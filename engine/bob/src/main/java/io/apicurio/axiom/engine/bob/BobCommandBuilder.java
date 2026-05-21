@@ -33,7 +33,8 @@ public class BobCommandBuilder {
         List<String> cmd = new ArrayList<>();
         cmd.add("bob");
 
-        // Bob uses API key auth in non-interactive mode
+        // Accept license non-interactively and use API key auth
+        cmd.add("--accept-license");
         cmd.add("--auth-method");
         cmd.add("api-key");
 

@@ -13,6 +13,7 @@ class BobCommandBuilderTest {
         List<String> cmd = BobCommandBuilder.create("Hello").build();
 
         assertTrue(cmd.contains("bob"));
+        assertTrue(cmd.contains("--accept-license"));
         assertTrue(cmd.contains("--auth-method"));
         assertTrue(cmd.contains("api-key"));
         assertTrue(cmd.contains("-p"));

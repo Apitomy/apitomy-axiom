@@ -48,8 +48,8 @@ public class BobEngine implements AiEngine, AiEngineProvider {
         List<AiEngineCheckResult> results = new ArrayList<>();
 
         try {
-            ProcessBuilder pb = new ProcessBuilder("bob", "--auth-method", "api-key",
-                    "-p", "Reply with exactly: AXIOM_OK");
+            ProcessBuilder pb = new ProcessBuilder("bob", "--accept-license",
+                    "--auth-method", "api-key", "-p", "Reply with exactly: AXIOM_OK");
             pb.redirectErrorStream(true);
             Process process = pb.start();
 
