@@ -50,7 +50,8 @@ public class McpConfigGenerator {
     private static final Logger LOG = Logger.getLogger(McpConfigGenerator.class);
 
     private static final String MCP_SERVER_DIR_NAME = "mcp-server";
-    private static final String[] TEMPLATE_FILES = { "package.json", "server.js" };
+    private static final String[] TEMPLATE_FILES = {
+            "package.json", "sdk-server.js", "tools-server.js" };
 
     @ConfigProperty(name = "quarkus.http.port", defaultValue = "8080")
     int httpPort;
@@ -79,8 +80,11 @@ public class McpConfigGenerator {
         LOG.info("Registered McpConfigGenerator as OpenCodeMcpManager delegate");
     }
 
-    /** Prefix used by Claude Code for tools provided by the axiom-tools MCP server. */
+    /** Prefix for script tools provided by the axiom-tools MCP server. */
     private static final String AXIOM_TOOLS_PREFIX = "mcp__axiom-tools__";
+
+    /** Prefix for SDK tools provided by the axiom-sdk MCP server. */
+    private static final String AXIOM_SDK_PREFIX = "mcp__axiom-sdk__";
 
     /**
      * Generates the MCP config file for a task, filtered by the action type's
@@ -116,9 +120,9 @@ public class McpConfigGenerator {
                         || allowedTools.stream().anyMatch(a -> a.startsWith("mcp__" + s.name + "__")))
                 .toList();
 
-        // Check if any SDK tools (built into server.js) are in the allowed list
+        // Check if any SDK tools are in the allowed list
         boolean hasSdkTools = !hasRestrictions
-                || allowedTools.stream().anyMatch(a -> a.startsWith(AXIOM_TOOLS_PREFIX + "axiom_"));
+                || allowedTools.stream().anyMatch(a -> a.startsWith(AXIOM_SDK_PREFIX));
 
         if (scriptTools.isEmpty() && mcpServers.isEmpty() && !hasSdkTools) {
             LOG.debugf("No MCP tools matched allowed list for task %d, skipping MCP config", taskId);
@@ -132,17 +136,33 @@ public class McpConfigGenerator {
 
             boolean first = true;
 
-            // If there are script tools, write a per-task tools JSON and reference
-            // the pre-built Axiom MCP server project.
-            if (!scriptTools.isEmpty() || hasSdkTools) {
-                Path serverDir = ensureMcpServerInstalled();
+            Path serverDir = (hasSdkTools || !scriptTools.isEmpty())
+                    ? ensureMcpServerInstalled() : null;
+
+            // SDK tools → axiom-sdk server (no tools JSON, no script execution)
+            if (hasSdkTools && serverDir != null) {
+                if (first) first = false; else configJson.append(",");
+                configJson.append("\"axiom-sdk\":{");
+                configJson.append("\"command\":\"node\",");
+                configJson.append("\"args\":[\"")
+                        .append(escapeJson(serverDir.resolve("sdk-server.js")
+                                .toAbsolutePath().toString()))
+                        .append("\"],");
+                configJson.append("\"env\":{\"AXIOM_API_URL\":\"")
+                        .append(escapeJson(env.get("AXIOM_API_URL")))
+                        .append("\"}}");
+            }
+
+            // Script tools → axiom-tools server (loads tools from JSON file)
+            if (!scriptTools.isEmpty() && serverDir != null) {
                 Path toolsJson = writeToolsJson(scriptTools, taskId);
 
                 if (first) first = false; else configJson.append(",");
                 configJson.append("\"axiom-tools\":{");
                 configJson.append("\"command\":\"node\",");
                 configJson.append("\"args\":[\"")
-                        .append(escapeJson(serverDir.resolve("server.js").toAbsolutePath().toString()))
+                        .append(escapeJson(serverDir.resolve("tools-server.js")
+                                .toAbsolutePath().toString()))
                         .append("\",\"")
                         .append(escapeJson(toolsJson.toAbsolutePath().toString()))
                         .append("\"],");
@@ -231,13 +251,14 @@ public class McpConfigGenerator {
      * @throws IOException if the project cannot be installed
      */
     private Path ensureMcpServerInstalled() throws IOException {
-        if (mcpServerDir != null && Files.exists(mcpServerDir.resolve("node_modules"))) {
+        if (mcpServerDir != null && Files.exists(mcpServerDir.resolve("node_modules"))
+                && Files.exists(mcpServerDir.resolve("sdk-server.js"))) {
             return mcpServerDir;
         }
 
         synchronized (this) {
-            // Double-check after acquiring lock
-            if (mcpServerDir != null && Files.exists(mcpServerDir.resolve("node_modules"))) {
+            if (mcpServerDir != null && Files.exists(mcpServerDir.resolve("node_modules"))
+                    && Files.exists(mcpServerDir.resolve("sdk-server.js"))) {
                 return mcpServerDir;
             }
 
@@ -345,6 +366,25 @@ public class McpConfigGenerator {
 
         List<McpServerConfig> configs = new ArrayList<>();
 
+        // SDK tools → axiom-sdk local MCP server
+        boolean hasSdkTools = !hasRestrictions
+                || allowedTools.stream().anyMatch(a -> a.startsWith(AXIOM_SDK_PREFIX));
+
+        if (hasSdkTools) {
+            try {
+                Path serverDir = ensureMcpServerInstalled();
+                Map<String, String> sdkEnv = new java.util.LinkedHashMap<>();
+                sdkEnv.put("AXIOM_API_URL", "http://localhost:" + httpPort + "/api/v1");
+                List<String> command = List.of(
+                        "node",
+                        serverDir.resolve("sdk-server.js").toAbsolutePath().toString()
+                );
+                configs.add(McpServerConfig.local("axiom-sdk", command, sdkEnv));
+            } catch (Exception e) {
+                LOG.errorf(e, "Failed to prepare axiom-sdk MCP server for task %d", taskId);
+            }
+        }
+
         // Script tools → axiom-tools local MCP server
         List<ToolDefinitionEntity> scriptTools = ToolDefinitionEntity.<ToolDefinitionEntity>listAll()
                 .stream()
@@ -359,7 +399,7 @@ public class McpConfigGenerator {
 
                 List<String> command = List.of(
                         "node",
-                        serverDir.resolve("server.js").toAbsolutePath().toString(),
+                        serverDir.resolve("tools-server.js").toAbsolutePath().toString(),
                         toolsJson.toAbsolutePath().toString()
                 );
                 configs.add(McpServerConfig.local("axiom-tools", command, environment));

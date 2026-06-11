@@ -67,7 +67,7 @@ class McpServerIntegrationTest {
             String serverJsPath = args.get(0).asText();
             String toolsJsonPath = args.get(1).asText();
 
-            assertTrue(Files.exists(Path.of(serverJsPath)), "server.js should exist");
+            assertTrue(Files.exists(Path.of(serverJsPath)), "tools-server.js should exist");
             assertTrue(Files.exists(Path.of(toolsJsonPath)), "tools JSON should exist");
 
             // Start the MCP server subprocess
