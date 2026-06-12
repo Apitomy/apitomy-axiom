@@ -438,7 +438,9 @@ public class SeedDataInitializer {
                         "mcp__axiom-sdk__axiom_close_project",
                         "mcp__axiom-sdk__axiom_reopen_project",
                         "mcp__axiom-sdk__axiom_add_project_label",
-                        "mcp__axiom-sdk__axiom_remove_project_label"));
+                        "mcp__axiom-sdk__axiom_remove_project_label",
+                        "mcp__axiom-sdk__axiom_list_tools",
+                        "mcp__axiom-sdk__axiom_list_report_definitions"));
         LOG.info("Created 'Axiom SDK' toolset");
     }
 

@@ -198,6 +198,27 @@ const SDK_TOOLS = [
             return await axiomApi("PUT", `/reports/${args.reportId}/labels`, labels);
         },
     },
+    {
+        name: "axiom_list_tools",
+        description: "List all custom tool definitions configured in Axiom. Returns names, descriptions, and parameter info for each tool.",
+        parameters: [
+            { name: "filterName", type: "string", description: "Filter by tool name (substring match)", required: false },
+        ],
+        handler: async (args) => {
+            const params = new URLSearchParams();
+            params.set("limit", "100");
+            if (args.filterName) params.set("filterName", args.filterName);
+            return await axiomApi("GET", `/tools?${params}`);
+        },
+    },
+    {
+        name: "axiom_list_report_definitions",
+        description: "List all report definitions configured in Axiom. Returns names, descriptions, schedules, and enabled status.",
+        parameters: [],
+        handler: async () => {
+            return await axiomApi("GET", "/reports/definitions");
+        },
+    },
 ];
 
 log("INFO", "Axiom SDK MCP server started", {

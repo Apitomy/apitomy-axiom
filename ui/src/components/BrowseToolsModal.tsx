@@ -35,6 +35,8 @@ const SDK_TOOLS: ToolEntry[] = [
     { value: "mcp__axiom-sdk__axiom_reopen_project", label: "axiom_reopen_project", description: "Reopen a previously closed Axiom project", category: "sdk" },
     { value: "mcp__axiom-sdk__axiom_add_project_label", label: "axiom_add_project_label", description: "Add a label to an Axiom project", category: "sdk" },
     { value: "mcp__axiom-sdk__axiom_remove_project_label", label: "axiom_remove_project_label", description: "Remove a label from an Axiom project", category: "sdk" },
+    { value: "mcp__axiom-sdk__axiom_list_tools", label: "axiom_list_tools", description: "List all custom tool definitions configured in Axiom", category: "sdk" },
+    { value: "mcp__axiom-sdk__axiom_list_report_definitions", label: "axiom_list_report_definitions", description: "List all report definitions configured in Axiom", category: "sdk" },
 ];
 
 interface BrowseToolsModalProps {

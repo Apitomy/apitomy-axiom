@@ -57,6 +57,8 @@ const AXIOM_SDK_TOOLS = [
     "mcp__axiom-sdk__axiom_reopen_project",
     "mcp__axiom-sdk__axiom_add_project_label",
     "mcp__axiom-sdk__axiom_remove_project_label",
+    "mcp__axiom-sdk__axiom_list_tools",
+    "mcp__axiom-sdk__axiom_list_report_definitions",
 ];
 
 const TOOLSET_STYLE: React.CSSProperties = {
