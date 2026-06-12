@@ -429,16 +429,18 @@ public class SeedDataInitializer {
         seedToolset("Axiom SDK",
                 "Built-in Axiom SDK tools for programmatic interaction with Axiom from AI agents",
                 String.join(",",
-                        "mcp__axiom-tools__axiom_fire_event",
-                        "mcp__axiom-tools__axiom_list_projects",
-                        "mcp__axiom-tools__axiom_get_project",
-                        "mcp__axiom-tools__axiom_create_task",
-                        "mcp__axiom-tools__axiom_get_task_status",
-                        "mcp__axiom-tools__axiom_add_thread_entry",
-                        "mcp__axiom-tools__axiom_close_project",
-                        "mcp__axiom-tools__axiom_reopen_project",
-                        "mcp__axiom-tools__axiom_add_project_label",
-                        "mcp__axiom-tools__axiom_remove_project_label"));
+                        "mcp__axiom-sdk__axiom_fire_event",
+                        "mcp__axiom-sdk__axiom_list_projects",
+                        "mcp__axiom-sdk__axiom_get_project",
+                        "mcp__axiom-sdk__axiom_create_task",
+                        "mcp__axiom-sdk__axiom_get_task_status",
+                        "mcp__axiom-sdk__axiom_add_thread_entry",
+                        "mcp__axiom-sdk__axiom_close_project",
+                        "mcp__axiom-sdk__axiom_reopen_project",
+                        "mcp__axiom-sdk__axiom_add_project_label",
+                        "mcp__axiom-sdk__axiom_remove_project_label",
+                        "mcp__axiom-sdk__axiom_list_tools",
+                        "mcp__axiom-sdk__axiom_list_report_definitions"));
         LOG.info("Created 'Axiom SDK' toolset");
     }
 

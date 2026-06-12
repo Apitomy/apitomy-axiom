@@ -20,9 +20,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * Tests for the MCP configuration generator. Verifies that the generated
  * MCP config JSON and tools JSON files have the correct structure and content.
  *
- * <p>These tests use the seeded tool data from {@link SeedDataInitializer},
- * which includes three built-in script tools: post_github_comment,
- * apply_github_labels, and create_github_pr.</p>
+ * <p>After the SDK/tools server split, the generator produces up to two
+ * independent MCP server entries: {@code axiom-sdk} for built-in SDK tools
+ * and {@code axiom-tools} for user-defined script tools.</p>
  */
 @QuarkusTest
 class McpConfigGeneratorTest {
@@ -33,82 +33,84 @@ class McpConfigGeneratorTest {
     @Inject
     ObjectMapper objectMapper;
 
-    // ── generateMcpConfig with seeded script tools ───────────────────
+    // ── Unrestricted config (both servers) ───────────────────────────
 
     @Test
-    void testGenerateMcpConfigProducesValidJson() throws Exception {
-        Map<String, String> env = Map.of("GH_TOKEN", "test-token-123");
+    void testUnrestrictedConfigHasBothServers() throws Exception {
+        Path configFile = generator.generateMcpConfig(9001L, Map.of(), null);
+        assertNotNull(configFile);
 
-        Path configFile = generator.generateMcpConfig(9001L, env, null);
-        assertNotNull(configFile, "Config file should be generated when tools exist");
-        assertTrue(Files.exists(configFile), "Config file should exist on disk");
-
-        String content = Files.readString(configFile);
-        JsonNode config = objectMapper.readTree(content);
-
-        assertTrue(config.has("mcpServers"), "Config should have mcpServers key");
+        JsonNode config = objectMapper.readTree(Files.readString(configFile));
         JsonNode servers = config.get("mcpServers");
-        assertTrue(servers.has("axiom-tools"), "Should have axiom-tools server for script tools");
+
+        assertTrue(servers.has("axiom-sdk"),
+                "Unrestricted config should have axiom-sdk server");
+        assertTrue(servers.has("axiom-tools"),
+                "Unrestricted config should have axiom-tools server");
     }
 
     @Test
     void testAxiomToolsServerConfig() throws Exception {
-        Map<String, String> env = Map.of("GH_TOKEN", "test-token-value");
-
-        Path configFile = generator.generateMcpConfig(9002L, env, null);
-        String content = Files.readString(configFile);
-        JsonNode config = objectMapper.readTree(content);
+        Path configFile = generator.generateMcpConfig(9002L, Map.of("GH_TOKEN", "test"), null);
+        JsonNode config = objectMapper.readTree(Files.readString(configFile));
 
         JsonNode axiomTools = config.get("mcpServers").get("axiom-tools");
         assertNotNull(axiomTools, "axiom-tools server should be present");
-
-        // Command should be "node"
         assertEquals("node", axiomTools.get("command").asText());
 
-        // Args should have two entries: server.js path and tools JSON path
         JsonNode args = axiomTools.get("args");
         assertTrue(args.isArray(), "args should be an array");
-        assertEquals(2, args.size(), "args should have server.js path and tools JSON path");
+        assertEquals(2, args.size(), "args should have tools-server.js path and tools JSON path");
 
         String serverJsPath = args.get(0).asText();
         String toolsJsonPath = args.get(1).asText();
 
-        assertTrue(serverJsPath.endsWith("server.js"), "First arg should be server.js path");
-        assertTrue(toolsJsonPath.contains("axiom-tools-9002"), "Second arg should contain task ID");
+        assertTrue(serverJsPath.endsWith("tools-server.js"),
+                "First arg should be tools-server.js path");
+        assertTrue(toolsJsonPath.contains("axiom-tools-9002"),
+                "Second arg should contain task ID");
 
-        // Both files should exist
-        assertTrue(Files.exists(Path.of(serverJsPath)), "server.js should exist");
+        assertTrue(Files.exists(Path.of(serverJsPath)), "tools-server.js should exist");
         assertTrue(Files.exists(Path.of(toolsJsonPath)), "tools JSON should exist");
     }
 
     @Test
-    void testEnvironmentVariablesInConfig() throws Exception {
+    void testAxiomSdkServerConfig() throws Exception {
+        Path configFile = generator.generateMcpConfig(9003L, Map.of(), null);
+        JsonNode config = objectMapper.readTree(Files.readString(configFile));
+
+        JsonNode axiomSdk = config.get("mcpServers").get("axiom-sdk");
+        assertNotNull(axiomSdk, "axiom-sdk server should be present");
+        assertEquals("node", axiomSdk.get("command").asText());
+
+        JsonNode args = axiomSdk.get("args");
+        assertTrue(args.isArray(), "args should be an array");
+        assertEquals(1, args.size(), "SDK server args should only have sdk-server.js path");
+
+        String sdkServerPath = args.get(0).asText();
+        assertTrue(sdkServerPath.endsWith("sdk-server.js"),
+                "Arg should be sdk-server.js path");
+        assertTrue(Files.exists(Path.of(sdkServerPath)), "sdk-server.js should exist");
+
+        JsonNode env = axiomSdk.get("env");
+        assertNotNull(env, "SDK server should have env");
+        assertTrue(env.has("AXIOM_API_URL"), "SDK server env should have AXIOM_API_URL");
+    }
+
+    @Test
+    void testEnvironmentVariablesInToolsServer() throws Exception {
         Map<String, String> env = Map.of(
                 "GH_TOKEN", "ghp_test123",
                 "GITHUB_TOKEN", "ghp_test456"
         );
 
-        Path configFile = generator.generateMcpConfig(9003L, env, null);
-        String content = Files.readString(configFile);
-        JsonNode config = objectMapper.readTree(content);
+        Path configFile = generator.generateMcpConfig(9004L, env, null);
+        JsonNode config = objectMapper.readTree(Files.readString(configFile));
 
         JsonNode axiomToolsEnv = config.get("mcpServers").get("axiom-tools").get("env");
-        assertNotNull(axiomToolsEnv, "env should be present");
+        assertNotNull(axiomToolsEnv, "axiom-tools env should be present");
         assertEquals("ghp_test123", axiomToolsEnv.get("GH_TOKEN").asText());
         assertEquals("ghp_test456", axiomToolsEnv.get("GITHUB_TOKEN").asText());
-    }
-
-    @Test
-    void testEmptyEnvironment() throws Exception {
-        Map<String, String> env = Map.of();
-
-        Path configFile = generator.generateMcpConfig(9004L, env, null);
-        String content = Files.readString(configFile);
-        JsonNode config = objectMapper.readTree(content);
-
-        JsonNode axiomToolsEnv = config.get("mcpServers").get("axiom-tools").get("env");
-        assertNotNull(axiomToolsEnv, "env key should still be present");
-        assertTrue(axiomToolsEnv.has("AXIOM_API_URL"), "AXIOM_API_URL should always be injected");
     }
 
     // ── Tools JSON file content ──────────────────────────────────────
@@ -116,19 +118,15 @@ class McpConfigGeneratorTest {
     @Test
     void testToolsJsonContainsSeededTools() throws Exception {
         Path configFile = generator.generateMcpConfig(9005L, Map.of(), null);
-        String content = Files.readString(configFile);
-        JsonNode config = objectMapper.readTree(content);
+        JsonNode config = objectMapper.readTree(Files.readString(configFile));
 
-        // Read the tools JSON file referenced in the config
         String toolsJsonPath = config.get("mcpServers").get("axiom-tools")
                 .get("args").get(1).asText();
-        String toolsContent = Files.readString(Path.of(toolsJsonPath));
-        JsonNode tools = objectMapper.readTree(toolsContent);
+        JsonNode tools = objectMapper.readTree(Files.readString(Path.of(toolsJsonPath)));
 
         assertTrue(tools.isArray(), "Tools should be a JSON array");
         assertTrue(tools.size() >= 4, "Should have at least 4 seeded script tools");
 
-        // Verify expected tool names are present
         boolean hasPostComment = false;
         boolean hasListLabels = false;
         boolean hasApplyLabels = false;
@@ -149,14 +147,12 @@ class McpConfigGeneratorTest {
     @Test
     void testToolJsonStructure() throws Exception {
         Path configFile = generator.generateMcpConfig(9006L, Map.of(), null);
-        String content = Files.readString(configFile);
-        JsonNode config = objectMapper.readTree(content);
+        JsonNode config = objectMapper.readTree(Files.readString(configFile));
 
         String toolsJsonPath = config.get("mcpServers").get("axiom-tools")
                 .get("args").get(1).asText();
         JsonNode tools = objectMapper.readTree(Files.readString(Path.of(toolsJsonPath)));
 
-        // Find the post_github_comment tool and verify its structure
         JsonNode postCommentTool = null;
         for (JsonNode tool : tools) {
             if ("post_github_comment".equals(tool.get("name").asText())) {
@@ -169,12 +165,10 @@ class McpConfigGeneratorTest {
         assertTrue(postCommentTool.has("scriptTemplate"), "Tool should have scriptTemplate");
         assertTrue(postCommentTool.has("parameters"), "Tool should have parameters");
 
-        // Verify parameters structure
         JsonNode params = postCommentTool.get("parameters");
         assertTrue(params.isArray(), "Parameters should be an array");
         assertTrue(params.size() >= 3, "post_github_comment should have at least 3 parameters");
 
-        // Verify each parameter has required fields
         for (JsonNode param : params) {
             assertTrue(param.has("name"), "Parameter should have name");
             assertTrue(param.has("type"), "Parameter should have type");
@@ -187,20 +181,19 @@ class McpConfigGeneratorTest {
 
     @Test
     void testMcpServerProjectInstalled() throws Exception {
-        // Trigger installation by generating config
         generator.generateMcpConfig(9007L, Map.of(), null);
 
         Path serverDir = Path.of(System.getProperty("user.home"), ".axiom", "mcp-server");
         assertTrue(Files.exists(serverDir), "MCP server directory should exist");
         assertTrue(Files.exists(serverDir.resolve("package.json")), "package.json should exist");
-        assertTrue(Files.exists(serverDir.resolve("server.js")), "server.js should exist");
+        assertTrue(Files.exists(serverDir.resolve("sdk-server.js")), "sdk-server.js should exist");
+        assertTrue(Files.exists(serverDir.resolve("tools-server.js")), "tools-server.js should exist");
         assertTrue(Files.exists(serverDir.resolve("node_modules")),
                 "node_modules should exist after npm install");
     }
 
     @Test
     void testMultipleCallsReuseInstalledServer() throws Exception {
-        // Generate two configs — both should reference the same server.js
         Path config1 = generator.generateMcpConfig(9008L, Map.of(), null);
         Path config2 = generator.generateMcpConfig(9009L, Map.of(), null);
 
@@ -209,13 +202,45 @@ class McpConfigGeneratorTest {
 
         String serverJs1 = cfg1.get("mcpServers").get("axiom-tools").get("args").get(0).asText();
         String serverJs2 = cfg2.get("mcpServers").get("axiom-tools").get("args").get(0).asText();
-        assertEquals(serverJs1, serverJs2, "Both configs should reference the same server.js");
+        assertEquals(serverJs1, serverJs2,
+                "Both configs should reference the same tools-server.js");
 
-        // But the tools JSON files should be different (per-task)
         String toolsJson1 = cfg1.get("mcpServers").get("axiom-tools").get("args").get(1).asText();
         String toolsJson2 = cfg2.get("mcpServers").get("axiom-tools").get("args").get(1).asText();
         assertNotEquals(toolsJson1, toolsJson2,
                 "Each task should get its own tools JSON file");
+    }
+
+    // ── Server isolation (only script tools → no SDK server) ────────
+
+    @Test
+    void testOnlyScriptToolsNoSdkServer() throws Exception {
+        Path configFile = generator.generateMcpConfig(9016L, Map.of(),
+                List.of("mcp__axiom-tools__post_github_comment"));
+        assertNotNull(configFile);
+
+        JsonNode config = objectMapper.readTree(Files.readString(configFile));
+        JsonNode servers = config.get("mcpServers");
+
+        assertTrue(servers.has("axiom-tools"),
+                "Should have axiom-tools when script tools are requested");
+        assertFalse(servers.has("axiom-sdk"),
+                "Should NOT have axiom-sdk when only script tools are requested");
+    }
+
+    @Test
+    void testOnlySdkToolsNoToolsServer() throws Exception {
+        Path configFile = generator.generateMcpConfig(9017L, Map.of(),
+                List.of("mcp__axiom-sdk__axiom_list_projects"));
+        assertNotNull(configFile);
+
+        JsonNode config = objectMapper.readTree(Files.readString(configFile));
+        JsonNode servers = config.get("mcpServers");
+
+        assertTrue(servers.has("axiom-sdk"),
+                "Should have axiom-sdk when SDK tools are requested");
+        assertFalse(servers.has("axiom-tools"),
+                "Should NOT have axiom-tools when only SDK tools are requested");
     }
 
     // ── External MCP server tools ────────────────────────────────────
@@ -223,7 +248,6 @@ class McpConfigGeneratorTest {
     @Test
     @Transactional
     void testExternalMcpServerStdioInConfig() throws Exception {
-        // Create a temporary external MCP server
         McpServerEntity mcpTool = new McpServerEntity();
         mcpTool.name = "test-external-stdio";
         mcpTool.description = "Test external MCP server (stdio)";
@@ -234,8 +258,7 @@ class McpConfigGeneratorTest {
 
         try {
             Path configFile = generator.generateMcpConfig(9010L, Map.of(), null);
-            String content = Files.readString(configFile);
-            JsonNode config = objectMapper.readTree(content);
+            JsonNode config = objectMapper.readTree(Files.readString(configFile));
 
             JsonNode servers = config.get("mcpServers");
             assertTrue(servers.has("test-external-stdio"),
@@ -267,8 +290,7 @@ class McpConfigGeneratorTest {
 
         try {
             Path configFile = generator.generateMcpConfig(9011L, Map.of(), null);
-            String content = Files.readString(configFile);
-            JsonNode config = objectMapper.readTree(content);
+            JsonNode config = objectMapper.readTree(Files.readString(configFile));
 
             JsonNode servers = config.get("mcpServers");
             assertTrue(servers.has("test-external-http"),
@@ -287,18 +309,15 @@ class McpConfigGeneratorTest {
     @Test
     @Transactional
     void testNoToolsReturnsNull() throws Exception {
-        // Temporarily remove all tools
         long originalCount = ToolDefinitionEntity.count();
         List<ToolDefinitionEntity> saved = ToolDefinitionEntity.<ToolDefinitionEntity>listAll()
                 .stream().toList();
 
         ToolDefinitionEntity.deleteAll();
         try {
-            // Pass an explicit allowed list with no matching tools
             Path configFile = generator.generateMcpConfig(9012L, Map.of(), List.of("Bash"));
             assertNull(configFile, "Should return null when no MCP tools match");
         } finally {
-            // Restore tools
             for (ToolDefinitionEntity tool : saved) {
                 ToolDefinitionEntity restored = new ToolDefinitionEntity();
                 restored.name = tool.name;
@@ -312,8 +331,7 @@ class McpConfigGeneratorTest {
 
     @Test
     @Transactional
-    void testOnlyExternalMcpServersNoAxiomTools() throws Exception {
-        // Temporarily remove all tools and add only an MCP server
+    void testOnlyExternalMcpServersNoAxiomServers() throws Exception {
         List<ToolDefinitionEntity> saved = ToolDefinitionEntity.<ToolDefinitionEntity>listAll()
                 .stream().toList();
         ToolDefinitionEntity.deleteAll();
@@ -325,17 +343,17 @@ class McpConfigGeneratorTest {
         mcpOnly.persist();
 
         try {
-            // Restrict to only the external MCP server tools (no axiom-tools)
             Path configFile = generator.generateMcpConfig(9013L, Map.of(),
                     List.of("mcp__test-mcp-only__some_tool"));
             assertNotNull(configFile, "Should generate config for MCP server tools");
 
-            String content = Files.readString(configFile);
-            JsonNode config = objectMapper.readTree(content);
+            JsonNode config = objectMapper.readTree(Files.readString(configFile));
             JsonNode servers = config.get("mcpServers");
 
             assertFalse(servers.has("axiom-tools"),
-                    "Should NOT have axiom-tools when no script or SDK tools requested");
+                    "Should NOT have axiom-tools when no script tools requested");
+            assertFalse(servers.has("axiom-sdk"),
+                    "Should NOT have axiom-sdk when no SDK tools requested");
             assertTrue(servers.has("test-mcp-only"),
                     "Should have the external MCP server");
         } finally {

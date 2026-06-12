@@ -1,10 +1,13 @@
 import { useEffect, useState, useCallback } from "react";
+import { Button, Flex, FlexItem, Tooltip } from "@patternfly/react-core";
+import ListIcon from "@patternfly/react-icons/dist/esm/icons/list-icon";
 import {
     fetchToolsets, type Toolset,
     fetchTools, type ToolDefinition,
     fetchMcpServers, type McpServer,
 } from "../config/api";
 import { TypeaheadAddInput, type TypeaheadAddSuggestion } from "./TypeaheadAddInput";
+import { BrowseToolsModal } from "./BrowseToolsModal";
 
 /**
  * Well-known Claude Code built-in tools available for autocomplete.
@@ -44,16 +47,18 @@ const BUILTIN_TOOLS = [
 ];
 
 const AXIOM_SDK_TOOLS = [
-    "mcp__axiom-tools__axiom_fire_event",
-    "mcp__axiom-tools__axiom_list_projects",
-    "mcp__axiom-tools__axiom_get_project",
-    "mcp__axiom-tools__axiom_create_task",
-    "mcp__axiom-tools__axiom_get_task_status",
-    "mcp__axiom-tools__axiom_add_thread_entry",
-    "mcp__axiom-tools__axiom_close_project",
-    "mcp__axiom-tools__axiom_reopen_project",
-    "mcp__axiom-tools__axiom_add_project_label",
-    "mcp__axiom-tools__axiom_remove_project_label",
+    "mcp__axiom-sdk__axiom_fire_event",
+    "mcp__axiom-sdk__axiom_list_projects",
+    "mcp__axiom-sdk__axiom_get_project",
+    "mcp__axiom-sdk__axiom_create_task",
+    "mcp__axiom-sdk__axiom_get_task_status",
+    "mcp__axiom-sdk__axiom_add_thread_entry",
+    "mcp__axiom-sdk__axiom_close_project",
+    "mcp__axiom-sdk__axiom_reopen_project",
+    "mcp__axiom-sdk__axiom_add_project_label",
+    "mcp__axiom-sdk__axiom_remove_project_label",
+    "mcp__axiom-sdk__axiom_list_tools",
+    "mcp__axiom-sdk__axiom_list_report_definitions",
 ];
 
 const TOOLSET_STYLE: React.CSSProperties = {
@@ -67,6 +72,8 @@ const MCP_STYLE: React.CSSProperties = {
 interface AddToolInputProps {
     /** Called when a tool is selected (either from suggestions or freeform). */
     onAdd: (tool: string) => void;
+    /** Called by the browse modal to replace the entire tool list. */
+    onReplace?: (tools: string[]) => void;
     /** Tools already in the list, used to filter out duplicates from suggestions. */
     existingTools?: string[];
     /** Placeholder text for the input. */
@@ -80,12 +87,14 @@ interface AddToolInputProps {
  */
 export function AddToolInput({
     onAdd,
+    onReplace,
     existingTools = [],
     placeholder = "Type a tool name or @ToolsetName and press Enter",
 }: AddToolInputProps) {
     const [toolsets, setToolsets] = useState<Toolset[]>([]);
     const [customTools, setCustomTools] = useState<ToolDefinition[]>([]);
     const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
+    const [isBrowseOpen, setIsBrowseOpen] = useState(false);
 
     useEffect(() => {
         Promise.all([fetchToolsets(), fetchTools(1, 1000), fetchMcpServers()])
@@ -119,11 +128,31 @@ export function AddToolInput({
     }, [toolsets, customTools, mcpServers])();
 
     return (
-        <TypeaheadAddInput
-            onAdd={onAdd}
-            suggestions={suggestions}
-            existingItems={existingTools}
-            placeholder={placeholder}
-        />
+        <>
+            <Flex>
+                <FlexItem grow={{ default: "grow" }}>
+                    <TypeaheadAddInput
+                        onAdd={onAdd}
+                        suggestions={suggestions}
+                        existingItems={existingTools}
+                        placeholder={placeholder}
+                    />
+                </FlexItem>
+                <FlexItem>
+                    <Tooltip content="Manage allowed tools">
+                        <Button variant="control" aria-label="Manage allowed tools"
+                            onClick={() => setIsBrowseOpen(true)}>
+                            <ListIcon />
+                        </Button>
+                    </Tooltip>
+                </FlexItem>
+            </Flex>
+            <BrowseToolsModal
+                isOpen={isBrowseOpen}
+                onClose={() => setIsBrowseOpen(false)}
+                onSave={onReplace || ((tools) => { tools.forEach(onAdd); })}
+                existingTools={existingTools}
+            />
+        </>
     );
 }

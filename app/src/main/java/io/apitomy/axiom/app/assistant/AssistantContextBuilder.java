@@ -129,7 +129,7 @@ public class AssistantContextBuilder {
                   "userTriggerable": true,
                   "managerTriggerable": true,
                   "emitsEvent": false,
-                  "allowedTools": "mcp__axiom-tools__tool1,mcp__axiom-tools__tool2,@ToolsetName",
+                  "allowedTools": "@Read-Only Tools,mcp__axiom-tools__my-tool,mcp__axiom-sdk__axiom_create_task",
                   "promptTemplate": "You are performing...\\n\\nContext: {{input}}",
                   "scriptTemplate": null,
                   "model": null,
@@ -141,9 +141,14 @@ public class AssistantContextBuilder {
 
                 **Execution modes:** `actor` (AI agent), `script` (bash script).
 
-                **Allowed tools pattern:** Comma-separated list. Use `mcp__axiom-tools__<name>`
-                for script tools, `mcp__<server>__<tool>` for MCP server tools, `@ToolsetName`
-                for toolset references.
+                **Allowed tools pattern:** Comma-separated list. Axiom has two built-in MCP
+                servers with different prefixes:
+                - `mcp__axiom-tools__<name>` — user-defined **script tools** (e.g.
+                  `mcp__axiom-tools__post_github_comment`)
+                - `mcp__axiom-sdk__axiom_<name>` — built-in **Axiom SDK tools** for
+                  project/task management (e.g. `mcp__axiom-sdk__axiom_create_task`)
+                - `@ToolsetName` — reference a named toolset (e.g. `@Read-Only Tools`,
+                  `@Axiom SDK`)
 
                 **Prompt template placeholders:** `{{input}}`, `{{projectId}}`,
                 `{{projectName}}`, `{{repository}}`, `{{issueRef}}`.
@@ -164,7 +169,7 @@ public class AssistantContextBuilder {
                   "scheduleDayOfWeek": "monday",
                   "timeWindow": "last-7d",
                   "promptTemplate": "Generate a report...\\n\\nRepositories: {{repositories}}\\nTime range: {{timeRangeStart}} to {{timeRangeEnd}}",
-                  "allowedTools": "mcp__axiom-tools__tool1"
+                  "allowedTools": "mcp__axiom-tools__my-tool"
                 }
                 ```
 
