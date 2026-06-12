@@ -73,6 +73,11 @@ export function ToolsetDetailPage() {
         setDirty(true);
     };
 
+    const replaceTools = (newTools: string[]) => {
+        setTools(newTools);
+        setDirty(true);
+    };
+
     const handleSave = () => {
         setSaving(true);
         const data = { ...form, tools };
@@ -141,7 +146,7 @@ export function ToolsetDetailPage() {
                 </p>
 
                 <div style={{ marginBottom: "16px" }}>
-                    <AddToolInput onAdd={addTool} existingTools={tools} />
+                    <AddToolInput onAdd={addTool} onReplace={replaceTools} existingTools={tools} />
                 </div>
 
                 {tools.length === 0 ? (

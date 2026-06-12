@@ -110,6 +110,11 @@ export function ActionTypeDetailPage() {
         setDirty(true);
     };
 
+    const replaceTools = (newTools: string[]) => {
+        setTools(newTools);
+        setDirty(true);
+    };
+
     const handleSave = () => {
         setSaving(true);
         const envToSend = Object.keys(envVars).length > 0 ? envVars : undefined;
@@ -191,6 +196,7 @@ export function ActionTypeDetailPage() {
                                 tools={tools}
                                 addTool={addTool}
                                 removeTool={removeTool}
+                                replaceTool={replaceTools}
                             />
                         </TabContent>
                     </Tab>
@@ -375,10 +381,11 @@ function InfoTab({ form, updateForm, availableModels, availableEngines }: {
     );
 }
 
-function AllowedToolsTab({ tools, addTool, removeTool }: {
+function AllowedToolsTab({ tools, addTool, removeTool, replaceTool }: {
     tools: string[];
     addTool: (tool: string) => void;
     removeTool: (tool: string) => void;
+    replaceTool: (tools: string[]) => void;
 }) {
     return (
         <div style={{ maxWidth: "700px" }}>
@@ -391,7 +398,7 @@ function AllowedToolsTab({ tools, addTool, removeTool }: {
             </p>
 
             <div style={{ marginBottom: "16px" }}>
-                <AddToolInput onAdd={addTool} existingTools={tools} />
+                <AddToolInput onAdd={addTool} onReplace={replaceTool} existingTools={tools} />
             </div>
 
             {tools.length === 0 ? (
