@@ -30,15 +30,17 @@ export function ActionTypeDetailModal({ isOpen, onClose, name, content }: Action
     const userTriggerable = content.userTriggerable as boolean ?? false;
     const managerTriggerable = content.managerTriggerable as boolean ?? false;
     const emitsEvent = content.emitsEvent as boolean ?? false;
-    const allowedTools = (content.allowedTools as string) || "";
+    const rawAllowedTools = content.allowedTools;
     const promptTemplate = (content.promptTemplate as string) || "";
     const scriptTemplate = (content.scriptTemplate as string) || "";
     const model = (content.model as string) || "";
     const engine = (content.engine as string) || "";
 
-    const toolsList = allowedTools
-        ? allowedTools.split(",").map((t) => t.trim()).filter(Boolean)
-        : [];
+    const toolsList = Array.isArray(rawAllowedTools)
+        ? rawAllowedTools as string[]
+        : typeof rawAllowedTools === "string" && rawAllowedTools
+            ? rawAllowedTools.split(",").map((t) => t.trim()).filter(Boolean)
+            : [];
 
     const isActorMode = executionMode === "actor";
     const templateContent = isActorMode ? promptTemplate : scriptTemplate;

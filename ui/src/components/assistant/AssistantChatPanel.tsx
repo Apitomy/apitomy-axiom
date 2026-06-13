@@ -17,8 +17,13 @@ let messageIdCounter = 0;
 export function AssistantChatPanel({ sessionId, onItemsChanged }: AssistantChatPanelProps) {
     const [messages, setMessages] = useState<ChatMessage[]>(() => [{
         id: String(++messageIdCounter),
-        type: "system" as const,
-        content: "Axiom Configuration Assistant ready. Describe what you'd like to create.",
+        type: "assistant" as const,
+        content: "Hi! I'm the **Axiom Configuration Assistant**. I can help you create and refine:\n\n" +
+            "- **Tools** — script-based tools that AI agents can invoke\n" +
+            "- **Action Types** — define kinds of work for AI agents or scripts\n" +
+            "- **Report Definitions** — recurring or on-demand reports\n\n" +
+            "I can look up your existing configuration to understand what's already set up. " +
+            "Just describe what you'd like to create or ask me a question to get started!",
     }]);
     const [isProcessing, setIsProcessing] = useState(false);
     const eventSourceRef = useRef<EventSource | null>(null);

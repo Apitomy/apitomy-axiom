@@ -83,16 +83,6 @@ public class ReportExecutionService {
             - Be concise but thorough — highlight what matters
             """;
 
-    private static final List<String> DEFAULT_REPORT_TOOLS = List.of(
-            "Read", "Glob", "Grep",
-            "Bash(ls *)", "Bash(cat *)", "Bash(head *)", "Bash(tail *)",
-            "Bash(find *)", "Bash(wc *)", "Bash(file *)",
-            "Bash(gh issue *)", "Bash(gh pr *)", "Bash(gh api *)",
-            "Bash(gh repo *)", "Bash(date *)",
-            "mcp__axiom-tools__list_github_issues",
-            "mcp__axiom-tools__list_github_prs"
-    );
-
     /**
      * Generates a report asynchronously. Updates the ReportEntity with the result.
      *
@@ -261,7 +251,7 @@ public class ReportExecutionService {
         if (definition.allowedTools != null && !definition.allowedTools.isBlank()) {
             return toolsetResolver.resolve(definition.allowedTools);
         }
-        return DEFAULT_REPORT_TOOLS;
+        return List.of();
     }
 
     /**

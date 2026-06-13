@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     PageSection,
@@ -29,6 +29,24 @@ import {
     type AssistantSessionInfo,
 } from "../config/api";
 
+const FUN_WORDS = [
+    "rocket", "cactus", "penguin", "waffle", "thunder", "mango", "cosmic",
+    "pickle", "turbo", "noodle", "galaxy", "biscuit", "phantom", "pretzel",
+    "velvet", "zigzag", "bamboo", "coral", "doodle", "falcon", "gopher",
+    "cobalt", "marble", "nimbus", "orchid", "quartz", "walrus", "tundra",
+    "nebula", "pebble", "saffron", "breeze", "mosaic", "lantern", "crimson",
+    "meadow", "jasper", "harbor", "ember", "frost", "summit", "canyon",
+    "copper", "willow", "sparrow", "clover", "rapids", "flint", "comet",
+    "puzzle", "sphinx", "goblin", "dragon", "wizard", "pirate", "ninja",
+    "viking", "yeti", "kraken", "phoenix", "griffin", "titan", "tempest",
+    "aurora", "blizzard", "cascade", "dynamo", "eclipse", "forge", "horizon",
+];
+
+function generateSessionName(): string {
+    const pick = () => FUN_WORDS[Math.floor(Math.random() * FUN_WORDS.length)];
+    return `${pick()}-${pick()}-${pick()}`;
+}
+
 const STATUS_COLORS: Record<string, "blue" | "green" | "red" | "grey"> = {
     starting: "blue",
     running: "green",
@@ -42,6 +60,13 @@ export function AssistantPage() {
     const [loading, setLoading] = useState(true);
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [newName, setNewName] = useState("");
+    const createButtonRef = useRef<HTMLButtonElement>(null);
+
+    useEffect(() => {
+        if (isCreateOpen) {
+            setTimeout(() => createButtonRef.current?.focus(), 100);
+        }
+    }, [isCreateOpen]);
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState("");
 
@@ -98,7 +123,7 @@ export function AssistantPage() {
                             <Button
                                 variant="primary"
                                 icon={<PlusCircleIcon />}
-                                onClick={() => setIsCreateOpen(true)}
+                                onClick={() => { setNewName(generateSessionName()); setIsCreateOpen(true); }}
                             >
                                 New Session
                             </Button>
@@ -128,7 +153,7 @@ export function AssistantPage() {
                             <Button
                                 variant="primary"
                                 icon={<PlusCircleIcon />}
-                                onClick={() => setIsCreateOpen(true)}
+                                onClick={() => { setNewName(generateSessionName()); setIsCreateOpen(true); }}
                             >
                                 New Session
                             </Button>
@@ -202,10 +227,12 @@ export function AssistantPage() {
                 </ModalBody>
                 <ModalFooter>
                     <Button
+                        ref={createButtonRef}
                         variant="primary"
                         onClick={handleCreate}
                         isLoading={creating}
                         isDisabled={creating}
+                        autoFocus
                     >
                         Create
                     </Button>

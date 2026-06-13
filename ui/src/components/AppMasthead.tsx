@@ -86,6 +86,7 @@ export function AppMasthead({ engineName, appVersion }: AppMastheadProps) {
             <AboutModal
                 isOpen={isAboutOpen}
                 onClose={() => setIsAboutOpen(false)}
+                productName="Apitomy Axiom"
                 brandImageSrc="/logo.png"
                 brandImageAlt="Apitomy Axiom"
                 trademark="Copyright &copy; 2025-2026"

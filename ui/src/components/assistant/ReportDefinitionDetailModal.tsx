@@ -36,12 +36,14 @@ export function ReportDefinitionDetailModal({
     const scheduleDayOfWeek = (content.scheduleDayOfWeek as string) || "";
     const timeWindow = (content.timeWindow as string) || "";
     const promptTemplate = (content.promptTemplate as string) || "";
-    const allowedTools = (content.allowedTools as string) || "";
+    const rawAllowedTools = content.allowedTools;
     const timeoutSeconds = content.timeoutSeconds as number | undefined;
 
-    const toolsList = allowedTools
-        ? allowedTools.split(",").map((t) => t.trim()).filter(Boolean)
-        : [];
+    const toolsList = Array.isArray(rawAllowedTools)
+        ? rawAllowedTools as string[]
+        : typeof rawAllowedTools === "string" && rawAllowedTools
+            ? rawAllowedTools.split(",").map((t) => t.trim()).filter(Boolean)
+            : [];
 
     const formatSchedule = () => {
         const parts = [schedule];
