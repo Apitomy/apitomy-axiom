@@ -342,19 +342,23 @@ function ParametersTab({ params, addParam, updateParam, removeParam }: {
                             <Th>Type</Th>
                             <Th>Description</Th>
                             <Th>Required</Th>
-                            <Th />
+                            <Th screenReaderText="Actions" />
                         </Tr>
                     </Thead>
                     <Tbody>
                         {params.map((p, i) => (
                             <Tr key={i}>
                                 <Td>
-                                    <TextInput value={p.name}
+                                    <TextInput id={`param-name-${i}`}
+                                        aria-label={`Parameter ${i} name`}
+                                        value={p.name}
                                         onChange={(_e, v) => updateParam(i, { name: v })}
                                         placeholder="param_name" />
                                 </Td>
                                 <Td>
-                                    <FormSelect value={p.type}
+                                    <FormSelect id={`param-type-${i}`}
+                                        aria-label={`Parameter ${i} type`}
+                                        value={p.type}
                                         onChange={(_e, v) => updateParam(i, { type: v })}>
                                         <FormSelectOption value="string" label="string" />
                                         <FormSelectOption value="number" label="number" />
@@ -362,7 +366,9 @@ function ParametersTab({ params, addParam, updateParam, removeParam }: {
                                     </FormSelect>
                                 </Td>
                                 <Td>
-                                    <TextInput value={p.description || ""}
+                                    <TextInput id={`param-desc-${i}`}
+                                        aria-label={`Parameter ${i} description`}
+                                        value={p.description || ""}
                                         onChange={(_e, v) => updateParam(i, { description: v })}
                                         placeholder="Description" />
                                 </Td>
