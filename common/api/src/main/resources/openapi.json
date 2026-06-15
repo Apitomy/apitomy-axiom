@@ -2119,6 +2119,9 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Tool definition has validation errors"
           }
         }
       }
@@ -2174,6 +2177,9 @@
           },
           "404": {
             "description": "Tool not found"
+          },
+          "422": {
+            "description": "Tool definition has validation errors"
           }
         }
       },
@@ -3183,6 +3189,36 @@
           }
         }
       ]
+    },
+    "/tools/validate": {
+      "post": {
+        "tags": [
+          "Tools"
+        ],
+        "summary": "Validate a tool definition without saving it",
+        "operationId": "validateTool",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewToolDefinition"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Validation result with errors and warnings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolValidationResult"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5214,6 +5250,52 @@
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/AssistantItem"
+        }
+      },
+      "ToolValidationMessage": {
+        "required": [
+          "severity",
+          "field",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "severity": {
+            "description": "Whether this is a blocking error or an advisory warning",
+            "enum": [
+              "error",
+              "warning"
+            ],
+            "type": "string"
+          },
+          "field": {
+            "description": "The field or path the message relates to",
+            "type": "string"
+          },
+          "message": {
+            "description": "Human-readable description of the issue",
+            "type": "string"
+          }
+        }
+      },
+      "ToolValidationResult": {
+        "required": [
+          "valid",
+          "messages"
+        ],
+        "type": "object",
+        "properties": {
+          "valid": {
+            "description": "True if no errors were found (warnings alone do not make it invalid)",
+            "type": "boolean"
+          },
+          "messages": {
+            "description": "All validation errors and warnings",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolValidationMessage"
+            }
+          }
         }
       }
     },

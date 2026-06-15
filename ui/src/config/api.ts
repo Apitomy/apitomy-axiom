@@ -547,6 +547,27 @@ export async function testTool(id: number, request: ToolTestRequest): Promise<To
     return response.json();
 }
 
+export interface ToolValidationMessage {
+    severity: "error" | "warning";
+    field: string;
+    message: string;
+}
+
+export interface ToolValidationResult {
+    valid: boolean;
+    messages: ToolValidationMessage[];
+}
+
+export async function validateTool(tool: NewToolDefinition): Promise<ToolValidationResult> {
+    const response = await fetch(`${API}/tools/validate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(tool),
+    });
+    if (!response.ok) throw new Error(`Failed to validate tool: ${response.status}`);
+    return response.json();
+}
+
 export interface ToolAiEditRequest {
     message: string;
     currentTool?: NewToolDefinition;

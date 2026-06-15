@@ -13,6 +13,8 @@ import io.apitomy.axiom.api.beans.ToolTestRequest;
 import io.apitomy.axiom.api.beans.ToolTestResponse;
 import io.apitomy.axiom.app.ToolAiService;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
+import io.apitomy.axiom.core.services.ToolValidator;
+import io.apitomy.axiom.core.services.ToolValidator.ValidationResult;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -20,6 +22,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
 
 import java.math.BigInteger;
@@ -92,6 +95,7 @@ public class ToolsResourceImpl implements ToolsResource {
     @Override
     @Transactional
     public ToolDefinition createTool(NewToolDefinition data) {
+        validateOrThrow(data);
         ToolDefinitionEntity entity = new ToolDefinitionEntity();
         applyFields(entity, data);
         entity.persist();
@@ -106,6 +110,7 @@ public class ToolsResourceImpl implements ToolsResource {
     @Override
     @Transactional
     public ToolDefinition updateTool(BigInteger toolId, NewToolDefinition data) {
+        validateOrThrow(data);
         ToolDefinitionEntity entity = findOrThrow(toolId.longValue());
         applyFields(entity, data);
         return toBean(entity);
@@ -126,6 +131,30 @@ public class ToolsResourceImpl implements ToolsResource {
     @Override
     public ToolAiEditResponse aiEditTool(ToolAiEditRequest data) {
         return toolAiService.editTool(data);
+    }
+
+    // ── Tool Validation ───────────────────────────────────────────────
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public io.apitomy.axiom.api.beans.ToolValidationResult validateTool(NewToolDefinition data) {
+        ValidationResult result = ToolValidator.validate(data);
+        io.apitomy.axiom.api.beans.ToolValidationResult response =
+                new io.apitomy.axiom.api.beans.ToolValidationResult();
+        response.setValid(!result.hasErrors());
+        response.setMessages(result.messages().stream().map(m -> {
+            io.apitomy.axiom.api.beans.ToolValidationMessage msg =
+                    new io.apitomy.axiom.api.beans.ToolValidationMessage();
+            msg.setSeverity(m.severity() == ToolValidator.Severity.ERROR
+                    ? io.apitomy.axiom.api.beans.ToolValidationMessage.Severity.ERROR
+                    : io.apitomy.axiom.api.beans.ToolValidationMessage.Severity.WARNING);
+            msg.setField(m.field());
+            msg.setMessage(m.message());
+            return msg;
+        }).toList());
+        return response;
     }
 
     // ── Tool Testing ──────────────────────────────────────────────────
@@ -206,6 +235,25 @@ public class ToolsResourceImpl implements ToolsResource {
     }
 
     // ── Helpers ──────────────────────────────────────────────────────
+
+    private void validateOrThrow(NewToolDefinition data) {
+        ValidationResult result = ToolValidator.validate(data);
+        if (result.hasErrors()) {
+            var errors = result.errors().stream()
+                    .map(e -> Map.of("field", e.field(), "message", e.message()))
+                    .toList();
+            var warnings = result.warnings().stream()
+                    .map(w -> Map.of("field", w.field(), "message", w.message()))
+                    .toList();
+            var body = Map.of(
+                    "message", "Tool definition has validation errors.",
+                    "errors", errors,
+                    "warnings", warnings
+            );
+            throw new WebApplicationException(
+                    Response.status(422).entity(body).build());
+        }
+    }
 
     private ToolDefinitionEntity findOrThrow(long id) {
         ToolDefinitionEntity entity = ToolDefinitionEntity.findById(id);

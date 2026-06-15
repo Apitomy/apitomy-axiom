@@ -23,6 +23,7 @@ class ToolLabelsTest {
                     {
                         "name": "label-test-tool-1",
                         "description": "A tool for label testing",
+                        "scriptTemplate": "echo test",
                         "labels": ["github", "automation"]
                     }
                     """)
@@ -52,7 +53,7 @@ class ToolLabelsTest {
         int toolId = given()
                 .contentType(ContentType.JSON)
                 .body("""
-                    { "name": "label-test-tool-2", "labels": ["alpha"] }
+                    { "name": "label-test-tool-2", "scriptTemplate": "echo test", "labels": ["alpha"] }
                     """)
                 .when()
                 .post(TOOLS_PATH)
@@ -65,7 +66,7 @@ class ToolLabelsTest {
         given()
                 .contentType(ContentType.JSON)
                 .body("""
-                    { "name": "label-test-tool-2", "labels": ["beta", "gamma"] }
+                    { "name": "label-test-tool-2", "scriptTemplate": "echo test", "labels": ["beta", "gamma"] }
                     """)
                 .when()
                 .put(TOOLS_PATH + "/" + toolId)
@@ -173,7 +174,7 @@ class ToolLabelsTest {
         return given()
                 .contentType(ContentType.JSON)
                 .body("""
-                    { "name": "%s", "labels": %s }
+                    { "name": "%s", "scriptTemplate": "echo test", "labels": %s }
                     """.formatted(name, labelsJson))
                 .when()
                 .post(TOOLS_PATH)

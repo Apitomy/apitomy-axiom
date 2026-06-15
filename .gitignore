@@ -62,3 +62,4 @@ coverage/
 # Serena / Claude
 /.serena/
 /.claude/
+/claudedocs/
