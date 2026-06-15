@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
     Breadcrumb,
@@ -40,11 +40,15 @@ import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-i
 import {
     type ReportDefinition,
     type NewReportDefinition,
+    type ToolValidationMessage,
     fetchReportDefinition,
     updateReportDefinition,
     runReportDefinition,
     deleteReportDefinition,
+    validateReportDefinition,
 } from "../config/api";
+import ExclamationTriangleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-triangle-icon";
+import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
 
 export function ReportDefinitionDetailPage() {
     const { definitionId } = useParams<{ definitionId: string }>();
@@ -65,6 +69,20 @@ export function ReportDefinitionDetailPage() {
     const [tools, setTools] = useState<string[]>([]);
     const [initialLabels, setInitialLabels] = useState<string[]>([]);
     const [envVars, setEnvVars] = useState<Record<string, string>>({});
+    const [validationMessages, setValidationMessages] = useState<ToolValidationMessage[]>([]);
+
+    const validationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const runValidation = useCallback((defData: NewReportDefinition) => {
+        if (validationTimerRef.current) {
+            clearTimeout(validationTimerRef.current);
+        }
+        validationTimerRef.current = setTimeout(() => {
+            validateReportDefinition(defData)
+                .then((result) => setValidationMessages(result.messages))
+                .catch(console.error);
+        }, 500);
+    }, []);
 
     const loadData = useCallback(() => {
         if (!id) return;
@@ -84,15 +102,35 @@ export function ReportDefinitionDetailPage() {
                 setInitialLabels(def.initialLabels || []);
                 setEnvVars(def.environment || {});
                 setDirty(false);
+                runValidation(buildValidationData(
+                    def, def.allowedTools || [], def.initialLabels || [],
+                    def.environment || {}
+                ));
             })
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [id]);
+    }, [id, runValidation]);
 
     useEffect(() => { loadData(); }, [loadData]);
 
+    const buildValidationData = (
+        formData: NewReportDefinition,
+        toolsList: string[],
+        labelsList: string[],
+        env: Record<string, string>
+    ): NewReportDefinition => ({
+        ...formData,
+        allowedTools: toolsList,
+        initialLabels: labelsList,
+        environment: Object.keys(env).length > 0 ? env : undefined,
+    });
+
     const updateForm = (updates: Partial<NewReportDefinition>) => {
-        setForm((prev) => ({ ...prev, ...updates }));
+        setForm((prev) => {
+            const updated = { ...prev, ...updates };
+            runValidation(buildValidationData(updated, tools, initialLabels, envVars));
+            return updated;
+        });
         setDirty(true);
     };
 
@@ -113,19 +151,24 @@ export function ReportDefinitionDetailPage() {
 
     const addTool = (tool: string) => {
         if (tool && !tools.includes(tool)) {
-            setTools([...tools, tool]);
+            const newTools = [...tools, tool];
+            setTools(newTools);
             setDirty(true);
+            runValidation(buildValidationData(form, newTools, initialLabels, envVars));
         }
     };
 
     const removeTool = (tool: string) => {
-        setTools(tools.filter((t) => t !== tool));
+        const newTools = tools.filter((t) => t !== tool);
+        setTools(newTools);
         setDirty(true);
+        runValidation(buildValidationData(form, newTools, initialLabels, envVars));
     };
 
     const replaceTools = (newTools: string[]) => {
         setTools(newTools);
         setDirty(true);
+        runValidation(buildValidationData(form, newTools, initialLabels, envVars));
     };
 
     const handleRunNow = () => {
@@ -180,7 +223,7 @@ export function ReportDefinitionDetailPage() {
                         AI Assistant
                     </Button>
                     <Button variant="primary" icon={<SaveIcon />} onClick={handleSave}
-                        isDisabled={!dirty || !form.name || saving} isLoading={saving}
+                        isDisabled={!dirty || !form.name || saving || validationMessages.some((m) => m.severity === "error")} isLoading={saving}
                         style={{ marginRight: "8px" }}>
                         {saving ? "Saving..." : "Save Changes"}
                     </Button>
@@ -230,7 +273,11 @@ export function ReportDefinitionDetailPage() {
                         style={{ marginTop: "24px" }}>
                         <EnvironmentTab
                             envVars={envVars}
-                            onChange={(updated) => { setEnvVars(updated); setDirty(true); }}
+                            onChange={(updated) => {
+                                setEnvVars(updated);
+                                setDirty(true);
+                                runValidation(buildValidationData(form, tools, initialLabels, updated));
+                            }}
                         />
                     </TabContent>
                 </Tab>
@@ -243,6 +290,47 @@ export function ReportDefinitionDetailPage() {
                         />
                     </TabContent>
                 </Tab>
+                {validationMessages.length > 0 && (
+                    <Tab eventKey={4} title={
+                        <TabTitleText>
+                            {validationMessages.some((m) => m.severity === "error")
+                                ? <ExclamationCircleIcon style={{ color: "#c9190b", marginRight: 6 }} />
+                                : <ExclamationTriangleIcon style={{ color: "#f0ab00", marginRight: 6 }} />
+                            }
+                            Problems ({validationMessages.length})
+                        </TabTitleText>
+                    }>
+                        <TabContent id="problems-tab" eventKey={4} activeKey={activeTab} style={{ marginTop: "24px" }}>
+                            <div style={{ maxWidth: "700px" }}>
+                                {validationMessages.map((msg, i) => (
+                                    <div key={i} style={{
+                                        display: "flex",
+                                        alignItems: "flex-start",
+                                        gap: 8,
+                                        padding: "10px 12px",
+                                        marginBottom: 4,
+                                        borderRadius: 4,
+                                        backgroundColor: msg.severity === "error"
+                                            ? "#fef3f2" : "#fdf7e7",
+                                        border: `1px solid ${msg.severity === "error"
+                                            ? "#c9190b" : "#f0ab00"}`,
+                                    }}>
+                                        {msg.severity === "error"
+                                            ? <ExclamationCircleIcon style={{ color: "#c9190b", marginTop: 2 }} />
+                                            : <ExclamationTriangleIcon style={{ color: "#f0ab00", marginTop: 2 }} />
+                                        }
+                                        <div>
+                                            <div style={{ fontSize: "13px" }}>{msg.message}</div>
+                                            <div style={{ fontSize: "12px", color: "#6a6e73", marginTop: 2 }}>
+                                                Field: <code>{msg.field}</code>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </TabContent>
+                    </Tab>
+                )}
             </Tabs>
 
             <Modal isOpen={isDeleteOpen}

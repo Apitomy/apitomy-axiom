@@ -903,6 +903,18 @@ export async function fetchReportDefinition(id: number): Promise<ReportDefinitio
     return response.json();
 }
 
+export async function validateReportDefinition(
+    def: NewReportDefinition
+): Promise<ToolValidationResult> {
+    const response = await fetch(`${API}/reports/definitions/validate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(def),
+    });
+    if (!response.ok) throw new Error(`Failed to validate report definition: ${response.status}`);
+    return response.json();
+}
+
 export async function createReportDefinition(def: NewReportDefinition): Promise<ReportDefinition> {
     const response = await fetch(`${API}/reports/definitions`, {
         method: "POST",

@@ -15,6 +15,9 @@ import io.apitomy.axiom.app.ReportQueueConsumer;
 import io.apitomy.axiom.app.ReportScheduler;
 import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
 import io.apitomy.axiom.core.entities.ReportEntity;
+import io.apitomy.axiom.core.entities.SecretEntity;
+import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
+import io.apitomy.axiom.core.entities.ToolsetEntity;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -22,6 +25,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Response;
+
+import io.apitomy.axiom.api.beans.ToolValidationResult;
+import io.apitomy.axiom.api.beans.ToolValidationMessage;
+import io.apitomy.axiom.core.services.ReportDefinitionValidator;
 
 import java.math.BigInteger;
 import java.time.Instant;
@@ -29,6 +37,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Implementation of the Reports REST API.
@@ -74,6 +83,7 @@ public class ReportsResourceImpl implements ReportsResource {
     @Override
     @Transactional
     public ReportDefinition createReportDefinition(NewReportDefinition data) {
+        validateOrThrow(data);
         ReportDefinitionEntity entity = new ReportDefinitionEntity();
         applyDefinitionFields(entity, data);
         entity.createdOn = Instant.now();
@@ -96,10 +106,32 @@ public class ReportsResourceImpl implements ReportsResource {
     @Override
     @Transactional
     public ReportDefinition updateReportDefinition(long definitionId, NewReportDefinition data) {
+        validateOrThrow(data);
         ReportDefinitionEntity entity = findDefinitionOrThrow(definitionId);
         applyDefinitionFields(entity, data);
         entity.updatedOn = Instant.now();
         return toDefinitionBean(entity);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public ToolValidationResult validateReportDefinition(NewReportDefinition data) {
+        ReportDefinitionValidator.ValidationResult result =
+                ReportDefinitionValidator.validate(data, getKnownNames());
+        ToolValidationResult response = new ToolValidationResult();
+        response.setValid(!result.hasErrors());
+        response.setMessages(result.messages().stream().map(m -> {
+            ToolValidationMessage msg = new ToolValidationMessage();
+            msg.setSeverity(m.severity() == ReportDefinitionValidator.Severity.ERROR
+                    ? ToolValidationMessage.Severity.ERROR
+                    : ToolValidationMessage.Severity.WARNING);
+            msg.setField(m.field());
+            msg.setMessage(m.message());
+            return msg;
+        }).toList());
+        return response;
     }
 
     /**
@@ -245,6 +277,53 @@ public class ReportsResourceImpl implements ReportsResource {
     }
 
     // ── Helpers ──────────────────────────────────────────────────────
+
+    private void validateOrThrow(NewReportDefinition data) {
+        ReportDefinitionValidator.ValidationResult result =
+                ReportDefinitionValidator.validate(data, getKnownNames());
+        if (result.hasErrors()) {
+            var errors = result.errors().stream()
+                    .map(e -> Map.of("field", e.field(), "message", e.message()))
+                    .toList();
+            var warnings = result.warnings().stream()
+                    .map(w -> Map.of("field", w.field(), "message", w.message()))
+                    .toList();
+            var body = Map.of(
+                    "message", "Report definition has validation errors.",
+                    "errors", errors,
+                    "warnings", warnings
+            );
+            throw new WebApplicationException(
+                    Response.status(422).entity(body).build());
+        }
+    }
+
+    private ReportDefinitionValidator.KnownNames getKnownNames() {
+        Set<String> secrets = SecretEntity.<SecretEntity>listAll().stream()
+                .map(s -> s.name)
+                .collect(java.util.stream.Collectors.toSet());
+        Set<String> tools = ToolDefinitionEntity.<ToolDefinitionEntity>listAll().stream()
+                .map(t -> t.name)
+                .collect(java.util.stream.Collectors.toSet());
+        Set<String> toolsets = ToolsetEntity.<ToolsetEntity>listAll().stream()
+                .map(t -> t.name)
+                .collect(java.util.stream.Collectors.toSet());
+        Set<String> sdkTools = Set.of(
+                "mcp__axiom-sdk__axiom_fire_event",
+                "mcp__axiom-sdk__axiom_list_projects",
+                "mcp__axiom-sdk__axiom_get_project",
+                "mcp__axiom-sdk__axiom_create_task",
+                "mcp__axiom-sdk__axiom_get_task_status",
+                "mcp__axiom-sdk__axiom_add_thread_entry",
+                "mcp__axiom-sdk__axiom_close_project",
+                "mcp__axiom-sdk__axiom_reopen_project",
+                "mcp__axiom-sdk__axiom_add_project_label",
+                "mcp__axiom-sdk__axiom_remove_project_label",
+                "mcp__axiom-sdk__axiom_list_tools",
+                "mcp__axiom-sdk__axiom_list_report_definitions"
+        );
+        return new ReportDefinitionValidator.KnownNames(secrets, tools, toolsets, sdkTools);
+    }
 
     private ReportDefinitionEntity findDefinitionOrThrow(long id) {
         ReportDefinitionEntity entity = ReportDefinitionEntity.findById(id);

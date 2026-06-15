@@ -1070,6 +1070,9 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Report definition has validation errors"
           }
         }
       }
@@ -1124,6 +1127,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "description": "Report definition has validation errors"
           }
         }
       },
@@ -3202,6 +3208,36 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/NewToolDefinition"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Validation result with errors and warnings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolValidationResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reports/definitions/validate": {
+      "post": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Validate a report definition without saving it",
+        "operationId": "validateReportDefinition",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewReportDefinition"
               }
             }
           }
