@@ -77,6 +77,7 @@ class ActionResourceTest {
                     "name": "custom-action",
                     "description": "A custom action for testing",
                     "executionMode": "actor",
+                    "promptTemplate": "Do the thing: {{input}}",
                     "userTriggerable": true,
                     "emitsEvent": false
                 }
@@ -110,6 +111,7 @@ class ActionResourceTest {
                     "name": "updated-action",
                     "description": "Updated description",
                     "executionMode": "script",
+                    "scriptTemplate": "echo updated",
                     "emitsEvent": true
                 }
                 """)
@@ -155,7 +157,8 @@ class ActionResourceTest {
             .body(String.format("""
                 {
                     "name": "%s",
-                    "executionMode": "actor"
+                    "executionMode": "actor",
+                    "promptTemplate": "Do: {{input}}"
                 }
                 """, name))
             .when()

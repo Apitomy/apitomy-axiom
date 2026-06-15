@@ -329,6 +329,16 @@ export async function fetchActionType(id: number): Promise<ActionType> {
     return response.json();
 }
 
+export async function validateActionType(at: NewActionType): Promise<ToolValidationResult> {
+    const response = await fetch(`${API}/action-types/validate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(at),
+    });
+    if (!response.ok) throw new Error(`Failed to validate action type: ${response.status}`);
+    return response.json();
+}
+
 export async function createActionType(at: NewActionType): Promise<ActionType> {
     const response = await fetch(`${API}/action-types`, {
         method: "POST",

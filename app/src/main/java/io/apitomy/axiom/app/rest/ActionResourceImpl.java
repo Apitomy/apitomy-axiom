@@ -12,8 +12,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.beans.Environment;
 import io.apitomy.axiom.app.ActionTypeAiService;
 import io.apitomy.axiom.app.ScriptAiService;
+import io.apitomy.axiom.api.beans.ToolValidationResult;
+import io.apitomy.axiom.api.beans.ToolValidationMessage;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
+import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
+import io.apitomy.axiom.core.entities.ToolsetEntity;
+import io.apitomy.axiom.core.services.ActionTypeValidator;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -25,6 +30,7 @@ import jakarta.ws.rs.core.Response;
 import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Implementation of the Action Types REST API.
@@ -59,6 +65,7 @@ public class ActionResourceImpl implements ActionResource {
     @Override
     @Transactional
     public ActionType createActionType(NewActionType data) {
+        validateOrThrow(data);
         ActionTypeEntity entity = new ActionTypeEntity();
         applyFields(entity, data);
         entity.persist();
@@ -79,6 +86,7 @@ public class ActionResourceImpl implements ActionResource {
     @Override
     @Transactional
     public ActionType updateActionType(long actionTypeId, NewActionType data) {
+        validateOrThrow(data);
         ActionTypeEntity entity = findOrThrow(actionTypeId);
         applyFields(entity, data);
         return toBean(entity);
@@ -92,6 +100,73 @@ public class ActionResourceImpl implements ActionResource {
     public void deleteActionType(long actionTypeId) {
         ActionTypeEntity entity = findOrThrow(actionTypeId);
         entity.delete();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public ToolValidationResult validateActionType(NewActionType data) {
+        ActionTypeValidator.ValidationResult result =
+                ActionTypeValidator.validate(data, getKnownNames());
+        ToolValidationResult response = new ToolValidationResult();
+        response.setValid(!result.hasErrors());
+        response.setMessages(result.messages().stream().map(m -> {
+            ToolValidationMessage msg = new ToolValidationMessage();
+            msg.setSeverity(m.severity() == ActionTypeValidator.Severity.ERROR
+                    ? ToolValidationMessage.Severity.ERROR
+                    : ToolValidationMessage.Severity.WARNING);
+            msg.setField(m.field());
+            msg.setMessage(m.message());
+            return msg;
+        }).toList());
+        return response;
+    }
+
+    private void validateOrThrow(NewActionType data) {
+        ActionTypeValidator.ValidationResult result =
+                ActionTypeValidator.validate(data, getKnownNames());
+        if (result.hasErrors()) {
+            var errors = result.errors().stream()
+                    .map(e -> Map.of("field", e.field(), "message", e.message()))
+                    .toList();
+            var warnings = result.warnings().stream()
+                    .map(w -> Map.of("field", w.field(), "message", w.message()))
+                    .toList();
+            throw new WebApplicationException(
+                    Response.status(422).entity(Map.of(
+                            "message", "Action type has validation errors.",
+                            "errors", errors,
+                            "warnings", warnings
+                    )).build());
+        }
+    }
+
+    private ActionTypeValidator.KnownNames getKnownNames() {
+        Set<String> secrets = SecretEntity.<SecretEntity>listAll().stream()
+                .map(s -> s.name)
+                .collect(java.util.stream.Collectors.toSet());
+        Set<String> tools = ToolDefinitionEntity.<ToolDefinitionEntity>listAll().stream()
+                .map(t -> t.name)
+                .collect(java.util.stream.Collectors.toSet());
+        Set<String> toolsets = ToolsetEntity.<ToolsetEntity>listAll().stream()
+                .map(t -> t.name)
+                .collect(java.util.stream.Collectors.toSet());
+        Set<String> sdkTools = Set.of(
+                "mcp__axiom-sdk__axiom_fire_event",
+                "mcp__axiom-sdk__axiom_list_projects",
+                "mcp__axiom-sdk__axiom_get_project",
+                "mcp__axiom-sdk__axiom_create_task",
+                "mcp__axiom-sdk__axiom_get_task_status",
+                "mcp__axiom-sdk__axiom_add_thread_entry",
+                "mcp__axiom-sdk__axiom_close_project",
+                "mcp__axiom-sdk__axiom_reopen_project",
+                "mcp__axiom-sdk__axiom_add_project_label",
+                "mcp__axiom-sdk__axiom_remove_project_label",
+                "mcp__axiom-sdk__axiom_list_tools",
+                "mcp__axiom-sdk__axiom_list_report_definitions"
+        );
+        return new ActionTypeValidator.KnownNames(secrets, tools, toolsets, sdkTools);
     }
 
     private void applyFields(ActionTypeEntity entity, NewActionType data) {

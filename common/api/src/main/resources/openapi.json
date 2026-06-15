@@ -760,6 +760,9 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Action type has validation errors"
           }
         }
       }
@@ -816,6 +819,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "description": "Action type has validation errors"
           }
         }
       },
@@ -3238,6 +3244,36 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/NewReportDefinition"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Validation result with errors and warnings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolValidationResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/action-types/validate": {
+      "post": {
+        "tags": [
+          "ActionTypes"
+        ],
+        "summary": "Validate an action type definition without saving it",
+        "operationId": "validateActionType",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewActionType"
               }
             }
           }

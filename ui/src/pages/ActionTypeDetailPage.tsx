@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
     Breadcrumb,
@@ -35,11 +35,15 @@ import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-i
 import {
     type ActionType,
     type NewActionType,
+    type ToolValidationMessage,
     fetchActionType,
     updateActionType,
+    validateActionType,
     fetchModels,
     fetchEngines,
 } from "../config/api";
+import ExclamationTriangleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-triangle-icon";
+import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
 
 export function ActionTypeDetailPage() {
     const { actionTypeId } = useParams<{ actionTypeId: string }>();
@@ -58,6 +62,29 @@ export function ActionTypeDetailPage() {
     const [aiModalOpen, setAiModalOpen] = useState(false);
     const [availableModels, setAvailableModels] = useState<string[]>([]);
     const [availableEngines, setAvailableEngines] = useState<string[]>([]);
+    const [validationMessages, setValidationMessages] = useState<ToolValidationMessage[]>([]);
+    const validationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const buildValidationData = (
+        formData: NewActionType,
+        toolsList: string[],
+        env: Record<string, string>
+    ): NewActionType => ({
+        ...formData,
+        allowedTools: toolsList,
+        environment: Object.keys(env).length > 0 ? env : undefined,
+    });
+
+    const runValidation = useCallback((data: NewActionType) => {
+        if (validationTimerRef.current) {
+            clearTimeout(validationTimerRef.current);
+        }
+        validationTimerRef.current = setTimeout(() => {
+            validateActionType(data)
+                .then((result) => setValidationMessages(result.messages))
+                .catch(console.error);
+        }, 500);
+    }, []);
 
     const loadData = useCallback(() => {
         if (!id) return;
@@ -82,10 +109,12 @@ export function ActionTypeDetailPage() {
                 setTools(at.allowedTools || []);
                 setEnvVars(at.environment || {});
                 setDirty(false);
+                runValidation(buildValidationData(
+                    at, at.allowedTools || [], at.environment || {}));
             })
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [id]);
+    }, [id, runValidation]);
 
     useEffect(() => { loadData(); }, [loadData]);
     useEffect(() => {
@@ -94,25 +123,34 @@ export function ActionTypeDetailPage() {
     }, []);
 
     const updateForm = (updates: Partial<NewActionType>) => {
-        setForm((prev) => ({ ...prev, ...updates }));
+        setForm((prev) => {
+            const updated = { ...prev, ...updates };
+            runValidation(buildValidationData(updated, tools, envVars));
+            return updated;
+        });
         setDirty(true);
     };
 
     const addTool = (tool: string) => {
         if (tool && !tools.includes(tool)) {
-            setTools([...tools, tool]);
+            const newTools = [...tools, tool];
+            setTools(newTools);
             setDirty(true);
+            runValidation(buildValidationData(form, newTools, envVars));
         }
     };
 
     const removeTool = (tool: string) => {
-        setTools(tools.filter((t) => t !== tool));
+        const newTools = tools.filter((t) => t !== tool);
+        setTools(newTools);
         setDirty(true);
+        runValidation(buildValidationData(form, newTools, envVars));
     };
 
     const replaceTools = (newTools: string[]) => {
         setTools(newTools);
         setDirty(true);
+        runValidation(buildValidationData(form, newTools, envVars));
     };
 
     const handleSave = () => {
@@ -175,7 +213,7 @@ export function ActionTypeDetailPage() {
                         variant="primary"
                         icon={<SaveIcon />}
                         onClick={handleSave}
-                        isDisabled={!dirty || !form.name || saving}
+                        isDisabled={!dirty || !form.name || saving || validationMessages.some((m) => m.severity === "error")}
                         isLoading={saving}
                     >
                         {saving ? "Saving..." : "Save Changes"}
@@ -207,7 +245,11 @@ export function ActionTypeDetailPage() {
                     <TabContent id="env-tab" eventKey={2} activeKey={activeTab} style={{ marginTop: "24px" }}>
                         <EnvironmentTab
                             envVars={envVars}
-                            onChange={(updated) => { setEnvVars(updated); setDirty(true); }}
+                            onChange={(updated) => {
+                                setEnvVars(updated);
+                                setDirty(true);
+                                runValidation(buildValidationData(form, tools, updated));
+                            }}
                         />
                     </TabContent>
                 </Tab>
@@ -228,6 +270,47 @@ export function ActionTypeDetailPage() {
                                 value={form.scriptTemplate || ""}
                                 onChange={(v) => updateForm({ scriptTemplate: v })}
                             />
+                        </TabContent>
+                    </Tab>
+                )}
+                {validationMessages.length > 0 && (
+                    <Tab eventKey={5} title={
+                        <TabTitleText>
+                            {validationMessages.some((m) => m.severity === "error")
+                                ? <ExclamationCircleIcon style={{ color: "#c9190b", marginRight: 6 }} />
+                                : <ExclamationTriangleIcon style={{ color: "#f0ab00", marginRight: 6 }} />
+                            }
+                            Problems ({validationMessages.length})
+                        </TabTitleText>
+                    }>
+                        <TabContent id="problems-tab" eventKey={5} activeKey={activeTab} style={{ marginTop: "24px" }}>
+                            <div style={{ maxWidth: "700px" }}>
+                                {validationMessages.map((msg, i) => (
+                                    <div key={i} style={{
+                                        display: "flex",
+                                        alignItems: "flex-start",
+                                        gap: 8,
+                                        padding: "10px 12px",
+                                        marginBottom: 4,
+                                        borderRadius: 4,
+                                        backgroundColor: msg.severity === "error"
+                                            ? "#fef3f2" : "#fdf7e7",
+                                        border: `1px solid ${msg.severity === "error"
+                                            ? "#c9190b" : "#f0ab00"}`,
+                                    }}>
+                                        {msg.severity === "error"
+                                            ? <ExclamationCircleIcon style={{ color: "#c9190b", marginTop: 2 }} />
+                                            : <ExclamationTriangleIcon style={{ color: "#f0ab00", marginTop: 2 }} />
+                                        }
+                                        <div>
+                                            <div style={{ fontSize: "13px" }}>{msg.message}</div>
+                                            <div style={{ fontSize: "12px", color: "#6a6e73", marginTop: 2 }}>
+                                                Field: <code>{msg.field}</code>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </TabContent>
                     </Tab>
                 )}
