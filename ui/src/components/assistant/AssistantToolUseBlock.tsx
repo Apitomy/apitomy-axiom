@@ -15,10 +15,10 @@ import { AssistantAskUserQuestion } from "./AssistantAskUserQuestion";
 SyntaxHighlighter.registerLanguage("json", json);
 SyntaxHighlighter.registerLanguage("bash", bash);
 
-type LabelColor = "blue" | "green" | "purple" | "cyan" | "orange" | "grey" | "red";
+type LabelColor = "blue" | "green" | "purple" | "teal" | "orange" | "grey" | "red";
 
 function getToolColor(toolName: string): LabelColor {
-    if (toolName === "AskUserQuestion") return "cyan";
+    if (toolName === "AskUserQuestion") return "teal";
     if (toolName === "EnterPlanMode" || toolName === "Agent") return "orange";
     if (toolName.startsWith("mcp__axiom-sdk__") || toolName.startsWith("mcp__axiom__")) return "green";
     if (toolName.startsWith("mcp__axiom-tools__")) return "purple";
