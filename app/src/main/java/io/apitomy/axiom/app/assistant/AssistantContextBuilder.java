@@ -129,7 +129,7 @@ public class AssistantContextBuilder {
                   "userTriggerable": true,
                   "managerTriggerable": true,
                   "emitsEvent": false,
-                  "allowedTools": "@Read-Only Tools,mcp__axiom-tools__my-tool,mcp__axiom-sdk__axiom_create_task",
+                  "allowedTools": ["@Read-Only Tools", "mcp__axiom-tools__my-tool", "mcp__axiom-sdk__axiom_create_task"],
                   "promptTemplate": "You are performing...\\n\\nContext: {{input}}",
                   "scriptTemplate": null,
                   "model": null,
@@ -169,7 +169,7 @@ public class AssistantContextBuilder {
                   "scheduleDayOfWeek": "monday",
                   "timeWindow": "last-7d",
                   "promptTemplate": "Generate a report...\\n\\nRepositories: {{repositories}}\\nTime range: {{timeRangeStart}} to {{timeRangeEnd}}",
-                  "allowedTools": "mcp__axiom-tools__my-tool"
+                  "allowedTools": ["mcp__axiom-tools__my-tool"]
                 }
                 ```
 
@@ -197,6 +197,10 @@ public class AssistantContextBuilder {
                   environment variables to reference secrets stored in Axiom.
                 - **Validate your output.** Make sure JSON is well-formed and all required fields
                   are present.
+                - **Allowed tools must match the prompt.** If a prompt template or script template
+                  references specific tools (e.g. "use the fetch-github-notifications tool"),
+                  those tools **must** be listed in `allowedTools`. An empty `allowedTools` means
+                  the agent gets no tools at all. Always include every tool the agent will need.
                 - When the user asks to modify an item, read the existing file, update it, and
                   write it back.
                 """;

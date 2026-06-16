@@ -15,6 +15,17 @@ import { AssistantAskUserQuestion } from "./AssistantAskUserQuestion";
 SyntaxHighlighter.registerLanguage("json", json);
 SyntaxHighlighter.registerLanguage("bash", bash);
 
+type LabelColor = "blue" | "green" | "purple" | "cyan" | "orange" | "grey" | "red";
+
+function getToolColor(toolName: string): LabelColor {
+    if (toolName === "AskUserQuestion") return "cyan";
+    if (toolName === "EnterPlanMode" || toolName === "Agent") return "orange";
+    if (toolName.startsWith("mcp__axiom-sdk__") || toolName.startsWith("mcp__axiom__")) return "green";
+    if (toolName.startsWith("mcp__axiom-tools__")) return "purple";
+    if (toolName.startsWith("mcp__")) return "grey";
+    return "blue";
+}
+
 interface AssistantToolUseBlockProps {
     toolName: string;
     input?: Record<string, unknown>;
@@ -66,7 +77,7 @@ export function AssistantToolUseBlock({
                 <ExpandableSection
                     toggleContent={
                         <span>
-                            <Label isCompact color={isError ? "red" : "blue"}>
+                            <Label isCompact color={isError ? "red" : getToolColor(toolName)}>
                                 {toolName}
                             </Label>
                             {inputPreview && (

@@ -206,12 +206,12 @@ public class AssistantSessionManager {
 
         List<AssistantItem> items = listItems(sessionId);
 
-        // Check for validation errors
+        // Check for validation errors (warnings don't block apply)
         List<String> allErrors = new ArrayList<>();
         for (AssistantItem item : items) {
-            if (!item.validationErrors().isEmpty()) {
+            if (!item.errors().isEmpty()) {
                 allErrors.add(item.type() + "/" + item.name() + ": "
-                        + String.join("; ", item.validationErrors()));
+                        + String.join("; ", item.errors()));
             }
         }
         if (!allErrors.isEmpty()) {
@@ -317,15 +317,24 @@ public class AssistantSessionManager {
         try (java.util.stream.Stream<Path> files = Files.list(dir)) {
             files.filter(f -> f.toString().endsWith(".json"))
                     .forEach(f -> {
-                        List<String> errors = itemValidator.validate(f, subdir);
-                        if (!errors.isEmpty()) {
+                        AssistantItemValidator.ValidationResult result =
+                                itemValidator.validate(f, subdir, workDir);
+                        List<String> allMessages = result.allMessages();
+                        if (!allMessages.isEmpty()) {
                             String filePath = workDir.relativize(f).toString();
-                            String feedback = "Validation errors in " + filePath + ":\n"
-                                    + String.join("\n",
-                                            errors.stream().map(e -> "- " + e).toList())
-                                    + "\n\nPlease fix these issues.";
+                            StringBuilder feedback = new StringBuilder();
+                            feedback.append("Validation issues in ").append(filePath).append(":\n");
+                            for (String err : result.errors()) {
+                                feedback.append("- [ERROR] ").append(err).append("\n");
+                            }
+                            for (String warn : result.warnings()) {
+                                feedback.append("- [WARNING] ").append(warn).append("\n");
+                            }
+                            if (!result.errors().isEmpty()) {
+                                feedback.append("\nPlease fix the errors above.");
+                            }
                             try {
-                                session.sendMessage(feedback);
+                                session.sendMessage(feedback.toString());
                                 LOG.infof("Sent validation feedback for %s in session %s",
                                         filePath, session.getId());
                             } catch (IOException e) {
@@ -347,8 +356,10 @@ public class AssistantSessionManager {
                     .forEach(f -> {
                         String name = f.getFileName().toString()
                                 .replaceFirst("\\.json$", "");
-                        List<String> errors = itemValidator.validate(f, subdir);
-                        items.add(new AssistantItem(subdir, name, errors));
+                        AssistantItemValidator.ValidationResult result =
+                                itemValidator.validate(f, subdir, workDir);
+                        items.add(new AssistantItem(subdir, name,
+                                result.errors(), result.warnings()));
                     });
         }
     }
@@ -448,15 +459,29 @@ public class AssistantSessionManager {
      * @param name the item name (file name without .json)
      * @param validationErrors list of validation errors (empty if valid)
      */
-    public record AssistantItem(String type, String name, List<String> validationErrors) {
+    /**
+     * Describes a generated configuration item with its validation status.
+     *
+     * @param type the item type directory (tools, action-types, report-definitions)
+     * @param name the item name (file name without .json)
+     * @param errors validation errors that block apply
+     * @param warnings advisory messages that don't block apply
+     */
+    public record AssistantItem(String type, String name,
+                                 List<String> errors, List<String> warnings) {
 
         /**
-         * Returns whether this item passed validation.
-         *
-         * @return true if there are no validation errors
+         * Returns whether this item has no errors (warnings are OK).
          */
         public boolean isValid() {
-            return validationErrors.isEmpty();
+            return errors.isEmpty();
+        }
+
+        /**
+         * Returns whether this item has any issues (errors or warnings).
+         */
+        public boolean hasIssues() {
+            return !errors.isEmpty() || !warnings.isEmpty();
         }
     }
 

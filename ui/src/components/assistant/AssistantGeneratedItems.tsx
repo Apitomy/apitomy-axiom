@@ -4,9 +4,11 @@ import {
     EmptyState,
     EmptyStateBody,
     Spinner,
+    Tooltip,
 } from "@patternfly/react-core";
 import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
 import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
+import ExclamationTriangleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-triangle-icon";
 import {
     fetchAssistantItems,
     fetchAssistantItemContent,
@@ -30,7 +32,9 @@ const TYPE_LABELS: Record<string, { label: string; color: "blue" | "green" | "pu
 export function AssistantGeneratedItems({ sessionId, refreshTrigger }: AssistantGeneratedItemsProps) {
     const [items, setItems] = useState<AssistantItem[]>([]);
     const [loading, setLoading] = useState(false);
-    const [selectedItem, setSelectedItem] = useState<{ type: string; name: string } | null>(null);
+    const [selectedItem, setSelectedItem] = useState<{
+        type: string; name: string; errors?: string[]; warnings?: string[];
+    } | null>(null);
     const [itemContent, setItemContent] = useState<Record<string, unknown> | null>(null);
 
     const load = useCallback(() => {
@@ -45,11 +49,14 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger }: Assistant
         load();
     }, [load, refreshTrigger]);
 
-    const handleItemClick = async (type: string, name: string) => {
+    const handleItemClick = async (item: AssistantItem) => {
         try {
-            const content = await fetchAssistantItemContent(sessionId, type, name);
+            const content = await fetchAssistantItemContent(sessionId, item.type, item.name);
             setItemContent(content);
-            setSelectedItem({ type, name });
+            setSelectedItem({
+                type: item.type, name: item.name,
+                errors: item.errors, warnings: item.warnings,
+            });
         } catch (err) {
             console.error("Failed to load item:", err);
         }
@@ -92,7 +99,7 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger }: Assistant
                 return (
                     <div
                         key={`${item.type}/${item.name}`}
-                        onClick={() => handleItemClick(item.type, item.name)}
+                        onClick={() => handleItemClick(item)}
                         style={{
                             display: "flex",
                             alignItems: "center",
@@ -115,11 +122,24 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger }: Assistant
                             {typeInfo.label}
                         </Label>
                         <span style={{ flex: 1, fontSize: "13px" }}>{item.name}</span>
-                        {item.valid ? (
+                        {item.valid && !(item.warnings?.length) ? (
                             <CheckCircleIcon style={{ color: "#3e8635" }} />
-                        ) : (
-                            <ExclamationCircleIcon style={{ color: "#c9190b" }} />
-                        )}
+                        ) : (() => {
+                            const messages = [
+                                ...(item.errors || []).map((e) => `Error: ${e}`),
+                                ...(item.warnings || []).map((w) => `Warning: ${w}`),
+                            ];
+                            const icon = !item.valid
+                                ? <ExclamationCircleIcon style={{ color: "#c9190b" }} />
+                                : <ExclamationTriangleIcon style={{ color: "#f0ab00" }} />;
+                            return (
+                                <Tooltip content={
+                                    <div>{messages.map((m, i) => <div key={i}>{m}</div>)}</div>
+                                }>
+                                    {icon}
+                                </Tooltip>
+                            );
+                        })()}
                     </div>
                 );
             })}
@@ -130,6 +150,8 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger }: Assistant
                     onClose={closeModal}
                     name={selectedItem.name}
                     content={itemContent}
+                    errors={selectedItem.errors}
+                    warnings={selectedItem.warnings}
                 />
             )}
             {selectedItem?.type === "action-types" && itemContent && (
@@ -138,6 +160,8 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger }: Assistant
                     onClose={closeModal}
                     name={selectedItem.name}
                     content={itemContent}
+                    errors={selectedItem.errors}
+                    warnings={selectedItem.warnings}
                 />
             )}
             {selectedItem?.type === "report-definitions" && itemContent && (
@@ -146,6 +170,8 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger }: Assistant
                     onClose={closeModal}
                     name={selectedItem.name}
                     content={itemContent}
+                    errors={selectedItem.errors}
+                    warnings={selectedItem.warnings}
                 />
             )}
         </div>

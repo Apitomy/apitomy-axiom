@@ -49,8 +49,8 @@ class AssistantItemValidatorTest {
                 }
                 """);
 
-        List<String> errors = validator.validate(file, "tools");
-        assertTrue(errors.isEmpty(), "Valid tool should have no errors: " + errors);
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "tools");
+        assertTrue(vr.isValid(), "Valid tool should have no errors: " + vr.errors());
     }
 
     @Test
@@ -62,9 +62,9 @@ class AssistantItemValidatorTest {
                 }
                 """);
 
-        List<String> errors = validator.validate(file, "tools");
-        assertFalse(errors.isEmpty());
-        assertTrue(errors.stream().anyMatch(e -> e.contains("name")));
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "tools");
+        assertFalse(vr.isValid());
+        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("name")));
     }
 
     @Test
@@ -76,9 +76,9 @@ class AssistantItemValidatorTest {
                 }
                 """);
 
-        List<String> errors = validator.validate(file, "tools");
-        assertFalse(errors.isEmpty());
-        assertTrue(errors.stream().anyMatch(e -> e.contains("description")));
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "tools");
+        assertTrue(vr.isValid(), "Missing description is a warning, not an error");
+        assertTrue(vr.warnings().stream().anyMatch(w -> w.contains("description")));
     }
 
     @Test
@@ -90,9 +90,9 @@ class AssistantItemValidatorTest {
                 }
                 """);
 
-        List<String> errors = validator.validate(file, "tools");
-        assertFalse(errors.isEmpty());
-        assertTrue(errors.stream().anyMatch(e -> e.contains("scriptTemplate")));
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "tools");
+        assertFalse(vr.isValid());
+        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("scriptTemplate")));
     }
 
     @Test
@@ -106,9 +106,9 @@ class AssistantItemValidatorTest {
                 }
                 """);
 
-        List<String> errors = validator.validate(file, "tools");
-        assertFalse(errors.isEmpty());
-        assertTrue(errors.stream().anyMatch(e -> e.contains("parameters")));
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "tools");
+        assertFalse(vr.isValid());
+        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("parameters")));
     }
 
     @Test
@@ -122,9 +122,9 @@ class AssistantItemValidatorTest {
                 }
                 """);
 
-        List<String> errors = validator.validate(file, "tools");
-        assertFalse(errors.isEmpty());
-        assertTrue(errors.stream().anyMatch(e -> e.contains("index 0") && e.contains("name")));
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "tools");
+        assertFalse(vr.isValid());
+        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("index 0") && e.contains("name")));
     }
 
     @Test
@@ -138,9 +138,9 @@ class AssistantItemValidatorTest {
                 }
                 """);
 
-        List<String> errors = validator.validate(file, "tools");
-        assertFalse(errors.isEmpty());
-        assertTrue(errors.stream().anyMatch(e -> e.contains("labels")));
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "tools");
+        assertFalse(vr.isValid());
+        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("labels")));
     }
 
     @Test
@@ -154,8 +154,8 @@ class AssistantItemValidatorTest {
                 }
                 """);
 
-        List<String> errors = validator.validate(file, "tools");
-        assertTrue(errors.isEmpty(), "Null parameters should be allowed: " + errors);
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "tools");
+        assertTrue(vr.isValid(), "Null parameters should be allowed: " + vr.errors());
     }
 
     // ── Action type validation ──────────────────────────────────────
@@ -173,8 +173,8 @@ class AssistantItemValidatorTest {
                 }
                 """);
 
-        List<String> errors = validator.validate(file, "action-types");
-        assertTrue(errors.isEmpty(), "Valid action type should have no errors: " + errors);
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "action-types");
+        assertTrue(vr.isValid(), "Valid action type should have no errors: " + vr.errors());
     }
 
     @Test
@@ -188,8 +188,8 @@ class AssistantItemValidatorTest {
                 }
                 """);
 
-        List<String> errors = validator.validate(file, "action-types");
-        assertTrue(errors.isEmpty(), "Valid script action should have no errors: " + errors);
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "action-types");
+        assertTrue(vr.isValid(), "Valid script action should have no errors: " + vr.errors());
     }
 
     @Test
@@ -201,9 +201,9 @@ class AssistantItemValidatorTest {
                 }
                 """);
 
-        List<String> errors = validator.validate(file, "action-types");
-        assertFalse(errors.isEmpty());
-        assertTrue(errors.stream().anyMatch(e -> e.contains("executionMode")));
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "action-types");
+        assertFalse(vr.isValid());
+        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("executionMode")));
     }
 
     @Test
@@ -216,9 +216,9 @@ class AssistantItemValidatorTest {
                 }
                 """);
 
-        List<String> errors = validator.validate(file, "action-types");
-        assertFalse(errors.isEmpty());
-        assertTrue(errors.stream().anyMatch(e -> e.contains("executionMode") && e.contains("invalid")));
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "action-types");
+        assertFalse(vr.isValid());
+        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("executionMode") && e.contains("invalid")));
     }
 
     @Test
@@ -231,9 +231,9 @@ class AssistantItemValidatorTest {
                 }
                 """);
 
-        List<String> errors = validator.validate(file, "action-types");
-        assertFalse(errors.isEmpty());
-        assertTrue(errors.stream().anyMatch(e -> e.contains("promptTemplate")));
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "action-types");
+        assertFalse(vr.isValid());
+        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("promptTemplate")));
     }
 
     @Test
@@ -246,9 +246,9 @@ class AssistantItemValidatorTest {
                 }
                 """);
 
-        List<String> errors = validator.validate(file, "action-types");
-        assertFalse(errors.isEmpty());
-        assertTrue(errors.stream().anyMatch(e -> e.contains("scriptTemplate")));
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "action-types");
+        assertFalse(vr.isValid());
+        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("scriptTemplate")));
     }
 
     // ── Report definition validation ────────────────────────────────
@@ -267,8 +267,8 @@ class AssistantItemValidatorTest {
                 }
                 """);
 
-        List<String> errors = validator.validate(file, "report-definitions");
-        assertTrue(errors.isEmpty(), "Valid report should have no errors: " + errors);
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "report-definitions");
+        assertTrue(vr.isValid(), "Valid report should have no errors: " + vr.errors());
     }
 
     @Test
@@ -281,9 +281,9 @@ class AssistantItemValidatorTest {
                 }
                 """);
 
-        List<String> errors = validator.validate(file, "report-definitions");
-        assertFalse(errors.isEmpty());
-        assertTrue(errors.stream().anyMatch(e -> e.contains("schedule")));
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "report-definitions");
+        assertFalse(vr.isValid());
+        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("schedule")));
     }
 
     @Test
@@ -297,9 +297,9 @@ class AssistantItemValidatorTest {
                 }
                 """);
 
-        List<String> errors = validator.validate(file, "report-definitions");
-        assertFalse(errors.isEmpty());
-        assertTrue(errors.stream().anyMatch(e -> e.contains("schedule") && e.contains("biweekly")));
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "report-definitions");
+        assertFalse(vr.isValid());
+        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("schedule") && e.contains("biweekly")));
     }
 
     @Test
@@ -314,8 +314,8 @@ class AssistantItemValidatorTest {
                 }
                 """);
 
-        List<String> errors = validator.validate(file, "report-definitions");
-        assertTrue(errors.isEmpty(), "Cron schedule should be accepted: " + errors);
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "report-definitions");
+        assertTrue(vr.isValid(), "Cron schedule should be accepted: " + vr.errors());
     }
 
     @Test
@@ -330,9 +330,9 @@ class AssistantItemValidatorTest {
                 }
                 """);
 
-        List<String> errors = validator.validate(file, "report-definitions");
-        assertFalse(errors.isEmpty());
-        assertTrue(errors.stream().anyMatch(e -> e.contains("timeWindow")));
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "report-definitions");
+        assertFalse(vr.isValid());
+        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("timeWindow")));
     }
 
     @Test
@@ -345,9 +345,9 @@ class AssistantItemValidatorTest {
                 }
                 """);
 
-        List<String> errors = validator.validate(file, "report-definitions");
-        assertFalse(errors.isEmpty());
-        assertTrue(errors.stream().anyMatch(e -> e.contains("promptTemplate")));
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "report-definitions");
+        assertFalse(vr.isValid());
+        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("promptTemplate")));
     }
 
     // ── General validation ──────────────────────────────────────────
@@ -359,27 +359,27 @@ class AssistantItemValidatorTest {
         file = file.resolve("bad.json");
         Files.writeString(file, "this is not JSON");
 
-        List<String> errors = validator.validate(file, "tools");
-        assertFalse(errors.isEmpty());
-        assertTrue(errors.stream().anyMatch(e -> e.contains("Invalid JSON")));
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "tools");
+        assertFalse(vr.isValid());
+        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("Invalid JSON")));
     }
 
     @Test
     void nonObjectRootFails() throws IOException {
         Path file = writeJson(tempDir, "tools/array-root.json", "[1, 2, 3]");
 
-        List<String> errors = validator.validate(file, "tools");
-        assertFalse(errors.isEmpty());
-        assertTrue(errors.stream().anyMatch(e -> e.contains("JSON object")));
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "tools");
+        assertFalse(vr.isValid());
+        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("Invalid JSON")));
     }
 
     @Test
     void nonExistentFileFails() {
         Path file = tempDir.resolve("tools/does-not-exist.json");
 
-        List<String> errors = validator.validate(file, "tools");
-        assertFalse(errors.isEmpty());
-        assertTrue(errors.stream().anyMatch(e -> e.contains("does not exist")));
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "tools");
+        assertFalse(vr.isValid());
+        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("does not exist")));
     }
 
     @Test
@@ -388,9 +388,9 @@ class AssistantItemValidatorTest {
                 {"name": "item", "description": "test"}
                 """);
 
-        List<String> errors = validator.validate(file, "unknown");
-        assertFalse(errors.isEmpty());
-        assertTrue(errors.stream().anyMatch(e -> e.contains("Unknown item type")));
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "unknown");
+        assertFalse(vr.isValid());
+        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("Unknown item type")));
     }
 
     // ── detectItemType ──────────────────────────────────────────────

@@ -289,9 +289,13 @@ public class AssistantSessionResource {
                 node.put("type", item.type());
                 node.put("name", item.name());
                 node.put("valid", item.isValid());
-                if (!item.isValid()) {
-                    ArrayNode errArr = node.putArray("validationErrors");
-                    item.validationErrors().forEach(errArr::add);
+                if (!item.errors().isEmpty()) {
+                    ArrayNode errArr = node.putArray("errors");
+                    item.errors().forEach(errArr::add);
+                }
+                if (!item.warnings().isEmpty()) {
+                    ArrayNode warnArr = node.putArray("warnings");
+                    item.warnings().forEach(warnArr::add);
                 }
             }
             return Response.ok(arr).build();

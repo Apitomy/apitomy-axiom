@@ -13,6 +13,9 @@ import {
 } from "@patternfly/react-core";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { useState } from "react";
+import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
+import ExclamationTriangleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-triangle-icon";
+import { ValidationProblemsTab } from "./ValidationProblemsTab";
 import "./ActionTypeDetailModal.css";
 
 interface ActionTypeDetailModalProps {
@@ -20,9 +23,11 @@ interface ActionTypeDetailModalProps {
     onClose: () => void;
     name: string;
     content: Record<string, unknown>;
+    errors?: string[];
+    warnings?: string[];
 }
 
-export function ActionTypeDetailModal({ isOpen, onClose, name, content }: ActionTypeDetailModalProps) {
+export function ActionTypeDetailModal({ isOpen, onClose, name, content, errors, warnings }: ActionTypeDetailModalProps) {
     const [activeTab, setActiveTab] = useState(0);
 
     const description = (content.description as string) || "";
@@ -126,10 +131,24 @@ export function ActionTypeDetailModal({ isOpen, onClose, name, content }: Action
                                     height="100%"
                                     isReadOnly
                                     isLineNumbersVisible
+                                    options={isActorMode ? { wordWrap: "on" } : undefined}
                                 />
                             </div>
                         </Tab>
                     ) : null}
+                    {((errors?.length ?? 0) > 0 || (warnings?.length ?? 0) > 0) && (
+                        <Tab eventKey={2} title={
+                            <TabTitleText>
+                                {(errors?.length ?? 0) > 0
+                                    ? <ExclamationCircleIcon style={{ color: "#c9190b", marginRight: 6 }} />
+                                    : <ExclamationTriangleIcon style={{ color: "#f0ab00", marginRight: 6 }} />
+                                }
+                                Problems ({(errors?.length ?? 0) + (warnings?.length ?? 0)})
+                            </TabTitleText>
+                        }>
+                            <ValidationProblemsTab errors={errors} warnings={warnings} />
+                        </Tab>
+                    )}
                 </Tabs>
             </ModalBody>
         </Modal>

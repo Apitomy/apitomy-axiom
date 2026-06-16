@@ -1176,7 +1176,8 @@ export interface AssistantItem {
     type: string;
     name: string;
     valid: boolean;
-    validationErrors?: string[];
+    errors?: string[];
+    warnings?: string[];
 }
 
 export async function createAssistantSession(name?: string): Promise<AssistantSessionInfo> {
