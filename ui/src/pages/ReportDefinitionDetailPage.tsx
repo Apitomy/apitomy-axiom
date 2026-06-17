@@ -241,9 +241,11 @@ export function ReportDefinitionDetailPage() {
                 reportName={form.name}
                 reportDescription={form.description}
                 onApply={(prompt, newTools) => {
-                    updateForm({ promptTemplate: prompt });
+                    const updated = { ...form, promptTemplate: prompt };
+                    setForm(updated);
                     setTools(newTools);
                     setDirty(true);
+                    runValidation(buildValidationData(updated, newTools, initialLabels, envVars));
                 }}
                 onClose={() => setAiModalOpen(false)}
             />

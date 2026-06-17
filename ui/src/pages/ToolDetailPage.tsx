@@ -279,9 +279,11 @@ export function ToolDetailPage() {
                 form={form}
                 params={params}
                 onApply={(updates, newParams) => {
+                    const updated = { ...form, ...updates, parameters: newParams, labels };
                     setForm((prev) => ({ ...prev, ...updates }));
                     setParams(newParams);
                     setDirty(true);
+                    runValidation(updated);
                 }}
                 onClose={() => setAiModalOpen(false)}
             />
