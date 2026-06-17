@@ -163,8 +163,9 @@ export async function importPack(packJson: string): Promise<ImportResult> {
     return response.json();
 }
 
-export async function fetchModels(): Promise<string[]> {
-    const response = await fetch(`${API}/system/models`);
+export async function fetchModels(engine?: string): Promise<string[]> {
+    const params = engine ? `?engine=${encodeURIComponent(engine)}` : "";
+    const response = await fetch(`${API}/system/models${params}`);
     if (!response.ok) throw new Error(`Failed to fetch models: ${response.status}`);
     return response.json();
 }

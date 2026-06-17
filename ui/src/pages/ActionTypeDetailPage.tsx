@@ -118,11 +118,17 @@ export function ActionTypeDetailPage() {
 
     useEffect(() => { loadData(); }, [loadData]);
     useEffect(() => {
-        fetchModels().then(setAvailableModels).catch(console.error);
         fetchEngines().then(setAvailableEngines).catch(console.error);
     }, []);
 
+    useEffect(() => {
+        fetchModels(form.engine || undefined).then(setAvailableModels).catch(console.error);
+    }, [form.engine]);
+
     const updateForm = (updates: Partial<NewActionType>) => {
+        if (updates.engine !== undefined && updates.engine !== form.engine) {
+            updates = { ...updates, model: undefined };
+        }
         setForm((prev) => {
             const updated = { ...prev, ...updates };
             runValidation(buildValidationData(updated, tools, envVars));
