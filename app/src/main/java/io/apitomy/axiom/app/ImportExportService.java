@@ -198,7 +198,7 @@ public class ImportExportService {
             ToolsetEntity entity = new ToolsetEntity();
             entity.name = item.path("name").asText();
             entity.description = textOrNull(item, "description");
-            entity.tools = textOrNull(item, "tools");
+            entity.tools = csvOrNull(item, "tools");
             entity.persist();
             count++;
         }
@@ -234,7 +234,7 @@ public class ImportExportService {
             entity.managerTriggerable = item.path("managerTriggerable").asBoolean(false);
             entity.emitsEvent = item.path("emitsEvent").asBoolean(false);
             entity.inputSchema = jsonOrNull(item, "inputSchema");
-            entity.allowedTools = textOrNull(item, "allowedTools");
+            entity.allowedTools = csvOrNull(item, "allowedTools");
             entity.promptTemplate = textOrNull(item, "promptTemplate");
             entity.scriptTemplate = textOrNull(item, "scriptTemplate");
             entity.model = textOrNull(item, "model");
@@ -258,7 +258,7 @@ public class ImportExportService {
             entity.scheduleDayOfWeek = textOrNull(item, "scheduleDayOfWeek");
             entity.timeWindow = item.path("timeWindow").asText("last-7d");
             entity.promptTemplate = item.path("promptTemplate").asText("");
-            entity.allowedTools = textOrNull(item, "allowedTools");
+            entity.allowedTools = csvOrNull(item, "allowedTools");
             entity.environment = jsonOrNull(item, "environment");
             entity.timeoutSeconds = item.has("timeoutSeconds")
                     ? item.path("timeoutSeconds").asInt() : null;
@@ -350,5 +350,27 @@ public class ImportExportService {
     private String jsonOrNull(JsonNode node, String field) {
         JsonNode value = node.path(field);
         return value.isMissingNode() || value.isNull() ? null : value.toString();
+    }
+
+    /**
+     * Reads a field that is stored as a comma-separated string but may appear
+     * in the JSON as either a string or an array of strings.
+     */
+    private String csvOrNull(JsonNode node, String field) {
+        JsonNode value = node.path(field);
+        if (value.isMissingNode() || value.isNull()) {
+            return null;
+        }
+        if (value.isArray()) {
+            List<String> items = new ArrayList<>();
+            for (JsonNode item : value) {
+                String text = item.asText("").trim();
+                if (!text.isEmpty()) {
+                    items.add(text);
+                }
+            }
+            return items.isEmpty() ? null : String.join(",", items);
+        }
+        return value.asText();
     }
 }
