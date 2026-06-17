@@ -194,7 +194,7 @@ public class TaskExecutionService {
                 List<String> caps = java.util.Arrays.stream(actor.capabilities.split(","))
                         .map(String::trim)
                         .toList();
-                if (caps.contains(task.actionType) && !isActorBusy(actor.id)) {
+                if ((caps.contains("*") || caps.contains(task.actionType)) && !isActorBusy(actor.id)) {
                     return actor;
                 }
             }
