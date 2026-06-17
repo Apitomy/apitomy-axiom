@@ -177,7 +177,7 @@ public class ImportExportService {
             ToolDefinitionEntity entity = new ToolDefinitionEntity();
             entity.name = item.path("name").asText();
             entity.description = textOrNull(item, "description");
-            entity.parameters = textOrNull(item, "parameters");
+            entity.parameters = jsonOrNull(item, "parameters");
             entity.scriptTemplate = textOrNull(item, "scriptTemplate");
             JsonNode labelsNode = item.path("labels");
             if (labelsNode.isArray()) {
@@ -213,8 +213,8 @@ public class ImportExportService {
             entity.name = item.path("name").asText();
             entity.description = textOrNull(item, "description");
             entity.serverCommand = textOrNull(item, "serverCommand");
-            entity.serverArgs = textOrNull(item, "serverArgs");
-            entity.serverEnv = textOrNull(item, "serverEnv");
+            entity.serverArgs = jsonOrNull(item, "serverArgs");
+            entity.serverEnv = jsonOrNull(item, "serverEnv");
             entity.serverUrl = textOrNull(item, "serverUrl");
             entity.persist();
             count++;
@@ -233,13 +233,13 @@ public class ImportExportService {
             entity.userTriggerable = item.path("userTriggerable").asBoolean(false);
             entity.managerTriggerable = item.path("managerTriggerable").asBoolean(false);
             entity.emitsEvent = item.path("emitsEvent").asBoolean(false);
-            entity.inputSchema = textOrNull(item, "inputSchema");
+            entity.inputSchema = jsonOrNull(item, "inputSchema");
             entity.allowedTools = textOrNull(item, "allowedTools");
             entity.promptTemplate = textOrNull(item, "promptTemplate");
             entity.scriptTemplate = textOrNull(item, "scriptTemplate");
             entity.model = textOrNull(item, "model");
             entity.engine = textOrNull(item, "engine");
-            entity.environment = textOrNull(item, "environment");
+            entity.environment = jsonOrNull(item, "environment");
             entity.persist();
             count++;
         }
@@ -259,7 +259,7 @@ public class ImportExportService {
             entity.timeWindow = item.path("timeWindow").asText("last-7d");
             entity.promptTemplate = item.path("promptTemplate").asText("");
             entity.allowedTools = textOrNull(item, "allowedTools");
-            entity.environment = textOrNull(item, "environment");
+            entity.environment = jsonOrNull(item, "environment");
             entity.timeoutSeconds = item.has("timeoutSeconds")
                     ? item.path("timeoutSeconds").asInt() : null;
             entity.enabled = false;
@@ -345,5 +345,10 @@ public class ImportExportService {
     private String textOrNull(JsonNode node, String field) {
         JsonNode value = node.path(field);
         return value.isMissingNode() || value.isNull() ? null : value.asText();
+    }
+
+    private String jsonOrNull(JsonNode node, String field) {
+        JsonNode value = node.path(field);
+        return value.isMissingNode() || value.isNull() ? null : value.toString();
     }
 }
