@@ -41,7 +41,10 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Getting Started: getting-started.md
+  - Getting Started:
+    - Running Axiom: getting-started/running-axiom.md
+    - Configuring Axiom: getting-started/configuring-axiom.md
+    - How to Contribute: getting-started/contributing.md
   - User Guide:
     - user-guide/index.md
 

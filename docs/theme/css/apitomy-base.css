@@ -253,6 +253,7 @@
 .highlight .p { color: #CBD5E1; }
 .highlight .o { color: #CBD5E1; }
 .highlight .na { color: var(--project-color-light); }
+.highlight .nv { color: var(--project-color-light); }
 .highlight .n { color: #38BDF8; }
 .highlight .kc { color: #34D399; }
 .highlight .k { color: #34D399; }

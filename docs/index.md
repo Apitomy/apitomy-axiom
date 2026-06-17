@@ -14,26 +14,9 @@ long-lived projects around them, and delegates work to human and AI actors.
 
 ## Quick Links
 
-- [Getting Started](getting-started.md) — Prerequisites, building, and running
+- [Running Axiom](getting-started/running-axiom.md) — Prerequisites and running Axiom
 - [User Guide](user-guide/index.md) — Architecture, configuration, and extending Axiom
 - [GitHub Repository](https://github.com/Apitomy/apitomy-axiom) — Source code and issues
-
-## Architecture Overview
-
-Axiom is built as a multi-module Quarkus application:
-
-```
-events/          → Event sources (GitHub, Jira) poll or receive webhooks
-  ↓
-manager/         → AI Manager triages events and creates tasks
-  ↓
-actors/          → Actors (Claude Code, OpenCode, Human) execute tasks
-  ↓
-core/            → Domain entities, project lifecycle, workspace management
-  ↓
-app/             → Quarkus application assembles everything
-ui/              → React frontend provides visibility and configuration
-```
 
 ## Tech Stack
 
