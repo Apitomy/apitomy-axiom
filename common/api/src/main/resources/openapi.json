@@ -65,8 +65,19 @@
           "System"
         ],
         "summary": "List available AI models",
-        "description": "Returns the list of AI models that can be used for action type configuration.",
+        "description": "Returns the list of AI models available for the specified engine, or the default engine if not specified.",
         "operationId": "listModels",
+        "parameters": [
+          {
+            "name": "engine",
+            "in": "query",
+            "description": "Engine type to list models for (e.g. opencode, claude-code). Defaults to the active engine.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {

@@ -103,13 +103,14 @@ public class SystemResourceImpl implements SystemResource {
     /**
      * {@inheritDoc}
      *
-     * Returns the available models for the active AI engine. For Claude Code,
-     * returns the static list from config. For OpenCode, returns models in
-     * provider/model format.
+     * Returns the available models for the specified engine, or the default
+     * engine if not specified. Claude Code returns short model names;
+     * OpenCode returns provider/model format.
      */
     @Override
-    public List<String> listModels() {
-        String models = "opencode".equals(aiEngine.getType())
+    public List<String> listModels(String engine) {
+        String engineType = (engine != null && !engine.isBlank()) ? engine : aiEngine.getType();
+        String models = "opencode".equals(engineType)
                 ? openCodeAvailableModels
                 : claudeAvailableModels;
 
