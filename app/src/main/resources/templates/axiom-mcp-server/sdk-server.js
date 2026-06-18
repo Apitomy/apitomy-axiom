@@ -53,16 +53,18 @@ const SDK_TOOLS = [
     },
     {
         name: "axiom_list_projects",
-        description: "List existing Axiom projects with optional filtering by name and status.",
+        description: "List existing Axiom projects with optional filtering by name, status, and labels.",
         parameters: [
             { name: "filterName", type: "string", description: "Filter by project name or issue ref (substring match)", required: false },
             { name: "filterStatus", type: "string", description: "Filter by status: Created, InProgress, Idle, Completed (comma-separated for multiple)", required: false },
+            { name: "filterLabels", type: "string", description: "Filter by labels (comma-separated, AND logic)", required: false },
         ],
         handler: async (args) => {
             const params = new URLSearchParams();
             params.set("limit", "50");
             if (args.filterName) params.set("filterName", args.filterName);
             if (args.filterStatus) params.set("filterStatus", args.filterStatus);
+            if (args.filterLabels) params.set("filterLabels", args.filterLabels);
             return await axiomApi("GET", `/projects?${params}`);
         },
     },
@@ -202,12 +204,14 @@ const SDK_TOOLS = [
         name: "axiom_list_tools",
         description: "List all custom tool definitions configured in Axiom. Returns names, descriptions, and parameter info for each tool.",
         parameters: [
-            { name: "filterName", type: "string", description: "Filter by tool name (substring match)", required: false },
+            { name: "filterName", type: "string", description: "Filter by tool name or description (substring match)", required: false },
+            { name: "filterLabels", type: "string", description: "Filter by labels (comma-separated, AND logic)", required: false },
         ],
         handler: async (args) => {
             const params = new URLSearchParams();
             params.set("limit", "100");
             if (args.filterName) params.set("filterName", args.filterName);
+            if (args.filterLabels) params.set("filterLabels", args.filterLabels);
             return await axiomApi("GET", `/tools?${params}`);
         },
     },
@@ -217,6 +221,111 @@ const SDK_TOOLS = [
         parameters: [],
         handler: async () => {
             return await axiomApi("GET", "/reports/definitions");
+        },
+    },
+    {
+        name: "axiom_list_reports",
+        description: "List generated reports with optional filtering by definition, status, title, and labels.",
+        parameters: [
+            { name: "filterDefinitionId", type: "number", description: "Filter by report definition ID", required: false },
+            { name: "filterStatus", type: "string", description: "Filter by status (comma-separated)", required: false },
+            { name: "filterTitle", type: "string", description: "Filter by title (substring match)", required: false },
+            { name: "filterLabels", type: "string", description: "Filter by labels (comma-separated, AND logic)", required: false },
+        ],
+        handler: async (args) => {
+            const params = new URLSearchParams();
+            params.set("limit", "50");
+            if (args.filterDefinitionId) params.set("filterDefinitionId", String(args.filterDefinitionId));
+            if (args.filterStatus) params.set("filterStatus", args.filterStatus);
+            if (args.filterTitle) params.set("filterTitle", args.filterTitle);
+            if (args.filterLabels) params.set("filterLabels", args.filterLabels);
+            return await axiomApi("GET", `/reports?${params}`);
+        },
+    },
+    {
+        name: "axiom_get_project_thread",
+        description: "Read the conversation thread for a project. Returns all messages posted by actors, the manager, and humans.",
+        parameters: [
+            { name: "projectId", type: "number", description: "The project ID", required: true },
+        ],
+        handler: async (args) => {
+            return await axiomApi("GET", `/projects/${args.projectId}/thread`);
+        },
+    },
+    {
+        name: "axiom_list_action_types",
+        description: "List all action types configured in Axiom. Returns names, descriptions, execution modes, and trigger settings.",
+        parameters: [
+            { name: "filterName", type: "string", description: "Filter by action type name (substring match)", required: false },
+        ],
+        handler: async (args) => {
+            const params = new URLSearchParams();
+            params.set("limit", "100");
+            if (args.filterName) params.set("filterName", args.filterName);
+            return await axiomApi("GET", `/action-types?${params}`);
+        },
+    },
+    {
+        name: "axiom_list_actors",
+        description: "List all actors (human and AI agent) configured in Axiom. Returns names, types, capabilities, and descriptions.",
+        parameters: [],
+        handler: async () => {
+            return await axiomApi("GET", "/actors");
+        },
+    },
+    {
+        name: "axiom_update_project",
+        description: "Update an Axiom project's metadata such as name, description, or labels.",
+        parameters: [
+            { name: "projectId", type: "number", description: "The project ID to update", required: true },
+            { name: "name", type: "string", description: "New project name", required: false },
+            { name: "description", type: "string", description: "New project description", required: false },
+            { name: "labels", type: "string", description: "Comma-separated list of labels to set on the project", required: false },
+        ],
+        handler: async (args) => {
+            const body = {};
+            if (args.name) body.name = args.name;
+            if (args.description) body.description = args.description;
+            if (args.labels) body.labels = args.labels.split(",").map(l => l.trim()).filter(Boolean);
+            return await axiomApi("PUT", `/projects/${args.projectId}`, body);
+        },
+    },
+    {
+        name: "axiom_list_events",
+        description: "List events related to an Axiom project. Returns event source, type, payload, and timestamps.",
+        parameters: [
+            { name: "projectId", type: "number", description: "The project ID", required: true },
+        ],
+        handler: async (args) => {
+            return await axiomApi("GET", `/projects/${args.projectId}/events`);
+        },
+    },
+    {
+        name: "axiom_respond_to_task",
+        description: "Submit a response to a task that is waiting for human input.",
+        parameters: [
+            { name: "projectId", type: "number", description: "The project ID", required: true },
+            { name: "taskId", type: "number", description: "The task ID awaiting a response", required: true },
+            { name: "response", type: "string", description: "The response content to submit", required: true },
+        ],
+        handler: async (args) => {
+            return await axiomApi("POST", `/projects/${args.projectId}/tasks/${args.taskId}/respond`, {
+                response: args.response,
+            });
+        },
+    },
+    {
+        name: "axiom_get_activity_log",
+        description: "Get the global activity log, optionally filtered by project. Returns a timeline of events, tasks, and actions.",
+        parameters: [
+            { name: "projectId", type: "number", description: "Filter by project ID", required: false },
+            { name: "limit", type: "number", description: "Maximum number of entries to return (default 50)", required: false },
+        ],
+        handler: async (args) => {
+            const params = new URLSearchParams();
+            params.set("limit", String(args.limit || 50));
+            if (args.projectId) params.set("filterProjectId", String(args.projectId));
+            return await axiomApi("GET", `/activity?${params}`);
         },
     },
 ];
