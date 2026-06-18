@@ -319,9 +319,9 @@ public class TaskExecutionService {
             task.status = "InProgress";
             task.assignedActor = actorEntityId;
 
-            // Update project status
+            // Update project status (don't overwrite Completed)
             ProjectEntity project = ProjectEntity.findById(task.projectId);
-            if (project != null) {
+            if (project != null && !"Completed".equals(project.status)) {
                 project.status = "InProgress";
                 project.updatedOn = Instant.now();
             }
@@ -348,9 +348,9 @@ public class TaskExecutionService {
             task.status = "AwaitingInput";
             task.assignedActor = actorEntityId;
 
-            // Update project status
+            // Update project status (don't overwrite Completed)
             ProjectEntity project = ProjectEntity.findById(task.projectId);
-            if (project != null) {
+            if (project != null && !"Completed".equals(project.status)) {
                 project.status = "InProgress";
                 project.updatedOn = Instant.now();
             }
