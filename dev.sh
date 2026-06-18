@@ -19,6 +19,7 @@
 # Usage:
 #   ./dev.sh              # start both backend and UI
 #   ./dev.sh --skip-ui    # start backend only (Quarkus dev mode)
+#   ./dev.sh --persist    # enable persistent storage (H2 file-based DB)
 #
 # Open http://localhost:8888 in your browser.
 #
@@ -29,9 +30,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 SKIP_UI=false
+PERSIST=false
 for arg in "$@"; do
     case "$arg" in
         --skip-ui) SKIP_UI=true ;;
+        --persist) PERSIST=true ;;
     esac
 done
 
@@ -109,8 +112,14 @@ trap cleanup EXIT INT TERM
 
 # ── Start Quarkus dev mode ────────────────────────────────────────
 
-echo "Starting Quarkus backend on http://localhost:8080 ..."
-mvn quarkus:dev -pl app -Ddebug=false -q &
+QUARKUS_ARGS=(-pl app -Ddebug=false -q)
+if [[ "$PERSIST" == true ]]; then
+    QUARKUS_ARGS+=(-Dquarkus.profile=persist)
+    echo "Starting Quarkus backend on http://localhost:8080 (persistence enabled) ..."
+else
+    echo "Starting Quarkus backend on http://localhost:8080 ..."
+fi
+mvn quarkus:dev "${QUARKUS_ARGS[@]}" &
 PIDS+=($!)
 
 # ── Start Vite dev server ─────────────────────────────────────────
