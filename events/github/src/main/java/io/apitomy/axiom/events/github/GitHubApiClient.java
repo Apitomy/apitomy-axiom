@@ -66,6 +66,43 @@ public class GitHubApiClient {
         return doGet(url, token);
     }
 
+    /**
+     * Fetches pull requests updated since the given timestamp.
+     *
+     * <p>The GitHub Pulls API does not support a {@code since} query parameter,
+     * so all recently-updated PRs are returned. The caller must filter by
+     * {@code updated_at} to find PRs changed since the last poll.</p>
+     *
+     * @param owner the repository owner
+     * @param repo the repository name
+     * @param token GitHub API token (may be null for public repos)
+     * @return the API result with the JSON array of pull requests
+     */
+    public ApiResult fetchPullsUpdatedSince(String owner, String repo, String token) {
+        String url = GITHUB_API_BASE + "/repos/" + owner + "/" + repo
+                + "/pulls?state=all&sort=updated&direction=asc&per_page=100";
+        return doGet(url, token);
+    }
+
+    /**
+     * Fetches pull request review comments updated since the given timestamp.
+     *
+     * @param owner the repository owner
+     * @param repo the repository name
+     * @param since only return comments updated after this time (may be null for first poll)
+     * @param token GitHub API token (may be null for public repos)
+     * @return the API result with the JSON array of review comments
+     */
+    public ApiResult fetchPullReviewCommentsUpdatedSince(String owner, String repo,
+                                                          Instant since, String token) {
+        String url = GITHUB_API_BASE + "/repos/" + owner + "/" + repo
+                + "/pulls/comments?sort=updated&direction=asc&per_page=100";
+        if (since != null) {
+            url += "&since=" + DateTimeFormatter.ISO_INSTANT.format(since);
+        }
+        return doGet(url, token);
+    }
+
     private ApiResult doGet(String url, String token) {
         try {
             HttpRequest.Builder builder = HttpRequest.newBuilder()

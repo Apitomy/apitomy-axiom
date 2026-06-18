@@ -27,7 +27,9 @@ public final class GitHubEventNormalizer {
         return switch (githubEvent) {
             case "issues" -> normalizeIssueEvent(action);
             case "issue_comment" -> normalizeIssueCommentEvent(action);
-            default -> null; // Unsupported event type
+            case "pull_request" -> normalizePullRequestEvent(action, payload);
+            case "pull_request_review_comment" -> normalizePullRequestReviewCommentEvent(action);
+            default -> null;
         };
     }
 
@@ -47,6 +49,31 @@ public final class GitHubEventNormalizer {
 
         String fullName = repo.path("full_name").asText(null);
         int number = issue.path("number").asInt(0);
+
+        if (fullName == null || number == 0) {
+            return null;
+        }
+
+        return fullName + "#" + number;
+    }
+
+    /**
+     * Extracts the pull request reference (owner/repo#number) from the payload.
+     * Falls back to {@link #extractIssueRef(JsonNode)} for issue payloads.
+     *
+     * @param payload the parsed JSON payload
+     * @return the PR or issue reference, or null if not found
+     */
+    public static String extractPrRef(JsonNode payload) {
+        JsonNode pr = payload.path("pull_request");
+        JsonNode repo = payload.path("repository");
+
+        if (pr.isMissingNode() || repo.isMissingNode()) {
+            return extractIssueRef(payload);
+        }
+
+        String fullName = repo.path("full_name").asText(null);
+        int number = pr.path("number").asInt(0);
 
         if (fullName == null || number == 0) {
             return null;
@@ -85,6 +112,35 @@ public final class GitHubEventNormalizer {
         return switch (action) {
             case "created" -> "comment-added";
             default -> null; // edited/deleted comments are ignored for now
+        };
+    }
+
+    private static String normalizePullRequestEvent(String action, JsonNode payload) {
+        if (action == null) {
+            return null;
+        }
+        return switch (action) {
+            case "opened" -> "pr-created";
+            case "edited", "labeled", "unlabeled", "assigned", "unassigned",
+                 "review_requested", "review_request_removed",
+                 "ready_for_review", "converted_to_draft",
+                 "synchronize" -> "pr-updated";
+            case "closed" -> {
+                boolean merged = payload.path("pull_request").path("merged").asBoolean(false);
+                yield merged ? "pr-merged" : "pr-closed";
+            }
+            case "reopened" -> "pr-reopened";
+            default -> null;
+        };
+    }
+
+    private static String normalizePullRequestReviewCommentEvent(String action) {
+        if (action == null) {
+            return null;
+        }
+        return switch (action) {
+            case "created" -> "pr-review-comment";
+            default -> null;
         };
     }
 }

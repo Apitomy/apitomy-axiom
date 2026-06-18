@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Polls the GitHub API for new issue and comment events on monitored event sources.
+ * Polls the GitHub API for new issue, comment, and pull request events on monitored event sources.
  *
  * <p>This provides an alternative to webhooks for environments where inbound
  * connectivity is not available (e.g. local development behind a firewall).</p>
@@ -28,6 +28,8 @@ import java.util.List;
  * <ol>
  *   <li>Fetches issues updated since the last poll</li>
  *   <li>Fetches comments created since the last poll</li>
+ *   <li>Fetches pull requests updated since the last poll</li>
+ *   <li>Fetches pull request review comments since the last poll</li>
  *   <li>Determines the event type for each and ingests new events</li>
  *   <li>Updates the event source's {@code lastPolledAt} timestamp</li>
  * </ol>
@@ -155,10 +157,32 @@ public class GitHubPoller {
             return;
         }
 
+        ApiResult pullsResult = apiClient.fetchPullsUpdatedSince(owner, name, token);
+        logLines.add("\n── Pull Requests API ──");
+        logLines.add(pullsResult.formatDetail());
+        if (!pullsResult.success()) {
+            LOG.warnf("GitHub Pulls API failed for %s: %s", repo, pullsResult.errorMessage());
+            logLines.add("Pull requests API failed, continuing with issues and comments only.");
+        }
+
+        ApiResult reviewCommentsResult = apiClient.fetchPullReviewCommentsUpdatedSince(owner, name, since, token);
+        logLines.add("\n── Review Comments API ──");
+        logLines.add(reviewCommentsResult.formatDetail());
+        if (!reviewCommentsResult.success()) {
+            LOG.warnf("GitHub Review Comments API failed for %s: %s", repo, reviewCommentsResult.errorMessage());
+            logLines.add("Review comments API failed, continuing without review comments.");
+        }
+
         logLines.add("\n── Events ──");
         int issueEvents = processIssues(source.id, issuesResult, owner, name, since, logLines);
         int commentEvents = processComments(source.id, commentsResult, owner, name, since, logLines);
-        int eventsIngested = issueEvents + commentEvents;
+        int prEvents = pullsResult.success()
+                ? processPullRequests(source.id, pullsResult, owner, name, since, logLines)
+                : 0;
+        int reviewCommentEvents = reviewCommentsResult.success()
+                ? processReviewComments(source.id, reviewCommentsResult, owner, name, since, logLines)
+                : 0;
+        int eventsIngested = issueEvents + commentEvents + prEvents + reviewCommentEvents;
 
         updateLastPolledAt(source.id, pollStartedAt);
 
@@ -228,7 +252,6 @@ public class GitHubPoller {
                 continue;
             }
 
-            // Only process comments created after our last poll (not edited ones)
             Instant createdAt = parseGitHubTimestamp(comment.path("created_at").asText(null));
             if (since != null && createdAt != null && !createdAt.isAfter(since)) {
                 continue;
@@ -252,6 +275,84 @@ public class GitHubPoller {
         return count;
     }
 
+    private int processPullRequests(Long eventSourceId, ApiResult result, String owner, String name,
+                                     Instant since, List<String> logLines) {
+        if (result.data() == null || !result.data().isArray()) {
+            logLines.add("Pull requests: no data returned");
+            return 0;
+        }
+
+        int total = result.data().size();
+        int count = 0;
+        String repoFullName = owner + "/" + name;
+
+        for (JsonNode pr : result.data()) {
+            Instant updatedAt = parseGitHubTimestamp(pr.path("updated_at").asText(null));
+            if (since != null && updatedAt != null && !updatedAt.isAfter(since)) {
+                continue;
+            }
+
+            String eventType = determinePrEventType(pr, since);
+            if (eventType == null) continue;
+
+            int number = pr.path("number").asInt(0);
+            String issueRef = repoFullName + "#" + number;
+
+            try {
+                String payload = objectMapper.writeValueAsString(wrapPrAsWebhookPayload(
+                        pr, repoFullName, eventType));
+                eventService.ingestEvent(eventSourceId, "github", eventType, issueRef, repoFullName, payload);
+                logLines.add("  " + eventType + ": " + issueRef + " — " + pr.path("title").asText(""));
+                count++;
+            } catch (Exception e) {
+                logLines.add("  Failed to ingest PR " + issueRef + ": " + e.getMessage());
+                LOG.warnf(e, "Failed to ingest PR event for %s", issueRef);
+            }
+        }
+        logLines.add("Pull requests: " + total + " returned by API, " + count + " event(s) ingested");
+        return count;
+    }
+
+    private int processReviewComments(Long eventSourceId, ApiResult result, String owner, String name,
+                                       Instant since, List<String> logLines) {
+        if (result.data() == null || !result.data().isArray()) {
+            logLines.add("Review comments: no data returned");
+            return 0;
+        }
+
+        int count = 0;
+        String repoFullName = owner + "/" + name;
+
+        for (JsonNode comment : result.data()) {
+            String prUrl = comment.path("pull_request_url").asText("");
+            int prNumber = extractIssueNumberFromUrl(prUrl);
+            if (prNumber == 0) {
+                continue;
+            }
+
+            Instant createdAt = parseGitHubTimestamp(comment.path("created_at").asText(null));
+            if (since != null && createdAt != null && !createdAt.isAfter(since)) {
+                continue;
+            }
+
+            String issueRef = repoFullName + "#" + prNumber;
+
+            try {
+                String payload = objectMapper.writeValueAsString(wrapReviewCommentAsWebhookPayload(
+                        comment, repoFullName, prNumber));
+                eventService.ingestEvent(eventSourceId, "github", "pr-review-comment", issueRef, repoFullName, payload);
+                String author = comment.path("user").path("login").asText("unknown");
+                logLines.add("  pr-review-comment: " + issueRef + " by " + author);
+                count++;
+            } catch (Exception e) {
+                logLines.add("  Failed to ingest review comment for " + issueRef + ": " + e.getMessage());
+                LOG.warnf(e, "Failed to ingest review comment event for %s", issueRef);
+            }
+        }
+        logLines.add("Review comments: " + result.data().size() + " returned by API, " + count + " new comment(s) ingested");
+        return count;
+    }
+
     /**
      * Determines the event type for an issue based on its state and timing.
      */
@@ -261,31 +362,59 @@ public class GitHubPoller {
         Instant updatedAt = parseGitHubTimestamp(issue.path("updated_at").asText(null));
         Instant closedAt = parseGitHubTimestamp(issue.path("closed_at").asText(null));
 
-        // If this is the first poll, only treat newly created issues as events
         if (since == null) {
             return null;
         }
 
-        // Issue was created after our last poll
         if (createdAt != null && createdAt.isAfter(since)) {
             return "issue-created";
         }
 
-        // Issue was closed after our last poll
         if ("closed".equals(state) && closedAt != null && closedAt.isAfter(since)) {
             return "issue-closed";
         }
 
-        // Issue was updated (but not created or closed) after our last poll
         if (updatedAt != null && updatedAt.isAfter(since)) {
-            // Could be a reopen, edit, label change, etc.
-            // We can't distinguish reopened from other updates via the issues API alone,
-            // so we emit issue-updated as a catch-all
             if ("open".equals(state) && closedAt != null) {
-                // Was previously closed and is now open — likely reopened
                 return "issue-reopened";
             }
             return "issue-updated";
+        }
+
+        return null;
+    }
+
+    /**
+     * Determines the event type for a pull request based on its state and timing.
+     */
+    String determinePrEventType(JsonNode pr, Instant since) {
+        String state = pr.path("state").asText("");
+        Instant createdAt = parseGitHubTimestamp(pr.path("created_at").asText(null));
+        Instant updatedAt = parseGitHubTimestamp(pr.path("updated_at").asText(null));
+        Instant closedAt = parseGitHubTimestamp(pr.path("closed_at").asText(null));
+        Instant mergedAt = parseGitHubTimestamp(pr.path("merged_at").asText(null));
+
+        if (since == null) {
+            return null;
+        }
+
+        if (createdAt != null && createdAt.isAfter(since)) {
+            return "pr-created";
+        }
+
+        if (mergedAt != null && mergedAt.isAfter(since)) {
+            return "pr-merged";
+        }
+
+        if ("closed".equals(state) && closedAt != null && closedAt.isAfter(since) && mergedAt == null) {
+            return "pr-closed";
+        }
+
+        if (updatedAt != null && updatedAt.isAfter(since)) {
+            if ("open".equals(state) && closedAt != null) {
+                return "pr-reopened";
+            }
+            return "pr-updated";
         }
 
         return null;
@@ -321,7 +450,38 @@ public class GitHubPoller {
         return node;
     }
 
-    private Instant parseGitHubTimestamp(String timestamp) {
+    /**
+     * Wraps a GitHub Pulls API response into a structure resembling a webhook payload,
+     * so the downstream processing is consistent regardless of event source.
+     */
+    private JsonNode wrapPrAsWebhookPayload(JsonNode pr, String repoFullName, String eventType) {
+        String action = switch (eventType) {
+            case "pr-created" -> "opened";
+            case "pr-closed" -> "closed";
+            case "pr-merged" -> "closed";
+            case "pr-reopened" -> "reopened";
+            default -> "edited";
+        };
+        var node = objectMapper.createObjectNode();
+        node.put("action", action);
+        node.put("polled", true);
+        node.set("pull_request", pr);
+        return node;
+    }
+
+    /**
+     * Wraps a GitHub Pull Review Comments API response into a structure resembling a webhook payload.
+     */
+    private JsonNode wrapReviewCommentAsWebhookPayload(JsonNode comment, String repoFullName, int prNumber) {
+        var node = objectMapper.createObjectNode();
+        node.put("action", "created");
+        node.put("polled", true);
+        node.putObject("pull_request").put("number", prNumber);
+        node.set("comment", comment);
+        return node;
+    }
+
+    Instant parseGitHubTimestamp(String timestamp) {
         if (timestamp == null || timestamp.isEmpty()) {
             return null;
         }
