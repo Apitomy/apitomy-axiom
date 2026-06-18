@@ -26,6 +26,8 @@ import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
+import GithubIcon from "@patternfly/react-icons/dist/esm/icons/github-icon";
+import JiraIcon from "@patternfly/react-icons/dist/esm/icons/jira-icon";
 import {
     type ChipFilterCriteria,
     type ChipFilterType,
@@ -243,9 +245,7 @@ export function ProjectsPage() {
                             <Tr>
                                 <Th>Name</Th>
                                 <Th>Status</Th>
-                                <Th>Type</Th>
                                 <Th>Issue</Th>
-                                <Th>Repository</Th>
                                 <Th>Labels</Th>
                                 <Th>Updated</Th>
                                 <Th />
@@ -258,17 +258,17 @@ export function ProjectsPage() {
                                     isClickable
                                     onRowClick={() => navigate(`/projects/${project.id}`)}
                                 >
-                                    <Td>{project.name}</Td>
+                                    <Td>
+                                        {project.issueSource === "github" && <GithubIcon style={{ marginRight: 6 }} />}
+                                        {project.issueSource === "jira" && <JiraIcon style={{ marginRight: 6 }} />}
+                                        {project.name}
+                                    </Td>
                                     <Td>
                                         <Label isCompact={true} color={STATUS_COLORS[project.status] || "grey"}>
                                             {STATUS_LABELS[project.status] || project.status}
                                         </Label>
                                     </Td>
-                                    <Td>
-                                        <Label isCompact>{project.type}</Label>
-                                    </Td>
                                     <Td>{project.issueRef}</Td>
-                                    <Td>{project.repository}</Td>
                                     <Td>
                                         {project.labels?.map((label) => (
                                             <Label key={label} isCompact color="purple"

@@ -40,6 +40,8 @@ import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import PlayIcon from "@patternfly/react-icons/dist/esm/icons/play-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
+import GithubIcon from "@patternfly/react-icons/dist/esm/icons/github-icon";
+import JiraIcon from "@patternfly/react-icons/dist/esm/icons/jira-icon";
 import {
     type ActionType,
     type AxiomEvent,
@@ -198,6 +200,8 @@ export function ProjectDetailPage() {
             >
                 <FlexItem>
                     <Title headingLevel="h1" size="lg">
+                        {project.issueSource === "github" && <GithubIcon style={{ marginRight: 8 }} />}
+                        {project.issueSource === "jira" && <JiraIcon style={{ marginRight: 8 }} />}
                         {project.name}
                     </Title>
                 </FlexItem>
