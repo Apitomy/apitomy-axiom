@@ -166,12 +166,16 @@ public class ToolsResourceImpl implements ToolsResource {
     public ToolTestResponse testTool(BigInteger toolId, ToolTestRequest data) {
         ToolDefinitionEntity entity = findOrThrow(toolId.longValue());
 
-        if (entity.scriptTemplate == null || entity.scriptTemplate.isBlank()) {
+        String scriptTemplate = (data.getScriptTemplate() != null && !data.getScriptTemplate().isBlank())
+                ? data.getScriptTemplate()
+                : entity.scriptTemplate;
+
+        if (scriptTemplate == null || scriptTemplate.isBlank()) {
             throw new WebApplicationException(
                     "Tool has no script template to test", 400);
         }
 
-        String resolvedScript = resolveParameters(entity.scriptTemplate, data);
+        String resolvedScript = resolveParameters(scriptTemplate, data);
         Instant startTime = Instant.now();
 
         try {

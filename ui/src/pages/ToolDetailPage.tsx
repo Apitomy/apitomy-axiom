@@ -464,7 +464,7 @@ function TestTab({ toolId, params, scriptTemplate }: {
     const handleRun = () => {
         setRunning(true);
         setResult(null);
-        testTool(toolId, { parameters: paramValues })
+        testTool(toolId, { scriptTemplate, parameters: paramValues })
             .then((r) => {
                 setResult(r);
                 setResultOpen(true);

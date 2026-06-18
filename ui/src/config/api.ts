@@ -537,6 +537,7 @@ export async function deleteTool(id: number): Promise<void> {
 }
 
 export interface ToolTestRequest {
+    scriptTemplate?: string;
     parameters?: Record<string, string>;
 }
 
