@@ -4989,6 +4989,10 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "scriptTemplate": {
+            "description": "Script template to use for the test. If provided, this overrides the saved script template from the database, allowing tests against unsaved changes.",
+            "type": "string"
           }
         }
       },
