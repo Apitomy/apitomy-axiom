@@ -65,7 +65,7 @@ export function ReportDefinitionsPage() {
             name: newName,
             schedule: newSchedule,
             timeWindow: "last-24h",
-            promptTemplate: "",
+            promptTemplate: "Summarize recent activity across all repositories.",
             enabled: false,
         })
             .then((def) => {
