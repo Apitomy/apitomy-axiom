@@ -51,6 +51,14 @@ nav:
     - Usage Examples: user-guide/usage-examples.md
     - AI Assistant: user-guide/ai-assistant.md
     - Logging and Debugging: user-guide/logging-and-debugging.md
+  - Developer Guide:
+    - Stack & Architecture: developer-guide/stack-and-architecture.md
+    - Building Axiom: developer-guide/building-axiom.md
+    - How to Contribute: developer-guide/how-to-contribute.md
+    - API-First Development: developer-guide/api-first-development.md
+    - Database & Migrations: developer-guide/database-and-migrations.md
+    - UI Development: developer-guide/ui-development.md
+    - Extending Axiom: developer-guide/extending-axiom.md
 
 docs_dir: ./docs
 site_dir: ./site
