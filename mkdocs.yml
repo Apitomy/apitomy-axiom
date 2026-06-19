@@ -46,7 +46,11 @@ nav:
     - Configuring Axiom: getting-started/configuring-axiom.md
     - How to Contribute: getting-started/contributing.md
   - User Guide:
-    - user-guide/index.md
+    - Concepts: user-guide/concepts.md
+    - Navigating the UI: user-guide/navigating-the-ui.md
+    - Usage Examples: user-guide/usage-examples.md
+    - AI Assistant: user-guide/ai-assistant.md
+    - Logging and Debugging: user-guide/logging-and-debugging.md
 
 docs_dir: ./docs
 site_dir: ./site

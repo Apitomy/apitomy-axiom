@@ -15,7 +15,7 @@ long-lived projects around them, and delegates work to human and AI actors.
 ## Quick Links
 
 - [Running Axiom](getting-started/running-axiom.md) — Prerequisites and running Axiom
-- [User Guide](user-guide/index.md) — Architecture, configuration, and extending Axiom
+- [User Guide](user-guide/concepts.md) — Core concepts, configuration, and extending Axiom
 - [GitHub Repository](https://github.com/Apitomy/apitomy-axiom) — Source code and issues
 
 ## Tech Stack
