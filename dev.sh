@@ -2,8 +2,8 @@
 #
 # Starts Apitomy Axiom in development mode.
 #
-# Launches the Quarkus backend (port 8080) and the Vite UI dev server
-# (port 8888) side by side. Both run in the foreground — Ctrl+C stops
+# Launches the Quarkus backend (port 9090) and the Vite UI dev server
+# (port 9191) side by side. Both run in the foreground — Ctrl+C stops
 # everything.
 #
 # Prerequisites:
@@ -21,7 +21,7 @@
 #   ./dev.sh --skip-ui    # start backend only (Quarkus dev mode)
 #   ./dev.sh --persist    # enable persistent storage (H2 file-based DB)
 #
-# Open http://localhost:8888 in your browser.
+# Open http://localhost:9191 in your browser.
 #
 
 set -euo pipefail
@@ -115,9 +115,9 @@ trap cleanup EXIT INT TERM
 QUARKUS_ARGS=(-pl app -Ddebug=false -q)
 if [[ "$PERSIST" == true ]]; then
     QUARKUS_ARGS+=(-Dquarkus.profile=persist)
-    echo "Starting Quarkus backend on http://localhost:8080 (persistence enabled) ..."
+    echo "Starting Quarkus backend on http://localhost:9090 (persistence enabled) ..."
 else
-    echo "Starting Quarkus backend on http://localhost:8080 ..."
+    echo "Starting Quarkus backend on http://localhost:9090 ..."
 fi
 mvn quarkus:dev "${QUARKUS_ARGS[@]}" &
 PIDS+=($!)
@@ -125,7 +125,7 @@ PIDS+=($!)
 # ── Start Vite dev server ─────────────────────────────────────────
 
 if [[ "$SKIP_UI" == false ]]; then
-    echo "Starting Vite UI on http://localhost:8888 ..."
+    echo "Starting Vite UI on http://localhost:9191 ..."
     (cd ui && npm run dev) &
     PIDS+=($!)
 fi
@@ -133,9 +133,9 @@ fi
 echo ""
 echo "============================================"
 if [[ "$SKIP_UI" == false ]]; then
-    echo "  UI:      http://localhost:8888"
+    echo "  UI:      http://localhost:9191"
 fi
-echo "  API:     http://localhost:8080/api/v1"
+echo "  API:     http://localhost:9090/api/v1"
 echo "  Ctrl+C to stop"
 echo "============================================"
 echo ""

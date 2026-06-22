@@ -62,8 +62,8 @@ dev server side by side:
 ./dev.sh
 ```
 
-- Backend starts on **http://localhost:8080**
-- UI starts on **http://localhost:8888** (proxies API requests to the backend)
+- Backend starts on **http://localhost:9090**
+- UI starts on **http://localhost:9191** (proxies API requests to the backend)
 - Both run in the foreground — **Ctrl+C** stops everything
 
 To run the backend only (no UI):

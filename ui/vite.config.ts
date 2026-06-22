@@ -4,10 +4,10 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
     plugins: [react()],
     server: {
-        port: 8888,
+        port: 9191,
         proxy: {
             "/api/v1/sse": {
-                target: "http://localhost:8080",
+                target: "http://localhost:9090",
                 changeOrigin: true,
                 // Required for SSE: disable response buffering
                 configure: (proxy) => {
@@ -18,7 +18,7 @@ export default defineConfig({
                 },
             },
             "/api": {
-                target: "http://localhost:8080",
+                target: "http://localhost:9090",
                 changeOrigin: true,
             },
         },

@@ -13,7 +13,7 @@ function log(level, message, data) {
     process.stderr.write(JSON.stringify(entry) + "\n");
 }
 
-const AXIOM_API_URL = process.env.AXIOM_API_URL || "http://localhost:8080/api/v1";
+const AXIOM_API_URL = process.env.AXIOM_API_URL || "http://localhost:9090/api/v1";
 
 async function axiomApi(method, path) {
     const url = `${AXIOM_API_URL}${path}`;

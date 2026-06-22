@@ -69,11 +69,11 @@ Starts the Quarkus backend (with hot reload) and the Vite UI dev server side by 
 
 | Service | URL |
 |---------|-----|
-| Backend (Quarkus dev mode) | http://localhost:8080 |
-| Frontend (Vite dev server) | http://localhost:8888 |
+| Backend (Quarkus dev mode) | http://localhost:9090 |
+| Frontend (Vite dev server) | http://localhost:9191 |
 
 The Vite dev server proxies `/api` requests to the backend, so you access the UI at
-`http://localhost:8888` and API calls are forwarded automatically.
+`http://localhost:9191` and API calls are forwarded automatically.
 
 Both processes run in the foreground — **Ctrl+C** stops everything.
 
@@ -122,7 +122,7 @@ needed.
 A typical development loop:
 
 1. Run `./dev.sh` to start both backend and frontend
-2. Open `http://localhost:8888` in your browser
+2. Open `http://localhost:9191` in your browser
 3. Edit backend Java code — Quarkus hot-reloads on the next request
 4. Edit frontend TypeScript/React code — Vite hot-reloads instantly
 5. Run `mvn test` in a module directory to run unit tests for that module
@@ -133,8 +133,8 @@ A typical development loop:
 
 | Port | Service | Mode |
 |------|---------|------|
-| 8080 | Quarkus backend | Development (`mvn quarkus:dev`) |
-| 8888 | Vite UI dev server | Development (`npm run dev`) |
+| 9090 | Quarkus backend | Development (`mvn quarkus:dev`) |
+| 9191 | Vite UI dev server | Development (`npm run dev`) |
 | 9191 | Quarkus backend | Production (uber-jar) |
 
 ---

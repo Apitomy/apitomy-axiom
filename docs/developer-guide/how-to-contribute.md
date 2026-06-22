@@ -20,7 +20,7 @@ For a quick overview of ways to get involved, see the
    ```bash
    ./dev.sh
    ```
-4. Open `http://localhost:8888` and verify the UI loads
+4. Open `http://localhost:9191` and verify the UI loads
 
 See the [Building Axiom](building-axiom.md) guide for prerequisites and build details.
 

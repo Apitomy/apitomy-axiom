@@ -58,7 +58,7 @@ empty UI shell.
 
 ### Done When
 - `mvn clean install` succeeds from the root
-- `mvn quarkus:dev` in `app/` starts the backend on port 8080
+- `mvn quarkus:dev` in `app/` starts the backend on port 9090
 - `npm run dev` in `ui/` starts the frontend with PatternFly navigation
 - The UI can call the backend health endpoint and display the result
 

@@ -195,5 +195,5 @@ CREATE INDEX IF NOT EXISTS idx_task_status ON task (status);
   data between restarts.
 - When writing a migration, test it against a persistent database that already has
   data to verify it runs cleanly.
-- The H2 console is available at `http://localhost:8080/q/h2` during development
+- The H2 console is available at `http://localhost:9090/q/h2` during development
   (Quarkus dev mode only).

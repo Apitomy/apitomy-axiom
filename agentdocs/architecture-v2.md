@@ -629,7 +629,7 @@ services:
   axiom-api:
     build: .
     ports:
-      - "8080:8080"
+      - "9090:9090"
     environment:
       QUARKUS_PROFILE: prod
       QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://axiom-db:5432/axiom
@@ -655,9 +655,9 @@ services:
   axiom-ui:
     build: ./ui
     ports:
-      - "8888:8080"
+      - "9191:9090"
     environment:
-      AXIOM_API_URL: http://localhost:8080
+      AXIOM_API_URL: http://localhost:9090
 
 volumes:
   axiom-pgdata:

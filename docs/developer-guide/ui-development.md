@@ -252,7 +252,7 @@ import { CodeEditor, Language } from "@patternfly/react-code-editor";
 
 1. Start the UI dev server: `cd ui && npm run dev` (or use `./dev.sh` which starts
    both)
-2. The Vite dev server runs on port 8888 and proxies `/api` requests to the backend
-   on port 8080
+2. The Vite dev server runs on port 9191 and proxies `/api` requests to the backend
+   on port 9090
 3. Hot module replacement (HMR) updates the browser instantly when you save a file
 4. Run `npm run lint` to check code quality before committing
