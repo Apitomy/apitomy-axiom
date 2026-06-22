@@ -96,14 +96,17 @@ export function ProjectsPage() {
         .filter((f) => f.filterBy.value === "status")
         .map((f) => f.filterValue)
         .join(",");
+    const nonCompletedStatuses = Object.keys(STATUS_LABELS)
+        .filter((s) => s !== "Completed")
+        .join(",");
     const filterStatus = explicitStatusFilters
         ? explicitStatusFilters
-        : (!showCompleted ? "Created,InProgress,Idle" : undefined);
+        : (!showCompleted ? nonCompletedStatuses : undefined);
     const filterLabels = filters
         .filter((f) => f.filterBy.value === "labels")
         .map((f) => f.filterValue)
         .join(",");
-    const isFiltered = filters.length > 0;
+    const isFiltered = filters.length > 0 || !showCompleted;
 
     const loadProjects = useCallback(() => {
         setLoading(true);
@@ -259,9 +262,11 @@ export function ProjectsPage() {
                 ) : projects.length === 0 ? (
                     <EmptyState>
                         <EmptyStateBody>
-                            {isFiltered
+                            {filters.length > 0
                                 ? "No projects match the current filters."
-                                : "No projects yet. Create one or wait for events from a monitored repository."}
+                                : !showCompleted
+                                    ? "All projects are completed. Toggle the eye icon to show them."
+                                    : "No projects yet. Create one or wait for events from a monitored repository."}
                         </EmptyStateBody>
                     </EmptyState>
                 ) : (
