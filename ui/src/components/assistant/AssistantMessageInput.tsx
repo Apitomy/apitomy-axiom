@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { TextArea, Button, Flex, FlexItem } from "@patternfly/react-core";
 import PaperPlaneIcon from "@patternfly/react-icons/dist/esm/icons/paper-plane-icon";
 
@@ -9,12 +9,16 @@ interface AssistantMessageInputProps {
 
 export function AssistantMessageInput({ onSend, disabled }: AssistantMessageInputProps) {
     const [value, setValue] = useState("");
+    const textAreaRef = useRef<HTMLTextAreaElement>(null);
 
     const handleSend = useCallback(() => {
         const trimmed = value.trim();
         if (!trimmed) return;
         onSend(trimmed);
         setValue("");
+        setTimeout(() => {
+            textAreaRef.current?.parentElement?.style.removeProperty("height");
+        }, 0);
     }, [value, onSend]);
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -28,6 +32,7 @@ export function AssistantMessageInput({ onSend, disabled }: AssistantMessageInpu
         <Flex style={{ padding: "12px 16px", borderTop: "1px solid #d2d2d2", flexShrink: 0 }}>
             <FlexItem grow={{ default: "grow" }}>
                 <TextArea
+                    ref={textAreaRef}
                     value={value}
                     onChange={(_e, val) => setValue(val)}
                     onKeyDown={handleKeyDown}
