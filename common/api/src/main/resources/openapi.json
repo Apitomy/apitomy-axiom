@@ -3397,6 +3397,8 @@
             "enum": [
               "bug-fix",
               "feature",
+              "issue",
+              "pull-request",
               "question",
               "help",
               "other"
@@ -3468,6 +3470,8 @@
             "enum": [
               "bug-fix",
               "feature",
+              "issue",
+              "pull-request",
               "question",
               "help",
               "other"
@@ -3508,6 +3512,8 @@
             "enum": [
               "bug-fix",
               "feature",
+              "issue",
+              "pull-request",
               "question",
               "help",
               "other"
