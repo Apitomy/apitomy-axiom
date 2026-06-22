@@ -4128,6 +4128,10 @@
             "items": {
               "type": "string"
             }
+          },
+          "titleTemplate": {
+            "description": "Optional template for the report title. Supports placeholders: {{name}}, {{date}}, {{time}}, {{datetime}}, {{timeWindow}}, {{schedule}}. When set, the resolved template is used as the report title instead of extracting the first H1 heading from the generated markdown.",
+            "type": "string"
           }
         }
       },
@@ -4188,6 +4192,10 @@
             "items": {
               "type": "string"
             }
+          },
+          "titleTemplate": {
+            "description": "Optional template for the report title. Supports placeholders: {{name}}, {{date}}, {{time}}, {{datetime}}, {{timeWindow}}, {{schedule}}. When set, the resolved template is used as the report title instead of extracting the first H1 heading from the generated markdown.",
+            "type": "string"
           }
         }
       },

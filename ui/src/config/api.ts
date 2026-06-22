@@ -851,6 +851,7 @@ export interface ReportDefinition {
     scheduleDayOfWeek?: string;
     timeWindow: string;
     promptTemplate: string;
+    titleTemplate?: string;
     allowedTools?: string[];
     enabled: boolean;
     timeoutSeconds?: number;

@@ -97,6 +97,7 @@ export function ReportDefinitionDetailPage() {
                     timeWindow: def.timeWindow,
                     promptTemplate: def.promptTemplate, enabled: def.enabled,
                     timeoutSeconds: def.timeoutSeconds,
+                    titleTemplate: def.titleTemplate,
                 });
                 setTools(def.allowedTools || []);
                 setInitialLabels(def.initialLabels || []);
@@ -364,6 +365,18 @@ function InfoTab({ form, updateForm, initialLabels, onLabelsChange }: {
             <FormGroup label="Name" isRequired fieldId="name">
                 <TextInput id="name" isRequired value={form.name}
                     onChange={(_e, v) => updateForm({ name: v })} />
+            </FormGroup>
+            <FormGroup label="Title Template" fieldId="titleTemplate">
+                <TextInput id="titleTemplate" value={form.titleTemplate || ""}
+                    onChange={(_e, v) => updateForm({ titleTemplate: v || undefined })}
+                    placeholder="e.g. {{name}} — {{date}}" />
+                <p style={{ color: "#6a6e73", fontSize: "0.85em", marginTop: "4px" }}>
+                    Optional. If set, the report title uses this template instead of
+                    extracting from markdown. Placeholders:{" "}
+                    <code>{"{{name}}"}</code>, <code>{"{{date}}"}</code>,{" "}
+                    <code>{"{{time}}"}</code>, <code>{"{{datetime}}"}</code>,{" "}
+                    <code>{"{{timeWindow}}"}</code>, <code>{"{{schedule}}"}</code>
+                </p>
             </FormGroup>
             <FormGroup label="Description" fieldId="description">
                 <TextArea id="description" value={form.description || ""}
