@@ -53,7 +53,7 @@ public class McpConfigGenerator {
     private static final String[] TEMPLATE_FILES = {
             "package.json", "sdk-server.js", "tools-server.js" };
 
-    @ConfigProperty(name = "quarkus.http.port", defaultValue = "8080")
+    @ConfigProperty(name = "quarkus.http.port", defaultValue = "9090")
     int httpPort;
 
     @Inject

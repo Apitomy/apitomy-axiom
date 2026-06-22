@@ -28,7 +28,7 @@ cd apitomy-axiom
 ./dev.sh
 ```
 
-This starts the Quarkus backend on `http://localhost:8080` and the Vite UI dev server on
-`http://localhost:8888`. See the
+This starts the Quarkus backend on `http://localhost:9090` and the Vite UI dev server on
+`http://localhost:9191`. See the
 [README](https://github.com/Apitomy/apitomy-axiom/blob/main/README.md) for full build
 instructions and development workflow details.

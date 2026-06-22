@@ -51,7 +51,7 @@ public class AssistantSessionManager {
     @ConfigProperty(name = "axiom.claude-code.executable", defaultValue = "claude")
     String claudeExecutable;
 
-    @ConfigProperty(name = "quarkus.http.port", defaultValue = "8080")
+    @ConfigProperty(name = "quarkus.http.port", defaultValue = "9090")
     int httpPort;
 
     @Inject

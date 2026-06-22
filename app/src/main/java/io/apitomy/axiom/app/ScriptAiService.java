@@ -54,7 +54,7 @@ public class ScriptAiService {
             - {{repository}} — the repository name (e.g. "owner/repo")
             - {{projectName}} — the project name
             - {{managerInput}} — context/instructions from the Manager
-            - {{apiBaseUrl}} — the Axiom REST API base URL (e.g. "http://localhost:8080/api/v1")
+            - {{apiBaseUrl}} — the Axiom REST API base URL (e.g. "http://localhost:9090/api/v1")
 
             Environment variables are also available:
             - AXIOM_API_URL — same as {{apiBaseUrl}}

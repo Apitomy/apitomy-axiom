@@ -18,7 +18,7 @@ public class AssistantContextBuilder {
 
     private static final Logger LOG = Logger.getLogger(AssistantContextBuilder.class);
 
-    @ConfigProperty(name = "quarkus.http.port", defaultValue = "8080")
+    @ConfigProperty(name = "quarkus.http.port", defaultValue = "9090")
     int httpPort;
 
     /**

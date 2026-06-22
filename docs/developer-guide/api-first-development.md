@@ -127,7 +127,7 @@ The API base URL is resolved differently in development and production:
 
 | Mode | Base URL | Mechanism |
 |------|----------|-----------|
-| Development | (empty string) | Vite proxy forwards `/api` to `localhost:8080` |
+| Development | (empty string) | Vite proxy forwards `/api` to `localhost:9090` |
 | Production | From `window.AXIOM_API_URL` | Injected by the backend at runtime |
 
 This is handled by `getApiBaseUrl()` in `api.ts`.

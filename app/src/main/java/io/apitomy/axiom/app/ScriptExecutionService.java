@@ -43,7 +43,7 @@ public class ScriptExecutionService {
     @Inject
     EnvironmentResolver environmentResolver;
 
-    @ConfigProperty(name = "quarkus.http.port", defaultValue = "8080")
+    @ConfigProperty(name = "quarkus.http.port", defaultValue = "9090")
     int httpPort;
 
     @ConfigProperty(name = "axiom.script.timeout-seconds", defaultValue = "60")
