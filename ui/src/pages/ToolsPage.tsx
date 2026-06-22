@@ -8,7 +8,6 @@ import {
     FlexItem,
     Form,
     FormGroup,
-    Label,
     Modal,
     ModalBody,
     ModalFooter,
@@ -25,6 +24,7 @@ import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
+import { ColoredLabel } from "../components/ColoredLabel";
 import {
     type ChipFilterCriteria,
     type ChipFilterType,
@@ -220,14 +220,14 @@ export function ToolsPage() {
                                         <Td>{tool.description || "—"}</Td>
                                         <Td>
                                             {tool.labels?.map((label) => (
-                                                <Label key={label} isCompact color="purple"
+                                                <ColoredLabel key={label} isCompact
                                                     style={{ marginRight: "4px", cursor: "pointer" }}
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         addLabelFilter(label);
                                                     }}>
                                                     {label}
-                                                </Label>
+                                                </ColoredLabel>
                                             ))}
                                         </Td>
                                         <Td>

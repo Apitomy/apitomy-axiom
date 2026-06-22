@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { HelperText, HelperTextItem, Label, TextInput } from "@patternfly/react-core";
+import { HelperText, HelperTextItem, TextInput } from "@patternfly/react-core";
+import { ColoredLabel } from "./ColoredLabel";
 
 /**
  * Editable label list. Type a label and press Enter to add it.
@@ -38,11 +39,11 @@ export function LabelInput({ labels, onChange }: {
             {labels.length > 0 && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "8px" }}>
                     {labels.map((label) => (
-                        <Label key={label} color="purple"
+                        <ColoredLabel key={label}
                             onClose={() => handleRemove(label)}
                             closeBtnAriaLabel={`Remove ${label}`}>
                             {label}
-                        </Label>
+                        </ColoredLabel>
                     ))}
                 </div>
             )}
