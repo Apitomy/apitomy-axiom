@@ -305,6 +305,10 @@ public class PipelineOrchestrator {
                 if (title != null && !title.isBlank()) {
                     return title;
                 }
+                title = root.path("pull_request").path("title").asText(null);
+                if (title != null && !title.isBlank()) {
+                    return title;
+                }
             } catch (Exception e) {
                 LOG.debugf("Could not parse event payload for issue title: %s", e.getMessage());
             }
