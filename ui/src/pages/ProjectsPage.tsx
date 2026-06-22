@@ -19,12 +19,15 @@ import {
     TextInput,
     Title,
     Toolbar,
+    Tooltip,
     ToolbarContent,
     ToolbarItem,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
+import EyeIcon from "@patternfly/react-icons/dist/esm/icons/eye-icon";
+import EyeSlashIcon from "@patternfly/react-icons/dist/esm/icons/eye-slash-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import { ColoredLabel } from "../components/ColoredLabel";
 import CodeBranchIcon from "@patternfly/react-icons/dist/esm/icons/code-branch-icon";
@@ -74,6 +77,9 @@ export function ProjectsPage() {
     const [loading, setLoading] = useState(true);
 
     const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
+    const [showCompleted, setShowCompleted] = useState(
+        () => localStorage.getItem("axiom.projects.showCompleted") === "true"
+    );
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
@@ -86,10 +92,13 @@ export function ProjectsPage() {
     });
 
     const filterName = filters.find((f) => f.filterBy.value === "name")?.filterValue;
-    const filterStatus = filters
+    const explicitStatusFilters = filters
         .filter((f) => f.filterBy.value === "status")
         .map((f) => f.filterValue)
         .join(",");
+    const filterStatus = explicitStatusFilters
+        ? explicitStatusFilters
+        : (!showCompleted ? "Created,InProgress,Idle" : undefined);
     const filterLabels = filters
         .filter((f) => f.filterBy.value === "labels")
         .map((f) => f.filterValue)
@@ -194,6 +203,19 @@ export function ProjectsPage() {
                         <Button variant="control" aria-label="Refresh" onClick={loadProjects}>
                             <SyncAltIcon />
                         </Button>
+                    </ToolbarItem>
+                    <ToolbarItem>
+                        <Tooltip content={showCompleted ? "Hide completed projects" : "Show completed projects"}>
+                            <Button variant="control" aria-label="Toggle completed projects"
+                                onClick={() => {
+                                    const next = !showCompleted;
+                                    setShowCompleted(next);
+                                    localStorage.setItem("axiom.projects.showCompleted", String(next));
+                                    setPage(1);
+                                }}>
+                                {showCompleted ? <EyeIcon /> : <EyeSlashIcon />}
+                            </Button>
+                        </Tooltip>
                     </ToolbarItem>
                     <ToolbarItem>
                         <Button
