@@ -19,12 +19,15 @@ import {
     TextInput,
     Title,
     Toolbar,
+    Tooltip,
     ToolbarContent,
     ToolbarItem,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
+import EyeIcon from "@patternfly/react-icons/dist/esm/icons/eye-icon";
+import EyeSlashIcon from "@patternfly/react-icons/dist/esm/icons/eye-slash-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import { ColoredLabel } from "../components/ColoredLabel";
 import CodeBranchIcon from "@patternfly/react-icons/dist/esm/icons/code-branch-icon";
@@ -74,6 +77,9 @@ export function ProjectsPage() {
     const [loading, setLoading] = useState(true);
 
     const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
+    const [showCompleted, setShowCompleted] = useState(
+        () => localStorage.getItem("axiom.projects.showCompleted") === "true"
+    );
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
@@ -86,15 +92,21 @@ export function ProjectsPage() {
     });
 
     const filterName = filters.find((f) => f.filterBy.value === "name")?.filterValue;
-    const filterStatus = filters
+    const explicitStatusFilters = filters
         .filter((f) => f.filterBy.value === "status")
         .map((f) => f.filterValue)
         .join(",");
+    const nonCompletedStatuses = Object.keys(STATUS_LABELS)
+        .filter((s) => s !== "Completed")
+        .join(",");
+    const filterStatus = explicitStatusFilters
+        ? explicitStatusFilters
+        : (!showCompleted ? nonCompletedStatuses : undefined);
     const filterLabels = filters
         .filter((f) => f.filterBy.value === "labels")
         .map((f) => f.filterValue)
         .join(",");
-    const isFiltered = filters.length > 0;
+    const isFiltered = filters.length > 0 || !showCompleted;
 
     const loadProjects = useCallback(() => {
         setLoading(true);
@@ -196,6 +208,19 @@ export function ProjectsPage() {
                         </Button>
                     </ToolbarItem>
                     <ToolbarItem>
+                        <Tooltip content={showCompleted ? "Hide completed projects" : "Show completed projects"}>
+                            <Button variant="control" aria-label="Toggle completed projects"
+                                onClick={() => {
+                                    const next = !showCompleted;
+                                    setShowCompleted(next);
+                                    localStorage.setItem("axiom.projects.showCompleted", String(next));
+                                    setPage(1);
+                                }}>
+                                {showCompleted ? <EyeIcon /> : <EyeSlashIcon />}
+                            </Button>
+                        </Tooltip>
+                    </ToolbarItem>
+                    <ToolbarItem>
                         <Button
                             variant="primary"
                             icon={<PlusCircleIcon />}
@@ -237,9 +262,11 @@ export function ProjectsPage() {
                 ) : projects.length === 0 ? (
                     <EmptyState>
                         <EmptyStateBody>
-                            {isFiltered
+                            {filters.length > 0
                                 ? "No projects match the current filters."
-                                : "No projects yet. Create one or wait for events from a monitored repository."}
+                                : !showCompleted
+                                    ? "All projects are completed. Toggle the eye icon to show them."
+                                    : "No projects yet. Create one or wait for events from a monitored repository."}
                         </EmptyStateBody>
                     </EmptyState>
                 ) : (
