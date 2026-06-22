@@ -3,7 +3,7 @@ import PencilAltIcon from "@patternfly/react-icons/dist/esm/icons/pencil-alt-ico
 import { ColoredLabel } from "./ColoredLabel";
 
 /**
- * Read-only display of labels as blue chips with a pencil icon
+ * Read-only display of labels as colored chips with a pencil icon
  * button to trigger editing. Shows "No labels" in italic when empty.
  */
 export function LabelDisplay({ labels, onEdit }: {
