@@ -1,5 +1,6 @@
-import { Button, Label } from "@patternfly/react-core";
+import { Button } from "@patternfly/react-core";
 import PencilAltIcon from "@patternfly/react-icons/dist/esm/icons/pencil-alt-icon";
+import { ColoredLabel } from "./ColoredLabel";
 
 /**
  * Read-only display of labels as blue chips with a pencil icon
@@ -14,7 +15,7 @@ export function LabelDisplay({ labels, onEdit }: {
             {labels.length > 0 ? (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
                     {labels.map((label) => (
-                        <Label key={label} isCompact color="purple">{label}</Label>
+                        <ColoredLabel key={label} isCompact>{label}</ColoredLabel>
                     ))}
                 </div>
             ) : (

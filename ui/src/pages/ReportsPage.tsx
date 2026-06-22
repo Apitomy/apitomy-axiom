@@ -21,6 +21,7 @@ import {
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
+import { ColoredLabel } from "../components/ColoredLabel";
 import {
     type ChipFilterCriteria,
     type ChipFilterType,
@@ -231,7 +232,7 @@ export function ReportsPage() {
                                     </Td>
                                     <Td>
                                         {(report.labels || []).map((label) => (
-                                            <Label key={label} isCompact color="purple"
+                                            <ColoredLabel key={label} isCompact
                                                 style={{ marginRight: "4px", cursor: "pointer" }}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
@@ -244,7 +245,7 @@ export function ReportsPage() {
                                                     }
                                                 }}>
                                                 {label}
-                                            </Label>
+                                            </ColoredLabel>
                                         ))}
                                     </Td>
                                     <Td style={{ whiteSpace: "nowrap" }}>
