@@ -289,6 +289,69 @@ class ReportDefinitionValidatorTest {
                 .count());
     }
 
+    // ── Title template validation ─────────────────────────────────────
+
+    @Test
+    void nullTitleTemplateNoMessages() {
+        NewReportDefinition def = makeDef("test", "desc", "daily", "last-24h", "prompt {{repositories}}");
+
+        ValidationResult result = ReportDefinitionValidator.validate(def);
+
+        assertFalse(result.messages().stream().anyMatch(m -> m.field().equals("titleTemplate")));
+    }
+
+    @Test
+    void blankTitleTemplateNoMessages() {
+        NewReportDefinition def = makeDef("test", "desc", "daily", "last-24h", "prompt {{repositories}}");
+        def.setTitleTemplate("   ");
+
+        ValidationResult result = ReportDefinitionValidator.validate(def);
+
+        assertFalse(result.messages().stream().anyMatch(m -> m.field().equals("titleTemplate")));
+    }
+
+    @Test
+    void titleTemplateWithRecognizedPlaceholdersIsValid() {
+        NewReportDefinition def = makeDef("test", "desc", "daily", "last-24h", "prompt {{repositories}}");
+        def.setTitleTemplate("{{name}} — {{date}}");
+
+        ValidationResult result = ReportDefinitionValidator.validate(def);
+
+        assertFalse(result.errors().stream().anyMatch(m -> m.field().equals("titleTemplate")));
+    }
+
+    @Test
+    void titleTemplateWithAllPlaceholdersIsValid() {
+        NewReportDefinition def = makeDef("test", "desc", "daily", "last-24h", "prompt {{repositories}}");
+        def.setTitleTemplate("{{name}} {{date}} {{time}} {{datetime}} {{timeWindow}} {{schedule}}");
+
+        ValidationResult result = ReportDefinitionValidator.validate(def);
+
+        assertFalse(result.errors().stream().anyMatch(m -> m.field().equals("titleTemplate")));
+    }
+
+    @Test
+    void titleTemplateWithUnrecognizedPlaceholderIsError() {
+        NewReportDefinition def = makeDef("test", "desc", "daily", "last-24h", "prompt {{repositories}}");
+        def.setTitleTemplate("{{name}} — {{foo}}");
+
+        ValidationResult result = ReportDefinitionValidator.validate(def);
+
+        assertTrue(result.hasErrors());
+        assertTrue(result.errors().stream().anyMatch(
+                m -> m.field().equals("titleTemplate") && m.message().contains("{{foo}}")));
+    }
+
+    @Test
+    void titleTemplateWithPlainTextIsValid() {
+        NewReportDefinition def = makeDef("test", "desc", "daily", "last-24h", "prompt {{repositories}}");
+        def.setTitleTemplate("My Custom Report Title");
+
+        ValidationResult result = ReportDefinitionValidator.validate(def);
+
+        assertFalse(result.errors().stream().anyMatch(m -> m.field().equals("titleTemplate")));
+    }
+
     // ── Timeout validation ──────────────────────────────────────────
 
     @Test

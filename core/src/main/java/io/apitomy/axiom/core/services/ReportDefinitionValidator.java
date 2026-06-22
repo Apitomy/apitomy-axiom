@@ -37,6 +37,8 @@ public final class ReportDefinitionValidator {
             Pattern.compile("\\{\\{([a-zA-Z_][a-zA-Z0-9_]*)\\}\\}");
     private static final Set<String> RECOGNIZED_PLACEHOLDERS = Set.of(
             "repositories", "timeRangeStart", "timeRangeEnd", "timeWindow");
+    private static final Set<String> RECOGNIZED_TITLE_PLACEHOLDERS = Set.of(
+            "name", "date", "time", "datetime", "timeWindow", "schedule");
 
     private ReportDefinitionValidator() {
     }
@@ -82,6 +84,7 @@ public final class ReportDefinitionValidator {
         validateSchedule(def, messages);
         validateTimeWindow(def, messages);
         validatePromptTemplate(def, messages);
+        validateTitleTemplate(def, messages);
         validateTimeoutSeconds(def, messages);
         validateInitialLabels(def, messages);
         validateAllowedTools(def, known, messages);
@@ -182,6 +185,25 @@ public final class ReportDefinitionValidator {
                         "Unrecognized placeholder '{{" + name + "}}'. "
                                 + "Supported placeholders are: {{repositories}}, "
                                 + "{{timeRangeStart}}, {{timeRangeEnd}}, {{timeWindow}}."));
+            }
+        }
+    }
+
+    private static void validateTitleTemplate(NewReportDefinition def,
+                                               List<ValidationMessage> messages) {
+        String template = def.getTitleTemplate();
+        if (template == null || template.isBlank()) {
+            return;
+        }
+
+        Matcher matcher = PLACEHOLDER_PATTERN.matcher(template);
+        while (matcher.find()) {
+            String name = matcher.group(1);
+            if (!RECOGNIZED_TITLE_PLACEHOLDERS.contains(name)) {
+                messages.add(error("titleTemplate",
+                        "Unrecognized placeholder '{{" + name + "}}'. "
+                                + "Supported placeholders are: {{name}}, {{date}}, "
+                                + "{{time}}, {{datetime}}, {{timeWindow}}, {{schedule}}."));
             }
         }
     }

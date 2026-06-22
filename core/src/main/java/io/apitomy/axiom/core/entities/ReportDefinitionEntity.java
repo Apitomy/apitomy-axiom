@@ -59,6 +59,14 @@ public class ReportDefinitionEntity extends PanacheEntity {
     public String promptTemplate;
 
     /**
+     * Optional template for the report title. Supports placeholders:
+     * {{name}}, {{date}}, {{time}}, {{datetime}}, {{timeWindow}}, {{schedule}}.
+     * When set, the resolved template is used instead of extracting from markdown.
+     */
+    @Column(name = "title_template", columnDefinition = "TEXT")
+    public String titleTemplate;
+
+    /**
      * Comma-separated list of tools the AI agent is allowed to use.
      */
     @Column(name = "allowed_tools", columnDefinition = "TEXT")

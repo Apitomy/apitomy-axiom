@@ -341,6 +341,7 @@ public class ReportsResourceImpl implements ReportsResource {
         entity.scheduleDayOfWeek = data.getScheduleDayOfWeek();
         entity.timeWindow = data.getTimeWindow();
         entity.promptTemplate = data.getPromptTemplate();
+        entity.titleTemplate = data.getTitleTemplate();
         entity.allowedTools = data.getAllowedTools() != null
                 ? String.join(",", data.getAllowedTools()) : null;
         entity.enabled = "none".equals(data.getSchedule()) ? false
@@ -370,6 +371,7 @@ public class ReportsResourceImpl implements ReportsResource {
         def.setScheduleDayOfWeek(entity.scheduleDayOfWeek);
         def.setTimeWindow(entity.timeWindow);
         def.setPromptTemplate(entity.promptTemplate);
+        def.setTitleTemplate(entity.titleTemplate);
         if (entity.allowedTools != null && !entity.allowedTools.isBlank()) {
             def.setAllowedTools(java.util.Arrays.stream(entity.allowedTools.split(","))
                     .map(String::trim).filter(s -> !s.isEmpty()).toList());

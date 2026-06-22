@@ -170,10 +170,16 @@ public class ReportExecutionService {
         ReportEntity report = ReportEntity.findById(reportId);
         if (report == null) return;
 
+        ReportDefinitionEntity def = ReportDefinitionEntity.findById(definitionId);
+
         if (result.success()) {
             report.status = "Completed";
             report.content = result.result();
-            report.title = extractTitle(result.result());
+            if (def != null && def.titleTemplate != null && !def.titleTemplate.isBlank()) {
+                report.title = resolveTitleTemplate(def.titleTemplate, def);
+            } else {
+                report.title = extractTitle(result.result());
+            }
         } else {
             report.status = "Failed";
             report.content = "Report generation failed: " + result.result();
@@ -198,7 +204,6 @@ public class ReportExecutionService {
         usage.persist();
 
         // Log activity
-        ReportDefinitionEntity def = ReportDefinitionEntity.findById(definitionId);
         String defName = def != null ? def.name : "Report #" + reportId;
         String statusText = result.success() ? "completed" : "failed";
         String summary = "Report " + statusText + ": " + defName;
@@ -301,6 +306,28 @@ public class ReportExecutionService {
             }
         }
         return "Report";
+    }
+
+    /**
+     * Resolves a title template by replacing placeholders with actual values.
+     *
+     * @param template the title template string
+     * @param def the report definition entity
+     * @return the resolved title string
+     */
+    private String resolveTitleTemplate(String template, ReportDefinitionEntity def) {
+        java.time.LocalDateTime now = java.time.LocalDateTime.now(ZoneId.systemDefault());
+        String date = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        String time = now.format(DateTimeFormatter.ofPattern("HH:mm"));
+        String datetime = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+
+        return template
+                .replace("{{name}}", def.name != null ? def.name : "")
+                .replace("{{date}}", date)
+                .replace("{{time}}", time)
+                .replace("{{datetime}}", datetime)
+                .replace("{{timeWindow}}", def.timeWindow != null ? def.timeWindow : "")
+                .replace("{{schedule}}", def.schedule != null ? def.schedule : "");
     }
 
     private Map<String, String> buildEnvironment(String customEnvironmentJson) {
