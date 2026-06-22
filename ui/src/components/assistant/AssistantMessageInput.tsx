@@ -16,7 +16,10 @@ export function AssistantMessageInput({ onSend, disabled }: AssistantMessageInpu
         if (!trimmed) return;
         onSend(trimmed);
         setValue("");
+        // Defer to next tick so React flushes setValue("") before we reset height
         setTimeout(() => {
+            // PF autoResize sets inline height on the textarea's parent <span>;
+            // programmatic value changes don't trigger a recalc, so clear it manually.
             textAreaRef.current?.parentElement?.style.removeProperty("height");
         }, 0);
     }, [value, onSend]);
