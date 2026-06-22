@@ -70,6 +70,7 @@ class PipelineOrchestratorTest {
         // Verify project was auto-created
         ProjectEntity project = ProjectEntity.find("issueRef", "TestOrg/pipeline-test#1").firstResult();
         assertNotNull(project, "Project should be auto-created");
+        assertEquals("issue", project.type);
         assertEquals("Created", project.status);
         assertEquals("github", project.issueSource);
         assertEquals("TestOrg/pipeline-test", project.repository);
@@ -115,6 +116,47 @@ class PipelineOrchestratorTest {
         List<TaskEntity> tasks = TaskEntity.list("projectId", project.id);
         assertEquals(1, tasks.size());
         assertEquals("answer-question", tasks.getFirst().actionType);
+    }
+
+    @Test
+    @Transactional
+    void testCreateProjectFromPrEventSetsPullRequestType() {
+        EventQueueEntity queueEntry = createEventAndEnqueue(
+                "github", "pr-created", "TestOrg/pipeline-test#10",
+                "TestOrg/pipeline-test",
+                "{\"action\":\"opened\",\"pull_request\":{\"number\":10,\"title\":\"Fix bug\"}}");
+
+        ManagerDecision decision = new ManagerDecision(
+                "create_task", "review", null,
+                "Review this PR", 0.9, "New PR needs review");
+        when(managerService.evaluate(any())).thenReturn(List.of(decision));
+
+        orchestrator.processEvent(queueEntry);
+
+        ProjectEntity project = ProjectEntity.find("issueRef", "TestOrg/pipeline-test#10").firstResult();
+        assertNotNull(project, "Project should be auto-created for PR event");
+        assertEquals("pull-request", project.type);
+        assertEquals("github", project.issueSource);
+    }
+
+    @Test
+    @Transactional
+    void testCreateProjectFromUnknownEventSetsOtherType() {
+        EventQueueEntity queueEntry = createEventAndEnqueue(
+                "github", "task-completed", "TestOrg/pipeline-test#11",
+                "TestOrg/pipeline-test",
+                "{\"action\":\"completed\",\"issue\":{\"number\":11,\"title\":\"Done\"}}");
+
+        ManagerDecision decision = new ManagerDecision(
+                "create_task", "analyze", null,
+                "Analyze this", 0.9, "Needs analysis");
+        when(managerService.evaluate(any())).thenReturn(List.of(decision));
+
+        orchestrator.processEvent(queueEntry);
+
+        ProjectEntity project = ProjectEntity.find("issueRef", "TestOrg/pipeline-test#11").firstResult();
+        assertNotNull(project, "Project should be auto-created for unknown event type");
+        assertEquals("other", project.type);
     }
 
     @Test

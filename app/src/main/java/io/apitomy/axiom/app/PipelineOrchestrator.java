@@ -257,7 +257,7 @@ public class PipelineOrchestrator {
     private ProjectEntity createProjectFromEvent(EventEntity event) {
         ProjectEntity project = new ProjectEntity();
         project.name = extractIssueTitle(event);
-        project.type = "other";
+        project.type = determineProjectType(event.eventType);
         project.status = ProjectStatus.Created.name();
         project.issueSource = event.source;
         project.issueRef = event.issueRef != null ? event.issueRef : "unknown";
@@ -283,6 +283,21 @@ public class PipelineOrchestrator {
         }
 
         return project;
+    }
+
+    /**
+     * Determines the project type based on the event type prefix.
+     */
+    private String determineProjectType(String eventType) {
+        if (eventType != null) {
+            if (eventType.startsWith("issue-")) {
+                return "issue";
+            }
+            if (eventType.startsWith("pr-")) {
+                return "pull-request";
+            }
+        }
+        return "other";
     }
 
     private void markQueueEntry(Long queueEntryId, String status) {
