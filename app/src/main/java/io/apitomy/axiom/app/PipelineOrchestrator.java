@@ -58,6 +58,7 @@ public class PipelineOrchestrator {
      * Polls the event queue every 5 seconds and processes one pending event at a time.
      * Events are processed sequentially to avoid race conditions in the Manager.
      */
+    @Transactional
     @Scheduled(every = "${axiom.pipeline.poll-interval:5s}",
                concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     void processNextEvent() {

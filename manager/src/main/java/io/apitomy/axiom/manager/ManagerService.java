@@ -15,7 +15,7 @@ import io.apitomy.axiom.engine.spi.AiEngineConfig;
 import io.apitomy.axiom.engine.spi.AiEngineResult;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.transaction.Transactional;
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -214,31 +214,33 @@ public class ManagerService {
      * @param summary a brief summary
      * @param details the full execution log (may be null)
      */
-    @Transactional
     void logManagerActivity(Long eventId, String entryType, String summary, String details) {
-        ActivityLogEntity log = new ActivityLogEntity();
-        log.eventId = eventId;
-        log.entryType = entryType;
-        log.summary = summary != null && summary.length() > 1024
-                ? summary.substring(0, 1021) + "..."
-                : summary;
-        log.details = details;
-        log.createdOn = Instant.now();
-        log.persist();
+        QuarkusTransaction.requiringNew().run(() -> {
+            ActivityLogEntity log = new ActivityLogEntity();
+            log.eventId = eventId;
+            log.entryType = entryType;
+            log.summary = summary != null && summary.length() > 1024
+                    ? summary.substring(0, 1021) + "..."
+                    : summary;
+            log.details = details;
+            log.createdOn = Instant.now();
+            log.persist();
+        });
     }
 
-    @Transactional
     void recordAiUsage(Long eventId, Long projectId,
                         Double costUsd, Long inputTokens, Long outputTokens) {
-        AiUsageEntity usage = new AiUsageEntity();
-        usage.invocationType = "manager";
-        usage.eventId = eventId;
-        usage.projectId = projectId;
-        usage.actionType = "manager-evaluate";
-        usage.costUsd = costUsd;
-        usage.inputTokens = inputTokens;
-        usage.outputTokens = outputTokens;
-        usage.createdOn = Instant.now();
-        usage.persist();
+        QuarkusTransaction.requiringNew().run(() -> {
+            AiUsageEntity usage = new AiUsageEntity();
+            usage.invocationType = "manager";
+            usage.eventId = eventId;
+            usage.projectId = projectId;
+            usage.actionType = "manager-evaluate";
+            usage.costUsd = costUsd;
+            usage.inputTokens = inputTokens;
+            usage.outputTokens = outputTokens;
+            usage.createdOn = Instant.now();
+            usage.persist();
+        });
     }
 }
