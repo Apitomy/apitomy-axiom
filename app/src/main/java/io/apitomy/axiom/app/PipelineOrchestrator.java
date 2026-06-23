@@ -70,6 +70,8 @@ public class PipelineOrchestrator {
         processEvent(queueEntry);
     }
 
+    // @Transactional is redundant here (runs inside processNextEvent's transaction via
+    // self-invocation) but retained so it takes effect if called through the CDI proxy.
     @Transactional
     EventQueueEntity findNextPendingEvent() {
         EventQueueEntity entry = EventQueueEntity.find(
@@ -80,6 +82,8 @@ public class PipelineOrchestrator {
         return entry;
     }
 
+    // @Transactional is redundant here (runs inside processNextEvent's transaction via
+    // self-invocation) but retained so it takes effect if called through the CDI proxy.
     @Transactional
     void processEvent(EventQueueEntity queueEntry) {
         EventEntity event = EventEntity.findById(queueEntry.eventId);

@@ -111,8 +111,12 @@ public class ManagerService {
             String executionLog = result.executionLog();
 
             // Record AI usage for this Manager evaluation
-            recordAiUsage(event.id, project != null ? project.id : null,
-                    result.costUsd(), result.inputTokens(), result.outputTokens());
+            try {
+                recordAiUsage(event.id, project != null ? project.id : null,
+                        result.costUsd(), result.inputTokens(), result.outputTokens());
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to record AI usage for event %d", event.id);
+            }
 
             if (!result.success()) {
                 LOG.errorf("Manager AI engine failed: %s", result.result());
