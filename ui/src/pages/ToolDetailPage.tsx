@@ -516,12 +516,6 @@ function TestTab({ toolId, params, scriptTemplate }: {
                 {running ? "Running..." : "Run Test"}
             </Button>
 
-            {running && (
-                <div style={{ marginTop: "24px", textAlign: "center" }}>
-                    <Spinner size="lg" />
-                </div>
-            )}
-
             {result && (
                 <Modal isOpen={resultOpen}
                     onClose={() => setResultOpen(false)}
