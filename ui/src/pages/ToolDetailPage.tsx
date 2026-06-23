@@ -18,7 +18,6 @@ import {
     ModalBody,
     ModalHeader,
     PageSection,
-    Spinner,
     Tab,
     TabContent,
     TabTitleText,
