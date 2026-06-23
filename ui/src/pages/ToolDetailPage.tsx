@@ -18,7 +18,6 @@ import {
     ModalBody,
     ModalHeader,
     PageSection,
-    Spinner,
     Tab,
     TabContent,
     TabTitleText,
@@ -515,12 +514,6 @@ function TestTab({ toolId, params, scriptTemplate }: {
                 isLoading={running}>
                 {running ? "Running..." : "Run Test"}
             </Button>
-
-            {running && (
-                <div style={{ marginTop: "24px", textAlign: "center" }}>
-                    <Spinner size="lg" />
-                </div>
-            )}
 
             {result && (
                 <Modal isOpen={resultOpen}
