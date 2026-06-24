@@ -1,5 +1,7 @@
 package io.apitomy.axiom.app;
 
+import io.apitomy.axiom.core.entities.TraceNodeEntity;
+import io.apitomy.axiom.core.tracing.TraceService;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
@@ -42,6 +44,9 @@ public class ScriptExecutionService {
 
     @Inject
     EnvironmentResolver environmentResolver;
+
+    @Inject
+    TraceService traceService;
 
     @ConfigProperty(name = "quarkus.http.port", defaultValue = "9090")
     int httpPort;
@@ -242,6 +247,23 @@ public class ScriptExecutionService {
         if (!success) {
             sseEvents.fire(SseEvent.notification(
                     "Script task failed: " + task.actionType, "error"));
+        }
+
+        // Complete the trace (async traces are finalized here)
+        if (task.traceId != null) {
+            try {
+                // Complete the task node with final status
+                TraceNodeEntity taskNode = TraceNodeEntity.find(
+                        "traceId = ?1 and nodeType = 'task' and entityType = 'task' and entityId = ?2",
+                        task.traceId, task.id).firstResult();
+                if (taskNode != null) {
+                    traceService.completeNode(taskNode.id, statusText);
+                }
+
+                traceService.completeTrace(task.traceId, success ? "completed" : "failed");
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to complete trace for script task %d", taskId);
+            }
         }
 
         updateProjectStatusAfterTask(task.projectId);

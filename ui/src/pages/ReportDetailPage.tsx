@@ -122,6 +122,13 @@ export function ReportDetailPage() {
                             View Execution Log
                         </Button>
                     )}
+                    {report.traceId && (
+                        <Button variant="secondary"
+                            onClick={() => navigate(`/logs/traces/${report.traceId}`)}
+                            style={{ marginRight: "8px" }}>
+                            View Execution Trace
+                        </Button>
+                    )}
                     <Button variant="danger" icon={<TrashIcon />} onClick={() => setIsDeleteOpen(true)}>
                         Delete
                     </Button>

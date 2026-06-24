@@ -47,6 +47,9 @@ export function AppSidebar() {
                             <NavItem isActive={location.pathname === "/logs/tasks"} onClick={() => navigate("/logs/tasks")}>
                                 Tasks
                             </NavItem>
+                            <NavItem isActive={location.pathname.startsWith("/logs/traces")} onClick={() => navigate("/logs/traces")}>
+                                Traces
+                            </NavItem>
                         </NavExpandable>
                         <NavExpandable title="Metrics"
                             isActive={location.pathname.startsWith("/metrics")}

@@ -1,6 +1,7 @@
 const { Server } = require("@modelcontextprotocol/sdk/server/index.js");
 const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js");
 const { ListToolsRequestSchema, CallToolRequestSchema } = require("@modelcontextprotocol/sdk/types.js");
+const { startToolTrace, completeToolTrace } = require(require("path").join(__dirname, "trace-helper.js"));
 
 function log(level, message, data) {
     const entry = {
@@ -367,14 +368,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     log("INFO", "SDK tool called", { toolName, args: Object.keys(args) });
+    const toolInput = JSON.stringify(args);
+    const traceNodeId = await startToolTrace(toolName, toolInput);
+
+    let result, status = "success";
+    const startTime = Date.now();
     try {
-        const startTime = Date.now();
-        const result = await tool.handler(args);
+        result = await tool.handler(args);
         const durationMs = Date.now() - startTime;
         log("INFO", "SDK tool completed", { toolName, durationMs });
+        await completeToolTrace(traceNodeId, result, status, durationMs);
         return { content: [{ type: "text", text: result || "OK" }] };
     } catch (error) {
+        status = "failure";
+        const durationMs = Date.now() - startTime;
         log("ERROR", "SDK tool failed", { toolName, error: error.message });
+        await completeToolTrace(traceNodeId, error.message, status, durationMs);
         return { content: [{ type: "text", text: error.message }], isError: true };
     }
 });

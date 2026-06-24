@@ -3,6 +3,8 @@ package io.apitomy.axiom.app;
 import io.apitomy.axiom.actors.spi.Actor;
 import io.apitomy.axiom.actors.spi.ActorContext;
 import io.apitomy.axiom.actors.spi.TaskResult;
+import io.apitomy.axiom.core.entities.TraceNodeEntity;
+import io.apitomy.axiom.core.tracing.TraceService;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
@@ -71,6 +73,9 @@ public class TaskExecutionService {
 
     @Inject
     EnvironmentResolver environmentResolver;
+
+    @Inject
+    TraceService traceService;
 
     /**
      * Attempts to execute the next pending task for the given project.
@@ -148,6 +153,21 @@ public class TaskExecutionService {
         Path workspace = workspaceService.getWorkspacePath(project);
         Map<String, String> env = buildEnvironment(
                 actionTypeEntity != null ? actionTypeEntity.environment : null);
+
+        // Inject trace env vars for MCP tool callbacks (tool calls become children of the task node)
+        if (task.traceId != null) {
+            try {
+                TraceNodeEntity taskNode = TraceNodeEntity.find(
+                        "traceId = ?1 and nodeType = 'task' and entityType = 'task' and entityId = ?2",
+                        task.traceId, task.id).firstResult();
+                if (taskNode != null) {
+                    env.put("AXIOM_TRACE_ID", task.traceId.toString());
+                    env.put("AXIOM_PARENT_NODE_ID", String.valueOf(taskNode.id));
+                }
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to look up task trace node for task %d", task.id);
+            }
+        }
 
         // Generate MCP config filtered to only the tools allowed by this action type
         List<String> allowedTools = getToolsFromActionType(task.actionType);
@@ -419,6 +439,23 @@ public class TaskExecutionService {
         if (!result.isSuccess()) {
             sseEvents.fire(SseEvent.notification(
                     "Task failed: " + task.actionType, "error"));
+        }
+
+        // Complete the trace (async traces are finalized here)
+        if (task.traceId != null) {
+            try {
+                // Complete the task node with final status
+                TraceNodeEntity taskNode = TraceNodeEntity.find(
+                        "traceId = ?1 and nodeType = 'task' and entityType = 'task' and entityId = ?2",
+                        task.traceId, task.id).firstResult();
+                if (taskNode != null) {
+                    traceService.completeNode(taskNode.id, statusText);
+                }
+
+                traceService.completeTrace(task.traceId, result.isSuccess() ? "completed" : "failed");
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to complete trace for task %d", task.id);
+            }
         }
 
         // Clean up temporary MCP config files

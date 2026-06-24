@@ -2,6 +2,8 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.core.tracing.TraceContext;
+import io.apitomy.axiom.core.tracing.TraceService;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.EventEntity;
@@ -54,6 +56,9 @@ public class PipelineOrchestrator {
     @Inject
     ScriptExecutionService scriptExecutionService;
 
+    @Inject
+    TraceService traceService;
+
     /**
      * Polls the event queue every 5 seconds and processes one pending event at a time.
      * Events are processed sequentially to avoid race conditions in the Manager.
@@ -96,57 +101,123 @@ public class PipelineOrchestrator {
         LOG.infof("Processing event %d: %s [%s] from %s",
                 event.id, event.eventType, event.issueRef, event.source);
 
+        // Create trace context (non-fatal — pipeline continues if tracing fails)
+        TraceContext traceCtx = null;
+        try {
+            traceCtx = traceService.createTrace("event-pipeline",
+                    "Processing event #" + event.id + ": " + event.eventType,
+                    event.id, null, null,
+                    "event-ingested", "Event received: " + event.eventType,
+                    "event", event.id);
+            event.traceId = traceCtx.traceId();
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to create trace for event %d", event.id);
+        }
+
         try {
             // Invoke the Manager
-            List<ManagerDecision> decisions = managerService.evaluate(event);
+            List<ManagerDecision> decisions = managerService.evaluate(event, traceCtx);
 
             if (decisions.isEmpty()) {
                 LOG.infof("Manager returned no decisions for event %d", event.id);
                 logActivity(null, null, event.id, "manager-no-decision",
                         "Manager returned no decisions for " + event.eventType);
+                popEvalNode(traceCtx);
+                completeTraceIfSync(traceCtx, false);
                 markQueueEntry(queueEntry.id, "completed");
                 return;
             }
 
-            // Process each decision
+            // Process each decision (created as children of the manager evaluation node)
+            boolean hasAsyncTask = false;
             for (ManagerDecision decision : decisions) {
-                processDecision(event, decision);
+                boolean isAsync = processDecision(event, decision, traceCtx);
+                if (isAsync) {
+                    hasAsyncTask = true;
+                }
             }
+            popEvalNode(traceCtx);
 
+            completeTraceIfSync(traceCtx, hasAsyncTask);
             markQueueEntry(queueEntry.id, "completed");
 
         } catch (Exception e) {
             LOG.errorf(e, "Pipeline failed for event %d", event.id);
             logActivity(null, null, event.id, "pipeline-error",
                     "Pipeline error: " + e.getMessage());
+            completeTraceFailed(traceCtx);
             markQueueEntry(queueEntry.id, "failed");
         }
     }
 
-    private void processDecision(EventEntity event, ManagerDecision decision) {
-        if (!managerService.meetsConfidenceThreshold(decision)) {
-            LOG.infof("Decision below confidence threshold (%.2f): %s — escalating",
-                    decision.confidence(), decision.decision());
-            handleEscalation(event, decision,
-                    "Low confidence (" + String.format("%.0f%%", decision.confidence() * 100)
-                            + "): " + decision.reasoning());
-            return;
+    /**
+     * Processes a single manager decision, returning {@code true} if the decision
+     * involves an async task (create_task or script_action).
+     */
+    private boolean processDecision(EventEntity event, ManagerDecision decision,
+            TraceContext traceCtx) {
+        String decisionLabel = switch (decision.decision()) {
+            case "create_task" -> "Create Task: " + decision.actionType();
+            case "script_action" -> "Script Action: " + decision.actionType();
+            case "ignore" -> "Ignore";
+            case "escalate" -> "Escalate";
+            default -> decision.decision() + ": " + decision.actionType();
+        };
+
+        Long decisionNodeId = null;
+        if (traceCtx != null) {
+            try {
+                decisionNodeId = traceService.addNode(traceCtx, "decision-processed", "in-progress",
+                        decisionLabel, null, null);
+                traceCtx.push(decisionNodeId);
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to add decision trace node");
+            }
         }
 
-        if (decision.isCreateTask()) {
-            handleCreateTask(event, decision);
-        } else if (decision.isIgnore()) {
-            handleIgnore(event, decision);
-        } else if (decision.isScriptAction()) {
-            handleScriptAction(event, decision);
-        } else if (decision.isEscalate()) {
-            handleEscalation(event, decision, decision.reasoning());
-        } else {
-            LOG.warnf("Unknown decision type: %s", decision.decision());
+        boolean isAsync = false;
+        Long decisionLogId = null;
+        try {
+            if (!managerService.meetsConfidenceThreshold(decision)) {
+                LOG.infof("Decision below confidence threshold (%.2f): %s — escalating",
+                        decision.confidence(), decision.decision());
+                handleEscalation(event, decision,
+                        "Low confidence (" + String.format("%.0f%%", decision.confidence() * 100)
+                                + "): " + decision.reasoning(), traceCtx);
+            } else if (decision.isCreateTask()) {
+                decisionLogId = handleCreateTask(event, decision, traceCtx);
+                isAsync = true;
+            } else if (decision.isIgnore()) {
+                handleIgnore(event, decision, traceCtx);
+            } else if (decision.isScriptAction()) {
+                decisionLogId = handleScriptAction(event, decision, traceCtx);
+                isAsync = true;
+            } else if (decision.isEscalate()) {
+                handleEscalation(event, decision, decision.reasoning(), traceCtx);
+            } else {
+                LOG.warnf("Unknown decision type: %s", decision.decision());
+            }
+        } finally {
+            if (traceCtx != null && decisionNodeId != null) {
+                try {
+                    if (decisionLogId != null) {
+                        traceService.completeNode(decisionNodeId, "completed",
+                                "activity-log", decisionLogId);
+                    } else {
+                        traceService.completeNode(decisionNodeId, "completed");
+                    }
+                    traceCtx.pop();
+                } catch (Exception e) {
+                    LOG.warnf(e, "Failed to complete decision trace node");
+                }
+            }
         }
+
+        return isAsync;
     }
 
-    private void handleCreateTask(EventEntity event, ManagerDecision decision) {
+    private Long handleCreateTask(EventEntity event, ManagerDecision decision,
+            TraceContext traceCtx) {
         // Find or create the project
         ProjectEntity project = findOrCreateProject(event);
 
@@ -159,6 +230,9 @@ public class PipelineOrchestrator {
         task.status = "Pending";
         task.input = decision.inputContext();
         task.createdOn = Instant.now();
+        if (traceCtx != null) {
+            task.traceId = traceCtx.traceId();
+        }
         task.persist();
 
         LOG.infof("Created task %d (%s) for project %d from event %d",
@@ -171,6 +245,27 @@ public class PipelineOrchestrator {
         logActivity(project.id, task.id, event.id, "task-created",
                 "Manager created task: " + task.actionType + " — " + decision.reasoning());
 
+        // Log the decision reasoning for trace node detail access
+        ActivityLogEntity decisionLog = new ActivityLogEntity();
+        decisionLog.projectId = project.id;
+        decisionLog.taskId = task.id;
+        decisionLog.eventId = event.id;
+        decisionLog.entryType = "manager-decision";
+        decisionLog.summary = decision.reasoning();
+        decisionLog.details = decision.inputContext();
+        decisionLog.createdOn = Instant.now();
+        decisionLog.persist();
+
+        // Add trace node for the task
+        if (traceCtx != null) {
+            try {
+                traceService.addNode(traceCtx, "task", "in-progress",
+                        "Task: " + task.actionType, "task", task.id);
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to add task trace node");
+            }
+        }
+
         // Log to thread
         addThreadEntry(project.id, "manager", "decision",
                 "Created task: " + task.actionType + "\n\nReasoning: " + decision.reasoning());
@@ -179,15 +274,28 @@ public class PipelineOrchestrator {
         sseEvents.fire(SseEvent.taskUpdated(project.id, task.id, "Pending"));
         sseEvents.fire(SseEvent.projectUpdated(project.id));
         sseEvents.fire(SseEvent.threadEntry(project.id));
+
+        return decisionLog.id;
     }
 
-    private void handleIgnore(EventEntity event, ManagerDecision decision) {
+    private void handleIgnore(EventEntity event, ManagerDecision decision,
+            TraceContext traceCtx) {
         LOG.infof("Ignoring event %d: %s", event.id, decision.reasoning());
         logActivity(null, null, event.id, "event-ignored",
                 "Event ignored: " + event.eventType + " — " + decision.reasoning());
+
+        if (traceCtx != null) {
+            try {
+                traceService.addNode(traceCtx, "event-ignored", "completed",
+                        "Ignored: " + decision.reasoning(), null, null);
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to add event-ignored trace node");
+            }
+        }
     }
 
-    private void handleScriptAction(EventEntity event, ManagerDecision decision) {
+    private Long handleScriptAction(EventEntity event, ManagerDecision decision,
+            TraceContext traceCtx) {
         ProjectEntity project = findOrCreateProject(event);
 
         TaskEntity task = new TaskEntity();
@@ -198,6 +306,9 @@ public class PipelineOrchestrator {
         task.status = "Pending";
         task.input = decision.inputContext();
         task.createdOn = Instant.now();
+        if (traceCtx != null) {
+            task.traceId = traceCtx.traceId();
+        }
         task.persist();
 
         LOG.infof("Created script task %d (%s) for project %d from event %d",
@@ -208,6 +319,27 @@ public class PipelineOrchestrator {
         logActivity(project.id, task.id, event.id, "task-created",
                 "Manager created script task: " + task.actionType
                         + " — " + decision.reasoning());
+
+        ActivityLogEntity decisionLog = new ActivityLogEntity();
+        decisionLog.projectId = project.id;
+        decisionLog.taskId = task.id;
+        decisionLog.eventId = event.id;
+        decisionLog.entryType = "manager-decision";
+        decisionLog.summary = decision.reasoning();
+        decisionLog.details = decision.inputContext();
+        decisionLog.createdOn = Instant.now();
+        decisionLog.persist();
+
+        // Add trace node for the task
+        if (traceCtx != null) {
+            try {
+                traceService.addNode(traceCtx, "task", "in-progress",
+                        "Task: " + task.actionType, "task", task.id);
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to add task trace node");
+            }
+        }
+
         addThreadEntry(project.id, "manager", "decision",
                 "Script action: " + task.actionType
                         + "\n\nReasoning: " + decision.reasoning());
@@ -217,12 +349,24 @@ public class PipelineOrchestrator {
         sseEvents.fire(SseEvent.threadEntry(project.id));
 
         scriptExecutionService.executeScript(task);
+
+        return decisionLog.id;
     }
 
-    private void handleEscalation(EventEntity event, ManagerDecision decision, String reason) {
+    private void handleEscalation(EventEntity event, ManagerDecision decision,
+            String reason, TraceContext traceCtx) {
         LOG.infof("Escalating event %d to user: %s", event.id, reason);
         logActivity(null, null, event.id, "manager-escalation",
                 "Manager escalation: " + reason);
+
+        if (traceCtx != null) {
+            try {
+                traceService.addNode(traceCtx, "escalation", "completed",
+                        "Escalated: " + reason, null, null);
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to add escalation trace node");
+            }
+        }
 
         // If there's a project, add to its thread
         ProjectEntity project = findProjectForEvent(event);
@@ -359,5 +503,49 @@ public class PipelineOrchestrator {
         entry.content = content;
         entry.createdOn = Instant.now();
         entry.persist();
+    }
+
+    /**
+     * Pops the manager evaluation node from the trace context stack.
+     */
+    private void popEvalNode(TraceContext traceCtx) {
+        if (traceCtx == null) {
+            return;
+        }
+        try {
+            traceCtx.pop();
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to pop eval node from trace context");
+        }
+    }
+
+    /**
+     * Completes the trace synchronously if no async tasks were created.
+     */
+    private void completeTraceIfSync(TraceContext traceCtx, boolean hasAsyncTask) {
+        if (traceCtx == null || hasAsyncTask) {
+            return;
+        }
+        try {
+            traceService.completeNode(traceCtx.currentParentNodeId(), "completed");
+            traceService.completeTrace(traceCtx.traceId(), "completed");
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to complete trace %s", traceCtx.traceId());
+        }
+    }
+
+    /**
+     * Completes the trace with a failed status on pipeline error.
+     */
+    private void completeTraceFailed(TraceContext traceCtx) {
+        if (traceCtx == null) {
+            return;
+        }
+        try {
+            traceService.completeNode(traceCtx.currentParentNodeId(), "failed");
+            traceService.completeTrace(traceCtx.traceId(), "failed");
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to complete trace %s on error", traceCtx.traceId());
+        }
     }
 }

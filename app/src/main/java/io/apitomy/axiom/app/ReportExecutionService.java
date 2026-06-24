@@ -2,6 +2,8 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.core.tracing.TraceContext;
+import io.apitomy.axiom.core.tracing.TraceService;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.events.SseEvent;
@@ -23,6 +25,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.nio.file.Path;
+import java.util.UUID;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -62,6 +65,9 @@ public class ReportExecutionService {
     @Inject
     EnvironmentResolver environmentResolver;
 
+    @Inject
+    TraceService traceService;
+
     @ConfigProperty(name = "axiom.claude-code.model")
     Optional<String> model;
 
@@ -92,6 +98,19 @@ public class ReportExecutionService {
     public void generateReport(ReportDefinitionEntity definition, Long reportId) {
         LOG.infof("Generating report '%s' (ID: %d)", definition.name, reportId);
 
+        // Create trace context (non-fatal — report generation continues if tracing fails)
+        TraceContext traceCtx = null;
+        Long aiNodeId = null;
+        try {
+            traceCtx = traceService.createTrace("report-generation",
+                    "Generating report: " + definition.name,
+                    null, null, reportId,
+                    "report-triggered", "Report triggered: " + definition.name,
+                    "report", reportId);
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to create trace for report %d", reportId);
+        }
+
         // Compute time range
         Instant now = Instant.now();
         Instant rangeStart = computeTimeRangeStart(definition, now);
@@ -113,8 +132,18 @@ public class ReportExecutionService {
         // Resolve allowed tools from the definition, falling back to defaults
         List<String> allowedTools = resolveAllowedTools(definition);
 
-        // Generate MCP config with report-related tools
+        // Generate MCP config with report-related tools and trace env vars
         Map<String, String> env = buildEnvironment(definition.environment);
+        if (traceCtx != null) {
+            try {
+                env.put("AXIOM_TRACE_ID", traceCtx.traceId().toString());
+                aiNodeId = traceService.addNode(traceCtx, "report-ai-invoked", "in-progress",
+                        "Report execution (AI agent)", null, null);
+                env.put("AXIOM_PARENT_NODE_ID", String.valueOf(aiNodeId));
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to add AI invocation trace node for report %d", reportId);
+            }
+        }
         Path mcpConfig = mcpConfigGenerator.generateMcpConfig(reportId, env, allowedTools);
 
         // Build engine-agnostic config
@@ -130,33 +159,41 @@ public class ReportExecutionService {
                 .mcpConfigFile(mcpConfig)
                 .build();
 
-        // Mark as generating
-        markGenerating(reportId, rangeStart, rangeEnd);
+        // Mark as generating (stores trace ID on the report entity)
+        UUID traceId = traceCtx != null ? traceCtx.traceId() : null;
+        markGenerating(reportId, rangeStart, rangeEnd, traceId);
 
         // Capture the current classloader so callbacks use the correct one
         // after Quarkus dev-mode live reloads.
         ClassLoader contextCl = Thread.currentThread().getContextClassLoader();
 
+        // Capture trace context for async lambdas
+        final TraceContext finalTraceCtx = traceCtx;
+        final Long finalAiNodeId = aiNodeId;
+
         aiEngine.prompt(engineConfig, prompt)
                 .thenAccept(result -> {
                     Thread.currentThread().setContextClassLoader(contextCl);
-                    onReportCompleted(reportId, definition.id, result);
+                    onReportCompleted(reportId, definition.id, result,
+                            finalTraceCtx, finalAiNodeId);
                 })
                 .exceptionally(throwable -> {
                     Thread.currentThread().setContextClassLoader(contextCl);
                     LOG.errorf(throwable, "Report %d generation failed unexpectedly", reportId);
-                    failReport(reportId, "Unexpected error: " + throwable.getMessage());
+                    failReport(reportId, "Unexpected error: " + throwable.getMessage(),
+                            finalTraceCtx, finalAiNodeId);
                     return null;
                 });
     }
 
     @Transactional
-    void markGenerating(Long reportId, Instant rangeStart, Instant rangeEnd) {
+    void markGenerating(Long reportId, Instant rangeStart, Instant rangeEnd, UUID traceId) {
         ReportEntity report = ReportEntity.findById(reportId);
         if (report != null) {
             report.status = "Generating";
             report.timeRangeStart = rangeStart;
             report.timeRangeEnd = rangeEnd;
+            report.traceId = traceId;
 
             ReportDefinitionEntity def = ReportDefinitionEntity.findById(report.definitionId);
             String defName = def != null ? def.name : "Report #" + reportId;
@@ -166,7 +203,8 @@ public class ReportExecutionService {
     }
 
     @Transactional
-    void onReportCompleted(Long reportId, Long definitionId, AiEngineResult result) {
+    void onReportCompleted(Long reportId, Long definitionId, AiEngineResult result,
+            TraceContext traceCtx, Long aiNodeId) {
         ReportEntity report = ReportEntity.findById(reportId);
         if (report == null) return;
 
@@ -216,10 +254,24 @@ public class ReportExecutionService {
         logActivity("report-" + statusText, summary);
         sseEvents.fire(SseEvent.reportUpdated(reportId, report.status));
         mcpConfigGenerator.cleanupTempFiles(reportId);
+
+        // Complete the trace
+        if (traceCtx != null) {
+            try {
+                if (aiNodeId != null) {
+                    traceService.completeNode(aiNodeId, statusText, "report", reportId);
+                }
+                traceService.completeTrace(traceCtx.traceId(),
+                        result.success() ? "completed" : "failed");
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to complete trace for report %d", reportId);
+            }
+        }
     }
 
     @Transactional
-    void failReport(Long reportId, String reason) {
+    void failReport(Long reportId, String reason,
+            TraceContext traceCtx, Long aiNodeId) {
         ReportEntity report = ReportEntity.findById(reportId);
         if (report != null) {
             report.status = "Failed";
@@ -232,6 +284,18 @@ public class ReportExecutionService {
             logActivity("report-failed", "Report failed: " + defName + " — " + reason);
             sseEvents.fire(SseEvent.reportUpdated(reportId, "Failed"));
             mcpConfigGenerator.cleanupTempFiles(reportId);
+        }
+
+        // Complete the trace
+        if (traceCtx != null) {
+            try {
+                if (aiNodeId != null) {
+                    traceService.completeNode(aiNodeId, "failed", "report", reportId);
+                }
+                traceService.completeTrace(traceCtx.traceId(), "failed");
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to complete trace for failed report %d", reportId);
+            }
         }
     }
 

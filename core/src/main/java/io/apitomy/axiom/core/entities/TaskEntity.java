@@ -6,6 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * Represents a discrete unit of work within a Project.
@@ -43,6 +44,10 @@ public class TaskEntity extends PanacheEntity {
 
     @Column(name = "completed_on")
     public Instant completedOn;
+
+
+    @Column(name = "trace_id")
+    public UUID traceId;
 
     @Column(name = "session_id")
     public String sessionId;
