@@ -2,6 +2,8 @@ package io.apitomy.axiom.manager;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.core.tracing.TraceContext;
+import io.apitomy.axiom.core.tracing.TraceService;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
@@ -41,6 +43,9 @@ public class ManagerService {
     @Inject
     AiEngine aiEngine;
 
+    @Inject
+    TraceService traceService;
+
     @ConfigProperty(name = "axiom.manager.confidence-threshold", defaultValue = "0.7")
     double confidenceThreshold;
 
@@ -56,11 +61,23 @@ public class ManagerService {
     /**
      * Evaluates an event and returns the Manager's decisions.
      *
-     * @param event the event to evaluate
+     * @param event    the event to evaluate
+     * @param traceCtx the current trace context (nullable — tracing is non-fatal)
      * @return a list of decisions (may be empty if the Manager fails)
      */
-    public List<ManagerDecision> evaluate(EventEntity event) {
+    public List<ManagerDecision> evaluate(EventEntity event, TraceContext traceCtx) {
         LOG.infof("Manager evaluating event %d: %s [%s]", event.id, event.eventType, event.issueRef);
+
+        // Add manager-evaluation trace node
+        Long evalNodeId = null;
+        if (traceCtx != null) {
+            try {
+                evalNodeId = traceService.addNode(traceCtx, "manager-evaluation", "in-progress",
+                        "Manager evaluating event: " + event.eventType, null, null);
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to add manager-evaluation trace node for event %d", event.id);
+            }
+        }
 
         // Load context
         List<ActionTypeEntity> actionTypes = ActionTypeEntity.list("managerTriggerable", true);
@@ -123,6 +140,7 @@ public class ManagerService {
                 logManagerActivity(event.id, "manager-error",
                         "Manager failed to evaluate event: " + result.result(),
                         executionLog);
+                completeEvalNode(evalNodeId, "failed", null);
                 return Collections.emptyList();
             }
 
@@ -144,7 +162,9 @@ public class ManagerService {
             String summaryText = decisions.isEmpty()
                     ? "Manager returned no decisions for event " + event.id
                     : "Manager decisions for event " + event.id + ": " + summary;
-            logManagerActivity(event.id, "manager-evaluated", summaryText, executionLog);
+            Long activityLogId = logManagerActivity(event.id, "manager-evaluated",
+                    summaryText, executionLog);
+            completeEvalNode(evalNodeId, "completed", activityLogId);
 
             return decisions;
 
@@ -152,7 +172,26 @@ public class ManagerService {
             LOG.errorf(e, "Manager evaluation failed for event %d", event.id);
             logManagerActivity(event.id, "manager-error",
                     "Manager evaluation error: " + e.getMessage(), null);
+            completeEvalNode(evalNodeId, "failed", null);
             return Collections.emptyList();
+        }
+    }
+
+    /**
+     * Completes the manager-evaluation trace node (non-fatal).
+     */
+    private void completeEvalNode(Long evalNodeId, String status, Long activityLogId) {
+        if (evalNodeId == null) {
+            return;
+        }
+        try {
+            if (activityLogId != null) {
+                traceService.completeNode(evalNodeId, status, "activity-log", activityLogId);
+            } else {
+                traceService.completeNode(evalNodeId, status);
+            }
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to complete manager-evaluation trace node %d", evalNodeId);
         }
     }
 
@@ -213,13 +252,14 @@ public class ManagerService {
     /**
      * Logs a manager activity entry with optional execution log details.
      *
-     * @param eventId the event ID
+     * @param eventId   the event ID
      * @param entryType the activity log entry type
-     * @param summary a brief summary
-     * @param details the full execution log (may be null)
+     * @param summary   a brief summary
+     * @param details   the full execution log (may be null)
+     * @return the persisted activity log entry ID
      */
-    void logManagerActivity(Long eventId, String entryType, String summary, String details) {
-        QuarkusTransaction.requiringNew().run(() -> {
+    Long logManagerActivity(Long eventId, String entryType, String summary, String details) {
+        return QuarkusTransaction.requiringNew().call(() -> {
             ActivityLogEntity log = new ActivityLogEntity();
             log.eventId = eventId;
             log.entryType = entryType;
@@ -229,6 +269,7 @@ public class ManagerService {
             log.details = details;
             log.createdOn = Instant.now();
             log.persist();
+            return log.id;
         });
     }
 

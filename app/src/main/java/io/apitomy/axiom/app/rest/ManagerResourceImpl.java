@@ -72,6 +72,6 @@ public class ManagerResourceImpl implements ManagerResource {
         if (event == null) {
             throw new WebApplicationException("Event not found: " + eventId, 404);
         }
-        return Response.ok(managerService.evaluate(event)).build();
+        return Response.ok(managerService.evaluate(event, null)).build();
     }
 }
