@@ -3302,6 +3302,354 @@
           }
         }
       }
+    },
+    "/traces": {
+      "get": {
+        "tags": [
+          "traces"
+        ],
+        "summary": "List traces with pagination and filtering",
+        "operationId": "listTraces",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (1-indexed)",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Items per page",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "filterTraceType",
+            "in": "query",
+            "description": "Filter by trace type (exact match)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filterStatus",
+            "in": "query",
+            "description": "Filter by status (exact match or comma-separated)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filterEventId",
+            "in": "query",
+            "description": "Filter by event ID",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "filterProjectId",
+            "in": "query",
+            "description": "Filter by project ID",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "filterReportId",
+            "in": "query",
+            "description": "Filter by report ID",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of traces",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceSearchResults"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/traces/{traceId}": {
+      "get": {
+        "tags": [
+          "traces"
+        ],
+        "summary": "Get a trace with all its nodes",
+        "operationId": "getTrace",
+        "responses": {
+          "200": {
+            "description": "Trace with all nodes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Trace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "traceId",
+          "in": "path",
+          "description": "Trace UUID",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "/traces/{traceId}/nodes/{nodeId}": {
+      "get": {
+        "tags": [
+          "traces"
+        ],
+        "summary": "Get a trace node with its referenced detail record",
+        "operationId": "getTraceNodeDetail",
+        "responses": {
+          "200": {
+            "description": "Trace node with detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceNodeDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Node not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "traceId",
+          "in": "path",
+          "description": "Trace UUID",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "nodeId",
+          "in": "path",
+          "description": "Trace node ID",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/traces/tool-calls": {
+      "post": {
+        "tags": [
+          "traces"
+        ],
+        "summary": "Record a tool call execution (MCP callback)",
+        "operationId": "createToolCall",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolCallRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tool call recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolCallCreated"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/traces/tool-calls/{nodeId}": {
+      "put": {
+        "tags": [
+          "traces"
+        ],
+        "summary": "Complete a tool call execution (MCP callback)",
+        "operationId": "completeToolCall",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolCallCompletion"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Tool call completed"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "nodeId",
+          "in": "path",
+          "description": "Tool call node ID",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/events/{eventId}/traces": {
+      "get": {
+        "tags": [
+          "traces"
+        ],
+        "summary": "List traces for an event",
+        "operationId": "listEventTraces",
+        "responses": {
+          "200": {
+            "description": "Traces for event",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Trace"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "eventId",
+          "in": "path",
+          "description": "Event ID",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/projects/{projectId}/traces": {
+      "get": {
+        "tags": [
+          "traces"
+        ],
+        "summary": "List traces for a project",
+        "operationId": "listProjectTraces",
+        "responses": {
+          "200": {
+            "description": "Traces for project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Trace"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "projectId",
+          "in": "path",
+          "description": "Project ID",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/reports/{reportId}/traces": {
+      "get": {
+        "tags": [
+          "traces"
+        ],
+        "summary": "List traces for a report",
+        "operationId": "listReportTraces",
+        "responses": {
+          "200": {
+            "description": "Traces for report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Trace"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "reportId",
+          "in": "path",
+          "description": "Report ID",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ]
     }
   },
   "components": {
@@ -3609,6 +3957,10 @@
           },
           "sessionId": {
             "description": "Claude Code session ID",
+            "type": "string"
+          },
+          "traceId": {
+            "format": "uuid",
             "type": "string"
           }
         }
@@ -3978,6 +4330,10 @@
             "format": "int64",
             "description": "ID of the Event Source that produced this event, if applicable",
             "type": "integer"
+          },
+          "traceId": {
+            "format": "uuid",
+            "type": "string"
           }
         }
       },
@@ -4256,6 +4612,10 @@
             "items": {
               "type": "string"
             }
+          },
+          "traceId": {
+            "format": "uuid",
+            "type": "string"
           }
         }
       },
@@ -5398,6 +5758,239 @@
             }
           }
         }
+      },
+      "Trace": {
+        "required": [
+          "traceId",
+          "traceType",
+          "status",
+          "summary",
+          "startedOn"
+        ],
+        "type": "object",
+        "properties": {
+          "traceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "traceType": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "eventId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "projectId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "reportId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "startedOn": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "completedOn": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      },
+      "TraceNode": {
+        "required": [
+          "id",
+          "traceId",
+          "nodeType",
+          "status",
+          "summary",
+          "startedOn"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "traceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "parentNodeId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "nodeType": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "startedOn": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "completedOn": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "durationMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "entityType": {
+            "type": "string"
+          },
+          "entityId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      },
+      "ToolExecution": {
+        "required": [
+          "id",
+          "traceId",
+          "toolName",
+          "status",
+          "createdOn"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "traceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "toolName": {
+            "type": "string"
+          },
+          "toolInput": {
+            "type": "string"
+          },
+          "toolOutput": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "durationMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "createdOn": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      },
+      "TraceSearchResults": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Trace"
+            }
+          },
+          "totalCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        }
+      },
+      "TraceDetail": {
+        "description": "Trace with all its nodes in tree order",
+        "type": "object",
+        "properties": {
+          "trace": {
+            "$ref": "#/components/schemas/Trace"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TraceNode"
+            }
+          }
+        }
+      },
+      "TraceNodeDetail": {
+        "type": "object",
+        "properties": {
+          "node": {
+            "$ref": "#/components/schemas/TraceNode"
+          },
+          "detail": {
+            "description": "The referenced detail record, type depends on entityType",
+            "type": "object"
+          }
+        }
+      },
+      "ToolCallRequest": {
+        "required": [
+          "traceId",
+          "toolName"
+        ],
+        "type": "object",
+        "properties": {
+          "traceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "parentNodeId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "toolName": {
+            "type": "string"
+          },
+          "toolInput": {
+            "type": "string"
+          }
+        }
+      },
+      "ToolCallCreated": {
+        "type": "object",
+        "properties": {
+          "nodeId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      },
+      "ToolCallCompletion": {
+        "type": "object",
+        "properties": {
+          "toolOutput": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "durationMs": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
       }
     },
     "responses": {
@@ -5513,6 +6106,10 @@
     {
       "name": "Assistant",
       "description": "Interactive AI assistant session management"
+    },
+    {
+      "name": "traces",
+      "description": "Activity tracing and execution lineage"
     }
   ]
 }

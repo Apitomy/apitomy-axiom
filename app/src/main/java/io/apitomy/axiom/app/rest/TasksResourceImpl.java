@@ -83,6 +83,9 @@ public class TasksResourceImpl implements TasksResource {
             task.setCompletedOn(Date.from(entity.completedOn));
         }
         task.setSessionId(entity.sessionId);
+        if (entity.traceId != null) {
+            task.setTraceId(entity.traceId);
+        }
         return task;
     }
 }
