@@ -1264,3 +1264,103 @@ export async function applyAssistantSession(sessionId: string): Promise<ImportRe
 export function assistantEventsUrl(sessionId: string): string {
     return `${API}/assistant/sessions/${sessionId}/events`;
 }
+
+// ── Traces ──────────────────────────────────────────────────────────
+
+export interface Trace {
+    traceId: string;
+    traceType: string;
+    status: string;
+    summary: string;
+    eventId?: number;
+    projectId?: number;
+    reportId?: number;
+    startedOn: string;
+    completedOn?: string;
+}
+
+export interface TraceNode {
+    id: number;
+    traceId: string;
+    parentNodeId?: number;
+    nodeType: string;
+    status: string;
+    summary: string;
+    startedOn: string;
+    completedOn?: string;
+    durationMs?: number;
+    entityType?: string;
+    entityId?: number;
+}
+
+export interface ToolExecution {
+    id: number;
+    traceId: string;
+    toolName: string;
+    toolInput?: string;
+    toolOutput?: string;
+    status: string;
+    durationMs?: number;
+    createdOn: string;
+}
+
+export interface TraceDetail {
+    trace: Trace;
+    nodes: TraceNode[];
+}
+
+export interface TraceNodeDetailResponse {
+    node: TraceNode;
+    detail: Record<string, unknown>;
+}
+
+export async function fetchTraces(
+    page = 1, limit = 20,
+    filterTraceType?: string, filterStatus?: string,
+    filterEventId?: number, filterProjectId?: number,
+    filterReportId?: number
+): Promise<SearchResults<Trace>> {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(limit));
+    if (filterTraceType) params.set("filterTraceType", filterTraceType);
+    if (filterStatus) params.set("filterStatus", filterStatus);
+    if (filterEventId) params.set("filterEventId", String(filterEventId));
+    if (filterProjectId) params.set("filterProjectId", String(filterProjectId));
+    if (filterReportId) params.set("filterReportId", String(filterReportId));
+    const response = await fetch(`${API}/traces?${params}`);
+    if (!response.ok) throw new Error(`Failed to fetch traces: ${response.status}`);
+    return response.json();
+}
+
+export async function fetchTraceDetail(traceId: string): Promise<TraceDetail> {
+    const response = await fetch(`${API}/traces/${traceId}`);
+    if (!response.ok) throw new Error(`Failed to fetch trace: ${response.status}`);
+    return response.json();
+}
+
+export async function fetchTraceNodeDetail(
+    traceId: string, nodeId: number
+): Promise<TraceNodeDetailResponse> {
+    const response = await fetch(`${API}/traces/${traceId}/nodes/${nodeId}`);
+    if (!response.ok) throw new Error(`Failed to fetch node detail: ${response.status}`);
+    return response.json();
+}
+
+export async function fetchEventTraces(eventId: number): Promise<Trace[]> {
+    const response = await fetch(`${API}/events/${eventId}/traces`);
+    if (!response.ok) throw new Error(`Failed to fetch event traces: ${response.status}`);
+    return response.json();
+}
+
+export async function fetchProjectTraces(projectId: number): Promise<Trace[]> {
+    const response = await fetch(`${API}/projects/${projectId}/traces`);
+    if (!response.ok) throw new Error(`Failed to fetch project traces: ${response.status}`);
+    return response.json();
+}
+
+export async function fetchReportTraces(reportId: number): Promise<Trace[]> {
+    const response = await fetch(`${API}/reports/${reportId}/traces`);
+    if (!response.ok) throw new Error(`Failed to fetch report traces: ${response.status}`);
+    return response.json();
+}
