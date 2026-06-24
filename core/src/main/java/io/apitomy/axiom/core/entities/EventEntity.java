@@ -6,6 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * Represents something that happened — either externally or internally.
@@ -36,6 +37,10 @@ public class EventEntity extends PanacheEntity {
 
     @Column(nullable = false, columnDefinition = "TEXT")
     public String payload;
+
+
+    @Column(name = "trace_id")
+    public UUID traceId;
 
     @Column(name = "received_at", nullable = false)
     public Instant receivedAt;
