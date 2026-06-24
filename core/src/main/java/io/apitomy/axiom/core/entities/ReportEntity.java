@@ -11,6 +11,7 @@ import jakarta.persistence.Table;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.UUID;
 import java.util.List;
 
 /**
@@ -53,6 +54,10 @@ public class ReportEntity extends PanacheEntity {
 
     @Column(name = "completed_on")
     public Instant completedOn;
+
+
+    @Column(name = "trace_id")
+    public UUID traceId;
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "report_label", joinColumns = @JoinColumn(name = "report_id"))
