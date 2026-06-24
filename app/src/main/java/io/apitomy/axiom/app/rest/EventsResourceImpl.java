@@ -4,6 +4,8 @@ import io.apitomy.axiom.api.EventsResource;
 import io.apitomy.axiom.api.beans.Event;
 import io.apitomy.axiom.api.beans.EventSearchResults;
 import io.apitomy.axiom.api.beans.NewEvent;
+import io.apitomy.axiom.api.beans.Trace;
+import io.apitomy.axiom.core.entities.TraceEntity;
 import io.apitomy.axiom.core.entities.EventEntity;
 import io.apitomy.axiom.events.core.EventService;
 import io.quarkus.panache.common.Page;
@@ -99,6 +101,18 @@ public class EventsResourceImpl implements EventsResource {
         return toBean(entity);
     }
 
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List<Trace> listEventTraces(BigInteger eventId) {
+        return TraceEntity.<TraceEntity>list("eventId", Sort.descending("startedOn"),
+                eventId.longValue())
+                .stream()
+                .map(TraceMapper::toTraceBean)
+                .toList();
+    }
+
     private Event toBean(EventEntity entity) {
         Event event = new Event();
         event.setId(entity.id);
@@ -111,6 +125,9 @@ public class EventsResourceImpl implements EventsResource {
         event.setTaskId(entity.taskId);
         event.setPayload(entity.payload);
         event.setReceivedAt(Date.from(entity.receivedAt));
+        if (entity.traceId != null) {
+            event.setTraceId(entity.traceId);
+        }
         return event;
     }
 }

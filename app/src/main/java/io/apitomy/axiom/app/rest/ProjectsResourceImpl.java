@@ -3,6 +3,8 @@ package io.apitomy.axiom.app.rest;
 import io.apitomy.axiom.actors.human.HumanActor;
 import io.apitomy.axiom.api.ProjectsResource;
 import io.apitomy.axiom.api.beans.Event;
+import io.apitomy.axiom.api.beans.Trace;
+import io.apitomy.axiom.core.entities.TraceEntity;
 import io.apitomy.axiom.api.beans.NewProject;
 import io.apitomy.axiom.api.beans.NewThreadEntry;
 import io.apitomy.axiom.api.beans.ProjectMetrics;
@@ -420,6 +422,18 @@ public class ProjectsResourceImpl implements ProjectsResource {
 
     // ── Helpers ───────────────────────────────────────────────────────
 
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List<Trace> listProjectTraces(BigInteger projectId) {
+        return TraceEntity.<TraceEntity>list("projectId", Sort.descending("startedOn"),
+                projectId.longValue())
+                .stream()
+                .map(TraceMapper::toTraceBean)
+                .toList();
+    }
+
     private ProjectEntity findProjectOrThrow(long id) {
         ProjectEntity entity = ProjectEntity.findById(id);
         if (entity == null) {
@@ -460,6 +474,9 @@ public class ProjectsResourceImpl implements ProjectsResource {
             task.setCompletedOn(Date.from(entity.completedOn));
         }
         task.setSessionId(entity.sessionId);
+        if (entity.traceId != null) {
+            task.setTraceId(entity.traceId);
+        }
         return task;
     }
 
@@ -485,6 +502,9 @@ public class ProjectsResourceImpl implements ProjectsResource {
         event.setProjectId(entity.projectId);
         event.setTaskId(entity.taskId);
         event.setReceivedAt(Date.from(entity.receivedAt));
+        if (entity.traceId != null) {
+            event.setTraceId(entity.traceId);
+        }
         return event;
     }
 }

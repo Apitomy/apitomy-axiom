@@ -1,6 +1,8 @@
 package io.apitomy.axiom.app.rest;
 
 import io.apitomy.axiom.api.ReportsResource;
+import io.apitomy.axiom.api.beans.Trace;
+import io.apitomy.axiom.core.entities.TraceEntity;
 import io.apitomy.axiom.api.beans.NewReportDefinition;
 import io.apitomy.axiom.api.beans.Report;
 import io.apitomy.axiom.api.beans.ReportAiEditRequest;
@@ -298,6 +300,18 @@ public class ReportsResourceImpl implements ReportsResource {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List<Trace> listReportTraces(BigInteger reportId) {
+        return TraceEntity.<TraceEntity>list("reportId", Sort.descending("startedOn"),
+                reportId.longValue())
+                .stream()
+                .map(TraceMapper::toTraceBean)
+                .toList();
+    }
+
     private ReportDefinitionValidator.KnownNames getKnownNames() {
         Set<String> secrets = SecretEntity.<SecretEntity>listAll().stream()
                 .map(s -> s.name)
@@ -401,6 +415,9 @@ public class ReportsResourceImpl implements ReportsResource {
         report.setCreatedOn(Date.from(entity.createdOn));
         if (entity.completedOn != null) report.setCompletedOn(Date.from(entity.completedOn));
         report.setLabels(entity.labels);
+        if (entity.traceId != null) {
+            report.setTraceId(entity.traceId);
+        }
         return report;
     }
 
