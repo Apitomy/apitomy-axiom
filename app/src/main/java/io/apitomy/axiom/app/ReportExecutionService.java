@@ -105,7 +105,8 @@ public class ReportExecutionService {
             traceCtx = traceService.createTrace("report-generation",
                     "Generating report: " + definition.name,
                     null, null, reportId,
-                    "report-triggered", "Report triggered: " + definition.name);
+                    "report-triggered", "Report triggered: " + definition.name,
+                    "report", reportId);
         } catch (Exception e) {
             LOG.warnf(e, "Failed to create trace for report %d", reportId);
         }
@@ -137,7 +138,7 @@ public class ReportExecutionService {
             try {
                 env.put("AXIOM_TRACE_ID", traceCtx.traceId().toString());
                 aiNodeId = traceService.addNode(traceCtx, "report-ai-invoked", "in-progress",
-                        "AI engine invoked for report generation", null, null);
+                        "Report execution (AI agent)", null, null);
                 env.put("AXIOM_PARENT_NODE_ID", String.valueOf(aiNodeId));
             } catch (Exception e) {
                 LOG.warnf(e, "Failed to add AI invocation trace node for report %d", reportId);
@@ -258,10 +259,8 @@ public class ReportExecutionService {
         if (traceCtx != null) {
             try {
                 if (aiNodeId != null) {
-                    traceService.completeNode(aiNodeId, statusText);
+                    traceService.completeNode(aiNodeId, statusText, "report", reportId);
                 }
-                traceService.addNode(traceCtx, "report-" + statusText, "completed",
-                        "Report " + statusText + ": " + defName, "report", reportId);
                 traceService.completeTrace(traceCtx.traceId(),
                         result.success() ? "completed" : "failed");
             } catch (Exception e) {
@@ -291,10 +290,8 @@ public class ReportExecutionService {
         if (traceCtx != null) {
             try {
                 if (aiNodeId != null) {
-                    traceService.completeNode(aiNodeId, "failed");
+                    traceService.completeNode(aiNodeId, "failed", "report", reportId);
                 }
-                traceService.addNode(traceCtx, "report-failed", "failed",
-                        "Report failed: " + reason, "report", reportId);
                 traceService.completeTrace(traceCtx.traceId(), "failed");
             } catch (Exception e) {
                 LOG.warnf(e, "Failed to complete trace for failed report %d", reportId);

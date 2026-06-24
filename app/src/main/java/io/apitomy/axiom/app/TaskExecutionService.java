@@ -4,7 +4,6 @@ import io.apitomy.axiom.actors.spi.Actor;
 import io.apitomy.axiom.actors.spi.ActorContext;
 import io.apitomy.axiom.actors.spi.TaskResult;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
-import io.apitomy.axiom.core.tracing.TraceContext;
 import io.apitomy.axiom.core.tracing.TraceService;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
@@ -155,21 +154,18 @@ public class TaskExecutionService {
         Map<String, String> env = buildEnvironment(
                 actionTypeEntity != null ? actionTypeEntity.environment : null);
 
-        // Create task-started trace node and inject trace env vars for MCP tool callbacks
+        // Inject trace env vars for MCP tool callbacks (tool calls become children of the task node)
         if (task.traceId != null) {
             try {
-                TraceNodeEntity taskCreatedNode = TraceNodeEntity.find(
-                        "traceId = ?1 and nodeType = 'task-created' and entityType = 'task' and entityId = ?2",
+                TraceNodeEntity taskNode = TraceNodeEntity.find(
+                        "traceId = ?1 and nodeType = 'task' and entityType = 'task' and entityId = ?2",
                         task.traceId, task.id).firstResult();
-                Long parentNodeId = taskCreatedNode != null ? taskCreatedNode.id : null;
-                TraceContext traceCtx = new TraceContext(task.traceId,
-                        parentNodeId != null ? parentNodeId : 0L);
-                Long taskStartedNodeId = traceService.addNode(traceCtx, "task-started", "in-progress",
-                        "Task execution started: " + task.actionType, "task", task.id);
-                env.put("AXIOM_TRACE_ID", task.traceId.toString());
-                env.put("AXIOM_PARENT_NODE_ID", String.valueOf(taskStartedNodeId));
+                if (taskNode != null) {
+                    env.put("AXIOM_TRACE_ID", task.traceId.toString());
+                    env.put("AXIOM_PARENT_NODE_ID", String.valueOf(taskNode.id));
+                }
             } catch (Exception e) {
-                LOG.warnf(e, "Failed to create task-started trace node for task %d", task.id);
+                LOG.warnf(e, "Failed to look up task trace node for task %d", task.id);
             }
         }
 
@@ -448,22 +444,12 @@ public class TaskExecutionService {
         // Complete the trace (async traces are finalized here)
         if (task.traceId != null) {
             try {
-                // Complete the task-started node
-                TraceNodeEntity taskStartedNode = TraceNodeEntity.find(
-                        "traceId = ?1 and nodeType = 'task-started' and entityType = 'task' and entityId = ?2",
+                // Complete the task node with final status
+                TraceNodeEntity taskNode = TraceNodeEntity.find(
+                        "traceId = ?1 and nodeType = 'task' and entityType = 'task' and entityId = ?2",
                         task.traceId, task.id).firstResult();
-                if (taskStartedNode != null) {
-                    traceService.completeNode(taskStartedNode.id, statusText);
-                }
-
-                // Add task-completed/task-failed node
-                TraceNodeEntity taskCreatedNode = TraceNodeEntity.find(
-                        "traceId = ?1 and nodeType = 'task-created' and entityType = 'task' and entityId = ?2",
-                        task.traceId, task.id).firstResult();
-                if (taskCreatedNode != null) {
-                    TraceContext traceCtx = new TraceContext(task.traceId, taskCreatedNode.id);
-                    traceService.addNode(traceCtx, "task-" + statusText, "completed",
-                            "Task " + statusText + ": " + task.actionType, "task", task.id);
+                if (taskNode != null) {
+                    traceService.completeNode(taskNode.id, statusText);
                 }
 
                 traceService.completeTrace(task.traceId, result.isSuccess() ? "completed" : "failed");

@@ -1,7 +1,6 @@
 package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
-import io.apitomy.axiom.core.tracing.TraceContext;
 import io.apitomy.axiom.core.tracing.TraceService;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
@@ -66,22 +65,6 @@ public class ScriptExecutionService {
         CompletableFuture.runAsync(() -> {
             Arc.container().requestContext().activate();
             try {
-                // Create task-started trace node
-                if (task.traceId != null) {
-                    try {
-                        TraceNodeEntity taskCreatedNode = TraceNodeEntity.find(
-                                "traceId = ?1 and nodeType = 'task-created' and entityType = 'task' and entityId = ?2",
-                                task.traceId, task.id).firstResult();
-                        if (taskCreatedNode != null) {
-                            TraceContext traceCtx = new TraceContext(task.traceId, taskCreatedNode.id);
-                            traceService.addNode(traceCtx, "task-started", "in-progress",
-                                    "Script execution started: " + task.actionType, "task", task.id);
-                        }
-                    } catch (Exception e) {
-                        LOG.warnf(e, "Failed to create task-started trace node for script task %d", task.id);
-                    }
-                }
-
                 RunResult result = runScript(task);
                 completeTask(task.id, result.output, result.exitCode == 0,
                         result.executionLog);
@@ -269,22 +252,12 @@ public class ScriptExecutionService {
         // Complete the trace (async traces are finalized here)
         if (task.traceId != null) {
             try {
-                // Complete the task-started node
-                TraceNodeEntity taskStartedNode = TraceNodeEntity.find(
-                        "traceId = ?1 and nodeType = 'task-started' and entityType = 'task' and entityId = ?2",
+                // Complete the task node with final status
+                TraceNodeEntity taskNode = TraceNodeEntity.find(
+                        "traceId = ?1 and nodeType = 'task' and entityType = 'task' and entityId = ?2",
                         task.traceId, task.id).firstResult();
-                if (taskStartedNode != null) {
-                    traceService.completeNode(taskStartedNode.id, statusText);
-                }
-
-                // Add task-completed/task-failed node
-                TraceNodeEntity taskCreatedNode = TraceNodeEntity.find(
-                        "traceId = ?1 and nodeType = 'task-created' and entityType = 'task' and entityId = ?2",
-                        task.traceId, task.id).firstResult();
-                if (taskCreatedNode != null) {
-                    TraceContext traceCtx = new TraceContext(task.traceId, taskCreatedNode.id);
-                    traceService.addNode(traceCtx, "task-" + statusText, "completed",
-                            "Script task " + statusText + ": " + task.actionType, "task", task.id);
+                if (taskNode != null) {
+                    traceService.completeNode(taskNode.id, statusText);
                 }
 
                 traceService.completeTrace(task.traceId, success ? "completed" : "failed");

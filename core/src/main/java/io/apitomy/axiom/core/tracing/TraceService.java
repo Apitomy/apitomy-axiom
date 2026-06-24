@@ -29,13 +29,16 @@ public class TraceService {
      * @param eventId         associated event ID (nullable)
      * @param projectId       associated project ID (nullable)
      * @param reportId        associated report ID (nullable)
-     * @param rootNodeType    node type for the root node
-     * @param rootNodeSummary summary for the root node
+     * @param rootNodeType       node type for the root node
+     * @param rootNodeSummary    summary for the root node
+     * @param rootEntityType     entity type for the root node (nullable)
+     * @param rootEntityId       entity ID for the root node (nullable)
      * @return a {@link TraceContext} with the root node on the stack
      */
     public TraceContext createTrace(String traceType, String summary,
             Long eventId, Long projectId, Long reportId,
-            String rootNodeType, String rootNodeSummary) {
+            String rootNodeType, String rootNodeSummary,
+            String rootEntityType, Long rootEntityId) {
         return QuarkusTransaction.requiringNew().call(() -> {
             Instant now = Instant.now();
 
@@ -59,6 +62,8 @@ public class TraceService {
             rootNode.startedOn = now;
             rootNode.completedOn = now;
             rootNode.durationMs = 0L;
+            rootNode.entityType = rootEntityType;
+            rootNode.entityId = rootEntityId;
             rootNode.persist();
 
             LOG.debugf("Created trace %s (%s) with root node %d",

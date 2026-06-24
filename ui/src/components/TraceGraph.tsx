@@ -4,7 +4,6 @@ import {
     ReactFlowProvider,
     Background,
     Controls,
-    MiniMap,
     Position,
     useNodesState,
     useEdgesState,
@@ -21,6 +20,7 @@ import { TraceNodeDetailModal } from "./TraceNodeDetailModal";
 interface TraceGraphProps {
     traceId: string;
     traceDetail?: TraceDetail;
+    refreshKey?: number;
 }
 
 const elk = new ELK();
@@ -89,7 +89,7 @@ async function layoutTrace(traceNodes: TraceNode[]): Promise<{
     return { nodes, edges };
 }
 
-function TraceGraphInner({ traceId, traceDetail }: TraceGraphProps) {
+function TraceGraphInner({ traceId, traceDetail, refreshKey }: TraceGraphProps) {
     const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
     const [loading, setLoading] = useState(true);
@@ -108,7 +108,7 @@ function TraceGraphInner({ traceId, traceDetail }: TraceGraphProps) {
         } finally {
             setLoading(false);
         }
-    }, [traceId, traceDetail, setNodes, setEdges]);
+    }, [traceId, traceDetail, refreshKey, setNodes, setEdges]);
 
     useEffect(() => { loadTrace(); }, [loadTrace]);
 
@@ -134,7 +134,7 @@ function TraceGraphInner({ traceId, traceDetail }: TraceGraphProps) {
     }
 
     return (
-        <div style={{ height: "500px", width: "100%" }}>
+        <div style={{ height: "100%", minHeight: "400px", width: "100%" }}>
             <ReactFlow
                 nodes={nodes}
                 edges={edges}
@@ -149,7 +149,6 @@ function TraceGraphInner({ traceId, traceDetail }: TraceGraphProps) {
             >
                 <Background />
                 <Controls />
-                <MiniMap />
             </ReactFlow>
 
             <TraceNodeDetailModal

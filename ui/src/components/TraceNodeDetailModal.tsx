@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
-    Button,
     DescriptionList,
     DescriptionListDescription,
     DescriptionListGroup,
@@ -10,11 +10,13 @@ import {
     Label,
     Modal,
     ModalBody,
-    ModalFooter,
     ModalHeader,
+    Tab,
+    Tabs,
+    TabTitleText,
 } from "@patternfly/react-core";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
-import { fetchTraceNodeDetail, type TraceNode } from "../config/api";
+import { fetchTraceNodeDetail, fetchTools, type TraceNode } from "../config/api";
 import { formatDuration, STATUS_COLORS } from "./TraceGraphNode";
 
 interface TraceNodeDetailModalProps {
@@ -42,7 +44,7 @@ export function TraceNodeDetailModal({ isOpen, traceId, node, onClose }: TraceNo
         <Modal isOpen={isOpen} onClose={onClose} variant="large" aria-label="Node Detail">
             <ModalHeader title={node?.summary || "Node Detail"} />
             <ModalBody>
-                <DescriptionList isHorizontal isCompact>
+                <DescriptionList isHorizontal isCompact columnModifier={{ default: "2Col" }}>
                     <DescriptionListGroup>
                         <DescriptionListTerm>Type</DescriptionListTerm>
                         <DescriptionListDescription>
@@ -83,20 +85,27 @@ export function TraceNodeDetailModal({ isOpen, traceId, node, onClose }: TraceNo
                     <EmptyState style={{ marginTop: "16px" }}>
                         <EmptyStateBody>Loading details...</EmptyStateBody>
                     </EmptyState>
-                ) : detail && (
+                ) : detail && node && (
                     <div style={{ marginTop: "16px" }}>
-                        {renderDetail(node!.entityType, detail)}
+                        {renderDetail(node.nodeType, node.entityType, detail)}
                     </div>
                 )}
             </ModalBody>
-            <ModalFooter>
-                <Button variant="link" onClick={onClose}>Close</Button>
-            </ModalFooter>
         </Modal>
     );
 }
 
-function renderDetail(entityType: string | undefined, detail: Record<string, unknown>) {
+function renderDetail(nodeType: string, entityType: string | undefined,
+        detail: Record<string, unknown>) {
+    if (nodeType === "decision-processed" && entityType === "activity-log") {
+        return <DecisionDetail detail={detail} />;
+    }
+    if (nodeType === "report-ai-invoked" && entityType === "report") {
+        return <ReportExecutionLogDetail detail={detail} />;
+    }
+    if (nodeType === "report-triggered" && entityType === "report") {
+        return <ReportLinkDetail detail={detail} />;
+    }
     switch (entityType) {
         case "tool-execution":
             return <ToolExecutionDetail detail={detail} />;
@@ -104,6 +113,8 @@ function renderDetail(entityType: string | undefined, detail: Record<string, unk
             return <ActivityLogDetail detail={detail} />;
         case "ai-usage":
             return <AiUsageDetail detail={detail} />;
+        case "task":
+            return <TaskDetail detail={detail} />;
         case "event":
             return <EventDetail detail={detail} />;
         default:
@@ -118,48 +129,52 @@ function renderDetail(entityType: string | undefined, detail: Record<string, unk
     }
 }
 
-function ToolExecutionDetail({ detail }: { detail: Record<string, unknown> }) {
+function ReportLinkDetail({ detail }: { detail: Record<string, unknown> }) {
+    const reportId = detail.id;
+    const title = detail.title ? String(detail.title) : `Report #${reportId}`;
+    return (
+        <DescriptionList isHorizontal isCompact>
+            <DescriptionListGroup>
+                <DescriptionListTerm>Report</DescriptionListTerm>
+                <DescriptionListDescription>
+                    <Link to={`/reports/${reportId}`}>{title}</Link>
+                </DescriptionListDescription>
+            </DescriptionListGroup>
+        </DescriptionList>
+    );
+}
+
+function ReportExecutionLogDetail({ detail }: { detail: Record<string, unknown> }) {
     return (
         <>
-            <DescriptionList isHorizontal isCompact style={{ marginBottom: "12px" }}>
-                <DescriptionListGroup>
-                    <DescriptionListTerm>Tool</DescriptionListTerm>
-                    <DescriptionListDescription>
-                        <Label isCompact>{String(detail.toolName || "")}</Label>
-                    </DescriptionListDescription>
-                </DescriptionListGroup>
-                <DescriptionListGroup>
-                    <DescriptionListTerm>Status</DescriptionListTerm>
-                    <DescriptionListDescription>{String(detail.status || "")}</DescriptionListDescription>
-                </DescriptionListGroup>
-                {detail.durationMs != null && (
-                    <DescriptionListGroup>
-                        <DescriptionListTerm>Duration</DescriptionListTerm>
-                        <DescriptionListDescription>
-                            {formatDuration(Number(detail.durationMs))}
-                        </DescriptionListDescription>
-                    </DescriptionListGroup>
-                )}
-            </DescriptionList>
-            {detail.toolInput && (
+            <h4 style={{ marginBottom: "4px", fontWeight: "bold" }}>Execution Log</h4>
+            <CodeEditor
+                code={String(detail.executionLog || "")}
+                language={Language.markdown}
+                isReadOnly
+                height="400px"
+            />
+        </>
+    );
+}
+
+function DecisionDetail({ detail }: { detail: Record<string, unknown> }) {
+    return (
+        <>
+            {detail.summary && (
                 <>
-                    <h4 style={{ marginBottom: "4px" }}>Input</h4>
-                    <CodeEditor
-                        code={formatJson(String(detail.toolInput))}
-                        language={Language.json}
-                        isReadOnly
-                        height="200px"
-                    />
+                    <h4 style={{ marginBottom: "4px", fontWeight: "bold" }}>Reasoning</h4>
+                    <p style={{ marginBottom: "16px" }}>{String(detail.summary)}</p>
                 </>
             )}
-            {detail.toolOutput && (
+            {detail.details && (
                 <>
-                    <h4 style={{ margin: "12px 0 4px" }}>Output</h4>
+                    <h4 style={{ marginBottom: "4px", fontWeight: "bold" }}>Input Context</h4>
                     <CodeEditor
-                        code={formatJson(String(detail.toolOutput))}
-                        language={Language.json}
+                        code={String(detail.details)}
+                        language={Language.markdown}
                         isReadOnly
-                        height="200px"
+                        height="300px"
                     />
                 </>
             )}
@@ -167,19 +182,123 @@ function ToolExecutionDetail({ detail }: { detail: Record<string, unknown> }) {
     );
 }
 
+function ToolExecutionDetail({ detail }: { detail: Record<string, unknown> }) {
+    const [toolId, setToolId] = useState<number | null>(null);
+    const [activeTab, setActiveTab] = useState(0);
+    const toolName = String(detail.toolName || "");
+
+    useEffect(() => {
+        if (!toolName) return;
+        fetchTools(1, 1, toolName)
+            .then((results) => {
+                const match = results.items.find((t) => t.name === toolName);
+                if (match) setToolId(match.id);
+            })
+            .catch(() => {});
+    }, [toolName]);
+
+    return (
+        <>
+            <DescriptionList isHorizontal isCompact style={{ marginBottom: "12px" }}>
+                <DescriptionListGroup>
+                    <DescriptionListTerm>Tool</DescriptionListTerm>
+                    <DescriptionListDescription>
+                        {toolId ? (
+                            <Link to={`/tools/${toolId}`}>{toolName}</Link>
+                        ) : toolName}
+                    </DescriptionListDescription>
+                </DescriptionListGroup>
+            </DescriptionList>
+            <Tabs activeKey={activeTab}
+                onSelect={(_e, key) => setActiveTab(Number(key))}>
+                <Tab eventKey={0} title={<TabTitleText>Input</TabTitleText>}>
+                    <div style={{ marginTop: "8px" }}>
+                        <CodeEditor
+                            code={formatJson(String(detail.toolInput || "{}"))}
+                            language={Language.json}
+                            isReadOnly
+                            height="300px"
+                        />
+                    </div>
+                </Tab>
+                <Tab eventKey={1} title={<TabTitleText>Output</TabTitleText>}>
+                    <div style={{ marginTop: "8px" }}>
+                        <CodeEditor
+                            code={formatJson(String(detail.toolOutput || ""))}
+                            language={Language.json}
+                            isReadOnly
+                            height="300px"
+                        />
+                    </div>
+                </Tab>
+            </Tabs>
+        </>
+    );
+}
+
+function TaskDetail({ detail }: { detail: Record<string, unknown> }) {
+    const [activeTab, setActiveTab] = useState(0);
+
+    return (
+        <Tabs activeKey={activeTab}
+            onSelect={(_e, key) => setActiveTab(Number(key))}>
+            <Tab eventKey={0} title={<TabTitleText>Input</TabTitleText>}>
+                <div style={{ marginTop: "8px" }}>
+                    <CodeEditor
+                        code={String(detail.input || "")}
+                        language={Language.markdown}
+                        isReadOnly
+                        height="300px"
+                        options={{ wordWrap: "on" }}
+                    />
+                </div>
+            </Tab>
+            <Tab eventKey={1} title={<TabTitleText>Output</TabTitleText>}>
+                <div style={{ marginTop: "8px" }}>
+                    <CodeEditor
+                        code={String(detail.output || "")}
+                        language={Language.markdown}
+                        isReadOnly
+                        height="300px"
+                        options={{ wordWrap: "on" }}
+                    />
+                </div>
+            </Tab>
+            <Tab eventKey={2} title={<TabTitleText>Execution Log</TabTitleText>}>
+                <div style={{ marginTop: "8px" }}>
+                    <CodeEditor
+                        code={String(detail.executionLog || "")}
+                        language={Language.markdown}
+                        isReadOnly
+                        height="400px"
+                    />
+                </div>
+            </Tab>
+        </Tabs>
+    );
+}
+
 function ActivityLogDetail({ detail }: { detail: Record<string, unknown> }) {
     return (
         <>
             {detail.summary && (
-                <p style={{ marginBottom: "12px" }}>{String(detail.summary)}</p>
+                <DescriptionList isHorizontal isCompact style={{ marginBottom: "12px" }}>
+                    <DescriptionListGroup>
+                        <DescriptionListTerm>Manager decisions</DescriptionListTerm>
+                        <DescriptionListDescription>{String(detail.summary)}</DescriptionListDescription>
+                    </DescriptionListGroup>
+                </DescriptionList>
             )}
             {detail.details && (
-                <CodeEditor
-                    code={String(detail.details)}
-                    language={Language.markdown}
-                    isReadOnly
-                    height="400px"
-                />
+                <>
+                    <h4 style={{ marginBottom: "4px", fontWeight: "bold" }}>Execution Log</h4>
+                    <CodeEditor
+                        code={String(detail.details)}
+                        language={Language.markdown}
+                        isReadOnly
+                        height="400px"
+                    />
+                </>
             )}
         </>
     );
@@ -244,12 +363,15 @@ function EventDetail({ detail }: { detail: Record<string, unknown> }) {
                 )}
             </DescriptionList>
             {detail.payload && (
-                <CodeEditor
-                    code={formatJson(String(detail.payload))}
-                    language={Language.json}
-                    isReadOnly
-                    height="400px"
-                />
+                <>
+                    <h4 style={{ marginBottom: "4px", fontWeight: "bold" }}>Event Payload</h4>
+                    <CodeEditor
+                        code={formatJson(String(detail.payload))}
+                        language={Language.json}
+                        isReadOnly
+                        height="400px"
+                    />
+                </>
             )}
         </>
     );

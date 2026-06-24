@@ -7,6 +7,11 @@
     max-width: 280px;
     font-size: 13px;
     cursor: pointer;
+    transition: box-shadow 0.15s ease;
+}
+
+.axiom-trace-graph-node:hover {
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.25);
 }
 
 .axiom-trace-graph-node[data-status="completed"] {

@@ -107,7 +107,8 @@ public class PipelineOrchestrator {
             traceCtx = traceService.createTrace("event-pipeline",
                     "Processing event #" + event.id + ": " + event.eventType,
                     event.id, null, null,
-                    "event-ingested", "Event received: " + event.eventType);
+                    "event-ingested", "Event received: " + event.eventType,
+                    "event", event.id);
             event.traceId = traceCtx.traceId();
         } catch (Exception e) {
             LOG.warnf(e, "Failed to create trace for event %d", event.id);
@@ -121,12 +122,13 @@ public class PipelineOrchestrator {
                 LOG.infof("Manager returned no decisions for event %d", event.id);
                 logActivity(null, null, event.id, "manager-no-decision",
                         "Manager returned no decisions for " + event.eventType);
+                popEvalNode(traceCtx);
                 completeTraceIfSync(traceCtx, false);
                 markQueueEntry(queueEntry.id, "completed");
                 return;
             }
 
-            // Process each decision
+            // Process each decision (created as children of the manager evaluation node)
             boolean hasAsyncTask = false;
             for (ManagerDecision decision : decisions) {
                 boolean isAsync = processDecision(event, decision, traceCtx);
@@ -134,6 +136,7 @@ public class PipelineOrchestrator {
                     hasAsyncTask = true;
                 }
             }
+            popEvalNode(traceCtx);
 
             completeTraceIfSync(traceCtx, hasAsyncTask);
             markQueueEntry(queueEntry.id, "completed");
@@ -153,12 +156,19 @@ public class PipelineOrchestrator {
      */
     private boolean processDecision(EventEntity event, ManagerDecision decision,
             TraceContext traceCtx) {
+        String decisionLabel = switch (decision.decision()) {
+            case "create_task" -> "Create Task: " + decision.actionType();
+            case "script_action" -> "Script Action: " + decision.actionType();
+            case "ignore" -> "Ignore";
+            case "escalate" -> "Escalate";
+            default -> decision.decision() + ": " + decision.actionType();
+        };
+
         Long decisionNodeId = null;
         if (traceCtx != null) {
             try {
                 decisionNodeId = traceService.addNode(traceCtx, "decision-processed", "in-progress",
-                        decision.decision() + ": " + decision.actionType(),
-                        null, null);
+                        decisionLabel, null, null);
                 traceCtx.push(decisionNodeId);
             } catch (Exception e) {
                 LOG.warnf(e, "Failed to add decision trace node");
@@ -166,6 +176,7 @@ public class PipelineOrchestrator {
         }
 
         boolean isAsync = false;
+        Long decisionLogId = null;
         try {
             if (!managerService.meetsConfidenceThreshold(decision)) {
                 LOG.infof("Decision below confidence threshold (%.2f): %s — escalating",
@@ -174,12 +185,12 @@ public class PipelineOrchestrator {
                         "Low confidence (" + String.format("%.0f%%", decision.confidence() * 100)
                                 + "): " + decision.reasoning(), traceCtx);
             } else if (decision.isCreateTask()) {
-                handleCreateTask(event, decision, traceCtx);
+                decisionLogId = handleCreateTask(event, decision, traceCtx);
                 isAsync = true;
             } else if (decision.isIgnore()) {
                 handleIgnore(event, decision, traceCtx);
             } else if (decision.isScriptAction()) {
-                handleScriptAction(event, decision, traceCtx);
+                decisionLogId = handleScriptAction(event, decision, traceCtx);
                 isAsync = true;
             } else if (decision.isEscalate()) {
                 handleEscalation(event, decision, decision.reasoning(), traceCtx);
@@ -189,7 +200,12 @@ public class PipelineOrchestrator {
         } finally {
             if (traceCtx != null && decisionNodeId != null) {
                 try {
-                    traceService.completeNode(decisionNodeId, "completed");
+                    if (decisionLogId != null) {
+                        traceService.completeNode(decisionNodeId, "completed",
+                                "activity-log", decisionLogId);
+                    } else {
+                        traceService.completeNode(decisionNodeId, "completed");
+                    }
                     traceCtx.pop();
                 } catch (Exception e) {
                     LOG.warnf(e, "Failed to complete decision trace node");
@@ -200,7 +216,7 @@ public class PipelineOrchestrator {
         return isAsync;
     }
 
-    private void handleCreateTask(EventEntity event, ManagerDecision decision,
+    private Long handleCreateTask(EventEntity event, ManagerDecision decision,
             TraceContext traceCtx) {
         // Find or create the project
         ProjectEntity project = findOrCreateProject(event);
@@ -229,13 +245,24 @@ public class PipelineOrchestrator {
         logActivity(project.id, task.id, event.id, "task-created",
                 "Manager created task: " + task.actionType + " — " + decision.reasoning());
 
-        // Add trace node for task creation
+        // Log the decision reasoning for trace node detail access
+        ActivityLogEntity decisionLog = new ActivityLogEntity();
+        decisionLog.projectId = project.id;
+        decisionLog.taskId = task.id;
+        decisionLog.eventId = event.id;
+        decisionLog.entryType = "manager-decision";
+        decisionLog.summary = decision.reasoning();
+        decisionLog.details = decision.inputContext();
+        decisionLog.createdOn = Instant.now();
+        decisionLog.persist();
+
+        // Add trace node for the task
         if (traceCtx != null) {
             try {
-                traceService.addNode(traceCtx, "task-created", "completed",
-                        "Created task: " + task.actionType, "task", task.id);
+                traceService.addNode(traceCtx, "task", "in-progress",
+                        "Task: " + task.actionType, "task", task.id);
             } catch (Exception e) {
-                LOG.warnf(e, "Failed to add task-created trace node");
+                LOG.warnf(e, "Failed to add task trace node");
             }
         }
 
@@ -247,6 +274,8 @@ public class PipelineOrchestrator {
         sseEvents.fire(SseEvent.taskUpdated(project.id, task.id, "Pending"));
         sseEvents.fire(SseEvent.projectUpdated(project.id));
         sseEvents.fire(SseEvent.threadEntry(project.id));
+
+        return decisionLog.id;
     }
 
     private void handleIgnore(EventEntity event, ManagerDecision decision,
@@ -265,7 +294,7 @@ public class PipelineOrchestrator {
         }
     }
 
-    private void handleScriptAction(EventEntity event, ManagerDecision decision,
+    private Long handleScriptAction(EventEntity event, ManagerDecision decision,
             TraceContext traceCtx) {
         ProjectEntity project = findOrCreateProject(event);
 
@@ -291,13 +320,23 @@ public class PipelineOrchestrator {
                 "Manager created script task: " + task.actionType
                         + " — " + decision.reasoning());
 
-        // Add trace node for task creation
+        ActivityLogEntity decisionLog = new ActivityLogEntity();
+        decisionLog.projectId = project.id;
+        decisionLog.taskId = task.id;
+        decisionLog.eventId = event.id;
+        decisionLog.entryType = "manager-decision";
+        decisionLog.summary = decision.reasoning();
+        decisionLog.details = decision.inputContext();
+        decisionLog.createdOn = Instant.now();
+        decisionLog.persist();
+
+        // Add trace node for the task
         if (traceCtx != null) {
             try {
-                traceService.addNode(traceCtx, "task-created", "completed",
-                        "Created script task: " + task.actionType, "task", task.id);
+                traceService.addNode(traceCtx, "task", "in-progress",
+                        "Task: " + task.actionType, "task", task.id);
             } catch (Exception e) {
-                LOG.warnf(e, "Failed to add task-created trace node");
+                LOG.warnf(e, "Failed to add task trace node");
             }
         }
 
@@ -310,6 +349,8 @@ public class PipelineOrchestrator {
         sseEvents.fire(SseEvent.threadEntry(project.id));
 
         scriptExecutionService.executeScript(task);
+
+        return decisionLog.id;
     }
 
     private void handleEscalation(EventEntity event, ManagerDecision decision,
@@ -462,6 +503,20 @@ public class PipelineOrchestrator {
         entry.content = content;
         entry.createdOn = Instant.now();
         entry.persist();
+    }
+
+    /**
+     * Pops the manager evaluation node from the trace context stack.
+     */
+    private void popEvalNode(TraceContext traceCtx) {
+        if (traceCtx == null) {
+            return;
+        }
+        try {
+            traceCtx.pop();
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to pop eval node from trace context");
+        }
     }
 
     /**

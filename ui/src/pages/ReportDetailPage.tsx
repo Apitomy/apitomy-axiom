@@ -33,7 +33,6 @@ import {
 } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 import { RenderedReport } from "../components/RenderedReport";
-import { TraceGraph } from "../components/TraceGraph";
 import { ExecutionLogModal } from "../components/ExecutionLogModal";
 import { LabelDisplay } from "../components/LabelDisplay";
 import { EditLabelsModal } from "../components/EditLabelsModal";
@@ -123,6 +122,13 @@ export function ReportDetailPage() {
                             View Execution Log
                         </Button>
                     )}
+                    {report.traceId && (
+                        <Button variant="secondary"
+                            onClick={() => navigate(`/logs/traces/${report.traceId}`)}
+                            style={{ marginRight: "8px" }}>
+                            View Execution Trace
+                        </Button>
+                    )}
                     <Button variant="danger" icon={<TrashIcon />} onClick={() => setIsDeleteOpen(true)}>
                         Delete
                     </Button>
@@ -207,15 +213,6 @@ export function ReportDetailPage() {
                         </If>
                     </EmptyStateBody>
                 </EmptyState>
-            )}
-
-            {report.traceId && (
-                <div style={{ marginTop: "24px" }}>
-                    <Title headingLevel="h3" size="md" style={{ marginBottom: "16px" }}>
-                        Execution Trace
-                    </Title>
-                    <TraceGraph traceId={report.traceId} />
-                </div>
             )}
 
             <ExecutionLogModal

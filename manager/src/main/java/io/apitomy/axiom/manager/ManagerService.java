@@ -68,12 +68,13 @@ public class ManagerService {
     public List<ManagerDecision> evaluate(EventEntity event, TraceContext traceCtx) {
         LOG.infof("Manager evaluating event %d: %s [%s]", event.id, event.eventType, event.issueRef);
 
-        // Add manager-evaluation trace node
+        // Add manager-evaluation trace node and push onto stack so decisions are children
         Long evalNodeId = null;
         if (traceCtx != null) {
             try {
                 evalNodeId = traceService.addNode(traceCtx, "manager-evaluation", "in-progress",
-                        "Manager evaluating event: " + event.eventType, null, null);
+                        "Manager evaluation: " + event.eventType, null, null);
+                traceCtx.push(evalNodeId);
             } catch (Exception e) {
                 LOG.warnf(e, "Failed to add manager-evaluation trace node for event %d", event.id);
             }
