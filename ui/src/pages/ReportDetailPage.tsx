@@ -33,6 +33,7 @@ import {
 } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 import { RenderedReport } from "../components/RenderedReport";
+import { TraceGraph } from "../components/TraceGraph";
 import { ExecutionLogModal } from "../components/ExecutionLogModal";
 import { LabelDisplay } from "../components/LabelDisplay";
 import { EditLabelsModal } from "../components/EditLabelsModal";
@@ -206,6 +207,15 @@ export function ReportDetailPage() {
                         </If>
                     </EmptyStateBody>
                 </EmptyState>
+            )}
+
+            {report.traceId && (
+                <div style={{ marginTop: "24px" }}>
+                    <Title headingLevel="h3" size="md" style={{ marginBottom: "16px" }}>
+                        Execution Trace
+                    </Title>
+                    <TraceGraph traceId={report.traceId} />
+                </div>
             )}
 
             <ExecutionLogModal

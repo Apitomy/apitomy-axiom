@@ -643,6 +643,8 @@ const EVENT_TYPE_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "
 };
 
 function EventsTab({ events }: { events: AxiomEvent[] }) {
+    const navigate = useNavigate();
+
     if (events.length === 0) {
         return (
             <EmptyState>
@@ -658,6 +660,7 @@ function EventsTab({ events }: { events: AxiomEvent[] }) {
                     <Th>Time</Th>
                     <Th>Source</Th>
                     <Th>Event Type</Th>
+                    <Th>Trace</Th>
                 </Tr>
             </Thead>
             <Tbody>
@@ -674,6 +677,14 @@ function EventsTab({ events }: { events: AxiomEvent[] }) {
                                 color={EVENT_TYPE_COLORS[event.eventType] || "grey"}>
                                 {event.eventType}
                             </Label>
+                        </Td>
+                        <Td>
+                            {event.traceId ? (
+                                <Button variant="link" isInline
+                                    onClick={() => navigate(`/logs/traces/${event.traceId}`)}>
+                                    View Trace
+                                </Button>
+                            ) : "—"}
                         </Td>
                     </Tr>
                 ))}

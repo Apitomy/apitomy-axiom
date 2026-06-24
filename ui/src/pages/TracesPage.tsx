@@ -20,54 +20,44 @@ import {
     ChipFilterInput,
     FilterChips,
 } from "@apitomy/common-ui-components";
-import { type AxiomEvent, fetchEvents } from "../config/api";
-import { EventDetailModal } from "../components/EventDetailModal";
-
-const SOURCE_COLORS: Record<string, "blue" | "green" | "orange" | "grey"> = {
-    github: "blue",
-    jira: "green",
-    internal: "orange",
-};
+import { type Trace, fetchTraces } from "../config/api";
+import { STATUS_COLORS, formatDuration } from "../components/TraceGraphNode";
 
 const FILTER_TYPES: ChipFilterType[] = [
-    { value: "source", label: "Source", testId: "event-filter-source" },
-    { value: "eventType", label: "Event Type", testId: "event-filter-eventType" },
-    { value: "repository", label: "Repository", testId: "event-filter-repository" },
+    { value: "traceType", label: "Type", testId: "trace-filter-type" },
+    { value: "status", label: "Status", testId: "trace-filter-status" },
 ];
 
-export function EventsPage() {
+export function TracesPage() {
     const navigate = useNavigate();
-    const [events, setEvents] = useState<AxiomEvent[]>([]);
+    const [traces, setTraces] = useState<Trace[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState(20);
     const [loading, setLoading] = useState(true);
-
     const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
 
-    // Payload modal
-    const [selectedEvent, setSelectedEvent] = useState<AxiomEvent | null>(null);
-
-    const filterSource = filters.find((f) => f.filterBy.value === "source")?.filterValue;
-    const filterEventType = filters.find((f) => f.filterBy.value === "eventType")?.filterValue;
-    const filterRepository = filters.find((f) => f.filterBy.value === "repository")?.filterValue;
+    const filterTraceType = filters.find((f) => f.filterBy.value === "traceType")?.filterValue;
+    const filterStatuses = filters
+        .filter((f) => f.filterBy.value === "status")
+        .map((f) => f.filterValue)
+        .join(",");
     const isFiltered = filters.length > 0;
 
     const loadData = useCallback(() => {
         setLoading(true);
-        fetchEvents(
+        fetchTraces(
             page, perPage,
-            filterSource || undefined,
-            filterEventType || undefined,
-            filterRepository || undefined
+            filterTraceType || undefined,
+            filterStatuses || undefined
         )
             .then((results) => {
-                setEvents(results.items);
+                setTraces(results.items);
                 setTotalCount(results.totalCount);
             })
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [page, perPage, filterSource, filterEventType, filterRepository]);
+    }, [page, perPage, filterTraceType, filterStatuses]);
 
     useEffect(() => { loadData(); }, [loadData]);
 
@@ -75,10 +65,14 @@ export function EventsPage() {
         if (!criteria.filterValue) return;
         const updated = filters.filter((f) =>
             !(f.filterBy.value === criteria.filterBy.value && f.filterValue === criteria.filterValue));
-        // All filter types on this page are single-value
-        const withoutSame = updated.filter((f) => f.filterBy.value !== criteria.filterBy.value);
-        withoutSame.push(criteria);
-        setFilters(withoutSame);
+        if (criteria.filterBy.value === "traceType") {
+            const withoutSame = updated.filter((f) => f.filterBy.value !== criteria.filterBy.value);
+            withoutSame.push(criteria);
+            setFilters(withoutSame);
+        } else {
+            updated.push(criteria);
+            setFilters(updated);
+        }
         setPage(1);
     };
 
@@ -95,11 +89,9 @@ export function EventsPage() {
 
     return (
         <PageSection>
-            <Title headingLevel="h1" size="lg" style={{ marginBottom: "16px" }}>
-                Events
-            </Title>
+            <Title headingLevel="h1" size="lg">Traces</Title>
 
-            <Toolbar>
+            <Toolbar style={{ marginTop: "16px" }}>
                 <ToolbarContent>
                     <ToolbarItem>
                         <ChipFilterInput
@@ -139,68 +131,55 @@ export function EventsPage() {
             <div>
                 {loading ? (
                     <EmptyState>
-                        <EmptyStateBody>Loading events...</EmptyStateBody>
+                        <EmptyStateBody>Loading traces...</EmptyStateBody>
                     </EmptyState>
-                ) : events.length === 0 ? (
+                ) : traces.length === 0 ? (
                     <EmptyState>
                         <EmptyStateBody>
                             {isFiltered
-                                ? "No events match the current filters."
-                                : "No events recorded yet."}
+                                ? "No traces match the current filters."
+                                : "No traces yet."}
                         </EmptyStateBody>
                     </EmptyState>
                 ) : (
-                    <Table aria-label="Events" variant="compact">
+                    <Table aria-label="Traces" variant="compact">
                         <Thead>
                             <Tr>
-                                <Th>#</Th>
-                                <Th>Time</Th>
-                                <Th>Source</Th>
-                                <Th>Event Type</Th>
-                                <Th>Repository</Th>
-                                <Th>Issue</Th>
-                                <Th>Project</Th>
-                                <Th>Trace</Th>
+                                <Th>ID</Th>
+                                <Th>Type</Th>
+                                <Th>Status</Th>
+                                <Th>Summary</Th>
+                                <Th>Started</Th>
+                                <Th>Duration</Th>
                             </Tr>
                         </Thead>
                         <Tbody>
-                            {events.map((event) => (
-                                <Tr key={event.id} isClickable
-                                    onRowClick={() => setSelectedEvent(event)}>
-                                    <Td>{event.id}</Td>
-                                    <Td style={{ whiteSpace: "nowrap" }}>
-                                        {new Date(event.receivedAt).toLocaleString()}
+                            {traces.map((trace) => (
+                                <Tr key={trace.traceId}
+                                    isClickable
+                                    onRowClick={() => navigate(`/logs/traces/${trace.traceId}`)}>
+                                    <Td style={{ fontFamily: "monospace", fontSize: "12px" }}>
+                                        {trace.traceId.substring(0, 8)}...
+                                    </Td>
+                                    <Td>
+                                        <Label isCompact>{trace.traceType}</Label>
                                     </Td>
                                     <Td>
                                         <Label isCompact
-                                            color={SOURCE_COLORS[event.source] || "grey"}
-                                            style={{ cursor: "pointer" }}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                const sourceType = FILTER_TYPES.find((t) => t.value === "source")!;
-                                                onAddFilterCriteria({ filterBy: sourceType, filterValue: event.source });
-                                            }}>
-                                            {event.source}
+                                            color={STATUS_COLORS[trace.status]}>
+                                            {trace.status}
                                         </Label>
                                     </Td>
-                                    <Td>{event.eventType}</Td>
-                                    <Td>{event.repository || "—"}</Td>
-                                    <Td>{event.issueRef || "—"}</Td>
-                                    <Td>
-                                        {event.projectId
-                                            ? `Project #${event.projectId}`
-                                            : "—"}
+                                    <Td>{trace.summary}</Td>
+                                    <Td style={{ whiteSpace: "nowrap" }}>
+                                        {new Date(trace.startedOn).toLocaleString()}
                                     </Td>
                                     <Td>
-                                        {event.traceId ? (
-                                            <Button variant="link" isInline
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    navigate(`/logs/traces/${event.traceId}`);
-                                                }}>
-                                                View Trace
-                                            </Button>
-                                        ) : "—"}
+                                        {trace.completedOn && trace.startedOn
+                                            ? formatDuration(
+                                                new Date(trace.completedOn).getTime()
+                                                    - new Date(trace.startedOn).getTime())
+                                            : "—"}
                                     </Td>
                                 </Tr>
                             ))}
@@ -208,11 +187,6 @@ export function EventsPage() {
                     </Table>
                 )}
             </div>
-
-            <EventDetailModal
-                event={selectedEvent}
-                onClose={() => setSelectedEvent(null)}
-            />
         </PageSection>
     );
 }
