@@ -1,6 +1,7 @@
 const { Server } = require("@modelcontextprotocol/sdk/server/index.js");
 const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js");
 const { ListToolsRequestSchema, CallToolRequestSchema } = require("@modelcontextprotocol/sdk/types.js");
+const { startToolTrace, completeToolTrace } = require(require("path").join(__dirname, "trace-helper.js"));
 const { execSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
@@ -61,6 +62,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 
     log("INFO", "Script tool called", { toolName, args: Object.keys(args) });
+    const toolInput = JSON.stringify(args);
+    const traceNodeId = await startToolTrace(toolName, toolInput);
 
     try {
         let cmd = tool.scriptTemplate;
@@ -93,10 +96,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const durationMs = Date.now() - startTime;
 
         log("INFO", "Script tool completed", { toolName, durationMs, outputLength: (result || "").length });
+        await completeToolTrace(traceNodeId, result, "success", durationMs);
         return { content: [{ type: "text", text: result || "Command completed successfully" }] };
     } catch (error) {
         const msg = error.stderr || error.stdout || error.message || "Command failed";
         log("ERROR", "Script tool failed", { toolName, exitCode: error.status, error: msg.substring(0, 500) });
+        await completeToolTrace(traceNodeId, msg, "failure", 0);
         return { content: [{ type: "text", text: msg }], isError: true };
     }
 });

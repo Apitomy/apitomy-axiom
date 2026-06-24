@@ -25,6 +25,7 @@ import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
 
 import java.math.BigInteger;
@@ -136,6 +137,7 @@ public class TraceResourceImpl implements TracesResource {
     }
 
     @Override
+    @Transactional
     public ToolCallCreated createToolCall(ToolCallRequest data) {
         UUID traceUuid = data.getTraceId();
         TraceEntity trace = TraceEntity.findById(traceUuid);
@@ -168,6 +170,7 @@ public class TraceResourceImpl implements TracesResource {
     }
 
     @Override
+    @Transactional
     public void completeToolCall(BigInteger nodeId, ToolCallCompletion data) {
         TraceNodeEntity node = TraceNodeEntity.findById(nodeId.longValue());
         if (node == null) {

@@ -51,7 +51,7 @@ public class McpConfigGenerator {
 
     private static final String MCP_SERVER_DIR_NAME = "mcp-server";
     private static final String[] TEMPLATE_FILES = {
-            "package.json", "sdk-server.js", "tools-server.js" };
+            "package.json", "sdk-server.js", "tools-server.js", "trace-helper.js" };
 
     @ConfigProperty(name = "quarkus.http.port", defaultValue = "9090")
     int httpPort;
