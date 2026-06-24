@@ -1,0 +1,42 @@
+.axiom-trace-graph-node {
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 2px solid var(--pf-t--global--border--color--default, #d2d2d2);
+    background: var(--pf-t--global--background--color--primary--default, #fff);
+    min-width: 200px;
+    max-width: 280px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.axiom-trace-graph-node[data-status="completed"] {
+    border-color: var(--pf-t--global--color--status--success--default, #3e8635);
+}
+.axiom-trace-graph-node[data-status="failed"] {
+    border-color: var(--pf-t--global--color--status--danger--default, #c9190b);
+}
+.axiom-trace-graph-node[data-status="in-progress"] {
+    border-color: var(--pf-t--global--color--status--info--default, #06c);
+}
+.axiom-trace-graph-node[data-status="skipped"] {
+    border-color: var(--pf-t--global--color--status--disabled--default, #8a8d90);
+}
+
+.axiom-trace-graph-node__header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.axiom-trace-graph-node__summary {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.axiom-trace-graph-node__timing {
+    font-size: 11px;
+    color: var(--pf-t--global--text--color--subtle, #6a6e73);
+    margin-top: 4px;
+}
