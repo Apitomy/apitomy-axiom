@@ -80,6 +80,7 @@ export interface Task {
     createdOn: string;
     completedOn?: string;
     sessionId?: string;
+    traceId?: string;
 }
 
 export interface ThreadEntry {
@@ -878,6 +879,7 @@ export interface Report {
     labels?: string[];
     createdOn: string;
     completedOn?: string;
+    traceId?: string;
 }
 
 export interface ReportAiEditRequest {
@@ -1110,6 +1112,7 @@ export interface AxiomEvent {
     taskId?: number;
     payload?: string;
     receivedAt: string;
+    traceId?: string;
 }
 
 export async function fetchEvent(id: number): Promise<AxiomEvent> {

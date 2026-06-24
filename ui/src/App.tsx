@@ -36,6 +36,8 @@ import { EngineSettingsPage } from "./pages/EngineSettingsPage";
 import { EventSourceDetailPage } from "./pages/EventSourceDetailPage";
 import { AssistantPage } from "./pages/AssistantPage";
 import { AssistantSessionPage } from "./pages/AssistantSessionPage";
+import { TracesPage } from "./pages/TracesPage";
+import { TraceDetailPage } from "./pages/TraceDetailPage";
 import { type StartupCheck, fetchSystemHealth, fetchSystemConfig } from "./config/api";
 import { sseClient } from "./config/sse";
 
@@ -102,6 +104,8 @@ export function App() {
                     <Route path="/logs/events" element={<EventsPage />} />
                     <Route path="/logs/manager" element={<ManagerDecisionsPage />} />
                     <Route path="/logs/tasks" element={<TasksPage />} />
+                    <Route path="/logs/traces" element={<TracesPage />} />
+                    <Route path="/logs/traces/:traceId" element={<TraceDetailPage />} />
                     <Route path="/reports" element={<ReportsPage />} />
                     <Route path="/reports/:reportId" element={<ReportDetailPage />} />
                     <Route path="/report-definitions" element={<ReportDefinitionsPage />} />
