@@ -195,6 +195,8 @@ public class ReportExecutionService {
             report.timeRangeEnd = rangeEnd;
             report.traceId = traceId;
 
+            sseEvents.fire(SseEvent.reportUpdated(reportId, report.status));
+
             ReportDefinitionEntity def = ReportDefinitionEntity.findById(report.definitionId);
             String defName = def != null ? def.name : "Report #" + reportId;
             logActivity("report-generating",

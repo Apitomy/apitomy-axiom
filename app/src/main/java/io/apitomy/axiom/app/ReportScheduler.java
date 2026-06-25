@@ -2,8 +2,10 @@ package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
 import io.apitomy.axiom.core.entities.ReportEntity;
+import io.apitomy.axiom.core.events.SseEvent;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.jboss.logging.Logger;
@@ -30,6 +32,9 @@ public class ReportScheduler {
     @Inject
     ReportQueueConsumer reportQueuePoller;
 
+    @Inject
+    Event<SseEvent> sseEvents;
+
     /**
      * Checks for report definitions that are due and triggers generation.
      * The transactional work (creating reports, advancing nextRunAt) is
@@ -43,6 +48,7 @@ public class ReportScheduler {
 
         // Step 2: enqueue for execution (after transaction has committed)
         for (Long reportId : reportIds) {
+            sseEvents.fire(SseEvent.reportUpdated(reportId, "Pending"));
             reportQueuePoller.enqueue(reportId);
         }
     }

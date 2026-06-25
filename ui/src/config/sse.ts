@@ -50,6 +50,7 @@ export class SseClient {
                         ? JSON.parse(parsed.data)
                         : parsed.data ?? {},
                 };
+                console.log("[SSE] Event received:", axiomEvent.type, axiomEvent.data);
                 this.listeners.forEach((listener) => listener(axiomEvent));
             } catch (e) {
                 console.warn("[SSE] Failed to parse event:", event.data);
