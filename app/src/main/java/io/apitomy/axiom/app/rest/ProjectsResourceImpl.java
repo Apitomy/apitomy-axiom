@@ -20,10 +20,13 @@ import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.EventEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
+import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
 import io.apitomy.axiom.core.lifecycle.ProjectLifecycle;
 import io.apitomy.axiom.core.lifecycle.ProjectStatus;
 import io.apitomy.axiom.core.services.WorkspaceService;
+import io.apitomy.axiom.core.tracing.TraceContext;
+import io.apitomy.axiom.core.tracing.TraceService;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -32,6 +35,7 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
+import org.jboss.logging.Logger;
 
 import java.math.BigInteger;
 
@@ -49,6 +53,8 @@ import java.util.Map;
 @RunOnVirtualThread
 public class ProjectsResourceImpl implements ProjectsResource {
 
+    private static final Logger LOG = Logger.getLogger(ProjectsResourceImpl.class);
+
     @Inject
     HumanActor humanActor;
 
@@ -57,6 +63,9 @@ public class ProjectsResourceImpl implements ProjectsResource {
 
     @Inject
     WorkspaceService workspaceService;
+
+    @Inject
+    TraceService traceService;
 
     // ── Projects ──────────────────────────────────────────────────────
 
@@ -238,6 +247,18 @@ public class ProjectsResourceImpl implements ProjectsResource {
     @Transactional
     public Task createTask(long projectId, NewTask data) {
         findProjectOrThrow(projectId);
+
+        TraceContext traceCtx = null;
+        try {
+            traceCtx = traceService.createTrace("user-action",
+                    "User action: " + data.getActionType(),
+                    null, projectId, null,
+                    "user-action-triggered", "User triggered action: " + data.getActionType(),
+                    null, null);
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to create trace for user action on project %d", projectId);
+        }
+
         TaskEntity entity = new TaskEntity();
         entity.projectId = projectId;
         entity.actionType = data.getActionType();
@@ -246,7 +267,20 @@ public class ProjectsResourceImpl implements ProjectsResource {
         entity.status = "Pending";
         entity.input = data.getInput();
         entity.createdOn = Instant.now();
+        if (traceCtx != null) {
+            entity.traceId = traceCtx.traceId();
+        }
         entity.persist();
+
+        if (traceCtx != null) {
+            try {
+                traceService.addNode(traceCtx, "task", "in-progress",
+                        "Task: " + entity.actionType, "task", entity.id);
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to add task trace node for task %d", entity.id);
+            }
+        }
+
         return toTaskBean(entity);
     }
 
@@ -356,6 +390,20 @@ public class ProjectsResourceImpl implements ProjectsResource {
         task.status = "Failed";
         task.output = "Cancelled by user";
         task.completedOn = Instant.now();
+
+        if (task.traceId != null) {
+            try {
+                TraceNodeEntity taskNode = TraceNodeEntity.find(
+                        "traceId = ?1 and nodeType = 'task' and entityType = 'task' and entityId = ?2",
+                        task.traceId, task.id).firstResult();
+                if (taskNode != null) {
+                    traceService.completeNode(taskNode.id, "failed");
+                }
+                traceService.completeTrace(task.traceId, "failed");
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to complete trace for cancelled task %d", taskId);
+            }
+        }
 
         // Reset project status if no other active tasks remain
         long activeTasks = TaskEntity.count(
