@@ -6,16 +6,19 @@ import io.apitomy.axiom.core.entities.EventQueueEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
+import io.apitomy.axiom.core.entities.TraceEntity;
+import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.services.WorkspaceService;
 import io.apitomy.axiom.manager.ManagerDecision;
 import io.apitomy.axiom.manager.ManagerService;
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.InjectMock;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 import java.time.Instant;
 import java.util.Collections;
@@ -23,7 +26,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 /**
  * Integration tests for the PipelineOrchestrator.
@@ -50,10 +53,22 @@ class PipelineOrchestratorTest {
         when(workspaceService.getWorkspacePath(any())).thenReturn(java.nio.file.Path.of("/tmp/test-workspace"));
     }
 
+    @AfterEach
+    @Transactional
+    void cleanup() {
+        ThreadEntryEntity.deleteAll();
+        TraceNodeEntity.deleteAll();
+        TraceEntity.deleteAll();
+        ActivityLogEntity.deleteAll();
+        TaskEntity.deleteAll();
+        ProjectEntity.deleteAll();
+        EventQueueEntity.deleteAll();
+        EventEntity.deleteAll();
+    }
+
     // ── Create Task Decision ──────────────────────────────────────────
 
     @Test
-    @Transactional
     void testCreateTaskDecisionAutoCreatesProject() {
         EventQueueEntity queueEntry = createEventAndEnqueue(
                 "github", "issue-created", "TestOrg/pipeline-test#1",
@@ -91,7 +106,6 @@ class PipelineOrchestratorTest {
     }
 
     @Test
-    @Transactional
     void testCreateTaskOnExistingProject() {
         // Create project first
         ProjectEntity project = createProject("TestOrg/pipeline-test#2", "TestOrg/pipeline-test");
@@ -119,7 +133,6 @@ class PipelineOrchestratorTest {
     }
 
     @Test
-    @Transactional
     void testCreateProjectFromPrEventSetsPullRequestType() {
         EventQueueEntity queueEntry = createEventAndEnqueue(
                 "github", "pr-created", "TestOrg/pipeline-test#10",
@@ -140,7 +153,6 @@ class PipelineOrchestratorTest {
     }
 
     @Test
-    @Transactional
     void testCreateProjectFromUnknownEventSetsOtherType() {
         EventQueueEntity queueEntry = createEventAndEnqueue(
                 "github", "task-completed", "TestOrg/pipeline-test#11",
@@ -160,7 +172,6 @@ class PipelineOrchestratorTest {
     }
 
     @Test
-    @Transactional
     void testMultipleDecisionsFromSingleEvent() {
         EventQueueEntity queueEntry = createEventAndEnqueue(
                 "github", "issue-created", "TestOrg/pipeline-test#3",
@@ -187,7 +198,6 @@ class PipelineOrchestratorTest {
     // ── Ignore Decision ───────────────────────────────────────────────
 
     @Test
-    @Transactional
     void testIgnoreDecision() {
         EventQueueEntity queueEntry = createEventAndEnqueue(
                 "github", "comment-added", "TestOrg/pipeline-test#10",
@@ -215,10 +225,8 @@ class PipelineOrchestratorTest {
     // ── System Action Decisions ───────────────────────────────────────
 
     @Test
-    @Transactional
     void testCloseProjectScriptAction() {
-        ProjectEntity project = createProject("TestOrg/pipeline-test#20", "TestOrg/pipeline-test");
-        project.status = "Idle";
+        ProjectEntity project = createProject("TestOrg/pipeline-test#20", "TestOrg/pipeline-test", "Idle");
 
         EventQueueEntity queueEntry = createEventAndEnqueue(
                 "github", "issue-closed", "TestOrg/pipeline-test#20",
@@ -240,10 +248,8 @@ class PipelineOrchestratorTest {
     }
 
     @Test
-    @Transactional
     void testReopenProjectScriptAction() {
-        ProjectEntity project = createProject("TestOrg/pipeline-test#21", "TestOrg/pipeline-test");
-        project.status = "Completed";
+        ProjectEntity project = createProject("TestOrg/pipeline-test#21", "TestOrg/pipeline-test", "Completed");
 
         EventQueueEntity queueEntry = createEventAndEnqueue(
                 "github", "issue-reopened", "TestOrg/pipeline-test#21",
@@ -263,7 +269,6 @@ class PipelineOrchestratorTest {
     // ── Escalation ────────────────────────────────────────────────────
 
     @Test
-    @Transactional
     void testEscalationDecision() {
         EventQueueEntity queueEntry = createEventAndEnqueue(
                 "github", "issue-updated", "TestOrg/pipeline-test#30",
@@ -282,7 +287,6 @@ class PipelineOrchestratorTest {
     }
 
     @Test
-    @Transactional
     void testLowConfidenceAutoEscalation() {
         ProjectEntity project = createProject("TestOrg/pipeline-test#31", "TestOrg/pipeline-test");
 
@@ -317,7 +321,6 @@ class PipelineOrchestratorTest {
     // ── No Decisions ──────────────────────────────────────────────────
 
     @Test
-    @Transactional
     void testManagerReturnsNoDecisions() {
         EventQueueEntity queueEntry = createEventAndEnqueue(
                 "github", "issue-updated", "TestOrg/pipeline-test#40",
@@ -339,7 +342,6 @@ class PipelineOrchestratorTest {
     // ── Activity Log & Thread Entries ─────────────────────────────────
 
     @Test
-    @Transactional
     void testActivityLogAndThreadEntries() {
         EventQueueEntity queueEntry = createEventAndEnqueue(
                 "github", "issue-created", "TestOrg/pipeline-test#50",
@@ -375,35 +377,43 @@ class PipelineOrchestratorTest {
     private EventQueueEntity createEventAndEnqueue(String source, String eventType,
                                                     String issueRef, String repository,
                                                     String payload) {
-        EventEntity event = new EventEntity();
-        event.source = source;
-        event.eventType = eventType;
-        event.issueRef = issueRef;
-        event.repository = repository;
-        event.payload = payload;
-        event.receivedAt = Instant.now();
-        event.persist();
+        return QuarkusTransaction.requiringNew().call(() -> {
+            EventEntity event = new EventEntity();
+            event.source = source;
+            event.eventType = eventType;
+            event.issueRef = issueRef;
+            event.repository = repository;
+            event.payload = payload;
+            event.receivedAt = Instant.now();
+            event.persist();
 
-        EventQueueEntity queueEntry = new EventQueueEntity();
-        queueEntry.eventId = event.id;
-        queueEntry.status = "pending";
-        queueEntry.enqueuedAt = Instant.now();
-        queueEntry.persist();
+            EventQueueEntity queueEntry = new EventQueueEntity();
+            queueEntry.eventId = event.id;
+            queueEntry.status = "pending";
+            queueEntry.enqueuedAt = Instant.now();
+            queueEntry.persist();
 
-        return queueEntry;
+            return queueEntry;
+        });
     }
 
     private ProjectEntity createProject(String issueRef, String repository) {
-        ProjectEntity project = new ProjectEntity();
-        project.name = issueRef;
-        project.type = "other";
-        project.status = "Created";
-        project.issueSource = "github";
-        project.issueRef = issueRef;
-        project.repository = repository;
-        project.createdOn = Instant.now();
-        project.updatedOn = Instant.now();
-        project.persist();
-        return project;
+        return createProject(issueRef, repository, "Created");
+    }
+
+    private ProjectEntity createProject(String issueRef, String repository, String status) {
+        return QuarkusTransaction.requiringNew().call(() -> {
+            ProjectEntity project = new ProjectEntity();
+            project.name = issueRef;
+            project.type = "other";
+            project.status = status;
+            project.issueSource = "github";
+            project.issueRef = issueRef;
+            project.repository = repository;
+            project.createdOn = Instant.now();
+            project.updatedOn = Instant.now();
+            project.persist();
+            return project;
+        });
     }
 }
