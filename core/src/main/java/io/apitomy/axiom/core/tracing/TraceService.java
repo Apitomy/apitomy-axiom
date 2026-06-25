@@ -122,18 +122,21 @@ public class TraceService {
      * @param status final status (e.g. "completed", "failed")
      */
     public void completeNode(Long nodeId, String status) {
-        QuarkusTransaction.requiringNew().run(() -> {
+        UUID traceId = QuarkusTransaction.requiringNew().call(() -> {
             TraceNodeEntity node = TraceNodeEntity.findById(nodeId);
             if (node == null) {
                 LOG.warnf("Trace node %d not found for completion", nodeId);
-                return;
+                return null;
             }
             Instant now = Instant.now();
             node.completedOn = now;
             node.durationMs = Duration.between(node.startedOn, now).toMillis();
             node.status = status;
-            sseEvents.fire(SseEvent.traceUpdated(node.traceId));
+            return node.traceId;
         });
+        if (traceId != null) {
+            sseEvents.fire(SseEvent.traceUpdated(traceId));
+        }
     }
 
     /**
@@ -147,11 +150,11 @@ public class TraceService {
      */
     public void completeNode(Long nodeId, String status,
             String entityType, Long entityId) {
-        QuarkusTransaction.requiringNew().run(() -> {
+        UUID traceId = QuarkusTransaction.requiringNew().call(() -> {
             TraceNodeEntity node = TraceNodeEntity.findById(nodeId);
             if (node == null) {
                 LOG.warnf("Trace node %d not found for completion", nodeId);
-                return;
+                return null;
             }
             Instant now = Instant.now();
             node.completedOn = now;
@@ -159,8 +162,11 @@ public class TraceService {
             node.status = status;
             node.entityType = entityType;
             node.entityId = entityId;
-            sseEvents.fire(SseEvent.traceUpdated(node.traceId));
+            return node.traceId;
         });
+        if (traceId != null) {
+            sseEvents.fire(SseEvent.traceUpdated(traceId));
+        }
     }
 
     /**
@@ -180,8 +186,8 @@ public class TraceService {
             trace.completedOn = Instant.now();
             trace.status = status;
             LOG.debugf("Completed trace %s with status %s", traceId, status);
-            sseEvents.fire(SseEvent.traceUpdated(traceId));
         });
+        sseEvents.fire(SseEvent.traceUpdated(traceId));
     }
 
     private static String truncate(String value, int maxLength) {

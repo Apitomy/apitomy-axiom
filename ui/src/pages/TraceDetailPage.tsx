@@ -17,15 +17,17 @@ export function TraceDetailPage() {
     const [refreshKey, setRefreshKey] = useState(0);
 
     useEffect(() => {
+        let timeout: ReturnType<typeof setTimeout>;
         const unsubscribe = sseClient.subscribe((event: AxiomSseEvent) => {
             if (event.type === "trace-updated") {
                 const data = event.data as { traceId?: string };
                 if (data.traceId === traceId) {
-                    setRefreshKey((k) => k + 1);
+                    clearTimeout(timeout);
+                    timeout = setTimeout(() => setRefreshKey((k) => k + 1), 300);
                 }
             }
         });
-        return unsubscribe;
+        return () => { clearTimeout(timeout); unsubscribe(); };
     }, [traceId]);
 
     return (
