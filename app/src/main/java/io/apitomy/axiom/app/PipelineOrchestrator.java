@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.tracing.TraceContext;
 import io.apitomy.axiom.core.tracing.TraceService;
-import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.EventEntity;
 import io.apitomy.axiom.core.entities.EventQueueEntity;
@@ -20,7 +19,7 @@ import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
-import jakarta.transaction.Transactional;
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import org.jboss.logging.Logger;
 
 import java.time.Instant;
@@ -62,8 +61,15 @@ public class PipelineOrchestrator {
     /**
      * Polls the event queue every 5 seconds and processes one pending event at a time.
      * Events are processed sequentially to avoid race conditions in the Manager.
+     *
+     * <p>The pipeline is split into three transactional phases so that the AI engine
+     * call in {@code ManagerService.evaluate()} does not hold a database connection:</p>
+     * <ol>
+     *   <li><b>Dequeue</b> — short transaction to mark the next pending event as "processing"</li>
+     *   <li><b>AI call</b> — no transaction held while the Manager evaluates the event</li>
+     *   <li><b>Persist results</b> — short transaction to process decisions and mark completion</li>
+     * </ol>
      */
-    @Transactional
     @Scheduled(every = "${axiom.pipeline.poll-interval:5s}",
                concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     void processNextEvent() {
@@ -75,33 +81,49 @@ public class PipelineOrchestrator {
         processEvent(queueEntry);
     }
 
-    // @Transactional is redundant here (runs inside processNextEvent's transaction via
-    // self-invocation) but retained so it takes effect if called through the CDI proxy.
-    @Transactional
+    /**
+     * Finds the next pending event in the queue and marks it as "processing" in a
+     * short independent transaction. Returns {@code null} if the queue is empty.
+     */
     EventQueueEntity findNextPendingEvent() {
-        EventQueueEntity entry = EventQueueEntity.find(
-                "status = 'pending' order by enqueuedAt asc").firstResult();
-        if (entry != null) {
-            entry.status = "processing";
-        }
-        return entry;
+        return QuarkusTransaction.requiringNew().call(() -> {
+            EventQueueEntity entry = EventQueueEntity.find(
+                    "status = 'pending' order by enqueuedAt asc").firstResult();
+            if (entry != null) {
+                entry.status = "processing";
+            }
+            return entry;
+        });
     }
 
-    // @Transactional is redundant here (runs inside processNextEvent's transaction via
-    // self-invocation) but retained so it takes effect if called through the CDI proxy.
-    @Transactional
+    /**
+     * Processes a single queued event through the full pipeline: load the event,
+     * invoke the AI Manager, and persist the resulting decisions.
+     *
+     * <p>The method is intentionally <b>not</b> {@code @Transactional} — each phase
+     * uses a short programmatic transaction so the AI engine call runs without
+     * holding a database connection.</p>
+     *
+     * @param queueEntry the dequeued event (may be detached)
+     */
     void processEvent(EventQueueEntity queueEntry) {
-        EventEntity event = EventEntity.findById(queueEntry.eventId);
+        Long eventId = queueEntry.eventId;
+        Long queueEntryId = queueEntry.id;
+
+        // Phase 1: Load event (short transaction)
+        EventEntity event = QuarkusTransaction.requiringNew().call(() ->
+                EventEntity.findById(eventId));
         if (event == null) {
-            LOG.warnf("Event %d not found for queue entry %d", queueEntry.eventId, queueEntry.id);
-            markQueueEntry(queueEntry.id, "failed");
+            LOG.warnf("Event %d not found for queue entry %d", eventId, queueEntryId);
+            QuarkusTransaction.requiringNew().run(() ->
+                    markQueueEntry(queueEntryId, "failed"));
             return;
         }
 
         LOG.infof("Processing event %d: %s [%s] from %s",
                 event.id, event.eventType, event.issueRef, event.source);
 
-        // Create trace context (non-fatal — pipeline continues if tracing fails)
+        // Trace creation (TraceService manages its own transactions)
         TraceContext traceCtx = null;
         try {
             traceCtx = traceService.createTrace("event-pipeline",
@@ -109,14 +131,35 @@ public class PipelineOrchestrator {
                     event.id, null, null,
                     "event-ingested", "Event received: " + event.eventType,
                     "event", event.id);
-            event.traceId = traceCtx.traceId();
         } catch (Exception e) {
             LOG.warnf(e, "Failed to create trace for event %d", event.id);
         }
 
+        // Phase 2: AI call (no transaction held — database connection released)
         try {
-            // Invoke the Manager
             List<ManagerDecision> decisions = managerService.evaluate(event, traceCtx);
+
+            // Phase 3: Persist results (short transaction)
+            persistResults(queueEntryId, event, decisions, traceCtx);
+
+        } catch (Exception e) {
+            LOG.errorf(e, "Pipeline failed for event %d", event.id);
+            persistFailure(queueEntryId, event.id, e.getMessage(), traceCtx);
+        }
+    }
+
+    /**
+     * Persists the Manager's evaluation results in a single short transaction.
+     * Re-loads the event as a managed entity so that field updates (traceId,
+     * projectId) are tracked by JPA dirty checking.
+     */
+    private void persistResults(Long queueEntryId, EventEntity detachedEvent,
+            List<ManagerDecision> decisions, TraceContext traceCtx) {
+        QuarkusTransaction.requiringNew().run(() -> {
+            EventEntity event = EventEntity.findById(detachedEvent.id);
+            if (traceCtx != null) {
+                event.traceId = traceCtx.traceId();
+            }
 
             if (decisions.isEmpty()) {
                 LOG.infof("Manager returned no decisions for event %d", event.id);
@@ -124,11 +167,10 @@ public class PipelineOrchestrator {
                         "Manager returned no decisions for " + event.eventType);
                 popEvalNode(traceCtx);
                 completeTraceIfSync(traceCtx, false);
-                markQueueEntry(queueEntry.id, "completed");
+                markQueueEntry(queueEntryId, "completed");
                 return;
             }
 
-            // Process each decision (created as children of the manager evaluation node)
             boolean hasAsyncTask = false;
             for (ManagerDecision decision : decisions) {
                 boolean isAsync = processDecision(event, decision, traceCtx);
@@ -139,15 +181,27 @@ public class PipelineOrchestrator {
             popEvalNode(traceCtx);
 
             completeTraceIfSync(traceCtx, hasAsyncTask);
-            markQueueEntry(queueEntry.id, "completed");
+            markQueueEntry(queueEntryId, "completed");
+        });
+    }
 
-        } catch (Exception e) {
-            LOG.errorf(e, "Pipeline failed for event %d", event.id);
-            logActivity(null, null, event.id, "pipeline-error",
-                    "Pipeline error: " + e.getMessage());
+    /**
+     * Persists pipeline failure state in a single short transaction.
+     */
+    private void persistFailure(Long queueEntryId, Long eventId,
+            String errorMessage, TraceContext traceCtx) {
+        QuarkusTransaction.requiringNew().run(() -> {
+            if (traceCtx != null) {
+                EventEntity event = EventEntity.findById(eventId);
+                if (event != null) {
+                    event.traceId = traceCtx.traceId();
+                }
+            }
+            logActivity(null, null, eventId, "pipeline-error",
+                    "Pipeline error: " + errorMessage);
             completeTraceFailed(traceCtx);
-            markQueueEntry(queueEntry.id, "failed");
-        }
+            markQueueEntry(queueEntryId, "failed");
+        });
     }
 
     /**

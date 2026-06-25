@@ -61,7 +61,11 @@ public class ManagerService {
     /**
      * Evaluates an event and returns the Manager's decisions.
      *
-     * @param event    the event to evaluate
+     * <p>Context loading (action types, actors, project data, config) runs in a short
+     * independent transaction so the subsequent AI engine call does not hold a database
+     * connection.</p>
+     *
+     * @param event    the event to evaluate (may be detached)
      * @param traceCtx the current trace context (nullable — tracing is non-fatal)
      * @return a list of decisions (may be empty if the Manager fails)
      */
@@ -80,39 +84,42 @@ public class ManagerService {
             }
         }
 
-        // Load context
-        List<ActionTypeEntity> actionTypes = ActionTypeEntity.list("managerTriggerable", true);
-        List<ActorEntity> actors = ActorEntity.listAll();
+        // Load context (short transaction — releases connection before AI call)
+        EvalContext ctx = QuarkusTransaction.requiringNew().call(() -> {
+            List<ActionTypeEntity> actionTypes = ActionTypeEntity.list("managerTriggerable", true);
+            List<ActorEntity> actors = ActorEntity.listAll();
 
-        // Find existing project for this issue
-        ProjectEntity project = null;
-        List<TaskEntity> recentTasks = Collections.emptyList();
-        if (event.issueRef != null) {
-            project = ProjectEntity.find("issueRef", event.issueRef).firstResult();
-            if (project != null) {
-                recentTasks = TaskEntity.find(
-                        "projectId = ?1 order by createdOn desc",
-                        project.id).page(0, 10).list();
+            ProjectEntity project = null;
+            List<TaskEntity> recentTasks = Collections.emptyList();
+            if (event.issueRef != null) {
+                project = ProjectEntity.find("issueRef", event.issueRef).firstResult();
+                if (project != null) {
+                    recentTasks = TaskEntity.find(
+                            "projectId = ?1 order by createdOn desc",
+                            project.id).page(0, 10).list();
+                }
             }
-        }
 
-        // Load manager configuration (system prompt + prompt template)
+            ManagerConfigEntity config = ManagerConfigEntity.<ManagerConfigEntity>findAll()
+                    .firstResult();
+            return new EvalContext(actionTypes, actors, project, recentTasks, config);
+        });
+
+        // Build prompts from detached context (no transaction needed)
         String systemPrompt = ManagerPromptBuilder.DEFAULT_SYSTEM_PROMPT;
         String promptTemplate = ManagerPromptBuilder.DEFAULT_PROMPT_TEMPLATE;
-        ManagerConfigEntity config = ManagerConfigEntity.<ManagerConfigEntity>findAll()
-                .firstResult();
-        if (config != null) {
-            if (config.systemPrompt != null && !config.systemPrompt.isBlank()) {
-                systemPrompt = config.systemPrompt;
+        if (ctx.config() != null) {
+            if (ctx.config().systemPrompt != null && !ctx.config().systemPrompt.isBlank()) {
+                systemPrompt = ctx.config().systemPrompt;
             }
-            if (config.promptTemplate != null && !config.promptTemplate.isBlank()) {
-                promptTemplate = config.promptTemplate;
+            if (ctx.config().promptTemplate != null && !ctx.config().promptTemplate.isBlank()) {
+                promptTemplate = ctx.config().promptTemplate;
             }
         }
 
-        // Build user prompt from template with placeholder substitution
         String userPrompt = ManagerPromptBuilder.buildUserPrompt(
-                promptTemplate, event, actionTypes, actors, project, recentTasks);
+                promptTemplate, event, ctx.actionTypes(), ctx.actors(),
+                ctx.project(), ctx.recentTasks());
         String jsonSchema = ManagerPromptBuilder.getResponseJsonSchema();
 
         // Build engine-agnostic config
@@ -130,7 +137,7 @@ public class ManagerService {
 
             // Record AI usage for this Manager evaluation
             try {
-                recordAiUsage(event.id, project != null ? project.id : null,
+                recordAiUsage(event.id, ctx.project() != null ? ctx.project().id : null,
                         result.costUsd(), result.inputTokens(), result.outputTokens());
             } catch (Exception e) {
                 LOG.warnf(e, "Failed to record AI usage for event %d", event.id);
@@ -177,6 +184,17 @@ public class ManagerService {
             return Collections.emptyList();
         }
     }
+
+    /**
+     * Holds context data loaded in a short transaction before the AI engine call.
+     */
+    private record EvalContext(
+            List<ActionTypeEntity> actionTypes,
+            List<ActorEntity> actors,
+            ProjectEntity project,
+            List<TaskEntity> recentTasks,
+            ManagerConfigEntity config
+    ) {}
 
     /**
      * Completes the manager-evaluation trace node (non-fatal).
