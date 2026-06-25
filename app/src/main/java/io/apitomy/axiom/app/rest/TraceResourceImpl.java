@@ -20,10 +20,12 @@ import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ToolExecutionEntity;
 import io.apitomy.axiom.core.entities.TraceEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
+import io.apitomy.axiom.core.events.SseEvent;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
@@ -45,6 +47,9 @@ public class TraceResourceImpl implements TracesResource {
 
     @Inject
     ObjectMapper objectMapper;
+
+    @Inject
+    Event<SseEvent> sseEvents;
 
     @Override
     public TraceSearchResults listTraces(BigInteger page, BigInteger limit,
@@ -164,6 +169,8 @@ public class TraceResourceImpl implements TracesResource {
         node.entityId = toolExec.id;
         node.persist();
 
+        sseEvents.fire(SseEvent.traceUpdated(traceUuid));
+
         ToolCallCreated response = new ToolCallCreated();
         response.setNodeId(node.id);
         return response;
@@ -191,6 +198,8 @@ public class TraceResourceImpl implements TracesResource {
                 toolExec.durationMs = data.getDurationMs();
             }
         }
+
+        sseEvents.fire(SseEvent.traceUpdated(node.traceId));
     }
 
     /**

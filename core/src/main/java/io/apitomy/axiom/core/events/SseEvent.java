@@ -93,6 +93,17 @@ public record SseEvent(
                         + ",\"status\":\"" + status + "\"}");
     }
 
+    /**
+     * Creates a trace-updated event.
+     *
+     * @param traceId the trace that changed
+     * @return a new SSE event
+     */
+    public static SseEvent traceUpdated(java.util.UUID traceId) {
+        return new SseEvent("trace-updated",
+                "{\"traceId\":\"" + traceId + "\"}");
+    }
+
     private static String escapeJson(String s) {
         if (s == null) return "";
         return s.replace("\\", "\\\\")

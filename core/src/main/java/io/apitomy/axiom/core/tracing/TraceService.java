@@ -8,8 +8,11 @@ import org.jboss.logging.Logger;
 
 import io.apitomy.axiom.core.entities.TraceEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
+import io.apitomy.axiom.core.events.SseEvent;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
+import jakarta.inject.Inject;
 
 /**
  * Central service for creating and managing execution traces. All write
@@ -20,6 +23,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 public class TraceService {
 
     private static final Logger LOG = Logger.getLogger(TraceService.class);
+
+    @Inject
+    Event<SseEvent> sseEvents;
 
     /**
      * Creates a new trace and its root node.
@@ -39,7 +45,7 @@ public class TraceService {
             Long eventId, Long projectId, Long reportId,
             String rootNodeType, String rootNodeSummary,
             String rootEntityType, Long rootEntityId) {
-        return QuarkusTransaction.requiringNew().call(() -> {
+        TraceContext ctx = QuarkusTransaction.requiringNew().call(() -> {
             Instant now = Instant.now();
 
             TraceEntity trace = new TraceEntity();
@@ -70,6 +76,8 @@ public class TraceService {
                     trace.traceId, traceType, rootNode.id);
             return new TraceContext(trace.traceId, rootNode.id);
         });
+        sseEvents.fire(SseEvent.traceUpdated(ctx.traceId()));
+        return ctx;
     }
 
     /**
@@ -86,7 +94,7 @@ public class TraceService {
      */
     public Long addNode(TraceContext ctx, String nodeType, String status,
             String summary, String entityType, Long entityId) {
-        return QuarkusTransaction.requiringNew().call(() -> {
+        Long nodeId = QuarkusTransaction.requiringNew().call(() -> {
             TraceNodeEntity node = new TraceNodeEntity();
             node.traceId = ctx.traceId();
             node.parentNodeId = ctx.currentParentNodeId();
@@ -102,6 +110,8 @@ public class TraceService {
                     node.id, nodeType, ctx.traceId(), node.parentNodeId);
             return node.id;
         });
+        sseEvents.fire(SseEvent.traceUpdated(ctx.traceId()));
+        return nodeId;
     }
 
     /**
@@ -122,6 +132,7 @@ public class TraceService {
             node.completedOn = now;
             node.durationMs = Duration.between(node.startedOn, now).toMillis();
             node.status = status;
+            sseEvents.fire(SseEvent.traceUpdated(node.traceId));
         });
     }
 
@@ -148,6 +159,7 @@ public class TraceService {
             node.status = status;
             node.entityType = entityType;
             node.entityId = entityId;
+            sseEvents.fire(SseEvent.traceUpdated(node.traceId));
         });
     }
 
@@ -168,6 +180,7 @@ public class TraceService {
             trace.completedOn = Instant.now();
             trace.status = status;
             LOG.debugf("Completed trace %s with status %s", traceId, status);
+            sseEvents.fire(SseEvent.traceUpdated(traceId));
         });
     }
 
