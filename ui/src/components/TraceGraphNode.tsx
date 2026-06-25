@@ -52,7 +52,7 @@ function NodeTypeIcon({ nodeType }: { nodeType: string }) {
 
 export function TraceGraphNode({ data }: { data: TraceNode }) {
     return (
-        <div className="axiom-trace-graph-node" data-status={data.status}>
+        <div className="axiom-trace-graph-node" data-status={data.status} data-node-type={data.nodeType}>
             <Handle type="target" position={Position.Left} />
 
             <div className="axiom-trace-graph-node__header">

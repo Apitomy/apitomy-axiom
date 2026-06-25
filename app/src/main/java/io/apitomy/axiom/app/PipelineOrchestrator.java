@@ -286,8 +286,15 @@ public class PipelineOrchestrator {
 
         if (traceCtx != null) {
             try {
+                ActivityLogEntity reasonLog = new ActivityLogEntity();
+                reasonLog.eventId = event.id;
+                reasonLog.entryType = "manager-decision";
+                reasonLog.summary = decision.reasoning();
+                reasonLog.createdOn = Instant.now();
+                reasonLog.persist();
+
                 traceService.addNode(traceCtx, "event-ignored", "completed",
-                        "Ignored: " + decision.reasoning(), null, null);
+                        "Ignored", "activity-log", reasonLog.id);
             } catch (Exception e) {
                 LOG.warnf(e, "Failed to add event-ignored trace node");
             }
@@ -361,8 +368,15 @@ public class PipelineOrchestrator {
 
         if (traceCtx != null) {
             try {
+                ActivityLogEntity reasonLog = new ActivityLogEntity();
+                reasonLog.eventId = event.id;
+                reasonLog.entryType = "manager-escalation";
+                reasonLog.summary = reason;
+                reasonLog.createdOn = Instant.now();
+                reasonLog.persist();
+
                 traceService.addNode(traceCtx, "escalation", "completed",
-                        "Escalated: " + reason, null, null);
+                        "Escalated", "activity-log", reasonLog.id);
             } catch (Exception e) {
                 LOG.warnf(e, "Failed to add escalation trace node");
             }

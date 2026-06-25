@@ -26,6 +26,9 @@
 .axiom-trace-graph-node[data-status="skipped"] {
     border-color: var(--pf-t--global--color--status--disabled--default, #8a8d90);
 }
+.axiom-trace-graph-node[data-node-type="escalation"] {
+    border-color: var(--pf-t--global--color--nonstatus--orange--default, #f0ab00);
+}
 
 .axiom-trace-graph-node__header {
     display: flex;

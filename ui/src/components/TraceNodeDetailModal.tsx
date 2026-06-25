@@ -106,6 +106,9 @@ function renderDetail(nodeType: string, entityType: string | undefined,
     if (nodeType === "report-triggered" && entityType === "report") {
         return <ReportLinkDetail detail={detail} />;
     }
+    if ((nodeType === "event-ignored" || nodeType === "escalation") && entityType === "activity-log") {
+        return <ReasoningDetail detail={detail} />;
+    }
     switch (entityType) {
         case "tool-execution":
             return <ToolExecutionDetail detail={detail} />;
@@ -127,6 +130,21 @@ function renderDetail(nodeType: string, entityType: string | undefined,
                 />
             );
     }
+}
+
+function ReasoningDetail({ detail }: { detail: Record<string, unknown> }) {
+    return (
+        <>
+            <h4 style={{ marginBottom: "4px", fontWeight: "bold" }}>Reasoning</h4>
+            <CodeEditor
+                code={String(detail.summary || "")}
+                language={Language.plaintext}
+                isReadOnly
+                height="200px"
+                options={{ wordWrap: "on" }}
+            />
+        </>
+    );
 }
 
 function ReportLinkDetail({ detail }: { detail: Record<string, unknown> }) {
