@@ -191,6 +191,12 @@ public class PipelineOrchestrator {
     private void persistFailure(Long queueEntryId, Long eventId,
             String errorMessage, TraceContext traceCtx) {
         QuarkusTransaction.requiringNew().run(() -> {
+            if (traceCtx != null) {
+                EventEntity event = EventEntity.findById(eventId);
+                if (event != null) {
+                    event.traceId = traceCtx.traceId();
+                }
+            }
             logActivity(null, null, eventId, "pipeline-error",
                     "Pipeline error: " + errorMessage);
             completeTraceFailed(traceCtx);
