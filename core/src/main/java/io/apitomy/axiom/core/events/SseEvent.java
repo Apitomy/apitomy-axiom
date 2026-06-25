@@ -1,5 +1,7 @@
 package io.apitomy.axiom.core.events;
 
+import java.util.UUID;
+
 /**
  * Represents an event to be sent to connected SSE clients.
  * Fired as a CDI event within the application and broadcast to all SSE subscribers.
@@ -91,6 +93,17 @@ public record SseEvent(
         return new SseEvent("report-updated",
                 "{\"reportId\":" + reportId
                         + ",\"status\":\"" + status + "\"}");
+    }
+
+    /**
+     * Creates a trace-updated event.
+     *
+     * @param traceId the trace that changed
+     * @return a new SSE event
+     */
+    public static SseEvent traceUpdated(UUID traceId) {
+        return new SseEvent("trace-updated",
+                "{\"traceId\":\"" + traceId + "\"}");
     }
 
     private static String escapeJson(String s) {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
     Breadcrumb,
@@ -10,10 +10,25 @@ import {
 } from "@patternfly/react-core";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import { TraceGraph } from "../components/TraceGraph";
+import { sseClient, type AxiomSseEvent } from "../config/sse";
 
 export function TraceDetailPage() {
     const { traceId } = useParams<{ traceId: string }>();
     const [refreshKey, setRefreshKey] = useState(0);
+
+    useEffect(() => {
+        let timeout: ReturnType<typeof setTimeout>;
+        const unsubscribe = sseClient.subscribe((event: AxiomSseEvent) => {
+            if (event.type === "trace-updated") {
+                const data = event.data as { traceId?: string };
+                if (data.traceId === traceId) {
+                    clearTimeout(timeout);
+                    timeout = setTimeout(() => setRefreshKey((k) => k + 1), 300);
+                }
+            }
+        });
+        return () => { clearTimeout(timeout); unsubscribe(); };
+    }, [traceId]);
 
     return (
         <PageSection>

@@ -20,12 +20,14 @@ import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ToolExecutionEntity;
 import io.apitomy.axiom.core.entities.TraceEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
+import io.apitomy.axiom.core.events.SseEvent;
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
-import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
 
 import java.math.BigInteger;
@@ -45,6 +47,9 @@ public class TraceResourceImpl implements TracesResource {
 
     @Inject
     ObjectMapper objectMapper;
+
+    @Inject
+    Event<SseEvent> sseEvents;
 
     @Override
     public TraceSearchResults listTraces(BigInteger page, BigInteger limit,
@@ -137,60 +142,70 @@ public class TraceResourceImpl implements TracesResource {
     }
 
     @Override
-    @Transactional
     public ToolCallCreated createToolCall(ToolCallRequest data) {
         UUID traceUuid = data.getTraceId();
-        TraceEntity trace = TraceEntity.findById(traceUuid);
-        if (trace == null) {
-            throw new WebApplicationException("Trace not found: " + traceUuid, 404);
-        }
 
-        ToolExecutionEntity toolExec = new ToolExecutionEntity();
-        toolExec.traceId = traceUuid;
-        toolExec.toolName = data.getToolName();
-        toolExec.toolInput = data.getToolInput();
-        toolExec.status = "in-progress";
-        toolExec.createdOn = java.time.Instant.now();
-        toolExec.persist();
+        ToolCallCreated response = QuarkusTransaction.requiringNew().call(() -> {
+            TraceEntity trace = TraceEntity.findById(traceUuid);
+            if (trace == null) {
+                throw new WebApplicationException("Trace not found: " + traceUuid, 404);
+            }
 
-        TraceNodeEntity node = new TraceNodeEntity();
-        node.traceId = traceUuid;
-        node.parentNodeId = data.getParentNodeId();
-        node.nodeType = "tool-execution";
-        node.status = "in-progress";
-        node.summary = "Tool: " + data.getToolName();
-        node.startedOn = java.time.Instant.now();
-        node.entityType = "tool-execution";
-        node.entityId = toolExec.id;
-        node.persist();
+            ToolExecutionEntity toolExec = new ToolExecutionEntity();
+            toolExec.traceId = traceUuid;
+            toolExec.toolName = data.getToolName();
+            toolExec.toolInput = data.getToolInput();
+            toolExec.status = "in-progress";
+            toolExec.createdOn = java.time.Instant.now();
+            toolExec.persist();
 
-        ToolCallCreated response = new ToolCallCreated();
-        response.setNodeId(node.id);
+            TraceNodeEntity node = new TraceNodeEntity();
+            node.traceId = traceUuid;
+            node.parentNodeId = data.getParentNodeId();
+            node.nodeType = "tool-execution";
+            node.status = "in-progress";
+            node.summary = "Tool: " + data.getToolName();
+            node.startedOn = java.time.Instant.now();
+            node.entityType = "tool-execution";
+            node.entityId = toolExec.id;
+            node.persist();
+
+            ToolCallCreated result = new ToolCallCreated();
+            result.setNodeId(node.id);
+            return result;
+        });
+
+        sseEvents.fire(SseEvent.traceUpdated(traceUuid));
         return response;
     }
 
     @Override
-    @Transactional
     public void completeToolCall(BigInteger nodeId, ToolCallCompletion data) {
-        TraceNodeEntity node = TraceNodeEntity.findById(nodeId.longValue());
-        if (node == null) {
-            throw new WebApplicationException("Trace node not found: " + nodeId, 404);
-        }
-
-        java.time.Instant now = java.time.Instant.now();
-        node.completedOn = now;
-        node.durationMs = data.getDurationMs();
-        node.status = data.getStatus() != null ? data.getStatus() : "completed";
-
-        if (node.entityType != null && "tool-execution".equals(node.entityType)
-                && node.entityId != null) {
-            ToolExecutionEntity toolExec = ToolExecutionEntity.findById(node.entityId);
-            if (toolExec != null) {
-                toolExec.toolOutput = data.getToolOutput();
-                toolExec.status = node.status;
-                toolExec.durationMs = data.getDurationMs();
+        UUID traceId = QuarkusTransaction.requiringNew().call(() -> {
+            TraceNodeEntity node = TraceNodeEntity.findById(nodeId.longValue());
+            if (node == null) {
+                throw new WebApplicationException("Trace node not found: " + nodeId, 404);
             }
-        }
+
+            java.time.Instant now = java.time.Instant.now();
+            node.completedOn = now;
+            node.durationMs = data.getDurationMs();
+            node.status = data.getStatus() != null ? data.getStatus() : "completed";
+
+            if (node.entityType != null && "tool-execution".equals(node.entityType)
+                    && node.entityId != null) {
+                ToolExecutionEntity toolExec = ToolExecutionEntity.findById(node.entityId);
+                if (toolExec != null) {
+                    toolExec.toolOutput = data.getToolOutput();
+                    toolExec.status = node.status;
+                    toolExec.durationMs = data.getDurationMs();
+                }
+            }
+
+            return node.traceId;
+        });
+
+        sseEvents.fire(SseEvent.traceUpdated(traceId));
     }
 
     /**

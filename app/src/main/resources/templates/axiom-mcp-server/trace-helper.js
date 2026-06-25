@@ -2,7 +2,7 @@ const TRACE_ID = process.env.AXIOM_TRACE_ID;
 const PARENT_NODE_ID = process.env.AXIOM_PARENT_NODE_ID;
 const AXIOM_API_URL = process.env.AXIOM_API_URL;
 
-const MAX_OUTPUT_LENGTH = 10000;
+const MAX_OUTPUT_LENGTH = 100000;
 
 const tracingEnabled = !!(TRACE_ID && PARENT_NODE_ID && AXIOM_API_URL);
 

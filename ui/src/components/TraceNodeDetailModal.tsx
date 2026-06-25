@@ -236,6 +236,7 @@ function ToolExecutionDetail({ detail }: { detail: Record<string, unknown> }) {
                             language={Language.json}
                             isReadOnly
                             height="300px"
+                            options={{ wordWrap: "on" }}
                         />
                     </div>
                 </Tab>
@@ -246,6 +247,7 @@ function ToolExecutionDetail({ detail }: { detail: Record<string, unknown> }) {
                             language={Language.json}
                             isReadOnly
                             height="300px"
+                            options={{ wordWrap: "on" }}
                         />
                     </div>
                 </Tab>
