@@ -41,7 +41,7 @@ import PlayIcon from "@patternfly/react-icons/dist/esm/icons/play-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import CodeBranchIcon from "@patternfly/react-icons/dist/esm/icons/code-branch-icon";
-import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
+import BugIcon from "@patternfly/react-icons/dist/esm/icons/bug-icon";
 import GithubIcon from "@patternfly/react-icons/dist/esm/icons/github-icon";
 import JiraIcon from "@patternfly/react-icons/dist/esm/icons/jira-icon";
 import {
@@ -204,7 +204,7 @@ export function ProjectDetailPage() {
                     <Title headingLevel="h1" size="lg">
                         {project.issueSource === "github" && <GithubIcon style={{ marginRight: 8 }} />}
                         {project.issueSource === "jira" && <JiraIcon style={{ marginRight: 8 }} />}
-                        {project.type === "issue" && <ExclamationCircleIcon style={{ marginRight: 8 }} />}
+                        {project.type === "issue" && <BugIcon style={{ marginRight: 8 }} />}
                         {project.type === "pull-request" && <CodeBranchIcon style={{ marginRight: 8 }} />}
                         {project.name}
                     </Title>
@@ -437,6 +437,7 @@ function TasksTab({ tasks, projectId, actorNames, onRefresh }: {
     actorNames: Record<number, string>;
     onRefresh: () => void;
 }) {
+    const navigate = useNavigate();
     const [respondingTo, setRespondingTo] = useState<number | null>(null);
     const [responseText, setResponseText] = useState("");
     const [submitting, setSubmitting] = useState(false);
@@ -481,6 +482,7 @@ function TasksTab({ tasks, projectId, actorNames, onRefresh }: {
                         <Th>Created By</Th>
                         <Th>Created</Th>
                         <Th>Completed</Th>
+                        <Th>Trace</Th>
                         <Th />
                     </Tr>
                 </Thead>
@@ -504,6 +506,14 @@ function TasksTab({ tasks, projectId, actorNames, onRefresh }: {
                                 {task.completedOn
                                     ? new Date(task.completedOn).toLocaleString()
                                     : "—"}
+                            </Td>
+                            <Td>
+                                {task.createdBy === "user" && task.traceId ? (
+                                    <Button variant="link" isInline
+                                        onClick={() => navigate(`/logs/traces/${task.traceId}`)}>
+                                        View Trace
+                                    </Button>
+                                ) : task.createdBy === "user" ? "—" : ""}
                             </Td>
                             <Td>
                                 {(task.status === "Completed" || task.status === "Failed") && (

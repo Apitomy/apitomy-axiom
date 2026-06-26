@@ -77,6 +77,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             cmd = cmd.replaceAll("{{" + key + "}}", String(value));
         }
 
+        // Clear any remaining placeholders for optional parameters not provided
+        const optionalParams = (tool.parameters || []).filter(p => !p.required && !(p.name in args));
+        for (const p of optionalParams) {
+            cmd = cmd.replaceAll("{{" + p.name + "_file}}", "");
+            cmd = cmd.replaceAll("{{" + p.name + "}}", "");
+        }
+
         const scriptFile = path.join(os.tmpdir(),
                 `axiom-tool-${toolName}-${Date.now()}.sh`);
         fs.writeFileSync(scriptFile, cmd);
