@@ -216,7 +216,7 @@ export function ToolsPage() {
                                         isClickable
                                         onRowClick={() => navigate(`/tools/${tool.id}`)}
                                     >
-                                        <Td>{tool.name}</Td>
+                                        <Td style={{ whiteSpace: "nowrap" }}>{tool.name}</Td>
                                         <Td>{tool.description || "—"}</Td>
                                         <Td>
                                             {tool.labels?.map((label) => (
