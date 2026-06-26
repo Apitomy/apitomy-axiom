@@ -33,7 +33,9 @@ const NODE_TYPE_ICONS: Record<string, React.ComponentType> = {
 export const STATUS_COLORS: Record<string, LabelProps["color"]> = {
     "in-progress": "blue",
     "completed": "green",
+    "success": "green",
     "failed": "red",
+    "failure": "red",
     "skipped": "grey",
 };
 

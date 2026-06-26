@@ -17,8 +17,10 @@
 .axiom-trace-graph-node[data-status="completed"] {
     border-color: var(--pf-t--global--color--status--success--default, #3e8635);
 }
-.axiom-trace-graph-node[data-status="failed"] {
+.axiom-trace-graph-node[data-status="failed"],
+.axiom-trace-graph-node[data-status="failure"] {
     border-color: var(--pf-t--global--color--status--danger--default, #c9190b);
+    background: rgba(201, 25, 11, 0.07);
 }
 .axiom-trace-graph-node[data-status="in-progress"] {
     border-color: var(--pf-t--global--color--status--info--default, #06c);
