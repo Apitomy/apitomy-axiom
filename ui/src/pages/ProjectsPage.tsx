@@ -31,7 +31,7 @@ import EyeSlashIcon from "@patternfly/react-icons/dist/esm/icons/eye-slash-icon"
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import { ColoredLabel } from "../components/ColoredLabel";
 import CodeBranchIcon from "@patternfly/react-icons/dist/esm/icons/code-branch-icon";
-import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
+import BugIcon from "@patternfly/react-icons/dist/esm/icons/bug-icon";
 import GithubIcon from "@patternfly/react-icons/dist/esm/icons/github-icon";
 import JiraIcon from "@patternfly/react-icons/dist/esm/icons/jira-icon";
 import {
@@ -291,7 +291,7 @@ export function ProjectsPage() {
                                     <Td>
                                         {project.issueSource === "github" && <GithubIcon style={{ marginRight: 6 }} />}
                                         {project.issueSource === "jira" && <JiraIcon style={{ marginRight: 6 }} />}
-                                        {project.type === "issue" && <ExclamationCircleIcon style={{ marginRight: 6 }} />}
+                                        {project.type === "issue" && <BugIcon style={{ marginRight: 6 }} />}
                                         {project.type === "pull-request" && <CodeBranchIcon style={{ marginRight: 6 }} />}
                                         {project.name}
                                     </Td>
