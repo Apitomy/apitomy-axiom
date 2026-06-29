@@ -15,10 +15,6 @@ import {
     Flex,
     FlexItem,
     Label,
-    Modal,
-    ModalBody,
-    ModalFooter,
-    ModalHeader,
     PageSection, Spinner,
     Title,
 } from "@patternfly/react-core";
@@ -36,6 +32,7 @@ import { RenderedReport } from "../components/RenderedReport";
 import { ExecutionLogModal } from "../components/ExecutionLogModal";
 import { LabelDisplay } from "../components/LabelDisplay";
 import { EditLabelsModal } from "../components/EditLabelsModal";
+import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import {If} from "@apitomy/common-ui-components";
 
 export function ReportDetailPage() {
@@ -231,19 +228,10 @@ export function ReportDetailPage() {
                 onClose={() => setIsLabelsOpen(false)}
             />
 
-            <Modal isOpen={isDeleteOpen}
-                onClose={() => setIsDeleteOpen(false)}
-                variant="small"
-                aria-label="Confirm delete report">
-                <ModalHeader title="Delete Report" />
-                <ModalBody>
-                    Are you sure you want to delete this report? This action cannot be undone.
-                </ModalBody>
-                <ModalFooter>
-                    <Button variant="danger" onClick={handleDelete}>Delete</Button>
-                    <Button variant="link" onClick={() => setIsDeleteOpen(false)}>Cancel</Button>
-                </ModalFooter>
-            </Modal>
+            <ConfirmDeleteModal isOpen={isDeleteOpen} title="Delete Report"
+                onConfirm={handleDelete} onCancel={() => setIsDeleteOpen(false)}>
+                Are you sure you want to delete this report? This action cannot be undone.
+            </ConfirmDeleteModal>
         </PageSection>
     );
 }

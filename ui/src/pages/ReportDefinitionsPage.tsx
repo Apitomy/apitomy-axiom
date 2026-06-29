@@ -28,6 +28,7 @@ import {
     createReportDefinition,
     deleteReportDefinition,
 } from "../config/api";
+import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 export function ReportDefinitionsPage() {
     const navigate = useNavigate();
@@ -146,20 +147,10 @@ export function ReportDefinitionsPage() {
                 )}
             </div>
 
-            <Modal isOpen={deleteTarget !== null} onClose={() => setDeleteTarget(null)} variant="small">
-                <ModalHeader title="Delete Report Definition" />
-                <ModalBody>
-                    Delete this report definition and all its generated reports?
-                </ModalBody>
-                <ModalFooter>
-                    <Button variant="danger" onClick={confirmDelete}>
-                        Delete
-                    </Button>
-                    <Button variant="link" onClick={() => setDeleteTarget(null)}>
-                        Cancel
-                    </Button>
-                </ModalFooter>
-            </Modal>
+            <ConfirmDeleteModal isOpen={deleteTarget !== null} title="Delete Report Definition"
+                onConfirm={confirmDelete} onCancel={() => setDeleteTarget(null)}>
+                Delete this report definition and all its generated reports?
+            </ConfirmDeleteModal>
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} variant="medium">
                 <ModalHeader title="Create Report Definition" />

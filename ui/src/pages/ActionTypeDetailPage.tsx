@@ -25,13 +25,13 @@ import {
 } from "@patternfly/react-core";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { registerPlaceholderCompletions, ACTION_TYPE_PLACEHOLDERS } from "../components/PlaceholderCompletionProvider";
-import { AddToolInput } from "../components/AddToolInput";
+import { EnvironmentTab } from "../components/EnvironmentTab";
+import { ToolListEditor } from "../components/ToolListEditor";
 import { ScriptAiModal } from "../components/ScriptAiModal";
 import { ActionTypeAiModal } from "../components/ActionTypeAiModal";
+import { ValidationProblemsPanel } from "../components/ValidationProblemsPanel";
 import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
 import MagicIcon from "@patternfly/react-icons/dist/esm/icons/magic-icon";
-import TimesIcon from "@patternfly/react-icons/dist/esm/icons/times-icon";
-import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import {
     type ActionType,
     type NewActionType,
@@ -236,11 +236,25 @@ export function ActionTypeDetailPage() {
                 {form.executionMode === "actor" && (
                     <Tab eventKey={1} title={<TabTitleText>Allowed Tools ({tools.length})</TabTitleText>}>
                         <TabContent id="tools-tab" eventKey={1} activeKey={activeTab} style={{ marginTop: "24px" }}>
-                            <AllowedToolsTab
+                            <ToolListEditor
                                 tools={tools}
-                                addTool={addTool}
-                                removeTool={removeTool}
-                                replaceTool={replaceTools}
+                                onAdd={addTool}
+                                onRemove={removeTool}
+                                onReplace={replaceTools}
+                                helpText={<>
+                                    Define which tools the AI agent is allowed to use when performing this
+                                    action type. Use patterns like <code>Bash(git log *)</code> to allow
+                                    specific shell commands. Reference a toolset using{" "}
+                                    <code>@ToolsetName</code> (e.g. <code>@Read-Only Tools</code>) to include
+                                    all tools from that collection. Tools not in this list will be denied.
+                                </>}
+                                emptyContent={
+                                    <EmptyState>
+                                        <EmptyStateBody>
+                                            No tools configured. The actor will use minimal read-only defaults.
+                                        </EmptyStateBody>
+                                    </EmptyState>
+                                }
                             />
                         </TabContent>
                     </Tab>
@@ -290,33 +304,7 @@ export function ActionTypeDetailPage() {
                         </TabTitleText>
                     }>
                         <TabContent id="problems-tab" eventKey={5} activeKey={activeTab} style={{ marginTop: "24px" }}>
-                            <div style={{ maxWidth: "700px" }}>
-                                {validationMessages.map((msg, i) => (
-                                    <div key={i} style={{
-                                        display: "flex",
-                                        alignItems: "flex-start",
-                                        gap: 8,
-                                        padding: "10px 12px",
-                                        marginBottom: 4,
-                                        borderRadius: 4,
-                                        backgroundColor: msg.severity === "error"
-                                            ? "#fef3f2" : "#fdf7e7",
-                                        border: `1px solid ${msg.severity === "error"
-                                            ? "#c9190b" : "#f0ab00"}`,
-                                    }}>
-                                        {msg.severity === "error"
-                                            ? <ExclamationCircleIcon style={{ color: "#c9190b", marginTop: 2 }} />
-                                            : <ExclamationTriangleIcon style={{ color: "#f0ab00", marginTop: 2 }} />
-                                        }
-                                        <div>
-                                            <div style={{ fontSize: "13px" }}>{msg.message}</div>
-                                            <div style={{ fontSize: "12px", color: "#6a6e73", marginTop: 2 }}>
-                                                Field: <code>{msg.field}</code>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
+                            <ValidationProblemsPanel messages={validationMessages} />
                         </TabContent>
                     </Tab>
                 )}
@@ -472,75 +460,6 @@ function InfoTab({ form, updateForm, availableModels, availableEngines }: {
     );
 }
 
-function AllowedToolsTab({ tools, addTool, removeTool, replaceTool }: {
-    tools: string[];
-    addTool: (tool: string) => void;
-    removeTool: (tool: string) => void;
-    replaceTool: (tools: string[]) => void;
-}) {
-    return (
-        <div style={{ maxWidth: "700px" }}>
-            <p style={{ color: "#6a6e73", marginBottom: "16px" }}>
-                Define which tools the AI agent is allowed to use when performing this
-                action type. Use patterns like <code>Bash(git log *)</code> to allow
-                specific shell commands. Reference a toolset using{" "}
-                <code>@ToolsetName</code> (e.g. <code>@Read-Only Tools</code>) to include
-                all tools from that collection. Tools not in this list will be denied.
-            </p>
-
-            <div style={{ marginBottom: "16px" }}>
-                <AddToolInput onAdd={addTool} onReplace={replaceTool} existingTools={tools} />
-            </div>
-
-            {tools.length === 0 ? (
-                <EmptyState>
-                    <EmptyStateBody>
-                        No tools configured. The actor will use minimal read-only defaults.
-                    </EmptyStateBody>
-                </EmptyState>
-            ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                    {tools.map((tool) => (
-                        <Flex
-                            key={tool}
-                            alignItems={{ default: "alignItemsCenter" }}
-                            style={{
-                                padding: "8px 12px",
-                                backgroundColor: tool.startsWith("@")
-                                    ? "var(--pf-t--global--background--color--primary--default)"
-                                    : "var(--pf-t--global--background--color--secondary--default)",
-                                borderRadius: "4px",
-                                border: tool.startsWith("@")
-                                    ? "1px solid var(--pf-t--global--border--color--default)"
-                                    : "none",
-                            }}
-                        >
-                            <FlexItem grow={{ default: "grow" }}>
-                                <code style={{
-                                    fontSize: "13px",
-                                    color: tool.startsWith("@")
-                                        ? "var(--pf-t--global--color--brand--default)"
-                                        : "inherit",
-                                }}>{tool}</code>
-                            </FlexItem>
-                            <FlexItem>
-                                <Button
-                                    variant="plain"
-                                    size="sm"
-                                    onClick={() => removeTool(tool)}
-                                    aria-label={`Remove ${tool}`}
-                                >
-                                    <TimesIcon />
-                                </Button>
-                            </FlexItem>
-                        </Flex>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-}
-
 function PromptTemplateTab({ value, onChange }: {
     value: string;
     onChange: (v: string) => void;
@@ -598,107 +517,3 @@ function ScriptTab({ value, onChange }: {
     );
 }
 
-function EnvironmentTab({ envVars, onChange }: {
-    envVars: Record<string, string>;
-    onChange: (updated: Record<string, string>) => void;
-}) {
-    const [newName, setNewName] = useState("");
-    const [newValue, setNewValue] = useState("");
-
-    const entries = Object.entries(envVars);
-
-    const handleAdd = () => {
-        const trimmed = newName.trim();
-        if (!trimmed || trimmed in envVars) return;
-        onChange({ ...envVars, [trimmed]: newValue });
-        setNewName("");
-        setNewValue("");
-    };
-
-    const handleRemove = (key: string) => {
-        const updated = { ...envVars };
-        delete updated[key];
-        onChange(updated);
-    };
-
-    const handleValueChange = (key: string, value: string) => {
-        onChange({ ...envVars, [key]: value });
-    };
-
-    return (
-        <div style={{ maxWidth: "700px" }}>
-            <p style={{ color: "#6a6e73", marginBottom: "16px" }}>
-                Custom environment variables injected into the subprocess. When configured,
-                these replace the default all-secrets injection. Reference an encrypted secret
-                using <code>{"${secret:SECRET_NAME}"}</code> syntax.
-            </p>
-
-            <Flex alignItems={{ default: "alignItemsFlexEnd" }}
-                style={{ marginBottom: "16px", gap: "8px" }}>
-                <FlexItem style={{ flex: 1 }}>
-                    <FormGroup label="Name" fieldId="env-new-name">
-                        <TextInput id="env-new-name" value={newName}
-                            onChange={(_e, v) => setNewName(v)}
-                            placeholder="e.g. GH_TOKEN"
-                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAdd(); } }}
-                        />
-                    </FormGroup>
-                </FlexItem>
-                <FlexItem style={{ flex: 2 }}>
-                    <FormGroup label="Value" fieldId="env-new-value">
-                        <TextInput id="env-new-value" value={newValue}
-                            onChange={(_e, v) => setNewValue(v)}
-                            placeholder="e.g. ${secret:GH_TOKEN}"
-                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAdd(); } }}
-                        />
-                    </FormGroup>
-                </FlexItem>
-                <FlexItem>
-                    <Button variant="secondary" icon={<PlusCircleIcon />}
-                        onClick={handleAdd}
-                        isDisabled={!newName.trim() || newName.trim() in envVars}
-                        style={{ marginBottom: "1px" }}>
-                        Add
-                    </Button>
-                </FlexItem>
-            </Flex>
-
-            {entries.length === 0 ? (
-                <EmptyState>
-                    <EmptyStateBody>
-                        No custom environment configured. All secrets will be injected automatically.
-                    </EmptyStateBody>
-                </EmptyState>
-            ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                    {entries.map(([key, value]) => (
-                        <Flex key={key} alignItems={{ default: "alignItemsCenter" }}
-                            style={{
-                                padding: "8px 12px",
-                                backgroundColor: "var(--pf-t--global--background--color--secondary--default)",
-                                borderRadius: "4px",
-                            }}>
-                            <FlexItem style={{ minWidth: "160px" }}>
-                                <code style={{ fontSize: "13px", fontWeight: 600 }}>{key}</code>
-                            </FlexItem>
-                            <FlexItem grow={{ default: "grow" }}>
-                                <TextInput value={value}
-                                    onChange={(_e, v) => handleValueChange(key, v)}
-                                    aria-label={`Value for ${key}`}
-                                    style={{ fontSize: "13px" }}
-                                />
-                            </FlexItem>
-                            <FlexItem>
-                                <Button variant="plain" size="sm"
-                                    onClick={() => handleRemove(key)}
-                                    aria-label={`Remove ${key}`}>
-                                    <TimesIcon />
-                                </Button>
-                            </FlexItem>
-                        </Flex>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-}

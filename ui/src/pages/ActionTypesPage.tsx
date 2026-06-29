@@ -31,6 +31,7 @@ import {
     createActionType,
     deleteActionType,
 } from "../config/api";
+import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 export function ActionTypesPage() {
     const navigate = useNavigate();
@@ -150,20 +151,10 @@ export function ActionTypesPage() {
                 )}
             </div>
 
-            <Modal isOpen={deleteTarget !== null} onClose={() => setDeleteTarget(null)} variant="small">
-                <ModalHeader title="Delete Action Type" />
-                <ModalBody>
-                    Delete this action type?
-                </ModalBody>
-                <ModalFooter>
-                    <Button variant="danger" onClick={confirmDelete}>
-                        Delete
-                    </Button>
-                    <Button variant="link" onClick={() => setDeleteTarget(null)}>
-                        Cancel
-                    </Button>
-                </ModalFooter>
-            </Modal>
+            <ConfirmDeleteModal isOpen={deleteTarget !== null} title="Delete Action Type"
+                onConfirm={confirmDelete} onCancel={() => setDeleteTarget(null)}>
+                Delete this action type?
+            </ConfirmDeleteModal>
 
             {/* Simple create modal — just name and mode, then navigate to detail page */}
             <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} variant="small">

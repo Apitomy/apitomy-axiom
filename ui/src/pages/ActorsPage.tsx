@@ -30,6 +30,7 @@ import {
     updateActor,
     deleteActor,
 } from "../config/api";
+import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 export function ActorsPage() {
     const navigate = useNavigate();
@@ -109,20 +110,10 @@ export function ActorsPage() {
                 )}
             </div>
 
-            <Modal isOpen={deleteTarget !== null} onClose={() => setDeleteTarget(null)} variant="small">
-                <ModalHeader title="Delete Actor" />
-                <ModalBody>
-                    Delete this actor?
-                </ModalBody>
-                <ModalFooter>
-                    <Button variant="danger" onClick={confirmDelete}>
-                        Delete
-                    </Button>
-                    <Button variant="link" onClick={() => setDeleteTarget(null)}>
-                        Cancel
-                    </Button>
-                </ModalFooter>
-            </Modal>
+            <ConfirmDeleteModal isOpen={deleteTarget !== null} title="Delete Actor"
+                onConfirm={confirmDelete} onCancel={() => setDeleteTarget(null)}>
+                Delete this actor?
+            </ConfirmDeleteModal>
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} variant="medium">
                 <ModalHeader title={editing ? "Edit Actor" : "Create Actor"} />

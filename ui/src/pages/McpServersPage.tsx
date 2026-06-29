@@ -26,6 +26,7 @@ import {
     createMcpServer,
     deleteMcpServer,
 } from "../config/api";
+import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 export function McpServersPage() {
     const navigate = useNavigate();
@@ -120,20 +121,10 @@ export function McpServersPage() {
                 )}
             </div>
 
-            <Modal isOpen={deleteTarget !== null} onClose={() => setDeleteTarget(null)} variant="small">
-                <ModalHeader title="Delete MCP Server" />
-                <ModalBody>
-                    Delete this MCP server?
-                </ModalBody>
-                <ModalFooter>
-                    <Button variant="danger" onClick={confirmDelete}>
-                        Delete
-                    </Button>
-                    <Button variant="link" onClick={() => setDeleteTarget(null)}>
-                        Cancel
-                    </Button>
-                </ModalFooter>
-            </Modal>
+            <ConfirmDeleteModal isOpen={deleteTarget !== null} title="Delete MCP Server"
+                onConfirm={confirmDelete} onCancel={() => setDeleteTarget(null)}>
+                Delete this MCP server?
+            </ConfirmDeleteModal>
 
             <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} variant="medium">
                 <ModalHeader title="Add MCP Server" />

@@ -25,6 +25,7 @@ import {
     createToolset,
     deleteToolset,
 } from "../config/api";
+import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 export function ToolsetsPage() {
     const navigate = useNavigate();
@@ -115,20 +116,10 @@ export function ToolsetsPage() {
                 )}
             </div>
 
-            <Modal isOpen={deleteTarget !== null} onClose={() => setDeleteTarget(null)} variant="small">
-                <ModalHeader title="Delete Toolset" />
-                <ModalBody>
-                    Delete this toolset?
-                </ModalBody>
-                <ModalFooter>
-                    <Button variant="danger" onClick={confirmDelete}>
-                        Delete
-                    </Button>
-                    <Button variant="link" onClick={() => setDeleteTarget(null)}>
-                        Cancel
-                    </Button>
-                </ModalFooter>
-            </Modal>
+            <ConfirmDeleteModal isOpen={deleteTarget !== null} title="Delete Toolset"
+                onConfirm={confirmDelete} onCancel={() => setDeleteTarget(null)}>
+                Delete this toolset?
+            </ConfirmDeleteModal>
 
             <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} variant="medium">
                 <ModalHeader title="Add Toolset" />
