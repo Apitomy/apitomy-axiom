@@ -443,3 +443,82 @@ template and tools. No event sources, projects, or actors are required.
 **Event-driven automation** uses the full pipeline — event sources feed events to the
 Manager, which creates projects and assigns tasks to actors using action types. The
 action types determine what tools and prompts the actors use.
+
+---
+
+## Traces
+
+A **Trace** is a hierarchical record of every step that occurred during a single pipeline
+run or report generation. While the [Activity Log](logging-and-debugging.md) shows a flat
+timeline of events across all runs, a trace shows the *tree structure* of one run — which
+steps led to which, how long each took, and whether each succeeded or failed.
+
+### When Traces Are Created
+
+Axiom creates a trace automatically whenever it processes an event or generates a report:
+
+| Trace Type | Trigger | Root Node |
+|------------|---------|-----------|
+| `event-pipeline` | An event is dequeued for processing | `event-ingested` |
+| `report-generation` | A report definition runs (scheduled or ad hoc) | `report-triggered` |
+
+Each trace has a status (`in-progress`, `completed`, or `failed`), timestamps, and a
+human-readable summary. Traces with asynchronous tasks (e.g. AI agent execution) remain
+`in-progress` until all tasks complete.
+
+### Trace Nodes
+
+Each step in the pipeline creates a **trace node** — a lightweight breadcrumb that
+records what happened at that point. Nodes form a parent-child tree: the root node is the
+trigger (event received or report triggered), and child nodes represent subsequent steps
+like manager evaluation, decision processing, task creation, and tool execution.
+
+Every node has:
+
+- **Node type** — identifies the kind of step
+- **Status** — `in-progress`, `completed`, or `failed`
+- **Summary** — a brief description of what happened
+- **Duration** — how long the step took (calculated at completion)
+- **Entity reference** — a pointer to a more detailed record elsewhere in the system
+  (an activity log entry, a task, an event, a tool execution record, etc.)
+
+The entity reference pattern keeps trace nodes small and fast to query. When you click a
+node in the UI, the detail is fetched from the referenced entity on demand.
+
+### Node Types
+
+| Node Type | Meaning | Appears In |
+|-----------|---------|------------|
+| `event-ingested` | An event was received and processing began | Event pipeline (root) |
+| `manager-evaluation` | The AI Manager was invoked to triage the event | Event pipeline |
+| `decision-processed` | A single decision from the Manager was executed | Event pipeline |
+| `task` | A task was created and assigned to an actor | Event pipeline |
+| `tool-execution` | An MCP tool was invoked during task or report execution | Both |
+| `escalation` | The Manager escalated a decision for human review | Event pipeline |
+| `event-ignored` | The Manager decided to ignore the event | Event pipeline |
+| `report-triggered` | A report generation was triggered | Report (root) |
+| `report-ai-invoked` | The AI agent was launched to generate the report | Report |
+
+### Tool Call Tracing
+
+When Axiom launches an AI agent to execute a task or generate a report, it passes trace
+correlation data to the subprocess via environment variables (`AXIOM_TRACE_ID` and
+`AXIOM_PARENT_NODE_ID`). MCP tool servers that Axiom generates for the agent read these
+variables and call back to Axiom's API to register each tool invocation as a trace node.
+This creates a detailed record of every tool the agent called, including the full JSON
+input and output.
+
+Tool call tracing is non-intrusive — if the callback fails, the tool execution continues
+normally. Tracing never interrupts the agent's work.
+
+### Viewing Traces
+
+Traces are accessible from several places in the UI:
+
+- **Logs > Traces** — browse and filter all traces
+- **Events page** — click **View Trace** on an event row to jump to its pipeline trace
+- **Report detail page** — click **View Execution Trace** to see the report's trace
+
+The trace detail page renders the node tree as an interactive tree. Click any
+node to view its full detail, including referenced entity data. See
+[Logging and Debugging](logging-and-debugging.md) for a full guide to reading traces.

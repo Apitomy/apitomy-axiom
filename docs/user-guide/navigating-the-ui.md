@@ -82,8 +82,23 @@ activity:
 | **Events** | Raw events received from event sources (GitHub issues, PRs, comments) |
 | **Manager Decisions** | The AI Manager's triage results — what action it chose for each event and its confidence score |
 | **Tasks** | Task execution history — which actor ran what action type, duration, cost, and outcome |
+| **Traces** | Visual graph of pipeline execution — shows every step from event ingestion through manager evaluation, decision processing, and task execution |
 
 Each log page supports filtering and pagination.
+
+The **Traces** page deserves special mention. While the other log pages show tabular data,
+traces render as an interactive directed graph. Each node in the graph represents a step
+in the pipeline (event received, manager evaluated, task created, tool executed, etc.).
+Nodes are color-coded by status — green for completed, blue for in-progress, red for
+failed. Click any node to open a detail modal showing the full data for that step,
+including tool input/output for tool executions and AI reasoning for manager evaluations.
+
+You can also navigate to a trace directly from:
+
+- An **event row** on the Events page — click **View Trace** to see the full pipeline
+  trace for that event
+- A **report detail page** — click **View Execution Trace** to see the report generation
+  trace
 
 ### Metrics
 

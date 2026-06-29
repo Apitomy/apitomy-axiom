@@ -211,6 +211,32 @@ Configuration objects use builders for clean, immutable construction:
 Actor execution and engine invocations return `CompletableFuture`, keeping the
 scheduled pollers non-blocking.
 
+### Tracing
+
+Every event pipeline run and report generation produces a **trace** — a tree of
+lightweight nodes recording each step. The tracing subsystem follows several key
+design principles:
+
+- **`TraceService` lives in `core`** — both the `app` module (PipelineOrchestrator,
+  TaskExecutionService) and the `manager` module (ManagerService) inject it directly,
+  avoiding circular dependencies
+- **Stack-based context** — `TraceContext` maintains a mutable node stack. Call
+  `push(nodeId)` when descending into a child scope and `pop()` when returning. The
+  current top of the stack is the parent for new nodes.
+- **Independent transactions** — all trace writes use
+  `QuarkusTransaction.requiringNew()`, so trace data persists even if the caller's
+  transaction rolls back
+- **Non-fatal** — all trace operations are wrapped in try/catch. Tracing failures never
+  interrupt the main pipeline
+- **SSE broadcast** — every trace mutation fires `SseEvent.traceUpdated(traceId)` for
+  real-time UI updates
+- **UUID primary key** — `TraceEntity` uses a UUID PK (the only entity in the project
+  to do so). The trace ID doubles as the correlation identifier threaded through
+  environment variables and API callbacks.
+
+See the [Tracing](tracing.md) developer guide for the full data model, service API, and
+REST endpoint reference.
+
 ### Scheduled Pollers
 
 All background processing uses Quarkus `@Scheduled` with
