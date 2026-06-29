@@ -7,10 +7,6 @@ import {
     EmptyStateFooter,
     EmptyStateActions,
     Label,
-    Modal,
-    ModalBody,
-    ModalFooter,
-    ModalHeader,
     PageSection,
     Pagination,
     Title,
@@ -29,6 +25,7 @@ import {
     FilterChips,
 } from "@apitomy/common-ui-components";
 import { type Report, fetchReports, deleteReport } from "../config/api";
+import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 const STATUS_COLORS: Record<string, "blue" | "green" | "grey" | "red"> = {
     Pending: "blue",
@@ -264,16 +261,10 @@ export function ReportsPage() {
                 )}
             </div>
 
-            <Modal isOpen={deleteTarget !== null} onClose={() => setDeleteTarget(null)} variant="small">
-                <ModalHeader title="Delete Report" />
-                <ModalBody>
-                    Are you sure you want to delete this report? This action cannot be undone.
-                </ModalBody>
-                <ModalFooter>
-                    <Button variant="danger" onClick={confirmDelete}>Delete</Button>
-                    <Button variant="link" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-                </ModalFooter>
-            </Modal>
+            <ConfirmDeleteModal isOpen={deleteTarget !== null} title="Delete Report"
+                onConfirm={confirmDelete} onCancel={() => setDeleteTarget(null)}>
+                Are you sure you want to delete this report? This action cannot be undone.
+            </ConfirmDeleteModal>
         </PageSection>
     );
 }

@@ -30,6 +30,7 @@ import EyeIcon from "@patternfly/react-icons/dist/esm/icons/eye-icon";
 import EyeSlashIcon from "@patternfly/react-icons/dist/esm/icons/eye-slash-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import { ColoredLabel } from "../components/ColoredLabel";
+import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import CodeBranchIcon from "@patternfly/react-icons/dist/esm/icons/code-branch-icon";
 import BugIcon from "@patternfly/react-icons/dist/esm/icons/bug-icon";
 import GithubIcon from "@patternfly/react-icons/dist/esm/icons/github-icon";
@@ -441,17 +442,11 @@ export function ProjectsPage() {
                 </ModalFooter>
             </Modal>
 
-            <Modal isOpen={deleteTarget !== null} onClose={() => setDeleteTarget(null)} variant="small">
-                <ModalHeader title="Delete Project" />
-                <ModalBody>
-                    Delete this project and all its data? This will remove all tasks,
-                    activity, thread entries, and workspace files. This cannot be undone.
-                </ModalBody>
-                <ModalFooter>
-                    <Button variant="danger" onClick={confirmDelete}>Delete</Button>
-                    <Button variant="link" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-                </ModalFooter>
-            </Modal>
+            <ConfirmDeleteModal isOpen={deleteTarget !== null} title="Delete Project"
+                onConfirm={confirmDelete} onCancel={() => setDeleteTarget(null)}>
+                Delete this project and all its data? This will remove all tasks,
+                activity, thread entries, and workspace files. This cannot be undone.
+            </ConfirmDeleteModal>
         </PageSection>
     );
 }

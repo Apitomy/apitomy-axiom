@@ -36,6 +36,7 @@ import {
     updateEventSource,
     deleteEventSource,
 } from "../config/api";
+import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 export function EventSourcesPage() {
     const navigate = useNavigate();
@@ -219,20 +220,10 @@ export function EventSourcesPage() {
                 )}
             </div>
 
-            <Modal isOpen={deleteTarget !== null} onClose={() => setDeleteTarget(null)} variant="small">
-                <ModalHeader title="Delete Event Source" />
-                <ModalBody>
-                    Delete this event source?
-                </ModalBody>
-                <ModalFooter>
-                    <Button variant="danger" onClick={confirmDelete}>
-                        Delete
-                    </Button>
-                    <Button variant="link" onClick={() => setDeleteTarget(null)}>
-                        Cancel
-                    </Button>
-                </ModalFooter>
-            </Modal>
+            <ConfirmDeleteModal isOpen={deleteTarget !== null} title="Delete Event Source"
+                onConfirm={confirmDelete} onCancel={() => setDeleteTarget(null)}>
+                Delete this event source?
+            </ConfirmDeleteModal>
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} variant="medium">
                 <ModalHeader title={editing ? "Edit Event Source" : "Add Event Source"} />

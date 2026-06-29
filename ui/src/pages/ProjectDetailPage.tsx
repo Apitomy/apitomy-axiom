@@ -67,6 +67,7 @@ import {
 import { EditLabelsModal } from "../components/EditLabelsModal";
 import { LabelDisplay } from "../components/LabelDisplay";
 import { ExecutionLogModal } from "../components/ExecutionLogModal";
+import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 const STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
     Created: "blue",
@@ -402,21 +403,16 @@ export function ProjectDetailPage() {
                 </ModalFooter>
             </Modal>
 
-            <Modal isOpen={isDeleteOpen} onClose={() => setIsDeleteOpen(false)} variant="small">
-                <ModalHeader title="Delete Project" />
-                <ModalBody>
-                    Delete this project and all its data? This will remove all tasks,
-                    activity, thread entries, and workspace files. This cannot be undone.
-                </ModalBody>
-                <ModalFooter>
-                    <Button variant="danger" onClick={() => {
-                        deleteProject(id)
-                            .then(() => navigate("/projects"))
-                            .catch(console.error);
-                    }}>Delete</Button>
-                    <Button variant="link" onClick={() => setIsDeleteOpen(false)}>Cancel</Button>
-                </ModalFooter>
-            </Modal>
+            <ConfirmDeleteModal isOpen={isDeleteOpen} title="Delete Project"
+                onConfirm={() => {
+                    deleteProject(id)
+                        .then(() => navigate("/projects"))
+                        .catch(console.error);
+                }}
+                onCancel={() => setIsDeleteOpen(false)}>
+                Delete this project and all its data? This will remove all tasks,
+                activity, thread entries, and workspace files. This cannot be undone.
+            </ConfirmDeleteModal>
 
             <EditLabelsModal
                 isOpen={isLabelsOpen}

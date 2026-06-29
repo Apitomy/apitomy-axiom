@@ -5,10 +5,6 @@ import {
     EmptyState,
     EmptyStateBody,
     Label,
-    Modal,
-    ModalBody,
-    ModalFooter,
-    ModalHeader,
     PageSection,
     Pagination,
     Title,
@@ -27,6 +23,7 @@ import {
 } from "@apitomy/common-ui-components";
 import { type Task, fetchAllTasks, cancelTask } from "../config/api";
 import { ExecutionLogModal } from "../components/ExecutionLogModal";
+import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 const STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
     Pending: "blue",
@@ -266,20 +263,11 @@ export function TasksPage() {
                 onClose={() => setIsLogModalOpen(false)}
             />
 
-            <Modal isOpen={cancelTarget !== null} onClose={() => setCancelTarget(null)} variant="small">
-                <ModalHeader title="Cancel Task" />
-                <ModalBody>
-                    {cancelTarget && `Cancel task #${cancelTarget.id} (${cancelTarget.actionType})?`}
-                </ModalBody>
-                <ModalFooter>
-                    <Button variant="danger" onClick={confirmCancel}>
-                        Cancel Task
-                    </Button>
-                    <Button variant="link" onClick={() => setCancelTarget(null)}>
-                        Cancel
-                    </Button>
-                </ModalFooter>
-            </Modal>
+            <ConfirmDeleteModal isOpen={cancelTarget !== null} title="Cancel Task"
+                onConfirm={confirmCancel} onCancel={() => setCancelTarget(null)}
+                confirmLabel="Cancel Task">
+                {cancelTarget && `Cancel task #${cancelTarget.id} (${cancelTarget.actionType})?`}
+            </ConfirmDeleteModal>
         </PageSection>
     );
 }

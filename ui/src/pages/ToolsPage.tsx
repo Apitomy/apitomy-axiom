@@ -38,6 +38,7 @@ import {
     createTool,
     deleteTool,
 } from "../config/api";
+import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "name", label: "Name", testId: "tool-filter-name" },
@@ -244,20 +245,10 @@ export function ToolsPage() {
                 )}
             </div>
 
-            <Modal isOpen={deleteTarget !== null} onClose={() => setDeleteTarget(null)} variant="small">
-                <ModalHeader title="Delete Tool" />
-                <ModalBody>
-                    Delete this tool?
-                </ModalBody>
-                <ModalFooter>
-                    <Button variant="danger" onClick={confirmDelete}>
-                        Delete
-                    </Button>
-                    <Button variant="link" onClick={() => setDeleteTarget(null)}>
-                        Cancel
-                    </Button>
-                </ModalFooter>
-            </Modal>
+            <ConfirmDeleteModal isOpen={deleteTarget !== null} title="Delete Tool"
+                onConfirm={confirmDelete} onCancel={() => setDeleteTarget(null)}>
+                Delete this tool?
+            </ConfirmDeleteModal>
 
             <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} variant="small">
                 <ModalHeader title="Create Tool" />
