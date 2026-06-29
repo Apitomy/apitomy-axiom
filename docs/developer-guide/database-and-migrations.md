@@ -55,6 +55,9 @@ record pattern.
 | `ActivityLogEntity` | Unified activity log entries |
 | `ThreadEntryEntity` | Chronological project thread entries |
 | `EventSourceLogEntity` | Per-poll-cycle log for event sources |
+| `TraceEntity` | Root trace record (UUID PK) — one per pipeline run or report generation |
+| `TraceNodeEntity` | A step/span in a trace tree — references a detail entity via `entityType` + `entityId` |
+| `ToolExecutionEntity` | Detailed MCP tool invocation record — stores full JSON input and output |
 
 ### Active Record Pattern
 

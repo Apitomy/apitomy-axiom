@@ -57,6 +57,7 @@ nav:
     - How to Contribute: developer-guide/how-to-contribute.md
     - API-First Development: developer-guide/api-first-development.md
     - Database & Migrations: developer-guide/database-and-migrations.md
+    - Tracing: developer-guide/tracing.md
     - UI Development: developer-guide/ui-development.md
     - Extending Axiom: developer-guide/extending-axiom.md
 

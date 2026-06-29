@@ -39,6 +39,8 @@ the pipeline things went wrong and examining the logs at that stage.
 | Task completed but result is wrong | Project detail page > Tasks tab > **View Log** |
 | Report failed | Report detail page > **View Log** |
 | Report content is wrong or incomplete | Report detail page > **View Log** — check tool output |
+| Want to see the full pipeline tree for one event | **Logs > Traces** or click **View Trace** on an event row |
+| Want to see what tools a report agent called | Report detail page > **View Execution Trace** |
 | Don't know where to start | **Logs > All Activity** — scan the timeline |
 
 ---
@@ -246,6 +248,83 @@ number of AI invocations, and input/output token counts.
 
 ---
 
+## Using Traces
+
+While the activity log, events page, and task log each show one dimension of what
+happened, a **trace** shows the complete tree structure of a single pipeline run or
+report generation. Traces answer the question: "What exactly happened, in what order,
+and how long did each step take?"
+
+### When to Use Traces vs. the Activity Log
+
+- Use the **Activity Log** when you want a timeline view across multiple events and
+  projects — "what has the system been doing?"
+- Use a **Trace** when you want to drill into one specific event or report — "what
+  happened step by step when this event was processed?"
+
+### Accessing Traces
+
+There are three ways to view a trace:
+
+1. **Logs > Traces** — browse all traces with filtering by trace type
+   (`event-pipeline` or `report-generation`), status, event ID, project ID, or report ID
+2. **Events page** — click **View Trace** on any event row that has been processed
+3. **Report detail page** — click **View Execution Trace** on a completed or failed
+   report
+
+### Reading the Trace Graph
+
+The trace detail page renders the node tree as a left-to-right directed graph:
+
+- **Nodes** represent pipeline steps — each shows an icon, a status label, a summary,
+  and timing information
+- **Edges** connect parent nodes to their children, showing the execution flow
+
+#### Node Colors
+
+| Color | Status |
+|-------|--------|
+| Green | `completed` / `success` — the step finished successfully |
+| Blue | `in-progress` — the step is still running |
+| Red | `failed` / `failure` — the step encountered an error |
+| Orange | `escalation` — the Manager escalated a decision for human review |
+| Grey | `skipped` — the step was skipped |
+
+Edges to failed nodes are drawn in red. Edges to in-progress nodes are animated.
+
+#### Node Icons
+
+Each node type has a distinctive icon to help you quickly identify what kind of step it
+represents — event received, manager evaluation, task creation, tool execution, etc.
+
+### Viewing Node Details
+
+Click any node in the graph to open a detail modal. The content of the modal depends on
+the node's entity type:
+
+| Entity Type | What the Modal Shows |
+|-------------|---------------------|
+| `event` | The raw event payload JSON |
+| `activity-log` | The activity log entry — type, summary, and execution log (if available) |
+| `task` | Task details — action type, actor, status, and execution output |
+| `tool-execution` | The MCP tool name, full JSON input, and full JSON output |
+| `ai-usage` | Token counts, cost, and model information |
+| `report` | Report metadata and content |
+
+The tool execution detail is especially useful for debugging — you can see exactly what
+data each tool received and returned.
+
+### Real-Time Updates
+
+When a trace is still in progress, the graph updates automatically as new nodes are
+added. You don't need to refresh the page — the UI receives server-sent events (SSE)
+and re-renders the graph when the trace changes.
+
+You can also click the **Refresh** button in the page header to manually reload the
+trace.
+
+---
+
 ## Debugging Checklist
 
 When something isn't working, work through the pipeline in order:
@@ -265,3 +344,9 @@ When something isn't working, work through the pipeline in order:
 8. **Were secrets available?** If a tool needs API credentials, verify the secret exists
    under **Configuration > Secrets** and the action type's environment is configured
    correctly.
+
+!!! tip "Use a Trace for the Full Picture"
+    For any event or report, clicking **View Trace** gives you the entire pipeline tree
+    in one view — every step, every tool call, every decision. This is often faster than
+    checking each log page individually, especially when you need to understand the
+    relationship between steps.
