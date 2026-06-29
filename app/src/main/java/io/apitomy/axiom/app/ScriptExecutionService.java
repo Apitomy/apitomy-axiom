@@ -60,12 +60,26 @@ public class ScriptExecutionService {
      * @param task the task whose action type defines the script to run
      */
     public void executeScript(TaskEntity task) {
+        executeScript(task, null);
+    }
+
+    /**
+     * Executes the script for a task asynchronously, using the supplied project
+     * for template variable resolution. If {@code project} is {@code null}, the
+     * project is loaded from the database — callers that already hold a managed
+     * entity (e.g. inside an uncommitted transaction) should pass it directly to
+     * avoid a race between the async thread and the transaction commit.
+     *
+     * @param task    the task whose action type defines the script to run
+     * @param project the project to use for placeholder substitution, or {@code null}
+     */
+    public void executeScript(TaskEntity task, ProjectEntity project) {
         markTaskInProgress(task.id);
 
         CompletableFuture.runAsync(() -> {
             Arc.container().requestContext().activate();
             try {
-                RunResult result = runScript(task);
+                RunResult result = runScript(task, project);
                 completeTask(task.id, result.output, result.exitCode == 0,
                         result.executionLog);
             } catch (Exception e) {
@@ -77,7 +91,8 @@ public class ScriptExecutionService {
         });
     }
 
-    private RunResult runScript(TaskEntity task) throws IOException, InterruptedException {
+    private RunResult runScript(TaskEntity task, ProjectEntity project)
+            throws IOException, InterruptedException {
         ActionTypeEntity actionType = ActionTypeEntity.find("name", task.actionType).firstResult();
         if (actionType == null || actionType.scriptTemplate == null
                 || actionType.scriptTemplate.isBlank()) {
@@ -86,7 +101,9 @@ public class ScriptExecutionService {
                     null);
         }
 
-        ProjectEntity project = ProjectEntity.findById(task.projectId);
+        if (project == null) {
+            project = ProjectEntity.findById(task.projectId);
+        }
         String script = substitutePlaceholders(actionType.scriptTemplate, task, project);
         Instant startTime = Instant.now();
 

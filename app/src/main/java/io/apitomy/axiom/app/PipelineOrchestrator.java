@@ -409,7 +409,7 @@ public class PipelineOrchestrator {
         sseEvents.fire(SseEvent.projectUpdated(project.id));
         sseEvents.fire(SseEvent.threadEntry(project.id));
 
-        scriptExecutionService.executeScript(task);
+        scriptExecutionService.executeScript(task, project);
 
         return decisionLog.id;
     }
