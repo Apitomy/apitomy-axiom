@@ -274,7 +274,7 @@ There are three ways to view a trace:
 
 ### Reading the Trace Graph
 
-The trace detail page renders the node tree as a left-to-right directed graph:
+The trace detail page renders the node tree as a left-to-right interactive tree:
 
 - **Nodes** represent pipeline steps — each shows an icon, a status label, a summary,
   and timing information
@@ -289,6 +289,12 @@ The trace detail page renders the node tree as a left-to-right directed graph:
 | Red | `failed` / `failure` — the step encountered an error |
 | Orange | `escalation` — the Manager escalated a decision for human review |
 | Grey | `skipped` — the step was skipped |
+
+!!! note
+    Colors are determined by a combination of node status and node type. The data model
+    defines three statuses (`in-progress`, `completed`, `failed`), but the UI uses node
+    type to apply additional colors — for example, `escalation` nodes are rendered in
+    orange and `event-ignored` nodes in grey, regardless of their underlying status.
 
 Edges to failed nodes are drawn in red. Edges to in-progress nodes are animated.
 

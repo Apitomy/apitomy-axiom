@@ -519,6 +519,6 @@ Traces are accessible from several places in the UI:
 - **Events page** — click **View Trace** on an event row to jump to its pipeline trace
 - **Report detail page** — click **View Execution Trace** to see the report's trace
 
-The trace detail page renders the node tree as an interactive directed graph. Click any
+The trace detail page renders the node tree as an interactive tree. Click any
 node to view its full detail, including referenced entity data. See
 [Logging and Debugging](logging-and-debugging.md) for a full guide to reading traces.

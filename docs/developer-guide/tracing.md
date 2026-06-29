@@ -1,7 +1,7 @@
 # Tracing
 
 Axiom's tracing subsystem records a hierarchical tree of every step that occurs during
-an event pipeline run or report generation. Each trace is a directed graph of lightweight
+an event pipeline run or report generation. Each trace is a tree of lightweight
 **trace nodes** that reference more detailed records elsewhere in the system, keeping
 nodes small and fast to query while providing full drill-down capability.
 
@@ -266,6 +266,26 @@ Returns a paginated list of traces with optional filtering.
   "limit": 20
 }
 ```
+
+### Convenience: List Traces by Entity
+
+The API also provides convenience endpoints that return traces for a specific event,
+project, or report. These return a JSON array of `Trace` objects (not paginated).
+
+```
+GET /api/v1/events/{eventId}/traces
+GET /api/v1/projects/{projectId}/traces
+GET /api/v1/reports/{reportId}/traces
+```
+
+| Endpoint | Path Parameter | Description |
+|----------|----------------|-------------|
+| `GET /events/{eventId}/traces` | `eventId` (integer) | All traces associated with the given event |
+| `GET /projects/{projectId}/traces` | `projectId` (integer) | All traces associated with the given project |
+| `GET /reports/{reportId}/traces` | `reportId` (integer) | All traces associated with the given report |
+
+These are equivalent to calling `GET /traces` with the corresponding filter parameter,
+but are more convenient when you already have the entity ID.
 
 ### Get Trace Detail
 
