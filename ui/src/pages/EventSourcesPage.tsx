@@ -24,8 +24,7 @@ import {
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
-import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
-import MinusCircleIcon from "@patternfly/react-icons/dist/esm/icons/minus-circle-icon";
+import { BooleanStatusIcon } from "../components/BooleanStatusIcon";
 import {
     type EventSource,
     type NewEventSource,
@@ -201,11 +200,7 @@ export function EventSourcesPage() {
                                     <Td>{s.name}</Td>
                                     <Td>{s.sourceType}</Td>
                                     <Td><code>{describeSource(s)}</code></Td>
-                                    <Td>
-                                        {s.enabled
-                                            ? <CheckCircleIcon color="var(--pf-t--global--color--status--success--default)" />
-                                            : <MinusCircleIcon color="var(--pf-t--global--icon--color--disabled)" />}
-                                    </Td>
+                                    <Td><BooleanStatusIcon value={s.enabled} /></Td>
                                     <Td>{s.pollInterval != null ? `${s.pollInterval}s` : "—"}</Td>
                                     <Td>
                                         <Button variant="plain" size="sm" style={{ padding: 0 }}
