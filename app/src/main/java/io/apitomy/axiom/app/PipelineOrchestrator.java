@@ -283,6 +283,8 @@ public class PipelineOrchestrator {
         task.createdBy = "manager";
         task.status = "Pending";
         task.input = decision.inputContext();
+        task.humanContext = decision.humanContext();
+        task.outputSchema = decision.outputSchema();
         task.createdOn = Instant.now();
         if (traceCtx != null) {
             task.traceId = traceCtx.traceId();
@@ -366,6 +368,8 @@ public class PipelineOrchestrator {
         task.createdBy = "manager";
         task.status = "Pending";
         task.input = decision.inputContext();
+        task.humanContext = decision.humanContext();
+        task.outputSchema = decision.outputSchema();
         task.createdOn = Instant.now();
         if (traceCtx != null) {
             task.traceId = traceCtx.traceId();

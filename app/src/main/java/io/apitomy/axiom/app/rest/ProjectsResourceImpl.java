@@ -525,6 +525,8 @@ public class ProjectsResourceImpl implements ProjectsResource {
         if (entity.traceId != null) {
             task.setTraceId(entity.traceId);
         }
+        task.setHumanContext(entity.humanContext);
+        task.setOutputSchema(entity.outputSchema);
         return task;
     }
 

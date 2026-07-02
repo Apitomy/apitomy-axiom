@@ -38,6 +38,7 @@ import { AssistantPage } from "./pages/AssistantPage";
 import { AssistantSessionPage } from "./pages/AssistantSessionPage";
 import { TracesPage } from "./pages/TracesPage";
 import { TraceDetailPage } from "./pages/TraceDetailPage";
+import { InboxPage } from "./pages/InboxPage";
 import { type StartupCheck, fetchSystemHealth, fetchSystemConfig } from "./config/api";
 import { sseClient } from "./config/sse";
 
@@ -86,6 +87,7 @@ export function App() {
             ) : (
                 <Routes>
                     <Route path="/" element={<DashboardPage />} />
+                    <Route path="/inbox" element={<InboxPage />} />
                     <Route path="/projects" element={<ProjectsPage />} />
                     <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
                     <Route path="/engine" element={<EngineSettingsPage />} />

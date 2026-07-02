@@ -77,7 +77,7 @@ class PipelineOrchestratorTest {
 
         ManagerDecision decision = new ManagerDecision(
                 "create_task", "analyze", null,
-                "Analyze this new issue", 0.9, "New issue needs analysis");
+                "Analyze this new issue", 0.9, "New issue needs analysis", null, null);
         when(managerService.evaluate(any(), any())).thenReturn(List.of(decision));
 
         orchestrator.processEvent(queueEntry);
@@ -117,7 +117,7 @@ class PipelineOrchestratorTest {
 
         ManagerDecision decision = new ManagerDecision(
                 "create_task", "answer-question", null,
-                "Answer the user's question", 0.85, "User asked a question");
+                "Answer the user's question", 0.85, "User asked a question", null, null);
         when(managerService.evaluate(any(), any())).thenReturn(List.of(decision));
 
         orchestrator.processEvent(queueEntry);
@@ -141,7 +141,7 @@ class PipelineOrchestratorTest {
 
         ManagerDecision decision = new ManagerDecision(
                 "create_task", "review", null,
-                "Review this PR", 0.9, "New PR needs review");
+                "Review this PR", 0.9, "New PR needs review", null, null);
         when(managerService.evaluate(any(), any())).thenReturn(List.of(decision));
 
         orchestrator.processEvent(queueEntry);
@@ -161,7 +161,7 @@ class PipelineOrchestratorTest {
 
         ManagerDecision decision = new ManagerDecision(
                 "create_task", "analyze", null,
-                "Analyze this", 0.9, "Needs analysis");
+                "Analyze this", 0.9, "Needs analysis", null, null);
         when(managerService.evaluate(any(), any())).thenReturn(List.of(decision));
 
         orchestrator.processEvent(queueEntry);
@@ -180,9 +180,9 @@ class PipelineOrchestratorTest {
 
         List<ManagerDecision> decisions = List.of(
                 new ManagerDecision("create_task", "auto-tag", null,
-                        "Tag this issue", 0.95, "New issue should be tagged"),
+                        "Tag this issue", 0.95, "New issue should be tagged", null, null),
                 new ManagerDecision("create_task", "analyze", null,
-                        "Analyze this issue", 0.88, "New issue needs analysis")
+                        "Analyze this issue", 0.88, "New issue needs analysis", null, null)
         );
         when(managerService.evaluate(any(), any())).thenReturn(decisions);
 
@@ -205,7 +205,7 @@ class PipelineOrchestratorTest {
                 "{\"action\":\"created\",\"comment\":{\"body\":\"bot message\"}}");
 
         ManagerDecision decision = new ManagerDecision(
-                "ignore", null, null, null, 0.98, "Bot comment, ignoring");
+                "ignore", null, null, null, 0.98, "Bot comment, ignoring", null, null);
         when(managerService.evaluate(any(), any())).thenReturn(List.of(decision));
 
         orchestrator.processEvent(queueEntry);
@@ -234,7 +234,7 @@ class PipelineOrchestratorTest {
                 "{\"action\":\"closed\"}");
 
         ManagerDecision decision = new ManagerDecision(
-                "script_action", "close-project", null, null, 0.9, "Issue closed");
+                "script_action", "close-project", null, null, 0.9, "Issue closed", null, null);
         when(managerService.evaluate(any(), any())).thenReturn(List.of(decision));
 
         orchestrator.processEvent(queueEntry);
@@ -257,7 +257,7 @@ class PipelineOrchestratorTest {
                 "{\"action\":\"reopened\"}");
 
         ManagerDecision decision = new ManagerDecision(
-                "script_action", "reopen-project", null, null, 0.85, "Issue reopened");
+                "script_action", "reopen-project", null, null, 0.85, "Issue reopened", null, null);
         when(managerService.evaluate(any(), any())).thenReturn(List.of(decision));
 
         orchestrator.processEvent(queueEntry);
@@ -276,7 +276,7 @@ class PipelineOrchestratorTest {
                 "{\"action\":\"edited\"}");
 
         ManagerDecision decision = new ManagerDecision(
-                "escalate", null, null, null, 0.4, "Not sure what to do");
+                "escalate", null, null, null, 0.4, "Not sure what to do", null, null);
         when(managerService.evaluate(any(), any())).thenReturn(List.of(decision));
 
         orchestrator.processEvent(queueEntry);
@@ -298,7 +298,7 @@ class PipelineOrchestratorTest {
         // Decision with confidence below threshold (0.7 default)
         ManagerDecision decision = new ManagerDecision(
                 "create_task", "implement", null,
-                "Implement something", 0.3, "Low confidence guess");
+                "Implement something", 0.3, "Low confidence guess", null, null);
         when(managerService.evaluate(any(), any())).thenReturn(List.of(decision));
         when(managerService.meetsConfidenceThreshold(any())).thenReturn(false);
 
@@ -350,7 +350,7 @@ class PipelineOrchestratorTest {
 
         ManagerDecision decision = new ManagerDecision(
                 "create_task", "analyze", null,
-                "Analyze this", 0.95, "Testing activity logging");
+                "Analyze this", 0.95, "Testing activity logging", null, null);
         when(managerService.evaluate(any(), any())).thenReturn(List.of(decision));
 
         orchestrator.processEvent(queueEntry);

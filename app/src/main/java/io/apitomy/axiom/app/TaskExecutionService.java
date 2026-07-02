@@ -389,6 +389,10 @@ public class TaskExecutionService {
             sseEvents.fire(SseEvent.taskUpdated(task.projectId, taskId, "AwaitingInput"));
             sseEvents.fire(SseEvent.projectUpdated(task.projectId));
             sseEvents.fire(SseEvent.threadEntry(task.projectId));
+
+            // Notify inbox subscribers
+            long inboxCount = TaskEntity.count("status", "AwaitingInput");
+            sseEvents.fire(SseEvent.inboxUpdated(taskId, "added", inboxCount));
         }
     }
 
@@ -399,6 +403,7 @@ public class TaskExecutionService {
             return;
         }
 
+        String previousStatus = task.status;
         task.status = result.isSuccess() ? "Completed" : "Failed";
         task.output = result.getOutput();
         task.completedOn = Instant.now();
@@ -439,6 +444,12 @@ public class TaskExecutionService {
         if (!result.isSuccess()) {
             sseEvents.fire(SseEvent.notification(
                     "Task failed: " + task.actionType, "error"));
+        }
+
+        // Notify inbox subscribers if this task was awaiting human input
+        if ("AwaitingInput".equals(previousStatus)) {
+            long inboxCount = TaskEntity.count("status", "AwaitingInput");
+            sseEvents.fire(SseEvent.inboxUpdated(taskId, "removed", inboxCount));
         }
 
         // Complete the trace (async traces are finalized here)

@@ -1,5 +1,7 @@
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
+    Badge,
     Nav,
     NavExpandable,
     NavItem,
@@ -7,12 +9,28 @@ import {
     PageSidebar,
     PageSidebarBody,
 } from "@patternfly/react-core";
+import { fetchInboxCount } from "../config/api";
+import { sseClient, type AxiomSseEvent } from "../config/sse";
 
 const CONFIG_PATHS = ["/actors", "/manager", "/action-types", "/tools", "/toolsets", "/mcp-servers", "/secrets", "/event-sources", "/report-definitions", "/engine", "/configuration-packs"];
 
 export function AppSidebar() {
     const navigate = useNavigate();
     const location = useLocation();
+    const [inboxCount, setInboxCount] = useState(0);
+
+    useEffect(() => {
+        fetchInboxCount()
+            .then((result) => setInboxCount(result.count))
+            .catch(() => setInboxCount(0));
+
+        const unsubscribe = sseClient.subscribe((event: AxiomSseEvent) => {
+            if (event.type === "inbox-updated" && typeof event.data.count === "number") {
+                setInboxCount(event.data.count);
+            }
+        });
+        return unsubscribe;
+    }, []);
 
     const isConfigActive = CONFIG_PATHS.some(
         (p) => location.pathname === p || location.pathname.startsWith(p + "/")
@@ -25,6 +43,12 @@ export function AppSidebar() {
                     <NavList>
                         <NavItem isActive={location.pathname === "/"} onClick={() => navigate("/")}>
                             Dashboard
+                        </NavItem>
+                        <NavItem isActive={location.pathname.startsWith("/inbox")} onClick={() => navigate("/inbox")}>
+                            Inbox{" "}
+                            {inboxCount > 0 && (
+                                <Badge isRead={false}>{inboxCount}</Badge>
+                            )}
                         </NavItem>
                         <NavItem isActive={location.pathname.startsWith("/reports")} onClick={() => navigate("/reports")}>
                             Reports

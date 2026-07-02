@@ -151,13 +151,26 @@ public final class ManagerPromptBuilder {
      * Used with Claude Code's {@code --json-schema} flag.
      */
     public static String getResponseJsonSchema() {
-        return "{\"type\":\"object\",\"required\":[\"decisions\"],\"properties\":{\"decisions\":"
-                + "{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"decision\","
-                + "\"confidence\",\"reasoning\"],\"properties\":{\"decision\":{\"type\":\"string\","
-                + "\"enum\":[\"create_task\",\"ignore\",\"script_action\",\"escalate\"]},"
-                + "\"actionType\":{\"type\":\"string\"},\"actorHint\":{\"type\":\"string\"},"
-                + "\"inputContext\":{\"type\":\"string\"},\"confidence\":{\"type\":\"number\","
-                + "\"minimum\":0,\"maximum\":1},\"reasoning\":{\"type\":\"string\"}}}}}}";
+        return """
+                {"type":"object","required":["decisions"],"properties":{"decisions":\
+                {"type":"array","items":{"type":"object","required":["decision",\
+                "confidence","reasoning"],"properties":{"decision":{"type":"string",\
+                "enum":["create_task","ignore","script_action","escalate"]},\
+                "actionType":{"type":"string"},"actorHint":{"type":"string"},\
+                "inputContext":{"type":"string"},"confidence":{"type":"number",\
+                "minimum":0,"maximum":1},"reasoning":{"type":"string"},\
+                "humanContext":{"type":"object","properties":{"title":{"type":"string"},\
+                "description":{"type":"string"},"references":{"type":"array","items":\
+                {"type":"object","properties":{"label":{"type":"string"},"url":\
+                {"type":"string"}}}}}},\
+                "outputSchema":{"type":"object","properties":{"fields":{"type":"array",\
+                "items":{"type":"object","properties":{"name":{"type":"string"},\
+                "type":{"type":"string","enum":["text","textarea","boolean","select","number"]},\
+                "label":{"type":"string"},"description":{"type":"string"},\
+                "required":{"type":"boolean"},"options":{"type":"array","items":\
+                {"type":"object","properties":{"label":{"type":"string"},"value":\
+                {"type":"string"}}}}}}}}}\
+                }}}}}""";
     }
 
     /**
@@ -175,6 +188,25 @@ public final class ManagerPromptBuilder {
             - **inputContext**: Instructions or context for the actor performing the task
             - **confidence**: 0.0 to 1.0 indicating your confidence
             - **reasoning**: Brief explanation of why you made this decision
+
+            When creating a task for a human actor (actorHint is "human" or the action \
+            type is designated for humans), you should also provide:
+            - **humanContext**: An object with:
+              - **title**: A short, clear title of what you need from the human
+              - **description**: Detailed context about what is being asked and why
+              - **references**: (Optional) array of {label, url} links to relevant resources
+            - **outputSchema**: (Optional) an object with a "fields" array defining the \
+              form fields the human must fill in. Each field has:
+              - **name**: Field identifier (used as the response key)
+              - **type**: One of: text, textarea, boolean, select, number
+              - **label**: Human-readable label displayed in the form
+              - **description**: (Optional) help text for the field
+              - **required**: Whether the field must be filled in
+              - **options**: (For select type only) array of {label, value} choices
+
+            If no outputSchema is provided for a human task, the user will see a \
+            freeform text input. Use outputSchema for structured responses like \
+            approvals, selections, or multi-field forms.
 
             Guidelines:
             - You may return multiple decisions for a single event

@@ -1367,3 +1367,86 @@ export async function fetchReportTraces(reportId: number): Promise<Trace[]> {
     if (!response.ok) throw new Error(`Failed to fetch report traces: ${response.status}`);
     return response.json();
 }
+
+// ── Inbox ────────────────────────────────────────────────────────
+
+export interface HumanContextReference {
+    label: string;
+    url: string;
+}
+
+export interface HumanContext {
+    title: string;
+    description?: string;
+    references?: HumanContextReference[];
+}
+
+export interface OutputSchemaFieldOption {
+    label: string;
+    value: string;
+}
+
+export interface OutputSchemaField {
+    name: string;
+    type: "text" | "textarea" | "boolean" | "select" | "number";
+    label: string;
+    description?: string;
+    required: boolean;
+    defaultValue?: unknown;
+    options?: OutputSchemaFieldOption[];
+}
+
+export interface OutputSchema {
+    fields: OutputSchemaField[];
+}
+
+export interface InboxItem {
+    id: number;
+    projectId: number;
+    projectName?: string;
+    actionType: string;
+    status: string;
+    input?: string;
+    humanContext?: HumanContext;
+    outputSchema?: OutputSchema;
+    createdOn: string;
+    eventId?: number;
+    traceId?: string;
+}
+
+export interface InboxCount {
+    count: number;
+}
+
+export async function fetchInboxItems(page = 1, limit = 20): Promise<SearchResults<InboxItem>> {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(limit));
+    const response = await fetch(`${API}/inbox?${params}`);
+    if (!response.ok) throw new Error(`Failed to fetch inbox items: ${response.status}`);
+    return response.json();
+}
+
+export async function fetchInboxCount(): Promise<InboxCount> {
+    const response = await fetch(`${API}/inbox/count`);
+    if (!response.ok) throw new Error(`Failed to fetch inbox count: ${response.status}`);
+    return response.json();
+}
+
+export async function fetchInboxItem(taskId: number): Promise<InboxItem> {
+    const response = await fetch(`${API}/inbox/${taskId}`);
+    if (!response.ok) throw new Error(`Failed to fetch inbox item: ${response.status}`);
+    return response.json();
+}
+
+export async function completeInboxItem(taskId: number, data: Record<string, unknown>): Promise<void> {
+    const response = await fetch(`${API}/inbox/${taskId}/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Failed to complete inbox item: ${error}`);
+    }
+}

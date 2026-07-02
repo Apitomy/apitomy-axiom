@@ -34,7 +34,19 @@ public record ManagerDecision(
         /**
          * The Manager's reasoning for this decision.
          */
-        String reasoning
+        String reasoning,
+
+        /**
+         * Structured context for human tasks: title, description, reference links.
+         * JSON string conforming to the HumanContext schema. Null for non-human tasks.
+         */
+        String humanContext,
+
+        /**
+         * Schema defining the form fields the human must fill in.
+         * JSON string conforming to the OutputSchema schema. Null means freeform text.
+         */
+        String outputSchema
 ) {
 
     /**
