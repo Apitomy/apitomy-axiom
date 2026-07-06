@@ -3688,6 +3688,44 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "Inbox"
+        ],
+        "summary": "Create a new human task directly in the inbox",
+        "operationId": "createInboxItem",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewInboxItem"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Human task created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxItem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/inbox/count": {
@@ -6345,6 +6383,31 @@
         "description": "Structured response to an inbox item. Keys match the output schema field names.",
         "type": "object",
         "additionalProperties": true
+      },
+      "NewInboxItem": {
+        "required": [
+          "projectId",
+          "actionType",
+          "humanContext"
+        ],
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "format": "int64",
+            "description": "Project to associate the task with",
+            "type": "integer"
+          },
+          "actionType": {
+            "description": "The action type for this human task",
+            "type": "string"
+          },
+          "humanContext": {
+            "$ref": "#/components/schemas/HumanContext"
+          },
+          "outputSchema": {
+            "$ref": "#/components/schemas/OutputSchema"
+          }
+        }
       }
     },
     "responses": {

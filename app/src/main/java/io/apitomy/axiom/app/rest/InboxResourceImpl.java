@@ -10,6 +10,8 @@ import io.apitomy.axiom.api.beans.InboxCount;
 import io.apitomy.axiom.api.beans.InboxItem;
 import io.apitomy.axiom.api.beans.InboxResponse;
 import io.apitomy.axiom.api.beans.InboxSearchResults;
+import io.apitomy.axiom.api.beans.NewInboxItem;
+import io.apitomy.axiom.app.TaskExecutionService;
 import io.apitomy.axiom.api.beans.OutputSchema;
 import io.apitomy.axiom.api.beans.OutputSchemaField;
 import io.apitomy.axiom.api.beans.OutputSchemaFieldOption;
@@ -23,7 +25,10 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.WebApplicationException;
 import org.jboss.logging.Logger;
 
+import jakarta.transaction.Transactional;
+
 import java.math.BigInteger;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -45,6 +50,9 @@ public class InboxResourceImpl implements InboxResource {
 
     @Inject
     InboxResponseValidator responseValidator;
+
+    @Inject
+    TaskExecutionService taskExecutionService;
 
     /**
      * {@inheritDoc}
@@ -93,6 +101,57 @@ public class InboxResourceImpl implements InboxResource {
         InboxCount result = new InboxCount();
         result.setCount(count);
         return result;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    @Transactional
+    public InboxItem createInboxItem(NewInboxItem data) {
+        long projectId = data.getProjectId();
+        ProjectEntity project = ProjectEntity.findById(projectId);
+        if (project == null) {
+            throw new WebApplicationException("Project not found: " + projectId, 404);
+        }
+
+        // Serialize humanContext and outputSchema beans to JSON for storage
+        String humanContextJson = null;
+        if (data.getHumanContext() != null) {
+            try {
+                humanContextJson = objectMapper.writeValueAsString(data.getHumanContext());
+            } catch (Exception e) {
+                throw new WebApplicationException("Invalid humanContext: " + e.getMessage(), 400);
+            }
+        }
+
+        String outputSchemaJson = null;
+        if (data.getOutputSchema() != null) {
+            try {
+                outputSchemaJson = objectMapper.writeValueAsString(data.getOutputSchema());
+            } catch (Exception e) {
+                throw new WebApplicationException("Invalid outputSchema: " + e.getMessage(), 400);
+            }
+        }
+
+        // Create and persist the task entity
+        TaskEntity task = new TaskEntity();
+        task.projectId = projectId;
+        task.actionType = data.getActionType();
+        task.createdBy = "user";
+        task.status = "Pending";
+        task.humanContext = humanContextJson;
+        task.outputSchema = outputSchemaJson;
+        task.createdOn = Instant.now();
+        task.persist();
+
+        LOG.infof("Created direct human task %d (%s) for project %d",
+                task.id, task.actionType, projectId);
+
+        // Register with HumanActor and wire completion callback
+        taskExecutionService.registerDirectHumanTask(task.id);
+
+        return toInboxItem(task, project.name);
     }
 
     /**

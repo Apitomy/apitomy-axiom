@@ -1427,6 +1427,23 @@ export async function fetchInboxItems(page = 1, limit = 20): Promise<SearchResul
     return response.json();
 }
 
+export interface NewInboxItem {
+    projectId: number;
+    actionType: string;
+    humanContext: HumanContext;
+    outputSchema?: OutputSchema;
+}
+
+export async function createInboxItem(data: NewInboxItem): Promise<InboxItem> {
+    const response = await fetch(`${API}/inbox`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(`Failed to create inbox item: ${response.status}`);
+    return response.json();
+}
+
 export async function fetchInboxCount(): Promise<InboxCount> {
     const response = await fetch(`${API}/inbox/count`);
     if (!response.ok) throw new Error(`Failed to fetch inbox count: ${response.status}`);

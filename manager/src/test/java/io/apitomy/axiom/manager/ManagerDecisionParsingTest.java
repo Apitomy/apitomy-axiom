@@ -212,4 +212,92 @@ class ManagerDecisionParsingTest {
         assertNull(d.actorHint());
         assertNull(d.inputContext());
     }
+
+    @Test
+    void testParseHumanContextAndOutputSchema() {
+        String json = """
+                {
+                    "decisions": [
+                        {
+                            "decision": "create_task",
+                            "actionType": "approve-deployment",
+                            "actorHint": "human",
+                            "inputContext": "PR #42 needs deployment approval",
+                            "confidence": 0.95,
+                            "reasoning": "Deployment requires human sign-off",
+                            "humanContext": {
+                                "title": "Approve deployment for auth-service",
+                                "description": "PR #42 changes the authentication flow.",
+                                "references": [
+                                    { "label": "PR #42", "url": "https://github.com/org/repo/pull/42" }
+                                ]
+                            },
+                            "outputSchema": {
+                                "fields": [
+                                    {
+                                        "name": "approved",
+                                        "type": "boolean",
+                                        "label": "Approve?",
+                                        "required": true
+                                    },
+                                    {
+                                        "name": "strategy",
+                                        "type": "select",
+                                        "label": "Strategy",
+                                        "required": true,
+                                        "options": [
+                                            { "label": "Blue-Green", "value": "blue-green" },
+                                            { "label": "Canary", "value": "canary" }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+                """;
+
+        List<ManagerDecision> decisions = service.parseDecisions(json);
+
+        assertEquals(1, decisions.size());
+        ManagerDecision d = decisions.getFirst();
+        assertTrue(d.isCreateTask());
+        assertEquals("human", d.actorHint());
+
+        // humanContext should be a JSON string
+        assertNotNull(d.humanContext());
+        assertTrue(d.humanContext().contains("Approve deployment for auth-service"));
+        assertTrue(d.humanContext().contains("PR #42"));
+
+        // outputSchema should be a JSON string
+        assertNotNull(d.outputSchema());
+        assertTrue(d.outputSchema().contains("approved"));
+        assertTrue(d.outputSchema().contains("boolean"));
+        assertTrue(d.outputSchema().contains("blue-green"));
+    }
+
+    @Test
+    void testParseHumanTaskWithoutOptionalFields() {
+        String json = """
+                {
+                    "decisions": [
+                        {
+                            "decision": "create_task",
+                            "actionType": "review",
+                            "actorHint": "human",
+                            "inputContext": "Review this PR",
+                            "confidence": 0.8,
+                            "reasoning": "Needs human review"
+                        }
+                    ]
+                }
+                """;
+
+        List<ManagerDecision> decisions = service.parseDecisions(json);
+
+        assertEquals(1, decisions.size());
+        ManagerDecision d = decisions.getFirst();
+        assertNull(d.humanContext());
+        assertNull(d.outputSchema());
+    }
 }

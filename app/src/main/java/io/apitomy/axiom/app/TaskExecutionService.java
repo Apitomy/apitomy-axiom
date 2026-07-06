@@ -396,6 +396,39 @@ public class TaskExecutionService {
         }
     }
 
+    /**
+     * Registers a directly-created human task. Sets the task to AwaitingInput,
+     * registers it with the HumanActor, and wires the completion callback.
+     *
+     * @param taskId the persisted task ID
+     */
+    public void registerDirectHumanTask(Long taskId) {
+        TaskEntity task = TaskEntity.findById(taskId);
+        if (task == null) {
+            return;
+        }
+
+        // Find the human actor entity and implementation
+        ActorEntity actorEntity = ActorEntity.find("type", "human").firstResult();
+        Long actorEntityId = actorEntity != null ? actorEntity.id : null;
+        String actorName = actorEntity != null ? actorEntity.name : "Human";
+
+        // Mark the task as awaiting input (sets status, logs activity, fires SSE)
+        markTaskAwaitingInput(taskId, actorEntityId, actorName);
+
+        // Register with the HumanActor and wire completion
+        Actor humanActor = findActorByType("human", null);
+        if (humanActor != null) {
+            humanActor.execute(task, null)
+                    .thenAccept(result -> onTaskCompleted(taskId, result))
+                    .exceptionally(throwable -> {
+                        LOG.errorf(throwable, "Direct human task %d failed unexpectedly", taskId);
+                        failTask(taskId, "Unexpected error: " + throwable.getMessage());
+                        return null;
+                    });
+        }
+    }
+
     @Transactional
     void onTaskCompleted(Long taskId, TaskResult result) {
         TaskEntity task = TaskEntity.findById(taskId);
