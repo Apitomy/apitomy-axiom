@@ -13,7 +13,7 @@ class ManagerDecisionTest {
     void testCreateTaskDecision() {
         ManagerDecision decision = new ManagerDecision(
                 "create_task", "analyze", "claude-agent",
-                "Analyze this issue", 0.9, "New issue needs analysis");
+                "Analyze this issue", 0.9, "New issue needs analysis", null, null);
 
         assertTrue(decision.isCreateTask());
         assertFalse(decision.isIgnore());
@@ -27,7 +27,7 @@ class ManagerDecisionTest {
     @Test
     void testIgnoreDecision() {
         ManagerDecision decision = new ManagerDecision(
-                "ignore", null, null, null, 0.95, "Bot comment, ignoring");
+                "ignore", null, null, null, 0.95, "Bot comment, ignoring", null, null);
 
         assertFalse(decision.isCreateTask());
         assertTrue(decision.isIgnore());
@@ -37,7 +37,7 @@ class ManagerDecisionTest {
     @Test
     void testScriptActionDecision() {
         ManagerDecision decision = new ManagerDecision(
-                "script_action", "close-project", null, null, 0.85, "Issue closed");
+                "script_action", "close-project", null, null, 0.85, "Issue closed", null, null);
 
         assertTrue(decision.isScriptAction());
         assertEquals("close-project", decision.actionType());
@@ -46,7 +46,7 @@ class ManagerDecisionTest {
     @Test
     void testEscalateDecision() {
         ManagerDecision decision = new ManagerDecision(
-                "escalate", null, null, null, 0.3, "Uncertain what to do");
+                "escalate", null, null, null, 0.3, "Uncertain what to do", null, null);
 
         assertTrue(decision.isEscalate());
         assertEquals(0.3, decision.confidence());

@@ -106,6 +106,21 @@ public record SseEvent(
                 "{\"traceId\":\"" + traceId + "\"}");
     }
 
+    /**
+     * Creates an inbox-updated event when a task enters or leaves AwaitingInput.
+     *
+     * @param taskId the task that changed
+     * @param action "added" or "removed"
+     * @param count the current total inbox count
+     * @return a new SSE event
+     */
+    public static SseEvent inboxUpdated(Long taskId, String action, long count) {
+        return new SseEvent("inbox-updated",
+                "{\"taskId\":" + taskId
+                        + ",\"action\":\"" + action + "\""
+                        + ",\"count\":" + count + "}");
+    }
+
     private static String escapeJson(String s) {
         if (s == null) return "";
         return s.replace("\\", "\\\\")

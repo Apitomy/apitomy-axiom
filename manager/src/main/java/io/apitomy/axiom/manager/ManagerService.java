@@ -248,13 +248,19 @@ public class ManagerService {
 
             List<ManagerDecision> decisions = new ArrayList<>();
             for (JsonNode node : decisionsNode) {
+                String humanContext = node.has("humanContext")
+                        ? node.get("humanContext").toString() : null;
+                String outputSchema = node.has("outputSchema")
+                        ? node.get("outputSchema").toString() : null;
                 ManagerDecision decision = new ManagerDecision(
                         node.path("decision").asText("ignore"),
                         node.path("actionType").asText(null),
                         node.path("actorHint").asText(null),
                         node.path("inputContext").asText(null),
                         node.path("confidence").asDouble(0.5),
-                        node.path("reasoning").asText("")
+                        node.path("reasoning").asText(""),
+                        humanContext,
+                        outputSchema
                 );
                 decisions.add(decision);
             }

@@ -3650,6 +3650,198 @@
           }
         }
       ]
+    },
+    "/inbox": {
+      "get": {
+        "tags": [
+          "Inbox"
+        ],
+        "summary": "List inbox items awaiting human input (paginated)",
+        "operationId": "listInboxItems",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of inbox items",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxSearchResults"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Inbox"
+        ],
+        "summary": "Create a new human task directly in the inbox",
+        "operationId": "createInboxItem",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewInboxItem"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Human task created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxItem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/inbox/count": {
+      "get": {
+        "tags": [
+          "Inbox"
+        ],
+        "summary": "Get the count of inbox items awaiting human input",
+        "operationId": "getInboxCount",
+        "responses": {
+          "200": {
+            "description": "Inbox item count",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxCount"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/inbox/{taskId}": {
+      "get": {
+        "tags": [
+          "Inbox"
+        ],
+        "summary": "Get a single inbox item with full detail",
+        "operationId": "getInboxItem",
+        "responses": {
+          "200": {
+            "description": "Inbox item detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxItem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Inbox item not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "taskId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/inbox/{taskId}/complete": {
+      "post": {
+        "tags": [
+          "Inbox"
+        ],
+        "summary": "Submit a structured response to complete an inbox item",
+        "operationId": "completeInboxItem",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InboxResponse"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Inbox item completed successfully"
+          },
+          "400": {
+            "description": "Validation error in response data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Inbox item not found or not awaiting input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "taskId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          }
+        }
+      ]
     }
   },
   "components": {
@@ -3961,6 +4153,14 @@
           },
           "traceId": {
             "format": "uuid",
+            "type": "string"
+          },
+          "humanContext": {
+            "description": "Structured context for human tasks (JSON string)",
+            "type": "string"
+          },
+          "outputSchema": {
+            "description": "Schema defining form fields for human response (JSON string)",
             "type": "string"
           }
         }
@@ -5991,6 +6191,223 @@
             "type": "integer"
           }
         }
+      },
+      "HumanContextReference": {
+        "required": [
+          "label",
+          "url"
+        ],
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "HumanContext": {
+        "required": [
+          "title"
+        ],
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "references": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HumanContextReference"
+            }
+          }
+        }
+      },
+      "OutputSchemaFieldOption": {
+        "required": [
+          "label",
+          "value"
+        ],
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "OutputSchemaField": {
+        "required": [
+          "name",
+          "type",
+          "label",
+          "required"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "text",
+              "textarea",
+              "boolean",
+              "select",
+              "number"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "defaultValue": {},
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OutputSchemaFieldOption"
+            }
+          }
+        }
+      },
+      "OutputSchema": {
+        "required": [
+          "fields"
+        ],
+        "type": "object",
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OutputSchemaField"
+            }
+          }
+        }
+      },
+      "InboxItem": {
+        "required": [
+          "id",
+          "projectId",
+          "actionType",
+          "status",
+          "createdOn"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "projectId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "projectName": {
+            "type": "string"
+          },
+          "actionType": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "input": {
+            "type": "string"
+          },
+          "humanContext": {
+            "$ref": "#/components/schemas/HumanContext"
+          },
+          "outputSchema": {
+            "$ref": "#/components/schemas/OutputSchema"
+          },
+          "createdOn": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "eventId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "traceId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        }
+      },
+      "InboxSearchResults": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InboxItem"
+            }
+          },
+          "totalCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        }
+      },
+      "InboxCount": {
+        "required": [
+          "count"
+        ],
+        "type": "object",
+        "properties": {
+          "count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      },
+      "InboxResponse": {
+        "description": "Structured response to an inbox item. Keys match the output schema field names.",
+        "type": "object",
+        "additionalProperties": true
+      },
+      "NewInboxItem": {
+        "required": [
+          "projectId",
+          "actionType",
+          "humanContext"
+        ],
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "format": "int64",
+            "description": "Project to associate the task with",
+            "type": "integer"
+          },
+          "actionType": {
+            "description": "The action type for this human task",
+            "type": "string"
+          },
+          "humanContext": {
+            "$ref": "#/components/schemas/HumanContext"
+          },
+          "outputSchema": {
+            "$ref": "#/components/schemas/OutputSchema"
+          }
+        }
       }
     },
     "responses": {
@@ -6110,6 +6527,10 @@
     {
       "name": "traces",
       "description": "Activity tracing and execution lineage"
+    },
+    {
+      "name": "Inbox",
+      "description": "Human task inbox operations"
     }
   ]
 }

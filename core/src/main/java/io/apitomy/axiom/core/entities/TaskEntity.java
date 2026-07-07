@@ -52,6 +52,21 @@ public class TaskEntity extends PanacheEntity {
     @Column(name = "session_id")
     public String sessionId;
 
+
+    /**
+     * Structured context for human tasks: title, description, reference links.
+     * Stored as JSON. Null for non-human tasks.
+     */
+    @Column(name = "human_context", columnDefinition = "TEXT")
+    public String humanContext;
+
+    /**
+     * Schema defining the form fields the human must fill in.
+     * Stored as JSON. Null means a freeform text response is expected.
+     */
+    @Column(name = "output_schema", columnDefinition = "TEXT")
+    public String outputSchema;
+
     @Column(name = "execution_log", columnDefinition = "TEXT")
     public String executionLog;
 }
