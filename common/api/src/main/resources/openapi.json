@@ -3842,6 +3842,133 @@
           }
         }
       ]
+    },
+    "/assistant/templates": {
+      "get": {
+        "tags": [
+          "Assistant"
+        ],
+        "summary": "List all session templates",
+        "operationId": "listSessionTemplates",
+        "responses": {
+          "200": {
+            "description": "List of session templates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionTemplateList"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Assistant"
+        ],
+        "summary": "Create a user-defined session template",
+        "operationId": "createSessionTemplate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewSessionTemplate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Template created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionTemplate"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistant/templates/{templateId}": {
+      "get": {
+        "tags": [
+          "Assistant"
+        ],
+        "summary": "Get a session template",
+        "operationId": "getSessionTemplate",
+        "responses": {
+          "200": {
+            "description": "Session template details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionTemplate"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Assistant"
+        ],
+        "summary": "Update a user-defined session template",
+        "operationId": "updateSessionTemplate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewSessionTemplate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Template updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionTemplate"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Cannot modify built-in template"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Assistant"
+        ],
+        "summary": "Delete a user-defined session template",
+        "operationId": "deleteSessionTemplate",
+        "responses": {
+          "204": {
+            "description": "Template deleted"
+          },
+          "403": {
+            "description": "Cannot delete built-in template"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "templateId",
+          "in": "path",
+          "description": "The template identifier",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
     }
   },
   "components": {
@@ -5767,7 +5894,8 @@
           "name",
           "status",
           "createdAt",
-          "lastActivityAt"
+          "lastActivityAt",
+          "templateId"
         ],
         "type": "object",
         "properties": {
@@ -5802,14 +5930,25 @@
           "errorMessage": {
             "description": "Error message if status is error",
             "type": "string"
+          },
+          "templateId": {
+            "description": "Template ID this session was created from",
+            "type": "string"
           }
         }
       },
       "CreateAssistantSessionRequest": {
+        "required": [
+          "templateId"
+        ],
         "type": "object",
         "properties": {
           "name": {
             "description": "Optional session name",
+            "type": "string"
+          },
+          "templateId": {
+            "description": "Template ID to create the session from",
             "type": "string"
           }
         }
@@ -6407,6 +6546,127 @@
           "outputSchema": {
             "$ref": "#/components/schemas/OutputSchema"
           }
+        }
+      },
+      "SessionTemplate": {
+        "required": [
+          "templateId",
+          "name",
+          "description",
+          "systemPrompt"
+        ],
+        "type": "object",
+        "properties": {
+          "templateId": {
+            "description": "Unique template identifier",
+            "type": "string"
+          },
+          "name": {
+            "description": "Display name",
+            "type": "string"
+          },
+          "description": {
+            "description": "Brief description shown in the template picker",
+            "type": "string"
+          },
+          "builtIn": {
+            "description": "Whether this is an immutable built-in template",
+            "type": "boolean"
+          },
+          "systemPrompt": {
+            "description": "Markdown content written to CLAUDE.md",
+            "type": "string"
+          },
+          "welcomeMessage": {
+            "description": "First message shown in the chat UI",
+            "type": "string"
+          },
+          "workingDirectory": {
+            "description": "Optional absolute path for the session working directory",
+            "type": "string"
+          },
+          "mcpServers": {
+            "description": "Names of MCP server configurations to include",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "toolsets": {
+            "description": "Names of toolsets whose tools are auto-approved",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "allowedTools": {
+            "description": "Additional explicit tool patterns for --allowedTools",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "NewSessionTemplate": {
+        "required": [
+          "name",
+          "description",
+          "systemPrompt"
+        ],
+        "type": "object",
+        "properties": {
+          "templateId": {
+            "description": "Optional custom template ID (generated if omitted)",
+            "type": "string"
+          },
+          "name": {
+            "description": "Display name",
+            "type": "string"
+          },
+          "description": {
+            "description": "Brief description",
+            "type": "string"
+          },
+          "systemPrompt": {
+            "description": "Markdown content written to CLAUDE.md",
+            "type": "string"
+          },
+          "welcomeMessage": {
+            "description": "First message shown in the chat UI",
+            "type": "string"
+          },
+          "workingDirectory": {
+            "description": "Optional absolute path for the session working directory",
+            "type": "string"
+          },
+          "mcpServers": {
+            "description": "Names of MCP server configurations to include",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "toolsets": {
+            "description": "Names of toolsets whose tools are auto-approved",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "allowedTools": {
+            "description": "Additional explicit tool patterns for --allowedTools",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "SessionTemplateList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/SessionTemplate"
         }
       }
     },
