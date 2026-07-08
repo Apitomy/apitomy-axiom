@@ -5,32 +5,37 @@ import {
     assistantEventsUrl,
     sendAssistantMessage,
     respondToAssistantPermission,
+    fetchAssistantTemplate,
 } from "../../config/api";
 
 interface AssistantChatPanelProps {
     sessionId: string;
+    templateId: string;
     onItemsChanged?: () => void;
 }
 
 let messageIdCounter = 0;
 
-export function AssistantChatPanel({ sessionId, onItemsChanged }: AssistantChatPanelProps) {
-    const [messages, setMessages] = useState<ChatMessage[]>(() => [{
-        id: String(++messageIdCounter),
-        type: "assistant" as const,
-        content: "Hi! I'm the **Axiom Configuration Assistant**. I can help you create and refine:\n\n" +
-            "- **Tools** — script-based tools that AI agents can invoke\n" +
-            "- **Action Types** — define kinds of work for AI agents or scripts\n" +
-            "- **Report Definitions** — recurring or on-demand reports\n\n" +
-            "I can look up your existing configuration to understand what's already set up. " +
-            "Just describe what you'd like to create or ask me a question to get started!",
-    }]);
+export function AssistantChatPanel({ sessionId, templateId, onItemsChanged }: AssistantChatPanelProps) {
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const eventSourceRef = useRef<EventSource | null>(null);
 
     const addMessage = useCallback((msg: Omit<ChatMessage, "id">) => {
         setMessages((prev) => [...prev, { ...msg, id: String(++messageIdCounter) }]);
     }, []);
+
+    useEffect(() => {
+        fetchAssistantTemplate(templateId).then((template) => {
+            if (template.welcomeMessage) {
+                setMessages([{
+                    id: String(++messageIdCounter),
+                    type: "assistant" as const,
+                    content: template.welcomeMessage,
+                }]);
+            }
+        }).catch(console.error);
+    }, [templateId]);
 
     useEffect(() => {
         const url = assistantEventsUrl(sessionId);

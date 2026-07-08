@@ -18,6 +18,9 @@ import {
     Toolbar,
     ToolbarContent,
     ToolbarItem,
+    Form,
+    FormGroup,
+    Alert,
 } from "@patternfly/react-core";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import RobotIcon from "@patternfly/react-icons/dist/esm/icons/robot-icon";
@@ -26,7 +29,9 @@ import {
     fetchAssistantSessions,
     createAssistantSession,
     deleteAssistantSession,
+    fetchAssistantTemplates,
     type AssistantSessionInfo,
+    type SessionTemplate,
 } from "../config/api";
 
 const FUN_WORDS = [
@@ -58,15 +63,18 @@ export function AssistantPage() {
     const navigate = useNavigate();
     const [sessions, setSessions] = useState<AssistantSessionInfo[]>([]);
     const [loading, setLoading] = useState(true);
-    const [isCreateOpen, setIsCreateOpen] = useState(false);
+    const [templates, setTemplates] = useState<SessionTemplate[]>([]);
+    const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false);
+    const [selectedTemplate, setSelectedTemplate] = useState<SessionTemplate | null>(null);
+    const [isNameModalOpen, setIsNameModalOpen] = useState(false);
     const [newName, setNewName] = useState("");
     const createButtonRef = useRef<HTMLButtonElement>(null);
 
     useEffect(() => {
-        if (isCreateOpen) {
+        if (isNameModalOpen) {
             setTimeout(() => createButtonRef.current?.focus(), 100);
         }
-    }, [isCreateOpen]);
+    }, [isNameModalOpen]);
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState("");
 
@@ -82,13 +90,29 @@ export function AssistantPage() {
         load();
     }, [load]);
 
+    const openTemplatePicker = () => {
+        fetchAssistantTemplates()
+            .then(setTemplates)
+            .catch(console.error);
+        setIsTemplatePickerOpen(true);
+    };
+
+    const handleTemplateSelect = (template: SessionTemplate) => {
+        setSelectedTemplate(template);
+        setIsTemplatePickerOpen(false);
+        setNewName(generateSessionName());
+        setIsNameModalOpen(true);
+    };
+
     const handleCreate = async () => {
+        if (!selectedTemplate) return;
         setCreating(true);
         setCreateError("");
         try {
-            const session = await createAssistantSession(newName || undefined);
-            setIsCreateOpen(false);
+            const session = await createAssistantSession(selectedTemplate.templateId, newName || undefined);
+            setIsNameModalOpen(false);
             setNewName("");
+            setSelectedTemplate(null);
             navigate(`/assistant/${session.id}`);
         } catch (err: unknown) {
             const e = err as { message?: string };
@@ -123,7 +147,7 @@ export function AssistantPage() {
                             <Button
                                 variant="primary"
                                 icon={<PlusCircleIcon />}
-                                onClick={() => { setNewName(generateSessionName()); setIsCreateOpen(true); }}
+                                onClick={openTemplatePicker}
                             >
                                 New Session
                             </Button>
@@ -153,7 +177,7 @@ export function AssistantPage() {
                             <Button
                                 variant="primary"
                                 icon={<PlusCircleIcon />}
-                                onClick={() => { setNewName(generateSessionName()); setIsCreateOpen(true); }}
+                                onClick={openTemplatePicker}
                             >
                                 New Session
                             </Button>
@@ -206,24 +230,67 @@ export function AssistantPage() {
             )}
 
             <Modal
-                isOpen={isCreateOpen}
-                onClose={() => setIsCreateOpen(false)}
-                variant="small"
-                aria-label="New assistant session"
+                isOpen={isTemplatePickerOpen}
+                onClose={() => setIsTemplatePickerOpen(false)}
+                variant="medium"
+                aria-label="Choose template"
             >
-                <ModalHeader title="New Assistant Session" />
+                <ModalHeader title="Choose a Template" />
                 <ModalBody>
-                    <TextInput
-                        value={newName}
-                        onChange={(_e, val) => setNewName(val)}
-                        placeholder="Session name (optional)"
-                        aria-label="Session name"
-                    />
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                        {templates.map((t) => (
+                            <div
+                                key={t.templateId}
+                                onClick={() => handleTemplateSelect(t)}
+                                style={{
+                                    border: "1px solid #d2d2d2",
+                                    borderRadius: 8,
+                                    padding: 16,
+                                    cursor: "pointer",
+                                }}
+                                onMouseOver={(e) =>
+                                    (e.currentTarget.style.borderColor = "#0066cc")
+                                }
+                                onMouseOut={(e) =>
+                                    (e.currentTarget.style.borderColor = "#d2d2d2")
+                                }
+                            >
+                                <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                                    {t.name}
+                                </div>
+                                <div style={{ fontSize: 13, color: "#6a6e73" }}>
+                                    {t.description}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </ModalBody>
+            </Modal>
+
+            <Modal
+                isOpen={isNameModalOpen}
+                onClose={() => setIsNameModalOpen(false)}
+                variant="small"
+                aria-label="Name session"
+            >
+                <ModalHeader title="Name Your Session" />
+                <ModalBody>
                     {createError && (
-                        <div style={{ color: "#c9190b", marginTop: 8, fontSize: "13px" }}>
-                            {createError}
-                        </div>
+                        <Alert variant="danger" isInline title={createError}
+                            style={{ marginBottom: 12 }} />
                     )}
+                    <Form>
+                        <FormGroup label="Session Name" fieldId="session-name">
+                            <TextInput
+                                id="session-name"
+                                value={newName}
+                                onChange={(_e, v) => setNewName(v)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") handleCreate();
+                                }}
+                            />
+                        </FormGroup>
+                    </Form>
                 </ModalBody>
                 <ModalFooter>
                     <Button
@@ -234,9 +301,9 @@ export function AssistantPage() {
                         isDisabled={creating}
                         autoFocus
                     >
-                        Create
+                        Create Session
                     </Button>
-                    <Button variant="link" onClick={() => setIsCreateOpen(false)}>
+                    <Button variant="link" onClick={() => setIsNameModalOpen(false)}>
                         Cancel
                     </Button>
                 </ModalFooter>

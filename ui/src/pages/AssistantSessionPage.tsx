@@ -95,6 +95,8 @@ export function AssistantSessionPage() {
         );
     }
 
+    const isConfigAssistant = session.templateId === "axiom-config-assistant";
+
     return (
         <PageSection padding={{ default: "noPadding" }} isFilled hasBodyWrapper={false}
             style={{
@@ -120,15 +122,17 @@ export function AssistantSessionPage() {
                     <span style={{ fontWeight: 600, fontSize: "16px" }}>{session.name}</span>
                 </FlexItem>
                 <FlexItem>
-                    <Button
-                        variant="primary"
-                        onClick={handleApply}
-                        isLoading={applying}
-                        isDisabled={applying}
-                        style={{ marginRight: 8 }}
-                    >
-                        Apply All
-                    </Button>
+                    {isConfigAssistant && (
+                        <Button
+                            variant="primary"
+                            onClick={handleApply}
+                            isLoading={applying}
+                            isDisabled={applying}
+                            style={{ marginRight: 8 }}
+                        >
+                            Apply All
+                        </Button>
+                    )}
                     <Button
                         variant="secondary"
                         isDanger
@@ -139,7 +143,7 @@ export function AssistantSessionPage() {
                 </FlexItem>
             </Flex>
 
-            {applyError && (
+            {isConfigAssistant && applyError && (
                 <Alert
                     variant="danger"
                     isInline
@@ -157,10 +161,9 @@ export function AssistantSessionPage() {
                 minHeight: 0,
                 overflow: "hidden",
             }}>
-                {/* Chat Panel - 70% */}
                 <div style={{
-                    flex: "7 1 0",
-                    borderRight: "1px solid #d2d2d2",
+                    flex: isConfigAssistant ? "7 1 0" : "1 1 0",
+                    borderRight: isConfigAssistant ? "1px solid #d2d2d2" : "none",
                     display: "flex",
                     flexDirection: "column",
                     minWidth: 0,
@@ -168,22 +171,24 @@ export function AssistantSessionPage() {
                 }}>
                     <AssistantChatPanel
                         sessionId={sessionId}
-                        onItemsChanged={handleItemsChanged}
+                        templateId={session.templateId}
+                        onItemsChanged={isConfigAssistant ? handleItemsChanged : undefined}
                     />
                 </div>
 
-                {/* Items Panel - 30%, scrolls independently */}
-                <div style={{
-                    flex: "3 1 0",
-                    overflowY: "auto",
-                    minWidth: 0,
-                    minHeight: 0,
-                }}>
-                    <AssistantGeneratedItems
-                        sessionId={sessionId}
-                        refreshTrigger={itemsRefresh}
-                    />
-                </div>
+                {isConfigAssistant && (
+                    <div style={{
+                        flex: "3 1 0",
+                        overflowY: "auto",
+                        minWidth: 0,
+                        minHeight: 0,
+                    }}>
+                        <AssistantGeneratedItems
+                            sessionId={sessionId}
+                            refreshTrigger={itemsRefresh}
+                        />
+                    </div>
+                )}
             </div>
 
             {/* End session confirmation */}
@@ -209,37 +214,39 @@ export function AssistantSessionPage() {
             </Modal>
 
             {/* Apply success */}
-            <Modal
-                isOpen={applyResult !== null}
-                onClose={() => {
-                    setApplyResult(null);
-                    navigate("/assistant");
-                }}
-                variant="small"
-                aria-label="Apply result"
-            >
-                <ModalHeader title="Items Applied Successfully" />
-                <ModalBody>
-                    {applyResult && (
-                        <div>
-                            <p>The following items were imported:</p>
-                            <ul style={{ marginTop: 8 }}>
-                                {(applyResult.tools ?? 0) > 0 && <li>{applyResult.tools} tool(s)</li>}
-                                {(applyResult.actionTypes ?? 0) > 0 && <li>{applyResult.actionTypes} action type(s)</li>}
-                                {(applyResult.reportDefinitions ?? 0) > 0 && <li>{applyResult.reportDefinitions} report definition(s)</li>}
-                            </ul>
-                        </div>
-                    )}
-                </ModalBody>
-                <ModalFooter>
-                    <Button variant="primary" onClick={() => {
+            {isConfigAssistant && (
+                <Modal
+                    isOpen={applyResult !== null}
+                    onClose={() => {
                         setApplyResult(null);
                         navigate("/assistant");
-                    }}>
-                        Done
-                    </Button>
-                </ModalFooter>
-            </Modal>
+                    }}
+                    variant="small"
+                    aria-label="Apply result"
+                >
+                    <ModalHeader title="Items Applied Successfully" />
+                    <ModalBody>
+                        {applyResult && (
+                            <div>
+                                <p>The following items were imported:</p>
+                                <ul style={{ marginTop: 8 }}>
+                                    {(applyResult.tools ?? 0) > 0 && <li>{applyResult.tools} tool(s)</li>}
+                                    {(applyResult.actionTypes ?? 0) > 0 && <li>{applyResult.actionTypes} action type(s)</li>}
+                                    {(applyResult.reportDefinitions ?? 0) > 0 && <li>{applyResult.reportDefinitions} report definition(s)</li>}
+                                </ul>
+                            </div>
+                        )}
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button variant="primary" onClick={() => {
+                            setApplyResult(null);
+                            navigate("/assistant");
+                        }}>
+                            Done
+                        </Button>
+                    </ModalFooter>
+                </Modal>
+            )}
         </PageSection>
     );
 }
