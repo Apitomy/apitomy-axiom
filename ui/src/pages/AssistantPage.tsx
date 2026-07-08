@@ -21,6 +21,7 @@ import {
     Form,
     FormGroup,
     Alert,
+    SearchInput,
 } from "@patternfly/react-core";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import RobotIcon from "@patternfly/react-icons/dist/esm/icons/robot-icon";
@@ -65,6 +66,7 @@ export function AssistantPage() {
     const [loading, setLoading] = useState(true);
     const [templates, setTemplates] = useState<SessionTemplate[]>([]);
     const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false);
+    const [templateFilter, setTemplateFilter] = useState("");
     const [selectedTemplate, setSelectedTemplate] = useState<SessionTemplate | null>(null);
     const [isNameModalOpen, setIsNameModalOpen] = useState(false);
     const [newName, setNewName] = useState("");
@@ -78,10 +80,17 @@ export function AssistantPage() {
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState("");
 
+    const [templateMap, setTemplateMap] = useState<Record<string, string>>({});
+
     const load = useCallback(() => {
         setLoading(true);
-        fetchAssistantSessions()
-            .then(setSessions)
+        Promise.all([fetchAssistantSessions(), fetchAssistantTemplates()])
+            .then(([sess, tmpls]) => {
+                setSessions(sess);
+                const map: Record<string, string> = {};
+                tmpls.forEach((t) => { map[t.templateId] = t.name; });
+                setTemplateMap(map);
+            })
             .catch(console.error)
             .finally(() => setLoading(false));
     }, []);
@@ -94,8 +103,16 @@ export function AssistantPage() {
         fetchAssistantTemplates()
             .then(setTemplates)
             .catch(console.error);
+        setTemplateFilter("");
         setIsTemplatePickerOpen(true);
     };
+
+    const filteredTemplates = templates.filter((t) => {
+        if (!templateFilter) return true;
+        const lower = templateFilter.toLowerCase();
+        return t.name.toLowerCase().includes(lower)
+            || t.description.toLowerCase().includes(lower);
+    });
 
     const handleTemplateSelect = (template: SessionTemplate) => {
         setSelectedTemplate(template);
@@ -211,6 +228,8 @@ export function AssistantPage() {
                             <div style={{ flex: 1 }}>
                                 <div style={{ fontWeight: 600, fontSize: "14px" }}>{s.name}</div>
                                 <div style={{ fontSize: "12px", color: "#6a6e73", marginTop: 2 }}>
+                                    {templateMap[s.templateId] || s.templateId}
+                                    {" · "}
                                     Created {new Date(s.createdAt).toLocaleString()}
                                 </div>
                             </div>
@@ -237,32 +256,46 @@ export function AssistantPage() {
             >
                 <ModalHeader title="Choose a Template" />
                 <ModalBody>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                        {templates.map((t) => (
-                            <div
-                                key={t.templateId}
-                                onClick={() => handleTemplateSelect(t)}
-                                style={{
-                                    border: "1px solid #d2d2d2",
-                                    borderRadius: 8,
-                                    padding: 16,
-                                    cursor: "pointer",
-                                }}
-                                onMouseOver={(e) =>
-                                    (e.currentTarget.style.borderColor = "#0066cc")
-                                }
-                                onMouseOut={(e) =>
-                                    (e.currentTarget.style.borderColor = "#d2d2d2")
-                                }
-                            >
-                                <div style={{ fontWeight: 600, marginBottom: 4 }}>
-                                    {t.name}
-                                </div>
-                                <div style={{ fontSize: 13, color: "#6a6e73" }}>
-                                    {t.description}
-                                </div>
+                    <SearchInput
+                        placeholder="Filter templates..."
+                        value={templateFilter}
+                        onChange={(_e, v) => setTemplateFilter(v)}
+                        onClear={() => setTemplateFilter("")}
+                        style={{ marginBottom: 12 }}
+                    />
+                    <div style={{ maxHeight: 400, overflowY: "auto" }}>
+                        {filteredTemplates.length === 0 ? (
+                            <div style={{ padding: 24, textAlign: "center", color: "#6a6e73" }}>
+                                No templates match your filter.
                             </div>
-                        ))}
+                        ) : (
+                            filteredTemplates.map((t) => (
+                                <div
+                                    key={t.templateId}
+                                    onClick={() => handleTemplateSelect(t)}
+                                    style={{
+                                        padding: "12px 16px",
+                                        cursor: "pointer",
+                                        borderBottom: "1px solid #eee",
+                                    }}
+                                    onMouseEnter={(e) =>
+                                        (e.currentTarget.style.backgroundColor = "#f0f0f0")
+                                    }
+                                    onMouseLeave={(e) =>
+                                        (e.currentTarget.style.backgroundColor = "transparent")
+                                    }
+                                >
+                                    <div style={{ fontWeight: 600, fontSize: 14 }}>
+                                        {t.name}
+                                    </div>
+                                    {t.description && (
+                                        <div style={{ fontSize: 13, color: "#6a6e73", marginTop: 2 }}>
+                                            {t.description}
+                                        </div>
+                                    )}
+                                </div>
+                            ))
+                        )}
                     </div>
                 </ModalBody>
             </Modal>
