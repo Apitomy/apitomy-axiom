@@ -39,6 +39,7 @@ public class AssistantSession {
 
     private final String id;
     private final String name;
+    private final String templateId;
     private final Path workingDirectory;
     private final List<String> command;
     private final AssistantEventParser parser;
@@ -57,12 +58,14 @@ public class AssistantSession {
      * Creates a new assistant session.
      *
      * @param name the user-visible session name
+     * @param templateId the template this session was created from
      * @param workingDirectory the session's working directory
      * @param command the full command line for the Claude Code subprocess
      */
-    public AssistantSession(String name, Path workingDirectory, List<String> command) {
+    public AssistantSession(String name, String templateId, Path workingDirectory, List<String> command) {
         this.id = UUID.randomUUID().toString();
         this.name = name;
+        this.templateId = templateId;
         this.workingDirectory = workingDirectory;
         this.command = command;
         this.parser = new AssistantEventParser();
@@ -202,6 +205,15 @@ public class AssistantSession {
 
     public String getName() {
         return name;
+    }
+
+    /**
+     * Returns the template ID this session was created from.
+     *
+     * @return the template identifier
+     */
+    public String getTemplateId() {
+        return templateId;
     }
 
     public Path getWorkingDirectory() {

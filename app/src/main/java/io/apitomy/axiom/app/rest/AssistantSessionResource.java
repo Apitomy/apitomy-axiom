@@ -55,7 +55,7 @@ public class AssistantSessionResource {
     /**
      * Creates a new assistant session.
      *
-     * @param body optional JSON body with a "name" field
+     * @param body JSON body with "name" and "templateId" fields
      * @return the created session info
      */
     @POST
@@ -67,13 +67,21 @@ public class AssistantSessionResource {
                     "The AI Assistant requires Claude Code as the active AI engine.");
         }
 
+        String name = body != null ? body.path("name").asText(null) : null;
+        String templateId = body != null ? body.path("templateId").asText(null) : null;
+
+        if (templateId == null || templateId.isBlank()) {
+            return errorResponse(400, "Missing required 'templateId' field");
+        }
+
         try {
-            String name = body != null ? body.path("name").asText(null) : null;
-            AssistantSession session = sessionManager.createSession(name);
+            AssistantSession session = sessionManager.createSession(name, templateId);
             return Response.ok(toSessionInfo(session)).build();
+        } catch (IllegalArgumentException e) {
+            return errorResponse(404, e.getMessage());
         } catch (SessionLimitReachedException e) {
             return errorResponse(409, e.getMessage());
-        } catch (IOException e) {
+        } catch (Exception e) {
             LOG.errorf(e, "Failed to create assistant session");
             return errorResponse(500, "Failed to create session: " + e.getMessage());
         }
@@ -281,6 +289,14 @@ public class AssistantSessionResource {
     @Path("/{id}/items")
     @Produces(MediaType.APPLICATION_JSON)
     public Response listItems(@PathParam("id") String id) {
+        AssistantSession session = sessionManager.getSession(id);
+        if (session == null) {
+            return errorResponse(404, "Session not found: " + id);
+        }
+        if (!"axiom-config-assistant".equals(session.getTemplateId())) {
+            return errorResponse(400, "Items are only available for Configuration Assistant sessions");
+        }
+
         try {
             List<AssistantItem> items = sessionManager.listItems(id);
             ArrayNode arr = objectMapper.createArrayNode();
@@ -320,6 +336,14 @@ public class AssistantSessionResource {
     public Response getItem(@PathParam("id") String id,
                             @PathParam("type") String type,
                             @PathParam("name") String name) {
+        AssistantSession session = sessionManager.getSession(id);
+        if (session == null) {
+            return errorResponse(404, "Session not found: " + id);
+        }
+        if (!"axiom-config-assistant".equals(session.getTemplateId())) {
+            return errorResponse(400, "Items are only available for Configuration Assistant sessions");
+        }
+
         try {
             JsonNode content = sessionManager.getItemContent(id, type, name);
             if (content == null) {
@@ -343,6 +367,14 @@ public class AssistantSessionResource {
     @Path("/{id}/apply")
     @Produces(MediaType.APPLICATION_JSON)
     public Response apply(@PathParam("id") String id) {
+        AssistantSession session = sessionManager.getSession(id);
+        if (session == null) {
+            return errorResponse(404, "Session not found: " + id);
+        }
+        if (!"axiom-config-assistant".equals(session.getTemplateId())) {
+            return errorResponse(400, "Items are only available for Configuration Assistant sessions");
+        }
+
         try {
             ImportResult result = sessionManager.applySession(id);
             return Response.ok(result).build();
@@ -382,6 +414,7 @@ public class AssistantSessionResource {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("id", session.getId());
         node.put("name", session.getName());
+        node.put("templateId", session.getTemplateId());
         node.put("status", session.getStatus().name().toLowerCase());
         node.put("createdAt", session.getCreatedAt().toString());
         node.put("lastActivityAt", session.getLastActivityAt().toString());

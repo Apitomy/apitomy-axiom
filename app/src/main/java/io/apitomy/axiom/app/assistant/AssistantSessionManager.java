@@ -7,6 +7,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.api.beans.ImportResult;
 import io.apitomy.axiom.app.ImportExportService;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
+import io.apitomy.axiom.core.entities.McpServerEntity;
+import io.apitomy.axiom.core.entities.ToolsetEntity;
 import io.quarkus.runtime.ShutdownEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -21,8 +23,10 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
@@ -55,6 +59,9 @@ public class AssistantSessionManager {
     int httpPort;
 
     @Inject
+    SessionTemplateService templateService;
+
+    @Inject
     AssistantContextBuilder contextBuilder;
 
     @Inject
@@ -74,12 +81,13 @@ public class AssistantSessionManager {
      * Creates and starts a new assistant session.
      *
      * @param name the user-visible session name
+     * @param templateId the template to create the session from
      * @return the started session
      * @throws IOException if the session cannot be created
      * @throws IllegalStateException if the AI engine is not Claude Code or the
      *         session limit has been reached
      */
-    public AssistantSession createSession(String name) throws IOException {
+    public AssistantSession createSession(String name, String templateId) throws IOException {
         if (!"claude-code".equals(aiEngine)) {
             throw new IllegalStateException(
                     "The AI Assistant requires Claude Code as the active AI engine. "
@@ -91,24 +99,54 @@ public class AssistantSessionManager {
                     "Maximum number of assistant sessions reached (" + maxSessions + ")");
         }
 
-        Path mcpServerDir = ensureAssistantMcpServerInstalled();
+        SessionTemplateService.SessionTemplate template = templateService.getTemplate(templateId);
+        if (template == null) {
+            throw new IllegalArgumentException("Template not found: " + templateId);
+        }
 
-        // Create a temporary session to get the ID, then build the working dir
+        // Resolve MCP servers from template
+        Map<String, AssistantContextBuilder.McpServerConfig> mcpConfigs =
+                resolveMcpServers(template);
+
+        // Resolve allowed tools from template
+        List<String> resolvedAllowedTools = resolveAllowedTools(template);
+
+        // Build MCP config JSON
+        String mcpConfig = contextBuilder.buildMcpConfig(mcpConfigs);
+
+        // Determine working directory
+        Path workDir;
+        if (template.workingDirectory() != null && !template.workingDirectory().isBlank()) {
+            workDir = Path.of(template.workingDirectory());
+            if (!Files.isDirectory(workDir)) {
+                throw new IOException("Template working directory does not exist: "
+                        + template.workingDirectory());
+            }
+            // Still write CLAUDE.md and mcp-config.json into the working directory
+            Files.writeString(workDir.resolve("CLAUDE.md"), template.systemPrompt());
+            if (mcpConfig != null) {
+                Files.writeString(workDir.resolve("mcp-config.json"), mcpConfig);
+            }
+        } else {
+            workDir = contextBuilder.createWorkingDirectory(
+                    UUID.randomUUID().toString(), templateId,
+                    template.systemPrompt(), mcpConfig);
+        }
+
+        List<String> command = buildCommand(workDir, resolvedAllowedTools, mcpConfig != null);
+
         String sessionName = name != null && !name.isBlank() ? name : "Assistant Session";
-        AssistantSession session = new AssistantSession(sessionName, null, List.of());
-
-        Path workDir = contextBuilder.createWorkingDirectory(session.getId(), mcpServerDir);
-
-        List<String> command = buildCommand(workDir);
-        session = new AssistantSession(sessionName, workDir, command);
+        AssistantSession session = new AssistantSession(sessionName, templateId, workDir, command);
         session.start();
 
-        // Wire validation listener: when Claude writes/edits files in item
-        // subdirectories, validate and send errors back if needed
-        session.addListener(createValidationListener(session));
+        // Config Assistant validation listener
+        if ("axiom-config-assistant".equals(templateId)) {
+            session.addListener(createValidationListener(session));
+        }
 
         sessions.put(session.getId(), session);
-        LOG.infof("Created assistant session %s (%s)", session.getId(), sessionName);
+        LOG.infof("Created assistant session %s (%s) from template %s",
+                session.getId(), sessionName, templateId);
         return session;
     }
 
@@ -251,7 +289,8 @@ public class AssistantSessionManager {
         }
     }
 
-    private List<String> buildCommand(Path workDir) {
+    private List<String> buildCommand(Path workDir, List<String> allowedTools,
+                                       boolean hasMcpConfig) {
         List<String> cmd = new ArrayList<>();
         cmd.add(claudeExecutable);
         cmd.add("--print");
@@ -262,24 +301,16 @@ public class AssistantSessionManager {
         cmd.add("--verbose");
         cmd.add("--permission-prompt-tool");
         cmd.add("stdio");
-        cmd.add("--mcp-config");
-        cmd.add(workDir.resolve("mcp-config.json").toAbsolutePath().toString());
 
-        // Auto-approve safe tools; everything else prompts the user via
-        // --permission-prompt-tool stdio (forwarded to the chat UI).
-        cmd.add("--allowedTools");
-        cmd.add(String.join(" ",
-                "Read(*)", "Write(*)", "Edit(*)",
-                "Bash(ls *)", "Bash(cat *)",
-                "mcp__axiom__axiom_list_tools",
-                "mcp__axiom__axiom_get_tool",
-                "mcp__axiom__axiom_list_action_types",
-                "mcp__axiom__axiom_get_action_type",
-                "mcp__axiom__axiom_list_report_definitions",
-                "mcp__axiom__axiom_get_report_definition",
-                "mcp__axiom__axiom_list_mcp_servers",
-                "mcp__axiom__axiom_list_toolsets"
-        ));
+        if (hasMcpConfig) {
+            cmd.add("--mcp-config");
+            cmd.add(workDir.resolve("mcp-config.json").toAbsolutePath().toString());
+        }
+
+        if (!allowedTools.isEmpty()) {
+            cmd.add("--allowedTools");
+            cmd.add(String.join(" ", allowedTools));
+        }
 
         return cmd;
     }
@@ -392,6 +423,78 @@ public class AssistantSessionManager {
         }
 
         return pack;
+    }
+
+    private Map<String, AssistantContextBuilder.McpServerConfig> resolveMcpServers(
+            SessionTemplateService.SessionTemplate template) throws IOException {
+        Map<String, AssistantContextBuilder.McpServerConfig> configs = new LinkedHashMap<>();
+
+        for (String serverName : template.mcpServers()) {
+            if ("@axiom-assistant".equals(serverName)) {
+                // Special built-in MCP server for the Config Assistant
+                Path mcpServerDir = ensureAssistantMcpServerInstalled();
+                String serverJsPath = mcpServerDir.resolve("server.js")
+                        .toAbsolutePath().toString();
+                String apiUrl = "http://localhost:" + httpPort + "/api/v1";
+                configs.put("axiom", new AssistantContextBuilder.McpServerConfig(
+                        "node",
+                        List.of(serverJsPath),
+                        Map.of("AXIOM_API_URL", apiUrl)));
+            } else {
+                // Resolve from database
+                McpServerEntity entity = McpServerEntity.find("name", serverName).firstResult();
+                if (entity != null && entity.serverCommand != null) {
+                    List<String> args = new ArrayList<>();
+                    if (entity.serverArgs != null && !entity.serverArgs.isBlank()) {
+                        JsonNode argsNode = objectMapper.readTree(entity.serverArgs);
+                        if (argsNode.isArray()) {
+                            for (JsonNode arg : argsNode) {
+                                args.add(arg.asText());
+                            }
+                        }
+                    }
+                    Map<String, String> env = new LinkedHashMap<>();
+                    if (entity.serverEnv != null && !entity.serverEnv.isBlank()) {
+                        JsonNode envNode = objectMapper.readTree(entity.serverEnv);
+                        envNode.fields().forEachRemaining(
+                                field -> env.put(field.getKey(), field.getValue().asText()));
+                    }
+                    configs.put(serverName, new AssistantContextBuilder.McpServerConfig(
+                            entity.serverCommand, args, env));
+                } else {
+                    LOG.warnf("MCP server not found or has no command: %s", serverName);
+                }
+            }
+        }
+
+        return configs;
+    }
+
+    private List<String> resolveAllowedTools(
+            SessionTemplateService.SessionTemplate template) {
+        List<String> resolved = new ArrayList<>();
+
+        // Add explicit allowed tools from the template
+        resolved.addAll(template.allowedTools());
+
+        // Resolve toolset references to their tool lists
+        for (String toolsetName : template.toolsets()) {
+            ToolsetEntity toolset = ToolsetEntity.find("name", toolsetName).firstResult();
+            if (toolset != null && toolset.tools != null) {
+                // Toolset tools are stored as comma-separated string
+                String[] tools = toolset.tools.split(",");
+                for (String tool : tools) {
+                    String trimmed = tool.trim();
+                    if (!trimmed.isEmpty()) {
+                        resolved.add(trimmed);
+                    }
+                }
+            } else {
+                LOG.warnf("Toolset not found: %s", toolsetName);
+            }
+        }
+
+        return resolved;
     }
 
     /**
