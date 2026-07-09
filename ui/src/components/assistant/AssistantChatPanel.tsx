@@ -5,18 +5,16 @@ import {
     assistantEventsUrl,
     sendAssistantMessage,
     respondToAssistantPermission,
-    fetchAssistantTemplate,
 } from "../../config/api";
 
 interface AssistantChatPanelProps {
     sessionId: string;
-    templateId: string;
     onItemsChanged?: () => void;
 }
 
 let messageIdCounter = 0;
 
-export function AssistantChatPanel({ sessionId, templateId, onItemsChanged }: AssistantChatPanelProps) {
+export function AssistantChatPanel({ sessionId, onItemsChanged }: AssistantChatPanelProps) {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const eventSourceRef = useRef<EventSource | null>(null);
@@ -24,18 +22,6 @@ export function AssistantChatPanel({ sessionId, templateId, onItemsChanged }: As
     const addMessage = useCallback((msg: Omit<ChatMessage, "id">) => {
         setMessages((prev) => [...prev, { ...msg, id: String(++messageIdCounter) }]);
     }, []);
-
-    useEffect(() => {
-        fetchAssistantTemplate(templateId).then((template) => {
-            if (template.welcomeMessage) {
-                setMessages([{
-                    id: String(++messageIdCounter),
-                    type: "assistant" as const,
-                    content: template.welcomeMessage,
-                }]);
-            }
-        }).catch(console.error);
-    }, [templateId]);
 
     useEffect(() => {
         const url = assistantEventsUrl(sessionId);
@@ -52,6 +38,23 @@ export function AssistantChatPanel({ sessionId, templateId, onItemsChanged }: As
                             return [...prev.slice(0, -1), { ...last, content: data.text }];
                         }
                         return [...prev, { id: String(++messageIdCounter), type: "assistant", content: data.text }];
+                    });
+                }
+            } catch {
+                // ignore
+            }
+        });
+
+        es.addEventListener("user_message", (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                if (data.content) {
+                    setMessages((prev) => {
+                        const last = prev[prev.length - 1];
+                        if (last && last.type === "user" && last.content === data.content) {
+                            return prev;
+                        }
+                        return [...prev, { id: String(++messageIdCounter), type: "user", content: data.content }];
                     });
                 }
             } catch {

@@ -138,6 +138,13 @@ public class AssistantSessionManager {
                 workDir, command);
         session.start();
 
+        // Add welcome message to event history so it replays on reconnect
+        if (template.welcomeMessage() != null && !template.welcomeMessage().isBlank()) {
+            ObjectNode welcomeData = objectMapper.createObjectNode();
+            welcomeData.put("text", template.welcomeMessage());
+            session.addEvent(new AssistantEventParser.SseEvent("assistant_text", welcomeData));
+        }
+
         // Config Assistant validation listener
         if ("axiom-config-assistant".equals(templateId)) {
             session.addListener(createValidationListener(session));

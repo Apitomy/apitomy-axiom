@@ -107,12 +107,18 @@ public class AssistantSession {
     }
 
     /**
-     * Sends a user message to the Claude Code subprocess via stdin.
+     * Sends a user message to the Claude Code subprocess via stdin. The message
+     * is also recorded in the event history so it can be replayed on reconnect.
      *
      * @param message the user's message text
      * @throws IOException if the message cannot be written
      */
     public void sendMessage(String message) throws IOException {
+        // Record the user message in event history for replay
+        ObjectNode userData = MAPPER.createObjectNode();
+        userData.put("content", message);
+        addEvent(new SseEvent("user_message", userData));
+
         ObjectNode root = MAPPER.createObjectNode();
         root.put("type", "user");
         ObjectNode msg = MAPPER.createObjectNode();
@@ -121,6 +127,25 @@ public class AssistantSession {
         root.set("message", msg);
         writeLine(MAPPER.writeValueAsString(root));
         lastActivityAt = Instant.now();
+    }
+
+    /**
+     * Adds a synthetic event to the event history and dispatches it to listeners.
+     * Used for events not produced by the Claude Code subprocess (e.g., user
+     * messages, welcome messages).
+     *
+     * @param event the event to add
+     */
+    public void addEvent(SseEvent event) {
+        eventHistory.add(event);
+        lastActivityAt = Instant.now();
+        for (Consumer<SseEvent> listener : listeners) {
+            try {
+                listener.accept(event);
+            } catch (Exception e) {
+                LOG.warnf(e, "SSE listener error in session %s", id);
+            }
+        }
     }
 
     /**

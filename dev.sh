@@ -110,17 +110,24 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
-# ── Start Quarkus dev mode ────────────────────────────────────────
+# ── Start backend ─────────────────────────────────────────────────
 
-QUARKUS_ARGS=(-pl app -Ddebug=false -q)
+JAVA_ARGS=(-Dquarkus.http.port=9090)
 if [[ "$PERSIST" == true ]]; then
-    QUARKUS_ARGS+=(-Dquarkus.profile=persist)
-    echo "Starting Quarkus backend on http://localhost:9090 (persistence enabled) ..."
+    JAVA_ARGS+=(-Dquarkus.profile=persist)
+    echo "Starting backend on http://localhost:9090 (persistence enabled) ..."
 else
-    echo "Starting Quarkus backend on http://localhost:9090 ..."
+    echo "Starting backend on http://localhost:9090 ..."
 fi
-mvn quarkus:dev "${QUARKUS_ARGS[@]}" &
+java "${JAVA_ARGS[@]}" -jar app/target/quarkus-app/quarkus-run.jar &
 PIDS+=($!)
+
+echo -n "Waiting for backend API ..."
+until curl -sf http://localhost:9090/api/v1/system/health >/dev/null 2>&1; do
+    echo -n "."
+    sleep 2
+done
+echo " ready!"
 
 # ── Start Vite dev server ─────────────────────────────────────────
 
@@ -128,6 +135,13 @@ if [[ "$SKIP_UI" == false ]]; then
     echo "Starting Vite UI on http://localhost:9191 ..."
     (cd ui && npm run dev) &
     PIDS+=($!)
+
+    echo -n "Waiting for UI ..."
+    until curl -sf http://localhost:9191/api/v1/system/health >/dev/null 2>&1; do
+        echo -n "."
+        sleep 2
+    done
+    echo " ready!"
 fi
 
 echo ""

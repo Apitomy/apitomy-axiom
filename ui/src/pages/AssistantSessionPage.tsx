@@ -171,7 +171,6 @@ export function AssistantSessionPage() {
                 }}>
                     <AssistantChatPanel
                         sessionId={sessionId}
-                        templateId={session.templateId}
                         onItemsChanged={isConfigAssistant ? handleItemsChanged : undefined}
                     />
                 </div>
