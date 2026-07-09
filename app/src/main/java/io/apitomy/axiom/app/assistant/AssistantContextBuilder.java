@@ -15,9 +15,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Creates the working directory structure for an assistant session, including
- * the {@code CLAUDE.md} system prompt and {@code mcp-config.json} for the
- * Axiom Assistant MCP server.
+ * Creates the directory structure for an assistant session. Each session has
+ * two directories: a session directory (always under {@code ~/.axiom/assistant/sessions/})
+ * that holds session metadata like {@code mcp-config.json}, and a working
+ * directory where Claude Code runs. If the template does not specify a
+ * working directory, one is created inside the session directory.
  */
 @ApplicationScoped
 public class AssistantContextBuilder {
@@ -31,52 +33,65 @@ public class AssistantContextBuilder {
     ObjectMapper objectMapper;
 
     /**
-     * Creates the full working directory for an assistant session.
+     * Creates the session directory for an assistant session. The session
+     * directory lives at {@code ~/.axiom/assistant/sessions/<sessionId>/}
+     * and holds session-level files like {@code mcp-config.json}.
      *
      * @param sessionId the unique session identifier
-     * @param templateId the template this session was created from
-     * @param systemPrompt markdown content to write to CLAUDE.md
      * @param mcpConfig the MCP configuration JSON string, or null
-     * @return the path to the created working directory
+     * @return the path to the created session directory
      * @throws IOException if directory creation fails
      */
-    public Path createWorkingDirectory(String sessionId, String templateId,
-                                        String systemPrompt, String mcpConfig)
-            throws IOException {
+    public Path createSessionDirectory(String sessionId, String mcpConfig) throws IOException {
         Path axiomHome = Path.of(System.getProperty("user.home"), ".axiom");
-        Path sessionsRoot = axiomHome.resolve("assistant-sessions");
+        Path sessionsRoot = axiomHome.resolve("assistant").resolve("sessions");
         Path sessionDir = sessionsRoot.resolve(sessionId);
 
         Files.createDirectories(sessionDir);
-
-        // Config Assistant needs item subdirectories
-        if ("axiom-config-assistant".equals(templateId)) {
-            Files.createDirectories(sessionDir.resolve("tools"));
-            Files.createDirectories(sessionDir.resolve("action-types"));
-            Files.createDirectories(sessionDir.resolve("report-definitions"));
-        }
-
-        Files.writeString(sessionDir.resolve("CLAUDE.md"), systemPrompt);
 
         if (mcpConfig != null) {
             Files.writeString(sessionDir.resolve("mcp-config.json"), mcpConfig);
         }
 
-        LOG.infof("Created assistant working directory: %s", sessionDir);
+        LOG.infof("Created session directory: %s", sessionDir);
         return sessionDir;
     }
 
     /**
-     * Deletes the working directory and all its contents.
+     * Creates the working directory inside the session directory. Used when the
+     * template does not specify an external working directory.
      *
-     * @param workingDirectory the directory to delete
+     * @param sessionDir the session directory
+     * @param templateId the template this session was created from
+     * @return the path to the created working directory
+     * @throws IOException if directory creation fails
      */
-    public void deleteWorkingDirectory(Path workingDirectory) {
-        if (workingDirectory == null || !Files.exists(workingDirectory)) {
+    public Path createWorkingDirectory(Path sessionDir, String templateId) throws IOException {
+        Path workDir = sessionDir.resolve("workDir");
+        Files.createDirectories(workDir);
+
+        // Config Assistant needs item subdirectories
+        if ("axiom-config-assistant".equals(templateId)) {
+            Files.createDirectories(workDir.resolve("tools"));
+            Files.createDirectories(workDir.resolve("action-types"));
+            Files.createDirectories(workDir.resolve("report-definitions"));
+        }
+
+        LOG.infof("Created working directory: %s", workDir);
+        return workDir;
+    }
+
+    /**
+     * Deletes the session directory and all its contents.
+     *
+     * @param sessionDirectory the session directory to delete
+     */
+    public void deleteSessionDirectory(Path sessionDirectory) {
+        if (sessionDirectory == null || !Files.exists(sessionDirectory)) {
             return;
         }
         try {
-            try (var walk = Files.walk(workingDirectory)) {
+            try (var walk = Files.walk(sessionDirectory)) {
                 walk.sorted(java.util.Comparator.reverseOrder())
                         .forEach(p -> {
                             try {
@@ -86,9 +101,9 @@ public class AssistantContextBuilder {
                             }
                         });
             }
-            LOG.infof("Deleted assistant working directory: %s", workingDirectory);
+            LOG.infof("Deleted session directory: %s", sessionDirectory);
         } catch (IOException e) {
-            LOG.warnf(e, "Failed to clean up working directory: %s", workingDirectory);
+            LOG.warnf(e, "Failed to clean up session directory: %s", sessionDirectory);
         }
     }
 

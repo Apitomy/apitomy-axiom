@@ -114,6 +114,10 @@ public class AssistantSessionManager {
         // Build MCP config JSON
         String mcpConfig = contextBuilder.buildMcpConfig(mcpConfigs);
 
+        // Create session directory (always under ~/.axiom/assistant/sessions/)
+        String sessionId = UUID.randomUUID().toString();
+        Path sessionDir = contextBuilder.createSessionDirectory(sessionId, mcpConfig);
+
         // Determine working directory
         Path workDir;
         if (template.workingDirectory() != null && !template.workingDirectory().isBlank()) {
@@ -122,21 +126,16 @@ public class AssistantSessionManager {
                 throw new IOException("Template working directory does not exist: "
                         + template.workingDirectory());
             }
-            // Still write CLAUDE.md and mcp-config.json into the working directory
-            Files.writeString(workDir.resolve("CLAUDE.md"), template.systemPrompt());
-            if (mcpConfig != null) {
-                Files.writeString(workDir.resolve("mcp-config.json"), mcpConfig);
-            }
         } else {
-            workDir = contextBuilder.createWorkingDirectory(
-                    UUID.randomUUID().toString(), templateId,
-                    template.systemPrompt(), mcpConfig);
+            workDir = contextBuilder.createWorkingDirectory(sessionDir, templateId);
         }
 
-        List<String> command = buildCommand(workDir, resolvedAllowedTools, mcpConfig != null);
+        List<String> command = buildCommand(workDir, sessionDir, template.systemPrompt(),
+                resolvedAllowedTools, mcpConfig != null);
 
         String sessionName = name != null && !name.isBlank() ? name : "Assistant Session";
-        AssistantSession session = new AssistantSession(sessionName, templateId, workDir, command);
+        AssistantSession session = new AssistantSession(sessionName, templateId, sessionDir,
+                workDir, command);
         session.start();
 
         // Config Assistant validation listener
@@ -170,7 +169,9 @@ public class AssistantSessionManager {
     }
 
     /**
-     * Destroys a session: kills the subprocess and deletes the working directory.
+     * Destroys a session: kills the subprocess and deletes the session directory.
+     * If the working directory is inside the session directory (auto-created),
+     * it is deleted as well. User-specified working directories are left untouched.
      *
      * @param sessionId the session to destroy
      */
@@ -178,7 +179,7 @@ public class AssistantSessionManager {
         AssistantSession session = sessions.remove(sessionId);
         if (session != null) {
             session.destroy();
-            contextBuilder.deleteWorkingDirectory(session.getWorkingDirectory());
+            contextBuilder.deleteSessionDirectory(session.getSessionDirectory());
             LOG.infof("Destroyed assistant session %s", sessionId);
         }
     }
@@ -289,8 +290,8 @@ public class AssistantSessionManager {
         }
     }
 
-    private List<String> buildCommand(Path workDir, List<String> allowedTools,
-                                       boolean hasMcpConfig) {
+    private List<String> buildCommand(Path workDir, Path sessionDir, String systemPrompt,
+                                       List<String> allowedTools, boolean hasMcpConfig) {
         List<String> cmd = new ArrayList<>();
         cmd.add(claudeExecutable);
         cmd.add("--print");
@@ -302,9 +303,12 @@ public class AssistantSessionManager {
         cmd.add("--permission-prompt-tool");
         cmd.add("stdio");
 
+        cmd.add("--system-prompt");
+        cmd.add(systemPrompt);
+
         if (hasMcpConfig) {
             cmd.add("--mcp-config");
-            cmd.add(workDir.resolve("mcp-config.json").toAbsolutePath().toString());
+            cmd.add(sessionDir.resolve("mcp-config.json").toAbsolutePath().toString());
         }
 
         if (!allowedTools.isEmpty()) {

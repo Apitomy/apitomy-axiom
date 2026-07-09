@@ -40,6 +40,7 @@ public class AssistantSession {
     private final String id;
     private final String name;
     private final String templateId;
+    private final Path sessionDirectory;
     private final Path workingDirectory;
     private final List<String> command;
     private final AssistantEventParser parser;
@@ -59,13 +60,16 @@ public class AssistantSession {
      *
      * @param name the user-visible session name
      * @param templateId the template this session was created from
-     * @param workingDirectory the session's working directory
+     * @param sessionDirectory the Axiom-managed session directory (always deleted on end)
+     * @param workingDirectory the Claude Code working directory
      * @param command the full command line for the Claude Code subprocess
      */
-    public AssistantSession(String name, String templateId, Path workingDirectory, List<String> command) {
+    public AssistantSession(String name, String templateId, Path sessionDirectory,
+                             Path workingDirectory, List<String> command) {
         this.id = UUID.randomUUID().toString();
         this.name = name;
         this.templateId = templateId;
+        this.sessionDirectory = sessionDirectory;
         this.workingDirectory = workingDirectory;
         this.command = command;
         this.parser = new AssistantEventParser();
@@ -214,6 +218,16 @@ public class AssistantSession {
      */
     public String getTemplateId() {
         return templateId;
+    }
+
+    /**
+     * Returns the Axiom-managed session directory. This directory is always
+     * deleted when the session ends.
+     *
+     * @return the session directory path
+     */
+    public Path getSessionDirectory() {
+        return sessionDirectory;
     }
 
     public Path getWorkingDirectory() {
