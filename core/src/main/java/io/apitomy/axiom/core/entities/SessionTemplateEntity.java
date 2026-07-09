@@ -51,14 +51,7 @@ public class SessionTemplateEntity extends PanacheEntity {
     @Column(name = "mcp_server_name")
     public List<String> mcpServers = new ArrayList<>();
 
-    /** Names of ToolsetEntity records whose tools are auto-approved. */
-    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "session_template_toolset",
-            joinColumns = @JoinColumn(name = "session_template_id"))
-    @Column(name = "toolset_name")
-    public List<String> toolsets = new ArrayList<>();
-
-    /** Additional explicit tool patterns for --allowedTools. */
+    /** Tool patterns and @ToolsetName references for --allowedTools. */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "session_template_allowed_tool",
             joinColumns = @JoinColumn(name = "session_template_id"))

@@ -153,7 +153,7 @@ public class SessionTemplateResource {
             node.put("workingDirectory", template.workingDirectory());
         }
         node.set("mcpServers", toJsonArray(template.mcpServers()));
-        node.set("toolsets", toJsonArray(template.toolsets()));
+
         node.set("allowedTools", toJsonArray(template.allowedTools()));
         return node;
     }
@@ -167,7 +167,6 @@ public class SessionTemplateResource {
                 body.path("welcomeMessage").asText(null),
                 body.path("workingDirectory").asText(null),
                 jsonArrayToList(body.path("mcpServers")),
-                jsonArrayToList(body.path("toolsets")),
                 jsonArrayToList(body.path("allowedTools")),
                 false);
     }

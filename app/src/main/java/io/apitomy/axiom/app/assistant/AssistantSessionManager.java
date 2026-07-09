@@ -485,27 +485,31 @@ public class AssistantSessionManager {
             SessionTemplateService.SessionTemplate template) {
         List<String> resolved = new ArrayList<>();
 
-        // Add explicit allowed tools from the template
-        resolved.addAll(template.allowedTools());
-
-        // Resolve toolset references to their tool lists
-        for (String toolsetName : template.toolsets()) {
-            ToolsetEntity toolset = ToolsetEntity.find("name", toolsetName).firstResult();
-            if (toolset != null && toolset.tools != null) {
-                // Toolset tools are stored as comma-separated string
-                String[] tools = toolset.tools.split(",");
-                for (String tool : tools) {
-                    String trimmed = tool.trim();
-                    if (!trimmed.isEmpty()) {
-                        resolved.add(trimmed);
-                    }
-                }
+        // Process allowed tools, expanding @ToolsetName references
+        for (String entry : template.allowedTools()) {
+            if (entry.startsWith("@")) {
+                expandToolset(entry.substring(1), resolved);
             } else {
-                LOG.warnf("Toolset not found: %s", toolsetName);
+                resolved.add(entry);
             }
         }
 
         return resolved;
+    }
+
+    private void expandToolset(String toolsetName, List<String> target) {
+        ToolsetEntity toolset = ToolsetEntity.find("name", toolsetName).firstResult();
+        if (toolset != null && toolset.tools != null) {
+            String[] tools = toolset.tools.split(",");
+            for (String tool : tools) {
+                String trimmed = tool.trim();
+                if (!trimmed.isEmpty()) {
+                    target.add(trimmed);
+                }
+            }
+        } else {
+            LOG.warnf("Toolset not found: %s", toolsetName);
+        }
     }
 
     /**

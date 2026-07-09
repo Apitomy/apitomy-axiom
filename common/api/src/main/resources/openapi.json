@@ -6592,15 +6592,8 @@
               "type": "string"
             }
           },
-          "toolsets": {
-            "description": "Names of toolsets whose tools are auto-approved",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
           "allowedTools": {
-            "description": "Additional explicit tool patterns for --allowedTools",
+            "description": "Tool patterns and @ToolsetName references for --allowedTools",
             "type": "array",
             "items": {
               "type": "string"
@@ -6647,15 +6640,8 @@
               "type": "string"
             }
           },
-          "toolsets": {
-            "description": "Names of toolsets whose tools are auto-approved",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
           "allowedTools": {
-            "description": "Additional explicit tool patterns for --allowedTools",
+            "description": "Tool patterns and @ToolsetName references for --allowedTools",
             "type": "array",
             "items": {
               "type": "string"

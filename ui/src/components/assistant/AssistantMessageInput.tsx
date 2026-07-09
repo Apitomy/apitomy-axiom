@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { TextArea, Button, Flex, FlexItem } from "@patternfly/react-core";
 import PaperPlaneIcon from "@patternfly/react-icons/dist/esm/icons/paper-plane-icon";
 
@@ -24,10 +24,35 @@ export function AssistantMessageInput({ onSend, disabled }: AssistantMessageInpu
         }, 0);
     }, [value, onSend]);
 
+    useEffect(() => {
+        if (!disabled) {
+            textAreaRef.current?.focus();
+        }
+    }, [disabled]);
+
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === "Enter" && !e.shiftKey) {
+        if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.altKey) {
             e.preventDefault();
             handleSend();
+        }
+        if (e.key === "Enter" && (e.ctrlKey || e.altKey)) {
+            e.preventDefault();
+            const textarea = textAreaRef.current;
+            if (textarea) {
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                const newValue = value.substring(0, start) + "\n" + value.substring(end);
+                setValue(newValue);
+                setTimeout(() => {
+                    textarea.selectionStart = textarea.selectionEnd = start + 1;
+                    // Trigger PF autoResize: reset parent height, set scrollHeight
+                    const parent = textarea.parentElement;
+                    if (parent) {
+                        parent.style.removeProperty("height");
+                        parent.style.height = textarea.scrollHeight + "px";
+                    }
+                }, 0);
+            }
         }
     };
 

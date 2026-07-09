@@ -73,7 +73,6 @@ export function SessionTemplatesPage() {
             welcomeMessage: template.welcomeMessage,
             workingDirectory: template.workingDirectory,
             mcpServers: template.mcpServers,
-            toolsets: template.toolsets,
             allowedTools: template.allowedTools,
         })
             .then((created) => navigate(`/session-templates/${created.templateId}`))

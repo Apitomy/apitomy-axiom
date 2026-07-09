@@ -45,8 +45,7 @@ public class SessionTemplateService {
      * @param welcomeMessage first chat message (nullable)
      * @param workingDirectory absolute path or null for auto-created
      * @param mcpServers MCP server names to include
-     * @param toolsets toolset names whose tools are auto-approved
-     * @param allowedTools explicit tool patterns for --allowedTools
+     * @param allowedTools tool patterns and @ToolsetName references for --allowedTools
      * @param builtIn true if loaded from classpath resources
      */
     public record SessionTemplate(
@@ -57,7 +56,6 @@ public class SessionTemplateService {
             String welcomeMessage,
             String workingDirectory,
             List<String> mcpServers,
-            List<String> toolsets,
             List<String> allowedTools,
             boolean builtIn) {
     }
@@ -144,8 +142,6 @@ public class SessionTemplateService {
         entity.workingDirectory = template.workingDirectory();
         entity.mcpServers = new ArrayList<>(template.mcpServers() != null
                 ? template.mcpServers() : List.of());
-        entity.toolsets = new ArrayList<>(template.toolsets() != null
-                ? template.toolsets() : List.of());
         entity.allowedTools = new ArrayList<>(template.allowedTools() != null
                 ? template.allowedTools() : List.of());
         entity.persist();
@@ -178,8 +174,6 @@ public class SessionTemplateService {
         entity.workingDirectory = template.workingDirectory();
         entity.mcpServers = new ArrayList<>(template.mcpServers() != null
                 ? template.mcpServers() : List.of());
-        entity.toolsets = new ArrayList<>(template.toolsets() != null
-                ? template.toolsets() : List.of());
         entity.allowedTools = new ArrayList<>(template.allowedTools() != null
                 ? template.allowedTools() : List.of());
         entity.persist();
@@ -213,7 +207,6 @@ public class SessionTemplateService {
                 entity.welcomeMessage,
                 entity.workingDirectory,
                 List.copyOf(entity.mcpServers),
-                List.copyOf(entity.toolsets),
                 List.copyOf(entity.allowedTools),
                 false);
     }
@@ -227,7 +220,6 @@ public class SessionTemplateService {
                 node.path("welcomeMessage").asText(null),
                 node.path("workingDirectory").asText(null),
                 jsonArrayToList(node.path("mcpServers")),
-                jsonArrayToList(node.path("toolsets")),
                 jsonArrayToList(node.path("allowedTools")),
                 builtIn);
     }

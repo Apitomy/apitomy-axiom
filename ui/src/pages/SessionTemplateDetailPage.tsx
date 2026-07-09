@@ -19,15 +19,14 @@ import {
     TextInput,
 } from "@patternfly/react-core";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
+import { ToolListEditor } from "../components/ToolListEditor";
 import {
     fetchAssistantTemplate,
     updateAssistantTemplate,
     fetchMcpServers,
-    fetchToolsets,
     type SessionTemplate,
     type NewSessionTemplate,
     type McpServer,
-    type Toolset,
 } from "../config/api";
 
 export function SessionTemplateDetailPage() {
@@ -40,7 +39,6 @@ export function SessionTemplateDetailPage() {
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
     const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
-    const [toolsets, setToolsets] = useState<Toolset[]>([]);
 
     const loadData = useCallback(() => {
         if (!templateId) return;
@@ -48,9 +46,8 @@ export function SessionTemplateDetailPage() {
         Promise.all([
             fetchAssistantTemplate(templateId),
             fetchMcpServers(),
-            fetchToolsets(),
         ])
-            .then(([t, servers, ts]) => {
+            .then(([t, servers]) => {
                 setTemplate(t);
                 setForm({
                     name: t.name,
@@ -59,11 +56,9 @@ export function SessionTemplateDetailPage() {
                     welcomeMessage: t.welcomeMessage,
                     workingDirectory: t.workingDirectory,
                     mcpServers: t.mcpServers,
-                    toolsets: t.toolsets,
                     allowedTools: t.allowedTools,
                 });
                 setMcpServers(servers);
-                setToolsets(ts);
                 setDirty(false);
             })
             .catch(console.error)
@@ -97,13 +92,6 @@ export function SessionTemplateDetailPage() {
         updateForm({ mcpServers: updated });
     };
 
-    const toggleToolset = (toolsetName: string) => {
-        const current = form.toolsets || [];
-        const updated = current.includes(toolsetName)
-            ? current.filter((n) => n !== toolsetName)
-            : [...current, toolsetName];
-        updateForm({ toolsets: updated });
-    };
 
     if (loading) {
         return <PageSection><Spinner size="lg" /></PageSection>;
@@ -178,6 +166,12 @@ export function SessionTemplateDetailPage() {
                         language={Language.markdown}
                         height="300px"
                         isReadOnly={isReadOnly}
+                        options={{
+                            quickSuggestions: false,
+                            suggestOnTriggerCharacters: false,
+                            wordBasedSuggestions: "off",
+                            parameterHints: { enabled: false },
+                        }}
                     />
                 </FormGroup>
 
@@ -259,67 +253,38 @@ export function SessionTemplateDetailPage() {
                     </div>
                 </FormGroup>
 
-                <FormGroup label="Toolsets" fieldId="toolsets">
-                    <FormHelperText>
-                        <HelperText>
-                            <HelperTextItem>
-                                Select toolsets whose tools are automatically approved.
-                            </HelperTextItem>
-                        </HelperText>
-                    </FormHelperText>
-                    <div style={{
-                        border: "1px solid #d2d2d2",
-                        borderRadius: "3px",
-                        padding: "8px",
-                        maxHeight: "200px",
-                        overflowY: "auto"
-                    }}>
-                        {toolsets.length === 0 ? (
-                            <div style={{ color: "#6a6e73", fontStyle: "italic" }}>
-                                No toolsets configured
-                            </div>
-                        ) : (
-                            toolsets.map((toolset) => (
-                                <div key={toolset.name} style={{ marginBottom: "4px" }}>
-                                    <label style={{ display: "flex", alignItems: "center", cursor: isReadOnly ? "not-allowed" : "pointer" }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={(form.toolsets || []).includes(toolset.name)}
-                                            onChange={() => toggleToolset(toolset.name)}
-                                            disabled={isReadOnly}
-                                            style={{ marginRight: "8px" }}
-                                        />
-                                        <span>{toolset.name}</span>
-                                        {toolset.description && (
-                                            <span style={{ marginLeft: "8px", color: "#6a6e73", fontSize: "0.9em" }}>
-                                                — {toolset.description}
-                                            </span>
-                                        )}
-                                    </label>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </FormGroup>
-
                 <FormGroup label="Allowed Tools" fieldId="allowedTools">
-                    <FormHelperText>
-                        <HelperText>
-                            <HelperTextItem>
-                                Additional tool patterns (one per line, e.g. "Read(*)",
-                                "Bash(ls *)").
-                            </HelperTextItem>
-                        </HelperText>
-                    </FormHelperText>
-                    <TextArea id="allowedTools"
-                        value={(form.allowedTools || []).join("\n")}
-                        onChange={(_e, v) => updateForm({
-                            allowedTools: v.split("\n")
-                                .map((s) => s.trim())
-                                .filter((s) => s.length > 0),
-                        })}
-                        isDisabled={isReadOnly} rows={4} />
+                    <ToolListEditor
+                        tools={form.allowedTools || []}
+                        onAdd={(tool) => {
+                            updateForm({ allowedTools: [...(form.allowedTools || []), tool] });
+                        }}
+                        onRemove={(tool) => {
+                            updateForm({
+                                allowedTools: (form.allowedTools || []).filter((t) => t !== tool),
+                            });
+                        }}
+                        onReplace={(tools) => {
+                            updateForm({ allowedTools: tools });
+                        }}
+                        helpText={<>
+                            Define which tools are automatically approved for sessions using this
+                            template. Use patterns like <code>Bash(git log *)</code> to allow
+                            specific shell commands. Reference a toolset using{" "}
+                            <code>@ToolsetName</code> (e.g. <code>@Read-Only Tools</code>) to
+                            include all tools from that collection.
+                        </>}
+                    />
                 </FormGroup>
+                {!isReadOnly && (
+                    <FormGroup>
+                        <Button variant="primary" onClick={handleSave}
+                            isDisabled={!dirty || !form.name || saving}
+                            isLoading={saving}>
+                            Save
+                        </Button>
+                    </FormGroup>
+                )}
             </Form>
         </PageSection>
     );

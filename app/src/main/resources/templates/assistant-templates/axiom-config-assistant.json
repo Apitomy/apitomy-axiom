@@ -6,7 +6,6 @@
   "welcomeMessage": "Hi! I'm the **Axiom Configuration Assistant**. I can help you create and refine:\n\n- **Tools** — script-based tools that AI agents can invoke\n- **Action Types** — define kinds of work for AI agents or scripts\n- **Report Definitions** — recurring or on-demand reports\n\nI can look up your existing configuration to understand what's already set up. Just describe what you'd like to create or ask me a question to get started!",
   "workingDirectory": null,
   "mcpServers": ["@axiom-assistant"],
-  "toolsets": [],
   "allowedTools": [
     "Read(*)", "Write(*)", "Edit(*)",
     "Bash(ls *)", "Bash(cat *)",

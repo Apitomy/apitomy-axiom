@@ -1178,7 +1178,6 @@ export interface SessionTemplate {
     welcomeMessage?: string;
     workingDirectory?: string;
     mcpServers: string[];
-    toolsets: string[];
     allowedTools: string[];
 }
 
@@ -1190,7 +1189,6 @@ export interface NewSessionTemplate {
     welcomeMessage?: string;
     workingDirectory?: string;
     mcpServers?: string[];
-    toolsets?: string[];
     allowedTools?: string[];
 }
 
