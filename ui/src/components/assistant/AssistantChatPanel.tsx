@@ -134,6 +134,21 @@ export function AssistantChatPanel({ sessionId, onItemsChanged }: AssistantChatP
             }
         });
 
+        es.addEventListener("permission_resolved", (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                setMessages((prev) =>
+                    prev.map((m) =>
+                        m.permissionId === data.permissionId
+                            ? { ...m, permissionResolved: true }
+                            : m
+                    )
+                );
+            } catch {
+                // ignore
+            }
+        });
+
         es.addEventListener("turn_complete", () => {
             setIsProcessing(false);
         });

@@ -160,6 +160,12 @@ public class AssistantSession {
     public void respondToPermission(String permissionId, boolean allow,
                                      com.fasterxml.jackson.databind.JsonNode toolInput)
             throws IOException {
+        // Record the resolution in event history for replay
+        ObjectNode resolvedData = MAPPER.createObjectNode();
+        resolvedData.put("permissionId", permissionId);
+        resolvedData.put("allow", allow);
+        addEvent(new SseEvent("permission_resolved", resolvedData));
+
         ObjectNode root = MAPPER.createObjectNode();
         root.put("type", "control_response");
         ObjectNode response = MAPPER.createObjectNode();

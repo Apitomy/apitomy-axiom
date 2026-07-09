@@ -117,6 +117,7 @@ if [[ "$PERSIST" == true ]]; then
     JAVA_ARGS+=(-Dquarkus.profile=persist)
     echo "Starting backend on http://localhost:9090 (persistence enabled) ..."
 else
+    JAVA_ARGS+=(-Dquarkus.profile=dev)
     echo "Starting backend on http://localhost:9090 ..."
 fi
 java "${JAVA_ARGS[@]}" -jar app/target/quarkus-app/quarkus-run.jar &
