@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
     PageSection,
     Button,
@@ -7,6 +7,7 @@ import {
     FlexItem,
     Label,
     Spinner,
+    Tooltip,
     Modal,
     ModalBody,
     ModalFooter,
@@ -14,6 +15,7 @@ import {
     Alert,
 } from "@patternfly/react-core";
 import ArrowLeftIcon from "@patternfly/react-icons/dist/esm/icons/arrow-left-icon";
+import ExternalLinkAltIcon from "@patternfly/react-icons/dist/esm/icons/external-link-alt-icon";
 import { AssistantChatPanel, type SessionMode } from "../components/assistant/AssistantChatPanel";
 import { AssistantGeneratedItems } from "../components/assistant/AssistantGeneratedItems";
 import {
@@ -27,6 +29,8 @@ import {
 export function AssistantSessionPage() {
     const { sessionId } = useParams<{ sessionId: string }>();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const isBreakout = searchParams.get("breakout") === "true";
     const [session, setSession] = useState<AssistantSessionInfo | null>(null);
     const [loading, setLoading] = useState(true);
     const [itemsRefresh, setItemsRefresh] = useState(0);
@@ -41,13 +45,18 @@ export function AssistantSessionPage() {
         if (!sessionId) return;
         setLoading(true);
         fetchAssistantSession(sessionId)
-            .then(setSession)
+            .then((s) => {
+                setSession(s);
+                if (isBreakout) {
+                    document.title = `${s.name} — AI Assistant`;
+                }
+            })
             .catch((err) => {
                 console.error("Failed to load session:", err);
-                navigate("/assistant");
+                if (!isBreakout) navigate("/assistant");
             })
             .finally(() => setLoading(false));
-    }, [sessionId, navigate]);
+    }, [sessionId, navigate, isBreakout]);
 
     const handleItemsChanged = useCallback(() => {
         setItemsRefresh((n) => n + 1);
@@ -61,10 +70,23 @@ export function AssistantSessionPage() {
         if (!sessionId) return;
         try {
             await deleteAssistantSession(sessionId);
-            navigate("/assistant");
+            if (isBreakout) {
+                window.close();
+            } else {
+                navigate("/assistant");
+            }
         } catch (err) {
             console.error("Failed to end session:", err);
         }
+    };
+
+    const handleBreakout = () => {
+        if (!sessionId) return;
+        window.open(
+            `/assistant/${sessionId}?breakout=true`,
+            "_blank",
+        );
+        navigate("/assistant");
     };
 
     const handleApply = async () => {
@@ -125,11 +147,13 @@ export function AssistantSessionPage() {
                 backgroundColor: sessionMode === "plan" ? "#fffaf0" : undefined,
                 transition: "background-color 0.3s ease, border-color 0.3s ease",
             }}>
-                <FlexItem>
-                    <Button variant="plain" onClick={() => navigate("/assistant")}>
-                        <ArrowLeftIcon />
-                    </Button>
-                </FlexItem>
+                {!isBreakout && (
+                    <FlexItem>
+                        <Button variant="plain" onClick={() => navigate("/assistant")}>
+                            <ArrowLeftIcon />
+                        </Button>
+                    </FlexItem>
+                )}
                 <FlexItem grow={{ default: "grow" }}>
                     <span style={{ fontWeight: 600, fontSize: "16px" }}>{session.name}</span>
                     {sessionMode === "plan" && (
@@ -154,9 +178,21 @@ export function AssistantSessionPage() {
                         variant="secondary"
                         isDanger
                         onClick={() => setIsEndConfirmOpen(true)}
+                        style={{ marginRight: isBreakout ? 0 : 8 }}
                     >
                         End Session
                     </Button>
+                    {!isBreakout && (
+                        <Tooltip content="Open in new window">
+                            <Button
+                                variant="plain"
+                                aria-label="Open in new window"
+                                onClick={handleBreakout}
+                            >
+                                <ExternalLinkAltIcon />
+                            </Button>
+                        </Tooltip>
+                    )}
                 </FlexItem>
             </Flex>
 

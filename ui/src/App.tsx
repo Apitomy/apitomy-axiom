@@ -77,12 +77,18 @@ export function App() {
     const hasCheckErrors = startupChecks != null &&
         startupChecks.some((c) => c.status === "error");
     const isAssistantPage = location.pathname.startsWith("/assistant");
+    const isBreakout = new URLSearchParams(location.search).get("breakout") === "true";
 
     return (
         <Page
-            masthead={<AppMasthead engineName={engineName} appVersion={appVersion} />}
-            sidebar={hasCheckErrors || isAssistantPage ? undefined : <AppSidebar />}
+            masthead={isBreakout ? undefined : <AppMasthead engineName={engineName} appVersion={appVersion} />}
+            sidebar={hasCheckErrors || isAssistantPage || isBreakout ? undefined : <AppSidebar />}
             isContentFilled
+            style={isBreakout ? {
+                paddingTop: 8,
+                "--pf-v6-c-page__sidebar--Width": "0px",
+                "--pf-v6-c-page__sidebar--xl--Width": "0px",
+            } as React.CSSProperties : undefined}
         >
             {hasCheckErrors ? (
                 <ConfigurationWarning checks={startupChecks!} />

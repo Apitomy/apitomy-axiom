@@ -6,6 +6,7 @@ import {
     sendAssistantMessage,
     respondToAssistantPermission,
 } from "../../config/api";
+import { randomThinkingMessage } from "./thinkingMessages";
 
 export type SessionMode = "normal" | "plan";
 
@@ -23,28 +24,6 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange }: 
     const [processingText, setProcessingText] = useState("");
     const eventSourceRef = useRef<EventSource | null>(null);
 
-    const THINKING_MESSAGES = [
-        "Claude is working...",
-        "Pondering the mysteries of code...",
-        "Consulting the silicon oracle...",
-        "Rummaging through the codebase...",
-        "Herding electrons...",
-        "Untangling spaghetti...",
-        "Asking the rubber duck...",
-        "Brewing a fresh pot of logic...",
-        "Warming up the flux capacitor...",
-        "Reticulating splines...",
-        "Bueller? Bueller? Bueller?...",
-        "I'll be back... with an answer...",
-        "Wax on, wax off, code on...",
-        "Roads? Where we're going we don't need roads...",
-        "Using the Force...",
-        "Phoning home for help...",
-        "Nobody puts Claude in a corner...",
-        "Make it so, Number One...",
-        "I feel the need... the need for speed...",
-        "Live long and process...",
-    ];
 
     const addMessage = useCallback((msg: Omit<ChatMessage, "id">) => {
         setMessages((prev) => [...prev, { ...msg, id: String(++messageIdCounter) }]);
@@ -64,11 +43,9 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange }: 
                         if (last && last.type === "assistant") {
                             return [...prev.slice(0, -1), { ...last, content: data.text }];
                         }
-                        setProcessingText(
-                            THINKING_MESSAGES[Math.floor(Math.random() * THINKING_MESSAGES.length)]
-                        );
                         return [...prev, { id: String(++messageIdCounter), type: "assistant", content: data.text }];
                     });
+                    setProcessingText(randomThinkingMessage());
                 }
             } catch {
                 // ignore
@@ -95,7 +72,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange }: 
 
         es.addEventListener("thinking", () => {
             setProcessingText(
-                THINKING_MESSAGES[Math.floor(Math.random() * THINKING_MESSAGES.length)]
+                randomThinkingMessage()
             );
         });
 
@@ -108,6 +85,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange }: 
                     toolInput: data.input,
                     toolUseId: data.id,
                 });
+                setProcessingText(randomThinkingMessage());
                 if (data.name === "EnterPlanMode") {
                     onModeChange?.("plan");
                 }
@@ -226,7 +204,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange }: 
     const handleSend = useCallback(async (message: string) => {
         addMessage({ type: "user", content: message });
         setProcessingText(
-            THINKING_MESSAGES[Math.floor(Math.random() * THINKING_MESSAGES.length)]
+            randomThinkingMessage()
         );
         setIsProcessing(true);
         try {
