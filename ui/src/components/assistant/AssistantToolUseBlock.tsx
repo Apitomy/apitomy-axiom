@@ -1,11 +1,14 @@
 import { useState } from "react";
 import {
     Button,
+    Content,
     ExpandableSection,
     Flex,
     FlexItem,
     Label,
 } from "@patternfly/react-core";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Light as SyntaxHighlighter } from "react-syntax-highlighter";
 import json from "react-syntax-highlighter/dist/esm/languages/hljs/json";
 import bash from "react-syntax-highlighter/dist/esm/languages/hljs/bash";
@@ -33,19 +36,21 @@ interface AssistantToolUseBlockProps {
     isError?: boolean;
     permissionId?: string;
     permissionResolved?: boolean;
+    permissionAllowed?: boolean;
     onPermissionRespond?: (permissionId: string, allow: boolean, toolInput?: Record<string, unknown>) => void;
 }
 
 export function AssistantToolUseBlock({
     toolName, input, result, isError,
-    permissionId, permissionResolved, onPermissionRespond,
+    permissionId, permissionResolved, permissionAllowed, onPermissionRespond,
 }: AssistantToolUseBlockProps) {
     const [isExpanded, setIsExpanded] = useState(false);
 
     const needsPermission = permissionId && !permissionResolved;
     const isAskUser = toolName === "AskUserQuestion";
+    const isPlanApproval = toolName === "ExitPlanMode";
     const borderColor = needsPermission
-        ? (isAskUser ? "#2b9af3" : "#f0ab00")
+        ? (isPlanApproval ? "#3e8635" : isAskUser ? "#2b9af3" : "#f0ab00")
         : undefined;
 
     const inputPreview = input
@@ -135,7 +140,61 @@ export function AssistantToolUseBlock({
                 </div>
             )}
 
-            {permissionId && !isAskUser && (
+            {permissionId && isPlanApproval && (
+                <div style={{
+                    padding: "10px 12px",
+                    backgroundColor: needsPermission ? "#f3faf3" : "#f0f0f0",
+                    borderTop: "1px solid #d2d2d2",
+                    fontSize: "13px",
+                }}>
+                    {needsPermission ? (
+                        <>
+                            <div style={{ fontWeight: 600, marginBottom: 8 }}>
+                                Plan ready for review
+                            </div>
+                            {input?.plan && (
+                                <div className="assistant-markdown" style={{
+                                    marginBottom: 10,
+                                    padding: "12px 16px",
+                                    backgroundColor: "white",
+                                    borderRadius: "4px",
+                                    border: "1px solid #c6e3c6",
+                                    maxHeight: "300px",
+                                    overflow: "auto",
+                                    fontSize: "13px",
+                                }}>
+                                    <Content>
+                                        <Markdown remarkPlugins={[remarkGfm]}>
+                                            {input.plan as string}
+                                        </Markdown>
+                                    </Content>
+                                </div>
+                            )}
+                            <Flex>
+                                <FlexItem>
+                                    <Button variant="primary" size="sm"
+                                        style={{ backgroundColor: "#3e8635", borderColor: "#3e8635" }}
+                                        onClick={() => onPermissionRespond?.(permissionId, true, input)}>
+                                        Approve Plan
+                                    </Button>
+                                </FlexItem>
+                                <FlexItem>
+                                    <Button variant="secondary" size="sm"
+                                        onClick={() => onPermissionRespond?.(permissionId, false, input)}>
+                                        Reject
+                                    </Button>
+                                </FlexItem>
+                            </Flex>
+                        </>
+                    ) : (
+                        <span style={{ color: permissionAllowed ? "#3e8635" : "#c9190b", fontStyle: "italic" }}>
+                            {permissionAllowed ? "Plan approved" : "Plan rejected"}
+                        </span>
+                    )}
+                </div>
+            )}
+
+            {permissionId && !isAskUser && !isPlanApproval && (
                 <div style={{
                     padding: "10px 12px",
                     backgroundColor: needsPermission ? "#fdf7e7" : "#f0f0f0",
@@ -180,8 +239,8 @@ export function AssistantToolUseBlock({
                             </Flex>
                         </>
                     ) : (
-                        <span style={{ color: "#6a6e73", fontStyle: "italic" }}>
-                            Permission granted
+                        <span style={{ color: permissionAllowed ? "#6a6e73" : "#c9190b", fontStyle: "italic" }}>
+                            {permissionAllowed ? "Permission granted" : "Permission denied"}
                         </span>
                     )}
                 </div>

@@ -7,14 +7,17 @@ import {
     respondToAssistantPermission,
 } from "../../config/api";
 
+export type SessionMode = "normal" | "plan";
+
 interface AssistantChatPanelProps {
     sessionId: string;
     onItemsChanged?: () => void;
+    onModeChange?: (mode: SessionMode) => void;
 }
 
 let messageIdCounter = 0;
 
-export function AssistantChatPanel({ sessionId, onItemsChanged }: AssistantChatPanelProps) {
+export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange }: AssistantChatPanelProps) {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [processingText, setProcessingText] = useState("");
@@ -61,6 +64,9 @@ export function AssistantChatPanel({ sessionId, onItemsChanged }: AssistantChatP
                         if (last && last.type === "assistant") {
                             return [...prev.slice(0, -1), { ...last, content: data.text }];
                         }
+                        setProcessingText(
+                            THINKING_MESSAGES[Math.floor(Math.random() * THINKING_MESSAGES.length)]
+                        );
                         return [...prev, { id: String(++messageIdCounter), type: "assistant", content: data.text }];
                     });
                 }
@@ -102,6 +108,9 @@ export function AssistantChatPanel({ sessionId, onItemsChanged }: AssistantChatP
                     toolInput: data.input,
                     toolUseId: data.id,
                 });
+                if (data.name === "EnterPlanMode") {
+                    onModeChange?.("plan");
+                }
             } catch {
                 // ignore
             }
@@ -160,13 +169,17 @@ export function AssistantChatPanel({ sessionId, onItemsChanged }: AssistantChatP
         es.addEventListener("permission_resolved", (e) => {
             try {
                 const data = JSON.parse(e.data);
-                setMessages((prev) =>
-                    prev.map((m) =>
+                setMessages((prev) => {
+                    const match = prev.find((m) => m.permissionId === data.permissionId);
+                    if (match?.toolName === "ExitPlanMode") {
+                        onModeChange?.("normal");
+                    }
+                    return prev.map((m) =>
                         m.permissionId === data.permissionId
-                            ? { ...m, permissionResolved: true }
+                            ? { ...m, permissionResolved: true, permissionAllowed: data.allow }
                             : m
-                    )
-                );
+                    );
+                });
             } catch {
                 // ignore
             }
@@ -208,7 +221,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged }: AssistantChatP
             es.close();
             eventSourceRef.current = null;
         };
-    }, [sessionId, addMessage, onItemsChanged]);
+    }, [sessionId, addMessage, onItemsChanged, onModeChange]);
 
     const handleSend = useCallback(async (message: string) => {
         addMessage({ type: "user", content: message });
@@ -230,7 +243,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged }: AssistantChatP
         setMessages((prev) =>
             prev.map((m) =>
                 m.permissionId === permissionId
-                    ? { ...m, permissionResolved: true }
+                    ? { ...m, permissionResolved: true, permissionAllowed: allow }
                     : m
             )
         );

@@ -18,6 +18,7 @@ export interface ChatMessage {
     isError?: boolean;
     permissionId?: string;
     permissionResolved?: boolean;
+    permissionAllowed?: boolean;
 }
 
 interface AssistantMessageListProps {
@@ -129,6 +130,7 @@ export function AssistantMessageList({ messages, onPermissionRespond, isProcessi
                                 isError={msg.isError}
                                 permissionId={msg.permissionId}
                                 permissionResolved={msg.permissionResolved}
+                                permissionAllowed={msg.permissionAllowed}
                                 onPermissionRespond={onPermissionRespond}
                             />
                         );

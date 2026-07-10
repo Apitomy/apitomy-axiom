@@ -5,6 +5,7 @@ import {
     Button,
     Flex,
     FlexItem,
+    Label,
     Spinner,
     Modal,
     ModalBody,
@@ -13,7 +14,7 @@ import {
     Alert,
 } from "@patternfly/react-core";
 import ArrowLeftIcon from "@patternfly/react-icons/dist/esm/icons/arrow-left-icon";
-import { AssistantChatPanel } from "../components/assistant/AssistantChatPanel";
+import { AssistantChatPanel, type SessionMode } from "../components/assistant/AssistantChatPanel";
 import { AssistantGeneratedItems } from "../components/assistant/AssistantGeneratedItems";
 import {
     fetchAssistantSession,
@@ -33,6 +34,7 @@ export function AssistantSessionPage() {
     const [applying, setApplying] = useState(false);
     const [applyResult, setApplyResult] = useState<ImportResult | null>(null);
     const [applyError, setApplyError] = useState<string | null>(null);
+    const [sessionMode, setSessionMode] = useState<SessionMode>("normal");
 
     useEffect(() => {
         if (!sessionId) return;
@@ -105,13 +107,18 @@ export function AssistantSessionPage() {
                 overflow: "hidden",
                 minHeight: 0,
                 flex: "1 1 0",
+                gap: 0,
             }}>
             {/* Header — fixed at top */}
             <Flex style={{
                 padding: "12px 16px",
-                borderBottom: "1px solid #d2d2d2",
+                border: sessionMode === "plan" ? "1px solid #f0ab00" : undefined,
+                borderBottom: sessionMode === "plan" ? "1px solid #f0ab00" : "1px solid #d2d2d2",
+                borderRadius: sessionMode === "plan" ? "12px 12px 0 0" : undefined,
                 alignItems: "center",
                 flexShrink: 0,
+                backgroundColor: sessionMode === "plan" ? "#fffaf0" : undefined,
+                transition: "background-color 0.3s ease, border-color 0.3s ease",
             }}>
                 <FlexItem>
                     <Button variant="plain" onClick={() => navigate("/assistant")}>
@@ -120,6 +127,11 @@ export function AssistantSessionPage() {
                 </FlexItem>
                 <FlexItem grow={{ default: "grow" }}>
                     <span style={{ fontWeight: 600, fontSize: "16px" }}>{session.name}</span>
+                    {sessionMode === "plan" && (
+                        <Label color="orange" isCompact style={{ marginLeft: 10 }}>
+                            Plan Mode
+                        </Label>
+                    )}
                 </FlexItem>
                 <FlexItem>
                     {isConfigAssistant && (
@@ -172,6 +184,7 @@ export function AssistantSessionPage() {
                     <AssistantChatPanel
                         sessionId={sessionId}
                         onItemsChanged={isConfigAssistant ? handleItemsChanged : undefined}
+                        onModeChange={setSessionMode}
                     />
                 </div>
 
