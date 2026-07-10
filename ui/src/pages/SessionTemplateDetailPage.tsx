@@ -15,6 +15,9 @@ import {
     Label,
     PageSection,
     Spinner,
+    Tab,
+    Tabs,
+    TabTitleText,
     TextArea,
     TextInput,
 } from "@patternfly/react-core";
@@ -39,6 +42,7 @@ export function SessionTemplateDetailPage() {
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
     const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
+    const [activeTab, setActiveTab] = useState(0);
 
     const loadData = useCallback(() => {
         if (!templateId) return;
@@ -92,7 +96,6 @@ export function SessionTemplateDetailPage() {
         updateForm({ mcpServers: updated });
     };
 
-
     if (loading) {
         return <PageSection><Spinner size="lg" /></PageSection>;
     }
@@ -138,154 +141,180 @@ export function SessionTemplateDetailPage() {
                 )}
             </Flex>
 
-            <Form>
-                <FormGroup label="Name" isRequired fieldId="name">
-                    <TextInput id="name" value={form.name}
-                        onChange={(_e, v) => updateForm({ name: v })}
-                        isDisabled={isReadOnly} />
-                </FormGroup>
+            <Tabs activeKey={activeTab}
+                onSelect={(_e, key) => setActiveTab(key as number)}>
 
-                <FormGroup label="Description" isRequired fieldId="description">
-                    <TextArea id="description" value={form.description}
-                        onChange={(_e, v) => updateForm({ description: v })}
-                        isDisabled={isReadOnly} rows={2} />
-                </FormGroup>
+                <Tab eventKey={0} title={<TabTitleText>General</TabTitleText>}>
+                    <Form style={{ marginTop: 24, maxWidth: 800 }}>
+                        <FormGroup label="Name" isRequired fieldId="name">
+                            <TextInput id="name" value={form.name}
+                                onChange={(_e, v) => updateForm({ name: v })}
+                                readOnlyVariant={isReadOnly ? "default" : undefined} />
+                        </FormGroup>
 
-                <FormGroup label="System Prompt" isRequired fieldId="systemPrompt">
-                    <FormHelperText>
-                        <HelperText>
-                            <HelperTextItem>
-                                Markdown content written to CLAUDE.md in the session working
-                                directory.
-                            </HelperTextItem>
-                        </HelperText>
-                    </FormHelperText>
-                    <CodeEditor
-                        code={form.systemPrompt}
-                        onChange={(v) => updateForm({ systemPrompt: v })}
-                        language={Language.markdown}
-                        height="300px"
-                        isReadOnly={isReadOnly}
-                        options={{
-                            quickSuggestions: false,
-                            suggestOnTriggerCharacters: false,
-                            wordBasedSuggestions: "off",
-                            parameterHints: { enabled: false },
-                        }}
-                    />
-                </FormGroup>
+                        <FormGroup label="Description" isRequired fieldId="description">
+                            <TextArea id="description" value={form.description}
+                                onChange={(_e, v) => updateForm({ description: v })}
+                                readOnlyVariant={isReadOnly ? "default" : undefined} rows={3} />
+                        </FormGroup>
 
-                <FormGroup label="Welcome Message" fieldId="welcomeMessage">
-                    <FormHelperText>
-                        <HelperText>
-                            <HelperTextItem>
-                                First message shown in the chat UI (supports markdown).
-                                Leave empty for no welcome message.
-                            </HelperTextItem>
-                        </HelperText>
-                    </FormHelperText>
-                    <TextArea id="welcomeMessage"
-                        value={form.welcomeMessage || ""}
-                        onChange={(_e, v) =>
-                            updateForm({ welcomeMessage: v || undefined })
-                        }
-                        isDisabled={isReadOnly} rows={4} />
-                </FormGroup>
+                        <FormGroup label="Welcome Message" fieldId="welcomeMessage">
+                            <FormHelperText>
+                                <HelperText>
+                                    <HelperTextItem>
+                                        First message shown in the chat UI (supports markdown).
+                                        Leave empty for no welcome message.
+                                    </HelperTextItem>
+                                </HelperText>
+                            </FormHelperText>
+                            <TextArea id="welcomeMessage"
+                                value={form.welcomeMessage || ""}
+                                onChange={(_e, v) =>
+                                    updateForm({ welcomeMessage: v || undefined })
+                                }
+                                readOnlyVariant={isReadOnly ? "default" : undefined} rows={4} />
+                        </FormGroup>
 
-                <FormGroup label="Working Directory" fieldId="workingDirectory">
-                    <FormHelperText>
-                        <HelperText>
-                            <HelperTextItem>
-                                Optional absolute path. If empty, Axiom creates a temporary
-                                directory.
-                            </HelperTextItem>
-                        </HelperText>
-                    </FormHelperText>
-                    <TextInput id="workingDirectory"
-                        value={form.workingDirectory || ""}
-                        onChange={(_e, v) =>
-                            updateForm({ workingDirectory: v || undefined })
-                        }
-                        isDisabled={isReadOnly} />
-                </FormGroup>
+                        <FormGroup label="Working Directory" fieldId="workingDirectory">
+                            <FormHelperText>
+                                <HelperText>
+                                    <HelperTextItem>
+                                        Optional absolute path. If empty, Axiom creates a
+                                        temporary directory.
+                                    </HelperTextItem>
+                                </HelperText>
+                            </FormHelperText>
+                            <TextInput id="workingDirectory"
+                                value={form.workingDirectory || ""}
+                                onChange={(_e, v) =>
+                                    updateForm({ workingDirectory: v || undefined })
+                                }
+                                readOnlyVariant={isReadOnly ? "default" : undefined} />
+                        </FormGroup>
+                    </Form>
+                </Tab>
 
-                <FormGroup label="MCP Servers" fieldId="mcpServers">
-                    <FormHelperText>
-                        <HelperText>
-                            <HelperTextItem>
-                                Select MCP servers to include in the session. These are
-                                resolved from your configured MCP servers.
-                            </HelperTextItem>
-                        </HelperText>
-                    </FormHelperText>
-                    <div style={{
-                        border: "1px solid #d2d2d2",
-                        borderRadius: "3px",
-                        padding: "8px",
-                        maxHeight: "200px",
-                        overflowY: "auto"
-                    }}>
-                        {mcpServers.length === 0 ? (
-                            <div style={{ color: "#6a6e73", fontStyle: "italic" }}>
-                                No MCP servers configured
-                            </div>
-                        ) : (
-                            mcpServers.map((server) => (
-                                <div key={server.name} style={{ marginBottom: "4px" }}>
-                                    <label style={{ display: "flex", alignItems: "center", cursor: isReadOnly ? "not-allowed" : "pointer" }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={(form.mcpServers || []).includes(server.name)}
-                                            onChange={() => toggleMcpServer(server.name)}
-                                            disabled={isReadOnly}
-                                            style={{ marginRight: "8px" }}
-                                        />
-                                        <span>{server.name}</span>
-                                        {server.description && (
-                                            <span style={{ marginLeft: "8px", color: "#6a6e73", fontSize: "0.9em" }}>
-                                                — {server.description}
-                                            </span>
-                                        )}
-                                    </label>
-                                </div>
-                            ))
-                        )}
+                <Tab eventKey={1} title={<TabTitleText>System Prompt</TabTitleText>}>
+                    <div style={{ marginTop: 24 }}>
+                        <FormHelperText style={{ marginBottom: 12 }}>
+                            <HelperText>
+                                <HelperTextItem>
+                                    Markdown content appended to the Claude Code system prompt
+                                    for sessions using this template.
+                                </HelperTextItem>
+                            </HelperText>
+                        </FormHelperText>
+                        <CodeEditor
+                            code={form.systemPrompt}
+                            onChange={(v) => updateForm({ systemPrompt: v })}
+                            language={Language.markdown}
+                            height="500px"
+                            isReadOnly={isReadOnly}
+                            isLineNumbersVisible
+                            options={{
+                                quickSuggestions: false,
+                                suggestOnTriggerCharacters: false,
+                                wordBasedSuggestions: "off",
+                                parameterHints: { enabled: false },
+                                wordWrap: "on",
+                            }}
+                        />
                     </div>
-                </FormGroup>
+                </Tab>
 
-                <FormGroup label="Allowed Tools" fieldId="allowedTools">
-                    <ToolListEditor
-                        tools={form.allowedTools || []}
-                        onAdd={(tool) => {
-                            updateForm({ allowedTools: [...(form.allowedTools || []), tool] });
-                        }}
-                        onRemove={(tool) => {
-                            updateForm({
-                                allowedTools: (form.allowedTools || []).filter((t) => t !== tool),
-                            });
-                        }}
-                        onReplace={(tools) => {
-                            updateForm({ allowedTools: tools });
-                        }}
-                        helpText={<>
-                            Define which tools are automatically approved for sessions using this
-                            template. Use patterns like <code>Bash(git log *)</code> to allow
-                            specific shell commands. Reference a toolset using{" "}
-                            <code>@ToolsetName</code> (e.g. <code>@Read-Only Tools</code>) to
-                            include all tools from that collection.
-                        </>}
-                    />
-                </FormGroup>
-                {!isReadOnly && (
-                    <FormGroup>
-                        <Button variant="primary" onClick={handleSave}
-                            isDisabled={!dirty || !form.name || saving}
-                            isLoading={saving}>
-                            Save
-                        </Button>
-                    </FormGroup>
-                )}
-            </Form>
+                <Tab eventKey={2} title={<TabTitleText>Tools &amp; Servers</TabTitleText>}>
+                    <Form style={{ marginTop: 24, maxWidth: 800 }}>
+                        <FormGroup label="Allowed Tools" fieldId="allowedTools">
+                            <ToolListEditor
+                                tools={form.allowedTools || []}
+                                onAdd={(tool) => {
+                                    updateForm({
+                                        allowedTools: [...(form.allowedTools || []), tool],
+                                    });
+                                }}
+                                onRemove={(tool) => {
+                                    updateForm({
+                                        allowedTools: (form.allowedTools || [])
+                                            .filter((t) => t !== tool),
+                                    });
+                                }}
+                                onReplace={(tools) => {
+                                    updateForm({ allowedTools: tools });
+                                }}
+                                helpText={<>
+                                    Define which tools are automatically approved for sessions
+                                    using this template. Use patterns like{" "}
+                                    <code>Bash(git log *)</code> to allow specific shell
+                                    commands. Reference a toolset using{" "}
+                                    <code>@ToolsetName</code> (e.g.{" "}
+                                    <code>@Read-Only Tools</code>) to include all tools from
+                                    that collection.
+                                </>}
+                            />
+                        </FormGroup>
+
+                        <FormGroup label="MCP Servers" fieldId="mcpServers">
+                            <FormHelperText>
+                                <HelperText>
+                                    <HelperTextItem>
+                                        Select MCP servers to include in the session. These
+                                        are resolved from your configured MCP servers.
+                                    </HelperTextItem>
+                                </HelperText>
+                            </FormHelperText>
+                            <div style={{
+                                border: "1px solid #d2d2d2",
+                                borderRadius: "3px",
+                                padding: "8px",
+                                maxHeight: "200px",
+                                overflowY: "auto",
+                            }}>
+                                {mcpServers.length === 0 ? (
+                                    <div style={{
+                                        color: "#6a6e73",
+                                        fontStyle: "italic",
+                                    }}>
+                                        No MCP servers configured
+                                    </div>
+                                ) : (
+                                    mcpServers.map((server) => (
+                                        <div key={server.name}
+                                            style={{ marginBottom: "4px" }}>
+                                            <label style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                cursor: isReadOnly
+                                                    ? "not-allowed" : "pointer",
+                                            }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={(form.mcpServers || [])
+                                                        .includes(server.name)}
+                                                    onChange={() =>
+                                                        toggleMcpServer(server.name)
+                                                    }
+                                                    disabled={isReadOnly}
+                                                    style={{ marginRight: "8px" }}
+                                                />
+                                                <span>{server.name}</span>
+                                                {server.description && (
+                                                    <span style={{
+                                                        marginLeft: "8px",
+                                                        color: "#6a6e73",
+                                                        fontSize: "0.9em",
+                                                    }}>
+                                                        — {server.description}
+                                                    </span>
+                                                )}
+                                            </label>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </FormGroup>
+                    </Form>
+                </Tab>
+            </Tabs>
         </PageSection>
     );
 }

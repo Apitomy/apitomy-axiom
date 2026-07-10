@@ -28,7 +28,10 @@ public class SessionTemplateService {
 
     private static final Logger LOG = Logger.getLogger(SessionTemplateService.class);
     private static final String TEMPLATES_RESOURCE_DIR = "templates/assistant-templates/";
-    private static final String[] BUILT_IN_FILES = { "axiom-config-assistant.json" };
+    private static final String[] BUILT_IN_FILES = {
+            "axiom-config-assistant.json",
+            "general-assistant.json",
+    };
 
     @Inject
     ObjectMapper objectMapper;

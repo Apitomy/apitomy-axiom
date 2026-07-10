@@ -18,8 +18,11 @@ import {
     Toolbar,
     ToolbarContent,
     ToolbarItem,
+    ToolbarGroup,
     Form,
     FormGroup,
+    FormSelect,
+    FormSelectOption,
     Alert,
     SearchInput,
 } from "@patternfly/react-core";
@@ -80,6 +83,8 @@ export function AssistantPage() {
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState("");
 
+    const [filterName, setFilterName] = useState("");
+    const [filterTemplateId, setFilterTemplateId] = useState("");
     const [templateMap, setTemplateMap] = useState<Record<string, string>>({});
 
     const load = useCallback(() => {
@@ -139,14 +144,34 @@ export function AssistantPage() {
         }
     };
 
-    const handleDelete = async (id: string, e: React.MouseEvent) => {
+    const filteredSessions = sessions.filter((s) => {
+        if (filterName && !s.name.toLowerCase().includes(filterName.toLowerCase())) {
+            return false;
+        }
+        if (filterTemplateId && s.templateId !== filterTemplateId) {
+            return false;
+        }
+        return true;
+    });
+
+    const uniqueTemplateIds = [...new Set(sessions.map((s) => s.templateId))];
+
+    const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+    const handleDeleteClick = (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (!confirm("End this assistant session?")) return;
+        setDeleteTarget(id);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!deleteTarget) return;
         try {
-            await deleteAssistantSession(id);
+            await deleteAssistantSession(deleteTarget);
+            setDeleteTarget(null);
             load();
         } catch (err) {
             console.error("Failed to delete session:", err);
+            setDeleteTarget(null);
         }
     };
 
@@ -160,7 +185,35 @@ export function AssistantPage() {
             {!loading && sessions.length > 0 && (
                 <Toolbar>
                     <ToolbarContent>
-                        <ToolbarItem>
+                        <ToolbarGroup>
+                            <ToolbarItem>
+                                <SearchInput
+                                    placeholder="Filter by name..."
+                                    value={filterName}
+                                    onChange={(_e, v) => setFilterName(v)}
+                                    onClear={() => setFilterName("")}
+                                    style={{ width: 250 }}
+                                />
+                            </ToolbarItem>
+                            <ToolbarItem>
+                                <FormSelect
+                                    value={filterTemplateId}
+                                    onChange={(_e, v) => setFilterTemplateId(v)}
+                                    aria-label="Filter by template"
+                                    style={{ width: 220 }}
+                                >
+                                    <FormSelectOption value="" label="All templates" />
+                                    {uniqueTemplateIds.map((tid) => (
+                                        <FormSelectOption
+                                            key={tid}
+                                            value={tid}
+                                            label={templateMap[tid] || tid}
+                                        />
+                                    ))}
+                                </FormSelect>
+                            </ToolbarItem>
+                        </ToolbarGroup>
+                        <ToolbarItem align={{ default: "alignEnd" }}>
                             <Button
                                 variant="primary"
                                 icon={<PlusCircleIcon />}
@@ -203,7 +256,7 @@ export function AssistantPage() {
                 </EmptyState>
             ) : (
                 <div style={{ marginTop: 16 }}>
-                    {sessions.map((s) => (
+                    {filteredSessions.map((s) => (
                         <div
                             key={s.id}
                             onClick={() => navigate(`/assistant/${s.id}`)}
@@ -239,7 +292,7 @@ export function AssistantPage() {
                             <Button
                                 variant="plain"
                                 aria-label="Delete session"
-                                onClick={(e) => handleDelete(s.id, e)}
+                                onClick={(e) => handleDeleteClick(s.id, e)}
                             >
                                 <TrashIcon />
                             </Button>
@@ -337,6 +390,27 @@ export function AssistantPage() {
                         Create Session
                     </Button>
                     <Button variant="link" onClick={() => setIsNameModalOpen(false)}>
+                        Cancel
+                    </Button>
+                </ModalFooter>
+            </Modal>
+
+            <Modal
+                isOpen={deleteTarget !== null}
+                onClose={() => setDeleteTarget(null)}
+                variant="small"
+                aria-label="End session confirmation"
+            >
+                <ModalHeader title="End Session?" />
+                <ModalBody>
+                    This will terminate the AI assistant and delete the session.
+                    This action cannot be undone.
+                </ModalBody>
+                <ModalFooter>
+                    <Button variant="danger" onClick={handleDeleteConfirm}>
+                        End Session
+                    </Button>
+                    <Button variant="link" onClick={() => setDeleteTarget(null)}>
                         Cancel
                     </Button>
                 </ModalFooter>
