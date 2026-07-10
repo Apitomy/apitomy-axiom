@@ -1206,8 +1206,7 @@ export interface AssistantItem {
     type: string;
     name: string;
     valid: boolean;
-    errors?: string[];
-    warnings?: string[];
+    validationErrors?: string[];
 }
 
 export async function createAssistantSession(
@@ -1290,6 +1289,13 @@ export async function applyAssistantSession(sessionId: string): Promise<ImportRe
         throw { status: response.status, ...body };
     }
     return response.json();
+}
+
+export async function interruptAssistantSession(sessionId: string): Promise<void> {
+    const response = await fetch(`${API}/assistant/sessions/${sessionId}/interrupt`, {
+        method: "POST",
+    });
+    if (!response.ok) throw new Error("Failed to interrupt session");
 }
 
 export function assistantEventsUrl(sessionId: string): string {

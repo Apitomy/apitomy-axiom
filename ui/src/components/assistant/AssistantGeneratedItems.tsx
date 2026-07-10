@@ -8,7 +8,6 @@ import {
 } from "@patternfly/react-core";
 import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
 import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
-import ExclamationTriangleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-triangle-icon";
 import {
     fetchAssistantItems,
     fetchAssistantItemContent,
@@ -33,7 +32,7 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger }: Assistant
     const [items, setItems] = useState<AssistantItem[]>([]);
     const [loading, setLoading] = useState(false);
     const [selectedItem, setSelectedItem] = useState<{
-        type: string; name: string; errors?: string[]; warnings?: string[];
+        type: string; name: string; validationErrors?: string[];
     } | null>(null);
     const [itemContent, setItemContent] = useState<Record<string, unknown> | null>(null);
 
@@ -55,7 +54,7 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger }: Assistant
             setItemContent(content);
             setSelectedItem({
                 type: item.type, name: item.name,
-                errors: item.errors, warnings: item.warnings,
+                validationErrors: item.validationErrors,
             });
         } catch (err) {
             console.error("Failed to load item:", err);
@@ -122,24 +121,15 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger }: Assistant
                             {typeInfo.label}
                         </Label>
                         <span style={{ flex: 1, fontSize: "13px" }}>{item.name}</span>
-                        {item.valid && !(item.warnings?.length) ? (
+                        {item.valid ? (
                             <CheckCircleIcon style={{ color: "#3e8635" }} />
-                        ) : (() => {
-                            const messages = [
-                                ...(item.errors || []).map((e) => `Error: ${e}`),
-                                ...(item.warnings || []).map((w) => `Warning: ${w}`),
-                            ];
-                            const icon = !item.valid
-                                ? <ExclamationCircleIcon style={{ color: "#c9190b" }} />
-                                : <ExclamationTriangleIcon style={{ color: "#f0ab00" }} />;
-                            return (
-                                <Tooltip content={
-                                    <div>{messages.map((m, i) => <div key={i}>{m}</div>)}</div>
-                                }>
-                                    {icon}
-                                </Tooltip>
-                            );
-                        })()}
+                        ) : (
+                            <Tooltip content={
+                                `${(item.validationErrors || []).length} validation error(s)`
+                            }>
+                                <ExclamationCircleIcon style={{ color: "#c9190b" }} />
+                            </Tooltip>
+                        )}
                     </div>
                 );
             })}
@@ -150,8 +140,7 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger }: Assistant
                     onClose={closeModal}
                     name={selectedItem.name}
                     content={itemContent}
-                    errors={selectedItem.errors}
-                    warnings={selectedItem.warnings}
+                    errors={selectedItem.validationErrors}
                 />
             )}
             {selectedItem?.type === "action-types" && itemContent && (
@@ -160,8 +149,7 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger }: Assistant
                     onClose={closeModal}
                     name={selectedItem.name}
                     content={itemContent}
-                    errors={selectedItem.errors}
-                    warnings={selectedItem.warnings}
+                    errors={selectedItem.validationErrors}
                 />
             )}
             {selectedItem?.type === "report-definitions" && itemContent && (
@@ -170,8 +158,7 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger }: Assistant
                     onClose={closeModal}
                     name={selectedItem.name}
                     content={itemContent}
-                    errors={selectedItem.errors}
-                    warnings={selectedItem.warnings}
+                    errors={selectedItem.validationErrors}
                 />
             )}
         </div>

@@ -196,12 +196,14 @@ class AssistantEventParserTest {
     // ── Unknown types ───────────────────────────────────────────────
 
     @Test
-    void parseUnknownTypeReturnsEmpty() {
+    void parseUnknownTypeReturnsUnhandledEvent() {
         String line = """
                 {"type":"something_else","data":"ignored"}""";
 
         List<SseEvent> events = parser.parse(line);
-        assertTrue(events.isEmpty());
+        assertEquals(1, events.size());
+        assertEquals("unhandled_event", events.get(0).type());
+        assertEquals("something_else", events.get(0).data().path("rawType").asText());
     }
 
     // ── Edge cases ──────────────────────────────────────────────────

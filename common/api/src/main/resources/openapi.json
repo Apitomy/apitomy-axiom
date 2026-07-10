@@ -3031,6 +3031,31 @@
         }
       ]
     },
+    "/assistant/sessions/{sessionId}/interrupt": {
+      "post": {
+        "tags": [
+          "Assistant"
+        ],
+        "summary": "Interrupt the current turn in an assistant session",
+        "operationId": "interruptAssistantSession",
+        "responses": {
+          "204": {
+            "description": "Interrupt signal sent"
+          }
+        },
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The assistant session identifier"
+          }
+        ]
+      }
+    },
     "/assistant/sessions/{sessionId}/messages": {
       "post": {
         "tags": [
@@ -5979,6 +6004,11 @@
           "allow": {
             "description": "Whether to allow (true) or deny (false) the tool call",
             "type": "boolean"
+          },
+          "updatedInput": {
+            "description": "The original tool input to echo back when allowing",
+            "type": "object",
+            "additionalProperties": true
           }
         }
       },

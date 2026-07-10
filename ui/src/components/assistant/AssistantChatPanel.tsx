@@ -31,6 +31,16 @@ export function AssistantChatPanel({ sessionId, onItemsChanged }: AssistantChatP
         "Brewing a fresh pot of logic...",
         "Warming up the flux capacitor...",
         "Reticulating splines...",
+        "Bueller? Bueller? Bueller?...",
+        "I'll be back... with an answer...",
+        "Wax on, wax off, code on...",
+        "Roads? Where we're going we don't need roads...",
+        "Using the Force...",
+        "Phoning home for help...",
+        "Nobody puts Claude in a corner...",
+        "Make it so, Number One...",
+        "I feel the need... the need for speed...",
+        "Live long and process...",
     ];
 
     const addMessage = useCallback((msg: Omit<ChatMessage, "id">) => {
@@ -70,6 +80,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged }: AssistantChatP
                         }
                         return [...prev, { id: String(++messageIdCounter), type: "user", content: data.content }];
                     });
+                    setIsProcessing(true);
                 }
             } catch {
                 // ignore
@@ -201,6 +212,9 @@ export function AssistantChatPanel({ sessionId, onItemsChanged }: AssistantChatP
 
     const handleSend = useCallback(async (message: string) => {
         addMessage({ type: "user", content: message });
+        setProcessingText(
+            THINKING_MESSAGES[Math.floor(Math.random() * THINKING_MESSAGES.length)]
+        );
         setIsProcessing(true);
         try {
             await sendAssistantMessage(sessionId, message);

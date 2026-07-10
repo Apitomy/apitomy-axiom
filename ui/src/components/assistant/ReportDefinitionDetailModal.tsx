@@ -14,7 +14,6 @@ import {
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { useState } from "react";
 import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
-import ExclamationTriangleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-triangle-icon";
 import { ValidationProblemsTab } from "./ValidationProblemsTab";
 import "./ActionTypeDetailModal.css";
 
@@ -24,7 +23,6 @@ interface ReportDefinitionDetailModalProps {
     name: string;
     content: Record<string, unknown>;
     errors?: string[];
-    warnings?: string[];
 }
 
 export function ReportDefinitionDetailModal({
@@ -33,7 +31,6 @@ export function ReportDefinitionDetailModal({
     name,
     content,
     errors,
-    warnings,
 }: ReportDefinitionDetailModalProps) {
     const [activeTab, setActiveTab] = useState(0);
 
@@ -132,17 +129,14 @@ export function ReportDefinitionDetailModal({
                             </div>
                         </Tab>
                     ) : null}
-                    {((errors?.length ?? 0) > 0 || (warnings?.length ?? 0) > 0) && (
+                    {(errors?.length ?? 0) > 0 && (
                         <Tab eventKey={2} title={
                             <TabTitleText>
-                                {(errors?.length ?? 0) > 0
-                                    ? <ExclamationCircleIcon style={{ color: "#c9190b", marginRight: 6 }} />
-                                    : <ExclamationTriangleIcon style={{ color: "#f0ab00", marginRight: 6 }} />
-                                }
-                                Problems ({(errors?.length ?? 0) + (warnings?.length ?? 0)})
+                                <ExclamationCircleIcon style={{ color: "#c9190b", marginRight: 6 }} />
+                                Problems ({errors!.length})
                             </TabTitleText>
                         }>
-                            <ValidationProblemsTab errors={errors} warnings={warnings} />
+                            <ValidationProblemsTab errors={errors} />
                         </Tab>
                     )}
                 </Tabs>

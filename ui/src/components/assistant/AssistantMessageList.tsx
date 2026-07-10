@@ -31,8 +31,8 @@ export function AssistantMessageList({ messages, onPermissionRespond, isProcessi
     const endRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        endRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [messages.length, isProcessing]);
+        endRef.current?.scrollIntoView({ behavior: "auto" });
+    }, [messages.length]);
 
     return (
         <div style={{

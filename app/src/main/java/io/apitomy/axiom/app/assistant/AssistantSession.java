@@ -215,6 +215,24 @@ public class AssistantSession {
     }
 
     /**
+     * Sends SIGINT to the Claude Code subprocess to interrupt the current
+     * turn, equivalent to pressing ESC in the CLI. The session remains
+     * alive for further interaction.
+     */
+    public void interrupt() {
+        if (process != null && process.isAlive()) {
+            long pid = process.pid();
+            LOG.infof("Interrupting assistant session %s (SIGINT to pid %d)", id, pid);
+            try {
+                new ProcessBuilder("kill", "-INT", String.valueOf(pid))
+                        .start().waitFor();
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to send SIGINT to session %s", id);
+            }
+        }
+    }
+
+    /**
      * Kills the subprocess and marks the session as stopped.
      */
     public void destroy() {
