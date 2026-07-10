@@ -22,6 +22,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange }: 
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [processingText, setProcessingText] = useState("");
+    const [slashCommands, setSlashCommands] = useState<string[]>([]);
     const eventSourceRef = useRef<EventSource | null>(null);
 
 
@@ -33,6 +34,17 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange }: 
         const url = assistantEventsUrl(sessionId);
         const es = new EventSource(url);
         eventSourceRef.current = es;
+
+        es.addEventListener("session_init", (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                if (Array.isArray(data.slashCommands)) {
+                    setSlashCommands(data.slashCommands);
+                }
+            } catch {
+                // ignore
+            }
+        });
 
         es.addEventListener("assistant_text", (e) => {
             try {
@@ -247,7 +259,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange }: 
                 isProcessing={isProcessing}
                 processingText={processingText}
             />
-            <AssistantMessageInput onSend={handleSend} disabled={isProcessing} />
+            <AssistantMessageInput onSend={handleSend} disabled={isProcessing} slashCommands={slashCommands} />
         </div>
     );
 }

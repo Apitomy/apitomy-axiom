@@ -9,16 +9,13 @@ export const THINKING_MESSAGES = [
     "Brewing a fresh pot of logic...",
     "Warming up the flux capacitor...",
     "Reticulating splines...",
-    "Bueller? Bueller? Bueller?...",
     "I'll be back... with an answer...",
-    "Wax on, wax off, code on...",
-    "Roads? Where we're going we don't need roads...",
     "Using the Force...",
     "Phoning home for help...",
     "Nobody puts Claude in a corner...",
-    "Make it so, Number One...",
-    "I feel the need... the need for speed...",
-    "Live long and process...",
+    "Making it so...",
+    "Feeling the need... the need for speed...",
+    "Living long and processing...",
 ];
 
 let lastIndex = -1;

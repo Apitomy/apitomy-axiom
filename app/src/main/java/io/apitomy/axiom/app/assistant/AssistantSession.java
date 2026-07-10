@@ -183,9 +183,7 @@ public class AssistantSession {
         }
         response.set("response", innerResponse);
         root.set("response", response);
-        String json = MAPPER.writeValueAsString(root);
-        LOG.infof("Permission response for %s (allow=%s): %s", permissionId, allow, json);
-        writeLine(json);
+        writeLine(MAPPER.writeValueAsString(root));
         lastActivityAt = Instant.now();
     }
 

@@ -1,25 +1,48 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { TextArea, Button, Flex, FlexItem } from "@patternfly/react-core";
 import PaperPlaneIcon from "@patternfly/react-icons/dist/esm/icons/paper-plane-icon";
 
 interface AssistantMessageInputProps {
     onSend: (message: string) => void;
     disabled?: boolean;
+    slashCommands?: string[];
 }
 
-export function AssistantMessageInput({ onSend, disabled }: AssistantMessageInputProps) {
+export function AssistantMessageInput({ onSend, disabled, slashCommands = [] }: AssistantMessageInputProps) {
     const [value, setValue] = useState("");
+    const [selectedIndex, setSelectedIndex] = useState(0);
     const textAreaRef = useRef<HTMLTextAreaElement>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    const filteredCommands = useMemo(() => {
+        if (!value.startsWith("/") || value.includes(" ") || value.includes("\n")) {
+            return [];
+        }
+        const query = value.substring(1).toLowerCase();
+        return slashCommands
+            .filter((cmd) => cmd.toLowerCase().includes(query))
+            .slice(0, 15);
+    }, [value, slashCommands]);
+
+    const showDropdown = filteredCommands.length > 0;
+
+    useEffect(() => {
+        setSelectedIndex(0);
+    }, [filteredCommands]);
+
+    useEffect(() => {
+        if (showDropdown && dropdownRef.current) {
+            const selected = dropdownRef.current.children[selectedIndex] as HTMLElement;
+            selected?.scrollIntoView({ block: "nearest" });
+        }
+    }, [selectedIndex, showDropdown]);
 
     const handleSend = useCallback(() => {
         const trimmed = value.trim();
         if (!trimmed) return;
         onSend(trimmed);
         setValue("");
-        // Defer to next tick so React flushes setValue("") before we reset height
         setTimeout(() => {
-            // PF autoResize sets inline height on the textarea's parent <span>;
-            // programmatic value changes don't trigger a recalc, so clear it manually.
             textAreaRef.current?.parentElement?.style.removeProperty("height");
         }, 0);
     }, [value, onSend]);
@@ -30,7 +53,39 @@ export function AssistantMessageInput({ onSend, disabled }: AssistantMessageInpu
         }
     }, [disabled]);
 
+    const selectCommand = useCallback((cmd: string) => {
+        setValue("/" + cmd + " ");
+        textAreaRef.current?.focus();
+    }, []);
+
     const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (showDropdown) {
+            if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setSelectedIndex((prev) =>
+                    prev < filteredCommands.length - 1 ? prev + 1 : 0
+                );
+                return;
+            }
+            if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setSelectedIndex((prev) =>
+                    prev > 0 ? prev - 1 : filteredCommands.length - 1
+                );
+                return;
+            }
+            if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
+                e.preventDefault();
+                selectCommand(filteredCommands[selectedIndex]);
+                return;
+            }
+            if (e.key === "Escape") {
+                e.preventDefault();
+                setValue("");
+                return;
+            }
+        }
+
         if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.altKey) {
             e.preventDefault();
             handleSend();
@@ -45,7 +100,6 @@ export function AssistantMessageInput({ onSend, disabled }: AssistantMessageInpu
                 setValue(newValue);
                 setTimeout(() => {
                     textarea.selectionStart = textarea.selectionEnd = start + 1;
-                    // Trigger PF autoResize: reset parent height, set scrollHeight
                     const parent = textarea.parentElement;
                     if (parent) {
                         parent.style.removeProperty("height");
@@ -57,29 +111,69 @@ export function AssistantMessageInput({ onSend, disabled }: AssistantMessageInpu
     };
 
     return (
-        <Flex style={{ padding: "12px 16px", borderTop: "1px solid #d2d2d2", flexShrink: 0 }}>
-            <FlexItem grow={{ default: "grow" }}>
-                <TextArea
-                    ref={textAreaRef}
-                    value={value}
-                    onChange={(_e, val) => setValue(val)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Type a message..."
-                    aria-label="Message input"
-                    autoResize
-                    rows={1}
-                    isDisabled={disabled}
-                />
-            </FlexItem>
-            <FlexItem alignSelf={{ default: "alignSelfFlexEnd" }}>
-                <Button
-                    variant="primary"
-                    onClick={handleSend}
-                    isDisabled={disabled || !value.trim()}
-                    aria-label="Send message"
-                    icon={<PaperPlaneIcon />}
-                />
-            </FlexItem>
-        </Flex>
+        <div style={{ position: "relative", flexShrink: 0 }}>
+            {showDropdown && (
+                <div
+                    ref={dropdownRef}
+                    style={{
+                        position: "absolute",
+                        bottom: "100%",
+                        left: 16,
+                        right: 16,
+                        maxHeight: 250,
+                        overflowY: "auto",
+                        backgroundColor: "white",
+                        border: "1px solid #d2d2d2",
+                        borderRadius: "6px",
+                        boxShadow: "0 -4px 12px rgba(0,0,0,0.1)",
+                        zIndex: 100,
+                        marginBottom: 4,
+                    }}
+                >
+                    {filteredCommands.map((cmd, i) => (
+                        <div
+                            key={cmd}
+                            onClick={() => selectCommand(cmd)}
+                            style={{
+                                padding: "8px 12px",
+                                cursor: "pointer",
+                                backgroundColor: i === selectedIndex ? "#f0f0f0" : "transparent",
+                                fontSize: "13px",
+                                fontFamily: "monospace",
+                                borderBottom: i < filteredCommands.length - 1
+                                    ? "1px solid #eee" : "none",
+                            }}
+                            onMouseEnter={() => setSelectedIndex(i)}
+                        >
+                            /{cmd}
+                        </div>
+                    ))}
+                </div>
+            )}
+            <Flex style={{ padding: "12px 16px", borderTop: "1px solid #d2d2d2" }}>
+                <FlexItem grow={{ default: "grow" }}>
+                    <TextArea
+                        ref={textAreaRef}
+                        value={value}
+                        onChange={(_e, val) => setValue(val)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Type a message... (/ for commands)"
+                        aria-label="Message input"
+                        autoResize
+                        rows={1}
+                        isDisabled={disabled}
+                    />
+                </FlexItem>
+                <FlexItem alignSelf={{ default: "alignSelfFlexEnd" }}>
+                    <Button
+                        variant="primary"
+                        onClick={handleSend}
+                        isDisabled={disabled || !value.trim()}
+                        aria-label="Send message"
+                        icon={<PaperPlaneIcon />}
+                    />
+                </FlexItem>
+            </Flex>
+        </div>
     );
 }

@@ -78,6 +78,14 @@ public class AssistantEventParser {
         data.put("sessionId", root.path("session_id").asText());
         data.put("cwd", root.path("cwd").asText());
         data.put("model", root.path("model").asText());
+        JsonNode slashCommands = root.path("slash_commands");
+        if (slashCommands.isArray()) {
+            data.set("slashCommands", slashCommands);
+        }
+        JsonNode tools = root.path("tools");
+        if (tools.isArray()) {
+            data.set("tools", tools);
+        }
         return List.of(new SseEvent("session_init", data));
     }
 
