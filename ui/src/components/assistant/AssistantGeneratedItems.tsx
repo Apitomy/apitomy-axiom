@@ -20,6 +20,7 @@ import { ReportDefinitionDetailModal } from "./ReportDefinitionDetailModal";
 interface AssistantGeneratedItemsProps {
     sessionId: string;
     refreshTrigger: number;
+    onItemCountChanged?: (count: number) => void;
 }
 
 const TYPE_LABELS: Record<string, { label: string; color: "blue" | "green" | "purple" }> = {
@@ -28,7 +29,7 @@ const TYPE_LABELS: Record<string, { label: string; color: "blue" | "green" | "pu
     "report-definitions": { label: "Report", color: "purple" },
 };
 
-export function AssistantGeneratedItems({ sessionId, refreshTrigger }: AssistantGeneratedItemsProps) {
+export function AssistantGeneratedItems({ sessionId, refreshTrigger, onItemCountChanged }: AssistantGeneratedItemsProps) {
     const [items, setItems] = useState<AssistantItem[]>([]);
     const [loading, setLoading] = useState(false);
     const [selectedItem, setSelectedItem] = useState<{
@@ -39,10 +40,13 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger }: Assistant
     const load = useCallback(() => {
         setLoading(true);
         fetchAssistantItems(sessionId)
-            .then(setItems)
+            .then((result) => {
+                setItems(result);
+                onItemCountChanged?.(result.length);
+            })
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [sessionId]);
+    }, [sessionId, onItemCountChanged]);
 
     useEffect(() => {
         load();

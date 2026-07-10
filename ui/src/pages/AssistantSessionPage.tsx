@@ -35,6 +35,7 @@ export function AssistantSessionPage() {
     const [applyResult, setApplyResult] = useState<ImportResult | null>(null);
     const [applyError, setApplyError] = useState<string | null>(null);
     const [sessionMode, setSessionMode] = useState<SessionMode>("normal");
+    const [itemCount, setItemCount] = useState(0);
 
     useEffect(() => {
         if (!sessionId) return;
@@ -50,6 +51,10 @@ export function AssistantSessionPage() {
 
     const handleItemsChanged = useCallback(() => {
         setItemsRefresh((n) => n + 1);
+    }, []);
+
+    const handleItemCountChanged = useCallback((count: number) => {
+        setItemCount(count);
     }, []);
 
     const handleEndSession = async () => {
@@ -139,7 +144,7 @@ export function AssistantSessionPage() {
                             variant="primary"
                             onClick={handleApply}
                             isLoading={applying}
-                            isDisabled={applying}
+                            isDisabled={applying || itemCount === 0}
                             style={{ marginRight: 8 }}
                         >
                             Apply All
@@ -198,6 +203,7 @@ export function AssistantSessionPage() {
                         <AssistantGeneratedItems
                             sessionId={sessionId}
                             refreshTrigger={itemsRefresh}
+                            onItemCountChanged={handleItemCountChanged}
                         />
                     </div>
                 )}
