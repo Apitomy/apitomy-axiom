@@ -28,6 +28,7 @@ import {
 } from "@patternfly/react-core";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import RobotIcon from "@patternfly/react-icons/dist/esm/icons/robot-icon";
+import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import {
     fetchAssistantSessions,
@@ -211,6 +212,15 @@ export function AssistantPage() {
                                         />
                                     ))}
                                 </FormSelect>
+                            </ToolbarItem>
+                            <ToolbarItem>
+                                <Button
+                                    variant="plain"
+                                    aria-label="Refresh sessions"
+                                    onClick={load}
+                                >
+                                    <SyncAltIcon />
+                                </Button>
                             </ToolbarItem>
                         </ToolbarGroup>
                         <ToolbarItem align={{ default: "alignEnd" }}>
