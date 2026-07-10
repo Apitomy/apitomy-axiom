@@ -2,13 +2,14 @@ import { useEffect, useRef } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Content, Spinner } from "@patternfly/react-core";
+import ExclamationTriangleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-triangle-icon";
 import { AssistantToolUseBlock } from "./AssistantToolUseBlock";
 import { AssistantPermissionPrompt } from "./AssistantPermissionPrompt";
 import "./AssistantMessageList.css";
 
 export interface ChatMessage {
     id: string;
-    type: "system" | "user" | "assistant" | "tool_use" | "tool_result" | "permission_request" | "thinking";
+    type: "system" | "warning" | "user" | "assistant" | "tool_use" | "tool_result" | "permission_request" | "thinking";
     content?: string;
     toolName?: string;
     toolInput?: Record<string, unknown>;
@@ -23,9 +24,10 @@ interface AssistantMessageListProps {
     messages: ChatMessage[];
     onPermissionRespond: (permissionId: string, allow: boolean, toolInput?: Record<string, unknown>) => void;
     isProcessing?: boolean;
+    processingText?: string;
 }
 
-export function AssistantMessageList({ messages, onPermissionRespond, isProcessing }: AssistantMessageListProps) {
+export function AssistantMessageList({ messages, onPermissionRespond, isProcessing, processingText }: AssistantMessageListProps) {
     const endRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -50,6 +52,25 @@ export function AssistantMessageList({ messages, onPermissionRespond, isProcessi
                                 color: "#6a6e73",
                                 fontStyle: "italic",
                             }}>
+                                {msg.content}
+                            </div>
+                        );
+
+                    case "warning":
+                        return (
+                            <div key={msg.id} style={{
+                                padding: "8px 12px",
+                                margin: "4px 8px",
+                                fontSize: "13px",
+                                color: "#795600",
+                                backgroundColor: "#fdf7e7",
+                                border: "1px solid #f0d67b",
+                                borderRadius: "4px",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                            }}>
+                                <ExclamationTriangleIcon color="#795600" />
                                 {msg.content}
                             </div>
                         );
@@ -152,7 +173,7 @@ export function AssistantMessageList({ messages, onPermissionRespond, isProcessi
                     color: "#6a6e73",
                 }}>
                     <Spinner size="md" />
-                    <span>Claude is working...</span>
+                    <span>{processingText || "Claude is working..."}</span>
                 </div>
             )}
             <div ref={endRef} />

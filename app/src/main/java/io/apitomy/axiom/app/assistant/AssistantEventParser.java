@@ -55,7 +55,12 @@ public class AssistantEventParser {
                 case "result" -> parseResult(node);
                 case "sdk_control_request" -> parseSdkControlRequest(node);
                 case "control_request" -> parseControlRequest(node);
-                default -> Collections.emptyList();
+                default -> {
+                    ObjectNode data = JsonNodeFactory.instance.objectNode();
+                    data.put("rawType", type);
+                    data.put("raw", node.toString());
+                    yield List.of(new SseEvent("unhandled_event", data));
+                }
             };
         } catch (Exception e) {
             LOG.tracef("Failed to parse NDJSON line: %s",

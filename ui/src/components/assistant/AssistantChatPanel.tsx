@@ -17,7 +17,21 @@ let messageIdCounter = 0;
 export function AssistantChatPanel({ sessionId, onItemsChanged }: AssistantChatPanelProps) {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [processingText, setProcessingText] = useState("");
     const eventSourceRef = useRef<EventSource | null>(null);
+
+    const THINKING_MESSAGES = [
+        "Claude is working...",
+        "Pondering the mysteries of code...",
+        "Consulting the silicon oracle...",
+        "Rummaging through the codebase...",
+        "Herding electrons...",
+        "Untangling spaghetti...",
+        "Asking the rubber duck...",
+        "Brewing a fresh pot of logic...",
+        "Warming up the flux capacitor...",
+        "Reticulating splines...",
+    ];
 
     const addMessage = useCallback((msg: Omit<ChatMessage, "id">) => {
         setMessages((prev) => [...prev, { ...msg, id: String(++messageIdCounter) }]);
@@ -63,11 +77,9 @@ export function AssistantChatPanel({ sessionId, onItemsChanged }: AssistantChatP
         });
 
         es.addEventListener("thinking", () => {
-            setMessages((prev) => {
-                const last = prev[prev.length - 1];
-                if (last && last.type === "thinking") return prev;
-                return [...prev, { id: String(++messageIdCounter), type: "thinking" }];
-            });
+            setProcessingText(
+                THINKING_MESSAGES[Math.floor(Math.random() * THINKING_MESSAGES.length)]
+            );
         });
 
         es.addEventListener("tool_use", (e) => {
@@ -153,6 +165,18 @@ export function AssistantChatPanel({ sessionId, onItemsChanged }: AssistantChatP
             setIsProcessing(false);
         });
 
+        es.addEventListener("unhandled_event", (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                addMessage({
+                    type: "warning",
+                    content: `Unhandled event type: ${data.rawType}`,
+                });
+            } catch {
+                // ignore
+            }
+        });
+
         es.addEventListener("session_error", (e) => {
             try {
                 const data = JSON.parse(e.data);
@@ -216,6 +240,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged }: AssistantChatP
                 messages={messages}
                 onPermissionRespond={handlePermissionRespond}
                 isProcessing={isProcessing}
+                processingText={processingText}
             />
             <AssistantMessageInput onSend={handleSend} disabled={isProcessing} />
         </div>

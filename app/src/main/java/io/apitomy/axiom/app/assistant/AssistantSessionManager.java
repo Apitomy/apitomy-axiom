@@ -310,7 +310,7 @@ public class AssistantSessionManager {
         cmd.add("--permission-prompt-tool");
         cmd.add("stdio");
 
-        cmd.add("--system-prompt");
+        cmd.add("--append-system-prompt");
         cmd.add(systemPrompt);
 
         if (hasMcpConfig) {
