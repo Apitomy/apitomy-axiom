@@ -1298,6 +1298,50 @@ export async function interruptAssistantSession(sessionId: string): Promise<void
     if (!response.ok) throw new Error("Failed to interrupt session");
 }
 
+export interface AutoApprovalRule {
+    id: string;
+    toolName: string;
+    fieldName?: string;
+    pattern?: string;
+    createdAt: string;
+}
+
+export interface CreateAutoApprovalRequest {
+    toolName: string;
+    fieldName?: string;
+    pattern?: string;
+    permissionId?: string;
+}
+
+export async function fetchAutoApprovals(sessionId: string): Promise<AutoApprovalRule[]> {
+    const response = await fetch(`${API}/assistant/sessions/${sessionId}/auto-approvals`);
+    if (!response.ok) throw new Error("Failed to fetch auto-approvals");
+    return response.json();
+}
+
+export async function createAutoApproval(
+    sessionId: string, data: CreateAutoApprovalRequest
+): Promise<AutoApprovalRule> {
+    const response = await fetch(`${API}/assistant/sessions/${sessionId}/auto-approvals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.message || "Failed to create auto-approval");
+    }
+    return response.json();
+}
+
+export async function deleteAutoApproval(sessionId: string, ruleId: string): Promise<void> {
+    const response = await fetch(
+        `${API}/assistant/sessions/${sessionId}/auto-approvals/${encodeURIComponent(ruleId)}`,
+        { method: "DELETE" }
+    );
+    if (!response.ok) throw new Error("Failed to delete auto-approval");
+}
+
 export function assistantEventsUrl(sessionId: string): string {
     return `${API}/assistant/sessions/${sessionId}/events`;
 }

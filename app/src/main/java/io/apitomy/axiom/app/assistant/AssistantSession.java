@@ -1,5 +1,6 @@
 package io.apitomy.axiom.app.assistant;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
@@ -17,6 +18,8 @@ import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 /**
  * Wraps an interactive Claude Code subprocess using stream-json I/O.
@@ -54,6 +57,22 @@ public class AssistantSession {
 
     private final CopyOnWriteArrayList<SseEvent> eventHistory = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<Consumer<SseEvent>> listeners = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<AutoApprovalRule> autoApprovalRules = new CopyOnWriteArrayList<>();
+
+    /**
+     * A session-scoped rule for automatically approving tool permissions.
+     *
+     * @param id unique identifier for management
+     * @param toolName the tool this rule applies to
+     * @param fieldName the input field to match against (e.g., "command", "file_path"), or null for tool-name-only matching
+     * @param pattern regex pattern string to match against the field value
+     * @param compiledPattern the compiled regex
+     * @param createdAt when the rule was created
+     */
+    public record AutoApprovalRule(String id, String toolName, String fieldName,
+                                    String pattern, Pattern compiledPattern,
+                                    Instant createdAt) {
+    }
 
     /**
      * Creates a new assistant session.
@@ -299,6 +318,71 @@ public class AssistantSession {
         return errorMessage.get();
     }
 
+    /**
+     * Adds an auto-approval rule for matching tool permissions.
+     *
+     * @param toolName the tool name to match
+     * @param fieldName the input field to match against, or null for tool-name-only
+     * @param pattern the regex pattern string
+     * @return the created rule
+     * @throws PatternSyntaxException if the pattern is invalid
+     */
+    public AutoApprovalRule addAutoApprovalRule(String toolName, String fieldName,
+                                                 String pattern) {
+        Pattern compiled = (pattern != null && !pattern.isBlank())
+                ? Pattern.compile(pattern) : null;
+        AutoApprovalRule rule = new AutoApprovalRule(
+                UUID.randomUUID().toString(), toolName, fieldName,
+                pattern, compiled, Instant.now());
+        autoApprovalRules.add(rule);
+        LOG.infof("Added auto-approval rule %s for %s (field=%s, pattern=%s)",
+                rule.id(), toolName, fieldName, pattern);
+        return rule;
+    }
+
+    /**
+     * Removes an auto-approval rule by ID.
+     *
+     * @param ruleId the rule identifier
+     * @return true if the rule was found and removed
+     */
+    public boolean removeAutoApprovalRule(String ruleId) {
+        return autoApprovalRules.removeIf(r -> r.id().equals(ruleId));
+    }
+
+    /**
+     * Returns all active auto-approval rules.
+     *
+     * @return unmodifiable list of rules
+     */
+    public List<AutoApprovalRule> getAutoApprovalRules() {
+        return List.copyOf(autoApprovalRules);
+    }
+
+    /**
+     * Checks whether a tool permission request matches any auto-approval rule.
+     *
+     * @param toolName the tool name from the permission request
+     * @param toolInput the tool input from the permission request
+     * @return true if a matching rule was found
+     */
+    public boolean checkAutoApproval(String toolName, JsonNode toolInput) {
+        for (AutoApprovalRule rule : autoApprovalRules) {
+            if (!rule.toolName().equals(toolName)) {
+                continue;
+            }
+            if (rule.fieldName() == null || rule.compiledPattern() == null) {
+                return true;
+            }
+            String fieldValue = toolInput != null
+                    ? toolInput.path(rule.fieldName()).asText(null) : null;
+            if (fieldValue != null && rule.compiledPattern().matcher(fieldValue).find()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void writeLine(String json) throws IOException {
         if (stdin == null) {
             throw new IOException("Session stdin is not available");
@@ -316,6 +400,9 @@ public class AssistantSession {
             while ((line = reader.readLine()) != null) {
                 List<SseEvent> events = parser.parse(line);
                 for (SseEvent event : events) {
+                    if (handleAutoApproval(event)) {
+                        continue;
+                    }
                     eventHistory.add(event);
                     lastActivityAt = Instant.now();
                     for (Consumer<SseEvent> listener : listeners) {
@@ -332,6 +419,26 @@ public class AssistantSession {
                 LOG.warnf("Error reading stdout for session %s: %s", id, e.getMessage());
             }
         }
+    }
+
+    private boolean handleAutoApproval(SseEvent event) {
+        if (!"permission_request".equals(event.type())) {
+            return false;
+        }
+        String toolName = event.data().path("toolName").asText("");
+        JsonNode toolInput = event.data().path("toolInput");
+        if (!checkAutoApproval(toolName, toolInput)) {
+            return false;
+        }
+        String requestId = event.data().path("requestId").asText("");
+        LOG.infof("Auto-approving %s (rule matched) in session %s", toolName, id);
+        try {
+            respondToPermission(requestId, true, toolInput);
+        } catch (IOException e) {
+            LOG.warnf(e, "Failed to auto-approve %s in session %s", toolName, id);
+            return false;
+        }
+        return true;
     }
 
     private void readStderr() {

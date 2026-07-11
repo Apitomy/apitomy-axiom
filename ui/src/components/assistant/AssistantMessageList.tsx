@@ -24,11 +24,13 @@ export interface ChatMessage {
 interface AssistantMessageListProps {
     messages: ChatMessage[];
     onPermissionRespond: (permissionId: string, allow: boolean, toolInput?: Record<string, unknown>) => void;
+    onCreateAutoApproval?: (toolName: string, fieldName: string | undefined,
+        pattern: string | undefined, permissionId: string) => void;
     isProcessing?: boolean;
     processingText?: string;
 }
 
-export function AssistantMessageList({ messages, onPermissionRespond, isProcessing, processingText }: AssistantMessageListProps) {
+export function AssistantMessageList({ messages, onPermissionRespond, onCreateAutoApproval, isProcessing, processingText }: AssistantMessageListProps) {
     const endRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -132,6 +134,7 @@ export function AssistantMessageList({ messages, onPermissionRespond, isProcessi
                                 permissionResolved={msg.permissionResolved}
                                 permissionAllowed={msg.permissionAllowed}
                                 onPermissionRespond={onPermissionRespond}
+                                onCreateAutoApproval={onCreateAutoApproval}
                             />
                         );
 

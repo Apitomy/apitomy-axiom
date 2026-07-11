@@ -6,6 +6,7 @@ import {
     Flex,
     FlexItem,
     Label,
+    TextInput,
 } from "@patternfly/react-core";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -38,13 +39,18 @@ interface AssistantToolUseBlockProps {
     permissionResolved?: boolean;
     permissionAllowed?: boolean;
     onPermissionRespond?: (permissionId: string, allow: boolean, toolInput?: Record<string, unknown>) => void;
+    onCreateAutoApproval?: (toolName: string, fieldName: string | undefined,
+        pattern: string | undefined, permissionId: string) => void;
 }
 
 export function AssistantToolUseBlock({
     toolName, input, result, isError,
     permissionId, permissionResolved, permissionAllowed, onPermissionRespond,
+    onCreateAutoApproval,
 }: AssistantToolUseBlockProps) {
     const [isExpanded, setIsExpanded] = useState(false);
+    const [showPatternUI, setShowPatternUI] = useState(false);
+    const [customPattern, setCustomPattern] = useState("");
 
     const needsPermission = permissionId && !permissionResolved;
     const isAskUser = toolName === "AskUserQuestion";
@@ -223,7 +229,7 @@ export function AssistantToolUseBlock({
                                     {contextSummary}
                                 </div>
                             )}
-                            <Flex>
+                            <Flex style={{ marginBottom: showPatternUI ? 8 : 0 }}>
                                 <FlexItem>
                                     <Button variant="primary" size="sm"
                                         onClick={() => onPermissionRespond?.(permissionId, true, input)}>
@@ -236,7 +242,64 @@ export function AssistantToolUseBlock({
                                         Deny
                                     </Button>
                                 </FlexItem>
+                                {onCreateAutoApproval && (
+                                    <FlexItem>
+                                        <Button variant="link" size="sm"
+                                            onClick={() => setShowPatternUI(!showPatternUI)}>
+                                            {showPatternUI ? "Cancel" : "Allow Pattern..."}
+                                        </Button>
+                                    </FlexItem>
+                                )}
                             </Flex>
+                            {showPatternUI && onCreateAutoApproval && (
+                                <div style={{
+                                    padding: "8px 10px",
+                                    backgroundColor: "white",
+                                    borderRadius: "4px",
+                                    border: "1px solid #d2d2d2",
+                                }}>
+                                    <div style={{ fontSize: "12px", color: "#6a6e73", marginBottom: 6 }}>
+                                        Auto-approve future {toolName} calls matching a pattern:
+                                    </div>
+                                    {getSuggestedPatterns(toolName, input).map((suggestion) => (
+                                        <Button key={suggestion.label} variant="tertiary" size="sm"
+                                            style={{ marginRight: 6, marginBottom: 4 }}
+                                            onClick={() => {
+                                                onCreateAutoApproval(
+                                                    toolName, suggestion.fieldName,
+                                                    suggestion.pattern, permissionId);
+                                                setShowPatternUI(false);
+                                            }}>
+                                            {suggestion.label}
+                                        </Button>
+                                    ))}
+                                    <Flex style={{ marginTop: 6, alignItems: "center", gap: 6 }}>
+                                        <FlexItem grow={{ default: "grow" }}>
+                                            <TextInput
+                                                value={customPattern}
+                                                onChange={(_e, v) => setCustomPattern(v)}
+                                                placeholder="Custom regex..."
+                                                aria-label="Custom auto-approval pattern"
+                                                size={30}
+                                            />
+                                        </FlexItem>
+                                        <FlexItem>
+                                            <Button variant="primary" size="sm"
+                                                isDisabled={!customPattern.trim()}
+                                                onClick={() => {
+                                                    const info = getFieldInfo(toolName);
+                                                    onCreateAutoApproval(
+                                                        toolName, info.fieldName,
+                                                        customPattern.trim(), permissionId);
+                                                    setShowPatternUI(false);
+                                                    setCustomPattern("");
+                                                }}>
+                                                Apply Rule
+                                            </Button>
+                                        </FlexItem>
+                                    </Flex>
+                                </div>
+                            )}
                         </>
                     ) : (
                         <span style={{ color: permissionAllowed ? "#6a6e73" : "#c9190b", fontStyle: "italic" }}>
@@ -289,4 +352,62 @@ function formatJson(text: string): string {
     } catch {
         return text;
     }
+}
+
+interface PatternSuggestion {
+    label: string;
+    fieldName: string | undefined;
+    pattern: string | undefined;
+}
+
+function getFieldInfo(toolName: string): { fieldName: string | undefined } {
+    switch (toolName) {
+        case "Bash": return { fieldName: "command" };
+        case "Read": case "Write": case "Edit": return { fieldName: "file_path" };
+        default: return { fieldName: undefined };
+    }
+}
+
+function getSuggestedPatterns(toolName: string, input?: Record<string, unknown>): PatternSuggestion[] {
+    const suggestions: PatternSuggestion[] = [];
+
+    if (toolName === "Bash" && input?.command) {
+        const command = input.command as string;
+        const firstWord = command.split(/\s+/)[0];
+        if (firstWord) {
+            suggestions.push({
+                label: `${firstWord} *`,
+                fieldName: "command",
+                pattern: `^${escapeRegex(firstWord)} `,
+            });
+        }
+    } else if ((toolName === "Read" || toolName === "Write" || toolName === "Edit")
+            && input?.file_path) {
+        const filePath = input.file_path as string;
+        const dir = filePath.substring(0, filePath.lastIndexOf("/"));
+        suggestions.push({
+            label: `Allow all ${toolName}`,
+            fieldName: undefined,
+            pattern: undefined,
+        });
+        if (dir) {
+            suggestions.push({
+                label: `${dir}/...`,
+                fieldName: "file_path",
+                pattern: `^${escapeRegex(dir)}/`,
+            });
+        }
+    } else {
+        suggestions.push({
+            label: `Allow all ${toolName}`,
+            fieldName: undefined,
+            pattern: undefined,
+        });
+    }
+
+    return suggestions;
+}
+
+function escapeRegex(text: string): string {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

@@ -3124,6 +3124,92 @@
         }
       ]
     },
+    "/assistant/sessions/{sessionId}/auto-approvals": {
+      "get": {
+        "tags": ["Assistant"],
+        "summary": "List active auto-approval rules for a session",
+        "operationId": "listAutoApprovals",
+        "responses": {
+          "200": {
+            "description": "List of auto-approval rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/AutoApprovalRule" }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "The assistant session identifier"
+          }
+        ]
+      },
+      "post": {
+        "tags": ["Assistant"],
+        "summary": "Add an auto-approval rule and optionally approve a pending permission",
+        "operationId": "createAutoApproval",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateAutoApprovalRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Rule created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AutoApprovalRule" }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "The assistant session identifier"
+          }
+        ]
+      }
+    },
+    "/assistant/sessions/{sessionId}/auto-approvals/{ruleId}": {
+      "delete": {
+        "tags": ["Assistant"],
+        "summary": "Remove an auto-approval rule",
+        "operationId": "deleteAutoApproval",
+        "responses": {
+          "204": { "description": "Rule removed" }
+        },
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "The assistant session identifier"
+          },
+          {
+            "name": "ruleId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "The auto-approval rule identifier"
+          }
+        ]
+      }
+    },
     "/assistant/sessions/{sessionId}/items": {
       "get": {
         "tags": [
@@ -6683,6 +6769,55 @@
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/SessionTemplate"
+        }
+      },
+      "AutoApprovalRule": {
+        "required": ["id", "toolName", "createdAt"],
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "Unique rule identifier",
+            "type": "string"
+          },
+          "toolName": {
+            "description": "Tool name this rule applies to",
+            "type": "string"
+          },
+          "fieldName": {
+            "description": "Input field to match against (e.g. command, file_path)",
+            "type": "string"
+          },
+          "pattern": {
+            "description": "Regex pattern to match against the field value",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "description": "When the rule was created",
+            "type": "string"
+          }
+        }
+      },
+      "CreateAutoApprovalRequest": {
+        "required": ["toolName"],
+        "type": "object",
+        "properties": {
+          "toolName": {
+            "description": "Tool name to auto-approve",
+            "type": "string"
+          },
+          "fieldName": {
+            "description": "Input field to match against, or null for tool-name-only matching",
+            "type": "string"
+          },
+          "pattern": {
+            "description": "Regex pattern to match against the field value",
+            "type": "string"
+          },
+          "permissionId": {
+            "description": "Optional pending permission ID to also approve immediately",
+            "type": "string"
+          }
         }
       }
     },

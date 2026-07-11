@@ -5,6 +5,7 @@ import {
     assistantEventsUrl,
     sendAssistantMessage,
     respondToAssistantPermission,
+    createAutoApproval,
 } from "../../config/api";
 import { randomThinkingMessage } from "./thinkingMessages";
 
@@ -14,11 +15,12 @@ interface AssistantChatPanelProps {
     sessionId: string;
     onItemsChanged?: () => void;
     onModeChange?: (mode: SessionMode) => void;
+    onAutoApprovalCountChange?: () => void;
 }
 
 let messageIdCounter = 0;
 
-export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange }: AssistantChatPanelProps) {
+export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, onAutoApprovalCountChange }: AssistantChatPanelProps) {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [processingText, setProcessingText] = useState("");
@@ -246,6 +248,28 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange }: 
         }
     }, [sessionId]);
 
+    const handleCreateAutoApproval = useCallback(async (
+        toolName: string, fieldName: string | undefined,
+        pattern: string | undefined, permissionId: string
+    ) => {
+        try {
+            await createAutoApproval(sessionId, {
+                toolName, fieldName, pattern, permissionId,
+            });
+            setMessages((prev) =>
+                prev.map((m) =>
+                    m.permissionId === permissionId
+                        ? { ...m, permissionResolved: true, permissionAllowed: true }
+                        : m
+                )
+            );
+            setIsProcessing(true);
+            onAutoApprovalCountChange?.();
+        } catch (err) {
+            console.error("Failed to create auto-approval:", err);
+        }
+    }, [sessionId, onAutoApprovalCountChange]);
+
     return (
         <div style={{
             display: "flex",
@@ -256,6 +280,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange }: 
             <AssistantMessageList
                 messages={messages}
                 onPermissionRespond={handlePermissionRespond}
+                onCreateAutoApproval={handleCreateAutoApproval}
                 isProcessing={isProcessing}
                 processingText={processingText}
             />

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
+    Badge,
     PageSection,
     Button,
     Flex,
@@ -14,15 +15,21 @@ import {
     ModalHeader,
     Alert,
 } from "@patternfly/react-core";
+import { Table, Thead, Tr, Th, Tbody, Td } from "@patternfly/react-table";
 import ArrowLeftIcon from "@patternfly/react-icons/dist/esm/icons/arrow-left-icon";
 import ExternalLinkAltIcon from "@patternfly/react-icons/dist/esm/icons/external-link-alt-icon";
+import ShieldAltIcon from "@patternfly/react-icons/dist/esm/icons/shield-alt-icon";
+import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import { AssistantChatPanel, type SessionMode } from "../components/assistant/AssistantChatPanel";
 import { AssistantGeneratedItems } from "../components/assistant/AssistantGeneratedItems";
 import {
     fetchAssistantSession,
     deleteAssistantSession,
     applyAssistantSession,
+    fetchAutoApprovals,
+    deleteAutoApproval,
     type AssistantSessionInfo,
+    type AutoApprovalRule,
     type ImportResult,
 } from "../config/api";
 
@@ -40,6 +47,9 @@ export function AssistantSessionPage() {
     const [applyError, setApplyError] = useState<string | null>(null);
     const [sessionMode, setSessionMode] = useState<SessionMode>("normal");
     const [itemCount, setItemCount] = useState(0);
+    const [autoApprovalCount, setAutoApprovalCount] = useState(0);
+    const [autoApprovalRules, setAutoApprovalRules] = useState<AutoApprovalRule[]>([]);
+    const [isAutoApprovalModalOpen, setIsAutoApprovalModalOpen] = useState(false);
 
     useEffect(() => {
         if (!sessionId) return;
@@ -65,6 +75,36 @@ export function AssistantSessionPage() {
     const handleItemCountChanged = useCallback((count: number) => {
         setItemCount(count);
     }, []);
+
+    const handleAutoApprovalCountChange = useCallback(() => {
+        if (!sessionId) return;
+        fetchAutoApprovals(sessionId)
+            .then((rules) => setAutoApprovalCount(rules.length))
+            .catch(console.error);
+    }, [sessionId]);
+
+    const openAutoApprovalModal = () => {
+        if (!sessionId) return;
+        fetchAutoApprovals(sessionId)
+            .then((rules) => {
+                setAutoApprovalRules(rules);
+                setAutoApprovalCount(rules.length);
+                setIsAutoApprovalModalOpen(true);
+            })
+            .catch(console.error);
+    };
+
+    const handleDeleteAutoApproval = async (ruleId: string) => {
+        if (!sessionId) return;
+        try {
+            await deleteAutoApproval(sessionId, ruleId);
+            const updated = autoApprovalRules.filter((r) => r.id !== ruleId);
+            setAutoApprovalRules(updated);
+            setAutoApprovalCount(updated.length);
+        } catch (err) {
+            console.error("Failed to delete auto-approval:", err);
+        }
+    };
 
     const handleEndSession = async () => {
         if (!sessionId) return;
@@ -174,6 +214,15 @@ export function AssistantSessionPage() {
                             Apply All
                         </Button>
                     )}
+                    {autoApprovalCount > 0 && (
+                        <Tooltip content={`${autoApprovalCount} auto-approval rule(s) active`}>
+                            <Button variant="plain" onClick={openAutoApprovalModal}
+                                style={{ marginRight: 4 }}>
+                                <ShieldAltIcon color="#3e8635" />
+                                <Badge isRead style={{ marginLeft: 4 }}>{autoApprovalCount}</Badge>
+                            </Button>
+                        </Tooltip>
+                    )}
                     <Button
                         variant="secondary"
                         isDanger
@@ -226,6 +275,7 @@ export function AssistantSessionPage() {
                         sessionId={sessionId}
                         onItemsChanged={isConfigAssistant ? handleItemsChanged : undefined}
                         onModeChange={setSessionMode}
+                        onAutoApprovalCountChange={handleAutoApprovalCountChange}
                     />
                 </div>
 
@@ -301,6 +351,59 @@ export function AssistantSessionPage() {
                     </ModalFooter>
                 </Modal>
             )}
+
+            {/* Auto-approval management */}
+            <Modal
+                isOpen={isAutoApprovalModalOpen}
+                onClose={() => setIsAutoApprovalModalOpen(false)}
+                variant="medium"
+                aria-label="Auto-approval rules"
+            >
+                <ModalHeader title="Auto-Approval Rules" />
+                <ModalBody>
+                    {autoApprovalRules.length === 0 ? (
+                        <div style={{ color: "#6a6e73", fontStyle: "italic", padding: 16 }}>
+                            No auto-approval rules active.
+                        </div>
+                    ) : (
+                        <Table aria-label="Auto-approval rules" variant="compact">
+                            <Thead>
+                                <Tr>
+                                    <Th>Tool</Th>
+                                    <Th>Field</Th>
+                                    <Th>Pattern</Th>
+                                    <Th width={10}>Actions</Th>
+                                </Tr>
+                            </Thead>
+                            <Tbody>
+                                {autoApprovalRules.map((rule) => (
+                                    <Tr key={rule.id}>
+                                        <Td><Label isCompact>{rule.toolName}</Label></Td>
+                                        <Td>{rule.fieldName || "—"}</Td>
+                                        <Td>
+                                            <code style={{ fontSize: "12px" }}>
+                                                {rule.pattern || "(all)"}
+                                            </code>
+                                        </Td>
+                                        <Td>
+                                            <Button variant="plain" size="sm" isDanger
+                                                onClick={() => handleDeleteAutoApproval(rule.id)}>
+                                                <TrashIcon />
+                                            </Button>
+                                        </Td>
+                                    </Tr>
+                                ))}
+                            </Tbody>
+                        </Table>
+                    )}
+                </ModalBody>
+                <ModalFooter>
+                    <Button variant="link"
+                        onClick={() => setIsAutoApprovalModalOpen(false)}>
+                        Close
+                    </Button>
+                </ModalFooter>
+            </Modal>
         </PageSection>
     );
 }

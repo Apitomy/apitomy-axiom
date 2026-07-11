@@ -7,7 +7,9 @@ import io.apitomy.axiom.api.beans.AssistantApplyResult;
 import io.apitomy.axiom.api.beans.AssistantItem;
 import io.apitomy.axiom.api.beans.AssistantPermissionResponse;
 import io.apitomy.axiom.api.beans.AssistantSessionInfo;
+import io.apitomy.axiom.api.beans.AutoApprovalRule;
 import io.apitomy.axiom.api.beans.CreateAssistantSessionRequest;
+import io.apitomy.axiom.api.beans.CreateAutoApprovalRequest;
 import io.apitomy.axiom.api.beans.NewSessionTemplate;
 import io.apitomy.axiom.api.beans.RenameAssistantSessionRequest;
 import io.apitomy.axiom.api.beans.SendAssistantMessageRequest;
@@ -361,6 +363,47 @@ public class AssistantResourceImpl implements AssistantResource {
         }
     }
 
+    // ── Auto-Approvals ────────────────────────────────────────────────
+
+    /** {@inheritDoc} */
+    @Override
+    public List<AutoApprovalRule> listAutoApprovals(String sessionId) {
+        AssistantSession session = requireSession(sessionId);
+        return session.getAutoApprovalRules().stream()
+                .map(this::toAutoApprovalBean).toList();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public AutoApprovalRule createAutoApproval(String sessionId,
+                                                CreateAutoApprovalRequest data) {
+        AssistantSession session = requireSession(sessionId);
+        try {
+            AssistantSession.AutoApprovalRule rule = session.addAutoApprovalRule(
+                    data.getToolName(), data.getFieldName(), data.getPattern());
+
+            if (data.getPermissionId() != null && !data.getPermissionId().isBlank()) {
+                try {
+                    session.respondToPermission(data.getPermissionId(), true, null);
+                } catch (IOException e) {
+                    LOG.warnf(e, "Failed to auto-approve pending permission %s",
+                            data.getPermissionId());
+                }
+            }
+
+            return toAutoApprovalBean(rule);
+        } catch (java.util.regex.PatternSyntaxException e) {
+            throw new WebApplicationException("Invalid regex pattern: " + e.getMessage(), 400);
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void deleteAutoApproval(String sessionId, String ruleId) {
+        AssistantSession session = requireSession(sessionId);
+        session.removeAutoApprovalRule(ruleId);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────
 
     private AssistantSession requireSession(String sessionId) {
@@ -412,6 +455,16 @@ public class AssistantResourceImpl implements AssistantResource {
         bean.setWorkingDirectory(template.workingDirectory());
         bean.setMcpServers(template.mcpServers());
         bean.setAllowedTools(template.allowedTools());
+        return bean;
+    }
+
+    private AutoApprovalRule toAutoApprovalBean(AssistantSession.AutoApprovalRule rule) {
+        AutoApprovalRule bean = new AutoApprovalRule();
+        bean.setId(rule.id());
+        bean.setToolName(rule.toolName());
+        bean.setFieldName(rule.fieldName());
+        bean.setPattern(rule.pattern());
+        bean.setCreatedAt(java.util.Date.from(rule.createdAt()));
         return bean;
     }
 
