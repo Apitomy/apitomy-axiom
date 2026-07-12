@@ -6701,6 +6701,10 @@
             "description": "Optional absolute path for the session working directory",
             "type": "string"
           },
+          "model": {
+            "description": "AI model override, or null for default",
+            "type": "string"
+          },
           "mcpServers": {
             "description": "Names of MCP server configurations to include",
             "type": "array",
@@ -6747,6 +6751,10 @@
           },
           "workingDirectory": {
             "description": "Optional absolute path for the session working directory",
+            "type": "string"
+          },
+          "model": {
+            "description": "AI model override, or null for default",
             "type": "string"
           },
           "mcpServers": {

@@ -20,6 +20,9 @@ import {
     TabTitleText,
     TextArea,
     TextInput,
+    FormSelect,
+    FormSelectOption,
+    FormSelectOptionGroup,
 } from "@patternfly/react-core";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { ToolListEditor } from "../components/ToolListEditor";
@@ -27,6 +30,7 @@ import {
     fetchAssistantTemplate,
     updateAssistantTemplate,
     fetchMcpServers,
+    fetchModels,
     type SessionTemplate,
     type NewSessionTemplate,
     type McpServer,
@@ -42,6 +46,7 @@ export function SessionTemplateDetailPage() {
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
     const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
+    const [availableModels, setAvailableModels] = useState<string[]>([]);
     const [activeTab, setActiveTab] = useState(0);
 
     const loadData = useCallback(() => {
@@ -50,8 +55,9 @@ export function SessionTemplateDetailPage() {
         Promise.all([
             fetchAssistantTemplate(templateId),
             fetchMcpServers(),
+            fetchModels(),
         ])
-            .then(([t, servers]) => {
+            .then(([t, servers, models]) => {
                 setTemplate(t);
                 setForm({
                     name: t.name,
@@ -59,10 +65,12 @@ export function SessionTemplateDetailPage() {
                     systemPrompt: t.systemPrompt,
                     welcomeMessage: t.welcomeMessage,
                     workingDirectory: t.workingDirectory,
+                    model: t.model,
                     mcpServers: t.mcpServers,
                     allowedTools: t.allowedTools,
                 });
                 setMcpServers(servers);
+                setAvailableModels(models);
                 setDirty(false);
             })
             .catch(console.error)
@@ -190,6 +198,53 @@ export function SessionTemplateDetailPage() {
                                     updateForm({ workingDirectory: v || undefined })
                                 }
                                 readOnlyVariant={isReadOnly ? "default" : undefined} />
+                        </FormGroup>
+
+                        <FormGroup label="Model" fieldId="model">
+                            <FormHelperText>
+                                <HelperText>
+                                    <HelperTextItem>
+                                        AI model to use for sessions. Select "Not specified"
+                                        to use the default model.
+                                    </HelperTextItem>
+                                </HelperText>
+                            </FormHelperText>
+                            <FormSelect
+                                id="model"
+                                value={form.model || ""}
+                                onChange={(_e, v) => updateForm({ model: v || undefined })}
+                                isDisabled={isReadOnly}
+                            >
+                                <FormSelectOption value="" label="Not specified (use default)" />
+                                {(() => {
+                                    const hasProviders = availableModels.some((m) => m.includes("/"));
+                                    if (hasProviders) {
+                                        const groups: Record<string, string[]> = {};
+                                        for (const m of availableModels) {
+                                            if (m.includes("/")) {
+                                                const [provider] = m.split("/", 2);
+                                                const key = provider.charAt(0).toUpperCase() + provider.slice(1);
+                                                if (!groups[key]) groups[key] = [];
+                                                groups[key].push(m);
+                                            } else {
+                                                if (!groups["Other"]) groups["Other"] = [];
+                                                groups["Other"].push(m);
+                                            }
+                                        }
+                                        return Object.entries(groups).map(([provider, models]) => (
+                                            <FormSelectOptionGroup key={provider} label={provider}>
+                                                {models.map((m) => (
+                                                    <FormSelectOption key={m} value={m}
+                                                        label={m.split("/").pop() || m} />
+                                                ))}
+                                            </FormSelectOptionGroup>
+                                        ));
+                                    }
+                                    return availableModels.map((m) => (
+                                        <FormSelectOption key={m} value={m} label={m} />
+                                    ));
+                                })()}
+                            </FormSelect>
                         </FormGroup>
                     </Form>
                 </Tab>

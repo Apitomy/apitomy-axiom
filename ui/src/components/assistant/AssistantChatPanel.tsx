@@ -16,11 +16,12 @@ interface AssistantChatPanelProps {
     onItemsChanged?: () => void;
     onModeChange?: (mode: SessionMode) => void;
     onAutoApprovalCountChange?: () => void;
+    onModelDetected?: (model: string) => void;
 }
 
 let messageIdCounter = 0;
 
-export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, onAutoApprovalCountChange }: AssistantChatPanelProps) {
+export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, onAutoApprovalCountChange, onModelDetected }: AssistantChatPanelProps) {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [processingText, setProcessingText] = useState("");
@@ -42,6 +43,9 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                 const data = JSON.parse(e.data);
                 if (Array.isArray(data.slashCommands)) {
                     setSlashCommands(data.slashCommands);
+                }
+                if (data.model) {
+                    onModelDetected?.(data.model);
                 }
             } catch {
                 // ignore
@@ -212,7 +216,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
             es.close();
             eventSourceRef.current = null;
         };
-    }, [sessionId, addMessage, onItemsChanged, onModeChange]);
+    }, [sessionId, addMessage, onItemsChanged, onModeChange, onModelDetected]);
 
     const handleSend = useCallback(async (message: string) => {
         addMessage({ type: "user", content: message });

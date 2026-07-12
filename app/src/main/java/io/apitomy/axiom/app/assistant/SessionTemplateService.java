@@ -47,6 +47,7 @@ public class SessionTemplateService {
      * @param systemPrompt markdown written to CLAUDE.md
      * @param welcomeMessage first chat message (nullable)
      * @param workingDirectory absolute path or null for auto-created
+     * @param model AI model override, or null for default
      * @param mcpServers MCP server names to include
      * @param allowedTools tool patterns and @ToolsetName references for --allowedTools
      * @param builtIn true if loaded from classpath resources
@@ -58,6 +59,7 @@ public class SessionTemplateService {
             String systemPrompt,
             String welcomeMessage,
             String workingDirectory,
+            String model,
             List<String> mcpServers,
             List<String> allowedTools,
             boolean builtIn) {
@@ -143,6 +145,7 @@ public class SessionTemplateService {
         entity.systemPrompt = template.systemPrompt();
         entity.welcomeMessage = template.welcomeMessage();
         entity.workingDirectory = template.workingDirectory();
+        entity.model = template.model();
         entity.mcpServers = new ArrayList<>(template.mcpServers() != null
                 ? template.mcpServers() : List.of());
         entity.allowedTools = new ArrayList<>(template.allowedTools() != null
@@ -175,6 +178,7 @@ public class SessionTemplateService {
         entity.systemPrompt = template.systemPrompt();
         entity.welcomeMessage = template.welcomeMessage();
         entity.workingDirectory = template.workingDirectory();
+        entity.model = template.model();
         entity.mcpServers = new ArrayList<>(template.mcpServers() != null
                 ? template.mcpServers() : List.of());
         entity.allowedTools = new ArrayList<>(template.allowedTools() != null
@@ -209,6 +213,7 @@ public class SessionTemplateService {
                 entity.systemPrompt,
                 entity.welcomeMessage,
                 entity.workingDirectory,
+                entity.model,
                 List.copyOf(entity.mcpServers),
                 List.copyOf(entity.allowedTools),
                 false);
@@ -222,6 +227,7 @@ public class SessionTemplateService {
                 node.path("systemPrompt").asText(""),
                 node.path("welcomeMessage").asText(null),
                 node.path("workingDirectory").asText(null),
+                node.path("model").asText(null),
                 jsonArrayToList(node.path("mcpServers")),
                 jsonArrayToList(node.path("allowedTools")),
                 builtIn);

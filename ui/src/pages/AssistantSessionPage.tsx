@@ -52,6 +52,7 @@ export function AssistantSessionPage() {
     const [itemCount, setItemCount] = useState(0);
     const [isEditingName, setIsEditingName] = useState(false);
     const [editName, setEditName] = useState("");
+    const [sessionModel, setSessionModel] = useState<string | null>(null);
     const [autoApprovalCount, setAutoApprovalCount] = useState(0);
     const [autoApprovalRules, setAutoApprovalRules] = useState<AutoApprovalRule[]>([]);
     const [isAutoApprovalModalOpen, setIsAutoApprovalModalOpen] = useState(false);
@@ -254,6 +255,11 @@ export function AssistantSessionPage() {
                             Plan Mode
                         </Label>
                     )}
+                    {sessionModel && (
+                        <Label color="grey" isCompact style={{ marginLeft: 10 }}>
+                            {sessionModel}
+                        </Label>
+                    )}
                 </FlexItem>
                 <FlexItem>
                     {isConfigAssistant && (
@@ -329,6 +335,7 @@ export function AssistantSessionPage() {
                         onItemsChanged={isConfigAssistant ? handleItemsChanged : undefined}
                         onModeChange={setSessionMode}
                         onAutoApprovalCountChange={handleAutoApprovalCountChange}
+                        onModelDetected={setSessionModel}
                     />
                 </div>
 

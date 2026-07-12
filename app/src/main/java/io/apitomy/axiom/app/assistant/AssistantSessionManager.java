@@ -131,7 +131,7 @@ public class AssistantSessionManager {
         }
 
         List<String> command = buildCommand(workDir, sessionDir, template.systemPrompt(),
-                resolvedAllowedTools, mcpConfig != null);
+                template.model(), resolvedAllowedTools, mcpConfig != null);
 
         String sessionName = name != null && !name.isBlank() ? name : "Assistant Session";
         AssistantSession session = new AssistantSession(sessionName, templateId, sessionDir,
@@ -298,7 +298,8 @@ public class AssistantSessionManager {
     }
 
     private List<String> buildCommand(Path workDir, Path sessionDir, String systemPrompt,
-                                       List<String> allowedTools, boolean hasMcpConfig) {
+                                       String model, List<String> allowedTools,
+                                       boolean hasMcpConfig) {
         List<String> cmd = new ArrayList<>();
         cmd.add(claudeExecutable);
         cmd.add("--print");
@@ -309,6 +310,11 @@ public class AssistantSessionManager {
         cmd.add("--verbose");
         cmd.add("--permission-prompt-tool");
         cmd.add("stdio");
+
+        if (model != null && !model.isBlank()) {
+            cmd.add("--model");
+            cmd.add(model);
+        }
 
         cmd.add("--append-system-prompt");
         cmd.add(systemPrompt);

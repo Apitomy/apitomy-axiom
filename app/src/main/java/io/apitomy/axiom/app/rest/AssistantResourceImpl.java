@@ -128,12 +128,8 @@ public class AssistantResourceImpl implements AssistantResource {
     }
 
     /**
-     * SSE event stream for an assistant session. Overrides the generated
-     * interface method to inject the SSE sink and factory via {@code @Context}.
-     *
-     * @param sessionId the session identifier
-     * @param sink the SSE event sink
-     * @param sse the SSE factory
+     * SSE event stream for an assistant session. This method overloads the
+     * generated interface method to add {@code @Context} SSE parameters.
      */
     @GET
     @Path("/sessions/{sessionId}/events")
@@ -199,8 +195,9 @@ public class AssistantResourceImpl implements AssistantResource {
     /** {@inheritDoc} */
     @Override
     public void streamAssistantEvents(String sessionId) {
-        // No-op: the SSE-aware overload with @Context SseEventSink handles
-        // actual requests. This method satisfies the generated interface.
+        // This method is called when the SSE-aware overload doesn't match
+        // (e.g., non-SSE client). Check the session exists for a clean 404.
+        requireSession(sessionId);
     }
 
     /** {@inheritDoc} */
@@ -456,6 +453,7 @@ public class AssistantResourceImpl implements AssistantResource {
         bean.setSystemPrompt(template.systemPrompt());
         bean.setWelcomeMessage(template.welcomeMessage());
         bean.setWorkingDirectory(template.workingDirectory());
+        bean.setModel(template.model());
         bean.setMcpServers(template.mcpServers());
         bean.setAllowedTools(template.allowedTools());
         return bean;
@@ -480,6 +478,7 @@ public class AssistantResourceImpl implements AssistantResource {
                 data.getSystemPrompt(),
                 data.getWelcomeMessage(),
                 data.getWorkingDirectory(),
+                data.getModel(),
                 data.getMcpServers() != null ? data.getMcpServers() : List.of(),
                 data.getAllowedTools() != null ? data.getAllowedTools() : List.of(),
                 false);

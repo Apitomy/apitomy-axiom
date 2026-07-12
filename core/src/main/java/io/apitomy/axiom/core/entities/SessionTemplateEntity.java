@@ -44,6 +44,10 @@ public class SessionTemplateEntity extends PanacheEntity {
     @Column(name = "working_directory", length = 1024)
     public String workingDirectory;
 
+    /** Optional AI model override (e.g. "claude-sonnet-4-5-20250929"). */
+    @Column(name = "model")
+    public String model;
+
     /** Names of McpServerEntity records to include in the session's MCP config. */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "session_template_mcp_server",

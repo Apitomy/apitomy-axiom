@@ -1177,6 +1177,7 @@ export interface SessionTemplate {
     systemPrompt: string;
     welcomeMessage?: string;
     workingDirectory?: string;
+    model?: string;
     mcpServers: string[];
     allowedTools: string[];
 }
