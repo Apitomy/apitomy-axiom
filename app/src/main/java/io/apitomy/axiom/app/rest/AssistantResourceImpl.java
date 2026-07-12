@@ -114,6 +114,9 @@ public class AssistantResourceImpl implements AssistantResource {
     public AssistantSessionInfo renameAssistantSession(String sessionId,
                                                         RenameAssistantSessionRequest data) {
         AssistantSession session = requireSession(sessionId);
+        if (data.getName() != null && !data.getName().isBlank()) {
+            session.setName(data.getName());
+        }
         return toSessionInfo(session);
     }
 
@@ -196,8 +199,8 @@ public class AssistantResourceImpl implements AssistantResource {
     /** {@inheritDoc} */
     @Override
     public void streamAssistantEvents(String sessionId) {
-        throw new WebApplicationException(
-                "Use the SSE endpoint with an EventSource client", 400);
+        // No-op: the SSE-aware overload with @Context SseEventSink handles
+        // actual requests. This method satisfies the generated interface.
     }
 
     /** {@inheritDoc} */

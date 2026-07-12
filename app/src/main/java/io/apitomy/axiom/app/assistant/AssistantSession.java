@@ -41,7 +41,7 @@ public class AssistantSession {
     public enum Status { STARTING, RUNNING, STOPPED, ERROR }
 
     private final String id;
-    private final String name;
+    private volatile String name;
     private final String templateId;
     private final Path sessionDirectory;
     private final Path workingDirectory;
@@ -277,6 +277,15 @@ public class AssistantSession {
 
     public String getName() {
         return name;
+    }
+
+    /**
+     * Renames this session.
+     *
+     * @param name the new session name
+     */
+    public void setName(String name) {
+        this.name = name;
     }
 
     /**

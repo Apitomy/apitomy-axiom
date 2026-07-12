@@ -1291,6 +1291,18 @@ export async function applyAssistantSession(sessionId: string): Promise<ImportRe
     return response.json();
 }
 
+export async function renameAssistantSession(
+    sessionId: string, name: string
+): Promise<AssistantSessionInfo> {
+    const response = await fetch(`${API}/assistant/sessions/${sessionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+    });
+    if (!response.ok) throw new Error("Failed to rename session");
+    return response.json();
+}
+
 export async function interruptAssistantSession(sessionId: string): Promise<void> {
     const response = await fetch(`${API}/assistant/sessions/${sessionId}/interrupt`, {
         method: "POST",

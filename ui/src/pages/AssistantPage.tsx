@@ -26,6 +26,7 @@ import {
     Alert,
     SearchInput,
 } from "@patternfly/react-core";
+import PencilAltIcon from "@patternfly/react-icons/dist/esm/icons/pencil-alt-icon";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import RobotIcon from "@patternfly/react-icons/dist/esm/icons/robot-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
@@ -34,6 +35,7 @@ import {
     fetchAssistantSessions,
     createAssistantSession,
     deleteAssistantSession,
+    renameAssistantSession,
     fetchAssistantTemplates,
     type AssistantSessionInfo,
     type SessionTemplate,
@@ -158,6 +160,26 @@ export function AssistantPage() {
     const uniqueTemplateIds = [...new Set(sessions.map((s) => s.templateId))];
 
     const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+    const [renameTarget, setRenameTarget] = useState<{ id: string; name: string } | null>(null);
+    const [renameValue, setRenameValue] = useState("");
+
+    const handleRenameClick = (session: AssistantSessionInfo, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setRenameTarget({ id: session.id, name: session.name });
+        setRenameValue(session.name);
+    };
+
+    const handleRenameConfirm = async () => {
+        if (!renameTarget || !renameValue.trim()) return;
+        try {
+            await renameAssistantSession(renameTarget.id, renameValue.trim());
+            setRenameTarget(null);
+            load();
+        } catch (err) {
+            console.error("Failed to rename session:", err);
+        }
+    };
 
     const handleDeleteClick = (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
@@ -301,6 +323,13 @@ export function AssistantPage() {
                             </Label>
                             <Button
                                 variant="plain"
+                                aria-label="Rename session"
+                                onClick={(e) => handleRenameClick(s, e)}
+                            >
+                                <PencilAltIcon />
+                            </Button>
+                            <Button
+                                variant="plain"
                                 aria-label="Delete session"
                                 onClick={(e) => handleDeleteClick(s.id, e)}
                             >
@@ -421,6 +450,39 @@ export function AssistantPage() {
                         End Session
                     </Button>
                     <Button variant="link" onClick={() => setDeleteTarget(null)}>
+                        Cancel
+                    </Button>
+                </ModalFooter>
+            </Modal>
+
+            <Modal
+                isOpen={renameTarget !== null}
+                onClose={() => setRenameTarget(null)}
+                variant="small"
+                aria-label="Rename session"
+            >
+                <ModalHeader title="Rename Session" />
+                <ModalBody>
+                    <Form>
+                        <FormGroup label="Session Name" fieldId="rename-session">
+                            <TextInput
+                                id="rename-session"
+                                value={renameValue}
+                                onChange={(_e, v) => setRenameValue(v)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") handleRenameConfirm();
+                                }}
+                                autoFocus
+                            />
+                        </FormGroup>
+                    </Form>
+                </ModalBody>
+                <ModalFooter>
+                    <Button variant="primary" onClick={handleRenameConfirm}
+                        isDisabled={!renameValue.trim()}>
+                        Rename
+                    </Button>
+                    <Button variant="link" onClick={() => setRenameTarget(null)}>
                         Cancel
                     </Button>
                 </ModalFooter>

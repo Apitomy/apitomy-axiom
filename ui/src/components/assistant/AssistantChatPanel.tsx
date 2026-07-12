@@ -204,9 +204,8 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
         });
 
         es.onerror = () => {
-            if (es.readyState === EventSource.CLOSED) {
-                setIsProcessing(false);
-            }
+            es.close();
+            setIsProcessing(false);
         };
 
         return () => {

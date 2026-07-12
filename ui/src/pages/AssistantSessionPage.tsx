@@ -4,6 +4,7 @@ import {
     Badge,
     PageSection,
     Button,
+    TextInput,
     Flex,
     FlexItem,
     Label,
@@ -18,6 +19,7 @@ import {
 import { Table, Thead, Tr, Th, Tbody, Td } from "@patternfly/react-table";
 import ArrowLeftIcon from "@patternfly/react-icons/dist/esm/icons/arrow-left-icon";
 import ExternalLinkAltIcon from "@patternfly/react-icons/dist/esm/icons/external-link-alt-icon";
+import PencilAltIcon from "@patternfly/react-icons/dist/esm/icons/pencil-alt-icon";
 import ShieldAltIcon from "@patternfly/react-icons/dist/esm/icons/shield-alt-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import { AssistantChatPanel, type SessionMode } from "../components/assistant/AssistantChatPanel";
@@ -26,6 +28,7 @@ import {
     fetchAssistantSession,
     deleteAssistantSession,
     applyAssistantSession,
+    renameAssistantSession,
     fetchAutoApprovals,
     deleteAutoApproval,
     type AssistantSessionInfo,
@@ -47,6 +50,8 @@ export function AssistantSessionPage() {
     const [applyError, setApplyError] = useState<string | null>(null);
     const [sessionMode, setSessionMode] = useState<SessionMode>("normal");
     const [itemCount, setItemCount] = useState(0);
+    const [isEditingName, setIsEditingName] = useState(false);
+    const [editName, setEditName] = useState("");
     const [autoApprovalCount, setAutoApprovalCount] = useState(0);
     const [autoApprovalRules, setAutoApprovalRules] = useState<AutoApprovalRule[]>([]);
     const [isAutoApprovalModalOpen, setIsAutoApprovalModalOpen] = useState(false);
@@ -66,7 +71,27 @@ export function AssistantSessionPage() {
                 if (!isBreakout) navigate("/assistant");
             })
             .finally(() => setLoading(false));
+        fetchAutoApprovals(sessionId)
+            .then((rules) => setAutoApprovalCount(rules.length))
+            .catch(console.error);
     }, [sessionId, navigate, isBreakout]);
+
+    const handleNameSave = async () => {
+        if (!sessionId || !editName.trim() || editName.trim() === session?.name) {
+            setIsEditingName(false);
+            return;
+        }
+        try {
+            const updated = await renameAssistantSession(sessionId, editName.trim());
+            setSession(updated);
+            if (isBreakout) {
+                document.title = `${updated.name} — AI Assistant`;
+            }
+        } catch (err) {
+            console.error("Failed to rename session:", err);
+        }
+        setIsEditingName(false);
+    };
 
     const handleItemsChanged = useCallback(() => {
         setItemsRefresh((n) => n + 1);
@@ -195,7 +220,35 @@ export function AssistantSessionPage() {
                     </FlexItem>
                 )}
                 <FlexItem grow={{ default: "grow" }}>
-                    <span style={{ fontWeight: 600, fontSize: "16px" }}>{session.name}</span>
+                    {isEditingName ? (
+                        <TextInput
+                            value={editName}
+                            onChange={(_e, v) => setEditName(v)}
+                            onBlur={handleNameSave}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") handleNameSave();
+                                if (e.key === "Escape") setIsEditingName(false);
+                            }}
+                            autoFocus
+                            style={{ fontWeight: 600, fontSize: "16px", maxWidth: 300 }}
+                        />
+                    ) : (
+                        <span
+                            className="session-name-editable"
+                            style={{ fontWeight: 600, fontSize: "16px", cursor: "pointer",
+                                display: "inline-flex", alignItems: "center", gap: 6 }}
+                            onClick={() => {
+                                setEditName(session.name);
+                                setIsEditingName(true);
+                            }}
+                        >
+                            {session.name}
+                            <PencilAltIcon className="session-name-pencil"
+                                style={{ fontSize: "12px", color: "#6a6e73", opacity: 0,
+                                    transition: "opacity 0.15s" }} />
+                            <style>{`.session-name-editable:hover .session-name-pencil { opacity: 1 !important; }`}</style>
+                        </span>
+                    )}
                     {sessionMode === "plan" && (
                         <Label color="orange" isCompact style={{ marginLeft: 10 }}>
                             Plan Mode
