@@ -131,6 +131,12 @@ public class AssistantSessionManager {
             workDir = contextBuilder.createWorkingDirectory(sessionDir, templateId);
         }
 
+        // Run init script if configured
+        if (template.initScript() != null && !template.initScript().isBlank()) {
+            runInitScript(workDir, sessionDir, template.initScript(),
+                    template.initScriptType());
+        }
+
         List<String> command = buildCommand(workDir, sessionDir, template.systemPrompt(),
                 template.model(), resolvedAllowedTools, mcpConfig != null);
 
@@ -192,6 +198,52 @@ public class AssistantSessionManager {
             contextBuilder.deleteSessionDirectory(session.getSessionDirectory());
             LOG.infof("Destroyed assistant session %s (cost=$%.4f, turns=%d)",
                     sessionId, session.getTotalCostUsd(), session.getTurnCount());
+        }
+    }
+
+    private void runInitScript(Path workDir, Path sessionDir, String script,
+                                String scriptType) throws IOException {
+        String type = scriptType != null ? scriptType : "bash";
+        String fileName = "bash".equals(type) ? "init.sh" : "init.js";
+        Path scriptFile = sessionDir.resolve(fileName);
+        Files.writeString(scriptFile, script);
+
+        String interpreter = "bash".equals(type) ? "bash" : "node";
+        LOG.infof("Running init script (%s) in %s", type, workDir);
+
+        ProcessBuilder pb = new ProcessBuilder(interpreter,
+                scriptFile.toAbsolutePath().toString())
+                .directory(workDir.toFile())
+                .redirectErrorStream(true);
+        Process process = pb.start();
+        String output = new String(process.getInputStream().readAllBytes());
+
+        boolean finished;
+        try {
+            finished = process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            process.destroyForcibly();
+            throw new IOException("Init script interrupted");
+        }
+
+        if (!finished) {
+            process.destroyForcibly();
+            throw new IOException("Init script timed out after 60 seconds");
+        }
+
+        int exitCode = process.exitValue();
+        if (exitCode != 0) {
+            LOG.warnf("Init script failed (exit %d): %s", exitCode, output);
+            throw new IOException("Init script failed (exit code " + exitCode + "): "
+                    + output.substring(0, Math.min(output.length(), 500)));
+        }
+
+        LOG.infof("Init script completed successfully");
+        try {
+            Files.deleteIfExists(scriptFile);
+        } catch (IOException e) {
+            LOG.warnf("Failed to delete init script file: %s", scriptFile);
         }
     }
 

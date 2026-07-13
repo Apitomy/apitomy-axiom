@@ -1178,6 +1178,8 @@ export interface SessionTemplate {
     welcomeMessage?: string;
     workingDirectory?: string;
     model?: string;
+    initScript?: string;
+    initScriptType?: string;
     mcpServers: string[];
     allowedTools: string[];
 }

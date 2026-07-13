@@ -6725,6 +6725,14 @@
             "description": "AI model override, or null for default",
             "type": "string"
           },
+          "initScript": {
+            "description": "Optional init script to run in the working directory on session creation",
+            "type": "string"
+          },
+          "initScriptType": {
+            "description": "Script type: bash or node",
+            "type": "string"
+          },
           "mcpServers": {
             "description": "Names of MCP server configurations to include",
             "type": "array",
@@ -6775,6 +6783,14 @@
           },
           "model": {
             "description": "AI model override, or null for default",
+            "type": "string"
+          },
+          "initScript": {
+            "description": "Optional init script to run in the working directory on session creation",
+            "type": "string"
+          },
+          "initScriptType": {
+            "description": "Script type: bash or node",
             "type": "string"
           },
           "mcpServers": {

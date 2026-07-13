@@ -48,6 +48,14 @@ public class SessionTemplateEntity extends PanacheEntity {
     @Column(name = "model")
     public String model;
 
+    /** Optional init script to run in the working directory on session creation. */
+    @Column(name = "init_script", columnDefinition = "TEXT")
+    public String initScript;
+
+    /** Script type: "bash" or "node". */
+    @Column(name = "init_script_type")
+    public String initScriptType;
+
     /** Names of McpServerEntity records to include in the session's MCP config. */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "session_template_mcp_server",

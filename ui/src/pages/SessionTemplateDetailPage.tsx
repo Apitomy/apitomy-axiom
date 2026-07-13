@@ -66,6 +66,8 @@ export function SessionTemplateDetailPage() {
                     welcomeMessage: t.welcomeMessage,
                     workingDirectory: t.workingDirectory,
                     model: t.model,
+                    initScript: t.initScript,
+                    initScriptType: t.initScriptType,
                     mcpServers: t.mcpServers,
                     allowedTools: t.allowedTools,
                 });
@@ -368,6 +370,55 @@ export function SessionTemplateDetailPage() {
                             </div>
                         </FormGroup>
                     </Form>
+                </Tab>
+
+                <Tab eventKey={3} title={
+                    <TabTitleText>
+                        Init Script{form.initScript ? " *" : ""}
+                    </TabTitleText>
+                }>
+                    <div style={{ marginTop: 24 }}>
+                        <FormHelperText style={{ marginBottom: 12 }}>
+                            <HelperText>
+                                <HelperTextItem>
+                                    Optional script that runs in the working directory when a
+                                    session is created. Use this to clone repositories, install
+                                    dependencies, or set up project files. The script must
+                                    complete within 60 seconds.
+                                </HelperTextItem>
+                            </HelperText>
+                        </FormHelperText>
+                        <Form style={{ maxWidth: 300, marginBottom: 12 }}>
+                            <FormGroup label="Script Type" fieldId="initScriptType">
+                                <FormSelect
+                                    id="initScriptType"
+                                    value={form.initScriptType || "bash"}
+                                    onChange={(_e, v) => updateForm({ initScriptType: v })}
+                                    isDisabled={isReadOnly}
+                                >
+                                    <FormSelectOption value="bash" label="Bash" />
+                                    <FormSelectOption value="node" label="Node.js" />
+                                </FormSelect>
+                            </FormGroup>
+                        </Form>
+                        <CodeEditor
+                            code={form.initScript || ""}
+                            onChange={(v) => updateForm({
+                                initScript: v || undefined,
+                            })}
+                            language={(form.initScriptType || "bash") === "bash"
+                                ? Language.shell : Language.javascript}
+                            height="400px"
+                            isReadOnly={isReadOnly}
+                            isLineNumbersVisible
+                            options={{
+                                quickSuggestions: false,
+                                suggestOnTriggerCharacters: false,
+                                wordBasedSuggestions: "off",
+                                parameterHints: { enabled: false },
+                            }}
+                        />
+                    </div>
                 </Tab>
             </Tabs>
         </PageSection>

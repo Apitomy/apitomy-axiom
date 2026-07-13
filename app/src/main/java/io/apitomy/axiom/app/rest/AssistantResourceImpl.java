@@ -458,6 +458,8 @@ public class AssistantResourceImpl implements AssistantResource {
         bean.setWelcomeMessage(template.welcomeMessage());
         bean.setWorkingDirectory(template.workingDirectory());
         bean.setModel(template.model());
+        bean.setInitScript(template.initScript());
+        bean.setInitScriptType(template.initScriptType());
         bean.setMcpServers(template.mcpServers());
         bean.setAllowedTools(template.allowedTools());
         return bean;
@@ -483,6 +485,8 @@ public class AssistantResourceImpl implements AssistantResource {
                 data.getWelcomeMessage(),
                 data.getWorkingDirectory(),
                 data.getModel(),
+                data.getInitScript(),
+                data.getInitScriptType(),
                 data.getMcpServers() != null ? data.getMcpServers() : List.of(),
                 data.getAllowedTools() != null ? data.getAllowedTools() : List.of(),
                 false);
