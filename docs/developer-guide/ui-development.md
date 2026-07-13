@@ -34,14 +34,24 @@ ui/src/
 │   ├── ProjectsPage.tsx
 │   ├── ProjectDetailPage.tsx
 │   ├── ActionTypesPage.tsx
-│   ├── ...
-│   └── AssistantSessionPage.tsx
+│   ├── AssistantPage.tsx
+│   ├── AssistantSessionPage.tsx
+│   ├── SessionTemplatesPage.tsx
+│   ├── SessionTemplateDetailPage.tsx
+│   └── ...
 ├── components/             Reusable UI components
 │   ├── AppMasthead.tsx
 │   ├── AppSidebar.tsx
 │   ├── ExecutionLogModal.tsx
 │   ├── EventDetailModal.tsx
-│   └── assistant/          AI Assistant chat components
+│   └── assistant/          AI Assistant components
+│       ├── AssistantChatPanel.tsx      SSE-connected chat orchestrator
+│       ├── AssistantMessageList.tsx    Message rendering (markdown, tools, permissions)
+│       ├── AssistantMessageInput.tsx   Input with slash-command autocomplete
+│       ├── AssistantToolUseBlock.tsx   Expandable tool use display + permission UX
+│       ├── AssistantPermissionPrompt.tsx  Permission allow/deny UI
+│       ├── AssistantAskUserQuestion.tsx   Structured question rendering
+│       └── AssistantGeneratedItems.tsx    Config Assistant sidebar
 └── vite-env.d.ts           Vite type declarations
 ```
 
