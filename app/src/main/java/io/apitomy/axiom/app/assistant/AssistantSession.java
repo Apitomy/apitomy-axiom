@@ -55,6 +55,12 @@ public class AssistantSession {
     private final Instant createdAt;
     private final AtomicReference<String> errorMessage = new AtomicReference<>();
 
+    private volatile double totalCostUsd;
+    private volatile long totalInputTokens;
+    private volatile long totalOutputTokens;
+    private volatile long totalDurationMs;
+    private volatile int turnCount;
+
     private final CopyOnWriteArrayList<SseEvent> eventHistory = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<Consumer<SseEvent>> listeners = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<AutoApprovalRule> autoApprovalRules = new CopyOnWriteArrayList<>();
@@ -327,6 +333,31 @@ public class AssistantSession {
         return errorMessage.get();
     }
 
+    /** Returns the accumulated cost in USD across all turns. */
+    public double getTotalCostUsd() {
+        return totalCostUsd;
+    }
+
+    /** Returns the accumulated input token count across all turns. */
+    public long getTotalInputTokens() {
+        return totalInputTokens;
+    }
+
+    /** Returns the accumulated output token count across all turns. */
+    public long getTotalOutputTokens() {
+        return totalOutputTokens;
+    }
+
+    /** Returns the accumulated duration in milliseconds across all turns. */
+    public long getTotalDurationMs() {
+        return totalDurationMs;
+    }
+
+    /** Returns the number of completed turns. */
+    public int getTurnCount() {
+        return turnCount;
+    }
+
     /**
      * Adds an auto-approval rule for matching tool permissions.
      *
@@ -412,6 +443,9 @@ public class AssistantSession {
                     if (handleAutoApproval(event)) {
                         continue;
                     }
+                    if ("turn_complete".equals(event.type())) {
+                        accumulateCost(event);
+                    }
                     eventHistory.add(event);
                     lastActivityAt = Instant.now();
                     for (Consumer<SseEvent> listener : listeners) {
@@ -448,6 +482,14 @@ public class AssistantSession {
             return false;
         }
         return true;
+    }
+
+    private void accumulateCost(SseEvent event) {
+        totalCostUsd += event.data().path("costUsd").asDouble(0);
+        totalInputTokens += event.data().path("inputTokens").asLong(0);
+        totalOutputTokens += event.data().path("outputTokens").asLong(0);
+        totalDurationMs += event.data().path("durationMs").asLong(0);
+        turnCount++;
     }
 
     private void readStderr() {

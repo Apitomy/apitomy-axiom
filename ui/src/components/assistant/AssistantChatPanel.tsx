@@ -17,11 +17,12 @@ interface AssistantChatPanelProps {
     onModeChange?: (mode: SessionMode) => void;
     onAutoApprovalCountChange?: () => void;
     onModelDetected?: (model: string) => void;
+    onCostUpdate?: (costUsd: number) => void;
 }
 
 let messageIdCounter = 0;
 
-export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, onAutoApprovalCountChange, onModelDetected }: AssistantChatPanelProps) {
+export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, onAutoApprovalCountChange, onModelDetected, onCostUpdate }: AssistantChatPanelProps) {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [processingText, setProcessingText] = useState("");
@@ -181,8 +182,16 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
             }
         });
 
-        es.addEventListener("turn_complete", () => {
+        es.addEventListener("turn_complete", (e) => {
             setIsProcessing(false);
+            try {
+                const data = JSON.parse(e.data);
+                if (data.costUsd != null) {
+                    onCostUpdate?.(data.costUsd);
+                }
+            } catch {
+                // ignore
+            }
         });
 
         es.addEventListener("unhandled_event", (e) => {
@@ -216,7 +225,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
             es.close();
             eventSourceRef.current = null;
         };
-    }, [sessionId, addMessage, onItemsChanged, onModeChange, onModelDetected]);
+    }, [sessionId, addMessage, onItemsChanged, onModeChange, onModelDetected, onCostUpdate]);
 
     const handleSend = useCallback(async (message: string) => {
         addMessage({ type: "user", content: message });

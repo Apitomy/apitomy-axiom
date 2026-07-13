@@ -431,6 +431,10 @@ public class AssistantResourceImpl implements AssistantResource {
         info.setCreatedAt(Date.from(session.getCreatedAt()));
         info.setLastActivityAt(Date.from(session.getLastActivityAt()));
         info.setErrorMessage(session.getErrorMessage());
+        info.setTotalCostUsd(session.getTotalCostUsd());
+        info.setTotalInputTokens(session.getTotalInputTokens());
+        info.setTotalOutputTokens(session.getTotalOutputTokens());
+        info.setTurnCount(session.getTurnCount());
         return info;
     }
 

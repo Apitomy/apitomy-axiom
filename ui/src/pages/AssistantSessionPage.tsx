@@ -53,6 +53,7 @@ export function AssistantSessionPage() {
     const [isEditingName, setIsEditingName] = useState(false);
     const [editName, setEditName] = useState("");
     const [sessionModel, setSessionModel] = useState<string | null>(null);
+    const [sessionCost, setSessionCost] = useState(0);
     const [autoApprovalCount, setAutoApprovalCount] = useState(0);
     const [autoApprovalRules, setAutoApprovalRules] = useState<AutoApprovalRule[]>([]);
     const [isAutoApprovalModalOpen, setIsAutoApprovalModalOpen] = useState(false);
@@ -260,6 +261,11 @@ export function AssistantSessionPage() {
                             {sessionModel}
                         </Label>
                     )}
+                    {sessionCost > 0 && (
+                        <Label color="grey" isCompact style={{ marginLeft: 10 }}>
+                            ${sessionCost.toFixed(4)}
+                        </Label>
+                    )}
                 </FlexItem>
                 <FlexItem>
                     {isConfigAssistant && (
@@ -336,6 +342,7 @@ export function AssistantSessionPage() {
                         onModeChange={setSessionMode}
                         onAutoApprovalCountChange={handleAutoApprovalCountChange}
                         onModelDetected={setSessionModel}
+                        onCostUpdate={setSessionCost}
                     />
                 </div>
 

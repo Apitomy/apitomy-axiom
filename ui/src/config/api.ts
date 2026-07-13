@@ -1201,6 +1201,10 @@ export interface AssistantSessionInfo {
     createdAt: string;
     lastActivityAt: string;
     errorMessage?: string;
+    totalCostUsd?: number;
+    totalInputTokens?: number;
+    totalOutputTokens?: number;
+    turnCount?: number;
 }
 
 export interface AssistantItem {

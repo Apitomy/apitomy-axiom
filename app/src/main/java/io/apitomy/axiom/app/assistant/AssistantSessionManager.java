@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.api.beans.ImportResult;
 import io.apitomy.axiom.app.ImportExportService;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
+import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.McpServerEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
 import io.quarkus.runtime.ShutdownEvent;
@@ -182,13 +183,31 @@ public class AssistantSessionManager {
      *
      * @param sessionId the session to destroy
      */
+    @jakarta.transaction.Transactional
     public void destroySession(String sessionId) {
         AssistantSession session = sessions.remove(sessionId);
         if (session != null) {
             session.destroy();
+            recordUsage(session);
             contextBuilder.deleteSessionDirectory(session.getSessionDirectory());
-            LOG.infof("Destroyed assistant session %s", sessionId);
+            LOG.infof("Destroyed assistant session %s (cost=$%.4f, turns=%d)",
+                    sessionId, session.getTotalCostUsd(), session.getTurnCount());
         }
+    }
+
+    private void recordUsage(AssistantSession session) {
+        if (session.getTurnCount() == 0) {
+            return;
+        }
+        AiUsageEntity usage = new AiUsageEntity();
+        usage.invocationType = "assistant-session";
+        usage.actionType = "assistant-session";
+        usage.costUsd = session.getTotalCostUsd();
+        usage.inputTokens = session.getTotalInputTokens();
+        usage.outputTokens = session.getTotalOutputTokens();
+        usage.durationMs = session.getTotalDurationMs();
+        usage.createdOn = Instant.now();
+        usage.persist();
     }
 
     /**

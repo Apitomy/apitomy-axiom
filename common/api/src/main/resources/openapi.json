@@ -6045,6 +6045,26 @@
           "templateId": {
             "description": "Template ID this session was created from",
             "type": "string"
+          },
+          "totalCostUsd": {
+            "description": "Accumulated cost in USD across all turns",
+            "type": "number",
+            "format": "double"
+          },
+          "totalInputTokens": {
+            "description": "Accumulated input token count",
+            "type": "integer",
+            "format": "int64"
+          },
+          "totalOutputTokens": {
+            "description": "Accumulated output token count",
+            "type": "integer",
+            "format": "int64"
+          },
+          "turnCount": {
+            "description": "Number of completed turns",
+            "type": "integer",
+            "format": "int32"
           }
         }
       },

@@ -147,6 +147,11 @@ public class AssistantEventParser {
         data.put("sessionId", root.path("session_id").asText());
         data.put("costUsd", root.path("total_cost_usd").asDouble(0));
         data.put("durationMs", root.path("duration_ms").asLong(0));
+        JsonNode usage = root.path("usage");
+        data.put("inputTokens", usage.path("input_tokens").asLong(0)
+                + usage.path("cache_creation_input_tokens").asLong(0)
+                + usage.path("cache_read_input_tokens").asLong(0));
+        data.put("outputTokens", usage.path("output_tokens").asLong(0));
         data.put("success", "success".equals(root.path("subtype").asText()));
         return List.of(new SseEvent("turn_complete", data));
     }
