@@ -30,6 +30,7 @@ import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.sse.OutboundSseEvent;
@@ -41,6 +42,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 /**
@@ -131,13 +133,15 @@ public class AssistantResourceImpl implements AssistantResource {
     /**
      * SSE event stream for an assistant session. This method overloads the
      * generated interface method to add {@code @Context} SSE parameters.
+     * Supports {@code Last-Event-Id} for resuming after a reconnect.
      */
     @GET
     @Path("/sessions/{sessionId}/events")
     @Produces(MediaType.SERVER_SENT_EVENTS)
     public void streamAssistantEvents(@PathParam("sessionId") String sessionId,
                                        @Context SseEventSink sink,
-                                       @Context Sse sse) {
+                                       @Context Sse sse,
+                                       @Context HttpHeaders headers) {
         AssistantSession session = sessionManager.getSession(sessionId);
         if (session == null) {
             try (sink) {
@@ -149,10 +153,14 @@ public class AssistantResourceImpl implements AssistantResource {
             return;
         }
 
-        // Stream live events
+        long lastEventId = parseLastEventId(headers);
+
+        // Stream live events — ID assigned via a counter seeded after snapshot
+        AtomicLong liveIdCounter = new AtomicLong();
         Consumer<SseEvent> listener = event -> {
             if (sink.isClosed()) return;
             OutboundSseEvent sseEvent = sse.newEventBuilder()
+                    .id(String.valueOf(liveIdCounter.getAndIncrement()))
                     .name(event.type())
                     .data(event.toJson())
                     .build();
@@ -161,15 +169,22 @@ public class AssistantResourceImpl implements AssistantResource {
 
         // Atomically snapshot history and register the listener so no events
         // emitted between replay and registration are lost.
-        List<SseEvent> history = session.addListenerWithHistory(listener);
+        List<SseEvent> history = session.addListenerWithHistory(listener, lastEventId);
+
+        // Seed the live counter: replayed events start at (lastEventId + 1),
+        // so live events continue from (lastEventId + 1 + history.size).
+        long replayStartId = lastEventId + 1;
+        liveIdCounter.set(replayStartId + history.size());
 
         // Replay history
-        for (SseEvent event : history) {
+        for (int i = 0; i < history.size(); i++) {
             if (sink.isClosed()) {
                 session.removeListener(listener);
                 return;
             }
+            SseEvent event = history.get(i);
             OutboundSseEvent sseEvent = sse.newEventBuilder()
+                    .id(String.valueOf(replayStartId + i))
                     .name(event.type())
                     .data(event.toJson())
                     .build();
@@ -209,6 +224,21 @@ public class AssistantResourceImpl implements AssistantResource {
                 }
             }
         });
+    }
+
+    /**
+     * Parses the {@code Last-Event-Id} header, returning -1 if absent or invalid.
+     */
+    private long parseLastEventId(HttpHeaders headers) {
+        String value = headers.getHeaderString("Last-Event-Id");
+        if (value == null || value.isBlank()) {
+            return -1;
+        }
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException e) {
+            return -1;
+        }
     }
 
     /** {@inheritDoc} */

@@ -232,8 +232,25 @@ public class AssistantSession {
      * @return the event history snapshot to replay
      */
     public List<SseEvent> addListenerWithHistory(Consumer<SseEvent> listener) {
+        return addListenerWithHistory(listener, -1);
+    }
+
+    /**
+     * Atomically snapshots the event history since a given event index and
+     * registers a listener. Used for SSE reconnect with {@code Last-Event-Id}.
+     *
+     * @param listener the event consumer to register
+     * @param sinceId the last event index the client received, or -1 to replay all
+     * @return the event history snapshot to replay (events after sinceId)
+     */
+    public List<SseEvent> addListenerWithHistory(Consumer<SseEvent> listener, long sinceId) {
         synchronized (eventLock) {
-            List<SseEvent> snapshot = List.copyOf(eventHistory);
+            int fromIndex = (int) Math.min(sinceId + 1, eventHistory.size());
+            if (fromIndex < 0) {
+                fromIndex = 0;
+            }
+            List<SseEvent> snapshot = List.copyOf(
+                    eventHistory.subList(fromIndex, eventHistory.size()));
             listeners.add(listener);
             return snapshot;
         }
