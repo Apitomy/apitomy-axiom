@@ -21,6 +21,13 @@ CREATE TABLE IF NOT EXISTS session_template_mcp_server (
     FOREIGN KEY (session_template_id) REFERENCES session_template(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS session_template_toolset (
+    session_template_id BIGINT NOT NULL,
+    toolset_name VARCHAR(255) NOT NULL,
+    UNIQUE (session_template_id, toolset_name),
+    FOREIGN KEY (session_template_id) REFERENCES session_template(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS session_template_allowed_tool (
     session_template_id BIGINT NOT NULL,
     tool_pattern VARCHAR(255) NOT NULL,
