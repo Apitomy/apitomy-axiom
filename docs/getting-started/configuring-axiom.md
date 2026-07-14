@@ -80,7 +80,6 @@ conversation.
 | Property | Default | Description |
 |----------|---------|-------------|
 | `axiom.assistant.max-sessions` | `3` | Maximum concurrent assistant sessions |
-| `axiom.assistant.idle-timeout-seconds` | `3600` | Auto-destroy idle sessions after this duration |
 
 ### Workspaces
 
