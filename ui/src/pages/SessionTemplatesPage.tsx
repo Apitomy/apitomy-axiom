@@ -149,7 +149,7 @@ export function SessionTemplatesPage() {
                                     </Label>
                                 </Td>
                                 <Td>
-                                    {t.builtIn ? (
+                                    {t.templateId !== "axiom-config-assistant" && (
                                         <Button variant="plain" size="sm"
                                             onClick={(e) => {
                                                 e.stopPropagation();
@@ -157,7 +157,8 @@ export function SessionTemplatesPage() {
                                             }}>
                                             <CopyIcon />
                                         </Button>
-                                    ) : (
+                                    )}
+                                    {!t.builtIn && (
                                         <Button variant="plain" size="sm"
                                             isDanger
                                             onClick={(e) => {
