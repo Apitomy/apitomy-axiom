@@ -3275,9 +3275,9 @@
           "200": {
             "description": "Item content",
             "content": {
-              "application/json": {
+              "*/*": {
                 "schema": {
-                  "$ref": "#/components/schemas/AssistantItem"
+                  "$ref": "#/components/schemas/FileContent"
                 }
               }
             }
@@ -6939,6 +6939,11 @@
             "type": "string"
           }
         }
+      },
+      "FileContent": {
+        "format": "binary",
+        "type": "string",
+        "x-codegen-inline": true
       }
     },
     "responses": {

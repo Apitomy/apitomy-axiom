@@ -45,7 +45,9 @@ public class AssistantSessionManager {
     private static final String[] MCP_TEMPLATE_FILES = { "package.json", "server.js" };
 
     @ConfigProperty(name = "axiom.assistant.max-sessions", defaultValue = "3")
-    int maxSessions;\n\n    @ConfigProperty(name = "axiom.ai-engine", defaultValue = "claude-code")
+    int maxSessions;
+
+    @ConfigProperty(name = "axiom.ai-engine", defaultValue = "claude-code")
     String aiEngine;
 
     @ConfigProperty(name = "axiom.claude-code.executable", defaultValue = "claude")

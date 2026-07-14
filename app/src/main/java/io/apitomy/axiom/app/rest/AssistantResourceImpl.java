@@ -258,8 +258,8 @@ public class AssistantResourceImpl implements AssistantResource {
 
     /** {@inheritDoc} */
     @Override
-    public AssistantItem getAssistantItem(String sessionId, String itemType,
-                                           String itemName) {
+    public Response getAssistantItem(String sessionId, String itemType,
+                                      String itemName) {
         AssistantSession session = requireSession(sessionId);
         requireConfigAssistant(session);
         try {
@@ -269,12 +269,7 @@ public class AssistantResourceImpl implements AssistantResource {
                 throw new WebApplicationException(
                         "Item not found: " + itemType + "/" + itemName, 404);
             }
-            // Return the raw content — the OpenAPI spec says AssistantItem but
-            // the item content endpoint returns the full JSON file content.
-            // This is a pragmatic deviation: the generated return type doesn't
-            // match the actual response shape for this endpoint.
-            throw new WebApplicationException(
-                    Response.ok(content).build());
+            return Response.ok(content).build();
         } catch (WebApplicationException e) {
             throw e;
         } catch (IOException e) {
