@@ -554,6 +554,14 @@ public class AssistantSession {
                 } else {
                     status = Status.STOPPED;
                 }
+
+                ObjectNode data = MAPPER.createObjectNode();
+                data.put("exitCode", exitCode);
+                data.put("status", status.name());
+                if (exitCode != 0) {
+                    data.put("message", "Process exited with code " + exitCode);
+                }
+                addEvent(new SseEvent("session_ended", data));
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
