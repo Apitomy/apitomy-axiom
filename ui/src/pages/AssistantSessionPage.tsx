@@ -54,6 +54,8 @@ export function AssistantSessionPage() {
     const [editName, setEditName] = useState("");
     const [sessionModel, setSessionModel] = useState<string | null>(null);
     const [sessionCost, setSessionCost] = useState(0);
+    const [sessionInputTokens, setSessionInputTokens] = useState(0);
+    const [sessionOutputTokens, setSessionOutputTokens] = useState(0);
     const [autoApprovalCount, setAutoApprovalCount] = useState(0);
     const [autoApprovalRules, setAutoApprovalRules] = useState<AutoApprovalRule[]>([]);
     const [isAutoApprovalModalOpen, setIsAutoApprovalModalOpen] = useState(false);
@@ -262,9 +264,13 @@ export function AssistantSessionPage() {
                         </Label>
                     )}
                     {sessionCost > 0 && (
-                        <Label color="grey" isCompact style={{ marginLeft: 10 }}>
-                            ${sessionCost.toFixed(4)}
-                        </Label>
+                        <Tooltip content={
+                            `Tokens in: ${sessionInputTokens.toLocaleString()} / out: ${sessionOutputTokens.toLocaleString()}`
+                        }>
+                            <Label color="grey" isCompact style={{ marginLeft: 10 }}>
+                                ${sessionCost.toFixed(4)}
+                            </Label>
+                        </Tooltip>
                     )}
                 </FlexItem>
                 <FlexItem>
@@ -342,7 +348,11 @@ export function AssistantSessionPage() {
                         onModeChange={setSessionMode}
                         onAutoApprovalCountChange={handleAutoApprovalCountChange}
                         onModelDetected={setSessionModel}
-                        onCostUpdate={setSessionCost}
+                        onCostUpdate={(cost, tokensIn, tokensOut) => {
+                            setSessionCost(cost);
+                            setSessionInputTokens(prev => prev + tokensIn);
+                            setSessionOutputTokens(prev => prev + tokensOut);
+                        }}
                     />
                 </div>
 

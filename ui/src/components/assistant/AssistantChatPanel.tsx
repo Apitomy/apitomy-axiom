@@ -17,7 +17,7 @@ interface AssistantChatPanelProps {
     onModeChange?: (mode: SessionMode) => void;
     onAutoApprovalCountChange?: () => void;
     onModelDetected?: (model: string) => void;
-    onCostUpdate?: (costUsd: number) => void;
+    onCostUpdate?: (costUsd: number, inputTokens: number, outputTokens: number) => void;
 }
 
 let messageIdCounter = 0;
@@ -187,7 +187,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
             try {
                 const data = JSON.parse(e.data);
                 if (data.costUsd != null) {
-                    onCostUpdate?.(data.costUsd);
+                    onCostUpdate?.(data.costUsd, data.inputTokens ?? 0, data.outputTokens ?? 0);
                 }
             } catch {
                 // ignore
