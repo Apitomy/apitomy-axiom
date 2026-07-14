@@ -63,6 +63,7 @@ public class AssistantSession {
 
     private final CopyOnWriteArrayList<SseEvent> eventHistory = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<Consumer<SseEvent>> listeners = new CopyOnWriteArrayList<>();
+    private final Object eventLock = new Object();
     private final CopyOnWriteArrayList<AutoApprovalRule> autoApprovalRules = new CopyOnWriteArrayList<>();
 
     /**
@@ -162,13 +163,15 @@ public class AssistantSession {
      * @param event the event to add
      */
     public void addEvent(SseEvent event) {
-        eventHistory.add(event);
-        lastActivityAt = Instant.now();
-        for (Consumer<SseEvent> listener : listeners) {
-            try {
-                listener.accept(event);
-            } catch (Exception e) {
-                LOG.warnf(e, "SSE listener error in session %s", id);
+        synchronized (eventLock) {
+            eventHistory.add(event);
+            lastActivityAt = Instant.now();
+            for (Consumer<SseEvent> listener : listeners) {
+                try {
+                    listener.accept(event);
+                } catch (Exception e) {
+                    LOG.warnf(e, "SSE listener error in session %s", id);
+                }
             }
         }
     }
@@ -219,6 +222,21 @@ public class AssistantSession {
      */
     public void addListener(Consumer<SseEvent> listener) {
         listeners.add(listener);
+    }
+
+    /**
+     * Atomically snapshots the event history and registers a listener so that
+     * no events are lost between replay and live streaming.
+     *
+     * @param listener the event consumer to register
+     * @return the event history snapshot to replay
+     */
+    public List<SseEvent> addListenerWithHistory(Consumer<SseEvent> listener) {
+        synchronized (eventLock) {
+            List<SseEvent> snapshot = List.copyOf(eventHistory);
+            listeners.add(listener);
+            return snapshot;
+        }
     }
 
     /**
@@ -446,13 +464,15 @@ public class AssistantSession {
                     if ("turn_complete".equals(event.type())) {
                         accumulateCost(event);
                     }
-                    eventHistory.add(event);
-                    lastActivityAt = Instant.now();
-                    for (Consumer<SseEvent> listener : listeners) {
-                        try {
-                            listener.accept(event);
-                        } catch (Exception e) {
-                            LOG.warnf(e, "SSE listener error in session %s", id);
+                    synchronized (eventLock) {
+                        eventHistory.add(event);
+                        lastActivityAt = Instant.now();
+                        for (Consumer<SseEvent> listener : listeners) {
+                            try {
+                                listener.accept(event);
+                            } catch (Exception e) {
+                                LOG.warnf(e, "SSE listener error in session %s", id);
+                            }
                         }
                     }
                 }

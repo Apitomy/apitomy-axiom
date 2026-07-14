@@ -149,16 +149,6 @@ public class AssistantResourceImpl implements AssistantResource {
             return;
         }
 
-        // Replay history
-        for (SseEvent event : session.getEventHistory()) {
-            if (sink.isClosed()) return;
-            OutboundSseEvent sseEvent = sse.newEventBuilder()
-                    .name(event.type())
-                    .data(event.toJson())
-                    .build();
-            sink.send(sseEvent);
-        }
-
         // Stream live events
         Consumer<SseEvent> listener = event -> {
             if (sink.isClosed()) return;
@@ -169,7 +159,22 @@ public class AssistantResourceImpl implements AssistantResource {
             sink.send(sseEvent);
         };
 
-        session.addListener(listener);
+        // Atomically snapshot history and register the listener so no events
+        // emitted between replay and registration are lost.
+        List<SseEvent> history = session.addListenerWithHistory(listener);
+
+        // Replay history
+        for (SseEvent event : history) {
+            if (sink.isClosed()) {
+                session.removeListener(listener);
+                return;
+            }
+            OutboundSseEvent sseEvent = sse.newEventBuilder()
+                    .name(event.type())
+                    .data(event.toJson())
+                    .build();
+            sink.send(sseEvent);
+        }
 
         sink.send(sse.newEventBuilder().comment("connected").build());
 
