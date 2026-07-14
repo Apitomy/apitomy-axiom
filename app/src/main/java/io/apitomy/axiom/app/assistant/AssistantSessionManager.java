@@ -10,6 +10,7 @@ import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.McpServerEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
 import io.quarkus.runtime.ShutdownEvent;
+import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
@@ -364,6 +365,29 @@ public class AssistantSessionManager {
      */
     public boolean isAvailable() {
         return "claude-code".equals(aiEngine);
+    }
+
+    /**
+     * Cleans up stale session directories left behind by a previous crash.
+     * No sessions are active at startup, so any directories under
+     * {@code ~/.axiom/assistant/sessions/} are orphaned.
+     *
+     * @param event the startup event
+     */
+    void onStartup(@Observes StartupEvent event) {
+        Path sessionsRoot = Path.of(System.getProperty("user.home"),
+                ".axiom", "assistant", "sessions");
+        if (!Files.isDirectory(sessionsRoot)) {
+            return;
+        }
+        try (Stream<Path> dirs = Files.list(sessionsRoot)) {
+            dirs.filter(Files::isDirectory).forEach(dir -> {
+                contextBuilder.deleteSessionDirectory(dir);
+                LOG.infof("Cleaned up stale session directory: %s", dir.getFileName());
+            });
+        } catch (IOException e) {
+            LOG.warnf(e, "Failed to clean up stale session directories");
+        }
     }
 
     /**
