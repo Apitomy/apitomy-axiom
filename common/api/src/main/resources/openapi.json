@@ -3038,22 +3038,22 @@
         ],
         "summary": "Interrupt the current turn in an assistant session",
         "operationId": "interruptAssistantSession",
-        "responses": {
-          "204": {
-            "description": "Interrupt signal sent"
-          }
-        },
         "parameters": [
           {
             "name": "sessionId",
             "in": "path",
+            "description": "The assistant session identifier",
             "required": true,
             "schema": {
               "type": "string"
-            },
-            "description": "The assistant session identifier"
+            }
           }
-        ]
+        ],
+        "responses": {
+          "204": {
+            "description": "Interrupt signal sent"
+          }
+        }
       }
     },
     "/assistant/sessions/{sessionId}/messages": {
@@ -3126,9 +3126,22 @@
     },
     "/assistant/sessions/{sessionId}/auto-approvals": {
       "get": {
-        "tags": ["Assistant"],
+        "tags": [
+          "Assistant"
+        ],
         "summary": "List active auto-approval rules for a session",
         "operationId": "listAutoApprovals",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "description": "The assistant session identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "List of auto-approval rules",
@@ -3136,30 +3149,38 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "$ref": "#/components/schemas/AutoApprovalRule" }
+                  "items": {
+                    "$ref": "#/components/schemas/AutoApprovalRule"
+                  }
                 }
               }
             }
           }
-        },
+        }
+      },
+      "post": {
+        "tags": [
+          "Assistant"
+        ],
+        "summary": "Add an auto-approval rule and optionally approve a pending permission",
+        "operationId": "createAutoApproval",
         "parameters": [
           {
             "name": "sessionId",
             "in": "path",
+            "description": "The assistant session identifier",
             "required": true,
-            "schema": { "type": "string" },
-            "description": "The assistant session identifier"
+            "schema": {
+              "type": "string"
+            }
           }
-        ]
-      },
-      "post": {
-        "tags": ["Assistant"],
-        "summary": "Add an auto-approval rule and optionally approve a pending permission",
-        "operationId": "createAutoApproval",
+        ],
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateAutoApprovalRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CreateAutoApprovalRequest"
+              }
             }
           }
         },
@@ -3168,46 +3189,47 @@
             "description": "Rule created",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/AutoApprovalRule" }
+                "schema": {
+                  "$ref": "#/components/schemas/AutoApprovalRule"
+                }
               }
             }
           }
-        },
-        "parameters": [
-          {
-            "name": "sessionId",
-            "in": "path",
-            "required": true,
-            "schema": { "type": "string" },
-            "description": "The assistant session identifier"
-          }
-        ]
+        }
       }
     },
     "/assistant/sessions/{sessionId}/auto-approvals/{ruleId}": {
       "delete": {
-        "tags": ["Assistant"],
+        "tags": [
+          "Assistant"
+        ],
         "summary": "Remove an auto-approval rule",
         "operationId": "deleteAutoApproval",
-        "responses": {
-          "204": { "description": "Rule removed" }
-        },
         "parameters": [
           {
             "name": "sessionId",
             "in": "path",
+            "description": "The assistant session identifier",
             "required": true,
-            "schema": { "type": "string" },
-            "description": "The assistant session identifier"
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "ruleId",
             "in": "path",
+            "description": "The auto-approval rule identifier",
             "required": true,
-            "schema": { "type": "string" },
-            "description": "The auto-approval rule identifier"
+            "schema": {
+              "type": "string"
+            }
           }
-        ]
+        ],
+        "responses": {
+          "204": {
+            "description": "Rule removed"
+          }
+        }
       }
     },
     "/assistant/sessions/{sessionId}/items": {
@@ -6047,24 +6069,24 @@
             "type": "string"
           },
           "totalCostUsd": {
+            "format": "double",
             "description": "Accumulated cost in USD across all turns",
-            "type": "number",
-            "format": "double"
+            "type": "number"
           },
           "totalInputTokens": {
+            "format": "int64",
             "description": "Accumulated input token count",
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "totalOutputTokens": {
+            "format": "int64",
             "description": "Accumulated output token count",
-            "type": "integer",
-            "format": "int64"
+            "type": "integer"
           },
           "turnCount": {
+            "format": "int32",
             "description": "Number of completed turns",
-            "type": "integer",
-            "format": "int32"
+            "type": "integer"
           }
         }
       },
@@ -6139,7 +6161,7 @@
         "type": "object",
         "properties": {
           "type": {
-            "description": "Item type directory (tools, action-types, report-definitions)",
+            "description": "Item type directory (tools, action-types, report-definitions, toolsets, session-templates)",
             "type": "string"
           },
           "name": {
@@ -6163,15 +6185,63 @@
         "type": "object",
         "properties": {
           "tools": {
-            "description": "Number of tools imported",
+            "description": "Total number of tools applied (created + updated)",
             "type": "integer"
           },
           "actionTypes": {
-            "description": "Number of action types imported",
+            "description": "Total number of action types applied (created + updated)",
             "type": "integer"
           },
           "reportDefinitions": {
-            "description": "Number of report definitions imported",
+            "description": "Total number of report definitions applied (created + updated)",
+            "type": "integer"
+          },
+          "toolsCreated": {
+            "description": "Number of new tools created",
+            "type": "integer"
+          },
+          "toolsUpdated": {
+            "description": "Number of existing tools updated",
+            "type": "integer"
+          },
+          "actionTypesCreated": {
+            "description": "Number of new action types created",
+            "type": "integer"
+          },
+          "actionTypesUpdated": {
+            "description": "Number of existing action types updated",
+            "type": "integer"
+          },
+          "reportDefinitionsCreated": {
+            "description": "Number of new report definitions created",
+            "type": "integer"
+          },
+          "reportDefinitionsUpdated": {
+            "description": "Number of existing report definitions updated",
+            "type": "integer"
+          },
+          "toolsets": {
+            "description": "Total number of toolsets applied (created + updated)",
+            "type": "integer"
+          },
+          "toolsetsCreated": {
+            "description": "Number of new toolsets created",
+            "type": "integer"
+          },
+          "toolsetsUpdated": {
+            "description": "Number of existing toolsets updated",
+            "type": "integer"
+          },
+          "sessionTemplates": {
+            "description": "Total number of session templates applied (created + updated)",
+            "type": "integer"
+          },
+          "sessionTemplatesCreated": {
+            "description": "Number of new session templates created",
+            "type": "integer"
+          },
+          "sessionTemplatesUpdated": {
+            "description": "Number of existing session templates updated",
             "type": "integer"
           }
         }
@@ -6816,7 +6886,11 @@
         }
       },
       "AutoApprovalRule": {
-        "required": ["id", "toolName", "createdAt"],
+        "required": [
+          "id",
+          "toolName",
+          "createdAt"
+        ],
         "type": "object",
         "properties": {
           "id": {
@@ -6843,7 +6917,9 @@
         }
       },
       "CreateAutoApprovalRequest": {
-        "required": ["toolName"],
+        "required": [
+          "toolName"
+        ],
         "type": "object",
         "properties": {
           "toolName": {

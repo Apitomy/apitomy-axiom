@@ -408,8 +408,9 @@ coding, analysis, or exploration.
 
 Sessions are created from **Session Templates**, which define the assistant's system prompt,
 available tools, MCP servers, and working directory. Axiom ships with built-in templates
-(including the Configuration Assistant for creating tools, action types, and report
-definitions), and you can create your own templates for custom workflows.
+(including the Configuration Assistant for creating and updating tools, action types,
+report definitions, toolsets, and session templates), and you can create your own
+templates for custom workflows.
 
 For full details, see the [AI Assistant](ai-assistant.md) guide.
 

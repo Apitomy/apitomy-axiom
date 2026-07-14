@@ -138,6 +138,24 @@ export interface ImportResult {
     reportDefinitions?: number;
 }
 
+export interface AssistantApplyResult {
+    tools?: number;
+    actionTypes?: number;
+    reportDefinitions?: number;
+    toolsets?: number;
+    sessionTemplates?: number;
+    toolsCreated?: number;
+    toolsUpdated?: number;
+    actionTypesCreated?: number;
+    actionTypesUpdated?: number;
+    reportDefinitionsCreated?: number;
+    reportDefinitionsUpdated?: number;
+    toolsetsCreated?: number;
+    toolsetsUpdated?: number;
+    sessionTemplatesCreated?: number;
+    sessionTemplatesUpdated?: number;
+}
+
 export async function exportPack(request: PackExportRequest): Promise<Blob> {
     const response = await fetch(`${API}/system/packs/export`, {
         method: "POST",
@@ -1287,7 +1305,7 @@ export async function fetchAssistantItemContent(
     return response.json();
 }
 
-export async function applyAssistantSession(sessionId: string): Promise<ImportResult> {
+export async function applyAssistantSession(sessionId: string): Promise<AssistantApplyResult> {
     const response = await fetch(`${API}/assistant/sessions/${sessionId}/apply`, {
         method: "POST",
     });

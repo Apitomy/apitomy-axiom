@@ -16,6 +16,7 @@ import io.apitomy.axiom.api.beans.SendAssistantMessageRequest;
 import io.apitomy.axiom.api.beans.SessionTemplate;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
 import io.apitomy.axiom.app.assistant.AssistantSession;
+import io.apitomy.axiom.app.ImportExportService;
 import io.apitomy.axiom.app.assistant.AssistantSessionManager;
 import io.apitomy.axiom.app.assistant.AssistantSessionManager.SessionLimitReachedException;
 import io.apitomy.axiom.app.assistant.AssistantSessionManager.ValidationException;
@@ -283,12 +284,24 @@ public class AssistantResourceImpl implements AssistantResource {
         AssistantSession session = requireSession(sessionId);
         requireConfigAssistant(session);
         try {
-            io.apitomy.axiom.api.beans.ImportResult result =
+            ImportExportService.UpsertResult result =
                     sessionManager.applySession(sessionId);
             AssistantApplyResult applyResult = new AssistantApplyResult();
-            applyResult.setTools(result.getTools());
-            applyResult.setActionTypes(result.getActionTypes());
-            applyResult.setReportDefinitions(result.getReportDefinitions());
+            applyResult.setTools(result.toolsCreated() + result.toolsUpdated());
+            applyResult.setActionTypes(result.actionTypesCreated() + result.actionTypesUpdated());
+            applyResult.setReportDefinitions(result.reportDefinitionsCreated() + result.reportDefinitionsUpdated());
+            applyResult.setToolsCreated(result.toolsCreated());
+            applyResult.setToolsUpdated(result.toolsUpdated());
+            applyResult.setActionTypesCreated(result.actionTypesCreated());
+            applyResult.setActionTypesUpdated(result.actionTypesUpdated());
+            applyResult.setReportDefinitionsCreated(result.reportDefinitionsCreated());
+            applyResult.setReportDefinitionsUpdated(result.reportDefinitionsUpdated());
+            applyResult.setToolsets(result.toolsetsCreated() + result.toolsetsUpdated());
+            applyResult.setToolsetsCreated(result.toolsetsCreated());
+            applyResult.setToolsetsUpdated(result.toolsetsUpdated());
+            applyResult.setSessionTemplates(result.sessionTemplatesCreated() + result.sessionTemplatesUpdated());
+            applyResult.setSessionTemplatesCreated(result.sessionTemplatesCreated());
+            applyResult.setSessionTemplatesUpdated(result.sessionTemplatesUpdated());
             return applyResult;
         } catch (ValidationException e) {
             throw new WebApplicationException(e.getMessage(), 422);

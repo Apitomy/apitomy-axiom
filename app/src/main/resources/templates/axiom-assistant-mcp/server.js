@@ -143,6 +143,49 @@ const TOOLS = [
             })), null, 2);
         },
     },
+    {
+        name: "axiom_get_toolset",
+        description: "Get full details of a specific toolset by name, including its tool list.",
+        parameters: [
+            { name: "name", type: "string", description: "The toolset name", required: true },
+        ],
+        handler: async (args) => {
+            const items = JSON.parse(await axiomApi("GET", "/toolsets"));
+            const ts = items.find(t => t.name === args.name);
+            if (!ts) return `Toolset '${args.name}' not found.`;
+            return JSON.stringify(ts, null, 2);
+        },
+    },
+    {
+        name: "axiom_list_session_templates",
+        description: "List all AI Assistant session templates in Axiom. Returns template IDs, names, descriptions, and whether they are built-in.",
+        parameters: [],
+        handler: async () => {
+            const items = JSON.parse(await axiomApi("GET", "/assistant/templates"));
+            if (items.length === 0) return "No session templates configured.";
+            return JSON.stringify(items.map(t => ({
+                templateId: t.templateId,
+                name: t.name,
+                description: t.description || "",
+                builtIn: t.builtIn || false,
+            })), null, 2);
+        },
+    },
+    {
+        name: "axiom_get_session_template",
+        description: "Get full details of a specific session template by template ID, including its system prompt, allowed tools, and MCP servers.",
+        parameters: [
+            { name: "templateId", type: "string", description: "The session template ID", required: true },
+        ],
+        handler: async (args) => {
+            try {
+                const result = await axiomApi("GET", "/assistant/templates/" + encodeURIComponent(args.templateId));
+                return result;
+            } catch (e) {
+                return `Session template '${args.templateId}' not found.`;
+            }
+        },
+    },
 ];
 
 log("INFO", "Axiom Assistant MCP server started", {

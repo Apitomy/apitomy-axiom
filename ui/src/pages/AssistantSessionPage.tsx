@@ -33,7 +33,7 @@ import {
     deleteAutoApproval,
     type AssistantSessionInfo,
     type AutoApprovalRule,
-    type ImportResult,
+    type AssistantApplyResult,
 } from "../config/api";
 
 export function AssistantSessionPage() {
@@ -46,7 +46,7 @@ export function AssistantSessionPage() {
     const [itemsRefresh, setItemsRefresh] = useState(0);
     const [isEndConfirmOpen, setIsEndConfirmOpen] = useState(false);
     const [applying, setApplying] = useState(false);
-    const [applyResult, setApplyResult] = useState<ImportResult | null>(null);
+    const [applyResult, setApplyResult] = useState<AssistantApplyResult | null>(null);
     const [applyError, setApplyError] = useState<string | null>(null);
     const [sessionMode, setSessionMode] = useState<SessionMode>("normal");
     const [itemCount, setItemCount] = useState(0);
@@ -399,11 +399,18 @@ export function AssistantSessionPage() {
                     <ModalBody>
                         {applyResult && (
                             <div>
-                                <p>The following items were imported:</p>
+                                <p>The following items were applied:</p>
                                 <ul style={{ marginTop: 8 }}>
-                                    {(applyResult.tools ?? 0) > 0 && <li>{applyResult.tools} tool(s)</li>}
-                                    {(applyResult.actionTypes ?? 0) > 0 && <li>{applyResult.actionTypes} action type(s)</li>}
-                                    {(applyResult.reportDefinitions ?? 0) > 0 && <li>{applyResult.reportDefinitions} report definition(s)</li>}
+                                    {(applyResult.toolsCreated ?? 0) > 0 && <li>{applyResult.toolsCreated} tool(s) created</li>}
+                                    {(applyResult.toolsUpdated ?? 0) > 0 && <li>{applyResult.toolsUpdated} tool(s) updated</li>}
+                                    {(applyResult.actionTypesCreated ?? 0) > 0 && <li>{applyResult.actionTypesCreated} action type(s) created</li>}
+                                    {(applyResult.actionTypesUpdated ?? 0) > 0 && <li>{applyResult.actionTypesUpdated} action type(s) updated</li>}
+                                    {(applyResult.reportDefinitionsCreated ?? 0) > 0 && <li>{applyResult.reportDefinitionsCreated} report definition(s) created</li>}
+                                    {(applyResult.reportDefinitionsUpdated ?? 0) > 0 && <li>{applyResult.reportDefinitionsUpdated} report definition(s) updated</li>}
+                                    {(applyResult.toolsetsCreated ?? 0) > 0 && <li>{applyResult.toolsetsCreated} toolset(s) created</li>}
+                                    {(applyResult.toolsetsUpdated ?? 0) > 0 && <li>{applyResult.toolsetsUpdated} toolset(s) updated</li>}
+                                    {(applyResult.sessionTemplatesCreated ?? 0) > 0 && <li>{applyResult.sessionTemplatesCreated} session template(s) created</li>}
+                                    {(applyResult.sessionTemplatesUpdated ?? 0) > 0 && <li>{applyResult.sessionTemplatesUpdated} session template(s) updated</li>}
                                 </ul>
                             </div>
                         )}

@@ -16,6 +16,8 @@ import {
 import { ToolDetailModal } from "./ToolDetailModal";
 import { ActionTypeDetailModal } from "./ActionTypeDetailModal";
 import { ReportDefinitionDetailModal } from "./ReportDefinitionDetailModal";
+import { ToolsetDetailModal } from "./ToolsetDetailModal";
+import { SessionTemplateDetailModal } from "./SessionTemplateDetailModal";
 
 interface AssistantGeneratedItemsProps {
     sessionId: string;
@@ -23,10 +25,12 @@ interface AssistantGeneratedItemsProps {
     onItemCountChanged?: (count: number) => void;
 }
 
-const TYPE_LABELS: Record<string, { label: string; color: "blue" | "green" | "purple" }> = {
+const TYPE_LABELS: Record<string, { label: string; color: "blue" | "green" | "purple" | "cyan" | "orange" }> = {
     "tools": { label: "Tool", color: "blue" },
     "action-types": { label: "Action Type", color: "green" },
     "report-definitions": { label: "Report", color: "purple" },
+    "toolsets": { label: "Toolset", color: "cyan" },
+    "session-templates": { label: "Template", color: "orange" },
 };
 
 export function AssistantGeneratedItems({ sessionId, refreshTrigger, onItemCountChanged }: AssistantGeneratedItemsProps) {
@@ -92,7 +96,8 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger, onItemCount
                 <EmptyState variant="sm">
                     <EmptyStateBody>
                         No items generated yet. Ask the assistant to create tools,
-                        action types, or report definitions.
+                        action types, report definitions, toolsets, or session
+                        templates.
                     </EmptyStateBody>
                 </EmptyState>
             )}
@@ -158,6 +163,24 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger, onItemCount
             )}
             {selectedItem?.type === "report-definitions" && itemContent && (
                 <ReportDefinitionDetailModal
+                    isOpen
+                    onClose={closeModal}
+                    name={selectedItem.name}
+                    content={itemContent}
+                    errors={selectedItem.validationErrors}
+                />
+            )}
+            {selectedItem?.type === "toolsets" && itemContent && (
+                <ToolsetDetailModal
+                    isOpen
+                    onClose={closeModal}
+                    name={selectedItem.name}
+                    content={itemContent}
+                    errors={selectedItem.validationErrors}
+                />
+            )}
+            {selectedItem?.type === "session-templates" && itemContent && (
+                <SessionTemplateDetailModal
                     isOpen
                     onClose={closeModal}
                     name={selectedItem.name}

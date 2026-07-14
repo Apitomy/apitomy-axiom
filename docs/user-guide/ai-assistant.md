@@ -7,8 +7,9 @@ tailored to specific workflows, from generating Axiom configuration to general-p
 coding assistance.
 
 Out of the box, Axiom ships two built-in templates: a **Configuration Assistant** for
-creating tools, action types, and report definitions, and a **General Assistant** for
-open-ended tasks. You can also create your own templates to define custom workflows.
+creating and updating tools, action types, report definitions, toolsets, and session
+templates, and a **General Assistant** for open-ended tasks. You can also create your
+own templates to define custom workflows.
 
 !!! note
     The AI Assistant requires **Claude Code** as the AI engine. The `claude` CLI must
@@ -47,7 +48,8 @@ Each template specifies:
 Axiom ships two immutable built-in templates:
 
 - **Configuration Assistant** (`axiom-config-assistant`) — purpose-built for creating
-  Axiom configuration items with a two-panel layout and Apply workflow.
+  and updating Axiom configuration items (tools, action types, report definitions,
+  toolsets, and session templates) with a two-panel layout and Apply workflow.
 - **General Assistant** (`general-assistant`) — a minimal template for open-ended tasks
   with no sidebar or special behavior.
 
@@ -171,8 +173,8 @@ session is consuming, especially for long or complex conversations.
 ## Configuration Assistant
 
 The **Configuration Assistant** template (`axiom-config-assistant`) provides a
-specialized workflow for creating Axiom configuration items. It extends the standard
-session interface with a two-panel layout and an Apply workflow.
+specialized workflow for creating and updating Axiom configuration items. It extends
+the standard session interface with a two-panel layout and an Apply workflow.
 
 ### Two-Panel Layout
 
@@ -181,14 +183,16 @@ session interface with a two-panel layout and an Apply workflow.
 
 ### Generated Items
 
-As the assistant creates items, they appear in the sidebar. The assistant can create
-three types of configuration items:
+As the assistant creates or updates items, they appear in the sidebar. The assistant
+can work with five types of configuration items:
 
 | Type | What it produces |
 |------|-----------------|
 | **Tools** | Script-based tools with parameters, descriptions, and bash script templates |
 | **Action Types** | Actor or script-mode action types with prompt templates, allowed tools, and trigger settings |
 | **Report Definitions** | Scheduled or ad-hoc reports with prompt templates, allowed tools, and time windows |
+| **Toolsets** | Named groups of tools that can be referenced in action types and session templates using `@ToolsetName` |
+| **Session Templates** | Custom AI Assistant session configurations with a persona, system prompt, MCP servers, and allowed tools |
 
 Each item shows its type, name, and validation status — a green checkmark if valid, or
 a warning/error icon if there are problems. Click any item to open a detail modal
@@ -210,10 +214,11 @@ Generated items exist only within the session until you apply them. Nothing is s
 to your Axiom configuration until you explicitly click **Apply All** in the session
 header.
 
-Apply All validates all items, then imports them into your Axiom configuration as a
-**Configuration Pack** in one operation. A summary dialog shows what was imported
-(e.g., "3 tools, 1 action type"). After applying, the session ends and you are
-returned to the sessions list.
+Apply All validates all items, then applies them to your Axiom configuration in one
+atomic operation. Items with names matching existing configuration are **updated in
+place**; items with new names are **created**. A summary dialog shows what was applied
+with a breakdown of created and updated counts (e.g., "2 tool(s) created, 1 tool(s)
+updated"). After applying, the session ends and you are returned to the sessions list.
 
 !!! warning
     If you end a session without applying, all generated items are discarded. This
@@ -223,7 +228,9 @@ returned to the sessions list.
 
 The Configuration Assistant has access to an MCP server that lets it query your
 existing Axiom configuration — it can list your current tools, action types, event
-sources, and more to understand what is already set up before creating new items.
+sources, and more to understand what is already set up. This is especially useful
+when updating existing items, as the assistant fetches the current definition before
+making changes.
 
 ### Example Conversation
 
@@ -273,8 +280,12 @@ modal.
   full configuration and check for validation warnings.
 - **Iterate in conversation.** If something isn't right, tell the assistant what to
   change rather than starting over. It can read and update the items it already created.
+- **Update existing items by name.** Tell the assistant which item you want to modify
+  and what to change. It will fetch the current definition, apply your changes, and
+  write the updated JSON. When you apply, matching names are updated in place.
 - **Ask about existing configuration.** The assistant can query your current tools,
-  action types, and other configuration to avoid duplicates and understand your setup.
+  action types, toolsets, session templates, and other configuration to understand
+  your setup before creating or updating items.
 
 ### General Tips
 
@@ -289,6 +300,6 @@ modal.
 - **Monitor costs.** Keep an eye on the running cost display in the toolbar, especially
   during complex multi-step tasks. End sessions when you are done to avoid unnecessary
   token usage.
-- **Choose the right template.** Use the Configuration Assistant when you need to create
-  Axiom configuration items. Use the General Assistant or a custom template for
-  everything else.
+- **Choose the right template.** Use the Configuration Assistant when you need to
+  create or update Axiom configuration items. Use the General Assistant or a custom
+  template for everything else.

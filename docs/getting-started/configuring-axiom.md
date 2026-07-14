@@ -74,7 +74,8 @@ The AI Manager triages incoming events and decides what actions to take.
 
 ### AI Assistant
 
-The interactive AI Assistant allows users to create configuration items through conversation.
+The interactive AI Assistant allows users to create and update configuration items through
+conversation.
 
 | Property | Default | Description |
 |----------|---------|-------------|

@@ -75,6 +75,8 @@ public class AssistantContextBuilder {
             Files.createDirectories(workDir.resolve("tools"));
             Files.createDirectories(workDir.resolve("action-types"));
             Files.createDirectories(workDir.resolve("report-definitions"));
+            Files.createDirectories(workDir.resolve("toolsets"));
+            Files.createDirectories(workDir.resolve("session-templates"));
         }
 
         LOG.infof("Created working directory: %s", workDir);

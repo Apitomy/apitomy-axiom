@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.apitomy.axiom.api.beans.ImportResult;
 import io.apitomy.axiom.app.ImportExportService;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
@@ -281,6 +280,8 @@ public class AssistantSessionManager {
         collectItems(workDir, "tools", items);
         collectItems(workDir, "action-types", items);
         collectItems(workDir, "report-definitions", items);
+        collectItems(workDir, "toolsets", items);
+        collectItems(workDir, "session-templates", items);
 
         return items;
     }
@@ -309,13 +310,15 @@ public class AssistantSessionManager {
     }
 
     /**
-     * Validates all items and imports them as a Configuration Pack.
+     * Validates all items and applies them as a Configuration Pack.
+     * Items with names matching existing entities are updated in place;
+     * new names are created.
      *
      * @param sessionId the session identifier
-     * @return the import result
+     * @return the upsert result with created and updated counts
      * @throws IOException if files cannot be read
      */
-    public ImportResult applySession(String sessionId) throws IOException {
+    public ImportExportService.UpsertResult applySession(String sessionId) throws IOException {
         AssistantSession session = sessions.get(sessionId);
         if (session == null) {
             throw new IllegalArgumentException("Session not found: " + sessionId);
@@ -338,8 +341,8 @@ public class AssistantSessionManager {
         // Build configuration pack
         JsonNode pack = buildConfigPack(session, items);
 
-        // Import via the existing service
-        ImportResult result = importExportService.importPack(pack);
+        // Import or update via the upsert service
+        ImportExportService.UpsertResult result = importExportService.importOrUpdatePack(pack);
 
         // Destroy session on success
         destroySession(sessionId);
@@ -420,6 +423,8 @@ public class AssistantSessionManager {
                 validateAndFeedback(workDir, "tools", session);
                 validateAndFeedback(workDir, "action-types", session);
                 validateAndFeedback(workDir, "report-definitions", session);
+                validateAndFeedback(workDir, "toolsets", session);
+                validateAndFeedback(workDir, "session-templates", session);
             } catch (Exception e) {
                 LOG.warnf(e, "Validation listener error in session %s",
                         session.getId());
@@ -497,6 +502,8 @@ public class AssistantSessionManager {
         ArrayNode toolsArr = pack.putArray("tools");
         ArrayNode actionTypesArr = pack.putArray("actionTypes");
         ArrayNode reportDefsArr = pack.putArray("reportDefinitions");
+        ArrayNode toolsetsArr = pack.putArray("toolsets");
+        ArrayNode templatesArr = pack.putArray("sessionTemplates");
 
         for (AssistantItem item : items) {
             Path file = session.getWorkingDirectory()
@@ -507,6 +514,8 @@ public class AssistantSessionManager {
                 case "tools" -> toolsArr.add(content);
                 case "action-types" -> actionTypesArr.add(content);
                 case "report-definitions" -> reportDefsArr.add(content);
+                case "toolsets" -> toolsetsArr.add(content);
+                case "session-templates" -> templatesArr.add(content);
             }
         }
 
