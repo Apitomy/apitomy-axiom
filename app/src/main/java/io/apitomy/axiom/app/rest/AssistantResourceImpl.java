@@ -178,13 +178,26 @@ public class AssistantResourceImpl implements AssistantResource {
 
         sink.send(sse.newEventBuilder().comment("connected").build());
 
-        Thread.ofVirtual().name("sse-cleanup-" + sessionId).start(() -> {
+        OutboundSseEvent heartbeat = sse.newEventBuilder().comment("heartbeat").build();
+        Thread.ofVirtual().name("sse-keepalive-" + sessionId).start(() -> {
+            int tick = 0;
             while (!sink.isClosed() && session.isAlive()) {
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     break;
+                }
+                tick++;
+                if (tick >= 15) {
+                    tick = 0;
+                    if (!sink.isClosed()) {
+                        try {
+                            sink.send(heartbeat);
+                        } catch (Exception e) {
+                            break;
+                        }
+                    }
                 }
             }
             session.removeListener(listener);
