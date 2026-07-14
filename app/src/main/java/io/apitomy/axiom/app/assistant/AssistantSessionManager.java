@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 /**
@@ -69,6 +70,7 @@ public class AssistantSessionManager {
     ObjectMapper objectMapper;
 
     private final Map<String, AssistantSession> sessions = new ConcurrentHashMap<>();
+    private final AtomicInteger sessionCount = new AtomicInteger();
 
     private volatile Path assistantMcpServerDir;
 
@@ -89,72 +91,79 @@ public class AssistantSessionManager {
                             + "Current engine: " + aiEngine);
         }
 
-        if (sessions.size() >= maxSessions) {
+        // Atomically reserve a session slot before doing any setup work.
+        if (sessionCount.incrementAndGet() > maxSessions) {
+            sessionCount.decrementAndGet();
             throw new SessionLimitReachedException(
                     "Maximum number of assistant sessions reached (" + maxSessions + ")");
         }
 
-        SessionTemplateService.SessionTemplate template = templateService.getTemplate(templateId);
-        if (template == null) {
-            throw new IllegalArgumentException("Template not found: " + templateId);
-        }
-
-        // Resolve MCP servers from template
-        Map<String, AssistantContextBuilder.McpServerConfig> mcpConfigs =
-                resolveMcpServers(template);
-
-        // Resolve allowed tools from template
-        List<String> resolvedAllowedTools = resolveAllowedTools(template);
-
-        // Build MCP config JSON
-        String mcpConfig = contextBuilder.buildMcpConfig(mcpConfigs);
-
-        // Create session directory (always under ~/.axiom/assistant/sessions/)
-        String sessionId = UUID.randomUUID().toString();
-        Path sessionDir = contextBuilder.createSessionDirectory(sessionId, mcpConfig);
-
-        // Determine working directory
-        Path workDir;
-        if (template.workingDirectory() != null && !template.workingDirectory().isBlank()) {
-            workDir = Path.of(template.workingDirectory());
-            if (!Files.isDirectory(workDir)) {
-                throw new IOException("Template working directory does not exist: "
-                        + template.workingDirectory());
+        try {
+            SessionTemplateService.SessionTemplate template = templateService.getTemplate(templateId);
+            if (template == null) {
+                throw new IllegalArgumentException("Template not found: " + templateId);
             }
-        } else {
-            workDir = contextBuilder.createWorkingDirectory(sessionDir, templateId);
+
+            // Resolve MCP servers from template
+            Map<String, AssistantContextBuilder.McpServerConfig> mcpConfigs =
+                    resolveMcpServers(template);
+
+            // Resolve allowed tools from template
+            List<String> resolvedAllowedTools = resolveAllowedTools(template);
+
+            // Build MCP config JSON
+            String mcpConfig = contextBuilder.buildMcpConfig(mcpConfigs);
+
+            // Create session directory (always under ~/.axiom/assistant/sessions/)
+            String sessionId = UUID.randomUUID().toString();
+            Path sessionDir = contextBuilder.createSessionDirectory(sessionId, mcpConfig);
+
+            // Determine working directory
+            Path workDir;
+            if (template.workingDirectory() != null && !template.workingDirectory().isBlank()) {
+                workDir = Path.of(template.workingDirectory());
+                if (!Files.isDirectory(workDir)) {
+                    throw new IOException("Template working directory does not exist: "
+                            + template.workingDirectory());
+                }
+            } else {
+                workDir = contextBuilder.createWorkingDirectory(sessionDir, templateId);
+            }
+
+            // Run init script if configured
+            if (template.initScript() != null && !template.initScript().isBlank()) {
+                runInitScript(workDir, sessionDir, template.initScript(),
+                        template.initScriptType());
+            }
+
+            List<String> command = buildCommand(workDir, sessionDir, template.systemPrompt(),
+                    template.model(), resolvedAllowedTools, mcpConfig != null);
+
+            String sessionName = name != null && !name.isBlank() ? name : "Assistant Session";
+            AssistantSession session = new AssistantSession(sessionName, templateId, sessionDir,
+                    workDir, command);
+            session.start();
+
+            // Add welcome message to event history so it replays on reconnect
+            if (template.welcomeMessage() != null && !template.welcomeMessage().isBlank()) {
+                ObjectNode welcomeData = objectMapper.createObjectNode();
+                welcomeData.put("text", template.welcomeMessage());
+                session.addEvent(new AssistantEventParser.SseEvent("assistant_text", welcomeData));
+            }
+
+            // Config Assistant validation listener
+            if ("axiom-config-assistant".equals(templateId)) {
+                session.addListener(createValidationListener(session));
+            }
+
+            sessions.put(session.getId(), session);
+            LOG.infof("Created assistant session %s (%s) from template %s",
+                    session.getId(), sessionName, templateId);
+            return session;
+        } catch (Exception e) {
+            sessionCount.decrementAndGet();
+            throw e;
         }
-
-        // Run init script if configured
-        if (template.initScript() != null && !template.initScript().isBlank()) {
-            runInitScript(workDir, sessionDir, template.initScript(),
-                    template.initScriptType());
-        }
-
-        List<String> command = buildCommand(workDir, sessionDir, template.systemPrompt(),
-                template.model(), resolvedAllowedTools, mcpConfig != null);
-
-        String sessionName = name != null && !name.isBlank() ? name : "Assistant Session";
-        AssistantSession session = new AssistantSession(sessionName, templateId, sessionDir,
-                workDir, command);
-        session.start();
-
-        // Add welcome message to event history so it replays on reconnect
-        if (template.welcomeMessage() != null && !template.welcomeMessage().isBlank()) {
-            ObjectNode welcomeData = objectMapper.createObjectNode();
-            welcomeData.put("text", template.welcomeMessage());
-            session.addEvent(new AssistantEventParser.SseEvent("assistant_text", welcomeData));
-        }
-
-        // Config Assistant validation listener
-        if ("axiom-config-assistant".equals(templateId)) {
-            session.addListener(createValidationListener(session));
-        }
-
-        sessions.put(session.getId(), session);
-        LOG.infof("Created assistant session %s (%s) from template %s",
-                session.getId(), sessionName, templateId);
-        return session;
     }
 
     /**
@@ -187,6 +196,7 @@ public class AssistantSessionManager {
     public void destroySession(String sessionId) {
         AssistantSession session = sessions.remove(sessionId);
         if (session != null) {
+            sessionCount.decrementAndGet();
             session.destroy();
             recordUsage(session);
             contextBuilder.deleteSessionDirectory(session.getSessionDirectory());
