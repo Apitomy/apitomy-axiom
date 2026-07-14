@@ -74,6 +74,9 @@ export function SessionTemplatesPage() {
             workingDirectory: template.workingDirectory,
             mcpServers: template.mcpServers,
             allowedTools: template.allowedTools,
+            model: template.model,
+            initScript: template.initScript,
+            initScriptType: template.initScriptType,
         })
             .then((created) => navigate(`/session-templates/${created.templateId}`))
             .catch(console.error);
