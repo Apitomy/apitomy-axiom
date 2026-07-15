@@ -14,6 +14,8 @@
     "Edit(*)",
     "Bash(ls *)",
     "Bash(cat *)",
+    "Bash(find *)",
+    "Bash(jq *)",
     "mcp__axiom__axiom_list_tools",
     "mcp__axiom__axiom_get_tool",
     "mcp__axiom__axiom_list_action_types",
