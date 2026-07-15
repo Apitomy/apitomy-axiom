@@ -41,7 +41,8 @@ Each template specifies:
 | **Model** | Optional AI model override (e.g., a specific Claude model). |
 | **MCP Servers** | Named MCP server configurations to include in the session. |
 | **Allowed Tools** | Tool patterns for `--allowedTools` (e.g., `Read(*)`, `Bash(ls *)`). Use `@ToolsetName` to include all tools from a toolset. |
-| **Init Script** | Optional bash or Node.js script executed when the session starts (60-second timeout). |
+| **Init Script** | Optional startup script executed when the session is created (see [Init Scripts](#init-scripts) below). |
+| **Environment** | Optional key-value environment variables injected into the Claude process. Values support `${secret:NAME}` syntax. |
 
 ### Built-in Templates
 
@@ -61,6 +62,64 @@ editable copies.
 You create and manage custom templates from **Configuration > Session Templates**. Each
 template supports all the fields listed above, giving you full control over the
 assistant's persona and capabilities.
+
+### Init Scripts
+
+Init scripts run once when a session is created, **before** Claude Code starts. They
+execute in the session's working directory and are useful for preparing the environment
+— cloning a repository, installing dependencies, fetching data, or writing config files
+that the assistant will need during the conversation.
+
+**Script types:**
+
+| Type | Runner | Use when |
+|------|--------|----------|
+| **Bash** | `/bin/bash` | Shell commands, git operations, file manipulation, package installs |
+| **Node.js** | `node` | Fetching data from APIs, generating config files, complex setup logic |
+
+Select the script type from the **Init Script** tab dropdown when editing a template.
+Write the script body in the editor below it.
+
+**Timeout:** Init scripts have a **60-second timeout**. If the script does not exit
+within 60 seconds, it is killed and the session continues without it. Keep scripts
+focused on quick setup tasks — long-running operations should be handled by the
+assistant itself during the conversation.
+
+**Environment:** Init scripts inherit the environment variables defined on the template
+(including resolved `${secret:NAME}` references), so they can use credentials for git
+clones, API calls, or authenticated downloads.
+
+**Common use cases:**
+
+- **Clone a repository** — `git clone` a repo into the working directory so the
+  assistant can work on it immediately.
+- **Install dependencies** — run `npm install`, `pip install -r requirements.txt`, or
+  `mvn dependency:resolve` to prepare the project.
+- **Write configuration files** — generate `.env`, `settings.json`, or other config
+  files that the assistant or its tools will need.
+- **Fetch context** — download issue details, pull request metadata, or other context
+  from external APIs and save it to a file the assistant can read.
+
+**Example (bash):**
+
+```bash
+#!/bin/bash
+# Clone a specific repo branch into the working directory
+git clone --branch main --depth 1 \
+  https://${GH_TOKEN}@github.com/my-org/my-repo.git .
+npm install
+```
+
+**Example (Node.js):**
+
+```javascript
+const fs = require("fs");
+const resp = await fetch("https://api.github.com/repos/my-org/my-repo/issues/42", {
+    headers: { Authorization: `Bearer ${process.env.GH_TOKEN}` },
+});
+const issue = await resp.json();
+fs.writeFileSync("context.json", JSON.stringify(issue, null, 2));
+```
 
 ---
 
