@@ -29,6 +29,16 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
     const [slashCommands, setSlashCommands] = useState<string[]>([]);
     const eventSourceRef = useRef<EventSource | null>(null);
 
+    // Keep callback refs so the EventSource effect doesn't re-run when
+    // parent-supplied callbacks change identity (e.g. inline arrow functions).
+    const onItemsChangedRef = useRef(onItemsChanged);
+    const onModeChangeRef = useRef(onModeChange);
+    const onModelDetectedRef = useRef(onModelDetected);
+    const onCostUpdateRef = useRef(onCostUpdate);
+    useEffect(() => { onItemsChangedRef.current = onItemsChanged; }, [onItemsChanged]);
+    useEffect(() => { onModeChangeRef.current = onModeChange; }, [onModeChange]);
+    useEffect(() => { onModelDetectedRef.current = onModelDetected; }, [onModelDetected]);
+    useEffect(() => { onCostUpdateRef.current = onCostUpdate; }, [onCostUpdate]);
 
     const addMessage = useCallback((msg: Omit<ChatMessage, "id">) => {
         setMessages((prev) => [...prev, { ...msg, id: String(++messageIdCounter) }]);
@@ -46,7 +56,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                     setSlashCommands(data.slashCommands);
                 }
                 if (data.model) {
-                    onModelDetected?.(data.model);
+                    onModelDetectedRef.current?.(data.model);
                 }
             } catch {
                 // ignore
@@ -106,7 +116,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                 });
                 setProcessingText(randomThinkingMessage());
                 if (data.name === "EnterPlanMode") {
-                    onModeChange?.("plan");
+                    onModeChangeRef.current?.("plan");
                 }
             } catch {
                 // ignore
@@ -123,7 +133,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                             : m
                     )
                 );
-                onItemsChanged?.();
+                onItemsChangedRef.current?.();
             } catch {
                 // ignore
             }
@@ -169,7 +179,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                 setMessages((prev) => {
                     const match = prev.find((m) => m.permissionId === data.permissionId);
                     if (match?.toolName === "ExitPlanMode") {
-                        onModeChange?.("normal");
+                        onModeChangeRef.current?.("normal");
                     }
                     return prev.map((m) =>
                         m.permissionId === data.permissionId
@@ -187,7 +197,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
             try {
                 const data = JSON.parse(e.data);
                 if (data.costUsd != null) {
-                    onCostUpdate?.(data.costUsd, data.inputTokens ?? 0, data.outputTokens ?? 0);
+                    onCostUpdateRef.current?.(data.costUsd, data.inputTokens ?? 0, data.outputTokens ?? 0);
                 }
             } catch {
                 // ignore
@@ -225,7 +235,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
             es.close();
             eventSourceRef.current = null;
         };
-    }, [sessionId, addMessage, onItemsChanged, onModeChange, onModelDetected, onCostUpdate]);
+    }, [sessionId, addMessage]);
 
     const handleSend = useCallback(async (message: string) => {
         addMessage({ type: "user", content: message });
