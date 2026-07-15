@@ -1304,7 +1304,7 @@ export async function fetchAssistantItemContent(
     sessionId: string, itemType: string, itemName: string
 ): Promise<Record<string, unknown>> {
     const response = await fetch(
-        `${API}/assistant/sessions/${sessionId}/items/${itemType}/${itemName}`
+        `${API}/assistant/sessions/${sessionId}/items/${itemType}/${encodeURIComponent(itemName)}`
     );
     if (!response.ok) throw new Error(`Failed to fetch item: ${response.status}`);
     return response.json();
