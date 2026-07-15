@@ -77,6 +77,7 @@ export function SessionTemplatesPage() {
             model: template.model,
             initScript: template.initScript,
             initScriptType: template.initScriptType,
+            environment: template.environment,
         })
             .then((created) => navigate(`/session-templates/${created.templateId}`))
             .catch(console.error);
@@ -141,7 +142,7 @@ export function SessionTemplatesPage() {
                                 onRowClick={() =>
                                     navigate(`/session-templates/${t.templateId}`)
                                 }>
-                                <Td>{t.name}</Td>
+                                <Td style={{ whiteSpace: "nowrap" }}>{t.name}</Td>
                                 <Td>{t.description}</Td>
                                 <Td>
                                     <Label color={t.builtIn ? "blue" : "green"}>
