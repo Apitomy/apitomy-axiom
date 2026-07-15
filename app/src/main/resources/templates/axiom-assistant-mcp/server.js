@@ -143,6 +143,118 @@ const TOOLS = [
             })), null, 2);
         },
     },
+    {
+        name: "axiom_get_toolset",
+        description: "Get full details of a specific toolset by name, including its tool list.",
+        parameters: [
+            { name: "name", type: "string", description: "The toolset name", required: true },
+        ],
+        handler: async (args) => {
+            const items = JSON.parse(await axiomApi("GET", "/toolsets"));
+            const ts = items.find(t => t.name === args.name);
+            if (!ts) return `Toolset '${args.name}' not found.`;
+            return JSON.stringify(ts, null, 2);
+        },
+    },
+    {
+        name: "axiom_list_session_templates",
+        description: "List all AI Assistant session templates in Axiom. Returns template IDs, names, descriptions, and whether they are built-in.",
+        parameters: [],
+        handler: async () => {
+            const items = JSON.parse(await axiomApi("GET", "/assistant/templates"));
+            if (items.length === 0) return "No session templates configured.";
+            return JSON.stringify(items.map(t => ({
+                templateId: t.templateId,
+                name: t.name,
+                description: t.description || "",
+                builtIn: t.builtIn || false,
+            })), null, 2);
+        },
+    },
+    {
+        name: "axiom_get_session_template",
+        description: "Get full details of a specific session template by template ID, including its system prompt, allowed tools, and MCP servers.",
+        parameters: [
+            { name: "templateId", type: "string", description: "The session template ID", required: true },
+        ],
+        handler: async (args) => {
+            try {
+                const result = await axiomApi("GET", "/assistant/templates/" + encodeURIComponent(args.templateId));
+                return result;
+            } catch (e) {
+                return `Session template '${args.templateId}' not found.`;
+            }
+        },
+    },
+    {
+        name: "axiom_list_event_sources",
+        description: "List all configured event sources in Axiom. Returns names, source types (github/jira), and whether they are enabled.",
+        parameters: [],
+        handler: async () => {
+            const items = JSON.parse(await axiomApi("GET", "/event-sources"));
+            if (items.length === 0) return "No event sources configured.";
+            return JSON.stringify(items.map(es => ({
+                id: es.id,
+                name: es.name,
+                description: es.description || "",
+                sourceType: es.sourceType,
+                enabled: es.enabled,
+            })), null, 2);
+        },
+    },
+    {
+        name: "axiom_list_secrets",
+        description: "List all secret names in Axiom. Returns names and descriptions only (values are never exposed). Use these names with ${secret:NAME} syntax in environment variables and configuration.",
+        parameters: [],
+        handler: async () => {
+            const items = JSON.parse(await axiomApi("GET", "/secrets"));
+            if (items.length === 0) return "No secrets configured.";
+            return JSON.stringify(items.map(s => ({
+                name: s.name,
+                description: s.description || "",
+            })), null, 2);
+        },
+    },
+    {
+        name: "axiom_list_projects",
+        description: "List projects in Axiom with optional filtering. Returns names, statuses, issue references, and labels.",
+        parameters: [
+            { name: "filterStatus", type: "string", description: "Comma-separated status filter (e.g. 'Created,InProgress,Idle')", required: false },
+            { name: "filterName", type: "string", description: "Substring filter on project name or issue reference", required: false },
+            { name: "limit", type: "string", description: "Max results to return (default 20)", required: false },
+        ],
+        handler: async (args) => {
+            let path = "/projects?limit=" + (args.limit || "20");
+            if (args.filterStatus) path += "&filterStatus=" + encodeURIComponent(args.filterStatus);
+            if (args.filterName) path += "&filterName=" + encodeURIComponent(args.filterName);
+            const result = JSON.parse(await axiomApi("GET", path));
+            const items = result.items || [];
+            if (items.length === 0) return "No projects found.";
+            return JSON.stringify(items.map(p => ({
+                id: p.id,
+                name: p.name,
+                status: p.status,
+                issueSource: p.issueSource || "",
+                issueRef: p.issueRef || "",
+                labels: p.labels || [],
+            })), null, 2);
+        },
+    },
+    {
+        name: "axiom_list_actors",
+        description: "List all configured actors in Axiom. Returns names, types (human/ai-agent), and descriptions.",
+        parameters: [],
+        handler: async () => {
+            const items = JSON.parse(await axiomApi("GET", "/actors"));
+            if (items.length === 0) return "No actors configured.";
+            return JSON.stringify(items.map(a => ({
+                id: a.id,
+                name: a.name,
+                description: a.description || "",
+                type: a.type,
+            })), null, 2);
+        },
+    },
 ];
 
 log("INFO", "Axiom Assistant MCP server started", {

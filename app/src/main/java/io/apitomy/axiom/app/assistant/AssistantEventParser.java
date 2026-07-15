@@ -55,7 +55,12 @@ public class AssistantEventParser {
                 case "result" -> parseResult(node);
                 case "sdk_control_request" -> parseSdkControlRequest(node);
                 case "control_request" -> parseControlRequest(node);
-                default -> Collections.emptyList();
+                default -> {
+                    ObjectNode data = JsonNodeFactory.instance.objectNode();
+                    data.put("rawType", type);
+                    data.put("raw", node.toString());
+                    yield List.of(new SseEvent("unhandled_event", data));
+                }
             };
         } catch (Exception e) {
             LOG.tracef("Failed to parse NDJSON line: %s",
@@ -73,6 +78,14 @@ public class AssistantEventParser {
         data.put("sessionId", root.path("session_id").asText());
         data.put("cwd", root.path("cwd").asText());
         data.put("model", root.path("model").asText());
+        JsonNode slashCommands = root.path("slash_commands");
+        if (slashCommands.isArray()) {
+            data.set("slashCommands", slashCommands);
+        }
+        JsonNode tools = root.path("tools");
+        if (tools.isArray()) {
+            data.set("tools", tools);
+        }
         return List.of(new SseEvent("session_init", data));
     }
 
@@ -134,6 +147,11 @@ public class AssistantEventParser {
         data.put("sessionId", root.path("session_id").asText());
         data.put("costUsd", root.path("total_cost_usd").asDouble(0));
         data.put("durationMs", root.path("duration_ms").asLong(0));
+        JsonNode usage = root.path("usage");
+        data.put("inputTokens", usage.path("input_tokens").asLong(0)
+                + usage.path("cache_creation_input_tokens").asLong(0)
+                + usage.path("cache_read_input_tokens").asLong(0));
+        data.put("outputTokens", usage.path("output_tokens").asLong(0));
         data.put("success", "success".equals(root.path("subtype").asText()));
         return List.of(new SseEvent("turn_complete", data));
     }

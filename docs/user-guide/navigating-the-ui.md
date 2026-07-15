@@ -126,6 +126,7 @@ edit, and delete configuration items:
 | **Secrets** | Store encrypted credentials injected into subprocesses |
 | **Tools** | Define script-based tools with parameters and bash templates |
 | **Toolsets** | Group tools into named collections for reuse |
+| **Session Templates** | Define AI Assistant session templates with system prompts, tools, and MCP servers |
 | **Configuration Packs** | Export and import bundles of configuration as JSON |
 
 Most configuration pages follow the same pattern: a list view with a **Create** button,

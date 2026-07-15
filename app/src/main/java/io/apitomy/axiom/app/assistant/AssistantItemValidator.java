@@ -1,5 +1,6 @@
 package io.apitomy.axiom.app.assistant;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.beans.NewActionType;
 import io.apitomy.axiom.api.beans.NewReportDefinition;
@@ -79,6 +80,8 @@ public class AssistantItemValidator {
             case "tools" -> validateTool(content, errors, warnings);
             case "action-types" -> validateActionType(content, workingDirectory, errors, warnings);
             case "report-definitions" -> validateReportDefinition(content, workingDirectory, errors, warnings);
+            case "toolsets" -> validateToolset(content, errors, warnings);
+            case "session-templates" -> validateSessionTemplate(content, errors, warnings);
             default -> errors.add("Unknown item type: " + itemType);
         }
 
@@ -99,6 +102,8 @@ public class AssistantItemValidator {
             case "tools" -> "tools";
             case "action-types" -> "action-types";
             case "report-definitions" -> "report-definitions";
+            case "toolsets" -> "toolsets";
+            case "session-templates" -> "session-templates";
             default -> null;
         };
     }
@@ -146,6 +151,65 @@ public class AssistantItemValidator {
         ReportDefinitionValidator.ValidationResult result =
                 ReportDefinitionValidator.validate(reportDef, known);
         collectMessages(result.errors(), result.warnings(), errors, warnings);
+    }
+
+    private void validateToolset(String json, List<String> errors, List<String> warnings) {
+        JsonNode node;
+        try {
+            node = objectMapper.readTree(json);
+        } catch (Exception e) {
+            errors.add("Invalid JSON: " + e.getMessage());
+            return;
+        }
+
+        String name = node.path("name").asText(null);
+        if (name == null || name.isBlank()) {
+            errors.add("'name' is required and must not be blank.");
+        }
+
+        JsonNode toolsNode = node.path("tools");
+        if (toolsNode.isMissingNode() || (toolsNode.isArray() && toolsNode.isEmpty())
+                || (toolsNode.isTextual() && toolsNode.asText().isBlank())) {
+            errors.add("'tools' is required and must contain at least one tool pattern.");
+        }
+
+        if (!node.has("description") || node.path("description").asText("").isBlank()) {
+            warnings.add("'description' is recommended for toolsets.");
+        }
+    }
+
+    private void validateSessionTemplate(String json, List<String> errors, List<String> warnings) {
+        JsonNode node;
+        try {
+            node = objectMapper.readTree(json);
+        } catch (Exception e) {
+            errors.add("Invalid JSON: " + e.getMessage());
+            return;
+        }
+
+        String name = node.path("name").asText(null);
+        if (name == null || name.isBlank()) {
+            errors.add("'name' is required and must not be blank.");
+        }
+
+        String description = node.path("description").asText(null);
+        if (description == null || description.isBlank()) {
+            errors.add("'description' is required and must not be blank.");
+        }
+
+        String systemPrompt = node.path("systemPrompt").asText(null);
+        if (systemPrompt == null || systemPrompt.isBlank()) {
+            errors.add("'systemPrompt' is required and must not be blank.");
+        }
+
+        if (!node.has("templateId") || node.path("templateId").asText("").isBlank()) {
+            warnings.add("'templateId' is missing — a UUID will be auto-generated on apply.");
+        }
+
+        JsonNode allowedTools = node.path("allowedTools");
+        if (allowedTools.isMissingNode() || (allowedTools.isArray() && allowedTools.isEmpty())) {
+            warnings.add("'allowedTools' is empty — the session will have no tool access.");
+        }
     }
 
     private <M> void collectMessages(

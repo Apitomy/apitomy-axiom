@@ -39,6 +39,8 @@ import { AssistantSessionPage } from "./pages/AssistantSessionPage";
 import { TracesPage } from "./pages/TracesPage";
 import { TraceDetailPage } from "./pages/TraceDetailPage";
 import { InboxPage } from "./pages/InboxPage";
+import { SessionTemplatesPage } from "./pages/SessionTemplatesPage";
+import { SessionTemplateDetailPage } from "./pages/SessionTemplateDetailPage";
 import { type StartupCheck, fetchSystemHealth, fetchSystemConfig } from "./config/api";
 import { sseClient } from "./config/sse";
 
@@ -75,12 +77,18 @@ export function App() {
     const hasCheckErrors = startupChecks != null &&
         startupChecks.some((c) => c.status === "error");
     const isAssistantPage = location.pathname.startsWith("/assistant");
+    const isBreakout = new URLSearchParams(location.search).get("breakout") === "true";
 
     return (
         <Page
-            masthead={<AppMasthead engineName={engineName} appVersion={appVersion} />}
-            sidebar={hasCheckErrors || isAssistantPage ? undefined : <AppSidebar />}
+            masthead={isBreakout ? undefined : <AppMasthead engineName={engineName} appVersion={appVersion} />}
+            sidebar={hasCheckErrors || isAssistantPage || isBreakout ? undefined : <AppSidebar />}
             isContentFilled
+            style={isBreakout ? {
+                paddingTop: 8,
+                "--pf-v6-c-page__sidebar--Width": "0px",
+                "--pf-v6-c-page__sidebar--xl--Width": "0px",
+            } as React.CSSProperties : undefined}
         >
             {hasCheckErrors ? (
                 <ConfigurationWarning checks={startupChecks!} />
@@ -118,6 +126,8 @@ export function App() {
                     <Route path="/event-sources/:eventSourceId" element={<EventSourceDetailPage />} />
                     <Route path="/secrets" element={<SecretsPage />} />
                     <Route path="/configuration-packs" element={<ConfigurationPacksPage />} />
+                    <Route path="/session-templates" element={<SessionTemplatesPage />} />
+                    <Route path="/session-templates/:templateId" element={<SessionTemplateDetailPage />} />
                     <Route path="/assistant" element={<AssistantPage />} />
                     <Route path="/assistant/:sessionId" element={<AssistantSessionPage />} />
                 </Routes>

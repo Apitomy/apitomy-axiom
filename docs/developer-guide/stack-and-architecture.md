@@ -157,6 +157,34 @@ ReportExecutionService
   │  Writes generated Markdown to ReportEntity
 ```
 
+### AI Assistant Sessions
+
+```
+AssistantSessionManager
+  │  Creates session from template
+  │  Resolves MCP servers, allowed tools, working directory
+  │  Runs optional init script
+  │
+  ▼
+AssistantSession (Claude Code subprocess)
+  │  ProcessBuilder with stream-json I/O
+  │  Virtual threads: stdout reader, stderr reader, process monitor
+  │  Bidirectional: JSON lines to stdin, NDJSON events from stdout
+  │
+  ▼
+AssistantEventParser
+  │  Normalizes NDJSON into typed SseEvent records
+  │  Auto-approval rules intercept permission requests
+  │
+  ▼
+JAX-RS SSE endpoint (per-session)
+  │  Streams events to browser EventSource
+  │  Full event history replay on reconnect
+```
+
+Sessions are in-memory — they do not survive server restarts. Cost and token usage
+are accumulated per-session and persisted to `AiUsageEntity` on session destruction.
+
 ### Real-Time Updates (SSE)
 
 ```
