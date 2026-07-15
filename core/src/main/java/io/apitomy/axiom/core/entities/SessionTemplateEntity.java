@@ -56,6 +56,13 @@ public class SessionTemplateEntity extends PanacheEntity {
     @Column(name = "init_script_type")
     public String initScriptType;
 
+    /**
+     * Optional JSON object of environment variables for the subprocess.
+     * Values can reference secrets using ${secret:NAME} syntax.
+     */
+    @Column(columnDefinition = "TEXT")
+    public String environment;
+
     /** Names of McpServerEntity records to include in the session's MCP config. */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "session_template_mcp_server",

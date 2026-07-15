@@ -25,6 +25,7 @@ import {
     FormSelectOptionGroup,
 } from "@patternfly/react-core";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
+import { EnvironmentTab } from "../components/EnvironmentTab";
 import { ToolListEditor } from "../components/ToolListEditor";
 import {
     fetchAssistantTemplate,
@@ -47,6 +48,7 @@ export function SessionTemplateDetailPage() {
     const [dirty, setDirty] = useState(false);
     const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
     const [availableModels, setAvailableModels] = useState<string[]>([]);
+    const [envVars, setEnvVars] = useState<Record<string, string>>({});
     const [activeTab, setActiveTab] = useState(0);
 
     const loadData = useCallback(() => {
@@ -71,6 +73,7 @@ export function SessionTemplateDetailPage() {
                     mcpServers: t.mcpServers,
                     allowedTools: t.allowedTools,
                 });
+                setEnvVars(t.environment || {});
                 setMcpServers(servers);
                 setAvailableModels(models);
                 setDirty(false);
@@ -89,7 +92,8 @@ export function SessionTemplateDetailPage() {
     const handleSave = () => {
         if (!templateId) return;
         setSaving(true);
-        updateAssistantTemplate(templateId, form)
+        const envToSend = Object.keys(envVars).length > 0 ? envVars : undefined;
+        updateAssistantTemplate(templateId, { ...form, environment: envToSend })
             .then((updated) => {
                 setTemplate(updated);
                 setDirty(false);
@@ -418,6 +422,24 @@ export function SessionTemplateDetailPage() {
                                 parameterHints: { enabled: false },
                             }}
                         />
+                    </div>
+                </Tab>
+
+                <Tab eventKey={4} title={<TabTitleText>Environment</TabTitleText>}>
+                    <div style={{ marginTop: 24 }}>
+                        {isReadOnly ? (
+                            <p style={{ color: "#6a6e73", fontStyle: "italic" }}>
+                                Environment variables cannot be modified on built-in templates.
+                            </p>
+                        ) : (
+                            <EnvironmentTab
+                                envVars={envVars}
+                                onChange={(updated) => {
+                                    setEnvVars(updated);
+                                    setDirty(true);
+                                }}
+                            />
+                        )}
                     </div>
                 </Tab>
             </Tabs>

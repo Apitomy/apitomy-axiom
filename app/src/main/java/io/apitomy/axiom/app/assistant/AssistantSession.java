@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
@@ -46,6 +47,7 @@ public class AssistantSession {
     private final Path sessionDirectory;
     private final Path workingDirectory;
     private final List<String> command;
+    private final Map<String, String> environment;
     private final AssistantEventParser parser;
 
     private volatile Process process;
@@ -89,15 +91,18 @@ public class AssistantSession {
      * @param sessionDirectory the Axiom-managed session directory (always deleted on end)
      * @param workingDirectory the Claude Code working directory
      * @param command the full command line for the Claude Code subprocess
+     * @param environment resolved environment variables to inject into the subprocess
      */
     public AssistantSession(String name, String templateId, Path sessionDirectory,
-                             Path workingDirectory, List<String> command) {
+                             Path workingDirectory, List<String> command,
+                             Map<String, String> environment) {
         this.id = UUID.randomUUID().toString();
         this.name = name;
         this.templateId = templateId;
         this.sessionDirectory = sessionDirectory;
         this.workingDirectory = workingDirectory;
         this.command = command;
+        this.environment = environment;
         this.parser = new AssistantEventParser();
         this.status = Status.STARTING;
         this.createdAt = Instant.now();
@@ -115,6 +120,9 @@ public class AssistantSession {
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.directory(workingDirectory.toFile());
         pb.redirectErrorStream(false);
+        if (environment != null && !environment.isEmpty()) {
+            pb.environment().putAll(environment);
+        }
 
         process = pb.start();
         stdin = process.getOutputStream();

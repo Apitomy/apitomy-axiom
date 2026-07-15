@@ -1198,6 +1198,7 @@ export interface SessionTemplate {
     model?: string;
     initScript?: string;
     initScriptType?: string;
+    environment?: Record<string, string>;
     mcpServers: string[];
     allowedTools: string[];
 }
@@ -1209,6 +1210,10 @@ export interface NewSessionTemplate {
     systemPrompt: string;
     welcomeMessage?: string;
     workingDirectory?: string;
+    model?: string;
+    initScript?: string;
+    initScriptType?: string;
+    environment?: Record<string, string>;
     mcpServers?: string[];
     allowedTools?: string[];
 }

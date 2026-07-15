@@ -469,6 +469,7 @@ public class ImportExportService {
             entity.model = textOrNull(item, "model");
             entity.initScript = textOrNull(item, "initScript");
             entity.initScriptType = textOrNull(item, "initScriptType");
+            entity.environment = jsonOrNull(item, "environment");
             JsonNode mcpNode = item.path("mcpServers");
             if (mcpNode.isArray()) {
                 for (JsonNode s : mcpNode) {

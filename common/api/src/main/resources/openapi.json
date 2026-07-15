@@ -6816,6 +6816,13 @@
             "items": {
               "type": "string"
             }
+          },
+          "environment": {
+            "description": "Custom environment variables for the subprocess. Values can reference secrets using ${secret:NAME} syntax.",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         }
       },
@@ -6874,6 +6881,13 @@
             "description": "Tool patterns and @ToolsetName references for --allowedTools",
             "type": "array",
             "items": {
+              "type": "string"
+            }
+          },
+          "environment": {
+            "description": "Custom environment variables for the subprocess. Values can reference secrets using ${secret:NAME} syntax.",
+            "type": "object",
+            "additionalProperties": {
               "type": "string"
             }
           }

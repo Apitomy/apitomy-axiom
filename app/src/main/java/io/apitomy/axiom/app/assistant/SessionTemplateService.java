@@ -50,6 +50,7 @@ public class SessionTemplateService {
      * @param model AI model override, or null for default
      * @param initScript optional init script content
      * @param initScriptType script type: "bash" or "node"
+     * @param environment JSON object of environment variables (nullable)
      * @param mcpServers MCP server names to include
      * @param allowedTools tool patterns and @ToolsetName references for --allowedTools
      * @param builtIn true if loaded from classpath resources
@@ -64,6 +65,7 @@ public class SessionTemplateService {
             String model,
             String initScript,
             String initScriptType,
+            String environment,
             List<String> mcpServers,
             List<String> allowedTools,
             boolean builtIn) {
@@ -137,6 +139,7 @@ public class SessionTemplateService {
      *
      * @param template the template data (templateId is generated if not provided)
      * @return the persisted template
+     * @throws IllegalArgumentException if the templateId collides with a built-in template
      */
     @Transactional
     public SessionTemplate createTemplate(SessionTemplate template) {
@@ -144,6 +147,10 @@ public class SessionTemplateService {
         entity.templateId = template.templateId() != null && !template.templateId().isBlank()
                 ? template.templateId()
                 : UUID.randomUUID().toString();
+        if (isBuiltIn(entity.templateId)) {
+            throw new IllegalArgumentException(
+                    "Template ID conflicts with a built-in template: " + entity.templateId);
+        }
         entity.name = template.name();
         entity.description = template.description();
         entity.systemPrompt = template.systemPrompt();
@@ -152,6 +159,7 @@ public class SessionTemplateService {
         entity.model = template.model();
         entity.initScript = template.initScript();
         entity.initScriptType = template.initScriptType();
+        entity.environment = template.environment();
         entity.mcpServers = new ArrayList<>(template.mcpServers() != null
                 ? template.mcpServers() : List.of());
         entity.allowedTools = new ArrayList<>(template.allowedTools() != null
@@ -187,6 +195,7 @@ public class SessionTemplateService {
         entity.model = template.model();
         entity.initScript = template.initScript();
         entity.initScriptType = template.initScriptType();
+        entity.environment = template.environment();
         entity.mcpServers = new ArrayList<>(template.mcpServers() != null
                 ? template.mcpServers() : List.of());
         entity.allowedTools = new ArrayList<>(template.allowedTools() != null
@@ -224,12 +233,15 @@ public class SessionTemplateService {
                 entity.model,
                 entity.initScript,
                 entity.initScriptType,
+                entity.environment,
                 List.copyOf(entity.mcpServers),
                 List.copyOf(entity.allowedTools),
                 false);
     }
 
     private SessionTemplate parseTemplateJson(JsonNode node, boolean builtIn) {
+        JsonNode envNode = node.path("environment");
+        String environment = envNode.isObject() ? envNode.toString() : null;
         return new SessionTemplate(
                 node.path("templateId").asText(),
                 node.path("name").asText(),
@@ -240,6 +252,7 @@ public class SessionTemplateService {
                 node.path("model").asText(null),
                 node.path("initScript").asText(null),
                 node.path("initScriptType").asText(null),
+                environment,
                 jsonArrayToList(node.path("mcpServers")),
                 jsonArrayToList(node.path("allowedTools")),
                 builtIn);

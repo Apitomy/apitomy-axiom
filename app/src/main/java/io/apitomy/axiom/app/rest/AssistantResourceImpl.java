@@ -1,7 +1,9 @@
 package io.apitomy.axiom.app.rest;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.api.beans.Environment;
 import io.apitomy.axiom.api.AssistantResource;
 import io.apitomy.axiom.api.beans.AssistantApplyResult;
 import io.apitomy.axiom.api.beans.AssistantItem;
@@ -42,6 +44,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -516,6 +519,7 @@ public class AssistantResourceImpl implements AssistantResource {
         bean.setModel(template.model());
         bean.setInitScript(template.initScript());
         bean.setInitScriptType(template.initScriptType());
+        bean.setEnvironment(jsonToEnvironment(template.environment()));
         bean.setMcpServers(template.mcpServers());
         bean.setAllowedTools(template.allowedTools());
         return bean;
@@ -543,8 +547,30 @@ public class AssistantResourceImpl implements AssistantResource {
                 data.getModel(),
                 data.getInitScript(),
                 data.getInitScriptType(),
+                environmentToJson(data.getEnvironment()),
                 data.getMcpServers() != null ? data.getMcpServers() : List.of(),
                 data.getAllowedTools() != null ? data.getAllowedTools() : List.of(),
                 false);
+    }
+
+    private String environmentToJson(Environment env) {
+        if (env == null || env.getAdditionalProperties().isEmpty()) return null;
+        try {
+            return objectMapper.writeValueAsString(env.getAdditionalProperties());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Environment jsonToEnvironment(String json) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            Map<String, String> map = objectMapper.readValue(json, new TypeReference<>() {});
+            Environment env = new Environment();
+            map.forEach(env::setAdditionalProperty);
+            return env;
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

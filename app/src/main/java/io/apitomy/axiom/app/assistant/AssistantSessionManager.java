@@ -9,6 +9,7 @@ import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.McpServerEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
+import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -71,6 +72,9 @@ public class AssistantSessionManager {
 
     @Inject
     ObjectMapper objectMapper;
+
+    @Inject
+    EnvironmentResolver environmentResolver;
 
     private final Map<String, AssistantSession> sessions = new ConcurrentHashMap<>();
     private final AtomicInteger sessionCount = new AtomicInteger();
@@ -139,12 +143,18 @@ public class AssistantSessionManager {
                         template.initScriptType());
             }
 
+            // Resolve environment variables (with secret substitution)
+            Map<String, String> resolvedEnv =
+                    environmentResolver.hasCustomEnvironment(template.environment())
+                            ? environmentResolver.resolve(template.environment())
+                            : Map.of();
+
             List<String> command = buildCommand(workDir, sessionDir, template.systemPrompt(),
                     template.model(), resolvedAllowedTools, mcpConfig != null);
 
             String sessionName = name != null && !name.isBlank() ? name : "Assistant Session";
             AssistantSession session = new AssistantSession(sessionName, templateId, sessionDir,
-                    workDir, command);
+                    workDir, command, resolvedEnv);
             session.start();
 
             // Add welcome message to event history so it replays on reconnect
