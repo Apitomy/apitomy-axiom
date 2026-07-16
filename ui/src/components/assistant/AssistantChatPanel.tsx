@@ -33,6 +33,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
     const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const reconnectDelayRef = useRef(1000);
     const sessionEndedRef = useRef(false);
+    const activeNotificationsRef = useRef<Map<string, Notification>>(new Map());
 
     // Keep callback refs so the EventSource effect doesn't re-run when
     // parent-supplied callbacks change identity (e.g. inline arrow functions).
@@ -47,6 +48,12 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
 
     const addMessage = useCallback((msg: Omit<ChatMessage, "id">) => {
         setMessages((prev) => [...prev, { ...msg, id: String(++messageIdCounter) }]);
+    }, []);
+
+    useEffect(() => {
+        if ("Notification" in window && Notification.permission === "default") {
+            Notification.requestPermission();
+        }
     }, []);
 
     useEffect(() => {
@@ -186,6 +193,31 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                         }];
                     });
                     setIsProcessing(false);
+
+                    if (document.hidden
+                            && "Notification" in window
+                            && Notification.permission === "granted") {
+                        const toolName = data.toolName;
+                        let title = "Action required";
+                        let body = `${toolName} needs your approval`;
+                        if (toolName === "ExitPlanMode") {
+                            title = "Plan ready for review";
+                            body = "An assistant plan is waiting for your approval.";
+                        } else if (toolName === "AskUserQuestion") {
+                            title = "Question from assistant";
+                            body = "The assistant is asking you a question.";
+                        }
+                        const notification = new Notification(title, {
+                            body,
+                            tag: `axiom-permission-${data.requestId}`,
+                        });
+                        notification.onclick = () => {
+                            window.focus();
+                            notification.close();
+                            activeNotificationsRef.current.delete(data.requestId);
+                        };
+                        activeNotificationsRef.current.set(data.requestId, notification);
+                    }
                 } catch {
                     // ignore
                 }
@@ -194,6 +226,8 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
             es.addEventListener("permission_resolved", (e) => {
                 try {
                     const data = JSON.parse(e.data);
+                    activeNotificationsRef.current.get(data.permissionId)?.close();
+                    activeNotificationsRef.current.delete(data.permissionId);
                     setMessages((prev) => {
                         const match = prev.find((m) => m.permissionId === data.permissionId);
                         if (match?.toolName === "ExitPlanMode") {
