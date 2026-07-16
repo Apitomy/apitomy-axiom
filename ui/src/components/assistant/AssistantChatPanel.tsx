@@ -33,6 +33,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
     const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const reconnectDelayRef = useRef(1000);
     const sessionEndedRef = useRef(false);
+    const activeNotificationsRef = useRef<Map<string, Notification>>(new Map());
 
     // Keep callback refs so the EventSource effect doesn't re-run when
     // parent-supplied callbacks change identity (e.g. inline arrow functions).
@@ -196,7 +197,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                     if (document.hidden
                             && "Notification" in window
                             && Notification.permission === "granted") {
-                        const toolName = data.toolName as string;
+                        const toolName = data.toolName;
                         let title = "Action required";
                         let body = `${toolName} needs your approval`;
                         if (toolName === "ExitPlanMode") {
@@ -213,7 +214,9 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                         notification.onclick = () => {
                             window.focus();
                             notification.close();
+                            activeNotificationsRef.current.delete(data.requestId);
                         };
+                        activeNotificationsRef.current.set(data.requestId, notification);
                     }
                 } catch {
                     // ignore
@@ -223,6 +226,8 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
             es.addEventListener("permission_resolved", (e) => {
                 try {
                     const data = JSON.parse(e.data);
+                    activeNotificationsRef.current.get(data.permissionId)?.close();
+                    activeNotificationsRef.current.delete(data.permissionId);
                     setMessages((prev) => {
                         const match = prev.find((m) => m.permissionId === data.permissionId);
                         if (match?.toolName === "ExitPlanMode") {
