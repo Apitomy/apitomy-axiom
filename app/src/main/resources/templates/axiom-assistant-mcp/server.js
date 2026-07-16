@@ -14,13 +14,18 @@ function log(level, message, data) {
 }
 
 const AXIOM_API_URL = process.env.AXIOM_API_URL || "http://localhost:9090/api/v1";
+const AXIOM_PROJECT_ID = process.env.AXIOM_PROJECT_ID;
 
-async function axiomApi(method, path) {
+async function axiomApi(method, path, body) {
     const url = `${AXIOM_API_URL}${path}`;
     const opts = {
         method,
         headers: { "Accept": "application/json" },
     };
+    if (body !== undefined) {
+        opts.headers["Content-Type"] = "application/json";
+        opts.body = JSON.stringify(body);
+    }
     const resp = await fetch(url, opts);
     const text = await resp.text();
     if (!resp.ok) {
@@ -257,9 +262,81 @@ const TOOLS = [
     },
 ];
 
+if (AXIOM_PROJECT_ID) {
+    const projectId = AXIOM_PROJECT_ID;
+    TOOLS.push(
+        {
+            name: "axiom_project_get_details",
+            description: "Get full details of the project this session is scoped to, including name, description, type, status, issue reference, repository, and labels",
+            parameters: [],
+            handler: async () => {
+                return await axiomApi("GET", `/projects/${encodeURIComponent(projectId)}`);
+            },
+        },
+        {
+            name: "axiom_project_list_tasks",
+            description: "List all tasks for this project with their status, assigned actor, and action type",
+            parameters: [],
+            handler: async () => {
+                return await axiomApi("GET", `/projects/${encodeURIComponent(projectId)}/tasks`);
+            },
+        },
+        {
+            name: "axiom_project_get_task",
+            description: "Get detailed information about a specific project task including input, output, and execution log",
+            parameters: [
+                { name: "taskId", type: "string", description: "The task ID to retrieve", required: true },
+            ],
+            handler: async (args) => {
+                return await axiomApi("GET", `/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(args.taskId)}`);
+            },
+        },
+        {
+            name: "axiom_project_get_thread",
+            description: "Read the project's discussion thread entries",
+            parameters: [],
+            handler: async () => {
+                return await axiomApi("GET", `/projects/${encodeURIComponent(projectId)}/thread`);
+            },
+        },
+        {
+            name: "axiom_project_add_thread_entry",
+            description: "Post a new entry to the project's discussion thread",
+            parameters: [
+                { name: "content", type: "string", description: "The thread entry content", required: true },
+            ],
+            handler: async (args) => {
+                return await axiomApi("POST", `/projects/${encodeURIComponent(projectId)}/thread`, {
+                    authorType: "assistant",
+                    authorId: "axiom-assistant",
+                    entryType: "comment",
+                    content: args.content,
+                });
+            },
+        },
+        {
+            name: "axiom_project_list_events",
+            description: "List events that triggered or relate to this project",
+            parameters: [],
+            handler: async () => {
+                return await axiomApi("GET", `/projects/${encodeURIComponent(projectId)}/events`);
+            },
+        },
+        {
+            name: "axiom_project_list_traces",
+            description: "List activity traces for this project for debugging and review",
+            parameters: [],
+            handler: async () => {
+                return await axiomApi("GET", `/projects/${encodeURIComponent(projectId)}/traces`);
+            },
+        },
+    );
+}
+
 log("INFO", "Axiom Assistant MCP server started", {
     toolCount: TOOLS.length,
     axiomApiUrl: AXIOM_API_URL,
+    projectId: AXIOM_PROJECT_ID || null,
 });
 
 const server = new Server({ name: "axiom-assistant", version: "1.0.0" }, {

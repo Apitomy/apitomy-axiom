@@ -8,8 +8,10 @@ import io.apitomy.axiom.app.ImportExportService;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.McpServerEntity;
+import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
+import io.apitomy.axiom.core.services.WorkspaceService;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -76,6 +78,9 @@ public class AssistantSessionManager {
     @Inject
     EnvironmentResolver environmentResolver;
 
+    @Inject
+    WorkspaceService workspaceService;
+
     private final Map<String, AssistantSession> sessions = new ConcurrentHashMap<>();
     private final AtomicInteger sessionCount = new AtomicInteger();
 
@@ -86,12 +91,14 @@ public class AssistantSessionManager {
      *
      * @param name the user-visible session name
      * @param templateId the template to create the session from
+     * @param projectId optional project ID to scope the session to
      * @return the started session
      * @throws IOException if the session cannot be created
      * @throws IllegalStateException if the AI engine is not Claude Code or the
      *         session limit has been reached
      */
-    public AssistantSession createSession(String name, String templateId) throws IOException {
+    public AssistantSession createSession(String name, String templateId,
+                                          Long projectId) throws IOException {
         if (!"claude-code".equals(aiEngine)) {
             throw new IllegalStateException(
                     "The AI Assistant requires Claude Code as the active AI engine. "
@@ -111,9 +118,18 @@ public class AssistantSessionManager {
                 throw new IllegalArgumentException("Template not found: " + templateId);
             }
 
+            // Look up project if scoped
+            ProjectEntity project = null;
+            if (projectId != null) {
+                project = ProjectEntity.findById(projectId);
+                if (project == null) {
+                    throw new IllegalArgumentException("Project not found: " + projectId);
+                }
+            }
+
             // Resolve MCP servers from template
             Map<String, AssistantContextBuilder.McpServerConfig> mcpConfigs =
-                    resolveMcpServers(template);
+                    resolveMcpServers(template, project);
 
             // Resolve allowed tools from template
             List<String> resolvedAllowedTools = resolveAllowedTools(template);
@@ -133,6 +149,13 @@ public class AssistantSessionManager {
                     throw new IOException("Template working directory does not exist: "
                             + template.workingDirectory());
                 }
+            } else if (project != null) {
+                Path projectWorkspace = workspaceService.getWorkspacePath(project);
+                if (Files.isDirectory(projectWorkspace)) {
+                    workDir = projectWorkspace;
+                } else {
+                    workDir = contextBuilder.createWorkingDirectory(sessionDir, templateId);
+                }
             } else {
                 workDir = contextBuilder.createWorkingDirectory(sessionDir, templateId);
             }
@@ -144,23 +167,41 @@ public class AssistantSessionManager {
             }
 
             // Resolve environment variables (with secret substitution)
-            Map<String, String> resolvedEnv =
-                    environmentResolver.hasCustomEnvironment(template.environment())
-                            ? environmentResolver.resolve(template.environment())
-                            : Map.of();
+            Map<String, String> resolvedEnv = new LinkedHashMap<>();
+            if (environmentResolver.hasCustomEnvironment(template.environment())) {
+                resolvedEnv.putAll(environmentResolver.resolve(template.environment()));
+            }
 
-            List<String> command = buildCommand(workDir, sessionDir, template.systemPrompt(),
+            // Inject project environment variables
+            if (project != null) {
+                resolvedEnv.put("AXIOM_PROJECT_ID", String.valueOf(project.id));
+                resolvedEnv.put("AXIOM_PROJECT_NAME", project.name);
+                resolvedEnv.put("AXIOM_ISSUE_REF", project.issueRef);
+                resolvedEnv.put("AXIOM_REPOSITORY", project.repository);
+            }
+
+            // Build system prompt, augmenting with project context if applicable
+            String systemPrompt = buildSystemPrompt(template, project);
+
+            // Build welcome message, substituting project placeholders
+            String welcomeMessage = template.welcomeMessage();
+            if (project != null && welcomeMessage != null) {
+                welcomeMessage = welcomeMessage.replace("{{projectName}}", project.name);
+            }
+
+            List<String> command = buildCommand(workDir, sessionDir, systemPrompt,
                     template.model(), resolvedAllowedTools, mcpConfig != null);
 
             String sessionName = name != null && !name.isBlank() ? name : "Assistant Session";
+            String projectName = project != null ? project.name : null;
             AssistantSession session = new AssistantSession(sessionName, templateId, sessionDir,
-                    workDir, command, resolvedEnv);
+                    workDir, command, resolvedEnv, projectId, projectName);
             session.start();
 
             // Add welcome message to event history so it replays on reconnect
-            if (template.welcomeMessage() != null && !template.welcomeMessage().isBlank()) {
+            if (welcomeMessage != null && !welcomeMessage.isBlank()) {
                 ObjectNode welcomeData = objectMapper.createObjectNode();
-                welcomeData.put("text", template.welcomeMessage());
+                welcomeData.put("text", welcomeMessage);
                 session.addEvent(new AssistantEventParser.SseEvent("assistant_text", welcomeData));
             }
 
@@ -412,6 +453,51 @@ public class AssistantSessionManager {
         }
     }
 
+    /**
+     * Builds the system prompt, augmenting the template prompt with project context
+     * if a project is specified.
+     */
+    private String buildSystemPrompt(SessionTemplateService.SessionTemplate template,
+                                     ProjectEntity project) {
+        String prompt = template.systemPrompt() != null ? template.systemPrompt() : "";
+
+        if (project == null) {
+            return prompt;
+        }
+
+        StringBuilder context = new StringBuilder();
+        context.append("\n\n## Project Context\n\n");
+        context.append("This session is scoped to the following project:\n\n");
+        context.append("- **Name**: ").append(project.name).append("\n");
+        if (project.description != null && !project.description.isBlank()) {
+            context.append("- **Description**: ").append(project.description).append("\n");
+        }
+        context.append("- **Type**: ").append(project.type).append("\n");
+        context.append("- **Status**: ").append(project.status).append("\n");
+        context.append("- **Issue Source**: ").append(project.issueSource).append("\n");
+        context.append("- **Issue Reference**: ").append(project.issueRef).append("\n");
+        context.append("- **Repository**: ").append(project.repository).append("\n");
+        if (project.labels != null && !project.labels.isEmpty()) {
+            context.append("- **Labels**: ").append(String.join(", ", project.labels)).append("\n");
+        }
+        context.append("\nUse the project-scoped MCP tools (prefixed with `axiom_project_`) to ")
+                .append("access project tasks, discussion thread, events, and traces.\n");
+
+        String projectContext = context.toString();
+
+        // Substitute {{projectContext}} placeholder if present, otherwise append
+        if (prompt.contains("{{projectContext}}")) {
+            prompt = prompt.replace("{{projectContext}}", projectContext);
+        } else {
+            prompt = prompt + projectContext;
+        }
+
+        // Substitute {{projectName}} placeholder
+        prompt = prompt.replace("{{projectName}}", project.name);
+
+        return prompt;
+    }
+
     private List<String> buildCommand(Path workDir, Path sessionDir, String systemPrompt,
                                        String model, List<String> allowedTools,
                                        boolean hasMcpConfig) {
@@ -564,20 +650,26 @@ public class AssistantSessionManager {
     }
 
     private Map<String, AssistantContextBuilder.McpServerConfig> resolveMcpServers(
-            SessionTemplateService.SessionTemplate template) throws IOException {
+            SessionTemplateService.SessionTemplate template,
+            ProjectEntity project) throws IOException {
         Map<String, AssistantContextBuilder.McpServerConfig> configs = new LinkedHashMap<>();
 
         for (String serverName : template.mcpServers()) {
             if ("@axiom-assistant".equals(serverName)) {
-                // Special built-in MCP server for the Config Assistant
+                // Special built-in MCP server for the assistant
                 Path mcpServerDir = ensureAssistantMcpServerInstalled();
                 String serverJsPath = mcpServerDir.resolve("server.js")
                         .toAbsolutePath().toString();
                 String apiUrl = "http://localhost:" + httpPort + "/api/v1";
+                Map<String, String> env = new LinkedHashMap<>();
+                env.put("AXIOM_API_URL", apiUrl);
+                if (project != null) {
+                    env.put("AXIOM_PROJECT_ID", String.valueOf(project.id));
+                }
                 configs.put("axiom", new AssistantContextBuilder.McpServerConfig(
                         "node",
                         List.of(serverJsPath),
-                        Map.of("AXIOM_API_URL", apiUrl)));
+                        env));
             } else {
                 // Resolve from database
                 McpServerEntity entity = McpServerEntity.find("name", serverName).firstResult();

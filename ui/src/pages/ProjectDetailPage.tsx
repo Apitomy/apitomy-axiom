@@ -37,6 +37,7 @@ import {
     Title,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
+import ChatIcon from "@patternfly/react-icons/dist/esm/icons/chat-icon";
 import PlayIcon from "@patternfly/react-icons/dist/esm/icons/play-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
@@ -58,6 +59,7 @@ import {
     fetchProjectMetrics,
     fetchProjectTasks,
     fetchThreadEntries,
+    createAssistantSession,
     createTask,
     deleteProject,
     updateProject,
@@ -218,6 +220,18 @@ export function ProjectDetailPage() {
                         style={{ marginRight: "8px" }}
                     >
                         <SyncAltIcon />
+                    </Button>
+                    <Button
+                        variant="secondary"
+                        icon={<ChatIcon />}
+                        onClick={() => {
+                            createAssistantSession("project-assistant", project.name, project.id)
+                                .then(session => navigate(`/assistant/${session.id}`))
+                                .catch(err => console.error("Failed to create project assistant session", err));
+                        }}
+                        style={{ marginRight: "8px" }}
+                    >
+                        Assistant
                     </Button>
                     <Button
                         variant="secondary"

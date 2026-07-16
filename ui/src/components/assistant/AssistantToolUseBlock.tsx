@@ -6,8 +6,12 @@ import {
     Flex,
     FlexItem,
     Label,
+    Modal,
+    ModalBody,
+    ModalHeader,
     TextInput,
 } from "@patternfly/react-core";
+import SearchPlusIcon from "@patternfly/react-icons/dist/esm/icons/search-plus-icon";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Light as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -51,6 +55,7 @@ export function AssistantToolUseBlock({
     const [isExpanded, setIsExpanded] = useState(false);
     const [showPatternUI, setShowPatternUI] = useState(false);
     const [customPattern, setCustomPattern] = useState("");
+    const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
 
     const needsPermission = permissionId && !permissionResolved;
     const isAskUser = toolName === "AskUserQuestion";
@@ -155,10 +160,25 @@ export function AssistantToolUseBlock({
                 }}>
                     {needsPermission ? (
                         <>
-                            <div style={{ fontWeight: 600, marginBottom: 8 }}>
-                                Plan ready for review
-                            </div>
-                            {input?.plan && (
+                            <Flex alignItems={{ default: "alignItemsCenter" }}
+                                style={{ marginBottom: 8 }}>
+                                <FlexItem>
+                                    <span style={{ fontWeight: 600 }}>
+                                        Plan ready for review
+                                    </span>
+                                </FlexItem>
+                                {!!input?.plan && (
+                                    <FlexItem>
+                                        <Button variant="plain" size="sm"
+                                            aria-label="View plan in full screen"
+                                            onClick={() => setIsPlanModalOpen(true)}
+                                            style={{ padding: "2px 6px" }}>
+                                            <SearchPlusIcon />
+                                        </Button>
+                                    </FlexItem>
+                                )}
+                            </Flex>
+                            {!!input?.plan && (
                                 <div className="assistant-markdown" style={{
                                     marginBottom: 10,
                                     padding: "12px 16px",
@@ -193,9 +213,43 @@ export function AssistantToolUseBlock({
                             </Flex>
                         </>
                     ) : (
-                        <span style={{ color: permissionAllowed ? "#3e8635" : "#c9190b", fontStyle: "italic" }}>
-                            {permissionAllowed ? "Plan approved" : "Plan rejected"}
-                        </span>
+                        <Flex alignItems={{ default: "alignItemsCenter" }}>
+                            <FlexItem>
+                                <span style={{ color: permissionAllowed ? "#3e8635" : "#c9190b",
+                                    fontStyle: "italic" }}>
+                                    {permissionAllowed ? "Plan approved" : "Plan rejected"}
+                                </span>
+                            </FlexItem>
+                            {!!input?.plan && (
+                                <FlexItem>
+                                    <Button variant="plain" size="sm"
+                                        aria-label="View plan"
+                                        onClick={() => setIsPlanModalOpen(true)}
+                                        style={{ padding: "2px 6px" }}>
+                                        <SearchPlusIcon />
+                                    </Button>
+                                </FlexItem>
+                            )}
+                        </Flex>
+                    )}
+                    {!!input?.plan && (
+                        <Modal
+                            isOpen={isPlanModalOpen}
+                            onClose={() => setIsPlanModalOpen(false)}
+                            variant="large"
+                            aria-label="Plan details"
+                        >
+                            <ModalHeader title="Plan" />
+                            <ModalBody>
+                                <Content>
+                                    <div className="assistant-markdown">
+                                        <Markdown remarkPlugins={[remarkGfm]}>
+                                            {input.plan as string}
+                                        </Markdown>
+                                    </div>
+                                </Content>
+                            </ModalBody>
+                        </Modal>
                     )}
                 </div>
             )}

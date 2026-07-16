@@ -88,7 +88,7 @@ public class AssistantResourceImpl implements AssistantResource {
         }
         try {
             AssistantSession session = sessionManager.createSession(
-                    data.getName(), data.getTemplateId());
+                    data.getName(), data.getTemplateId(), data.getProjectId());
             return toSessionInfo(session);
         } catch (IllegalArgumentException e) {
             throw new WebApplicationException(e.getMessage(), 404);
@@ -494,6 +494,8 @@ public class AssistantResourceImpl implements AssistantResource {
         info.setTotalInputTokens(session.getTotalInputTokens());
         info.setTotalOutputTokens(session.getTotalOutputTokens());
         info.setTurnCount(session.getTurnCount());
+        info.setProjectId(session.getProjectId());
+        info.setProjectName(session.getProjectName());
         return info;
     }
 
