@@ -50,6 +50,12 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
     }, []);
 
     useEffect(() => {
+        if ("Notification" in window && Notification.permission === "default") {
+            Notification.requestPermission();
+        }
+    }, []);
+
+    useEffect(() => {
         sessionEndedRef.current = false;
         setConnectionLost(false);
         reconnectDelayRef.current = 1000;
@@ -186,6 +192,29 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                         }];
                     });
                     setIsProcessing(false);
+
+                    if (document.hidden
+                            && "Notification" in window
+                            && Notification.permission === "granted") {
+                        const toolName = data.toolName as string;
+                        let title = "Action required";
+                        let body = `${toolName} needs your approval`;
+                        if (toolName === "ExitPlanMode") {
+                            title = "Plan ready for review";
+                            body = "An assistant plan is waiting for your approval.";
+                        } else if (toolName === "AskUserQuestion") {
+                            title = "Question from assistant";
+                            body = "The assistant is asking you a question.";
+                        }
+                        const notification = new Notification(title, {
+                            body,
+                            tag: `axiom-permission-${data.requestId}`,
+                        });
+                        notification.onclick = () => {
+                            window.focus();
+                            notification.close();
+                        };
+                    }
                 } catch {
                     // ignore
                 }
