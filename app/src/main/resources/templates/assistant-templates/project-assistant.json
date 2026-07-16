@@ -8,7 +8,12 @@
   "mcpServers": ["@axiom-assistant"],
   "allowedTools": [
     "Read(*)", "Write(*)", "Edit(*)",
-    "Bash(*)",
+    "Bash(ls *)", "Bash(cat *)", "Bash(head *)", "Bash(tail *)",
+    "Bash(find *)", "Bash(wc *)", "Bash(file *)", "Bash(grep *)",
+    "Bash(tree *)", "Bash(diff *)", "Bash(sort *)", "Bash(uniq *)",
+    "Bash(git log *)", "Bash(git diff *)", "Bash(git show *)",
+    "Bash(git status *)", "Bash(git branch *)", "Bash(git blame *)",
+    "Bash(gh issue *)", "Bash(gh pr *)", "Bash(gh api *)",
     "WebSearch(*)", "WebFetch(*)",
     "mcp__axiom__axiom_project_get_details",
     "mcp__axiom__axiom_project_list_tasks",
