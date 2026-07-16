@@ -457,13 +457,6 @@ public class AssistantSessionManager {
      *
      * @param type the item type directory (tools, action-types, report-definitions)
      * @param name the item name (file name without .json)
-     * @param validationErrors list of validation errors (empty if valid)
-     */
-    /**
-     * Describes a generated configuration item with its validation status.
-     *
-     * @param type the item type directory (tools, action-types, report-definitions)
-     * @param name the item name (file name without .json)
      * @param errors validation errors that block apply
      * @param warnings advisory messages that don't block apply
      */
