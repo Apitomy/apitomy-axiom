@@ -67,6 +67,8 @@ public class AssistantSession {
     private final CopyOnWriteArrayList<Consumer<SseEvent>> listeners = new CopyOnWriteArrayList<>();
     private final Object eventLock = new Object();
     private final CopyOnWriteArrayList<AutoApprovalRule> autoApprovalRules = new CopyOnWriteArrayList<>();
+    private final Long projectId;
+    private final String projectName;
 
     /**
      * A session-scoped rule for automatically approving tool permissions.
@@ -92,10 +94,13 @@ public class AssistantSession {
      * @param workingDirectory the Claude Code working directory
      * @param command the full command line for the Claude Code subprocess
      * @param environment resolved environment variables to inject into the subprocess
+     * @param projectId optional project ID if session is scoped to a project
+     * @param projectName optional project name if session is scoped to a project
      */
     public AssistantSession(String name, String templateId, Path sessionDirectory,
                              Path workingDirectory, List<String> command,
-                             Map<String, String> environment) {
+                             Map<String, String> environment, Long projectId,
+                             String projectName) {
         this.id = UUID.randomUUID().toString();
         this.name = name;
         this.templateId = templateId;
@@ -107,6 +112,8 @@ public class AssistantSession {
         this.status = Status.STARTING;
         this.createdAt = Instant.now();
         this.lastActivityAt = this.createdAt;
+        this.projectId = projectId;
+        this.projectName = projectName;
     }
 
     /**
@@ -399,6 +406,20 @@ public class AssistantSession {
     /** Returns the number of completed turns. */
     public int getTurnCount() {
         return turnCount;
+    }
+
+    /**
+     * @return the project ID if this session is scoped to a project, null otherwise
+     */
+    public Long getProjectId() {
+        return projectId;
+    }
+
+    /**
+     * @return the project name if this session is scoped to a project, null otherwise
+     */
+    public String getProjectName() {
+        return projectName;
     }
 
     /**

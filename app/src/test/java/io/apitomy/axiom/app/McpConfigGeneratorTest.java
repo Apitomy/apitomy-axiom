@@ -127,21 +127,21 @@ class McpConfigGeneratorTest {
         assertTrue(tools.isArray(), "Tools should be a JSON array");
         assertTrue(tools.size() >= 4, "Should have at least 4 seeded script tools");
 
-        boolean hasPostComment = false;
         boolean hasListLabels = false;
         boolean hasApplyLabels = false;
-        boolean hasCreatePr = false;
+        boolean hasListIssues = false;
+        boolean hasListPrs = false;
         for (JsonNode tool : tools) {
             String name = tool.get("name").asText();
-            if ("post_github_comment".equals(name)) hasPostComment = true;
             if ("list_github_labels".equals(name)) hasListLabels = true;
             if ("apply_github_labels".equals(name)) hasApplyLabels = true;
-            if ("create_github_pr".equals(name)) hasCreatePr = true;
+            if ("list_github_issues".equals(name)) hasListIssues = true;
+            if ("list_github_prs".equals(name)) hasListPrs = true;
         }
-        assertTrue(hasPostComment, "Should contain post_github_comment tool");
         assertTrue(hasListLabels, "Should contain list_github_labels tool");
         assertTrue(hasApplyLabels, "Should contain apply_github_labels tool");
-        assertTrue(hasCreatePr, "Should contain create_github_pr tool");
+        assertTrue(hasListIssues, "Should contain list_github_issues tool");
+        assertTrue(hasListPrs, "Should contain list_github_prs tool");
     }
 
     @Test
@@ -153,21 +153,21 @@ class McpConfigGeneratorTest {
                 .get("args").get(1).asText();
         JsonNode tools = objectMapper.readTree(Files.readString(Path.of(toolsJsonPath)));
 
-        JsonNode postCommentTool = null;
+        JsonNode applyLabelsTool = null;
         for (JsonNode tool : tools) {
-            if ("post_github_comment".equals(tool.get("name").asText())) {
-                postCommentTool = tool;
+            if ("apply_github_labels".equals(tool.get("name").asText())) {
+                applyLabelsTool = tool;
                 break;
             }
         }
-        assertNotNull(postCommentTool, "post_github_comment tool should exist");
-        assertTrue(postCommentTool.has("description"), "Tool should have description");
-        assertTrue(postCommentTool.has("scriptTemplate"), "Tool should have scriptTemplate");
-        assertTrue(postCommentTool.has("parameters"), "Tool should have parameters");
+        assertNotNull(applyLabelsTool, "apply_github_labels tool should exist");
+        assertTrue(applyLabelsTool.has("description"), "Tool should have description");
+        assertTrue(applyLabelsTool.has("scriptTemplate"), "Tool should have scriptTemplate");
+        assertTrue(applyLabelsTool.has("parameters"), "Tool should have parameters");
 
-        JsonNode params = postCommentTool.get("parameters");
+        JsonNode params = applyLabelsTool.get("parameters");
         assertTrue(params.isArray(), "Parameters should be an array");
-        assertTrue(params.size() >= 3, "post_github_comment should have at least 3 parameters");
+        assertTrue(params.size() >= 3, "apply_github_labels should have at least 3 parameters");
 
         for (JsonNode param : params) {
             assertTrue(param.has("name"), "Parameter should have name");
@@ -216,7 +216,7 @@ class McpConfigGeneratorTest {
     @Test
     void testOnlyScriptToolsNoSdkServer() throws Exception {
         Path configFile = generator.generateMcpConfig(9016L, Map.of(),
-                List.of("mcp__axiom-tools__post_github_comment"));
+                List.of("mcp__axiom-tools__list_github_labels"));
         assertNotNull(configFile);
 
         JsonNode config = objectMapper.readTree(Files.readString(configFile));

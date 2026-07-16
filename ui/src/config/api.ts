@@ -1230,6 +1230,8 @@ export interface AssistantSessionInfo {
     totalInputTokens?: number;
     totalOutputTokens?: number;
     turnCount?: number;
+    projectId?: number;
+    projectName?: string;
 }
 
 export interface AssistantItem {
@@ -1241,12 +1243,13 @@ export interface AssistantItem {
 
 export async function createAssistantSession(
     templateId: string,
-    name?: string
+    name?: string,
+    projectId?: number
 ): Promise<AssistantSessionInfo> {
     const response = await fetch(`${API}/assistant/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, templateId }),
+        body: JSON.stringify({ name, templateId, projectId }),
     });
     if (!response.ok) {
         const body = await response.json().catch(() => null);

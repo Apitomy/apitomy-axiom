@@ -314,6 +314,14 @@ export function AssistantPage() {
                                 <div style={{ fontWeight: 600, fontSize: "14px" }}>{s.name}</div>
                                 <div style={{ fontSize: "12px", color: "#6a6e73", marginTop: 2 }}>
                                     {templateMap[s.templateId] || s.templateId}
+                                    {s.projectName && (
+                                        <>
+                                            {" · "}
+                                            <Label isCompact color="teal">
+                                                {s.projectName}
+                                            </Label>
+                                        </>
+                                    )}
                                     {" · "}
                                     Created {new Date(s.createdAt).toLocaleString()}
                                 </div>

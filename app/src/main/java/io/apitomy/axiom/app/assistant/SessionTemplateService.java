@@ -31,6 +31,7 @@ public class SessionTemplateService {
     private static final String[] BUILT_IN_FILES = {
             "axiom-config-assistant.json",
             "general-assistant.json",
+            "project-assistant.json",
     };
 
     @Inject

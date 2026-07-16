@@ -6087,6 +6087,15 @@
             "format": "int32",
             "description": "Number of completed turns",
             "type": "integer"
+          },
+          "projectId": {
+            "format": "int64",
+            "description": "Project ID if session is scoped to a project",
+            "type": "integer"
+          },
+          "projectName": {
+            "description": "Project name if session is scoped to a project",
+            "type": "string"
           }
         }
       },
@@ -6103,6 +6112,11 @@
           "templateId": {
             "description": "Template ID to create the session from",
             "type": "string"
+          },
+          "projectId": {
+            "format": "int64",
+            "description": "Optional project ID to scope the session to a specific project",
+            "type": "integer"
           }
         }
       },

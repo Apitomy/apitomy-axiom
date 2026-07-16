@@ -272,6 +272,16 @@ export function AssistantSessionPage() {
                             </Label>
                         </Tooltip>
                     )}
+                    {session.projectId && session.projectName && (
+                        <Label
+                            color="teal"
+                            isCompact
+                            style={{ marginLeft: 10, cursor: "pointer" }}
+                            onClick={() => navigate(`/projects/${session.projectId}`)}
+                        >
+                            {session.projectName}
+                        </Label>
+                    )}
                 </FlexItem>
                 <FlexItem>
                     {isConfigAssistant && (
