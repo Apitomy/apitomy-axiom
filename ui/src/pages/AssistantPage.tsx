@@ -157,7 +157,8 @@ export function AssistantPage() {
         return true;
     });
 
-    const uniqueTemplateIds = [...new Set(sessions.map((s) => s.templateId))];
+    const uniqueTemplateIds = Object.keys(templateMap)
+        .sort((a, b) => (templateMap[a] || a).localeCompare(templateMap[b] || b));
 
     const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
