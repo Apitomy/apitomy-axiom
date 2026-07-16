@@ -73,6 +73,15 @@ export function AssistantToolUseBlock({
         overflow: "auto",
     };
 
+    const sectionLabelStyle: React.CSSProperties = {
+        fontSize: "11px",
+        color: "#6a6e73",
+        fontWeight: 600,
+        marginBottom: 4,
+        textTransform: "uppercase",
+        letterSpacing: "0.5px",
+    };
+
     return (
         <div style={{
             margin: "4px 0",
@@ -103,7 +112,8 @@ export function AssistantToolUseBlock({
                     isIndented
                 >
                     {input && (
-                        <div style={{ marginBottom: result ? 8 : 0 }}>
+                        <div>
+                            <div style={sectionLabelStyle}>Input</div>
                             <SyntaxHighlighter
                                 language="json"
                                 style={stackoverflowLight}
@@ -115,17 +125,31 @@ export function AssistantToolUseBlock({
                         </div>
                     )}
                     {result && (
-                        <SyntaxHighlighter
-                            language={isJson(result) ? "json" : "bash"}
-                            style={stackoverflowLight}
-                            customStyle={{
-                                ...codeStyle,
-                                ...(isError ? { backgroundColor: "#fef3f2" } : {}),
-                            }}
-                            wrapLongLines
-                        >
-                            {isJson(result) ? formatJson(result) : result}
-                        </SyntaxHighlighter>
+                        <div style={{
+                            ...(input ? {
+                                borderTop: "1px solid #d2d2d2",
+                                marginTop: 8,
+                                paddingTop: 8,
+                            } : {}),
+                        }}>
+                            <div style={{
+                                ...sectionLabelStyle,
+                                ...(isError ? { color: "#c9190b" } : {}),
+                            }}>
+                                {isError ? "Error" : "Result"}
+                            </div>
+                            <SyntaxHighlighter
+                                language={isJson(result) ? "json" : "bash"}
+                                style={stackoverflowLight}
+                                customStyle={{
+                                    ...codeStyle,
+                                    ...(isError ? { backgroundColor: "#fef3f2" } : {}),
+                                }}
+                                wrapLongLines
+                            >
+                                {isJson(result) ? formatJson(result) : result}
+                            </SyntaxHighlighter>
+                        </div>
                     )}
                 </ExpandableSection>
             </div>
