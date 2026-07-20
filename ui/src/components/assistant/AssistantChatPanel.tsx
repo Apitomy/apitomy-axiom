@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Alert } from "@patternfly/react-core";
 import { AssistantMessageList, type ChatMessage } from "./AssistantMessageList";
 import { AssistantMessageInput } from "./AssistantMessageInput";
 import {
-    assistantEventsUrl,
     sendAssistantMessage,
     respondToAssistantPermission,
     createAutoApproval,
+    fetchAssistantSessionHistory,
 } from "../../config/api";
+import { sseClient } from "../../config/sse";
 import { randomThinkingMessage } from "./thinkingMessages";
 
 export type SessionMode = "normal" | "plan";
@@ -28,15 +28,9 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
     const [isProcessing, setIsProcessing] = useState(false);
     const [processingText, setProcessingText] = useState("");
     const [slashCommands, setSlashCommands] = useState<string[]>([]);
-    const [connectionLost, setConnectionLost] = useState(false);
-    const eventSourceRef = useRef<EventSource | null>(null);
-    const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const reconnectDelayRef = useRef(1000);
     const sessionEndedRef = useRef(false);
-    const activeNotificationsRef = useRef<Map<string, Notification>>(new Map());
+    const lastSeenIndexRef = useRef(-1);
 
-    // Keep callback refs so the EventSource effect doesn't re-run when
-    // parent-supplied callbacks change identity (e.g. inline arrow functions).
     const onItemsChangedRef = useRef(onItemsChanged);
     const onModeChangeRef = useRef(onModeChange);
     const onModelDetectedRef = useRef(onModelDetected);
@@ -56,258 +50,218 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
         }
     }, []);
 
-    useEffect(() => {
-        sessionEndedRef.current = false;
-        setConnectionLost(false);
-        reconnectDelayRef.current = 1000;
-
-        const url = assistantEventsUrl(sessionId);
-
-        function connect() {
-            setMessages([]);
-
-            const es = new EventSource(url);
-            eventSourceRef.current = es;
-
-            es.onopen = () => {
-                setConnectionLost(false);
-                reconnectDelayRef.current = 1000;
-            };
-
-            es.addEventListener("session_init", (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    if (Array.isArray(data.slashCommands)) {
-                        setSlashCommands(data.slashCommands);
-                    }
-                    if (data.model) {
-                        onModelDetectedRef.current?.(data.model);
-                    }
-                } catch {
-                    // ignore
+    const processEvent = useCallback((eventType: string, data: Record<string, unknown>) => {
+        switch (eventType) {
+            case "session_init":
+                if (Array.isArray(data.slashCommands)) {
+                    setSlashCommands(data.slashCommands as string[]);
                 }
-            });
-
-            es.addEventListener("assistant_text", (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    if (data.text) {
-                        setMessages((prev) => {
-                            const last = prev[prev.length - 1];
-                            if (last && last.type === "assistant") {
-                                return [...prev.slice(0, -1), { ...last, content: data.text }];
-                            }
-                            return [...prev, { id: String(++messageIdCounter), type: "assistant", content: data.text }];
-                        });
-                        setProcessingText(randomThinkingMessage());
-                    }
-                } catch {
-                    // ignore
+                if (data.model) {
+                    onModelDetectedRef.current?.(data.model as string);
                 }
-            });
+                break;
 
-            es.addEventListener("user_message", (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    if (data.content) {
-                        setMessages((prev) => {
-                            const last = prev[prev.length - 1];
-                            if (last && last.type === "user" && last.content === data.content) {
-                                return prev;
-                            }
-                            return [...prev, { id: String(++messageIdCounter), type: "user", content: data.content }];
-                        });
-                        setIsProcessing(true);
-                    }
-                } catch {
-                    // ignore
-                }
-            });
-
-            es.addEventListener("thinking", () => {
-                setProcessingText(
-                    randomThinkingMessage()
-                );
-            });
-
-            es.addEventListener("tool_use", (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    addMessage({
-                        type: "tool_use",
-                        toolName: data.name,
-                        toolInput: data.input,
-                        toolUseId: data.id,
+            case "assistant_text":
+                if (data.text) {
+                    setMessages((prev) => {
+                        const last = prev[prev.length - 1];
+                        if (last && last.type === "assistant") {
+                            return [...prev.slice(0, -1), { ...last, content: data.text as string }];
+                        }
+                        return [...prev, { id: String(++messageIdCounter), type: "assistant", content: data.text as string }];
                     });
                     setProcessingText(randomThinkingMessage());
-                    if (data.name === "EnterPlanMode") {
-                        onModeChangeRef.current?.("plan");
-                    }
-                } catch {
-                    // ignore
                 }
-            });
+                break;
 
-            es.addEventListener("tool_result", (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    setMessages((prev) =>
-                        prev.map((m) =>
-                            m.type === "tool_use" && m.toolUseId === data.toolUseId
-                                ? { ...m, toolResult: data.stdout || data.stderr || "", isError: !!data.stderr && !data.stdout }
-                                : m
-                        )
+            case "user_message":
+                if (data.content) {
+                    setMessages((prev) => {
+                        const last = prev[prev.length - 1];
+                        if (last && last.type === "user" && last.content === data.content) {
+                            return prev;
+                        }
+                        return [...prev, { id: String(++messageIdCounter), type: "user", content: data.content as string }];
+                    });
+                    setIsProcessing(true);
+                }
+                break;
+
+            case "thinking":
+                setProcessingText(randomThinkingMessage());
+                break;
+
+            case "tool_use":
+                addMessage({
+                    type: "tool_use",
+                    toolName: data.name as string,
+                    toolInput: data.input as Record<string, unknown>,
+                    toolUseId: data.id as string,
+                });
+                setProcessingText(randomThinkingMessage());
+                if (data.name === "EnterPlanMode") {
+                    onModeChangeRef.current?.("plan");
+                }
+                break;
+
+            case "tool_result":
+                setMessages((prev) =>
+                    prev.map((m) =>
+                        m.type === "tool_use" && m.toolUseId === data.toolUseId
+                            ? { ...m, toolResult: (data.stdout || data.stderr || "") as string, isError: !!data.stderr && !data.stdout }
+                            : m
+                    )
+                );
+                onItemsChangedRef.current?.();
+                break;
+
+            case "permission_request":
+                setMessages((prev) => {
+                    const lastToolIdx = prev.findLastIndex(
+                        (m) => m.type === "tool_use" && m.toolName === data.toolName && !m.permissionId
                     );
-                    onItemsChangedRef.current?.();
-                } catch {
-                    // ignore
-                }
-            });
-
-            es.addEventListener("permission_request", (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-
-                    // Attach permission to the matching tool_use block
-                    setMessages((prev) => {
-                        const lastToolIdx = prev.findLastIndex(
-                            (m) => m.type === "tool_use" && m.toolName === data.toolName && !m.permissionId
-                        );
-                        if (lastToolIdx >= 0) {
-                            const updated = [...prev];
-                            updated[lastToolIdx] = {
-                                ...updated[lastToolIdx],
-                                permissionId: data.requestId,
-                                permissionResolved: false,
-                                toolInput: data.toolInput || updated[lastToolIdx].toolInput,
-                            };
-                            return updated;
-                        }
-                        // Fallback: add as standalone if no matching tool_use
-                        return [...prev, {
-                            id: String(++messageIdCounter),
-                            type: "permission_request" as const,
-                            permissionId: data.requestId,
-                            toolName: data.toolName,
-                            toolInput: data.toolInput,
-                        }];
-                    });
-                    setIsProcessing(false);
-
-                    if (document.hidden
-                            && "Notification" in window
-                            && Notification.permission === "granted") {
-                        const toolName = data.toolName;
-                        let title = "Action required";
-                        let body = `${toolName} needs your approval`;
-                        if (toolName === "ExitPlanMode") {
-                            title = "Plan ready for review";
-                            body = "An assistant plan is waiting for your approval.";
-                        } else if (toolName === "AskUserQuestion") {
-                            title = "Question from assistant";
-                            body = "The assistant is asking you a question.";
-                        }
-                        const notification = new Notification(title, {
-                            body,
-                            tag: `axiom-permission-${data.requestId}`,
-                        });
-                        notification.onclick = () => {
-                            window.focus();
-                            notification.close();
-                            activeNotificationsRef.current.delete(data.requestId);
+                    if (lastToolIdx >= 0) {
+                        const updated = [...prev];
+                        updated[lastToolIdx] = {
+                            ...updated[lastToolIdx],
+                            permissionId: data.requestId as string,
+                            permissionResolved: false,
+                            toolInput: (data.toolInput as Record<string, unknown>) || updated[lastToolIdx].toolInput,
                         };
-                        activeNotificationsRef.current.set(data.requestId, notification);
+                        return updated;
                     }
-                } catch {
-                    // ignore
-                }
-            });
-
-            es.addEventListener("permission_resolved", (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    activeNotificationsRef.current.get(data.permissionId)?.close();
-                    activeNotificationsRef.current.delete(data.permissionId);
-                    setMessages((prev) => {
-                        const match = prev.find((m) => m.permissionId === data.permissionId);
-                        if (match?.toolName === "ExitPlanMode") {
-                            onModeChangeRef.current?.("normal");
-                        }
-                        return prev.map((m) =>
-                            m.permissionId === data.permissionId
-                                ? { ...m, permissionResolved: true, permissionAllowed: data.allow }
-                                : m
-                        );
-                    });
-                } catch {
-                    // ignore
-                }
-            });
-
-            es.addEventListener("turn_complete", (e) => {
+                    return [...prev, {
+                        id: String(++messageIdCounter),
+                        type: "permission_request" as const,
+                        permissionId: data.requestId as string,
+                        toolName: data.toolName as string,
+                        toolInput: data.toolInput as Record<string, unknown>,
+                    }];
+                });
                 setIsProcessing(false);
-                try {
-                    const data = JSON.parse(e.data);
-                    if (data.costUsd != null) {
-                        onCostUpdateRef.current?.(data.costUsd, data.inputTokens ?? 0, data.outputTokens ?? 0);
-                    }
-                } catch {
-                    // ignore
-                }
-            });
 
-            es.addEventListener("session_ended", () => {
+                if (document.hidden
+                        && "Notification" in window
+                        && Notification.permission === "granted") {
+                    const toolName = data.toolName as string;
+                    let title = "Action required";
+                    let body = `${toolName} needs your approval`;
+                    if (toolName === "ExitPlanMode") {
+                        title = "Plan ready for review";
+                        body = "An assistant plan is waiting for your approval.";
+                    } else if (toolName === "AskUserQuestion") {
+                        title = "Question from assistant";
+                        body = "The assistant is asking you a question.";
+                    }
+                    const notification = new Notification(title, {
+                        body,
+                        tag: `axiom-permission-${data.requestId}`,
+                    });
+                    notification.onclick = () => {
+                        window.focus();
+                        notification.close();
+                    };
+                }
+                break;
+
+            case "permission_resolved":
+                setMessages((prev) => {
+                    const match = prev.find((m) => m.permissionId === data.permissionId);
+                    if (match?.toolName === "ExitPlanMode") {
+                        onModeChangeRef.current?.("normal");
+                    }
+                    return prev.map((m) =>
+                        m.permissionId === data.permissionId
+                            ? { ...m, permissionResolved: true, permissionAllowed: data.allow as boolean }
+                            : m
+                    );
+                });
+                break;
+
+            case "turn_complete":
+                setIsProcessing(false);
+                if (data.costUsd != null) {
+                    onCostUpdateRef.current?.(
+                        data.costUsd as number,
+                        (data.inputTokens ?? 0) as number,
+                        (data.outputTokens ?? 0) as number
+                    );
+                }
+                break;
+
+            case "session_ended":
                 sessionEndedRef.current = true;
                 setIsProcessing(false);
-            });
+                break;
 
-            es.addEventListener("unhandled_event", (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    addMessage({
-                        type: "warning",
-                        content: `Unhandled event type: ${data.rawType}`,
-                    });
-                } catch {
-                    // ignore
-                }
-            });
+            case "unhandled_event":
+                addMessage({
+                    type: "warning",
+                    content: `Unhandled event type: ${data.rawType}`,
+                });
+                break;
 
-            es.addEventListener("session_error", (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    addMessage({ type: "system", content: data.message || "Session error" });
-                } catch {
-                    // ignore
-                }
+            case "session_error":
+                addMessage({ type: "system", content: (data.message as string) || "Session error" });
                 setIsProcessing(false);
-            });
-
-            es.onerror = () => {
-                es.close();
-                eventSourceRef.current = null;
-                if (sessionEndedRef.current) return;
-                setConnectionLost(true);
-                setIsProcessing(false);
-                reconnectTimerRef.current = setTimeout(() => {
-                    reconnectTimerRef.current = null;
-                    connect();
-                }, reconnectDelayRef.current);
-                reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 30000);
-            };
+                break;
         }
+    }, [addMessage]);
 
-        connect();
+    useEffect(() => {
+        sessionEndedRef.current = false;
+        lastSeenIndexRef.current = -1;
+        setMessages([]);
+
+        sseClient.connect();
+
+        let cancelled = false;
+        const buffer: { eventType: string; eventData: Record<string, unknown>; eventIndex: number }[] = [];
+        let historyLoaded = false;
+
+        const unsubscribe = sseClient.subscribeSession(sessionId,
+            (eventType, eventData, eventIndex) => {
+                if (cancelled) return;
+                if (!historyLoaded) {
+                    buffer.push({ eventType, eventData, eventIndex });
+                    return;
+                }
+                if (eventIndex <= lastSeenIndexRef.current) return;
+                lastSeenIndexRef.current = eventIndex;
+                processEvent(eventType, eventData);
+            }
+        );
+
+        fetchAssistantSessionHistory(sessionId)
+            .then((history) => {
+                if (cancelled) return;
+                for (const event of history) {
+                    processEvent(event.eventType, event.eventData);
+                    lastSeenIndexRef.current = Math.max(lastSeenIndexRef.current, event.eventIndex);
+                }
+                historyLoaded = true;
+                for (const event of buffer) {
+                    if (event.eventIndex <= lastSeenIndexRef.current) continue;
+                    lastSeenIndexRef.current = event.eventIndex;
+                    processEvent(event.eventType, event.eventData);
+                }
+                buffer.length = 0;
+            })
+            .catch((err) => {
+                if (cancelled) return;
+                console.error("Failed to fetch session history:", err);
+                historyLoaded = true;
+                for (const event of buffer) {
+                    processEvent(event.eventType, event.eventData);
+                }
+                buffer.length = 0;
+            });
 
         return () => {
-            eventSourceRef.current?.close();
-            eventSourceRef.current = null;
-            if (reconnectTimerRef.current) {
-                clearTimeout(reconnectTimerRef.current);
-                reconnectTimerRef.current = null;
-            }
+            cancelled = true;
+            unsubscribe();
         };
-    }, [sessionId, addMessage]);
+    }, [sessionId, processEvent]);
 
     const handleSend = useCallback(async (message: string) => {
         addMessage({ type: "user", content: message });
@@ -371,11 +325,6 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
             flex: "1 1 0",
             minHeight: 0,
         }}>
-            {connectionLost && (
-                <Alert variant="warning" isInline isPlain
-                    title="Connection lost — reconnecting..."
-                    style={{ flexShrink: 0 }} />
-            )}
             <AssistantMessageList
                 messages={messages}
                 onPermissionRespond={handlePermissionRespond}

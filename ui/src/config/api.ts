@@ -1271,6 +1271,20 @@ export async function fetchAssistantSession(id: string): Promise<AssistantSessio
     return response.json();
 }
 
+export interface AssistantHistoryEvent {
+    eventType: string;
+    eventData: Record<string, unknown>;
+    eventIndex: number;
+}
+
+export async function fetchAssistantSessionHistory(
+    sessionId: string
+): Promise<AssistantHistoryEvent[]> {
+    const response = await fetch(`${API}/assistant/sessions/${sessionId}/history`);
+    if (!response.ok) throw new Error(`Failed to fetch session history: ${response.status}`);
+    return response.json();
+}
+
 export async function deleteAssistantSession(id: string): Promise<void> {
     const response = await fetch(`${API}/assistant/sessions/${id}`, { method: "DELETE" });
     if (!response.ok) throw new Error(`Failed to delete session: ${response.status}`);
