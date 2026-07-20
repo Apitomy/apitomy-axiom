@@ -45,7 +45,8 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
@@ -137,6 +138,13 @@ public class AssistantResourceImpl implements AssistantResource {
      * SSE event stream for an assistant session. This method overloads the
      * generated interface method to add {@code @Context} SSE parameters.
      * Supports {@code Last-Event-Id} for resuming after a reconnect.
+     *
+     * <p>Event delivery is decoupled from event dispatch via a per-connection
+     * {@link LinkedBlockingQueue}. The listener registered with the session
+     * performs a non-blocking {@code offer()} so that the session's
+     * {@code eventLock} is never held while writing to the SSE sink. A
+     * dedicated drainer virtual thread polls the queue and calls
+     * {@code sink.send()}, ensuring only one thread ever writes to the sink.
      */
     @GET
     @Path("/sessions/{sessionId}/events")
@@ -158,72 +166,64 @@ public class AssistantResourceImpl implements AssistantResource {
 
         long lastEventId = parseLastEventId(headers);
 
-        // Stream live events — ID assigned via a counter seeded after snapshot
-        AtomicLong liveIdCounter = new AtomicLong();
+        LinkedBlockingQueue<SseEvent> eventQueue = new LinkedBlockingQueue<>(4096);
+
         Consumer<SseEvent> listener = event -> {
-            if (sink.isClosed()) return;
-            OutboundSseEvent sseEvent = sse.newEventBuilder()
-                    .id(String.valueOf(liveIdCounter.getAndIncrement()))
-                    .name(event.type())
-                    .data(event.toJson())
-                    .build();
-            sink.send(sseEvent);
+            if (!eventQueue.offer(event)) {
+                LOG.warnf("SSE event queue full for session %s, forcing reconnect",
+                        sessionId);
+                try { sink.close(); } catch (Exception ignored) { }
+            }
         };
 
-        // Atomically snapshot history and register the listener so no events
-        // emitted between replay and registration are lost.
         List<SseEvent> history = session.addListenerWithHistory(listener, lastEventId);
 
-        // Seed the live counter: replayed events start at (lastEventId + 1),
-        // so live events continue from (lastEventId + 1 + history.size).
-        long replayStartId = lastEventId + 1;
-        liveIdCounter.set(replayStartId + history.size());
+        Thread.ofVirtual().name("sse-drainer-" + sessionId).start(() -> {
+            try {
+                long nextId = lastEventId + 1;
 
-        // Replay history
-        for (int i = 0; i < history.size(); i++) {
-            if (sink.isClosed()) {
-                session.removeListener(listener);
-                return;
-            }
-            SseEvent event = history.get(i);
-            OutboundSseEvent sseEvent = sse.newEventBuilder()
-                    .id(String.valueOf(replayStartId + i))
-                    .name(event.type())
-                    .data(event.toJson())
-                    .build();
-            sink.send(sseEvent);
-        }
-
-        sink.send(sse.newEventBuilder().comment("connected").build());
-
-        OutboundSseEvent heartbeat = sse.newEventBuilder().comment("heartbeat").build();
-        Thread.ofVirtual().name("sse-keepalive-" + sessionId).start(() -> {
-            int tick = 0;
-            while (!sink.isClosed() && session.isAlive()) {
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
+                for (SseEvent event : history) {
+                    if (sink.isClosed()) return;
+                    sink.send(buildSseEvent(sse, event, nextId++));
                 }
-                tick++;
-                if (tick >= 15) {
-                    tick = 0;
-                    if (!sink.isClosed()) {
-                        try {
-                            sink.send(heartbeat);
-                        } catch (Exception e) {
-                            break;
+
+                if (!sink.isClosed()) {
+                    sink.send(sse.newEventBuilder().comment("connected").build());
+                }
+
+                int idleSeconds = 0;
+                while (!sink.isClosed()
+                        && (session.isAlive() || !eventQueue.isEmpty())) {
+                    SseEvent event = eventQueue.poll(1, TimeUnit.SECONDS);
+                    if (event != null) {
+                        sink.send(buildSseEvent(sse, event, nextId++));
+                        idleSeconds = 0;
+                        List<SseEvent> batch = new ArrayList<>();
+                        eventQueue.drainTo(batch);
+                        for (SseEvent e : batch) {
+                            if (sink.isClosed()) return;
+                            sink.send(buildSseEvent(sse, e, nextId++));
+                        }
+                    } else {
+                        idleSeconds++;
+                        if (idleSeconds >= 15) {
+                            idleSeconds = 0;
+                            if (!sink.isClosed()) {
+                                sink.send(sse.newEventBuilder()
+                                        .comment("heartbeat").build());
+                            }
                         }
                     }
                 }
-            }
-            session.removeListener(listener);
-            if (!sink.isClosed()) {
-                try {
-                    sink.close();
-                } catch (Exception e) {
-                    // Ignore
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (Exception e) {
+                LOG.debugf("SSE drainer ended for session %s: %s",
+                        sessionId, e.getMessage());
+            } finally {
+                session.removeListener(listener);
+                if (!sink.isClosed()) {
+                    try { sink.close(); } catch (Exception ignored) { }
                 }
             }
         });
@@ -244,12 +244,57 @@ public class AssistantResourceImpl implements AssistantResource {
         }
     }
 
+    /**
+     * Builds an outbound SSE event with a numeric ID, event name, and JSON data.
+     */
+    private OutboundSseEvent buildSseEvent(Sse sse, SseEvent event, long id) {
+        return sse.newEventBuilder()
+                .id(String.valueOf(id))
+                .name(event.type())
+                .data(event.toJson())
+                .build();
+    }
+
     /** {@inheritDoc} */
     @Override
     public void streamAssistantEvents(String sessionId) {
         // This method is called when the SSE-aware overload doesn't match
         // (e.g., non-SSE client). Check the session exists for a clean 404.
         requireSession(sessionId);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void getAssistantSessionHistory(String sessionId) {
+        // Overridden below with @Context injection for Response building.
+    }
+
+    /**
+     * Returns the full event history for an assistant session as a JSON array.
+     * Each element contains eventType, eventData, and eventIndex.
+     */
+    @GET
+    @Path("/sessions/{sessionId}/history")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getAssistantSessionHistoryWithResponse(
+            @PathParam("sessionId") String sessionId) {
+        AssistantSession session = sessionManager.getSession(sessionId);
+        if (session == null) {
+            throw new WebApplicationException("Session not found: " + sessionId, 404);
+        }
+
+        List<SseEvent> history = session.getEventHistory();
+        StringBuilder json = new StringBuilder("[");
+        for (int i = 0; i < history.size(); i++) {
+            if (i > 0) json.append(",");
+            SseEvent event = history.get(i);
+            json.append("{\"eventType\":\"").append(event.type()).append("\",")
+                    .append("\"eventData\":").append(event.toJson()).append(",")
+                    .append("\"eventIndex\":").append(i).append("}");
+        }
+        json.append("]");
+
+        return Response.ok(json.toString(), MediaType.APPLICATION_JSON).build();
     }
 
     /** {@inheritDoc} */

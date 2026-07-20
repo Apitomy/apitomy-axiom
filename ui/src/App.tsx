@@ -74,9 +74,10 @@ export function App() {
         };
     }, []);
 
+    const isAssistantPage = location.pathname.startsWith("/assistant");
+
     const hasCheckErrors = startupChecks != null &&
         startupChecks.some((c) => c.status === "error");
-    const isAssistantPage = location.pathname.startsWith("/assistant");
     const isBreakout = new URLSearchParams(location.search).get("breakout") === "true";
 
     return (

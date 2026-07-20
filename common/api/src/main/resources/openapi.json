@@ -4102,6 +4102,35 @@
           }
         }
       ]
+    },
+    "/assistant/sessions/{sessionId}/history": {
+      "get": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Get the event history for an assistant session",
+        "description": "Returns the full event history for an assistant session as a JSON array. Each element contains the event type, event data, and a numeric index. Used by the UI to populate the initial state when subscribing to a session via the multiplexed SSE channel.",
+        "operationId": "getAssistantSessionHistory",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "description": "The assistant session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The session event history as a JSON array"
+          },
+          "404": {
+            "description": "Session not found"
+          }
+        }
+      }
     }
   },
   "components": {

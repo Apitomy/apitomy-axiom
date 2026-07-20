@@ -423,6 +423,13 @@ public class AssistantSession {
     }
 
     /**
+     * @return the number of events in the session's event history
+     */
+    public int getEventCount() {
+        return eventHistory.size();
+    }
+
+    /**
      * Adds an auto-approval rule for matching tool permissions.
      *
      * @param toolName the tool name to match

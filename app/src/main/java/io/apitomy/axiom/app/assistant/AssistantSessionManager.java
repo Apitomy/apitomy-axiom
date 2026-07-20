@@ -12,6 +12,7 @@ import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.WorkspaceService;
+import jakarta.enterprise.event.Event;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -80,6 +81,9 @@ public class AssistantSessionManager {
 
     @Inject
     WorkspaceService workspaceService;
+
+    @Inject
+    Event<io.apitomy.axiom.core.events.SseEvent> sseEventEmitter;
 
     private final Map<String, AssistantSession> sessions = new ConcurrentHashMap<>();
     private final AtomicInteger sessionCount = new AtomicInteger();
@@ -205,6 +209,19 @@ public class AssistantSessionManager {
                 session.addEvent(new AssistantEventParser.SseEvent("assistant_text", welcomeData));
             }
 
+            // CDI bridge: broadcast assistant events to the global SSE channel
+            session.addListener(event -> {
+                try {
+                    int eventIndex = session.getEventCount() - 1;
+                    sseEventEmitter.fire(
+                            io.apitomy.axiom.core.events.SseEvent.assistantSessionEvent(
+                                    session.getId(), event.type(),
+                                    event.toJson(), eventIndex));
+                } catch (Exception e) {
+                    LOG.debugf("Failed to broadcast assistant event: %s", e.getMessage());
+                }
+            });
+
             // Config Assistant validation listener
             if ("axiom-config-assistant".equals(templateId)) {
                 session.addListener(createValidationListener(session));
@@ -252,7 +269,12 @@ public class AssistantSessionManager {
         if (session != null) {
             sessionCount.decrementAndGet();
             session.destroy();
-            recordUsage(session);
+            try {
+                recordUsage(session);
+            } catch (Exception e) {
+                LOG.debugf("Could not record usage for session %s: %s",
+                        sessionId, e.getMessage());
+            }
             contextBuilder.deleteSessionDirectory(session.getSessionDirectory());
             LOG.infof("Destroyed assistant session %s (cost=$%.4f, turns=%d)",
                     sessionId, session.getTotalCostUsd(), session.getTurnCount());
