@@ -3020,10 +3020,7 @@
         "operationId": "streamAssistantEvents",
         "responses": {
           "200": {
-            "description": "SSE event stream for the assistant session",
-            "content": {
-              "text/event-stream": {}
-            }
+            "description": "SSE event stream for the assistant session"
           }
         }
       },
