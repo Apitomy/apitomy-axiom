@@ -59,7 +59,6 @@ import {
     fetchProjectMetrics,
     fetchProjectTasks,
     fetchThreadEntries,
-    createAssistantSession,
     createTask,
     deleteProject,
     updateProject,
@@ -69,6 +68,7 @@ import {
 import { EditLabelsModal } from "../components/EditLabelsModal";
 import { LabelDisplay } from "../components/LabelDisplay";
 import { ExecutionLogModal } from "../components/ExecutionLogModal";
+import { CreateSessionModal } from "../components/assistant/CreateSessionModal";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 const STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
@@ -99,6 +99,7 @@ export function ProjectDetailPage() {
 
     // Trigger Action state
     const [isActionModalOpen, setIsActionModalOpen] = useState(false);
+    const [isAssistantModalOpen, setIsAssistantModalOpen] = useState(false);
     const [actionTypes, setActionTypes] = useState<ActionType[]>([]);
     const [selectedActionType, setSelectedActionType] = useState("");
     const [actionInput, setActionInput] = useState("");
@@ -224,13 +225,7 @@ export function ProjectDetailPage() {
                     <Button
                         variant="secondary"
                         icon={<ChatIcon />}
-                        onClick={() => {
-                            createAssistantSession("project-assistant", project.name, project.id)
-                                .then(session => {
-                                    window.open(`/assistant/${session.id}?breakout=true`, "_blank");
-                                })
-                                .catch(err => console.error("Failed to create project assistant session", err));
-                        }}
+                        onClick={() => setIsAssistantModalOpen(true)}
                         style={{ marginRight: "8px" }}
                     >
                         Assistant
@@ -418,6 +413,17 @@ export function ProjectDetailPage() {
                     </Button>
                 </ModalFooter>
             </Modal>
+
+            <CreateSessionModal
+                isOpen={isAssistantModalOpen}
+                onClose={() => setIsAssistantModalOpen(false)}
+                onSessionCreated={(session) => {
+                    setIsAssistantModalOpen(false);
+                    window.open(`/assistant/${session.id}?breakout=true`, "_blank");
+                }}
+                projectId={project.id}
+                defaultName={project.name}
+            />
 
             <ConfirmDeleteModal isOpen={isDeleteOpen} title="Delete Project"
                 onConfirm={() => {
