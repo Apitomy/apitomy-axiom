@@ -1,0 +1,194 @@
+:root {
+    --axiom--color--warning--bg: #fdf7e7;
+    --axiom--color--success--bg: #f3faf3;
+    --axiom--color--success--border: #c6e3c6;
+    --axiom--color--danger--bg: #fef3f2;
+}
+
+/* Block wrapper */
+.axiom-tool-use {
+    margin: 4px 0;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.axiom-tool-use[data-border="plan"] {
+    border: 2px solid var(--pf-t--global--color--status--success--default, #3e8635);
+}
+
+.axiom-tool-use[data-border="ask"] {
+    border: 2px solid var(--pf-t--global--color--status--info--default, #2b9af3);
+}
+
+.axiom-tool-use[data-border="permission"] {
+    border: 2px solid var(--pf-t--global--color--nonstatus--orange--default, #f0ab00);
+}
+
+/* Expandable header */
+.axiom-tool-use__header {
+    padding: 8px 12px;
+    background-color: var(--pf-t--global--background--color--secondary--default, #f0f0f0);
+    font-size: 13px;
+}
+
+/* Input preview text */
+.axiom-tool-use__input-preview {
+    margin-left: 8px;
+    color: var(--pf-t--global--text--color--subtle, #6a6e73);
+    font-size: 12px;
+}
+
+/* Section labels (Input, Result) */
+.axiom-tool-use__section-label {
+    font-size: 11px;
+    color: var(--pf-t--global--text--color--subtle, #6a6e73);
+    font-weight: 600;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.axiom-tool-use__section-label--error {
+    color: var(--pf-t--global--color--status--danger--default, #c9190b);
+}
+
+/* Code blocks (SyntaxHighlighter wrapper) */
+.axiom-tool-use__code pre {
+    margin: 0;
+    border-radius: 4px;
+    font-size: 12px;
+    max-height: 250px;
+    overflow: auto;
+}
+
+.axiom-tool-use__code--error pre {
+    background-color: var(--axiom--color--danger--bg, #fef3f2) !important;
+}
+
+/* Result divider */
+.axiom-tool-use__result-divider {
+    border-top: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+    margin-top: 8px;
+    padding-top: 8px;
+}
+
+/* Ask user section */
+.axiom-tool-use__ask-section {
+    border-top: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+}
+
+/* Plan approval section */
+.axiom-tool-use__plan-section {
+    padding: 10px 12px;
+    background-color: var(--axiom--color--success--bg, #f3faf3);
+    border-top: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+    font-size: 13px;
+}
+
+.axiom-tool-use__plan-section[data-resolved="true"] {
+    background-color: var(--pf-t--global--background--color--secondary--default, #f0f0f0);
+}
+
+.axiom-tool-use__plan-review-header {
+    margin-bottom: 8px;
+}
+
+.axiom-tool-use__plan-review-title {
+    font-weight: 600;
+}
+
+.axiom-tool-use__plan-content {
+    margin-bottom: 10px;
+    padding: 12px 16px;
+    background-color: var(--pf-t--global--background--color--primary--default, #fff);
+    border-radius: 4px;
+    border: 1px solid var(--axiom--color--success--border, #c6e3c6);
+    max-height: 300px;
+    overflow: auto;
+    font-size: 13px;
+}
+
+.axiom-tool-use__plan-approve-btn {
+    background-color: var(--pf-t--global--color--status--success--default, #3e8635);
+    border-color: var(--pf-t--global--color--status--success--default, #3e8635);
+}
+
+.axiom-tool-use__plan-status--approved {
+    color: var(--pf-t--global--color--status--success--default, #3e8635);
+    font-style: italic;
+}
+
+.axiom-tool-use__plan-status--rejected {
+    color: var(--pf-t--global--color--status--danger--default, #c9190b);
+    font-style: italic;
+}
+
+.axiom-tool-use__view-plan-btn {
+    padding: 2px 6px;
+}
+
+/* Permission section */
+.axiom-tool-use__permission-section {
+    padding: 10px 12px;
+    background-color: var(--axiom--color--warning--bg, #fdf7e7);
+    border-top: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+    font-size: 13px;
+}
+
+.axiom-tool-use__permission-section[data-resolved="true"] {
+    background-color: var(--pf-t--global--background--color--secondary--default, #f0f0f0);
+}
+
+.axiom-tool-use__permission-title {
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.axiom-tool-use__context-summary {
+    margin-bottom: 8px;
+    padding: 6px 10px;
+    background-color: var(--pf-t--global--background--color--primary--default, #fff);
+    border-radius: 4px;
+    border: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+    font-family: monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 120px;
+    overflow: auto;
+}
+
+.axiom-tool-use__permission-status--granted {
+    color: var(--pf-t--global--text--color--subtle, #6a6e73);
+    font-style: italic;
+}
+
+.axiom-tool-use__permission-status--denied {
+    color: var(--pf-t--global--color--status--danger--default, #c9190b);
+    font-style: italic;
+}
+
+/* Pattern UI */
+.axiom-tool-use__pattern-ui {
+    padding: 8px 10px;
+    background-color: var(--pf-t--global--background--color--primary--default, #fff);
+    border-radius: 4px;
+    border: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+}
+
+.axiom-tool-use__pattern-hint {
+    font-size: 12px;
+    color: var(--pf-t--global--text--color--subtle, #6a6e73);
+    margin-bottom: 6px;
+}
+
+.axiom-tool-use__pattern-suggestion {
+    margin-right: 6px;
+    margin-bottom: 4px;
+}
+
+.axiom-tool-use__pattern-custom-row {
+    margin-top: 6px;
+    align-items: center;
+    gap: 6px;
+}

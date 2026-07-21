@@ -35,6 +35,7 @@ import {
     type AutoApprovalRule,
     type AssistantApplyResult,
 } from "../config/api";
+import "./AssistantSessionPage.css";
 
 export function AssistantSessionPage() {
     const { sessionId } = useParams<{ sessionId: string }>();
@@ -197,25 +198,10 @@ export function AssistantSessionPage() {
 
     return (
         <PageSection padding={{ default: "noPadding" }} isFilled hasBodyWrapper={false}
-            style={{
-                display: "flex",
-                flexDirection: "column",
-                overflow: "hidden",
-                minHeight: 0,
-                flex: "1 1 0",
-                gap: 0,
-            }}>
+            className="axiom-session-page">
             {/* Header — fixed at top */}
-            <Flex style={{
-                padding: "12px 16px",
-                border: sessionMode === "plan" ? "1px solid #f0ab00" : undefined,
-                borderBottom: sessionMode === "plan" ? "1px solid #f0ab00" : "1px solid #d2d2d2",
-                borderRadius: sessionMode === "plan" ? "12px 12px 0 0" : undefined,
-                alignItems: "center",
-                flexShrink: 0,
-                backgroundColor: sessionMode === "plan" ? "#fffaf0" : undefined,
-                transition: "background-color 0.3s ease, border-color 0.3s ease",
-            }}>
+            <Flex className="axiom-session-page__header"
+                data-mode={sessionMode === "plan" ? "plan" : undefined}>
                 {!isBreakout && (
                     <FlexItem>
                         <Button variant="plain" onClick={() => navigate("/assistant")}>
@@ -234,32 +220,27 @@ export function AssistantSessionPage() {
                                 if (e.key === "Escape") setIsEditingName(false);
                             }}
                             autoFocus
-                            style={{ fontWeight: 600, fontSize: "16px", maxWidth: 300 }}
+                            className="axiom-session-page__name-input"
                         />
                     ) : (
                         <span
-                            className="session-name-editable"
-                            style={{ fontWeight: 600, fontSize: "16px", cursor: "pointer",
-                                display: "inline-flex", alignItems: "center", gap: 6 }}
+                            className="axiom-session-page__name-editable"
                             onClick={() => {
                                 setEditName(session.name);
                                 setIsEditingName(true);
                             }}
                         >
                             {session.name}
-                            <PencilAltIcon className="session-name-pencil"
-                                style={{ fontSize: "12px", color: "#6a6e73", opacity: 0,
-                                    transition: "opacity 0.15s" }} />
-                            <style>{`.session-name-editable:hover .session-name-pencil { opacity: 1 !important; }`}</style>
+                            <PencilAltIcon className="axiom-session-page__name-pencil" />
                         </span>
                     )}
                     {sessionMode === "plan" && (
-                        <Label color="orange" isCompact style={{ marginLeft: 10 }}>
+                        <Label color="orange" isCompact className="axiom-session-page__header-label">
                             Plan Mode
                         </Label>
                     )}
                     {sessionModel && (
-                        <Label color="grey" isCompact style={{ marginLeft: 10 }}>
+                        <Label color="grey" isCompact className="axiom-session-page__header-label">
                             {sessionModel}
                         </Label>
                     )}
@@ -267,7 +248,7 @@ export function AssistantSessionPage() {
                         <Tooltip content={
                             `Tokens in: ${sessionInputTokens.toLocaleString()} / out: ${sessionOutputTokens.toLocaleString()}`
                         }>
-                            <Label color="grey" isCompact style={{ marginLeft: 10 }}>
+                            <Label color="grey" isCompact className="axiom-session-page__header-label">
                                 ${sessionCost.toFixed(4)}
                             </Label>
                         </Tooltip>
@@ -276,7 +257,7 @@ export function AssistantSessionPage() {
                         <Label
                             color="teal"
                             isCompact
-                            style={{ marginLeft: 10, cursor: "pointer" }}
+                            className="axiom-session-page__header-label--clickable"
                             onClick={() => navigate(`/projects/${session.projectId}`)}
                         >
                             {session.projectName}
@@ -290,7 +271,7 @@ export function AssistantSessionPage() {
                             onClick={handleApply}
                             isLoading={applying}
                             isDisabled={applying || itemCount === 0}
-                            style={{ marginRight: 8 }}
+                            className="axiom-session-page__apply-btn"
                         >
                             Apply All
                         </Button>
@@ -298,9 +279,9 @@ export function AssistantSessionPage() {
                     {autoApprovalCount > 0 && (
                         <Tooltip content={`${autoApprovalCount} auto-approval rule(s) active`}>
                             <Button variant="plain" onClick={openAutoApprovalModal}
-                                style={{ marginRight: 4 }}>
-                                <ShieldAltIcon color="#3e8635" />
-                                <Badge isRead style={{ marginLeft: 4 }}>{autoApprovalCount}</Badge>
+                                className="axiom-session-page__shield-btn">
+                                <ShieldAltIcon className="axiom-session-page__shield-icon" />
+                                <Badge isRead className="axiom-session-page__shield-badge">{autoApprovalCount}</Badge>
                             </Button>
                         </Tooltip>
                     )}
@@ -308,7 +289,7 @@ export function AssistantSessionPage() {
                         variant="secondary"
                         isDanger
                         onClick={() => setIsEndConfirmOpen(true)}
-                        style={{ marginRight: isBreakout ? 0 : 8 }}
+                        className={isBreakout ? "axiom-session-page__end-btn--breakout" : "axiom-session-page__end-btn"}
                     >
                         End Session
                     </Button>
@@ -331,27 +312,15 @@ export function AssistantSessionPage() {
                     variant="danger"
                     isInline
                     title="Apply failed"
-                    style={{ margin: "8px 16px", flexShrink: 0 }}
+                    className="axiom-session-page__apply-error"
                 >
-                    <pre style={{ whiteSpace: "pre-wrap", fontSize: "12px" }}>{applyError}</pre>
+                    <pre className="axiom-session-page__apply-error-pre">{applyError}</pre>
                 </Alert>
             )}
 
             {/* Split panels — fills remaining height */}
-            <div style={{
-                display: "flex",
-                flex: "1 1 0",
-                minHeight: 0,
-                overflow: "hidden",
-            }}>
-                <div style={{
-                    flex: isConfigAssistant ? "7 1 0" : "1 1 0",
-                    borderRight: isConfigAssistant ? "1px solid #d2d2d2" : "none",
-                    display: "flex",
-                    flexDirection: "column",
-                    minWidth: 0,
-                    minHeight: 0,
-                }}>
+            <div className="axiom-session-page__split-panels">
+                <div className={`axiom-session-page__chat-panel${isConfigAssistant ? " axiom-session-page__chat-panel--with-sidebar" : ""}`}>
                     <AssistantChatPanel
                         sessionId={sessionId}
                         onItemsChanged={isConfigAssistant ? handleItemsChanged : undefined}
@@ -367,12 +336,7 @@ export function AssistantSessionPage() {
                 </div>
 
                 {isConfigAssistant && (
-                    <div style={{
-                        flex: "3 1 0",
-                        overflowY: "auto",
-                        minWidth: 0,
-                        minHeight: 0,
-                    }}>
+                    <div className="axiom-session-page__items-panel">
                         <AssistantGeneratedItems
                             sessionId={sessionId}
                             refreshTrigger={itemsRefresh}
@@ -420,7 +384,7 @@ export function AssistantSessionPage() {
                         {applyResult && (
                             <div>
                                 <p>The following items were applied:</p>
-                                <ul style={{ marginTop: 8 }}>
+                                <ul className="axiom-session-page__apply-result-list">
                                     {(applyResult.toolsCreated ?? 0) > 0 && <li>{applyResult.toolsCreated} tool(s) created</li>}
                                     {(applyResult.toolsUpdated ?? 0) > 0 && <li>{applyResult.toolsUpdated} tool(s) updated</li>}
                                     {(applyResult.actionTypesCreated ?? 0) > 0 && <li>{applyResult.actionTypesCreated} action type(s) created</li>}
@@ -456,7 +420,7 @@ export function AssistantSessionPage() {
                 <ModalHeader title="Auto-Approval Rules" />
                 <ModalBody>
                     {autoApprovalRules.length === 0 ? (
-                        <div style={{ color: "#6a6e73", fontStyle: "italic", padding: 16 }}>
+                        <div className="axiom-session-page__auto-approval-empty">
                             No auto-approval rules active.
                         </div>
                     ) : (
@@ -475,7 +439,7 @@ export function AssistantSessionPage() {
                                         <Td><Label isCompact>{rule.toolName}</Label></Td>
                                         <Td>{rule.fieldName || "—"}</Td>
                                         <Td>
-                                            <code style={{ fontSize: "12px" }}>
+                                            <code className="axiom-session-page__auto-approval-code">
                                                 {rule.pattern || "(all)"}
                                             </code>
                                         </Td>

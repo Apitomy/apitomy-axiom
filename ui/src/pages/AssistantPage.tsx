@@ -40,6 +40,7 @@ import {
     type AssistantSessionInfo,
     type SessionTemplate,
 } from "../config/api";
+import "./AssistantPage.css";
 
 const FUN_WORDS = [
     "rocket", "cactus", "penguin", "waffle", "thunder", "mango", "cosmic",
@@ -216,7 +217,7 @@ export function AssistantPage() {
                                     value={filterName}
                                     onChange={(_e, v) => setFilterName(v)}
                                     onClear={() => setFilterName("")}
-                                    style={{ width: 250 }}
+                                    className="axiom-assistant-page__filter-name"
                                 />
                             </ToolbarItem>
                             <ToolbarItem>
@@ -224,7 +225,7 @@ export function AssistantPage() {
                                     value={filterTemplateId}
                                     onChange={(_e, v) => setFilterTemplateId(v)}
                                     aria-label="Filter by template"
-                                    style={{ width: 220 }}
+                                    className="axiom-assistant-page__filter-template"
                                 >
                                     <FormSelectOption value="" label="All templates" />
                                     {uniqueTemplateIds.map((tid) => (
@@ -288,32 +289,16 @@ export function AssistantPage() {
                     </EmptyStateFooter>
                 </EmptyState>
             ) : (
-                <div style={{ marginTop: 16 }}>
+                <div className="axiom-assistant-page__sessions">
                     {filteredSessions.map((s) => (
                         <div
                             key={s.id}
+                            className="axiom-assistant-page__session-card"
                             onClick={() => navigate(`/assistant/${s.id}`)}
-                            style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 12,
-                                padding: "14px 16px",
-                                marginBottom: 8,
-                                borderRadius: 8,
-                                border: "1px solid #d2d2d2",
-                                cursor: "pointer",
-                                backgroundColor: "#fafafa",
-                            }}
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.backgroundColor = "#f0f0f0";
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.backgroundColor = "#fafafa";
-                            }}
                         >
-                            <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: 600, fontSize: "14px" }}>{s.name}</div>
-                                <div style={{ fontSize: "12px", color: "#6a6e73", marginTop: 2 }}>
+                            <div className="axiom-assistant-page__session-card__details">
+                                <div className="axiom-assistant-page__session-card__name">{s.name}</div>
+                                <div className="axiom-assistant-page__session-card__meta">
                                     {templateMap[s.templateId] || s.templateId}
                                     {s.projectName && (
                                         <>
@@ -362,35 +347,25 @@ export function AssistantPage() {
                         value={templateFilter}
                         onChange={(_e, v) => setTemplateFilter(v)}
                         onClear={() => setTemplateFilter("")}
-                        style={{ marginBottom: 12 }}
+                        className="axiom-assistant-page__template-filter"
                     />
-                    <div style={{ maxHeight: 400, overflowY: "auto" }}>
+                    <div className="axiom-assistant-page__template-list">
                         {filteredTemplates.length === 0 ? (
-                            <div style={{ padding: 24, textAlign: "center", color: "#6a6e73" }}>
+                            <div className="axiom-assistant-page__template-list__empty">
                                 No templates match your filter.
                             </div>
                         ) : (
                             filteredTemplates.map((t) => (
                                 <div
                                     key={t.templateId}
+                                    className="axiom-assistant-page__template-item"
                                     onClick={() => handleTemplateSelect(t)}
-                                    style={{
-                                        padding: "12px 16px",
-                                        cursor: "pointer",
-                                        borderBottom: "1px solid #eee",
-                                    }}
-                                    onMouseEnter={(e) =>
-                                        (e.currentTarget.style.backgroundColor = "#f0f0f0")
-                                    }
-                                    onMouseLeave={(e) =>
-                                        (e.currentTarget.style.backgroundColor = "transparent")
-                                    }
                                 >
-                                    <div style={{ fontWeight: 600, fontSize: 14 }}>
+                                    <div className="axiom-assistant-page__template-item__name">
                                         {t.name}
                                     </div>
                                     {t.description && (
-                                        <div style={{ fontSize: 13, color: "#6a6e73", marginTop: 2 }}>
+                                        <div className="axiom-assistant-page__template-item__desc">
                                             {t.description}
                                         </div>
                                     )}
@@ -411,7 +386,7 @@ export function AssistantPage() {
                 <ModalBody>
                     {createError && (
                         <Alert variant="danger" isInline title={createError}
-                            style={{ marginBottom: 12 }} />
+                            className="axiom-assistant-page__create-error" />
                     )}
                     <Form>
                         <FormGroup label="Session Name" fieldId="session-name">

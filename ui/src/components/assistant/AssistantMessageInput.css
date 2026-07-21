@@ -1,0 +1,44 @@
+/* Message input bar */
+.axiom-message-input {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.axiom-message-input__bar {
+    padding: 12px 16px;
+    border-top: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+}
+
+/* Slash command dropdown */
+.axiom-message-input__dropdown {
+    position: absolute;
+    bottom: 100%;
+    left: 16px;
+    right: 16px;
+    max-height: 250px;
+    overflow-y: auto;
+    background-color: var(--pf-t--global--background--color--primary--default, #fff);
+    border: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+    border-radius: 6px;
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+    margin-bottom: 4px;
+}
+
+.axiom-message-input__dropdown-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    background-color: transparent;
+    font-size: 13px;
+    font-family: monospace;
+    border-bottom: 1px solid var(--pf-t--global--border--color--default, #eee);
+}
+
+.axiom-message-input__dropdown-item:last-child {
+    border-bottom: none;
+}
+
+.axiom-message-input__dropdown-item[data-selected="true"],
+.axiom-message-input__dropdown-item:hover {
+    background-color: var(--pf-t--global--background--color--secondary--default, #f0f0f0);
+}
