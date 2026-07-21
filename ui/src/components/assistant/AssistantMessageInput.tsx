@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { TextArea, Button, Flex, FlexItem } from "@patternfly/react-core";
 import PaperPlaneIcon from "@patternfly/react-icons/dist/esm/icons/paper-plane-icon";
+import "./AssistantMessageInput.css";
 
 interface AssistantMessageInputProps {
     onSend: (message: string) => void;
@@ -111,38 +112,15 @@ export function AssistantMessageInput({ onSend, disabled, slashCommands = [] }: 
     };
 
     return (
-        <div style={{ position: "relative", flexShrink: 0 }}>
+        <div className="axiom-message-input">
             {showDropdown && (
-                <div
-                    ref={dropdownRef}
-                    style={{
-                        position: "absolute",
-                        bottom: "100%",
-                        left: 16,
-                        right: 16,
-                        maxHeight: 250,
-                        overflowY: "auto",
-                        backgroundColor: "white",
-                        border: "1px solid #d2d2d2",
-                        borderRadius: "6px",
-                        boxShadow: "0 -4px 12px rgba(0,0,0,0.1)",
-                        zIndex: 100,
-                        marginBottom: 4,
-                    }}
-                >
+                <div ref={dropdownRef} className="axiom-message-input__dropdown">
                     {filteredCommands.map((cmd, i) => (
                         <div
                             key={cmd}
+                            className="axiom-message-input__dropdown-item"
+                            data-selected={i === selectedIndex || undefined}
                             onClick={() => selectCommand(cmd)}
-                            style={{
-                                padding: "8px 12px",
-                                cursor: "pointer",
-                                backgroundColor: i === selectedIndex ? "#f0f0f0" : "transparent",
-                                fontSize: "13px",
-                                fontFamily: "monospace",
-                                borderBottom: i < filteredCommands.length - 1
-                                    ? "1px solid #eee" : "none",
-                            }}
                             onMouseEnter={() => setSelectedIndex(i)}
                         >
                             /{cmd}
@@ -150,7 +128,7 @@ export function AssistantMessageInput({ onSend, disabled, slashCommands = [] }: 
                     ))}
                 </div>
             )}
-            <Flex style={{ padding: "12px 16px", borderTop: "1px solid #d2d2d2" }}>
+            <Flex className="axiom-message-input__bar">
                 <FlexItem grow={{ default: "grow" }}>
                     <TextArea
                         ref={textAreaRef}

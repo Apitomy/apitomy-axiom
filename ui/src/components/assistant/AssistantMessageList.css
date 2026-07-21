@@ -1,3 +1,83 @@
+/* Message list container */
+.axiom-message-list {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px;
+}
+
+/* System and thinking messages */
+.axiom-message-list__system,
+.axiom-message-list__thinking {
+    padding: 8px 12px;
+    margin: 4px 0;
+    font-size: 13px;
+    color: var(--pf-t--global--text--color--subtle, #6a6e73);
+    font-style: italic;
+}
+
+/* Warning messages */
+.axiom-message-list__warning {
+    padding: 8px 12px;
+    margin: 4px 8px;
+    font-size: 13px;
+    color: var(--axiom--color--warning--text, #795600);
+    background-color: var(--axiom--color--warning--bg, #fdf7e7);
+    border: 1px solid var(--axiom--color--warning--border, #f0d67b);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.axiom-message-list__warning-icon {
+    color: var(--axiom--color--warning--text, #795600);
+}
+
+/* User message */
+.axiom-message-list__user-row {
+    display: flex;
+    justify-content: flex-end;
+    margin: 8px 0;
+}
+
+.axiom-message-list__user-bubble {
+    max-width: 80%;
+    padding: 10px 14px;
+    border-radius: 12px 12px 2px 12px;
+    background-color: var(--pf-t--global--color--brand--default, #0066cc);
+    color: var(--pf-t--global--background--color--primary--default, #fff);
+    white-space: pre-wrap;
+    font-size: 14px;
+}
+
+/* Assistant message */
+.axiom-message-list__assistant-row {
+    display: flex;
+    justify-content: flex-start;
+    margin: 8px 0;
+}
+
+.axiom-message-list__assistant-bubble {
+    max-width: 80%;
+    padding: 10px 14px;
+    border-radius: 12px 12px 12px 2px;
+    background-color: var(--pf-t--global--background--color--secondary--default, #f0f0f0);
+    font-size: 14px;
+}
+
+/* Processing spinner */
+.axiom-message-list__processing {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    margin: 8px 0;
+    font-size: 13px;
+    color: var(--pf-t--global--text--color--subtle, #6a6e73);
+}
+
+/* Markdown table styles */
 .assistant-markdown table {
     border-collapse: collapse;
     width: 100%;
@@ -8,20 +88,20 @@
 .assistant-markdown th {
     text-align: left;
     padding: 6px 10px;
-    border-bottom: 2px solid #d2d2d2;
-    background-color: #f0f0f0;
+    border-bottom: 2px solid var(--pf-t--global--border--color--default, #d2d2d2);
+    background-color: var(--pf-t--global--background--color--secondary--default, #f0f0f0);
     font-weight: 600;
 }
 
 .assistant-markdown td {
     padding: 6px 10px;
-    border-bottom: 1px solid #e0e0e0;
+    border-bottom: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
 }
 
 .assistant-markdown tr:nth-child(even) {
-    background-color: #fafafa;
+    background-color: var(--pf-t--global--background--color--secondary--default, #fafafa);
 }
 
 .assistant-markdown tr:hover {
-    background-color: #f0f5fa;
+    background-color: var(--pf-t--global--background--color--secondary--hover, #f0f5fa);
 }

@@ -1,0 +1,86 @@
+/* Session list */
+.axiom-assistant-page__sessions {
+    margin-top: 16px;
+}
+
+.axiom-assistant-page__session-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    border: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+    cursor: pointer;
+    background-color: var(--pf-t--global--background--color--secondary--default, #fafafa);
+}
+
+.axiom-assistant-page__session-card:hover {
+    background-color: var(--pf-t--global--background--color--secondary--hover, #f0f0f0);
+}
+
+.axiom-assistant-page__session-card__details {
+    flex: 1;
+}
+
+.axiom-assistant-page__session-card__name {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.axiom-assistant-page__session-card__meta {
+    font-size: 12px;
+    color: var(--pf-t--global--text--color--subtle, #6a6e73);
+    margin-top: 2px;
+}
+
+/* Filter controls */
+.axiom-assistant-page__filter-name {
+    width: 250px;
+}
+
+.axiom-assistant-page__filter-template {
+    width: 220px;
+}
+
+/* Template picker modal */
+.axiom-assistant-page__template-filter {
+    margin-bottom: 12px;
+}
+
+.axiom-assistant-page__template-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.axiom-assistant-page__template-list__empty {
+    padding: 24px;
+    text-align: center;
+    color: var(--pf-t--global--text--color--subtle, #6a6e73);
+}
+
+.axiom-assistant-page__template-item {
+    padding: 12px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+}
+
+.axiom-assistant-page__template-item:hover {
+    background-color: var(--pf-t--global--background--color--secondary--hover, #f0f0f0);
+}
+
+.axiom-assistant-page__template-item__name {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.axiom-assistant-page__template-item__desc {
+    font-size: 13px;
+    color: var(--pf-t--global--text--color--subtle, #6a6e73);
+    margin-top: 2px;
+}
+
+/* Create error alert */
+.axiom-assistant-page__create-error {
+    margin-bottom: 12px;
+}

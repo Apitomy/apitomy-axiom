@@ -19,6 +19,7 @@ import json from "react-syntax-highlighter/dist/esm/languages/hljs/json";
 import bash from "react-syntax-highlighter/dist/esm/languages/hljs/bash";
 import { stackoverflowLight } from "react-syntax-highlighter/dist/esm/styles/hljs";
 import { AssistantAskUserQuestion } from "./AssistantAskUserQuestion";
+import "./AssistantToolUseBlock.css";
 
 SyntaxHighlighter.registerLanguage("json", json);
 SyntaxHighlighter.registerLanguage("bash", bash);
@@ -60,8 +61,8 @@ export function AssistantToolUseBlock({
     const needsPermission = permissionId && !permissionResolved;
     const isAskUser = toolName === "AskUserQuestion";
     const isPlanApproval = toolName === "ExitPlanMode";
-    const borderColor = needsPermission
-        ? (isPlanApproval ? "#3e8635" : isAskUser ? "#2b9af3" : "#f0ab00")
+    const borderVariant = needsPermission
+        ? (isPlanApproval ? "plan" : isAskUser ? "ask" : "permission")
         : undefined;
 
     const inputPreview = input
@@ -70,35 +71,9 @@ export function AssistantToolUseBlock({
 
     const contextSummary = getContextSummary(toolName, input);
 
-    const codeStyle = {
-        margin: 0,
-        borderRadius: "4px",
-        fontSize: "12px",
-        maxHeight: "250px",
-        overflow: "auto",
-    };
-
-    const sectionLabelStyle: React.CSSProperties = {
-        fontSize: "11px",
-        color: "#6a6e73",
-        fontWeight: 600,
-        marginBottom: 4,
-        textTransform: "uppercase",
-        letterSpacing: "0.5px",
-    };
-
     return (
-        <div style={{
-            margin: "4px 0",
-            borderRadius: "6px",
-            overflow: "hidden",
-            border: borderColor ? `2px solid ${borderColor}` : undefined,
-        }}>
-            <div style={{
-                padding: "8px 12px",
-                backgroundColor: "#f0f0f0",
-                fontSize: "13px",
-            }}>
+        <div className="axiom-tool-use" data-border={borderVariant || undefined}>
+            <div className="axiom-tool-use__header">
                 <ExpandableSection
                     toggleContent={
                         <span>
@@ -106,7 +81,7 @@ export function AssistantToolUseBlock({
                                 {toolName}
                             </Label>
                             {inputPreview && (
-                                <span style={{ marginLeft: 8, color: "#6a6e73", fontSize: "12px" }}>
+                                <span className="axiom-tool-use__input-preview">
                                     {inputPreview}{input && JSON.stringify(input).length > 100 ? "..." : ""}
                                 </span>
                             )}
@@ -118,49 +93,39 @@ export function AssistantToolUseBlock({
                 >
                     {input && (
                         <div>
-                            <div style={sectionLabelStyle}>Input</div>
-                            <SyntaxHighlighter
-                                language="json"
-                                style={stackoverflowLight}
-                                customStyle={codeStyle}
-                                wrapLongLines
-                            >
-                                {JSON.stringify(input, null, 2)}
-                            </SyntaxHighlighter>
+                            <div className="axiom-tool-use__section-label">Input</div>
+                            <div className="axiom-tool-use__code">
+                                <SyntaxHighlighter
+                                    language="json"
+                                    style={stackoverflowLight}
+                                    wrapLongLines
+                                >
+                                    {JSON.stringify(input, null, 2)}
+                                </SyntaxHighlighter>
+                            </div>
                         </div>
                     )}
                     {result && (
-                        <div style={{
-                            ...(input ? {
-                                borderTop: "1px solid #d2d2d2",
-                                marginTop: 8,
-                                paddingTop: 8,
-                            } : {}),
-                        }}>
-                            <div style={{
-                                ...sectionLabelStyle,
-                                ...(isError ? { color: "#c9190b" } : {}),
-                            }}>
+                        <div className={input ? "axiom-tool-use__result-divider" : undefined}>
+                            <div className={`axiom-tool-use__section-label${isError ? " axiom-tool-use__section-label--error" : ""}`}>
                                 {isError ? "Error" : "Result"}
                             </div>
-                            <SyntaxHighlighter
-                                language={isJson(result) ? "json" : "bash"}
-                                style={stackoverflowLight}
-                                customStyle={{
-                                    ...codeStyle,
-                                    ...(isError ? { backgroundColor: "#fef3f2" } : {}),
-                                }}
-                                wrapLongLines
-                            >
-                                {isJson(result) ? formatJson(result) : result}
-                            </SyntaxHighlighter>
+                            <div className={`axiom-tool-use__code${isError ? " axiom-tool-use__code--error" : ""}`}>
+                                <SyntaxHighlighter
+                                    language={isJson(result) ? "json" : "bash"}
+                                    style={stackoverflowLight}
+                                    wrapLongLines
+                                >
+                                    {isJson(result) ? formatJson(result) : result}
+                                </SyntaxHighlighter>
+                            </div>
                         </div>
                     )}
                 </ExpandableSection>
             </div>
 
             {permissionId && isAskUser && Array.isArray(input?.questions) && (
-                <div style={{ borderTop: "1px solid #d2d2d2" }}>
+                <div className="axiom-tool-use__ask-section">
                     <AssistantAskUserQuestion
                         permissionId={permissionId}
                         questions={input.questions as {
@@ -176,18 +141,14 @@ export function AssistantToolUseBlock({
             )}
 
             {permissionId && isPlanApproval && (
-                <div style={{
-                    padding: "10px 12px",
-                    backgroundColor: needsPermission ? "#f3faf3" : "#f0f0f0",
-                    borderTop: "1px solid #d2d2d2",
-                    fontSize: "13px",
-                }}>
+                <div className="axiom-tool-use__plan-section"
+                    data-resolved={!needsPermission ? "true" : undefined}>
                     {needsPermission ? (
                         <>
                             <Flex alignItems={{ default: "alignItemsCenter" }}
-                                style={{ marginBottom: 8 }}>
+                                className="axiom-tool-use__plan-review-header">
                                 <FlexItem>
-                                    <span style={{ fontWeight: 600 }}>
+                                    <span className="axiom-tool-use__plan-review-title">
                                         Plan ready for review
                                     </span>
                                 </FlexItem>
@@ -196,23 +157,14 @@ export function AssistantToolUseBlock({
                                         <Button variant="plain" size="sm"
                                             aria-label="View plan in full screen"
                                             onClick={() => setIsPlanModalOpen(true)}
-                                            style={{ padding: "2px 6px" }}>
+                                            className="axiom-tool-use__view-plan-btn">
                                             <SearchPlusIcon />
                                         </Button>
                                     </FlexItem>
                                 )}
                             </Flex>
                             {!!input?.plan && (
-                                <div className="assistant-markdown" style={{
-                                    marginBottom: 10,
-                                    padding: "12px 16px",
-                                    backgroundColor: "white",
-                                    borderRadius: "4px",
-                                    border: "1px solid #c6e3c6",
-                                    maxHeight: "300px",
-                                    overflow: "auto",
-                                    fontSize: "13px",
-                                }}>
+                                <div className="assistant-markdown axiom-tool-use__plan-content">
                                     <Content>
                                         <Markdown remarkPlugins={[remarkGfm]}>
                                             {input.plan as string}
@@ -223,7 +175,7 @@ export function AssistantToolUseBlock({
                             <Flex>
                                 <FlexItem>
                                     <Button variant="primary" size="sm"
-                                        style={{ backgroundColor: "#3e8635", borderColor: "#3e8635" }}
+                                        className="axiom-tool-use__plan-approve-btn"
                                         onClick={() => onPermissionRespond?.(permissionId, true, input)}>
                                         Approve Plan
                                     </Button>
@@ -239,8 +191,9 @@ export function AssistantToolUseBlock({
                     ) : (
                         <Flex alignItems={{ default: "alignItemsCenter" }}>
                             <FlexItem>
-                                <span style={{ color: permissionAllowed ? "#3e8635" : "#c9190b",
-                                    fontStyle: "italic" }}>
+                                <span className={permissionAllowed
+                                    ? "axiom-tool-use__plan-status--approved"
+                                    : "axiom-tool-use__plan-status--rejected"}>
                                     {permissionAllowed ? "Plan approved" : "Plan rejected"}
                                 </span>
                             </FlexItem>
@@ -249,7 +202,7 @@ export function AssistantToolUseBlock({
                                     <Button variant="plain" size="sm"
                                         aria-label="View plan"
                                         onClick={() => setIsPlanModalOpen(true)}
-                                        style={{ padding: "2px 6px" }}>
+                                        className="axiom-tool-use__view-plan-btn">
                                         <SearchPlusIcon />
                                     </Button>
                                 </FlexItem>
@@ -279,31 +232,15 @@ export function AssistantToolUseBlock({
             )}
 
             {permissionId && !isAskUser && !isPlanApproval && (
-                <div style={{
-                    padding: "10px 12px",
-                    backgroundColor: needsPermission ? "#fdf7e7" : "#f0f0f0",
-                    borderTop: "1px solid #d2d2d2",
-                    fontSize: "13px",
-                }}>
+                <div className="axiom-tool-use__permission-section"
+                    data-resolved={!needsPermission ? "true" : undefined}>
                     {needsPermission ? (
                         <>
-                            <div style={{ fontWeight: 600, marginBottom: 6 }}>
+                            <div className="axiom-tool-use__permission-title">
                                 Permission required
                             </div>
                             {contextSummary && (
-                                <div style={{
-                                    marginBottom: 8,
-                                    padding: "6px 10px",
-                                    backgroundColor: "white",
-                                    borderRadius: "4px",
-                                    border: "1px solid #d2d2d2",
-                                    fontFamily: "monospace",
-                                    fontSize: "12px",
-                                    whiteSpace: "pre-wrap",
-                                    wordBreak: "break-all",
-                                    maxHeight: "120px",
-                                    overflow: "auto",
-                                }}>
+                                <div className="axiom-tool-use__context-summary">
                                     {contextSummary}
                                 </div>
                             )}
@@ -330,18 +267,13 @@ export function AssistantToolUseBlock({
                                 )}
                             </Flex>
                             {showPatternUI && onCreateAutoApproval && (
-                                <div style={{
-                                    padding: "8px 10px",
-                                    backgroundColor: "white",
-                                    borderRadius: "4px",
-                                    border: "1px solid #d2d2d2",
-                                }}>
-                                    <div style={{ fontSize: "12px", color: "#6a6e73", marginBottom: 6 }}>
+                                <div className="axiom-tool-use__pattern-ui">
+                                    <div className="axiom-tool-use__pattern-hint">
                                         Auto-approve future {toolName} calls matching a pattern:
                                     </div>
                                     {getSuggestedPatterns(toolName, input).map((suggestion) => (
                                         <Button key={suggestion.label} variant="tertiary" size="sm"
-                                            style={{ marginRight: 6, marginBottom: 4 }}
+                                            className="axiom-tool-use__pattern-suggestion"
                                             onClick={() => {
                                                 onCreateAutoApproval(
                                                     toolName, suggestion.fieldName,
@@ -351,7 +283,7 @@ export function AssistantToolUseBlock({
                                             {suggestion.label}
                                         </Button>
                                     ))}
-                                    <Flex style={{ marginTop: 6, alignItems: "center", gap: 6 }}>
+                                    <Flex className="axiom-tool-use__pattern-custom-row">
                                         <FlexItem grow={{ default: "grow" }}>
                                             <TextInput
                                                 value={customPattern}
@@ -380,7 +312,9 @@ export function AssistantToolUseBlock({
                             )}
                         </>
                     ) : (
-                        <span style={{ color: permissionAllowed ? "#6a6e73" : "#c9190b", fontStyle: "italic" }}>
+                        <span className={permissionAllowed
+                            ? "axiom-tool-use__permission-status--granted"
+                            : "axiom-tool-use__permission-status--denied"}>
                             {permissionAllowed ? "Permission granted" : "Permission denied"}
                         </span>
                     )}

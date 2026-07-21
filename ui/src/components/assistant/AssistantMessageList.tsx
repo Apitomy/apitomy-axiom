@@ -38,62 +38,28 @@ export function AssistantMessageList({ messages, onPermissionRespond, onCreateAu
     }, [messages.length]);
 
     return (
-        <div style={{
-            flex: "1 1 0",
-            minHeight: 0,
-            overflowY: "auto",
-            padding: "16px",
-        }}>
+        <div className="axiom-message-list">
             {messages.map((msg) => {
                 switch (msg.type) {
                     case "system":
                         return (
-                            <div key={msg.id} style={{
-                                padding: "8px 12px",
-                                margin: "4px 0",
-                                fontSize: "13px",
-                                color: "#6a6e73",
-                                fontStyle: "italic",
-                            }}>
+                            <div key={msg.id} className="axiom-message-list__system">
                                 {msg.content}
                             </div>
                         );
 
                     case "warning":
                         return (
-                            <div key={msg.id} style={{
-                                padding: "8px 12px",
-                                margin: "4px 8px",
-                                fontSize: "13px",
-                                color: "#795600",
-                                backgroundColor: "#fdf7e7",
-                                border: "1px solid #f0d67b",
-                                borderRadius: "4px",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "8px",
-                            }}>
-                                <ExclamationTriangleIcon color="#795600" />
+                            <div key={msg.id} className="axiom-message-list__warning">
+                                <ExclamationTriangleIcon className="axiom-message-list__warning-icon" />
                                 {msg.content}
                             </div>
                         );
 
                     case "user":
                         return (
-                            <div key={msg.id} style={{
-                                display: "flex",
-                                justifyContent: "flex-end",
-                                margin: "8px 0",
-                            }}>
-                                <div style={{
-                                    maxWidth: "80%",
-                                    padding: "10px 14px",
-                                    borderRadius: "12px 12px 2px 12px",
-                                    backgroundColor: "#0066cc",
-                                    color: "white",
-                                    whiteSpace: "pre-wrap",
-                                    fontSize: "14px",
-                                }}>
+                            <div key={msg.id} className="axiom-message-list__user-row">
+                                <div className="axiom-message-list__user-bubble">
                                     {msg.content}
                                 </div>
                             </div>
@@ -101,18 +67,8 @@ export function AssistantMessageList({ messages, onPermissionRespond, onCreateAu
 
                     case "assistant":
                         return (
-                            <div key={msg.id} style={{
-                                display: "flex",
-                                justifyContent: "flex-start",
-                                margin: "8px 0",
-                            }}>
-                                <div className="assistant-markdown" style={{
-                                    maxWidth: "80%",
-                                    padding: "10px 14px",
-                                    borderRadius: "12px 12px 12px 2px",
-                                    backgroundColor: "#f0f0f0",
-                                    fontSize: "14px",
-                                }}>
+                            <div key={msg.id} className="axiom-message-list__assistant-row">
+                                <div className="assistant-markdown axiom-message-list__assistant-bubble">
                                     <Content>
                                         <Markdown remarkPlugins={[remarkGfm]}>
                                             {msg.content?.trim() || ""}
@@ -140,13 +96,7 @@ export function AssistantMessageList({ messages, onPermissionRespond, onCreateAu
 
                     case "thinking":
                         return (
-                            <div key={msg.id} style={{
-                                padding: "8px 12px",
-                                margin: "4px 0",
-                                fontSize: "13px",
-                                color: "#6a6e73",
-                                fontStyle: "italic",
-                            }}>
+                            <div key={msg.id} className="axiom-message-list__thinking">
                                 Thinking...
                             </div>
                         );
@@ -168,15 +118,7 @@ export function AssistantMessageList({ messages, onPermissionRespond, onCreateAu
                 }
             })}
             {isProcessing && (
-                <div style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "12px",
-                    margin: "8px 0",
-                    fontSize: "13px",
-                    color: "#6a6e73",
-                }}>
+                <div className="axiom-message-list__processing">
                     <Spinner size="md" />
                     <span>{processingText || "Claude is working..."}</span>
                 </div>
