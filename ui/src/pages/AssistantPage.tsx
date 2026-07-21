@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     PageSection,
@@ -23,7 +23,6 @@ import {
     FormGroup,
     FormSelect,
     FormSelectOption,
-    Alert,
     SearchInput,
 } from "@patternfly/react-core";
 import PencilAltIcon from "@patternfly/react-icons/dist/esm/icons/pencil-alt-icon";
@@ -33,32 +32,13 @@ import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import {
     fetchAssistantSessions,
-    createAssistantSession,
     deleteAssistantSession,
     renameAssistantSession,
     fetchAssistantTemplates,
     type AssistantSessionInfo,
-    type SessionTemplate,
 } from "../config/api";
+import { CreateSessionModal } from "../components/assistant/CreateSessionModal";
 import "./AssistantPage.css";
-
-const FUN_WORDS = [
-    "rocket", "cactus", "penguin", "waffle", "thunder", "mango", "cosmic",
-    "pickle", "turbo", "noodle", "galaxy", "biscuit", "phantom", "pretzel",
-    "velvet", "zigzag", "bamboo", "coral", "doodle", "falcon", "gopher",
-    "cobalt", "marble", "nimbus", "orchid", "quartz", "walrus", "tundra",
-    "nebula", "pebble", "saffron", "breeze", "mosaic", "lantern", "crimson",
-    "meadow", "jasper", "harbor", "ember", "frost", "summit", "canyon",
-    "copper", "willow", "sparrow", "clover", "rapids", "flint", "comet",
-    "puzzle", "sphinx", "goblin", "dragon", "wizard", "pirate", "ninja",
-    "viking", "yeti", "kraken", "phoenix", "griffin", "titan", "tempest",
-    "aurora", "blizzard", "cascade", "dynamo", "eclipse", "forge", "horizon",
-];
-
-function generateSessionName(): string {
-    const pick = () => FUN_WORDS[Math.floor(Math.random() * FUN_WORDS.length)];
-    return `${pick()}-${pick()}-${pick()}`;
-}
 
 const STATUS_COLORS: Record<string, "blue" | "green" | "red" | "grey"> = {
     starting: "blue",
@@ -71,21 +51,7 @@ export function AssistantPage() {
     const navigate = useNavigate();
     const [sessions, setSessions] = useState<AssistantSessionInfo[]>([]);
     const [loading, setLoading] = useState(true);
-    const [templates, setTemplates] = useState<SessionTemplate[]>([]);
     const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false);
-    const [templateFilter, setTemplateFilter] = useState("");
-    const [selectedTemplate, setSelectedTemplate] = useState<SessionTemplate | null>(null);
-    const [isNameModalOpen, setIsNameModalOpen] = useState(false);
-    const [newName, setNewName] = useState("");
-    const createButtonRef = useRef<HTMLButtonElement>(null);
-
-    useEffect(() => {
-        if (isNameModalOpen) {
-            setTimeout(() => createButtonRef.current?.focus(), 100);
-        }
-    }, [isNameModalOpen]);
-    const [creating, setCreating] = useState(false);
-    const [createError, setCreateError] = useState("");
 
     const [filterName, setFilterName] = useState("");
     const [filterTemplateId, setFilterTemplateId] = useState("");
@@ -107,46 +73,6 @@ export function AssistantPage() {
     useEffect(() => {
         load();
     }, [load]);
-
-    const openTemplatePicker = () => {
-        fetchAssistantTemplates()
-            .then(setTemplates)
-            .catch(console.error);
-        setTemplateFilter("");
-        setIsTemplatePickerOpen(true);
-    };
-
-    const filteredTemplates = templates.filter((t) => {
-        if (!templateFilter) return true;
-        const lower = templateFilter.toLowerCase();
-        return t.name.toLowerCase().includes(lower)
-            || t.description.toLowerCase().includes(lower);
-    });
-
-    const handleTemplateSelect = (template: SessionTemplate) => {
-        setSelectedTemplate(template);
-        setIsTemplatePickerOpen(false);
-        setNewName(generateSessionName());
-        setIsNameModalOpen(true);
-    };
-
-    const handleCreate = async () => {
-        if (!selectedTemplate) return;
-        setCreating(true);
-        setCreateError("");
-        try {
-            const session = await createAssistantSession(selectedTemplate.templateId, newName || undefined);
-            setIsNameModalOpen(false);
-            setNewName("");
-            setSelectedTemplate(null);
-            navigate(`/assistant/${session.id}`);
-        } catch (err: unknown) {
-            const e = err as { message?: string };
-            setCreateError(e.message || "Failed to create session");
-        } finally {
-            setCreating(false);
-        }
-    };
 
     const filteredSessions = sessions.filter((s) => {
         if (filterName && !s.name.toLowerCase().includes(filterName.toLowerCase())) {
@@ -251,7 +177,7 @@ export function AssistantPage() {
                             <Button
                                 variant="primary"
                                 icon={<PlusCircleIcon />}
-                                onClick={openTemplatePicker}
+                                onClick={() => setIsTemplatePickerOpen(true)}
                             >
                                 New Session
                             </Button>
@@ -281,7 +207,7 @@ export function AssistantPage() {
                             <Button
                                 variant="primary"
                                 icon={<PlusCircleIcon />}
-                                onClick={openTemplatePicker}
+                                onClick={() => setIsTemplatePickerOpen(true)}
                             >
                                 New Session
                             </Button>
@@ -334,89 +260,14 @@ export function AssistantPage() {
                 </div>
             )}
 
-            <Modal
+            <CreateSessionModal
                 isOpen={isTemplatePickerOpen}
                 onClose={() => setIsTemplatePickerOpen(false)}
-                variant="medium"
-                aria-label="Choose template"
-            >
-                <ModalHeader title="Choose a Template" />
-                <ModalBody>
-                    <SearchInput
-                        placeholder="Filter templates..."
-                        value={templateFilter}
-                        onChange={(_e, v) => setTemplateFilter(v)}
-                        onClear={() => setTemplateFilter("")}
-                        className="axiom-assistant-page__template-filter"
-                    />
-                    <div className="axiom-assistant-page__template-list">
-                        {filteredTemplates.length === 0 ? (
-                            <div className="axiom-assistant-page__template-list__empty">
-                                No templates match your filter.
-                            </div>
-                        ) : (
-                            filteredTemplates.map((t) => (
-                                <div
-                                    key={t.templateId}
-                                    className="axiom-assistant-page__template-item"
-                                    onClick={() => handleTemplateSelect(t)}
-                                >
-                                    <div className="axiom-assistant-page__template-item__name">
-                                        {t.name}
-                                    </div>
-                                    {t.description && (
-                                        <div className="axiom-assistant-page__template-item__desc">
-                                            {t.description}
-                                        </div>
-                                    )}
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </ModalBody>
-            </Modal>
-
-            <Modal
-                isOpen={isNameModalOpen}
-                onClose={() => setIsNameModalOpen(false)}
-                variant="small"
-                aria-label="Name session"
-            >
-                <ModalHeader title="Name Your Session" />
-                <ModalBody>
-                    {createError && (
-                        <Alert variant="danger" isInline title={createError}
-                            className="axiom-assistant-page__create-error" />
-                    )}
-                    <Form>
-                        <FormGroup label="Session Name" fieldId="session-name">
-                            <TextInput
-                                id="session-name"
-                                value={newName}
-                                onChange={(_e, v) => setNewName(v)}
-                                onKeyDown={(e) => {
-                                    if (e.key === "Enter") handleCreate();
-                                }}
-                            />
-                        </FormGroup>
-                    </Form>
-                </ModalBody>
-                <ModalFooter>
-                    <Button
-                        ref={createButtonRef}
-                        variant="primary"
-                        onClick={handleCreate}
-                        isLoading={creating}
-                        isDisabled={creating}
-                        autoFocus
-                    >
-                        Create Session
-                    </Button>
-                    <Button variant="link" onClick={() => setIsNameModalOpen(false)}>
-                        Cancel
-                    </Button>
-                </ModalFooter>
-            </Modal>
+                onSessionCreated={(session) => {
+                    setIsTemplatePickerOpen(false);
+                    navigate(`/assistant/${session.id}`);
+                }}
+            />
 
             <Modal
                 isOpen={deleteTarget !== null}
