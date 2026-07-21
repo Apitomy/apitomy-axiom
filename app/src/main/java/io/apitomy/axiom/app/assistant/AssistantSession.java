@@ -17,7 +17,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.DoubleAdder;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -57,11 +60,11 @@ public class AssistantSession {
     private final Instant createdAt;
     private final AtomicReference<String> errorMessage = new AtomicReference<>();
 
-    private volatile double totalCostUsd;
-    private volatile long totalInputTokens;
-    private volatile long totalOutputTokens;
-    private volatile long totalDurationMs;
-    private volatile int turnCount;
+    private final DoubleAdder totalCostUsd = new DoubleAdder();
+    private final AtomicLong totalInputTokens = new AtomicLong();
+    private final AtomicLong totalOutputTokens = new AtomicLong();
+    private final AtomicLong totalDurationMs = new AtomicLong();
+    private final AtomicInteger turnCount = new AtomicInteger();
 
     private final CopyOnWriteArrayList<SseEvent> eventHistory = new CopyOnWriteArrayList<>();
     private final CopyOnWriteArrayList<Consumer<SseEvent>> listeners = new CopyOnWriteArrayList<>();
@@ -385,27 +388,27 @@ public class AssistantSession {
 
     /** Returns the accumulated cost in USD across all turns. */
     public double getTotalCostUsd() {
-        return totalCostUsd;
+        return totalCostUsd.sum();
     }
 
     /** Returns the accumulated input token count across all turns. */
     public long getTotalInputTokens() {
-        return totalInputTokens;
+        return totalInputTokens.get();
     }
 
     /** Returns the accumulated output token count across all turns. */
     public long getTotalOutputTokens() {
-        return totalOutputTokens;
+        return totalOutputTokens.get();
     }
 
     /** Returns the accumulated duration in milliseconds across all turns. */
     public long getTotalDurationMs() {
-        return totalDurationMs;
+        return totalDurationMs.get();
     }
 
     /** Returns the number of completed turns. */
     public int getTurnCount() {
-        return turnCount;
+        return turnCount.get();
     }
 
     /**
@@ -558,11 +561,11 @@ public class AssistantSession {
     }
 
     private void accumulateCost(SseEvent event) {
-        totalCostUsd += event.data().path("costUsd").asDouble(0);
-        totalInputTokens += event.data().path("inputTokens").asLong(0);
-        totalOutputTokens += event.data().path("outputTokens").asLong(0);
-        totalDurationMs += event.data().path("durationMs").asLong(0);
-        turnCount++;
+        totalCostUsd.add(event.data().path("costUsd").asDouble(0));
+        totalInputTokens.addAndGet(event.data().path("inputTokens").asLong(0));
+        totalOutputTokens.addAndGet(event.data().path("outputTokens").asLong(0));
+        totalDurationMs.addAndGet(event.data().path("durationMs").asLong(0));
+        turnCount.incrementAndGet();
     }
 
     private void readStderr() {
