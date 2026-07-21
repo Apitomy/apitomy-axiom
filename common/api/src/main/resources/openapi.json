@@ -3017,7 +3017,15 @@
           "Assistant"
         ],
         "summary": "SSE event stream for an assistant session",
-        "operationId": "streamAssistantEvents"
+        "operationId": "streamAssistantEvents",
+        "responses": {
+          "200": {
+            "description": "SSE event stream for the assistant session",
+            "content": {
+              "text/event-stream": {}
+            }
+          }
+        }
       },
       "parameters": [
         {
