@@ -63,11 +63,11 @@ export function AssistantChatPanel({ sessionId, onItemsChanged }: AssistantChatP
              */
             function withSkipGuard(handler: (e: MessageEvent) => void): (e: MessageEvent) => void {
                 return (e: MessageEvent) => {
-                    eventsReceivedRef.current++;
                     if (eventsToSkipRef.current > 0) {
                         eventsToSkipRef.current--;
                         return;
                     }
+                    eventsReceivedRef.current++;
                     handler(e);
                 };
             }
@@ -254,7 +254,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged }: AssistantChatP
             {isReconnecting && (
                 <Alert variant="warning" isInline isPlain title="Connection lost. Reconnecting..." />
             )}
-            <AssistantMessageInput onSend={handleSend} disabled={isProcessing} />
+            <AssistantMessageInput onSend={handleSend} disabled={isProcessing || isReconnecting} />
         </div>
     );
 }
