@@ -155,7 +155,7 @@ export function AssistantMessageInput({ onSend, disabled, slashCommands = [] }: 
                     <TextArea
                         ref={textAreaRef}
                         value={value}
-                        onChange={(_e, val) => setValue(val)}
+                        onChange={(_e, val) => { if (val !== value) setValue(val); }}
                         onKeyDown={handleKeyDown}
                         placeholder="Type a message... (/ for commands)"
                         aria-label="Message input"
