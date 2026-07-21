@@ -1,7 +1,3 @@
-:root {
-    --axiom--color--orange--bg: #fffaf0;
-}
-
 /* Page layout */
 .axiom-session-page {
     display: flex;

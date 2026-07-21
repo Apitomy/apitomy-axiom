@@ -31,7 +31,7 @@
     background-color: transparent;
     font-size: 13px;
     font-family: monospace;
-    border-bottom: 1px solid var(--pf-t--global--border--color--default, #eee);
+    border-bottom: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
 }
 
 .axiom-message-input__dropdown-item:last-child {
