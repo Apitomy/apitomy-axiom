@@ -226,7 +226,9 @@ export function ProjectDetailPage() {
                         icon={<ChatIcon />}
                         onClick={() => {
                             createAssistantSession("project-assistant", project.name, project.id)
-                                .then(session => navigate(`/assistant/${session.id}`))
+                                .then(session => {
+                                    window.open(`/assistant/${session.id}?breakout=true`, "_blank");
+                                })
                                 .catch(err => console.error("Failed to create project assistant session", err));
                         }}
                         style={{ marginRight: "8px" }}

@@ -1194,6 +1194,7 @@ export interface SessionTemplate {
     builtIn: boolean;
     systemPrompt: string;
     welcomeMessage?: string;
+    initialMessage?: string;
     workingDirectory?: string;
     model?: string;
     initScript?: string;
@@ -1209,6 +1210,7 @@ export interface NewSessionTemplate {
     description: string;
     systemPrompt: string;
     welcomeMessage?: string;
+    initialMessage?: string;
     workingDirectory?: string;
     model?: string;
     initScript?: string;

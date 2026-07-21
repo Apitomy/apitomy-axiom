@@ -6866,6 +6866,10 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "initialMessage": {
+            "description": "Message automatically sent to the AI when a session starts",
+            "type": "string"
           }
         }
       },
@@ -6933,6 +6937,10 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "initialMessage": {
+            "description": "Message automatically sent to the AI when a session starts",
+            "type": "string"
           }
         }
       },

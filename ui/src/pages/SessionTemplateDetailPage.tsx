@@ -66,6 +66,7 @@ export function SessionTemplateDetailPage() {
                     description: t.description,
                     systemPrompt: t.systemPrompt,
                     welcomeMessage: t.welcomeMessage,
+                    initialMessage: t.initialMessage,
                     workingDirectory: t.workingDirectory,
                     model: t.model,
                     initScript: t.initScript,
@@ -185,6 +186,24 @@ export function SessionTemplateDetailPage() {
                                 value={form.welcomeMessage || ""}
                                 onChange={(_e, v) =>
                                     updateForm({ welcomeMessage: v || undefined })
+                                }
+                                readOnlyVariant={isReadOnly ? "default" : undefined} rows={4} />
+                        </FormGroup>
+
+                        <FormGroup label="Initial Message" fieldId="initialMessage">
+                            <FormHelperText>
+                                <HelperText>
+                                    <HelperTextItem>
+                                        Message automatically sent to the AI when a session
+                                        starts. Supports {"{{projectName}}"} placeholder.
+                                        Leave empty for none.
+                                    </HelperTextItem>
+                                </HelperText>
+                            </FormHelperText>
+                            <TextArea id="initialMessage"
+                                value={form.initialMessage || ""}
+                                onChange={(_e, v) =>
+                                    updateForm({ initialMessage: v || undefined })
                                 }
                                 readOnlyVariant={isReadOnly ? "default" : undefined} rows={4} />
                         </FormGroup>

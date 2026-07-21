@@ -38,9 +38,11 @@ export class SseClient {
     private eventSource: EventSource | null = null;
     private listeners: SseListener[] = [];
     private sessionListeners: Map<string, SessionEventListener[]> = new Map();
+    private reconnectListeners: (() => void)[] = [];
     private reconnectDelay = 1000;
     private closed = false;
     private connected = false;
+    private hasConnectedOnce = false;
 
     private get useSharedWorker(): boolean {
         return typeof SharedWorker !== "undefined";
@@ -74,12 +76,27 @@ export class SseClient {
             const msg = e.data;
             switch (msg.type) {
                 case "event":
+                    console.log("[SseClient] Received event from worker:",
+                        msg.event?.type,
+                        msg.event?.type === "assistant-session-event"
+                            ? `session=${msg.event.data?.sessionId} type=${msg.event.data?.eventType} idx=${msg.event.data?.eventIndex}`
+                            : "");
                     this.dispatchEvent(msg.event);
                     break;
                 case "connected":
+                    console.log("[SseClient] Worker reported SSE connected",
+                        this.hasConnectedOnce ? "(reconnect)" : "(initial)");
                     this.reconnectDelay = 1000;
+                    if (this.hasConnectedOnce) {
+                        this.reconnectListeners.forEach((cb) => cb());
+                    }
+                    this.hasConnectedOnce = true;
                     break;
                 case "disconnected":
+                    console.warn("[SseClient] Worker reported SSE disconnected");
+                    break;
+                case "ping":
+                    this.worker?.port.postMessage({ type: "pong" });
                     break;
             }
         };
@@ -97,6 +114,10 @@ export class SseClient {
 
         this.eventSource.onopen = () => {
             this.reconnectDelay = 1000;
+            if (this.hasConnectedOnce) {
+                this.reconnectListeners.forEach((cb) => cb());
+            }
+            this.hasConnectedOnce = true;
         };
 
         this.eventSource.onmessage = (event) => {
@@ -132,8 +153,11 @@ export class SseClient {
             const eventData = event.data.eventData as Record<string, unknown>;
             const eventIndex = event.data.eventIndex as number;
             const sessionCbs = this.sessionListeners.get(sessionId);
-            if (sessionCbs) {
+            if (sessionCbs && sessionCbs.length > 0) {
+                console.log(`[SseClient] Dispatching ${eventType} idx=${eventIndex} to ${sessionCbs.length} listener(s) for session ${sessionId.substring(0, 8)}`);
                 sessionCbs.forEach((cb) => cb(eventType, eventData, eventIndex));
+            } else {
+                console.log(`[SseClient] No listeners for session ${sessionId.substring(0, 8)}, dropping ${eventType} idx=${eventIndex}`);
             }
         } else {
             this.listeners.forEach((listener) => listener(event));
@@ -150,6 +174,21 @@ export class SseClient {
         this.listeners.push(listener);
         return () => {
             this.listeners = this.listeners.filter((l) => l !== listener);
+        };
+    }
+
+    /**
+     * Registers a callback that fires when the SSE connection is re-established
+     * after a disconnect. Tabs should use this to re-fetch history and catch up
+     * on any events missed during the gap.
+     *
+     * @param callback the reconnect handler
+     * @returns an unsubscribe function
+     */
+    onReconnect(callback: () => void): () => void {
+        this.reconnectListeners.push(callback);
+        return () => {
+            this.reconnectListeners = this.reconnectListeners.filter((cb) => cb !== callback);
         };
     }
 
