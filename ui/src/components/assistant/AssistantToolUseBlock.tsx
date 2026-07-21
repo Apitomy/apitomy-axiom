@@ -1,16 +1,25 @@
 import { useState } from "react";
 import {
     Button,
+    Content,
     ExpandableSection,
     Flex,
     FlexItem,
     Label,
+    Modal,
+    ModalBody,
+    ModalHeader,
+    TextInput,
 } from "@patternfly/react-core";
+import SearchPlusIcon from "@patternfly/react-icons/dist/esm/icons/search-plus-icon";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Light as SyntaxHighlighter } from "react-syntax-highlighter";
 import json from "react-syntax-highlighter/dist/esm/languages/hljs/json";
 import bash from "react-syntax-highlighter/dist/esm/languages/hljs/bash";
 import { stackoverflowLight } from "react-syntax-highlighter/dist/esm/styles/hljs";
 import { AssistantAskUserQuestion } from "./AssistantAskUserQuestion";
+import "./AssistantToolUseBlock.css";
 
 SyntaxHighlighter.registerLanguage("json", json);
 SyntaxHighlighter.registerLanguage("bash", bash);
@@ -33,19 +42,27 @@ interface AssistantToolUseBlockProps {
     isError?: boolean;
     permissionId?: string;
     permissionResolved?: boolean;
+    permissionAllowed?: boolean;
     onPermissionRespond?: (permissionId: string, allow: boolean, toolInput?: Record<string, unknown>) => void;
+    onCreateAutoApproval?: (toolName: string, fieldName: string | undefined,
+        pattern: string | undefined, permissionId: string) => void;
 }
 
 export function AssistantToolUseBlock({
     toolName, input, result, isError,
-    permissionId, permissionResolved, onPermissionRespond,
+    permissionId, permissionResolved, permissionAllowed, onPermissionRespond,
+    onCreateAutoApproval,
 }: AssistantToolUseBlockProps) {
     const [isExpanded, setIsExpanded] = useState(false);
+    const [showPatternUI, setShowPatternUI] = useState(false);
+    const [customPattern, setCustomPattern] = useState("");
+    const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
 
     const needsPermission = permissionId && !permissionResolved;
     const isAskUser = toolName === "AskUserQuestion";
-    const borderColor = needsPermission
-        ? (isAskUser ? "#2b9af3" : "#f0ab00")
+    const isPlanApproval = toolName === "ExitPlanMode";
+    const borderVariant = needsPermission
+        ? (isPlanApproval ? "plan" : isAskUser ? "ask" : "permission")
         : undefined;
 
     const inputPreview = input
@@ -54,26 +71,9 @@ export function AssistantToolUseBlock({
 
     const contextSummary = getContextSummary(toolName, input);
 
-    const codeStyle = {
-        margin: 0,
-        borderRadius: "4px",
-        fontSize: "12px",
-        maxHeight: "250px",
-        overflow: "auto",
-    };
-
     return (
-        <div style={{
-            margin: "4px 0",
-            borderRadius: "6px",
-            overflow: "hidden",
-            border: borderColor ? `2px solid ${borderColor}` : undefined,
-        }}>
-            <div style={{
-                padding: "8px 12px",
-                backgroundColor: "#f0f0f0",
-                fontSize: "13px",
-            }}>
+        <div className="axiom-tool-use" data-border={borderVariant || undefined}>
+            <div className="axiom-tool-use__header">
                 <ExpandableSection
                     toggleContent={
                         <span>
@@ -81,7 +81,7 @@ export function AssistantToolUseBlock({
                                 {toolName}
                             </Label>
                             {inputPreview && (
-                                <span style={{ marginLeft: 8, color: "#6a6e73", fontSize: "12px" }}>
+                                <span className="axiom-tool-use__input-preview">
                                     {inputPreview}{input && JSON.stringify(input).length > 100 ? "..." : ""}
                                 </span>
                             )}
@@ -92,35 +92,40 @@ export function AssistantToolUseBlock({
                     isIndented
                 >
                     {input && (
-                        <div style={{ marginBottom: result ? 8 : 0 }}>
-                            <SyntaxHighlighter
-                                language="json"
-                                style={stackoverflowLight}
-                                customStyle={codeStyle}
-                                wrapLongLines
-                            >
-                                {JSON.stringify(input, null, 2)}
-                            </SyntaxHighlighter>
+                        <div>
+                            <div className="axiom-tool-use__section-label">Input</div>
+                            <div className="axiom-tool-use__code">
+                                <SyntaxHighlighter
+                                    language="json"
+                                    style={stackoverflowLight}
+                                    wrapLongLines
+                                >
+                                    {JSON.stringify(input, null, 2)}
+                                </SyntaxHighlighter>
+                            </div>
                         </div>
                     )}
                     {result && (
-                        <SyntaxHighlighter
-                            language={isJson(result) ? "json" : "bash"}
-                            style={stackoverflowLight}
-                            customStyle={{
-                                ...codeStyle,
-                                ...(isError ? { backgroundColor: "#fef3f2" } : {}),
-                            }}
-                            wrapLongLines
-                        >
-                            {isJson(result) ? formatJson(result) : result}
-                        </SyntaxHighlighter>
+                        <div className={input ? "axiom-tool-use__result-divider" : undefined}>
+                            <div className={`axiom-tool-use__section-label${isError ? " axiom-tool-use__section-label--error" : ""}`}>
+                                {isError ? "Error" : "Result"}
+                            </div>
+                            <div className={`axiom-tool-use__code${isError ? " axiom-tool-use__code--error" : ""}`}>
+                                <SyntaxHighlighter
+                                    language={isJson(result) ? "json" : "bash"}
+                                    style={stackoverflowLight}
+                                    wrapLongLines
+                                >
+                                    {isJson(result) ? formatJson(result) : result}
+                                </SyntaxHighlighter>
+                            </div>
+                        </div>
                     )}
                 </ExpandableSection>
             </div>
 
             {permissionId && isAskUser && Array.isArray(input?.questions) && (
-                <div style={{ borderTop: "1px solid #d2d2d2" }}>
+                <div className="axiom-tool-use__ask-section">
                     <AssistantAskUserQuestion
                         permissionId={permissionId}
                         questions={input.questions as {
@@ -135,36 +140,111 @@ export function AssistantToolUseBlock({
                 </div>
             )}
 
-            {permissionId && !isAskUser && (
-                <div style={{
-                    padding: "10px 12px",
-                    backgroundColor: needsPermission ? "#fdf7e7" : "#f0f0f0",
-                    borderTop: "1px solid #d2d2d2",
-                    fontSize: "13px",
-                }}>
+            {permissionId && isPlanApproval && (
+                <div className="axiom-tool-use__plan-section"
+                    data-resolved={!needsPermission ? "true" : undefined}>
                     {needsPermission ? (
                         <>
-                            <div style={{ fontWeight: 600, marginBottom: 6 }}>
-                                Permission required
-                            </div>
-                            {contextSummary && (
-                                <div style={{
-                                    marginBottom: 8,
-                                    padding: "6px 10px",
-                                    backgroundColor: "white",
-                                    borderRadius: "4px",
-                                    border: "1px solid #d2d2d2",
-                                    fontFamily: "monospace",
-                                    fontSize: "12px",
-                                    whiteSpace: "pre-wrap",
-                                    wordBreak: "break-all",
-                                    maxHeight: "120px",
-                                    overflow: "auto",
-                                }}>
-                                    {contextSummary}
+                            <Flex alignItems={{ default: "alignItemsCenter" }}
+                                className="axiom-tool-use__plan-review-header">
+                                <FlexItem>
+                                    <span className="axiom-tool-use__plan-review-title">
+                                        Plan ready for review
+                                    </span>
+                                </FlexItem>
+                                {!!input?.plan && (
+                                    <FlexItem>
+                                        <Button variant="plain" size="sm"
+                                            aria-label="View plan in full screen"
+                                            onClick={() => setIsPlanModalOpen(true)}
+                                            className="axiom-tool-use__view-plan-btn">
+                                            <SearchPlusIcon />
+                                        </Button>
+                                    </FlexItem>
+                                )}
+                            </Flex>
+                            {!!input?.plan && (
+                                <div className="assistant-markdown axiom-tool-use__plan-content">
+                                    <Content>
+                                        <Markdown remarkPlugins={[remarkGfm]}>
+                                            {input.plan as string}
+                                        </Markdown>
+                                    </Content>
                                 </div>
                             )}
                             <Flex>
+                                <FlexItem>
+                                    <Button variant="primary" size="sm"
+                                        className="axiom-tool-use__plan-approve-btn"
+                                        onClick={() => onPermissionRespond?.(permissionId, true, input)}>
+                                        Approve Plan
+                                    </Button>
+                                </FlexItem>
+                                <FlexItem>
+                                    <Button variant="secondary" size="sm"
+                                        onClick={() => onPermissionRespond?.(permissionId, false, input)}>
+                                        Reject
+                                    </Button>
+                                </FlexItem>
+                            </Flex>
+                        </>
+                    ) : (
+                        <Flex alignItems={{ default: "alignItemsCenter" }}>
+                            <FlexItem>
+                                <span className={permissionAllowed
+                                    ? "axiom-tool-use__plan-status--approved"
+                                    : "axiom-tool-use__plan-status--rejected"}>
+                                    {permissionAllowed ? "Plan approved" : "Plan rejected"}
+                                </span>
+                            </FlexItem>
+                            {!!input?.plan && (
+                                <FlexItem>
+                                    <Button variant="plain" size="sm"
+                                        aria-label="View plan"
+                                        onClick={() => setIsPlanModalOpen(true)}
+                                        className="axiom-tool-use__view-plan-btn">
+                                        <SearchPlusIcon />
+                                    </Button>
+                                </FlexItem>
+                            )}
+                        </Flex>
+                    )}
+                    {!!input?.plan && (
+                        <Modal
+                            isOpen={isPlanModalOpen}
+                            onClose={() => setIsPlanModalOpen(false)}
+                            variant="large"
+                            aria-label="Plan details"
+                        >
+                            <ModalHeader title="Plan" />
+                            <ModalBody>
+                                <Content>
+                                    <div className="assistant-markdown">
+                                        <Markdown remarkPlugins={[remarkGfm]}>
+                                            {input.plan as string}
+                                        </Markdown>
+                                    </div>
+                                </Content>
+                            </ModalBody>
+                        </Modal>
+                    )}
+                </div>
+            )}
+
+            {permissionId && !isAskUser && !isPlanApproval && (
+                <div className="axiom-tool-use__permission-section"
+                    data-resolved={!needsPermission ? "true" : undefined}>
+                    {needsPermission ? (
+                        <>
+                            <div className="axiom-tool-use__permission-title">
+                                Permission required
+                            </div>
+                            {contextSummary && (
+                                <div className="axiom-tool-use__context-summary">
+                                    {contextSummary}
+                                </div>
+                            )}
+                            <Flex style={{ marginBottom: showPatternUI ? 8 : 0 }}>
                                 <FlexItem>
                                     <Button variant="primary" size="sm"
                                         onClick={() => onPermissionRespond?.(permissionId, true, input)}>
@@ -177,11 +257,65 @@ export function AssistantToolUseBlock({
                                         Deny
                                     </Button>
                                 </FlexItem>
+                                {onCreateAutoApproval && (
+                                    <FlexItem>
+                                        <Button variant="link" size="sm"
+                                            onClick={() => setShowPatternUI(!showPatternUI)}>
+                                            {showPatternUI ? "Cancel" : "Allow Pattern..."}
+                                        </Button>
+                                    </FlexItem>
+                                )}
                             </Flex>
+                            {showPatternUI && onCreateAutoApproval && (
+                                <div className="axiom-tool-use__pattern-ui">
+                                    <div className="axiom-tool-use__pattern-hint">
+                                        Auto-approve future {toolName} calls matching a pattern:
+                                    </div>
+                                    {getSuggestedPatterns(toolName, input).map((suggestion) => (
+                                        <Button key={suggestion.label} variant="tertiary" size="sm"
+                                            className="axiom-tool-use__pattern-suggestion"
+                                            onClick={() => {
+                                                onCreateAutoApproval(
+                                                    toolName, suggestion.fieldName,
+                                                    suggestion.pattern, permissionId);
+                                                setShowPatternUI(false);
+                                            }}>
+                                            {suggestion.label}
+                                        </Button>
+                                    ))}
+                                    <Flex className="axiom-tool-use__pattern-custom-row">
+                                        <FlexItem grow={{ default: "grow" }}>
+                                            <TextInput
+                                                value={customPattern}
+                                                onChange={(_e, v) => setCustomPattern(v)}
+                                                placeholder="Custom regex..."
+                                                aria-label="Custom auto-approval pattern"
+                                                size={30}
+                                            />
+                                        </FlexItem>
+                                        <FlexItem>
+                                            <Button variant="primary" size="sm"
+                                                isDisabled={!customPattern.trim()}
+                                                onClick={() => {
+                                                    const info = getFieldInfo(toolName);
+                                                    onCreateAutoApproval(
+                                                        toolName, info.fieldName,
+                                                        customPattern.trim(), permissionId);
+                                                    setShowPatternUI(false);
+                                                    setCustomPattern("");
+                                                }}>
+                                                Apply Rule
+                                            </Button>
+                                        </FlexItem>
+                                    </Flex>
+                                </div>
+                            )}
                         </>
                     ) : (
-                        <span style={{ color: "#6a6e73", fontStyle: "italic" }}>
-                            Permission granted
+                        <span className={permissionAllowed
+                            ? "axiom-tool-use__permission-status--granted"
+                            : "axiom-tool-use__permission-status--denied"}>
+                            {permissionAllowed ? "Permission granted" : "Permission denied"}
                         </span>
                     )}
                 </div>
@@ -230,4 +364,62 @@ function formatJson(text: string): string {
     } catch {
         return text;
     }
+}
+
+interface PatternSuggestion {
+    label: string;
+    fieldName: string | undefined;
+    pattern: string | undefined;
+}
+
+function getFieldInfo(toolName: string): { fieldName: string | undefined } {
+    switch (toolName) {
+        case "Bash": return { fieldName: "command" };
+        case "Read": case "Write": case "Edit": return { fieldName: "file_path" };
+        default: return { fieldName: undefined };
+    }
+}
+
+function getSuggestedPatterns(toolName: string, input?: Record<string, unknown>): PatternSuggestion[] {
+    const suggestions: PatternSuggestion[] = [];
+
+    if (toolName === "Bash" && input?.command) {
+        const command = input.command as string;
+        const firstWord = command.split(/\s+/)[0];
+        if (firstWord) {
+            suggestions.push({
+                label: `${firstWord} *`,
+                fieldName: "command",
+                pattern: `^${escapeRegex(firstWord)} `,
+            });
+        }
+    } else if ((toolName === "Read" || toolName === "Write" || toolName === "Edit")
+            && input?.file_path) {
+        const filePath = input.file_path as string;
+        const dir = filePath.substring(0, filePath.lastIndexOf("/"));
+        suggestions.push({
+            label: `Allow all ${toolName}`,
+            fieldName: undefined,
+            pattern: undefined,
+        });
+        if (dir) {
+            suggestions.push({
+                label: `${dir}/...`,
+                fieldName: "file_path",
+                pattern: `^${escapeRegex(dir)}/`,
+            });
+        }
+    } else {
+        suggestions.push({
+            label: `Allow all ${toolName}`,
+            fieldName: undefined,
+            pattern: undefined,
+        });
+    }
+
+    return suggestions;
+}
+
+function escapeRegex(text: string): string {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

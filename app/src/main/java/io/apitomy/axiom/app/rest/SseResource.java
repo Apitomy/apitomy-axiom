@@ -14,6 +14,9 @@ import org.jboss.resteasy.reactive.RestStreamElementType;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * SSE endpoint that streams real-time events to connected UI clients.
@@ -23,6 +26,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>Uses a set of emitters instead of BroadcastProcessor to avoid
  * back-pressure failures when no clients are connected or clients
  * can't keep up.</p>
+ *
+ * <p>Sends periodic heartbeat events to keep SSE connections alive
+ * through proxies that close idle connections.</p>
  */
 @Path("/api/v1/sse")
 @ApplicationScoped
@@ -31,6 +37,20 @@ public class SseResource {
     private static final Logger LOG = Logger.getLogger(SseResource.class);
 
     private final Set<MultiEmitter<? super SseEvent>> emitters = ConcurrentHashMap.newKeySet();
+    private final ScheduledExecutorService heartbeatScheduler =
+            Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "sse-heartbeat");
+                t.setDaemon(true);
+                return t;
+            });
+
+    {
+        heartbeatScheduler.scheduleAtFixedRate(() -> {
+            if (!emitters.isEmpty()) {
+                onSseEvent(SseEvent.heartbeat());
+            }
+        }, 15, 15, TimeUnit.SECONDS);
+    }
 
     /**
      * SSE stream endpoint. Clients connect here and receive real-time events.
@@ -61,7 +81,10 @@ public class SseResource {
         if (emitters.isEmpty()) {
             return;
         }
-        LOG.debugf("Broadcasting SSE event: %s to %d client(s)", event.type(), emitters.size());
+        if (!"heartbeat".equals(event.type())) {
+            LOG.debugf("Broadcasting SSE event: %s to %d client(s)",
+                    event.type(), emitters.size());
+        }
         for (MultiEmitter<? super SseEvent> emitter : emitters) {
             try {
                 emitter.emit(event);

@@ -138,6 +138,24 @@ export interface ImportResult {
     reportDefinitions?: number;
 }
 
+export interface AssistantApplyResult {
+    tools?: number;
+    actionTypes?: number;
+    reportDefinitions?: number;
+    toolsets?: number;
+    sessionTemplates?: number;
+    toolsCreated?: number;
+    toolsUpdated?: number;
+    actionTypesCreated?: number;
+    actionTypesUpdated?: number;
+    reportDefinitionsCreated?: number;
+    reportDefinitionsUpdated?: number;
+    toolsetsCreated?: number;
+    toolsetsUpdated?: number;
+    sessionTemplatesCreated?: number;
+    sessionTemplatesUpdated?: number;
+}
+
 export async function exportPack(request: PackExportRequest): Promise<Blob> {
     const response = await fetch(`${API}/system/packs/export`, {
         method: "POST",
@@ -1169,32 +1187,76 @@ export async function fetchActivityLogDetails(activityId: number): Promise<strin
 
 // ── AI Assistant ────────────────────────────────────────────────
 
+export interface SessionTemplate {
+    templateId: string;
+    name: string;
+    description: string;
+    builtIn: boolean;
+    systemPrompt: string;
+    welcomeMessage?: string;
+    initialMessage?: string;
+    workingDirectory?: string;
+    model?: string;
+    initScript?: string;
+    initScriptType?: string;
+    environment?: Record<string, string>;
+    mcpServers: string[];
+    allowedTools: string[];
+}
+
+export interface NewSessionTemplate {
+    templateId?: string;
+    name: string;
+    description: string;
+    systemPrompt: string;
+    welcomeMessage?: string;
+    initialMessage?: string;
+    workingDirectory?: string;
+    model?: string;
+    initScript?: string;
+    initScriptType?: string;
+    environment?: Record<string, string>;
+    mcpServers?: string[];
+    allowedTools?: string[];
+}
+
 export interface AssistantSessionInfo {
     id: string;
     name: string;
+    templateId: string;
     status: "starting" | "running" | "stopped" | "error";
     createdAt: string;
     lastActivityAt: string;
     errorMessage?: string;
+    totalCostUsd?: number;
+    totalInputTokens?: number;
+    totalOutputTokens?: number;
+    turnCount?: number;
+    projectId?: number;
+    projectName?: string;
 }
 
 export interface AssistantItem {
     type: string;
     name: string;
     valid: boolean;
-    errors?: string[];
-    warnings?: string[];
+    validationErrors?: string[];
 }
 
-export async function createAssistantSession(name?: string): Promise<AssistantSessionInfo> {
+export async function createAssistantSession(
+    templateId: string,
+    name?: string,
+    projectId?: number
+): Promise<AssistantSessionInfo> {
     const response = await fetch(`${API}/assistant/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, templateId, projectId }),
     });
     if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw { status: response.status, message: body.message || `Failed: ${response.status}` };
+        const body = await response.json().catch(() => null);
+        const message = body?.message || `Failed to create session (${response.status})`;
+        throw new Error(message);
     }
     return response.json();
 }
@@ -1208,6 +1270,20 @@ export async function fetchAssistantSessions(): Promise<AssistantSessionInfo[]> 
 export async function fetchAssistantSession(id: string): Promise<AssistantSessionInfo> {
     const response = await fetch(`${API}/assistant/sessions/${id}`);
     if (!response.ok) throw new Error(`Failed to fetch session: ${response.status}`);
+    return response.json();
+}
+
+export interface AssistantHistoryEvent {
+    eventType: string;
+    eventData: Record<string, unknown>;
+    eventIndex: number;
+}
+
+export async function fetchAssistantSessionHistory(
+    sessionId: string
+): Promise<AssistantHistoryEvent[]> {
+    const response = await fetch(`${API}/assistant/sessions/${sessionId}/history`);
+    if (!response.ok) throw new Error(`Failed to fetch session history: ${response.status}`);
     return response.json();
 }
 
@@ -1247,13 +1323,13 @@ export async function fetchAssistantItemContent(
     sessionId: string, itemType: string, itemName: string
 ): Promise<Record<string, unknown>> {
     const response = await fetch(
-        `${API}/assistant/sessions/${sessionId}/items/${itemType}/${itemName}`
+        `${API}/assistant/sessions/${sessionId}/items/${itemType}/${encodeURIComponent(itemName)}`
     );
     if (!response.ok) throw new Error(`Failed to fetch item: ${response.status}`);
     return response.json();
 }
 
-export async function applyAssistantSession(sessionId: string): Promise<ImportResult> {
+export async function applyAssistantSession(sessionId: string): Promise<AssistantApplyResult> {
     const response = await fetch(`${API}/assistant/sessions/${sessionId}/apply`, {
         method: "POST",
     });
@@ -1264,8 +1340,125 @@ export async function applyAssistantSession(sessionId: string): Promise<ImportRe
     return response.json();
 }
 
+export async function renameAssistantSession(
+    sessionId: string, name: string
+): Promise<AssistantSessionInfo> {
+    const response = await fetch(`${API}/assistant/sessions/${sessionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+    });
+    if (!response.ok) throw new Error("Failed to rename session");
+    return response.json();
+}
+
+export async function interruptAssistantSession(sessionId: string): Promise<void> {
+    const response = await fetch(`${API}/assistant/sessions/${sessionId}/interrupt`, {
+        method: "POST",
+    });
+    if (!response.ok) throw new Error("Failed to interrupt session");
+}
+
+export interface AutoApprovalRule {
+    id: string;
+    toolName: string;
+    fieldName?: string;
+    pattern?: string;
+    createdAt: string;
+}
+
+export interface CreateAutoApprovalRequest {
+    toolName: string;
+    fieldName?: string;
+    pattern?: string;
+    permissionId?: string;
+}
+
+export async function fetchAutoApprovals(sessionId: string): Promise<AutoApprovalRule[]> {
+    const response = await fetch(`${API}/assistant/sessions/${sessionId}/auto-approvals`);
+    if (!response.ok) throw new Error("Failed to fetch auto-approvals");
+    return response.json();
+}
+
+export async function createAutoApproval(
+    sessionId: string, data: CreateAutoApprovalRequest
+): Promise<AutoApprovalRule> {
+    const response = await fetch(`${API}/assistant/sessions/${sessionId}/auto-approvals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.message || "Failed to create auto-approval");
+    }
+    return response.json();
+}
+
+export async function deleteAutoApproval(sessionId: string, ruleId: string): Promise<void> {
+    const response = await fetch(
+        `${API}/assistant/sessions/${sessionId}/auto-approvals/${encodeURIComponent(ruleId)}`,
+        { method: "DELETE" }
+    );
+    if (!response.ok) throw new Error("Failed to delete auto-approval");
+}
+
 export function assistantEventsUrl(sessionId: string): string {
     return `${API}/assistant/sessions/${sessionId}/events`;
+}
+
+export async function fetchAssistantTemplates(): Promise<SessionTemplate[]> {
+    const response = await fetch(`${API}/assistant/templates`);
+    if (!response.ok) throw new Error("Failed to fetch templates");
+    return response.json();
+}
+
+export async function fetchAssistantTemplate(templateId: string): Promise<SessionTemplate> {
+    const response = await fetch(`${API}/assistant/templates/${encodeURIComponent(templateId)}`);
+    if (!response.ok) throw new Error("Failed to fetch template");
+    return response.json();
+}
+
+export async function createAssistantTemplate(
+    data: NewSessionTemplate
+): Promise<SessionTemplate> {
+    const response = await fetch(`${API}/assistant/templates`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error("Failed to create template");
+    return response.json();
+}
+
+export async function updateAssistantTemplate(
+    templateId: string,
+    data: NewSessionTemplate
+): Promise<SessionTemplate> {
+    const response = await fetch(
+        `${API}/assistant/templates/${encodeURIComponent(templateId)}`,
+        {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+        }
+    );
+    if (!response.ok) {
+        if (response.status === 403) throw new Error("Cannot modify built-in template");
+        throw new Error("Failed to update template");
+    }
+    return response.json();
+}
+
+export async function deleteAssistantTemplate(templateId: string): Promise<void> {
+    const response = await fetch(
+        `${API}/assistant/templates/${encodeURIComponent(templateId)}`,
+        { method: "DELETE" }
+    );
+    if (!response.ok) {
+        if (response.status === 403) throw new Error("Cannot delete built-in template");
+        throw new Error("Failed to delete template");
+    }
 }
 
 // ── Traces ──────────────────────────────────────────────────────────

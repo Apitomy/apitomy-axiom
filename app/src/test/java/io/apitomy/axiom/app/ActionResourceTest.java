@@ -23,28 +23,27 @@ class ActionResourceTest {
             .then()
                 .statusCode(200)
                 .contentType(ContentType.JSON)
-                .body("$.size()", greaterThanOrEqualTo(9))
-                .body("name", hasItems("analyze", "implement", "review", "close-project"));
+                .body("$.size()", greaterThanOrEqualTo(2))
+                .body("name", hasItems("auto-tag", "close-project"));
     }
 
     @Test
     void testGetSeedActionType() {
-        // Get the "analyze" action type by listing and finding it
         int id = given()
             .when()
                 .get(ACTION_TYPES_PATH)
             .then()
                 .statusCode(200)
-                .extract().path("find { it.name == 'analyze' }.id");
+                .extract().path("find { it.name == 'auto-tag' }.id");
 
         given()
             .when()
                 .get(ACTION_TYPES_PATH + "/" + id)
             .then()
                 .statusCode(200)
-                .body("name", equalTo("analyze"))
+                .body("name", equalTo("auto-tag"))
                 .body("executionMode", equalTo("actor"))
-                .body("userTriggerable", equalTo(true))
+                .body("userTriggerable", equalTo(false))
                 .body("emitsEvent", equalTo(true));
     }
 

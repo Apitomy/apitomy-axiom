@@ -74,12 +74,12 @@ The AI Manager triages incoming events and decides what actions to take.
 
 ### AI Assistant
 
-The interactive AI Assistant allows users to create configuration items through conversation.
+The interactive AI Assistant allows users to create and update configuration items through
+conversation.
 
 | Property | Default | Description |
 |----------|---------|-------------|
 | `axiom.assistant.max-sessions` | `3` | Maximum concurrent assistant sessions |
-| `axiom.assistant.idle-timeout-seconds` | `3600` | Auto-destroy idle sessions after this duration |
 
 ### Workspaces
 

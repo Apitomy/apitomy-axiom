@@ -121,6 +121,34 @@ public record SseEvent(
                         + ",\"count\":" + count + "}");
     }
 
+    /**
+     * Creates an assistant-session-event that wraps an assistant event for
+     * broadcast via the global SSE channel.
+     *
+     * @param sessionId the assistant session ID
+     * @param eventType the assistant event type (e.g. "assistant_text", "tool_use")
+     * @param eventData the assistant event payload as a JSON string
+     * @param eventIndex the event's position in the session's event history
+     * @return a new SSE event
+     */
+    public static SseEvent assistantSessionEvent(String sessionId, String eventType,
+                                                  String eventData, int eventIndex) {
+        return new SseEvent("assistant-session-event",
+                "{\"sessionId\":\"" + sessionId + "\","
+                        + "\"eventType\":\"" + eventType + "\","
+                        + "\"eventData\":" + eventData + ","
+                        + "\"eventIndex\":" + eventIndex + "}");
+    }
+
+    /**
+     * Creates a heartbeat event to keep SSE connections alive through proxies.
+     *
+     * @return a new heartbeat SSE event
+     */
+    public static SseEvent heartbeat() {
+        return new SseEvent("heartbeat", "{}");
+    }
+
     private static String escapeJson(String s) {
         if (s == null) return "";
         return s.replace("\\", "\\\\")

@@ -10,6 +10,8 @@ long-lived projects around them, and delegates work to human and AI actors.
 - **Project Lifecycle** — long-lived projects track work from triage through completion
 - **Event Sources** — watches GitHub and Jira repositories via webhooks or polling
 - **Web Dashboard** — React + PatternFly UI with real-time SSE updates
+- **AI Assistant** — interactive conversational interface with customizable session templates,
+  real-time tool permission management, and plan mode
 - **Pluggable AI Engines** — swap between Claude Code CLI and OpenCode without code changes
 
 ## Quick Links

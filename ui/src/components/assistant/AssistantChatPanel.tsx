@@ -1,216 +1,302 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Alert } from "@patternfly/react-core";
 import { AssistantMessageList, type ChatMessage } from "./AssistantMessageList";
 import { AssistantMessageInput } from "./AssistantMessageInput";
 import {
-    assistantEventsUrl,
     sendAssistantMessage,
     respondToAssistantPermission,
+    createAutoApproval,
+    fetchAssistantSessionHistory,
 } from "../../config/api";
+import { sseClient } from "../../config/sse";
+import { randomThinkingMessage } from "./thinkingMessages";
+
+export type SessionMode = "normal" | "plan";
 
 interface AssistantChatPanelProps {
     sessionId: string;
     onItemsChanged?: () => void;
+    onModeChange?: (mode: SessionMode) => void;
+    onAutoApprovalCountChange?: () => void;
+    onModelDetected?: (model: string) => void;
+    onCostUpdate?: (costUsd: number, inputTokens: number, outputTokens: number) => void;
 }
-
-const INITIAL_RECONNECT_DELAY = 1000;
-const MAX_RECONNECT_DELAY = 30000;
-const MAX_RECONNECT_ATTEMPTS = 10;
 
 let messageIdCounter = 0;
 
-export function AssistantChatPanel({ sessionId, onItemsChanged }: AssistantChatPanelProps) {
-    const [messages, setMessages] = useState<ChatMessage[]>(() => [{
-        id: String(++messageIdCounter),
-        type: "assistant" as const,
-        content: "Hi! I'm the **Axiom Configuration Assistant**. I can help you create and refine:\n\n" +
-            "- **Tools** — script-based tools that AI agents can invoke\n" +
-            "- **Action Types** — define kinds of work for AI agents or scripts\n" +
-            "- **Report Definitions** — recurring or on-demand reports\n\n" +
-            "I can look up your existing configuration to understand what's already set up. " +
-            "Just describe what you'd like to create or ask me a question to get started!",
-    }]);
+export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, onAutoApprovalCountChange, onModelDetected, onCostUpdate }: AssistantChatPanelProps) {
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [isReconnecting, setIsReconnecting] = useState(false);
-    const eventSourceRef = useRef<EventSource | null>(null);
-    const reconnectDelayRef = useRef(INITIAL_RECONNECT_DELAY);
-    const reconnectAttemptsRef = useRef(0);
-    const eventsReceivedRef = useRef(0);
-    const eventsToSkipRef = useRef(0);
-    const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [processingText, setProcessingText] = useState("");
+    const [slashCommands, setSlashCommands] = useState<string[]>([]);
+    const sessionEndedRef = useRef(false);
+    const lastSeenIndexRef = useRef(-1);
+
+    const onItemsChangedRef = useRef(onItemsChanged);
+    const onModeChangeRef = useRef(onModeChange);
+    const onModelDetectedRef = useRef(onModelDetected);
+    const onCostUpdateRef = useRef(onCostUpdate);
+    useEffect(() => { onItemsChangedRef.current = onItemsChanged; }, [onItemsChanged]);
+    useEffect(() => { onModeChangeRef.current = onModeChange; }, [onModeChange]);
+    useEffect(() => { onModelDetectedRef.current = onModelDetected; }, [onModelDetected]);
+    useEffect(() => { onCostUpdateRef.current = onCostUpdate; }, [onCostUpdate]);
 
     const addMessage = useCallback((msg: Omit<ChatMessage, "id">) => {
         setMessages((prev) => [...prev, { ...msg, id: String(++messageIdCounter) }]);
     }, []);
 
     useEffect(() => {
-        const url = assistantEventsUrl(sessionId);
+        if ("Notification" in window && Notification.permission === "default") {
+            Notification.requestPermission();
+        }
+    }, []);
 
-        function connect() {
-            const es = new EventSource(url);
-            eventSourceRef.current = es;
+    const processEvent = useCallback((eventType: string, data: Record<string, unknown>) => {
+        switch (eventType) {
+            case "session_init":
+                if (Array.isArray(data.slashCommands)) {
+                    setSlashCommands(data.slashCommands as string[]);
+                }
+                if (data.model) {
+                    onModelDetectedRef.current?.(data.model as string);
+                }
+                break;
 
-            es.onopen = () => {
-                reconnectDelayRef.current = INITIAL_RECONNECT_DELAY;
-                reconnectAttemptsRef.current = 0;
-                setIsReconnecting(false);
-            };
+            case "assistant_text":
+                if (data.text) {
+                    setMessages((prev) => {
+                        const last = prev[prev.length - 1];
+                        if (last && last.type === "assistant") {
+                            return [...prev.slice(0, -1), { ...last, content: data.text as string }];
+                        }
+                        return [...prev, { id: String(++messageIdCounter), type: "assistant", content: data.text as string }];
+                    });
+                    setProcessingText(randomThinkingMessage());
+                }
+                break;
 
-            /**
-             * Wraps an SSE event handler with replay-skip logic: on reconnect the
-             * backend replays the full event history, so we skip events that were
-             * already processed before the connection dropped.
-             */
-            function withSkipGuard(handler: (e: MessageEvent) => void): (e: MessageEvent) => void {
-                return (e: MessageEvent) => {
-                    if (eventsToSkipRef.current > 0) {
-                        eventsToSkipRef.current--;
+            case "user_message":
+                if (data.content) {
+                    setMessages((prev) => {
+                        const last = prev[prev.length - 1];
+                        if (last && last.type === "user" && last.content === data.content) {
+                            return prev;
+                        }
+                        return [...prev, { id: String(++messageIdCounter), type: "user", content: data.content as string }];
+                    });
+                    setIsProcessing(true);
+                }
+                break;
+
+            case "thinking":
+                setProcessingText(randomThinkingMessage());
+                break;
+
+            case "tool_use":
+                addMessage({
+                    type: "tool_use",
+                    toolName: data.name as string,
+                    toolInput: data.input as Record<string, unknown>,
+                    toolUseId: data.id as string,
+                });
+                setProcessingText(randomThinkingMessage());
+                if (data.name === "EnterPlanMode") {
+                    onModeChangeRef.current?.("plan");
+                }
+                break;
+
+            case "tool_result":
+                setMessages((prev) =>
+                    prev.map((m) =>
+                        m.type === "tool_use" && m.toolUseId === data.toolUseId
+                            ? { ...m, toolResult: (data.stdout || data.stderr || "") as string, isError: !!data.stderr && !data.stdout }
+                            : m
+                    )
+                );
+                onItemsChangedRef.current?.();
+                break;
+
+            case "permission_request":
+                setMessages((prev) => {
+                    const lastToolIdx = prev.findLastIndex(
+                        (m) => m.type === "tool_use" && m.toolName === data.toolName && !m.permissionId
+                    );
+                    if (lastToolIdx >= 0) {
+                        const updated = [...prev];
+                        updated[lastToolIdx] = {
+                            ...updated[lastToolIdx],
+                            permissionId: data.requestId as string,
+                            permissionResolved: false,
+                            toolInput: (data.toolInput as Record<string, unknown>) || updated[lastToolIdx].toolInput,
+                        };
+                        return updated;
+                    }
+                    return [...prev, {
+                        id: String(++messageIdCounter),
+                        type: "permission_request" as const,
+                        permissionId: data.requestId as string,
+                        toolName: data.toolName as string,
+                        toolInput: data.toolInput as Record<string, unknown>,
+                    }];
+                });
+                setIsProcessing(false);
+
+                if (document.hidden
+                        && "Notification" in window
+                        && Notification.permission === "granted") {
+                    const toolName = data.toolName as string;
+                    let title = "Action required";
+                    let body = `${toolName} needs your approval`;
+                    if (toolName === "ExitPlanMode") {
+                        title = "Plan ready for review";
+                        body = "An assistant plan is waiting for your approval.";
+                    } else if (toolName === "AskUserQuestion") {
+                        title = "Question from assistant";
+                        body = "The assistant is asking you a question.";
+                    }
+                    const notification = new Notification(title, {
+                        body,
+                        tag: `axiom-permission-${data.requestId}`,
+                    });
+                    notification.onclick = () => {
+                        window.focus();
+                        notification.close();
+                    };
+                }
+                break;
+
+            case "permission_resolved":
+                setMessages((prev) => {
+                    const match = prev.find((m) => m.permissionId === data.permissionId);
+                    if (match?.toolName === "ExitPlanMode") {
+                        onModeChangeRef.current?.("normal");
+                    }
+                    return prev.map((m) =>
+                        m.permissionId === data.permissionId
+                            ? { ...m, permissionResolved: true, permissionAllowed: data.allow as boolean }
+                            : m
+                    );
+                });
+                break;
+
+            case "turn_complete":
+                setIsProcessing(false);
+                if (data.costUsd != null) {
+                    onCostUpdateRef.current?.(
+                        data.costUsd as number,
+                        (data.inputTokens ?? 0) as number,
+                        (data.outputTokens ?? 0) as number
+                    );
+                }
+                break;
+
+            case "session_ended":
+                sessionEndedRef.current = true;
+                setIsProcessing(false);
+                break;
+
+            case "unhandled_event":
+                addMessage({
+                    type: "warning",
+                    content: `Unhandled event type: ${data.rawType}`,
+                });
+                break;
+
+            case "session_error":
+                addMessage({ type: "system", content: (data.message as string) || "Session error" });
+                setIsProcessing(false);
+                break;
+        }
+    }, [addMessage]);
+
+    useEffect(() => {
+        sessionEndedRef.current = false;
+        lastSeenIndexRef.current = -1;
+        setMessages([]);
+
+        sseClient.connect();
+
+        let cancelled = false;
+        const buffer: { eventType: string; eventData: Record<string, unknown>; eventIndex: number }[] = [];
+        let historyLoaded = false;
+
+        const sessionShort = sessionId.substring(0, 8);
+        console.log(`[ChatPanel] Subscribing to session ${sessionShort}`);
+
+        const unsubscribe = sseClient.subscribeSession(sessionId,
+            (eventType, eventData, eventIndex) => {
+                if (cancelled) {
+                    console.warn(`[ChatPanel] DROPPED (cancelled) ${eventType} idx=${eventIndex} for ${sessionShort}`);
+                    return;
+                }
+                if (!historyLoaded) {
+                    console.log(`[ChatPanel] Buffering (history loading) ${eventType} idx=${eventIndex} for ${sessionShort}`);
+                    buffer.push({ eventType, eventData, eventIndex });
+                    return;
+                }
+                if (eventIndex <= lastSeenIndexRef.current) {
+                    console.log(`[ChatPanel] Skipping (already seen) ${eventType} idx=${eventIndex} <= ${lastSeenIndexRef.current} for ${sessionShort}`);
+                    return;
+                }
+                console.log(`[ChatPanel] Processing live ${eventType} idx=${eventIndex} for ${sessionShort}`);
+                lastSeenIndexRef.current = eventIndex;
+                processEvent(eventType, eventData);
+            }
+        );
+
+        function catchUpFromHistory() {
+            console.log(`[ChatPanel] Fetching history for ${sessionShort} (lastSeen=${lastSeenIndexRef.current})`);
+            fetchAssistantSessionHistory(sessionId)
+                .then((history) => {
+                    if (cancelled) {
+                        console.warn(`[ChatPanel] History response arrived but cancelled for ${sessionShort}`);
                         return;
                     }
-                    eventsReceivedRef.current++;
-                    handler(e);
-                };
-            }
-
-            es.addEventListener("assistant_text", withSkipGuard((e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    if (data.text) {
-                        setMessages((prev) => {
-                            const last = prev[prev.length - 1];
-                            if (last && last.type === "assistant") {
-                                return [...prev.slice(0, -1), { ...last, content: data.text }];
-                            }
-                            return [...prev, { id: String(++messageIdCounter), type: "assistant", content: data.text }];
-                        });
+                    const newEvents = history.filter(e => e.eventIndex > lastSeenIndexRef.current);
+                    console.log(`[ChatPanel] History: ${history.length} total, ${newEvents.length} new (lastSeen=${lastSeenIndexRef.current}) for ${sessionShort}`);
+                    for (const event of history) {
+                        if (event.eventIndex <= lastSeenIndexRef.current) continue;
+                        processEvent(event.eventType, event.eventData);
+                        lastSeenIndexRef.current = Math.max(lastSeenIndexRef.current, event.eventIndex);
                     }
-                } catch {
-                    // ignore
-                }
-            }));
-
-            es.addEventListener("thinking", withSkipGuard(() => {
-                setMessages((prev) => {
-                    const last = prev[prev.length - 1];
-                    if (last && last.type === "thinking") return prev;
-                    return [...prev, { id: String(++messageIdCounter), type: "thinking" }];
+                    historyLoaded = true;
+                    for (const event of buffer) {
+                        if (event.eventIndex <= lastSeenIndexRef.current) continue;
+                        lastSeenIndexRef.current = event.eventIndex;
+                        processEvent(event.eventType, event.eventData);
+                    }
+                    buffer.length = 0;
+                })
+                .catch((err) => {
+                    if (cancelled) return;
+                    console.error("Failed to fetch session history:", err);
+                    historyLoaded = true;
+                    for (const event of buffer) {
+                        processEvent(event.eventType, event.eventData);
+                    }
+                    buffer.length = 0;
                 });
-            }));
-
-            es.addEventListener("tool_use", withSkipGuard((e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    addMessage({
-                        type: "tool_use",
-                        toolName: data.name,
-                        toolInput: data.input,
-                        toolUseId: data.id,
-                    });
-                } catch {
-                    // ignore
-                }
-            }));
-
-            es.addEventListener("tool_result", withSkipGuard((e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    setMessages((prev) =>
-                        prev.map((m) =>
-                            m.type === "tool_use" && m.toolUseId === data.toolUseId
-                                ? { ...m, toolResult: data.stdout || data.stderr || "", isError: !!data.stderr && !data.stdout }
-                                : m
-                        )
-                    );
-                    onItemsChanged?.();
-                } catch {
-                    // ignore
-                }
-            }));
-
-            es.addEventListener("permission_request", withSkipGuard((e) => {
-                try {
-                    const data = JSON.parse(e.data);
-
-                    // Attach permission to the matching tool_use block
-                    setMessages((prev) => {
-                        const lastToolIdx = prev.findLastIndex(
-                            (m) => m.type === "tool_use" && m.toolName === data.toolName && !m.permissionId
-                        );
-                        if (lastToolIdx >= 0) {
-                            const updated = [...prev];
-                            updated[lastToolIdx] = {
-                                ...updated[lastToolIdx],
-                                permissionId: data.requestId,
-                                permissionResolved: false,
-                                toolInput: data.toolInput || updated[lastToolIdx].toolInput,
-                            };
-                            return updated;
-                        }
-                        // Fallback: add as standalone if no matching tool_use
-                        return [...prev, {
-                            id: String(++messageIdCounter),
-                            type: "permission_request" as const,
-                            permissionId: data.requestId,
-                            toolName: data.toolName,
-                            toolInput: data.toolInput,
-                        }];
-                    });
-                    setIsProcessing(false);
-                } catch {
-                    // ignore
-                }
-            }));
-
-            es.addEventListener("turn_complete", withSkipGuard(() => {
-                setIsProcessing(false);
-            }));
-
-            es.addEventListener("session_error", withSkipGuard((e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    addMessage({ type: "system", content: data.message || "Session error" });
-                } catch {
-                    // ignore
-                }
-                setIsProcessing(false);
-            }));
-
-            es.onerror = () => {
-                es.close();
-                if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
-                    setIsReconnecting(true);
-                    eventsToSkipRef.current = eventsReceivedRef.current;
-                    reconnectTimerRef.current = setTimeout(() => {
-                        reconnectAttemptsRef.current++;
-                        reconnectDelayRef.current = Math.min(
-                            reconnectDelayRef.current * 2, MAX_RECONNECT_DELAY
-                        );
-                        connect();
-                    }, reconnectDelayRef.current);
-                } else {
-                    setIsReconnecting(false);
-                    setIsProcessing(false);
-                    addMessage({
-                        type: "system",
-                        content: "Connection lost. Please refresh the page to continue.",
-                    });
-                }
-            };
         }
 
-        connect();
+        catchUpFromHistory();
+
+        const unsubReconnect = sseClient.onReconnect(() => {
+            console.log(`[ChatPanel] SSE reconnected, catching up for ${sessionShort}`);
+            if (!cancelled) catchUpFromHistory();
+        });
 
         return () => {
-            eventSourceRef.current?.close();
-            eventSourceRef.current = null;
-            if (reconnectTimerRef.current) {
-                clearTimeout(reconnectTimerRef.current);
-            }
+            console.log(`[ChatPanel] Cleaning up subscription for ${sessionShort}`);
+            cancelled = true;
+            unsubscribe();
+            unsubReconnect();
         };
-    }, [sessionId, addMessage, onItemsChanged]);
+    }, [sessionId, processEvent]);
 
     const handleSend = useCallback(async (message: string) => {
         addMessage({ type: "user", content: message });
+        setProcessingText(
+            randomThinkingMessage()
+        );
         setIsProcessing(true);
         try {
             await sendAssistantMessage(sessionId, message);
@@ -226,7 +312,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged }: AssistantChatP
         setMessages((prev) =>
             prev.map((m) =>
                 m.permissionId === permissionId
-                    ? { ...m, permissionResolved: true }
+                    ? { ...m, permissionResolved: true, permissionAllowed: allow }
                     : m
             )
         );
@@ -239,6 +325,28 @@ export function AssistantChatPanel({ sessionId, onItemsChanged }: AssistantChatP
         }
     }, [sessionId]);
 
+    const handleCreateAutoApproval = useCallback(async (
+        toolName: string, fieldName: string | undefined,
+        pattern: string | undefined, permissionId: string
+    ) => {
+        try {
+            await createAutoApproval(sessionId, {
+                toolName, fieldName, pattern, permissionId,
+            });
+            setMessages((prev) =>
+                prev.map((m) =>
+                    m.permissionId === permissionId
+                        ? { ...m, permissionResolved: true, permissionAllowed: true }
+                        : m
+                )
+            );
+            setIsProcessing(true);
+            onAutoApprovalCountChange?.();
+        } catch (err) {
+            console.error("Failed to create auto-approval:", err);
+        }
+    }, [sessionId, onAutoApprovalCountChange]);
+
     return (
         <div style={{
             display: "flex",
@@ -249,12 +357,11 @@ export function AssistantChatPanel({ sessionId, onItemsChanged }: AssistantChatP
             <AssistantMessageList
                 messages={messages}
                 onPermissionRespond={handlePermissionRespond}
+                onCreateAutoApproval={handleCreateAutoApproval}
                 isProcessing={isProcessing}
+                processingText={processingText}
             />
-            {isReconnecting && (
-                <Alert variant="warning" isInline isPlain title="Connection lost. Reconnecting..." />
-            )}
-            <AssistantMessageInput onSend={handleSend} disabled={isProcessing || isReconnecting} />
+            <AssistantMessageInput onSend={handleSend} disabled={isProcessing} slashCommands={slashCommands} />
         </div>
     );
 }

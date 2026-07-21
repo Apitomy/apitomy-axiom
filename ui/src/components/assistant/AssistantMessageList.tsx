@@ -2,13 +2,14 @@ import { useEffect, useRef } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Content, Spinner } from "@patternfly/react-core";
+import ExclamationTriangleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-triangle-icon";
 import { AssistantToolUseBlock } from "./AssistantToolUseBlock";
 import { AssistantPermissionPrompt } from "./AssistantPermissionPrompt";
 import "./AssistantMessageList.css";
 
 export interface ChatMessage {
     id: string;
-    type: "system" | "user" | "assistant" | "tool_use" | "tool_result" | "permission_request" | "thinking";
+    type: "system" | "warning" | "user" | "assistant" | "tool_use" | "tool_result" | "permission_request" | "thinking";
     content?: string;
     toolName?: string;
     toolInput?: Record<string, unknown>;
@@ -17,59 +18,48 @@ export interface ChatMessage {
     isError?: boolean;
     permissionId?: string;
     permissionResolved?: boolean;
+    permissionAllowed?: boolean;
 }
 
 interface AssistantMessageListProps {
     messages: ChatMessage[];
     onPermissionRespond: (permissionId: string, allow: boolean, toolInput?: Record<string, unknown>) => void;
+    onCreateAutoApproval?: (toolName: string, fieldName: string | undefined,
+        pattern: string | undefined, permissionId: string) => void;
     isProcessing?: boolean;
+    processingText?: string;
 }
 
-export function AssistantMessageList({ messages, onPermissionRespond, isProcessing }: AssistantMessageListProps) {
+export function AssistantMessageList({ messages, onPermissionRespond, onCreateAutoApproval, isProcessing, processingText }: AssistantMessageListProps) {
     const endRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        endRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [messages.length, isProcessing]);
+        endRef.current?.scrollIntoView({ behavior: "auto" });
+    }, [messages.length]);
 
     return (
-        <div style={{
-            flex: "1 1 0",
-            minHeight: 0,
-            overflowY: "auto",
-            padding: "16px",
-        }}>
+        <div className="axiom-message-list">
             {messages.map((msg) => {
                 switch (msg.type) {
                     case "system":
                         return (
-                            <div key={msg.id} style={{
-                                padding: "8px 12px",
-                                margin: "4px 0",
-                                fontSize: "13px",
-                                color: "#6a6e73",
-                                fontStyle: "italic",
-                            }}>
+                            <div key={msg.id} className="axiom-message-list__system">
+                                {msg.content}
+                            </div>
+                        );
+
+                    case "warning":
+                        return (
+                            <div key={msg.id} className="axiom-message-list__warning">
+                                <ExclamationTriangleIcon className="axiom-message-list__warning-icon" />
                                 {msg.content}
                             </div>
                         );
 
                     case "user":
                         return (
-                            <div key={msg.id} style={{
-                                display: "flex",
-                                justifyContent: "flex-end",
-                                margin: "8px 0",
-                            }}>
-                                <div style={{
-                                    maxWidth: "80%",
-                                    padding: "10px 14px",
-                                    borderRadius: "12px 12px 2px 12px",
-                                    backgroundColor: "#0066cc",
-                                    color: "white",
-                                    whiteSpace: "pre-wrap",
-                                    fontSize: "14px",
-                                }}>
+                            <div key={msg.id} className="axiom-message-list__user-row">
+                                <div className="axiom-message-list__user-bubble">
                                     {msg.content}
                                 </div>
                             </div>
@@ -77,18 +67,8 @@ export function AssistantMessageList({ messages, onPermissionRespond, isProcessi
 
                     case "assistant":
                         return (
-                            <div key={msg.id} style={{
-                                display: "flex",
-                                justifyContent: "flex-start",
-                                margin: "8px 0",
-                            }}>
-                                <div className="assistant-markdown" style={{
-                                    maxWidth: "80%",
-                                    padding: "10px 14px",
-                                    borderRadius: "12px 12px 12px 2px",
-                                    backgroundColor: "#f0f0f0",
-                                    fontSize: "14px",
-                                }}>
+                            <div key={msg.id} className="axiom-message-list__assistant-row">
+                                <div className="assistant-markdown axiom-message-list__assistant-bubble">
                                     <Content>
                                         <Markdown remarkPlugins={[remarkGfm]}>
                                             {msg.content?.trim() || ""}
@@ -108,19 +88,15 @@ export function AssistantMessageList({ messages, onPermissionRespond, isProcessi
                                 isError={msg.isError}
                                 permissionId={msg.permissionId}
                                 permissionResolved={msg.permissionResolved}
+                                permissionAllowed={msg.permissionAllowed}
                                 onPermissionRespond={onPermissionRespond}
+                                onCreateAutoApproval={onCreateAutoApproval}
                             />
                         );
 
                     case "thinking":
                         return (
-                            <div key={msg.id} style={{
-                                padding: "8px 12px",
-                                margin: "4px 0",
-                                fontSize: "13px",
-                                color: "#6a6e73",
-                                fontStyle: "italic",
-                            }}>
+                            <div key={msg.id} className="axiom-message-list__thinking">
                                 Thinking...
                             </div>
                         );
@@ -142,17 +118,9 @@ export function AssistantMessageList({ messages, onPermissionRespond, isProcessi
                 }
             })}
             {isProcessing && (
-                <div style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "12px",
-                    margin: "8px 0",
-                    fontSize: "13px",
-                    color: "#6a6e73",
-                }}>
+                <div className="axiom-message-list__processing">
                     <Spinner size="md" />
-                    <span>Claude is working...</span>
+                    <span>{processingText || "Claude is working..."}</span>
                 </div>
             )}
             <div ref={endRef} />

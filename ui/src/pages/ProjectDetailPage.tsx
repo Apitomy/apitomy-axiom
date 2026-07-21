@@ -37,6 +37,7 @@ import {
     Title,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
+import ChatIcon from "@patternfly/react-icons/dist/esm/icons/chat-icon";
 import PlayIcon from "@patternfly/react-icons/dist/esm/icons/play-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
@@ -67,6 +68,7 @@ import {
 import { EditLabelsModal } from "../components/EditLabelsModal";
 import { LabelDisplay } from "../components/LabelDisplay";
 import { ExecutionLogModal } from "../components/ExecutionLogModal";
+import { CreateSessionModal } from "../components/assistant/CreateSessionModal";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 const STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
@@ -97,6 +99,7 @@ export function ProjectDetailPage() {
 
     // Trigger Action state
     const [isActionModalOpen, setIsActionModalOpen] = useState(false);
+    const [isAssistantModalOpen, setIsAssistantModalOpen] = useState(false);
     const [actionTypes, setActionTypes] = useState<ActionType[]>([]);
     const [selectedActionType, setSelectedActionType] = useState("");
     const [actionInput, setActionInput] = useState("");
@@ -218,6 +221,14 @@ export function ProjectDetailPage() {
                         style={{ marginRight: "8px" }}
                     >
                         <SyncAltIcon />
+                    </Button>
+                    <Button
+                        variant="secondary"
+                        icon={<ChatIcon />}
+                        onClick={() => setIsAssistantModalOpen(true)}
+                        style={{ marginRight: "8px" }}
+                    >
+                        Assistant
                     </Button>
                     <Button
                         variant="secondary"
@@ -402,6 +413,17 @@ export function ProjectDetailPage() {
                     </Button>
                 </ModalFooter>
             </Modal>
+
+            <CreateSessionModal
+                isOpen={isAssistantModalOpen}
+                onClose={() => setIsAssistantModalOpen(false)}
+                onSessionCreated={(session) => {
+                    setIsAssistantModalOpen(false);
+                    window.open(`/assistant/${session.id}?breakout=true`, "_blank");
+                }}
+                projectId={project.id}
+                defaultName={project.name}
+            />
 
             <ConfirmDeleteModal isOpen={isDeleteOpen} title="Delete Project"
                 onConfirm={() => {

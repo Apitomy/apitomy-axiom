@@ -10,7 +10,9 @@ import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.McpServerEntity;
 import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
+import io.apitomy.axiom.core.entities.SessionTemplateEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
+import io.apitomy.axiom.app.assistant.SessionTemplateService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -33,6 +35,9 @@ public class ImportExportService {
 
     @Inject
     ObjectMapper objectMapper;
+
+    @Inject
+    SessionTemplateService sessionTemplateService;
 
     /**
      * Exports a configuration pack containing the selected items.
@@ -143,6 +148,55 @@ public class ImportExportService {
         result.setActionTypes(actionTypes);
         result.setReportDefinitions(reportDefinitions);
         return result;
+    }
+
+    /**
+     * Result of an upsert import operation, tracking created vs updated counts.
+     */
+    public record UpsertResult(
+            int toolsCreated, int toolsUpdated,
+            int actionTypesCreated, int actionTypesUpdated,
+            int reportDefinitionsCreated, int reportDefinitionsUpdated,
+            int toolsetsCreated, int toolsetsUpdated,
+            int sessionTemplatesCreated, int sessionTemplatesUpdated
+    ) {}
+
+    /**
+     * Imports a configuration pack with upsert semantics: items whose name
+     * matches an existing entity are updated in place; new names are created.
+     * Used by the assistant apply flow.
+     *
+     * @param pack the pack JSON
+     * @return summary with created and updated counts per category
+     */
+    @Transactional
+    public UpsertResult importOrUpdatePack(JsonNode pack) {
+        int[] tools = upsertTools(pack.path("tools"));
+        int[] actionTypes = upsertActionTypes(pack.path("actionTypes"));
+        int[] reportDefinitions = upsertReportDefinitions(pack.path("reportDefinitions"));
+        int[] toolsets = upsertToolsets(pack.path("toolsets"));
+        int[] sessionTemplates = upsertSessionTemplates(pack.path("sessionTemplates"));
+
+        String packName = pack.path("metadata").path("name").asText("unnamed");
+        LOG.infof("Upserted configuration pack '%s': %d tools created, %d updated; "
+                        + "%d action types created, %d updated; "
+                        + "%d report definitions created, %d updated; "
+                        + "%d toolsets created, %d updated; "
+                        + "%d session templates created, %d updated",
+                packName,
+                tools[0], tools[1],
+                actionTypes[0], actionTypes[1],
+                reportDefinitions[0], reportDefinitions[1],
+                toolsets[0], toolsets[1],
+                sessionTemplates[0], sessionTemplates[1]);
+
+        return new UpsertResult(
+                tools[0], tools[1],
+                actionTypes[0], actionTypes[1],
+                reportDefinitions[0], reportDefinitions[1],
+                toolsets[0], toolsets[1],
+                sessionTemplates[0], sessionTemplates[1]
+        );
     }
 
     // ── Conflict detection ───────────────────────────────────────────
@@ -269,6 +323,170 @@ public class ImportExportService {
             count++;
         }
         return count;
+    }
+
+    // ── Upsert helpers ──────────────────────────────────────────────
+
+    private int[] upsertTools(JsonNode items) {
+        if (!items.isArray()) return new int[]{0, 0};
+        int created = 0, updated = 0;
+        for (JsonNode item : items) {
+            String name = item.path("name").asText();
+            ToolDefinitionEntity entity = ToolDefinitionEntity.find("name", name).firstResult();
+            boolean isNew = (entity == null);
+            if (isNew) {
+                entity = new ToolDefinitionEntity();
+                entity.name = name;
+            } else {
+                entity.labels.clear();
+            }
+            entity.description = textOrNull(item, "description");
+            entity.parameters = jsonOrNull(item, "parameters");
+            entity.scriptTemplate = textOrNull(item, "scriptTemplate");
+            JsonNode labelsNode = item.path("labels");
+            if (labelsNode.isArray()) {
+                for (JsonNode l : labelsNode) {
+                    entity.labels.add(l.asText());
+                }
+            }
+            entity.persist();
+            if (isNew) created++;
+            else updated++;
+        }
+        return new int[]{created, updated};
+    }
+
+    private int[] upsertActionTypes(JsonNode items) {
+        if (!items.isArray()) return new int[]{0, 0};
+        int created = 0, updated = 0;
+        for (JsonNode item : items) {
+            String name = item.path("name").asText();
+            ActionTypeEntity entity = ActionTypeEntity.find("name", name).firstResult();
+            boolean isNew = (entity == null);
+            if (isNew) {
+                entity = new ActionTypeEntity();
+                entity.name = name;
+            }
+            entity.description = textOrNull(item, "description");
+            entity.executionMode = item.path("executionMode").asText("actor");
+            entity.userTriggerable = item.path("userTriggerable").asBoolean(false);
+            entity.managerTriggerable = item.path("managerTriggerable").asBoolean(false);
+            entity.emitsEvent = item.path("emitsEvent").asBoolean(false);
+            entity.inputSchema = jsonOrNull(item, "inputSchema");
+            entity.allowedTools = csvOrNull(item, "allowedTools");
+            entity.promptTemplate = textOrNull(item, "promptTemplate");
+            entity.scriptTemplate = textOrNull(item, "scriptTemplate");
+            entity.model = textOrNull(item, "model");
+            entity.engine = textOrNull(item, "engine");
+            entity.environment = jsonOrNull(item, "environment");
+            entity.persist();
+            if (isNew) created++;
+            else updated++;
+        }
+        return new int[]{created, updated};
+    }
+
+    private int[] upsertReportDefinitions(JsonNode items) {
+        if (!items.isArray()) return new int[]{0, 0};
+        int created = 0, updated = 0;
+        for (JsonNode item : items) {
+            String name = item.path("name").asText();
+            ReportDefinitionEntity entity = ReportDefinitionEntity.find("name", name).firstResult();
+            boolean isNew = (entity == null);
+            if (isNew) {
+                entity = new ReportDefinitionEntity();
+                entity.name = name;
+                entity.enabled = false;
+                entity.createdOn = Instant.now();
+            }
+            entity.description = textOrNull(item, "description");
+            entity.schedule = item.path("schedule").asText("none");
+            entity.scheduleTime = textOrNull(item, "scheduleTime");
+            entity.scheduleDayOfWeek = textOrNull(item, "scheduleDayOfWeek");
+            entity.timeWindow = item.path("timeWindow").asText("last-7d");
+            entity.promptTemplate = item.path("promptTemplate").asText("");
+            entity.allowedTools = csvOrNull(item, "allowedTools");
+            entity.environment = jsonOrNull(item, "environment");
+            entity.timeoutSeconds = item.has("timeoutSeconds")
+                    ? item.path("timeoutSeconds").asInt() : null;
+            entity.updatedOn = Instant.now();
+            entity.persist();
+            if (isNew) created++;
+            else updated++;
+        }
+        return new int[]{created, updated};
+    }
+
+    private int[] upsertToolsets(JsonNode items) {
+        if (!items.isArray()) return new int[]{0, 0};
+        int created = 0, updated = 0;
+        for (JsonNode item : items) {
+            String name = item.path("name").asText();
+            ToolsetEntity entity = ToolsetEntity.find("name", name).firstResult();
+            boolean isNew = (entity == null);
+            if (isNew) {
+                entity = new ToolsetEntity();
+                entity.name = name;
+            }
+            entity.description = textOrNull(item, "description");
+            entity.tools = csvOrNull(item, "tools");
+            entity.persist();
+            if (isNew) created++;
+            else updated++;
+        }
+        return new int[]{created, updated};
+    }
+
+    private int[] upsertSessionTemplates(JsonNode items) {
+        if (!items.isArray()) return new int[]{0, 0};
+        int created = 0, updated = 0;
+        for (JsonNode item : items) {
+            String templateId = item.path("templateId").asText(null);
+            if (templateId == null || templateId.isBlank()) {
+                templateId = java.util.UUID.randomUUID().toString();
+            }
+
+            // Guard against overwriting built-in templates
+            if (sessionTemplateService.isBuiltIn(templateId)) {
+                LOG.warnf("Skipping built-in session template '%s' — cannot be overwritten", templateId);
+                continue;
+            }
+
+            SessionTemplateEntity entity = SessionTemplateEntity.find("templateId", templateId).firstResult();
+            boolean isNew = (entity == null);
+            if (isNew) {
+                entity = new SessionTemplateEntity();
+                entity.templateId = templateId;
+            } else {
+                entity.mcpServers.clear();
+                entity.allowedTools.clear();
+            }
+            entity.name = item.path("name").asText("");
+            entity.description = textOrNull(item, "description");
+            entity.systemPrompt = textOrNull(item, "systemPrompt");
+            entity.welcomeMessage = textOrNull(item, "welcomeMessage");
+            entity.workingDirectory = textOrNull(item, "workingDirectory");
+            entity.model = textOrNull(item, "model");
+            entity.initScript = textOrNull(item, "initScript");
+            entity.initScriptType = textOrNull(item, "initScriptType");
+            entity.environment = jsonOrNull(item, "environment");
+            JsonNode mcpNode = item.path("mcpServers");
+            if (mcpNode.isArray()) {
+                for (JsonNode s : mcpNode) {
+                    entity.mcpServers.add(s.asText());
+                }
+            }
+            JsonNode toolsNode = item.path("allowedTools");
+            if (toolsNode.isArray()) {
+                for (JsonNode t : toolsNode) {
+                    entity.allowedTools.add(t.asText());
+                }
+            }
+            entity.persist();
+            if (isNew) created++;
+            else updated++;
+        }
+        return new int[]{created, updated};
     }
 
     // ── Serialization helpers ────────────────────────────────────────

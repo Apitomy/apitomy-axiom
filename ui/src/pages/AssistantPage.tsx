@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     PageSection,
@@ -18,34 +18,27 @@ import {
     Toolbar,
     ToolbarContent,
     ToolbarItem,
+    ToolbarGroup,
+    Form,
+    FormGroup,
+    FormSelect,
+    FormSelectOption,
+    SearchInput,
 } from "@patternfly/react-core";
+import PencilAltIcon from "@patternfly/react-icons/dist/esm/icons/pencil-alt-icon";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import RobotIcon from "@patternfly/react-icons/dist/esm/icons/robot-icon";
+import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import {
     fetchAssistantSessions,
-    createAssistantSession,
     deleteAssistantSession,
+    renameAssistantSession,
+    fetchAssistantTemplates,
     type AssistantSessionInfo,
 } from "../config/api";
-
-const FUN_WORDS = [
-    "rocket", "cactus", "penguin", "waffle", "thunder", "mango", "cosmic",
-    "pickle", "turbo", "noodle", "galaxy", "biscuit", "phantom", "pretzel",
-    "velvet", "zigzag", "bamboo", "coral", "doodle", "falcon", "gopher",
-    "cobalt", "marble", "nimbus", "orchid", "quartz", "walrus", "tundra",
-    "nebula", "pebble", "saffron", "breeze", "mosaic", "lantern", "crimson",
-    "meadow", "jasper", "harbor", "ember", "frost", "summit", "canyon",
-    "copper", "willow", "sparrow", "clover", "rapids", "flint", "comet",
-    "puzzle", "sphinx", "goblin", "dragon", "wizard", "pirate", "ninja",
-    "viking", "yeti", "kraken", "phoenix", "griffin", "titan", "tempest",
-    "aurora", "blizzard", "cascade", "dynamo", "eclipse", "forge", "horizon",
-];
-
-function generateSessionName(): string {
-    const pick = () => FUN_WORDS[Math.floor(Math.random() * FUN_WORDS.length)];
-    return `${pick()}-${pick()}-${pick()}`;
-}
+import { CreateSessionModal } from "../components/assistant/CreateSessionModal";
+import "./AssistantPage.css";
 
 const STATUS_COLORS: Record<string, "blue" | "green" | "red" | "grey"> = {
     starting: "blue",
@@ -58,22 +51,21 @@ export function AssistantPage() {
     const navigate = useNavigate();
     const [sessions, setSessions] = useState<AssistantSessionInfo[]>([]);
     const [loading, setLoading] = useState(true);
-    const [isCreateOpen, setIsCreateOpen] = useState(false);
-    const [newName, setNewName] = useState("");
-    const createButtonRef = useRef<HTMLButtonElement>(null);
+    const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false);
 
-    useEffect(() => {
-        if (isCreateOpen) {
-            setTimeout(() => createButtonRef.current?.focus(), 100);
-        }
-    }, [isCreateOpen]);
-    const [creating, setCreating] = useState(false);
-    const [createError, setCreateError] = useState("");
+    const [filterName, setFilterName] = useState("");
+    const [filterTemplateId, setFilterTemplateId] = useState("");
+    const [templateMap, setTemplateMap] = useState<Record<string, string>>({});
 
     const load = useCallback(() => {
         setLoading(true);
-        fetchAssistantSessions()
-            .then(setSessions)
+        Promise.all([fetchAssistantSessions(), fetchAssistantTemplates()])
+            .then(([sess, tmpls]) => {
+                setSessions(sess);
+                const map: Record<string, string> = {};
+                tmpls.forEach((t) => { map[t.templateId] = t.name; });
+                setTemplateMap(map);
+            })
             .catch(console.error)
             .finally(() => setLoading(false));
     }, []);
@@ -82,30 +74,55 @@ export function AssistantPage() {
         load();
     }, [load]);
 
-    const handleCreate = async () => {
-        setCreating(true);
-        setCreateError("");
+    const filteredSessions = sessions.filter((s) => {
+        if (filterName && !s.name.toLowerCase().includes(filterName.toLowerCase())) {
+            return false;
+        }
+        if (filterTemplateId && s.templateId !== filterTemplateId) {
+            return false;
+        }
+        return true;
+    });
+
+    const uniqueTemplateIds = Object.keys(templateMap)
+        .sort((a, b) => (templateMap[a] || a).localeCompare(templateMap[b] || b));
+
+    const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+    const [renameTarget, setRenameTarget] = useState<{ id: string; name: string } | null>(null);
+    const [renameValue, setRenameValue] = useState("");
+
+    const handleRenameClick = (session: AssistantSessionInfo, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setRenameTarget({ id: session.id, name: session.name });
+        setRenameValue(session.name);
+    };
+
+    const handleRenameConfirm = async () => {
+        if (!renameTarget || !renameValue.trim()) return;
         try {
-            const session = await createAssistantSession(newName || undefined);
-            setIsCreateOpen(false);
-            setNewName("");
-            navigate(`/assistant/${session.id}`);
-        } catch (err: unknown) {
-            const e = err as { message?: string };
-            setCreateError(e.message || "Failed to create session");
-        } finally {
-            setCreating(false);
+            await renameAssistantSession(renameTarget.id, renameValue.trim());
+            setRenameTarget(null);
+            load();
+        } catch (err) {
+            console.error("Failed to rename session:", err);
         }
     };
 
-    const handleDelete = async (id: string, e: React.MouseEvent) => {
+    const handleDeleteClick = (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (!confirm("End this assistant session?")) return;
+        setDeleteTarget(id);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!deleteTarget) return;
         try {
-            await deleteAssistantSession(id);
+            await deleteAssistantSession(deleteTarget);
+            setDeleteTarget(null);
             load();
         } catch (err) {
             console.error("Failed to delete session:", err);
+            setDeleteTarget(null);
         }
     };
 
@@ -119,11 +136,48 @@ export function AssistantPage() {
             {!loading && sessions.length > 0 && (
                 <Toolbar>
                     <ToolbarContent>
-                        <ToolbarItem>
+                        <ToolbarGroup>
+                            <ToolbarItem>
+                                <SearchInput
+                                    placeholder="Filter by name..."
+                                    value={filterName}
+                                    onChange={(_e, v) => setFilterName(v)}
+                                    onClear={() => setFilterName("")}
+                                    className="axiom-assistant-page__filter-name"
+                                />
+                            </ToolbarItem>
+                            <ToolbarItem>
+                                <FormSelect
+                                    value={filterTemplateId}
+                                    onChange={(_e, v) => setFilterTemplateId(v)}
+                                    aria-label="Filter by template"
+                                    className="axiom-assistant-page__filter-template"
+                                >
+                                    <FormSelectOption value="" label="All templates" />
+                                    {uniqueTemplateIds.map((tid) => (
+                                        <FormSelectOption
+                                            key={tid}
+                                            value={tid}
+                                            label={templateMap[tid] || tid}
+                                        />
+                                    ))}
+                                </FormSelect>
+                            </ToolbarItem>
+                            <ToolbarItem>
+                                <Button
+                                    variant="plain"
+                                    aria-label="Refresh sessions"
+                                    onClick={load}
+                                >
+                                    <SyncAltIcon />
+                                </Button>
+                            </ToolbarItem>
+                        </ToolbarGroup>
+                        <ToolbarItem align={{ default: "alignEnd" }}>
                             <Button
                                 variant="primary"
                                 icon={<PlusCircleIcon />}
-                                onClick={() => { setNewName(generateSessionName()); setIsCreateOpen(true); }}
+                                onClick={() => setIsTemplatePickerOpen(true)}
                             >
                                 New Session
                             </Button>
@@ -153,7 +207,7 @@ export function AssistantPage() {
                             <Button
                                 variant="primary"
                                 icon={<PlusCircleIcon />}
-                                onClick={() => { setNewName(generateSessionName()); setIsCreateOpen(true); }}
+                                onClick={() => setIsTemplatePickerOpen(true)}
                             >
                                 New Session
                             </Button>
@@ -161,32 +215,26 @@ export function AssistantPage() {
                     </EmptyStateFooter>
                 </EmptyState>
             ) : (
-                <div style={{ marginTop: 16 }}>
-                    {sessions.map((s) => (
+                <div className="axiom-assistant-page__sessions">
+                    {filteredSessions.map((s) => (
                         <div
                             key={s.id}
+                            className="axiom-assistant-page__session-card"
                             onClick={() => navigate(`/assistant/${s.id}`)}
-                            style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 12,
-                                padding: "14px 16px",
-                                marginBottom: 8,
-                                borderRadius: 8,
-                                border: "1px solid #d2d2d2",
-                                cursor: "pointer",
-                                backgroundColor: "#fafafa",
-                            }}
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.backgroundColor = "#f0f0f0";
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.backgroundColor = "#fafafa";
-                            }}
                         >
-                            <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: 600, fontSize: "14px" }}>{s.name}</div>
-                                <div style={{ fontSize: "12px", color: "#6a6e73", marginTop: 2 }}>
+                            <div className="axiom-assistant-page__session-card__details">
+                                <div className="axiom-assistant-page__session-card__name">{s.name}</div>
+                                <div className="axiom-assistant-page__session-card__meta">
+                                    {templateMap[s.templateId] || s.templateId}
+                                    {s.projectName && (
+                                        <>
+                                            {" · "}
+                                            <Label isCompact color="teal">
+                                                {s.projectName}
+                                            </Label>
+                                        </>
+                                    )}
+                                    {" · "}
                                     Created {new Date(s.createdAt).toLocaleString()}
                                 </div>
                             </div>
@@ -195,8 +243,15 @@ export function AssistantPage() {
                             </Label>
                             <Button
                                 variant="plain"
+                                aria-label="Rename session"
+                                onClick={(e) => handleRenameClick(s, e)}
+                            >
+                                <PencilAltIcon />
+                            </Button>
+                            <Button
+                                variant="plain"
                                 aria-label="Delete session"
-                                onClick={(e) => handleDelete(s.id, e)}
+                                onClick={(e) => handleDeleteClick(s.id, e)}
                             >
                                 <TrashIcon />
                             </Button>
@@ -205,38 +260,64 @@ export function AssistantPage() {
                 </div>
             )}
 
+            <CreateSessionModal
+                isOpen={isTemplatePickerOpen}
+                onClose={() => setIsTemplatePickerOpen(false)}
+                onSessionCreated={(session) => {
+                    setIsTemplatePickerOpen(false);
+                    navigate(`/assistant/${session.id}`);
+                }}
+            />
+
             <Modal
-                isOpen={isCreateOpen}
-                onClose={() => setIsCreateOpen(false)}
+                isOpen={deleteTarget !== null}
+                onClose={() => setDeleteTarget(null)}
                 variant="small"
-                aria-label="New assistant session"
+                aria-label="End session confirmation"
             >
-                <ModalHeader title="New Assistant Session" />
+                <ModalHeader title="End Session?" />
                 <ModalBody>
-                    <TextInput
-                        value={newName}
-                        onChange={(_e, val) => setNewName(val)}
-                        placeholder="Session name (optional)"
-                        aria-label="Session name"
-                    />
-                    {createError && (
-                        <div style={{ color: "#c9190b", marginTop: 8, fontSize: "13px" }}>
-                            {createError}
-                        </div>
-                    )}
+                    This will terminate the AI assistant and delete the session.
+                    This action cannot be undone.
                 </ModalBody>
                 <ModalFooter>
-                    <Button
-                        ref={createButtonRef}
-                        variant="primary"
-                        onClick={handleCreate}
-                        isLoading={creating}
-                        isDisabled={creating}
-                        autoFocus
-                    >
-                        Create
+                    <Button variant="danger" onClick={handleDeleteConfirm}>
+                        End Session
                     </Button>
-                    <Button variant="link" onClick={() => setIsCreateOpen(false)}>
+                    <Button variant="link" onClick={() => setDeleteTarget(null)}>
+                        Cancel
+                    </Button>
+                </ModalFooter>
+            </Modal>
+
+            <Modal
+                isOpen={renameTarget !== null}
+                onClose={() => setRenameTarget(null)}
+                variant="small"
+                aria-label="Rename session"
+            >
+                <ModalHeader title="Rename Session" />
+                <ModalBody>
+                    <Form>
+                        <FormGroup label="Session Name" fieldId="rename-session">
+                            <TextInput
+                                id="rename-session"
+                                value={renameValue}
+                                onChange={(_e, v) => setRenameValue(v)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") handleRenameConfirm();
+                                }}
+                                autoFocus
+                            />
+                        </FormGroup>
+                    </Form>
+                </ModalBody>
+                <ModalFooter>
+                    <Button variant="primary" onClick={handleRenameConfirm}
+                        isDisabled={!renameValue.trim()}>
+                        Rename
+                    </Button>
+                    <Button variant="link" onClick={() => setRenameTarget(null)}>
                         Cancel
                     </Button>
                 </ModalFooter>

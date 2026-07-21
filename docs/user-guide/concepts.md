@@ -1,16 +1,18 @@
 # Concepts
 
 Apitomy Axiom is an event-driven orchestration platform that uses AI to automate
-software development workflows. It has two primary use-cases:
+software development workflows. It has three primary capabilities:
 
 - **Reports** — AI-generated reports about your repositories and projects, produced
   on a schedule or on demand
 - **Event-driven automation** — monitor GitHub and Jira for activity, triage incoming
   events with an AI Manager, and delegate work to AI or human actors
+- **AI Assistant** — an interactive conversational interface for arbitrary tasks, powered by
+  customizable session templates
 
-Both use-cases share a common set of configuration items — tools, secrets, MCP servers,
-and more — that give the AI agents the capabilities they need. This guide explains
-each concept and how they relate.
+All three capabilities share a common set of configuration items — tools, secrets, MCP
+servers, and more — that give the AI agents the capabilities they need. This guide
+explains each concept and how they relate.
 
 ---
 
@@ -395,6 +397,22 @@ files. A pack can include any combination of:
 
 This is useful for sharing configurations between Axiom instances, backing up
 configuration, or distributing pre-built setups.
+
+---
+
+## AI Assistant
+
+The AI Assistant is an interactive conversational interface built on top of Claude Code. You
+can use it for arbitrary tasks — from creating Axiom configuration items to general-purpose
+coding, analysis, or exploration.
+
+Sessions are created from **Session Templates**, which define the assistant's system prompt,
+available tools, MCP servers, and working directory. Axiom ships with built-in templates
+(including the Configuration Assistant for creating and updating tools, action types,
+report definitions, toolsets, and session templates), and you can create your own
+templates for custom workflows.
+
+For full details, see the [AI Assistant](ai-assistant.md) guide.
 
 ---
 
