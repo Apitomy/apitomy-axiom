@@ -219,47 +219,76 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
         const buffer: { eventType: string; eventData: Record<string, unknown>; eventIndex: number }[] = [];
         let historyLoaded = false;
 
+        const sessionShort = sessionId.substring(0, 8);
+        console.log(`[ChatPanel] Subscribing to session ${sessionShort}`);
+
         const unsubscribe = sseClient.subscribeSession(sessionId,
             (eventType, eventData, eventIndex) => {
-                if (cancelled) return;
+                if (cancelled) {
+                    console.warn(`[ChatPanel] DROPPED (cancelled) ${eventType} idx=${eventIndex} for ${sessionShort}`);
+                    return;
+                }
                 if (!historyLoaded) {
+                    console.log(`[ChatPanel] Buffering (history loading) ${eventType} idx=${eventIndex} for ${sessionShort}`);
                     buffer.push({ eventType, eventData, eventIndex });
                     return;
                 }
-                if (eventIndex <= lastSeenIndexRef.current) return;
+                if (eventIndex <= lastSeenIndexRef.current) {
+                    console.log(`[ChatPanel] Skipping (already seen) ${eventType} idx=${eventIndex} <= ${lastSeenIndexRef.current} for ${sessionShort}`);
+                    return;
+                }
+                console.log(`[ChatPanel] Processing live ${eventType} idx=${eventIndex} for ${sessionShort}`);
                 lastSeenIndexRef.current = eventIndex;
                 processEvent(eventType, eventData);
             }
         );
 
-        fetchAssistantSessionHistory(sessionId)
-            .then((history) => {
-                if (cancelled) return;
-                for (const event of history) {
-                    processEvent(event.eventType, event.eventData);
-                    lastSeenIndexRef.current = Math.max(lastSeenIndexRef.current, event.eventIndex);
-                }
-                historyLoaded = true;
-                for (const event of buffer) {
-                    if (event.eventIndex <= lastSeenIndexRef.current) continue;
-                    lastSeenIndexRef.current = event.eventIndex;
-                    processEvent(event.eventType, event.eventData);
-                }
-                buffer.length = 0;
-            })
-            .catch((err) => {
-                if (cancelled) return;
-                console.error("Failed to fetch session history:", err);
-                historyLoaded = true;
-                for (const event of buffer) {
-                    processEvent(event.eventType, event.eventData);
-                }
-                buffer.length = 0;
-            });
+        function catchUpFromHistory() {
+            console.log(`[ChatPanel] Fetching history for ${sessionShort} (lastSeen=${lastSeenIndexRef.current})`);
+            fetchAssistantSessionHistory(sessionId)
+                .then((history) => {
+                    if (cancelled) {
+                        console.warn(`[ChatPanel] History response arrived but cancelled for ${sessionShort}`);
+                        return;
+                    }
+                    const newEvents = history.filter(e => e.eventIndex > lastSeenIndexRef.current);
+                    console.log(`[ChatPanel] History: ${history.length} total, ${newEvents.length} new (lastSeen=${lastSeenIndexRef.current}) for ${sessionShort}`);
+                    for (const event of history) {
+                        if (event.eventIndex <= lastSeenIndexRef.current) continue;
+                        processEvent(event.eventType, event.eventData);
+                        lastSeenIndexRef.current = Math.max(lastSeenIndexRef.current, event.eventIndex);
+                    }
+                    historyLoaded = true;
+                    for (const event of buffer) {
+                        if (event.eventIndex <= lastSeenIndexRef.current) continue;
+                        lastSeenIndexRef.current = event.eventIndex;
+                        processEvent(event.eventType, event.eventData);
+                    }
+                    buffer.length = 0;
+                })
+                .catch((err) => {
+                    if (cancelled) return;
+                    console.error("Failed to fetch session history:", err);
+                    historyLoaded = true;
+                    for (const event of buffer) {
+                        processEvent(event.eventType, event.eventData);
+                    }
+                    buffer.length = 0;
+                });
+        }
+
+        catchUpFromHistory();
+
+        const unsubReconnect = sseClient.onReconnect(() => {
+            console.log(`[ChatPanel] SSE reconnected, catching up for ${sessionShort}`);
+            if (!cancelled) catchUpFromHistory();
+        });
 
         return () => {
+            console.log(`[ChatPanel] Cleaning up subscription for ${sessionShort}`);
             cancelled = true;
             unsubscribe();
+            unsubReconnect();
         };
     }, [sessionId, processEvent]);
 

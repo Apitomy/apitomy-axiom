@@ -140,6 +140,15 @@ public record SseEvent(
                         + "\"eventIndex\":" + eventIndex + "}");
     }
 
+    /**
+     * Creates a heartbeat event to keep SSE connections alive through proxies.
+     *
+     * @return a new heartbeat SSE event
+     */
+    public static SseEvent heartbeat() {
+        return new SseEvent("heartbeat", "{}");
+    }
+
     private static String escapeJson(String s) {
         if (s == null) return "";
         return s.replace("\\", "\\\\")

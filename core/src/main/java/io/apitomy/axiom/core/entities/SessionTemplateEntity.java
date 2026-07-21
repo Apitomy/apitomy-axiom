@@ -40,6 +40,10 @@ public class SessionTemplateEntity extends PanacheEntity {
     @Column(name = "welcome_message", columnDefinition = "TEXT")
     public String welcomeMessage;
 
+    /** Message automatically sent to the AI when a session starts. */
+    @Column(name = "initial_message", columnDefinition = "TEXT")
+    public String initialMessage;
+
     /** Optional absolute path to an existing directory for the session. */
     @Column(name = "working_directory", length = 1024)
     public String workingDirectory;

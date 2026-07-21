@@ -230,6 +230,16 @@ public class AssistantSessionManager {
             sessions.put(session.getId(), session);
             LOG.infof("Created assistant session %s (%s) from template %s",
                     session.getId(), sessionName, templateId);
+
+            // Send initial user message if configured
+            String initialMessage = template.initialMessage();
+            if (project != null && initialMessage != null) {
+                initialMessage = initialMessage.replace("{{projectName}}", project.name);
+            }
+            if (initialMessage != null && !initialMessage.isBlank()) {
+                session.sendMessage(initialMessage);
+            }
+
             return session;
         } catch (Exception e) {
             sessionCount.decrementAndGet();

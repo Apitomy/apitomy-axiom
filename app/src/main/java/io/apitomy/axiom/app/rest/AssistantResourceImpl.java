@@ -562,6 +562,7 @@ public class AssistantResourceImpl implements AssistantResource {
         bean.setBuiltIn(template.builtIn());
         bean.setSystemPrompt(template.systemPrompt());
         bean.setWelcomeMessage(template.welcomeMessage());
+        bean.setInitialMessage(template.initialMessage());
         bean.setWorkingDirectory(template.workingDirectory());
         bean.setModel(template.model());
         bean.setInitScript(template.initScript());
@@ -590,6 +591,7 @@ public class AssistantResourceImpl implements AssistantResource {
                 data.getDescription(),
                 data.getSystemPrompt(),
                 data.getWelcomeMessage(),
+                data.getInitialMessage(),
                 data.getWorkingDirectory(),
                 data.getModel(),
                 data.getInitScript(),

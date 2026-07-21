@@ -47,6 +47,7 @@ public class SessionTemplateService {
      * @param description brief description
      * @param systemPrompt markdown written to CLAUDE.md
      * @param welcomeMessage first chat message (nullable)
+     * @param initialMessage message automatically sent to the AI on session start (nullable)
      * @param workingDirectory absolute path or null for auto-created
      * @param model AI model override, or null for default
      * @param initScript optional init script content
@@ -62,6 +63,7 @@ public class SessionTemplateService {
             String description,
             String systemPrompt,
             String welcomeMessage,
+            String initialMessage,
             String workingDirectory,
             String model,
             String initScript,
@@ -156,6 +158,7 @@ public class SessionTemplateService {
         entity.description = template.description();
         entity.systemPrompt = template.systemPrompt();
         entity.welcomeMessage = template.welcomeMessage();
+        entity.initialMessage = template.initialMessage();
         entity.workingDirectory = template.workingDirectory();
         entity.model = template.model();
         entity.initScript = template.initScript();
@@ -192,6 +195,7 @@ public class SessionTemplateService {
         entity.description = template.description();
         entity.systemPrompt = template.systemPrompt();
         entity.welcomeMessage = template.welcomeMessage();
+        entity.initialMessage = template.initialMessage();
         entity.workingDirectory = template.workingDirectory();
         entity.model = template.model();
         entity.initScript = template.initScript();
@@ -230,6 +234,7 @@ public class SessionTemplateService {
                 entity.description,
                 entity.systemPrompt,
                 entity.welcomeMessage,
+                entity.initialMessage,
                 entity.workingDirectory,
                 entity.model,
                 entity.initScript,
@@ -249,6 +254,7 @@ public class SessionTemplateService {
                 node.path("description").asText(""),
                 node.path("systemPrompt").asText(""),
                 node.path("welcomeMessage").asText(null),
+                node.path("initialMessage").asText(null),
                 node.path("workingDirectory").asText(null),
                 node.path("model").asText(null),
                 node.path("initScript").asText(null),
