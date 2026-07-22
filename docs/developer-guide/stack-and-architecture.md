@@ -185,6 +185,32 @@ JAX-RS SSE endpoint (per-session)
 Sessions are in-memory — they do not survive server restarts. Cost and token usage
 are accumulated per-session and persisted to `AiUsageEntity` on session destruction.
 
+#### Init Script Security
+
+Session templates support optional init scripts (bash or Node.js) that run once when a
+session is created. The `runInitScript` method in `AssistantSessionManager` executes
+these scripts via `ProcessBuilder` with **no sandboxing** — the script runs as the same
+OS user as the Axiom server process, with full filesystem and network access. The only
+safeguard is a 60-second timeout.
+
+**Trust model:** The init script content comes from session templates stored in the
+database (user-defined) or in built-in JSON files under
+`resources/templates/assistant-templates/`. There are currently no authentication or
+role-based access controls on the template CRUD endpoints
+(`POST/PUT /assistant/templates`). Any user with network access to Axiom can create a
+template containing an arbitrary init script, which will execute with server privileges
+when a session is created from that template. Template authors are therefore implicitly
+trusted with server-level code execution.
+
+**Future hardening options** (not currently implemented):
+
+- Add role-based access control to the template CRUD endpoints so only administrators
+  can create or modify templates with init scripts
+- Run init scripts in a container or as a restricted OS user to limit their blast
+  radius
+- Validate or restrict init script content (e.g., command allowlists or static
+  analysis)
+
 ### Real-Time Updates (SSE)
 
 ```
