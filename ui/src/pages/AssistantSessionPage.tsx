@@ -348,7 +348,7 @@ export function AssistantSessionPage() {
                     isInline
                     title="Failed to rename session"
                     actionClose={<AlertActionCloseButton onClose={() => setRenameError(null)} />}
-                    className="axiom-session-page__end-session-error"
+                    className="axiom-session-page__rename-error"
                 >
                     {renameError}
                 </Alert>
