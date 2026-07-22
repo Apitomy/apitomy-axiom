@@ -15,6 +15,7 @@ import {
     ModalFooter,
     ModalHeader,
     Alert,
+    AlertActionCloseButton,
 } from "@patternfly/react-core";
 import { Table, Thead, Tr, Th, Tbody, Td } from "@patternfly/react-table";
 import ArrowLeftIcon from "@patternfly/react-icons/dist/esm/icons/arrow-left-icon";
@@ -49,6 +50,7 @@ export function AssistantSessionPage() {
     const [applying, setApplying] = useState(false);
     const [applyResult, setApplyResult] = useState<AssistantApplyResult | null>(null);
     const [applyError, setApplyError] = useState<string | null>(null);
+    const [endSessionError, setEndSessionError] = useState<string | null>(null);
     const [sessionMode, setSessionMode] = useState<SessionMode>("normal");
     const [itemCount, setItemCount] = useState(0);
     const [isEditingName, setIsEditingName] = useState(false);
@@ -138,6 +140,7 @@ export function AssistantSessionPage() {
 
     const handleEndSession = async () => {
         if (!sessionId) return;
+        setEndSessionError(null);
         try {
             await deleteAssistantSession(sessionId);
             if (isBreakout) {
@@ -147,6 +150,8 @@ export function AssistantSessionPage() {
             }
         } catch (err) {
             console.error("Failed to end session:", err);
+            setEndSessionError((err as Error).message || "Failed to end session");
+            setIsEndConfirmOpen(false);
         }
     };
 
@@ -315,6 +320,18 @@ export function AssistantSessionPage() {
                     className="axiom-session-page__apply-error"
                 >
                     <pre className="axiom-session-page__apply-error-pre">{applyError}</pre>
+                </Alert>
+            )}
+
+            {endSessionError && (
+                <Alert
+                    variant="danger"
+                    isInline
+                    title="Failed to end session"
+                    actionClose={<AlertActionCloseButton onClose={() => setEndSessionError(null)} />}
+                    className="axiom-session-page__end-session-error"
+                >
+                    {endSessionError}
                 </Alert>
             )}
 
