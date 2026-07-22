@@ -346,8 +346,9 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
             onAutoApprovalCountChange?.();
         } catch (err) {
             console.error("Failed to create auto-approval:", err);
+            addMessage({ type: "system", content: "Failed to create auto-approval rule. Please try again." });
         }
-    }, [sessionId, onAutoApprovalCountChange]);
+    }, [sessionId, onAutoApprovalCountChange, addMessage]);
 
     return (
         <div style={{
