@@ -355,8 +355,9 @@ export function AssistantSessionPage() {
             >
                 <ModalHeader title="End Session?" />
                 <ModalBody>
-                    This will terminate the AI assistant and delete all generated items
-                    that have not been applied. This action cannot be undone.
+                    {isConfigAssistant
+                        ? "This will terminate the AI assistant and delete all generated items that have not been applied. This action cannot be undone."
+                        : "This will terminate the AI assistant and delete the session. This action cannot be undone."}
                 </ModalBody>
                 <ModalFooter>
                     <Button variant="danger" onClick={handleEndSession}>
