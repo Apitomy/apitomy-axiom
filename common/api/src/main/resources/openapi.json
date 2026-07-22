@@ -3280,11 +3280,7 @@
           "200": {
             "description": "Item content",
             "content": {
-              "*/*": {
-                "schema": {
-                  "$ref": "#/components/schemas/FileContent"
-                }
-              }
+              "application/json": {}
             }
           }
         }
@@ -7009,11 +7005,6 @@
             "type": "string"
           }
         }
-      },
-      "FileContent": {
-        "format": "binary",
-        "type": "string",
-        "x-codegen-inline": true
       }
     },
     "responses": {
