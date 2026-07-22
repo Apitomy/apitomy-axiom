@@ -8,6 +8,8 @@ import io.apitomy.axiom.api.beans.NewToolDefinition;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ManagedContext;
 import io.apitomy.axiom.core.services.ActionTypeValidator;
 import io.apitomy.axiom.core.services.ReportDefinitionValidator;
 import io.apitomy.axiom.core.services.ToolValidator;
@@ -238,6 +240,10 @@ public class AssistantItemValidator {
     }
 
     private ActionTypeValidator.KnownNames buildActionTypeKnownNames(Path workingDirectory) {
+        ManagedContext requestContext = Arc.container() != null
+                ? Arc.container().requestContext() : null;
+        boolean activated = requestContext != null && !requestContext.isActive();
+        if (activated) requestContext.activate();
         try {
             Set<String> secrets = SecretEntity.<SecretEntity>listAll().stream()
                     .map(s -> s.name)
@@ -253,10 +259,16 @@ public class AssistantItemValidator {
         } catch (Exception e) {
             LOG.warnf("Failed to build KnownNames for validation: %s", e.getMessage());
             return null;
+        } finally {
+            if (activated) requestContext.deactivate();
         }
     }
 
     private ReportDefinitionValidator.KnownNames buildReportDefKnownNames(Path workingDirectory) {
+        ManagedContext requestContext = Arc.container() != null
+                ? Arc.container().requestContext() : null;
+        boolean activated = requestContext != null && !requestContext.isActive();
+        if (activated) requestContext.activate();
         try {
             Set<String> secrets = SecretEntity.<SecretEntity>listAll().stream()
                     .map(s -> s.name)
@@ -272,6 +284,8 @@ public class AssistantItemValidator {
         } catch (Exception e) {
             LOG.warnf("Failed to build KnownNames for validation: %s", e.getMessage());
             return null;
+        } finally {
+            if (activated) requestContext.deactivate();
         }
     }
 
