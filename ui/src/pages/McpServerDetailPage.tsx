@@ -127,7 +127,7 @@ export function McpServerDetailPage() {
                     <TabContent id="connection-tab" eventKey={1} activeKey={activeTab}
                         style={{ marginTop: "24px" }}>
                         <Form style={{ maxWidth: "600px" }}>
-                            <p style={{ color: "#6a6e73", marginBottom: "16px" }}>
+                            <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
                                 Configure the MCP server connection. Use either an HTTP URL
                                 (for HTTP/SSE transport) or a command (for stdio transport).
                             </p>

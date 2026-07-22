@@ -18,6 +18,8 @@ import { Light as SyntaxHighlighter } from "react-syntax-highlighter";
 import json from "react-syntax-highlighter/dist/esm/languages/hljs/json";
 import bash from "react-syntax-highlighter/dist/esm/languages/hljs/bash";
 import { stackoverflowLight } from "react-syntax-highlighter/dist/esm/styles/hljs";
+import { stackoverflowDark } from "react-syntax-highlighter/dist/esm/styles/hljs";
+import { useEffectiveTheme } from "../../hooks/useTheme";
 import { AssistantAskUserQuestion } from "./AssistantAskUserQuestion";
 import "./AssistantToolUseBlock.css";
 
@@ -53,6 +55,8 @@ export function AssistantToolUseBlock({
     permissionId, permissionResolved, permissionAllowed, onPermissionRespond,
     onCreateAutoApproval,
 }: AssistantToolUseBlockProps) {
+    const effectiveTheme = useEffectiveTheme();
+    const syntaxStyle = effectiveTheme === "dark" ? stackoverflowDark : stackoverflowLight;
     const [isExpanded, setIsExpanded] = useState(false);
     const [showPatternUI, setShowPatternUI] = useState(false);
     const [customPattern, setCustomPattern] = useState("");
@@ -97,7 +101,7 @@ export function AssistantToolUseBlock({
                             <div className="axiom-tool-use__code">
                                 <SyntaxHighlighter
                                     language="json"
-                                    style={stackoverflowLight}
+                                    style={syntaxStyle}
                                     wrapLongLines
                                 >
                                     {JSON.stringify(input, null, 2)}
@@ -113,7 +117,7 @@ export function AssistantToolUseBlock({
                             <div className={`axiom-tool-use__code${isError ? " axiom-tool-use__code--error" : ""}`}>
                                 <SyntaxHighlighter
                                     language={isJson(result) ? "json" : "bash"}
-                                    style={stackoverflowLight}
+                                    style={syntaxStyle}
                                     wrapLongLines
                                 >
                                     {isJson(result) ? formatJson(result) : result}

@@ -380,7 +380,7 @@ export function ProjectDetailPage() {
                                 </FormSelect>
                             </FormGroup>
                             {selectedActionDesc && (
-                                <p style={{ color: "#6a6e73", fontSize: "14px", marginTop: "-8px" }}>
+                                <p className="axiom-text-subtle" style={{ fontSize: "14px", marginTop: "-8px" }}>
                                     {selectedActionDesc}
                                 </p>
                             )}
@@ -645,7 +645,7 @@ function ThreadTab({ entries }: { entries: ThreadEntry[] }) {
                                 </Label>
                             </FlexItem>
                             <FlexItem>
-                                <span style={{ fontSize: "12px", color: "#6a6e73" }}>
+                                <span className="axiom-text-subtle" style={{ fontSize: "12px" }}>
                                     {new Date(entry.createdOn).toLocaleString()}
                                 </span>
                             </FlexItem>
@@ -738,7 +738,7 @@ function MetricsTab({ metrics }: { metrics: ProjectMetrics | null }) {
                         <div style={{ fontSize: "24px", fontWeight: "bold" }}>
                             {formatBytes(metrics.diskUsageBytes)}
                         </div>
-                        <div style={{ fontSize: "13px", color: "#6a6e73" }}>Disk Usage</div>
+                        <div className="axiom-text-subtle" style={{ fontSize: "13px" }}>Disk Usage</div>
                     </CardBody>
                 </Card>
             </GalleryItem>
@@ -748,7 +748,7 @@ function MetricsTab({ metrics }: { metrics: ProjectMetrics | null }) {
                         <div style={{ fontSize: "24px", fontWeight: "bold" }}>
                             ${metrics.totalCostUsd.toFixed(4)}
                         </div>
-                        <div style={{ fontSize: "13px", color: "#6a6e73" }}>AI Cost</div>
+                        <div className="axiom-text-subtle" style={{ fontSize: "13px" }}>AI Cost</div>
                     </CardBody>
                 </Card>
             </GalleryItem>
@@ -758,7 +758,7 @@ function MetricsTab({ metrics }: { metrics: ProjectMetrics | null }) {
                         <div style={{ fontSize: "24px", fontWeight: "bold" }}>
                             {metrics.invocationCount}
                         </div>
-                        <div style={{ fontSize: "13px", color: "#6a6e73" }}>AI Invocations</div>
+                        <div className="axiom-text-subtle" style={{ fontSize: "13px" }}>AI Invocations</div>
                     </CardBody>
                 </Card>
             </GalleryItem>
@@ -768,7 +768,7 @@ function MetricsTab({ metrics }: { metrics: ProjectMetrics | null }) {
                         <div style={{ fontSize: "24px", fontWeight: "bold" }}>
                             {metrics.totalInputTokens.toLocaleString()}
                         </div>
-                        <div style={{ fontSize: "13px", color: "#6a6e73" }}>Input Tokens</div>
+                        <div className="axiom-text-subtle" style={{ fontSize: "13px" }}>Input Tokens</div>
                     </CardBody>
                 </Card>
             </GalleryItem>
@@ -778,7 +778,7 @@ function MetricsTab({ metrics }: { metrics: ProjectMetrics | null }) {
                         <div style={{ fontSize: "24px", fontWeight: "bold" }}>
                             {metrics.totalOutputTokens.toLocaleString()}
                         </div>
-                        <div style={{ fontSize: "13px", color: "#6a6e73" }}>Output Tokens</div>
+                        <div className="axiom-text-subtle" style={{ fontSize: "13px" }}>Output Tokens</div>
                     </CardBody>
                 </Card>
             </GalleryItem>

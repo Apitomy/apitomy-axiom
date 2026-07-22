@@ -99,7 +99,7 @@ export function ReportAiModal({
                         ))}
                     </div>
                 ) : (
-                    <div style={{ color: "#6a6e73", fontSize: "13px" }}>
+                    <div className="axiom-text-subtle" style={{ fontSize: "13px" }}>
                         No tools configured. Ask the AI to recommend tools.
                     </div>
                 )}
@@ -108,7 +108,7 @@ export function ReportAiModal({
                 <Title headingLevel="h4" size="md">
                     Prompt Template
                 </Title>
-                <div style={{ color: "#6a6e73", fontSize: "13px", marginTop: "2px" }}>
+                <div className="axiom-text-subtle" style={{ fontSize: "13px", marginTop: "2px" }}>
                     Placeholders:{" "}
                     <code>{"{{repositories}}"}</code>,{" "}
                     <code>{"{{timeRangeStart}}"}</code>,{" "}

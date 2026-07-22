@@ -113,7 +113,7 @@ export function BrowseToolsModal({ isOpen, onClose, onSave, existingTools }: Bro
         return (
             <div key={entry.value} style={{
                 padding: "6px 8px",
-                borderBottom: "1px solid #f0f0f0",
+                borderBottom: "1px solid var(--pf-t--global--border--color--default, #d2d2d2)",
             }}>
                 <Checkbox
                     id={`browse-${entry.value}`}
@@ -129,7 +129,7 @@ export function BrowseToolsModal({ isOpen, onClose, onSave, existingTools }: Bro
                                 {entry.label}
                             </span>
                             {entry.description && (
-                                <span style={{ color: "#6a6e73", fontSize: "12px", marginLeft: 8 }}>
+                                <span className="axiom-text-subtle" style={{ fontSize: "12px", marginLeft: 8 }}>
                                     — {entry.description}
                                 </span>
                             )}
@@ -193,7 +193,7 @@ export function BrowseToolsModal({ isOpen, onClose, onSave, existingTools }: Bro
                 )}
 
                 {filteredToolsets.length === 0 && filteredCustom.length === 0 && filteredSdk.length === 0 && (
-                    <div style={{ padding: 24, textAlign: "center", color: "#6a6e73" }}>
+                    <div className="axiom-text-subtle" style={{ padding: 24, textAlign: "center" }}>
                         No tools match the filter.
                     </div>
                 )}

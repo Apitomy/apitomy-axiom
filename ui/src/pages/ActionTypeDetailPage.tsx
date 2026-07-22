@@ -297,8 +297,8 @@ export function ActionTypeDetailPage() {
                     <Tab eventKey={5} title={
                         <TabTitleText>
                             {validationMessages.some((m) => m.severity === "error")
-                                ? <ExclamationCircleIcon style={{ color: "#c9190b", marginRight: 6 }} />
-                                : <ExclamationTriangleIcon style={{ color: "#f0ab00", marginRight: 6 }} />
+                                ? <ExclamationCircleIcon className="axiom-icon-danger" style={{ marginRight: 6 }} />
+                                : <ExclamationTriangleIcon className="axiom-icon-warning" style={{ marginRight: 6 }} />
                             }
                             Problems ({validationMessages.length})
                         </TabTitleText>
@@ -466,7 +466,7 @@ function PromptTemplateTab({ value, onChange }: {
 }) {
     return (
         <div>
-            <p style={{ color: "#6a6e73", marginBottom: "16px" }}>
+            <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
                 The prompt sent to the AI agent when executing this action type.
                 Supports placeholders:{" "}
                 <code>{"{{managerInput}}"}</code>,{" "}
@@ -494,7 +494,7 @@ function ScriptTab({ value, onChange }: {
 }) {
     return (
         <div>
-            <p style={{ color: "#6a6e73", marginBottom: "16px" }}>
+            <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
                 A bash script that runs when this action type is triggered.
                 Supports placeholders:{" "}
                 <code>{"{{projectId}}"}</code>,{" "}

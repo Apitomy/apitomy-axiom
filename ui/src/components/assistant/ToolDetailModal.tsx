@@ -88,7 +88,7 @@ export function ToolDetailModal({ isOpen, onClose, name, content, errors }: Tool
                                     </DescriptionList>
                                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
                                         <thead>
-                                            <tr style={{ borderBottom: "2px solid #d2d2d2" }}>
+                                            <tr style={{ borderBottom: "2px solid var(--pf-t--global--border--color--default, #d2d2d2)" }}>
                                                 <th style={{ textAlign: "left", padding: "6px 8px" }}>Name</th>
                                                 <th style={{ textAlign: "left", padding: "6px 8px" }}>Type</th>
                                                 <th style={{ textAlign: "left", padding: "6px 8px" }}>Description</th>
@@ -97,7 +97,7 @@ export function ToolDetailModal({ isOpen, onClose, name, content, errors }: Tool
                                         </thead>
                                         <tbody>
                                             {parameters.map((p) => (
-                                                <tr key={p.name} style={{ borderBottom: "1px solid #d2d2d2" }}>
+                                                <tr key={p.name} style={{ borderBottom: "1px solid var(--pf-t--global--border--color--default, #d2d2d2)" }}>
                                                     <td style={{ padding: "6px 8px", fontFamily: "monospace" }}>{p.name}</td>
                                                     <td style={{ padding: "6px 8px" }}>{p.type || "string"}</td>
                                                     <td style={{ padding: "6px 8px" }}>{p.description || "—"}</td>
@@ -126,7 +126,7 @@ export function ToolDetailModal({ isOpen, onClose, name, content, errors }: Tool
                     {(errors?.length ?? 0) > 0 && (
                         <Tab eventKey={2} title={
                             <TabTitleText>
-                                <ExclamationCircleIcon style={{ color: "#c9190b", marginRight: 6 }} />
+                                <ExclamationCircleIcon className="axiom-icon-danger" style={{ marginRight: 6 }} />
                                 Problems ({errors!.length})
                             </TabTitleText>
                         }>

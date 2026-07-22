@@ -306,8 +306,8 @@ export function ReportDefinitionDetailPage() {
                     <Tab eventKey={4} title={
                         <TabTitleText>
                             {validationMessages.some((m) => m.severity === "error")
-                                ? <ExclamationCircleIcon style={{ color: "#c9190b", marginRight: 6 }} />
-                                : <ExclamationTriangleIcon style={{ color: "#f0ab00", marginRight: 6 }} />
+                                ? <ExclamationCircleIcon className="axiom-icon-danger" style={{ marginRight: 6 }} />
+                                : <ExclamationTriangleIcon className="axiom-icon-warning" style={{ marginRight: 6 }} />
                             }
                             Problems ({validationMessages.length})
                         </TabTitleText>
@@ -344,7 +344,7 @@ function InfoTab({ form, updateForm, initialLabels, onLabelsChange }: {
                 <TextInput id="titleTemplate" value={form.titleTemplate || ""}
                     onChange={(_e, v) => updateForm({ titleTemplate: v || undefined })}
                     placeholder="e.g. {{name}} — {{date}}" />
-                <p style={{ color: "#6a6e73", fontSize: "0.85em", marginTop: "4px" }}>
+                <p className="axiom-text-subtle" style={{ fontSize: "0.85em", marginTop: "4px" }}>
                     Optional. If set, the report title uses this template instead of
                     extracting from markdown. Placeholders:{" "}
                     <code>{"{{name}}"}</code>, <code>{"{{date}}"}</code>,{" "}
@@ -425,7 +425,7 @@ function PromptTemplateTab({ value, onChange }: {
 }) {
     return (
         <div>
-            <p style={{ color: "#6a6e73", marginBottom: "16px" }}>
+            <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
                 Instructions for the AI agent when generating this report.
                 Supports placeholders:{" "}
                 <code>{"{{repositories}}"}</code>,{" "}

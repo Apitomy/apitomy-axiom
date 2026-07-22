@@ -50,7 +50,7 @@ export function EditLabelsModal({ isOpen, labels, onSave, onClose }: {
             aria-label="Edit Labels">
             <ModalHeader title="Edit Labels" />
             <ModalBody>
-                <p style={{ color: "#6a6e73", marginBottom: "16px" }}>
+                <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
                     Type a label and press Enter to add it. Click the X on a label to remove it.
                 </p>
                 <LabelInput labels={draft} onChange={setDraft} />

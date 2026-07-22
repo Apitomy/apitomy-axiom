@@ -118,7 +118,7 @@ export function ReportDefinitionsPage() {
                                     <Td>
                                         <Label isCompact>{def.schedule}</Label>
                                         {def.scheduleTime && (
-                                            <span style={{ marginLeft: "4px", fontSize: "12px", color: "#6a6e73" }}>
+                                            <span className="axiom-text-subtle" style={{ marginLeft: "4px", fontSize: "12px" }}>
                                                 at {def.scheduleTime}
                                             </span>
                                         )}

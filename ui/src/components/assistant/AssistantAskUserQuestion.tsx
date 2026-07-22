@@ -99,7 +99,7 @@ export function AssistantAskUserQuestion({
     return (
         <div style={{
             padding: "8px 12px",
-            backgroundColor: "#f0f8ff",
+            backgroundColor: "var(--axiom--color--info--bg)",
         }}>
             <ExpandableSection
                 toggleContent={
@@ -108,7 +108,7 @@ export function AssistantAskUserQuestion({
                             Question
                         </Label>
                         {resolved && summaryText && (
-                            <span style={{ fontSize: "13px", color: "#6a6e73" }}>
+                            <span className="axiom-text-subtle" style={{ fontSize: "13px" }}>
                                 {summaryText}
                             </span>
                         )}
@@ -126,11 +126,10 @@ export function AssistantAskUserQuestion({
                 {questions.map((q, qIdx) => (
                     <div key={qIdx} style={{ marginBottom: qIdx < questions.length - 1 ? 16 : 8 }}>
                         {q.header && (
-                            <div style={{
+                            <div className="axiom-text-subtle" style={{
                                 fontSize: "11px",
                                 fontWeight: 600,
                                 textTransform: "uppercase",
-                                color: "#6a6e73",
                                 marginBottom: 4,
                             }}>
                                 {q.header}
@@ -154,7 +153,7 @@ export function AssistantAskUserQuestion({
                                                     <span>
                                                         {opt.label}
                                                         {opt.description && (
-                                                            <span style={{ color: "#6a6e73", marginLeft: 6, fontSize: "13px" }}>
+                                                            <span className="axiom-text-subtle" style={{ marginLeft: 6, fontSize: "13px" }}>
                                                                 — {opt.description}
                                                             </span>
                                                         )}
@@ -186,7 +185,7 @@ export function AssistantAskUserQuestion({
                                                 <span>
                                                     {opt.label}
                                                     {opt.description && (
-                                                        <span style={{ color: "#6a6e73", marginLeft: 6, fontSize: "13px" }}>
+                                                        <span className="axiom-text-subtle" style={{ marginLeft: 6, fontSize: "13px" }}>
                                                             — {opt.description}
                                                         </span>
                                                     )}

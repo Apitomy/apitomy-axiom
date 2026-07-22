@@ -76,11 +76,10 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger, onItemCount
 
     return (
         <div style={{ padding: "16px", height: "100%", overflow: "auto" }}>
-            <div style={{
+            <div className="axiom-text-default" style={{
                 fontWeight: 600,
                 fontSize: "14px",
                 marginBottom: "12px",
-                color: "#151515",
             }}>
                 Generated Items ({items.length})
             </div>
@@ -108,6 +107,7 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger, onItemCount
                     <div
                         key={`${item.type}/${item.name}`}
                         onClick={() => handleItemClick(item)}
+                        className="axiom-generated-item-card"
                         style={{
                             display: "flex",
                             alignItems: "center",
@@ -116,14 +116,6 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger, onItemCount
                             marginBottom: "4px",
                             borderRadius: "6px",
                             cursor: "pointer",
-                            backgroundColor: "#fafafa",
-                            border: "1px solid #d2d2d2",
-                        }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = "#f0f0f0";
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = "#fafafa";
                         }}
                     >
                         <Label isCompact color={typeInfo.color}>
@@ -131,12 +123,12 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger, onItemCount
                         </Label>
                         <span style={{ flex: 1, fontSize: "13px" }}>{item.name}</span>
                         {item.valid ? (
-                            <CheckCircleIcon style={{ color: "#3e8635" }} />
+                            <CheckCircleIcon className="axiom-icon-success" />
                         ) : (
                             <Tooltip content={
                                 `${(item.validationErrors || []).length} validation error(s)`
                             }>
-                                <ExclamationCircleIcon style={{ color: "#c9190b" }} />
+                                <ExclamationCircleIcon className="axiom-icon-danger" />
                             </Tooltip>
                         )}
                     </div>

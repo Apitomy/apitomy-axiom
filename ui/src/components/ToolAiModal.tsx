@@ -97,7 +97,7 @@ export function ToolAiModal({ isOpen, form, params, onApply, onClose }: ToolAiMo
                         </Table>
                     </div>
                 ) : (
-                    <div style={{ color: "#6a6e73", fontSize: "13px" }}>
+                    <div className="axiom-text-subtle" style={{ fontSize: "13px" }}>
                         No parameters defined yet. Ask the AI to create them.
                     </div>
                 )}

@@ -11,7 +11,7 @@
 }
 
 .axiom-trace-graph-node:hover {
-    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 3px 12px var(--pf-t--global--box-shadow--color--200, rgba(0, 0, 0, 0.25));
 }
 
 .axiom-trace-graph-node[data-status="completed"] {
@@ -20,7 +20,7 @@
 .axiom-trace-graph-node[data-status="failed"],
 .axiom-trace-graph-node[data-status="failure"] {
     border-color: var(--pf-t--global--color--status--danger--default, #c9190b);
-    background: rgba(201, 25, 11, 0.07);
+    background: var(--axiom--color--danger--bg, #fef3f2);
 }
 .axiom-trace-graph-node[data-status="in-progress"] {
     border-color: var(--pf-t--global--color--status--info--default, #06c);

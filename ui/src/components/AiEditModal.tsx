@@ -103,8 +103,8 @@ export function AiEditModal({
                                 gap: "12px",
                             }}>
                                 {messages.length === 0 && (
-                                    <div style={{
-                                        color: "#6a6e73", fontSize: "13px", textAlign: "center",
+                                    <div className="axiom-text-subtle" style={{
+                                        fontSize: "13px", textAlign: "center",
                                         marginTop: "32px",
                                     }}>
                                         {emptyHint}
@@ -119,7 +119,7 @@ export function AiEditModal({
                                         backgroundColor: msg.role === "user"
                                             ? "var(--pf-t--global--color--brand--default)"
                                             : "var(--pf-t--global--background--color--secondary--default)",
-                                        color: msg.role === "user" ? "white" : "inherit",
+                                        color: msg.role === "user" ? "var(--pf-t--global--background--color--primary--default, #fff)" : "inherit",
                                         fontSize: "13px",
                                     }}>
                                         {msg.role === "assistant" ? (
@@ -130,13 +130,12 @@ export function AiEditModal({
                                     </div>
                                 ))}
                                 {loading && (
-                                    <div style={{
+                                    <div className="axiom-text-subtle" style={{
                                         alignSelf: "flex-start",
                                         padding: "8px 12px",
                                         borderRadius: "8px",
                                         backgroundColor: "var(--pf-t--global--background--color--secondary--default)",
                                         fontSize: "13px",
-                                        color: "#6a6e73",
                                     }}>
                                         <Spinner size="sm" style={{ marginRight: "5px" }} />
                                         Thinking...

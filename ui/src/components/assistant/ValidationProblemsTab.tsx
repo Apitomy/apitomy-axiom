@@ -17,10 +17,10 @@ export function ValidationProblemsTab({ errors = [], warnings = [] }: Validation
                     padding: "10px 12px",
                     marginBottom: 4,
                     borderRadius: 4,
-                    backgroundColor: "#fef3f2",
-                    border: "1px solid #c9190b",
+                    backgroundColor: "var(--axiom--color--danger--bg)",
+                    border: "1px solid var(--pf-t--global--color--status--danger--default, #c9190b)",
                 }}>
-                    <ExclamationCircleIcon style={{ color: "#c9190b", marginTop: 2, flexShrink: 0 }} />
+                    <ExclamationCircleIcon className="axiom-icon-danger" style={{ marginTop: 2, flexShrink: 0 }} />
                     <div style={{ fontSize: "13px" }}>{msg}</div>
                 </div>
             ))}
@@ -32,10 +32,10 @@ export function ValidationProblemsTab({ errors = [], warnings = [] }: Validation
                     padding: "10px 12px",
                     marginBottom: 4,
                     borderRadius: 4,
-                    backgroundColor: "#fdf7e7",
-                    border: "1px solid #f0ab00",
+                    backgroundColor: "var(--axiom--color--warning--bg)",
+                    border: "1px solid var(--pf-t--global--color--status--warning--default, #f0ab00)",
                 }}>
-                    <ExclamationTriangleIcon style={{ color: "#f0ab00", marginTop: 2, flexShrink: 0 }} />
+                    <ExclamationTriangleIcon className="axiom-icon-warning" style={{ marginTop: 2, flexShrink: 0 }} />
                     <div style={{ fontSize: "13px" }}>{msg}</div>
                 </div>
             ))}

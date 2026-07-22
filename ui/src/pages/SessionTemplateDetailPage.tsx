@@ -343,15 +343,14 @@ export function SessionTemplateDetailPage() {
                                 </HelperText>
                             </FormHelperText>
                             <div style={{
-                                border: "1px solid #d2d2d2",
+                                border: "1px solid var(--pf-t--global--border--color--default, #d2d2d2)",
                                 borderRadius: "3px",
                                 padding: "8px",
                                 maxHeight: "200px",
                                 overflowY: "auto",
                             }}>
                                 {mcpServers.length === 0 ? (
-                                    <div style={{
-                                        color: "#6a6e73",
+                                    <div className="axiom-text-subtle" style={{
                                         fontStyle: "italic",
                                     }}>
                                         No MCP servers configured
@@ -378,9 +377,8 @@ export function SessionTemplateDetailPage() {
                                                 />
                                                 <span>{server.name}</span>
                                                 {server.description && (
-                                                    <span style={{
+                                                    <span className="axiom-text-subtle" style={{
                                                         marginLeft: "8px",
-                                                        color: "#6a6e73",
                                                         fontSize: "0.9em",
                                                     }}>
                                                         — {server.description}
@@ -447,7 +445,7 @@ export function SessionTemplateDetailPage() {
                 <Tab eventKey={4} title={<TabTitleText>Environment</TabTitleText>}>
                     <div style={{ marginTop: 24 }}>
                         {isReadOnly ? (
-                            <p style={{ color: "#6a6e73", fontStyle: "italic" }}>
+                            <p className="axiom-text-subtle" style={{ fontStyle: "italic" }}>
                                 Environment variables cannot be modified on built-in templates.
                             </p>
                         ) : (

@@ -30,7 +30,7 @@ export function ConfigurationWarning({ checks }: ConfigurationWarningProps) {
                 <Title headingLevel="h1" size="xl" style={{ marginBottom: "8px" }}>
                     Application Configuration Required
                 </Title>
-                <p style={{ color: "#6a6e73", marginBottom: "24px" }}>
+                <p className="axiom-text-subtle" style={{ marginBottom: "24px" }}>
                     Apitomy Axiom detected configuration issues during startup.
                     Please resolve the items below and restart the application.
                 </p>
@@ -73,7 +73,7 @@ export function ConfigurationWarning({ checks }: ConfigurationWarningProps) {
                         <table style={{ width: "100%", borderCollapse: "collapse" }}>
                             <tbody>
                                 {checks.map((check) => (
-                                    <tr key={check.name} style={{ borderBottom: "1px solid #d2d2d2" }}>
+                                    <tr key={check.name} style={{ borderBottom: "1px solid var(--pf-t--global--border--color--default, #d2d2d2)" }}>
                                         <td style={{ padding: "12px 8px", width: "32px" }}>
                                             {check.status === "ok" ? (
                                                 <CheckCircleIcon color="var(--pf-t--global--color--status--success--default)" />
@@ -86,7 +86,7 @@ export function ConfigurationWarning({ checks }: ConfigurationWarningProps) {
                                         <td style={{ padding: "12px 8px", fontWeight: "bold" }}>
                                             {check.name}
                                         </td>
-                                        <td style={{ padding: "12px 8px", color: "#6a6e73" }}>
+                                        <td className="axiom-text-subtle" style={{ padding: "12px 8px" }}>
                                             {check.status === "ok" ? "Configured" : check.message}
                                         </td>
                                     </tr>

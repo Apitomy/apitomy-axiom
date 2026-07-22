@@ -1,13 +1,3 @@
-:root {
-    --axiom--color--warning--bg: #fdf7e7;
-    --axiom--color--warning--border: #f0d67b;
-    --axiom--color--warning--text: #795600;
-    --axiom--color--success--bg: #f3faf3;
-    --axiom--color--success--border: #c6e3c6;
-    --axiom--color--danger--bg: #fef3f2;
-    --axiom--color--orange--bg: #fffaf0;
-}
-
 /* Block wrapper */
 .axiom-tool-use {
     margin: 4px 0;
