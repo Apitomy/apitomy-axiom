@@ -85,9 +85,11 @@ within 60 seconds, it is killed and the session continues without it. Keep scrip
 focused on quick setup tasks — long-running operations should be handled by the
 assistant itself during the conversation.
 
-**Environment:** Init scripts inherit the environment variables defined on the template
-(including resolved `${secret:NAME}` references), so they can use credentials for git
-clones, API calls, or authenticated downloads.
+**Environment:** Init scripts do **not** inherit the template's environment variables.
+Template environment variables (including resolved `${secret:NAME}` references) are
+injected into the Claude Code process, which starts after the init script finishes. If
+your init script needs credentials (e.g., for `git clone` or API calls), they must be
+available through the server's own environment or set up by other means.
 
 **Common use cases:**
 
@@ -120,6 +122,21 @@ const resp = await fetch("https://api.github.com/repos/my-org/my-repo/issues/42"
 const issue = await resp.json();
 fs.writeFileSync("context.json", JSON.stringify(issue, null, 2));
 ```
+
+!!! warning "Security: Init scripts run unsandboxed"
+    Init scripts execute as the **same OS user** that runs the Axiom server process.
+    There is no sandboxing, filesystem restriction, or network isolation — the only
+    guard is the 60-second timeout. This means anyone who can create or edit a session
+    template can run arbitrary code on the server with the server's full privileges.
+
+    **Recommendations:**
+
+    - Restrict template creation to **trusted administrators**. Treat the ability to
+      create or edit session templates as equivalent to shell access on the server.
+    - If Axiom is deployed in a multi-tenant or untrusted environment, consider running
+      the server under a **restricted service account** with minimal filesystem and
+      network permissions, or use **container-level isolation** to limit the blast
+      radius of init scripts.
 
 ---
 
