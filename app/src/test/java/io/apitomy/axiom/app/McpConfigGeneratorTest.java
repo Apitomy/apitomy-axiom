@@ -67,8 +67,8 @@ class McpConfigGeneratorTest {
 
         assertTrue(serverJsPath.endsWith("tools-server.js"),
                 "First arg should be tools-server.js path");
-        assertTrue(toolsJsonPath.contains("axiom-tools-9002"),
-                "Second arg should contain task ID");
+        assertTrue(toolsJsonPath.contains("/9002/"),
+                "Second arg should contain task ID in path");
 
         assertTrue(Files.exists(Path.of(serverJsPath)), "tools-server.js should exist");
         assertTrue(Files.exists(Path.of(toolsJsonPath)), "tools JSON should exist");
@@ -375,9 +375,9 @@ class McpConfigGeneratorTest {
         Path config2 = generator.generateMcpConfig(9015L, Map.of(), null);
 
         assertNotEquals(config1, config2, "Each task should get a unique config file");
-        assertTrue(config1.getFileName().toString().contains("9014"),
-                "Config filename should contain task ID");
-        assertTrue(config2.getFileName().toString().contains("9015"),
-                "Config filename should contain task ID");
+        assertTrue(config1.toString().contains("/9014/"),
+                "Config path should contain task ID");
+        assertTrue(config2.toString().contains("/9015/"),
+                "Config path should contain task ID");
     }
 }

@@ -200,8 +200,9 @@ public class McpConfigGenerator {
 
             configJson.append("}}");
 
-            // Write config file
-            Path configFile = Files.createTempFile("axiom-mcp-" + taskId + "-", ".json");
+            // Write config file to ~/.axiom/tasks/{taskId}/
+            Path taskDir = getTaskDirectory(taskId);
+            Path configFile = taskDir.resolve("mcp-config.json");
             Files.writeString(configFile, configJson.toString());
             LOG.infof("Generated MCP config for task %d: %s (%d script tools, %d MCP servers)",
                     taskId, configFile, scriptTools.size(), mcpServers.size());
@@ -214,31 +215,38 @@ public class McpConfigGenerator {
     }
 
     /**
-     * Cleans up temporary MCP config and tools files for a given task/report ID.
+     * Cleans up the MCP config directory for a given task/report ID.
      *
      * @param taskId the task or report ID used when generating the files
      */
     public void cleanupTempFiles(Long taskId) {
-        try {
-            Path tmpDir = Path.of(System.getProperty("java.io.tmpdir"));
-            try (var stream = Files.list(tmpDir)) {
-                stream.filter(p -> {
-                    String name = p.getFileName().toString();
-                    return (name.startsWith("axiom-mcp-" + taskId + "-")
-                            || name.startsWith("axiom-tools-" + taskId + "-"))
-                            && name.endsWith(".json");
-                }).forEach(p -> {
-                    try {
-                        Files.deleteIfExists(p);
-                        LOG.debugf("Cleaned up temp file: %s", p);
-                    } catch (IOException e) {
-                        LOG.warnf("Failed to delete temp file: %s", p);
-                    }
-                });
-            }
+        Path taskDir = Path.of(System.getProperty("user.home"), ".axiom", "tasks",
+                String.valueOf(taskId));
+        if (!Files.isDirectory(taskDir)) return;
+        try (var stream = Files.walk(taskDir)) {
+            stream.sorted(java.util.Comparator.reverseOrder())
+                    .forEach(p -> {
+                        try {
+                            Files.deleteIfExists(p);
+                        } catch (IOException e) {
+                            LOG.warnf("Failed to delete: %s", p);
+                        }
+                    });
+            LOG.debugf("Cleaned up task directory: %s", taskDir);
         } catch (IOException e) {
-            LOG.warnf(e, "Failed to list temp directory for cleanup of task %d", taskId);
+            LOG.warnf(e, "Failed to clean up task directory for task %d", taskId);
         }
+    }
+
+    /**
+     * Returns the task-specific directory under {@code ~/.axiom/tasks/{taskId}/},
+     * creating it if it does not exist.
+     */
+    private Path getTaskDirectory(Long taskId) throws IOException {
+        Path taskDir = Path.of(System.getProperty("user.home"), ".axiom", "tasks",
+                String.valueOf(taskId));
+        Files.createDirectories(taskDir);
+        return taskDir;
     }
 
     /**
@@ -314,7 +322,8 @@ public class McpConfigGenerator {
      */
     private Path writeToolsJson(List<ToolDefinitionEntity> tools, Long taskId) throws IOException {
         String json = buildToolsJson(tools);
-        Path toolsFile = Files.createTempFile("axiom-tools-" + taskId + "-", ".json");
+        Path taskDir = getTaskDirectory(taskId);
+        Path toolsFile = taskDir.resolve("tools.json");
         Files.writeString(toolsFile, json);
         LOG.debugf("Wrote tools JSON for task %d: %s (%d tools)", (Object) taskId, toolsFile, tools.size());
         return toolsFile;

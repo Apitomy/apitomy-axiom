@@ -6,10 +6,11 @@ persona, tools, MCP servers, and working directory — so you can create session
 tailored to specific workflows, from generating Axiom configuration to general-purpose
 coding assistance.
 
-Out of the box, Axiom ships two built-in templates: a **Configuration Assistant** for
+Out of the box, Axiom ships three built-in templates: a **Configuration Assistant** for
 creating and updating tools, action types, report definitions, toolsets, and session
-templates, and a **General Assistant** for open-ended tasks. You can also create your
-own templates to define custom workflows.
+templates, a **General Assistant** for open-ended tasks, and a **Project Assistant** for
+working within the context of a specific project. You can also create your own templates
+to define custom workflows.
 
 !!! note
     The AI Assistant requires **Claude Code** as the AI engine. The `claude` CLI must
@@ -35,9 +36,10 @@ Each template specifies:
 | Field | Purpose |
 |-------|---------|
 | **Name / Description** | Display name and summary shown in the template picker. |
-| **System Prompt** | Markdown instructions written to `CLAUDE.md` in the session working directory. |
+| **System Prompt** | Markdown instructions passed to Claude Code via `--append-system-prompt`. |
 | **Welcome Message** | First message shown in the chat, attributed to the assistant. |
-| **Working Directory** | Absolute path for the session. If empty, Axiom creates a temporary directory under `~/.axiom/assistant-sessions/`. |
+| **Working Directory** | Absolute path for the session. If empty, Axiom creates a temporary directory under `~/.axiom/assistant/sessions/`. For project-scoped sessions, defaults to the project workspace. |
+| **Initial Message** | Optional message automatically sent to the AI when a session starts. Supports `{{projectName}}` placeholder. |
 | **Model** | Optional AI model override (e.g., a specific Claude model). |
 | **MCP Servers** | Named MCP server configurations to include in the session. |
 | **Allowed Tools** | Tool patterns for `--allowedTools` (e.g., `Read(*)`, `Bash(ls *)`). Use `@ToolsetName` to include all tools from a toolset. |
@@ -46,13 +48,16 @@ Each template specifies:
 
 ### Built-in Templates
 
-Axiom ships two immutable built-in templates:
+Axiom ships three immutable built-in templates:
 
 - **Configuration Assistant** (`axiom-config-assistant`) — purpose-built for creating
   and updating Axiom configuration items (tools, action types, report definitions,
   toolsets, and session templates) with a two-panel layout and Apply workflow.
 - **General Assistant** (`general-assistant`) — a minimal template for open-ended tasks
   with no sidebar or special behavior.
+- **Project Assistant** (`project-assistant`) — scoped to a specific Axiom project, with
+  the working directory set to the project workspace and access to project-specific MCP
+  tools for querying tasks, events, and the discussion thread.
 
 Built-in templates cannot be modified or deleted, but you can clone them to create
 editable copies.

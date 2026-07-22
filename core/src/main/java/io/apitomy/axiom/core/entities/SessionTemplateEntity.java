@@ -32,7 +32,7 @@ public class SessionTemplateEntity extends PanacheEntity {
     @Column(nullable = false, columnDefinition = "TEXT")
     public String description;
 
-    /** Markdown content written to CLAUDE.md in the session working directory. */
+    /** Markdown content passed as the system prompt via --append-system-prompt. */
     @Column(name = "system_prompt", nullable = false, columnDefinition = "TEXT")
     public String systemPrompt;
 

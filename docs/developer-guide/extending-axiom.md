@@ -119,7 +119,7 @@ Location: `actors/spi/src/main/java/io/apitomy/axiom/actors/spi/Actor.java`
 
 **`ActorContext`** — provided to the actor for each task:
 
-- `workingDirectory` — git clone of the project's repository
+- `workingDirectory` — the project's workspace directory (`~/.axiom/workspaces/project-{id}`)
 - `allowedTools` / `disallowedTools` — tool access control
 - `systemPrompt` — system-level instructions
 - `promptTemplate` — the action type's prompt (with placeholders substituted)

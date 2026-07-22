@@ -45,7 +45,7 @@ public class SessionTemplateService {
      * @param templateId unique identifier (slug for built-ins, UUID for user-defined)
      * @param name display name
      * @param description brief description
-     * @param systemPrompt markdown written to CLAUDE.md
+     * @param systemPrompt markdown passed via --append-system-prompt
      * @param welcomeMessage first chat message (nullable)
      * @param initialMessage message automatically sent to the AI on session start (nullable)
      * @param workingDirectory absolute path or null for auto-created
