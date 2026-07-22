@@ -113,7 +113,7 @@ export function AiUsagePage() {
                             <div style={{ fontSize: "24px", fontWeight: "bold" }}>
                                 {totalCount}
                             </div>
-                            <div style={{ fontSize: "13px", color: "#6a6e73" }}>
+                            <div className="axiom-text-subtle" style={{ fontSize: "13px" }}>
                                 Invocations
                             </div>
                         </CardBody>
@@ -125,7 +125,7 @@ export function AiUsagePage() {
                             <div style={{ fontSize: "24px", fontWeight: "bold" }}>
                                 ${totalCost.toFixed(4)}
                             </div>
-                            <div style={{ fontSize: "13px", color: "#6a6e73" }}>
+                            <div className="axiom-text-subtle" style={{ fontSize: "13px" }}>
                                 Cost
                             </div>
                         </CardBody>
@@ -137,7 +137,7 @@ export function AiUsagePage() {
                             <div style={{ fontSize: "24px", fontWeight: "bold" }}>
                                 {totalInputTokens.toLocaleString()}
                             </div>
-                            <div style={{ fontSize: "13px", color: "#6a6e73" }}>
+                            <div className="axiom-text-subtle" style={{ fontSize: "13px" }}>
                                 Input Tokens
                             </div>
                         </CardBody>
@@ -149,7 +149,7 @@ export function AiUsagePage() {
                             <div style={{ fontSize: "24px", fontWeight: "bold" }}>
                                 {totalOutputTokens.toLocaleString()}
                             </div>
-                            <div style={{ fontSize: "13px", color: "#6a6e73" }}>
+                            <div className="axiom-text-subtle" style={{ fontSize: "13px" }}>
                                 Output Tokens
                             </div>
                         </CardBody>

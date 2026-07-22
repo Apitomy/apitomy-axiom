@@ -1,7 +1,36 @@
+.axiom-masthead {
+    position: relative;
+    border-bottom: none;
+    box-shadow: none;
+    background: var(--pf-t--global--background--color--primary--default, #fff);
+    margin-bottom: 6px;
+}
+
+.axiom-masthead__brand-text {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--axiom--color--brand, #0b2545);
+    cursor: pointer;
+    letter-spacing: -0.5px;
+}
+
+.axiom-masthead__icon {
+    color: var(--axiom--color--brand--accent, #2082a3);
+}
+
+.axiom-masthead__gradient-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--axiom--color--brand--gradient);
+}
+
 @keyframes axiom-throb {
     0%, 100% {
         transform: scale(1);
-        color: #2082a3;
+        color: var(--axiom--color--brand--accent, #2082a3);
     }
     50% {
         transform: scale(2);
@@ -16,5 +45,5 @@
 .axiom-assistant-throb:hover svg {
     animation: none;
     transform: scale(1.3);
-    color: #0066cc;
+    color: var(--pf-t--global--color--link--default, #0066cc);
 }

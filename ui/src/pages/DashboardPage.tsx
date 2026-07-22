@@ -171,7 +171,7 @@ export function DashboardPage() {
                     <table style={{ width: "100%", borderCollapse: "collapse" }}>
                         <tbody>
                             {requirements.map((req) => (
-                                <tr key={req.name} style={{ borderBottom: "1px solid #d2d2d2" }}>
+                                <tr key={req.name} style={{ borderBottom: "1px solid var(--pf-t--global--border--color--default, #d2d2d2)" }}>
                                     <td style={{ padding: "8px", width: "24px" }}>
                                         {req.met ? (
                                             <CheckCircleIcon color="var(--pf-t--global--color--status--success--default)" />
@@ -404,11 +404,11 @@ export function DashboardPage() {
                                                        color={ENTRY_TYPE_COLORS[entry.entryType] || "grey"}>
                                                     {entry.entryType}
                                                 </Label>
-                                                <span style={{ fontSize: "12px", color: "#6a6e73" }}>
+                                                <span className="axiom-text-subtle" style={{ fontSize: "12px" }}>
                                                     {new Date(entry.createdOn).toLocaleTimeString()}
                                                 </span>
                                             </div>
-                                            <div style={{ fontSize: "13px", color: "#151515" }}>
+                                            <div className="axiom-text-default" style={{ fontSize: "13px" }}>
                                                 {entry.summary.length > 120
                                                     ? entry.summary.substring(0, 117) + "..."
                                                     : entry.summary}
@@ -447,7 +447,7 @@ function StatusCard({ label, count, color }: {
                 }}>
                     {count}
                 </div>
-                <div style={{ fontSize: "13px", color: "#6a6e73", marginTop: "4px" }}>
+                <div className="axiom-text-subtle" style={{ fontSize: "13px", marginTop: "4px" }}>
                     {label}
                 </div>
             </CardBody>

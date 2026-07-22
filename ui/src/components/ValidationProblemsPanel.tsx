@@ -21,17 +21,17 @@ export function ValidationProblemsPanel({ messages }: {
                     marginBottom: 4,
                     borderRadius: 4,
                     backgroundColor: msg.severity === "error"
-                        ? "#fef3f2" : "#fdf7e7",
+                        ? "var(--axiom--color--danger--bg)" : "var(--axiom--color--warning--bg)",
                     border: `1px solid ${msg.severity === "error"
-                        ? "#c9190b" : "#f0ab00"}`,
+                        ? "var(--pf-t--global--color--status--danger--default, #c9190b)" : "var(--pf-t--global--color--status--warning--default, #f0ab00)"}`,
                 }}>
                     {msg.severity === "error"
-                        ? <ExclamationCircleIcon style={{ color: "#c9190b", marginTop: 2 }} />
-                        : <ExclamationTriangleIcon style={{ color: "#f0ab00", marginTop: 2 }} />
+                        ? <ExclamationCircleIcon className="axiom-icon-danger" style={{ marginTop: 2 }} />
+                        : <ExclamationTriangleIcon className="axiom-icon-warning" style={{ marginTop: 2 }} />
                     }
                     <div>
                         <div style={{ fontSize: "13px" }}>{msg.message}</div>
-                        <div style={{ fontSize: "12px", color: "#6a6e73", marginTop: 2 }}>
+                        <div className="axiom-text-subtle" style={{ fontSize: "12px", marginTop: 2 }}>
                             Field: <code>{msg.field}</code>
                         </div>
                     </div>

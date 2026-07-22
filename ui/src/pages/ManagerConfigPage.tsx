@@ -80,7 +80,7 @@ export function ManagerConfigPage() {
                 <Tab eventKey={0} title={<TabTitleText>System Prompt</TabTitleText>}>
                     <TabContent id="system-prompt-tab" eventKey={0} activeKey={activeTab}
                         style={{ marginTop: "16px" }}>
-                        <p style={{ color: "#6a6e73", marginBottom: "16px" }}>
+                        <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
                             The system prompt defines the Manager's role, behavior, and decision
                             format. It is sent as the system context for every Manager evaluation.
                         </p>
@@ -96,7 +96,7 @@ export function ManagerConfigPage() {
                 <Tab eventKey={1} title={<TabTitleText>Prompt Template</TabTitleText>}>
                     <TabContent id="prompt-template-tab" eventKey={1} activeKey={activeTab}
                         style={{ marginTop: "16px" }}>
-                        <p style={{ color: "#6a6e73", marginBottom: "16px" }}>
+                        <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
                             The prompt template is sent as the user message for each event evaluation.
                             Placeholders are substituted at runtime:{" "}
                             <code>{"{{actionTypes}}"}</code> (list of configured action types),{" "}

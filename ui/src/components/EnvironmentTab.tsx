@@ -45,7 +45,7 @@ export function EnvironmentTab({ envVars, onChange }: {
 
     return (
         <div style={{ maxWidth: "700px" }}>
-            <p style={{ color: "#6a6e73", marginBottom: "16px" }}>
+            <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
                 Custom environment variables injected into the subprocess. When configured,
                 these replace the default all-secrets injection. Reference an encrypted secret
                 using <code>{"${secret:SECRET_NAME}"}</code> syntax.

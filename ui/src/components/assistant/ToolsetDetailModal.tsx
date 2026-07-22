@@ -86,7 +86,7 @@ export function ToolsetDetailModal({ isOpen, onClose, name, content, errors }: T
                     {(errors?.length ?? 0) > 0 && (
                         <Tab eventKey={2} title={
                             <TabTitleText>
-                                <ExclamationCircleIcon style={{ color: "#c9190b", marginRight: 6 }} />
+                                <ExclamationCircleIcon className="axiom-icon-danger" style={{ marginRight: 6 }} />
                                 Problems ({errors!.length})
                             </TabTitleText>
                         }>

@@ -235,8 +235,8 @@ export function ToolDetailPage() {
                     <Tab eventKey={4} title={
                         <TabTitleText>
                             {validationMessages.some((m) => m.severity === "error")
-                                ? <ExclamationCircleIcon style={{ color: "#c9190b", marginRight: 6 }} />
-                                : <ExclamationTriangleIcon style={{ color: "#f0ab00", marginRight: 6 }} />
+                                ? <ExclamationCircleIcon className="axiom-icon-danger" style={{ marginRight: 6 }} />
+                                : <ExclamationTriangleIcon className="axiom-icon-warning" style={{ marginRight: 6 }} />
                             }
                             Problems ({validationMessages.length})
                         </TabTitleText>
@@ -305,7 +305,7 @@ function ParametersTab({ params, addParam, updateParam, removeParam }: {
 }) {
     return (
         <div style={{ maxWidth: "800px" }}>
-            <p style={{ color: "#6a6e73", marginBottom: "16px" }}>
+            <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
                 Define the parameters the AI agent will provide when calling this tool.
                 Use <code>{"{{param_name}}"}</code> in the script template to substitute values.
             </p>
@@ -377,7 +377,7 @@ function ScriptTemplateTab({ value, onChange }: {
 }) {
     return (
         <div>
-            <p style={{ color: "#6a6e73", marginBottom: "16px" }}>
+            <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
                 Bash script to execute when the tool is called. Supports multi-line scripts
                 with variables, pipes, and control flow.
                 Use <code>{"{{param_name}}"}</code> for parameter substitution.
@@ -462,7 +462,7 @@ function TestTab({ toolId, params, scriptTemplate }: {
 
     return (
         <div style={{ maxWidth: "800px" }}>
-            <p style={{ color: "#6a6e73", marginBottom: "16px" }}>
+            <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
                 Test this tool by providing parameter values and executing the script template.
                 Secrets are not injected during testing.
             </p>
@@ -505,7 +505,7 @@ function TestTab({ toolId, params, scriptTemplate }: {
                                 </Label>
                             </FlexItem>
                             <FlexItem>
-                                <span style={{ color: "#6a6e73", fontSize: "13px" }}>
+                                <span className="axiom-text-subtle" style={{ fontSize: "13px" }}>
                                     {result.durationMs}ms
                                 </span>
                             </FlexItem>
@@ -530,7 +530,7 @@ function TestTab({ toolId, params, scriptTemplate }: {
 
                         <div style={{ marginBottom: "8px", fontWeight: 600, fontSize: "14px" }}>Output</div>
                         {!result.output || result.output.trim() === "" ? (
-                            <p style={{ color: "#6a6e73", fontStyle: "italic" }}>(no output)</p>
+                            <p className="axiom-text-subtle" style={{ fontStyle: "italic" }}>(no output)</p>
                         ) : outputIsJson ? (
                             <CodeEditor
                                 code={formatJson(result.output)}

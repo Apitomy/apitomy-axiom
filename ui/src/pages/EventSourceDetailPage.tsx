@@ -252,7 +252,7 @@ function LogsTab({ logs, totalCount, page, perPage, onPageChange, onPerPageChang
                 alignItems={{ default: "alignItemsCenter" }}
                 style={{ marginBottom: "16px" }}>
                 <FlexItem>
-                    <p style={{ color: "#6a6e73" }}>
+                    <p className="axiom-text-subtle">
                         Poll activity for this event source. Click a row to view details.
                     </p>
                 </FlexItem>
@@ -343,7 +343,7 @@ function LogsTab({ logs, totalCount, page, perPage, onPageChange, onPerPageChang
                                     <CodeBlockCode>{selectedLog.detail}</CodeBlockCode>
                                 </CodeBlock>
                             ) : (
-                                <p style={{ color: "#6a6e73", fontStyle: "italic" }}>
+                                <p className="axiom-text-subtle" style={{ fontStyle: "italic" }}>
                                     No detailed log available for this poll cycle.
                                 </p>
                             )}

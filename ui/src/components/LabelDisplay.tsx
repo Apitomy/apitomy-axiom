@@ -19,7 +19,7 @@ export function LabelDisplay({ labels, onEdit }: {
                     ))}
                 </div>
             ) : (
-                <span style={{ color: "#6a6e73", fontStyle: "italic" }}>No labels</span>
+                <span className="axiom-text-subtle" style={{ fontStyle: "italic" }}>No labels</span>
             )}
             <Button variant="plain" size="sm" style={{ padding: 0 }}
                 onClick={onEdit} aria-label="Edit labels">

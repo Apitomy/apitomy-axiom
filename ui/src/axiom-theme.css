@@ -1,0 +1,70 @@
+/* ============================================================
+   Axiom Theme — custom properties and utility classes
+   ============================================================ */
+
+/* --- Semantic custom properties (light defaults) --- */
+:root {
+    --axiom--color--warning--bg: #fdf7e7;
+    --axiom--color--warning--border: #f0d67b;
+    --axiom--color--warning--text: #795600;
+    --axiom--color--success--bg: #f3faf3;
+    --axiom--color--success--border: #c6e3c6;
+    --axiom--color--danger--bg: #fef3f2;
+    --axiom--color--orange--bg: #fffaf0;
+    --axiom--color--info--bg: #f0f8ff;
+
+    --axiom--color--brand: #0b2545;
+    --axiom--color--brand--accent: #2082a3;
+    --axiom--color--brand--gradient: linear-gradient(90deg, #0b2545, #1b6b93, #4fc0d0);
+}
+
+/* --- Dark-mode overrides --- */
+:root:where(.pf-v6-theme-dark) {
+    --axiom--color--warning--bg: #332800;
+    --axiom--color--warning--border: #6b5200;
+    --axiom--color--warning--text: #f0d67b;
+    --axiom--color--success--bg: #1a3a1a;
+    --axiom--color--success--border: #2d5f2d;
+    --axiom--color--danger--bg: #3d0f0f;
+    --axiom--color--orange--bg: #332200;
+    --axiom--color--info--bg: #0d1f30;
+
+    --axiom--color--brand: #8ecae6;
+    --axiom--color--brand--accent: #4fc0d0;
+    --axiom--color--brand--gradient: linear-gradient(90deg, #4fc0d0, #1b6b93, #8ecae6);
+}
+
+/* --- Utility classes --- */
+
+.axiom-text-subtle {
+    color: var(--pf-t--global--text--color--subtle, #6a6e73);
+}
+
+.axiom-text-default {
+    color: var(--pf-t--global--text--color--regular, #151515);
+}
+
+.axiom-icon-danger {
+    color: var(--pf-t--global--color--status--danger--default, #c9190b);
+}
+
+.axiom-icon-warning {
+    color: var(--pf-t--global--color--status--warning--default, #f0ab00);
+}
+
+.axiom-icon-success {
+    color: var(--pf-t--global--color--status--success--default, #3e8635);
+}
+
+.axiom-icon-disabled {
+    color: var(--pf-t--global--color--status--disabled--default, #8a8d90);
+}
+
+.axiom-generated-item-card {
+    background-color: var(--pf-t--global--background--color--secondary--default, #fafafa);
+    border: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+}
+
+.axiom-generated-item-card:hover {
+    background-color: var(--pf-t--global--background--color--tertiary--default, #f0f0f0);
+}

@@ -259,7 +259,7 @@ export function ConfigurationPacksPage() {
             <Title headingLevel="h1" size="lg">
                 Configuration Packs
             </Title>
-            <p style={{ color: "#6a6e73", marginTop: "8px", marginBottom: "16px" }}>
+            <p className="axiom-text-subtle" style={{ marginTop: "8px", marginBottom: "16px" }}>
                 Configuration packs bundle related items — action types, tools, toolsets,
                 MCP servers, and report definitions — into a portable JSON file. Create a pack
                 to share your setup with others, or import one to quickly add pre-configured
@@ -304,7 +304,7 @@ export function ConfigurationPacksPage() {
                                                         {at?.executionMode || "—"}
                                                     </Label>
                                                 </FlexItem>
-                                                <FlexItem style={{ fontSize: "12px", color: "#6a6e73" }}>
+                                                <FlexItem className="axiom-text-subtle" style={{ fontSize: "12px" }}>
                                                     {at?.executionMode === "actor" ? `${at?.allowedTools?.length || 0} tools` : ""}
                                                 </FlexItem>
                                             </Flex>
@@ -323,7 +323,7 @@ export function ConfigurationPacksPage() {
                                         return (
                                             <Flex alignItems={{ default: "alignItemsCenter" }} style={{ gap: "8px" }}>
                                                 <FlexItem><span style={{ fontWeight: 600 }}>{item.name}</span></FlexItem>
-                                                <FlexItem style={{ fontSize: "12px", color: "#6a6e73" }}>
+                                                <FlexItem className="axiom-text-subtle" style={{ fontSize: "12px" }}>
                                                     {t?.parameters?.length ? `${t.parameters.length} param(s)` : ""}
                                                 </FlexItem>
                                             </Flex>
@@ -344,7 +344,7 @@ export function ConfigurationPacksPage() {
                                         return (
                                             <Flex alignItems={{ default: "alignItemsCenter" }} style={{ gap: "8px" }}>
                                                 <FlexItem><span style={{ fontWeight: 600 }}>{item.name}</span></FlexItem>
-                                                <FlexItem style={{ fontSize: "12px", color: "#6a6e73" }}>
+                                                <FlexItem className="axiom-text-subtle" style={{ fontSize: "12px" }}>
                                                     {ts?.tools?.length ? `${ts.tools.length} tool(s)` : ""}
                                                 </FlexItem>
                                             </Flex>
@@ -398,7 +398,7 @@ export function ConfigurationPacksPage() {
                     <TabContent id="import-tab" eventKey={1} activeKey={activeTab}
                         style={{ marginTop: "24px" }}>
                         <div style={{ maxWidth: "600px" }}>
-                            <p style={{ color: "#6a6e73", marginBottom: "16px" }}>
+                            <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
                                 Upload a configuration pack JSON file to import its contents.
                             </p>
 
@@ -595,7 +595,7 @@ function SelectedItemsSection({ title, allItems, selected, onAdd, onRemove, rend
             </Flex>
 
             {selectedItems.length === 0 ? (
-                <p style={{ color: "#6a6e73", fontSize: "13px", fontStyle: "italic" }}>
+                <p className="axiom-text-subtle" style={{ fontSize: "13px", fontStyle: "italic" }}>
                     No {title.toLowerCase()} selected.
                 </p>
             ) : (
@@ -608,7 +608,7 @@ function SelectedItemsSection({ title, allItems, selected, onAdd, onRemove, rend
                                         <>
                                             <span style={{ fontWeight: 600 }}>{item.name}</span>
                                             {item.description && (
-                                                <span style={{ fontSize: "12px", color: "#6a6e73", marginLeft: "8px" }}>
+                                                <span className="axiom-text-subtle" style={{ fontSize: "12px", marginLeft: "8px" }}>
                                                     {item.description}
                                                 </span>
                                             )}
@@ -648,7 +648,7 @@ function SelectedItemsSection({ title, allItems, selected, onAdd, onRemove, rend
                             style={{ marginBottom: "16px" }}
                         />
                         {filteredItems.length === 0 ? (
-                            <p style={{ color: "#6a6e73", fontStyle: "italic" }}>
+                            <p className="axiom-text-subtle" style={{ fontStyle: "italic" }}>
                                 {availableItems.length === 0
                                     ? `All ${title.toLowerCase()} are already selected.`
                                     : "No items match the filter."}
@@ -725,7 +725,7 @@ function ActionTypePickerModal({ isOpen, onClose, availableItems, modalSelected,
                     style={{ marginBottom: "16px" }}
                 />
                 {filtered.length === 0 ? (
-                    <p style={{ color: "#6a6e73", fontStyle: "italic" }}>
+                    <p className="axiom-text-subtle" style={{ fontStyle: "italic" }}>
                         {availableItems.length === 0
                             ? "All action types are already selected."
                             : "No action types match the filter."}
@@ -818,7 +818,7 @@ function ToolPickerModal({ isOpen, onClose, availableItems, modalSelected, toggl
                     onChange={(_e, v) => setFilter(v)} aria-label="Filter tools"
                     style={{ marginBottom: "16px" }} />
                 {filtered.length === 0 ? (
-                    <p style={{ color: "#6a6e73", fontStyle: "italic" }}>
+                    <p className="axiom-text-subtle" style={{ fontStyle: "italic" }}>
                         {available.length === 0 ? "All tools are already selected." : "No tools match the filter."}
                     </p>
                 ) : (
@@ -838,7 +838,7 @@ function ToolPickerModal({ isOpen, onClose, availableItems, modalSelected, toggl
                                     <Td><Checkbox id={`tool-pick-${t.id}`} isChecked={modalSelected.has(t.id)}
                                         onChange={() => toggleItem(t.id)} aria-label={`Select ${t.name}`} /></Td>
                                     <Td>{t.name}</Td>
-                                    <Td style={{ color: "#6a6e73", fontSize: "13px" }}>
+                                    <Td className="axiom-text-subtle" style={{ fontSize: "13px" }}>
                                         {t.description ? (t.description.length > 60 ? t.description.substring(0, 57) + "..." : t.description) : "—"}
                                     </Td>
                                     <Td>{t.parameters?.length || 0}</Td>
@@ -894,7 +894,7 @@ function ToolsetPickerModal({ isOpen, onClose, availableItems, modalSelected, to
                     onChange={(_e, v) => setFilter(v)} aria-label="Filter toolsets"
                     style={{ marginBottom: "16px" }} />
                 {filtered.length === 0 ? (
-                    <p style={{ color: "#6a6e73", fontStyle: "italic" }}>
+                    <p className="axiom-text-subtle" style={{ fontStyle: "italic" }}>
                         {available.length === 0 ? "All toolsets are already selected." : "No toolsets match the filter."}
                     </p>
                 ) : (
@@ -914,7 +914,7 @@ function ToolsetPickerModal({ isOpen, onClose, availableItems, modalSelected, to
                                     <Td><Checkbox id={`ts-pick-${ts.id}`} isChecked={modalSelected.has(ts.id)}
                                         onChange={() => toggleItem(ts.id)} aria-label={`Select ${ts.name}`} /></Td>
                                     <Td>{ts.name}</Td>
-                                    <Td style={{ color: "#6a6e73", fontSize: "13px" }}>
+                                    <Td className="axiom-text-subtle" style={{ fontSize: "13px" }}>
                                         {ts.description || "—"}
                                     </Td>
                                     <Td>{ts.tools?.length || 0}</Td>
@@ -970,7 +970,7 @@ function ReportDefinitionPickerModal({ isOpen, onClose, availableItems, modalSel
                     onChange={(_e, v) => setFilter(v)} aria-label="Filter report definitions"
                     style={{ marginBottom: "16px" }} />
                 {filtered.length === 0 ? (
-                    <p style={{ color: "#6a6e73", fontStyle: "italic" }}>
+                    <p className="axiom-text-subtle" style={{ fontStyle: "italic" }}>
                         {available.length === 0 ? "All report definitions are already selected." : "No report definitions match the filter."}
                     </p>
                 ) : (

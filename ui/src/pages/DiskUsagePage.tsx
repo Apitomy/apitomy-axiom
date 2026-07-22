@@ -91,7 +91,7 @@ export function DiskUsagePage() {
                             <div style={{ fontSize: "24px", fontWeight: "bold" }}>
                                 {formatBytes(totalDiskUsageBytes)}
                             </div>
-                            <div style={{ fontSize: "13px", color: "#6a6e73" }}>
+                            <div className="axiom-text-subtle" style={{ fontSize: "13px" }}>
                                 Total Disk Usage
                             </div>
                         </CardBody>
@@ -103,7 +103,7 @@ export function DiskUsagePage() {
                             <div style={{ fontSize: "24px", fontWeight: "bold" }}>
                                 {projectCount}
                             </div>
-                            <div style={{ fontSize: "13px", color: "#6a6e73" }}>
+                            <div className="axiom-text-subtle" style={{ fontSize: "13px" }}>
                                 Projects
                             </div>
                         </CardBody>

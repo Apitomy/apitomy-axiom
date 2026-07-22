@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useTheme } from "./hooks/useTheme";
 import { Routes, Route, useLocation } from "react-router-dom";
 import { Page } from "@patternfly/react-core";
 
@@ -46,9 +47,11 @@ import { sseClient } from "./config/sse";
 
 export function App() {
     const location = useLocation();
+    const { mode: themeMode, setMode: setThemeMode } = useTheme();
     const [startupChecks, setStartupChecks] = useState<StartupCheck[] | null>(null);
     const [engineName, setEngineName] = useState<string | undefined>(undefined);
     const [appVersion, setAppVersion] = useState<string>("");
+    const themeProps = useMemo(() => ({ themeMode, setThemeMode }), [themeMode, setThemeMode]);
 
     useEffect(() => {
         fetchSystemHealth()
@@ -82,7 +85,7 @@ export function App() {
 
     return (
         <Page
-            masthead={isBreakout ? undefined : <AppMasthead engineName={engineName} appVersion={appVersion} />}
+            masthead={isBreakout ? undefined : <AppMasthead engineName={engineName} appVersion={appVersion} {...themeProps} />}
             sidebar={hasCheckErrors || isAssistantPage || isBreakout ? undefined : <AppSidebar />}
             isContentFilled
             style={isBreakout ? {

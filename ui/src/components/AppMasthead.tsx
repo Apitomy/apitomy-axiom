@@ -16,29 +16,52 @@ import {
 } from "@patternfly/react-core";
 import QuestionCircleIcon from "@patternfly/react-icons/dist/esm/icons/question-circle-icon";
 import RobotIcon from "@patternfly/react-icons/dist/esm/icons/robot-icon";
+import SunIcon from "@patternfly/react-icons/dist/esm/icons/sun-icon";
+import MoonIcon from "@patternfly/react-icons/dist/esm/icons/moon-icon";
+import DesktopIcon from "@patternfly/react-icons/dist/esm/icons/desktop-icon";
+import { type ThemeMode } from "../hooks/useTheme";
 
 interface AppMastheadProps {
     engineName?: string;
     appVersion: string;
+    themeMode: ThemeMode;
+    setThemeMode: (mode: ThemeMode) => void;
 }
 
-export function AppMasthead({ engineName, appVersion }: AppMastheadProps) {
+const THEME_CYCLE: ThemeMode[] = ["light", "dark", "system"];
+
+/**
+ * Returns the icon and tooltip label for the current theme mode.
+ */
+function themeDisplay(mode: ThemeMode) {
+    switch (mode) {
+        case "light":
+            return { icon: <SunIcon />, label: "Theme: Light (click for Dark)" };
+        case "dark":
+            return { icon: <MoonIcon />, label: "Theme: Dark (click for System)" };
+        case "system":
+            return { icon: <DesktopIcon />, label: "Theme: System (click for Light)" };
+    }
+}
+
+export function AppMasthead({ engineName, appVersion, themeMode, setThemeMode }: AppMastheadProps) {
     const navigate = useNavigate();
     const [isAboutOpen, setIsAboutOpen] = useState(false);
+    const { icon: themeIcon, label: themeLabel } = themeDisplay(themeMode);
+
+    const cycleTheme = () => {
+        const currentIndex = THEME_CYCLE.indexOf(themeMode);
+        const nextIndex = (currentIndex + 1) % THEME_CYCLE.length;
+        setThemeMode(THEME_CYCLE[nextIndex]);
+    };
 
     return (
         <>
-            <Masthead style={{
-                position: "relative",
-                borderBottom: "none",
-                boxShadow: "none",
-                background: "white",
-                marginBottom: "6px",
-            }}>
+            <Masthead className="axiom-masthead">
                 <MastheadMain>
                     <MastheadBrand>
                         <span
-                            style={{ fontSize: "20px", fontWeight: 600, color: "#0b2545", cursor: "pointer", letterSpacing: "-0.5px" }}
+                            className="axiom-masthead__brand-text"
                             onClick={() => navigate("/")}>Apitomy Axiom</span>
                     </MastheadBrand>
                 </MastheadMain>
@@ -57,30 +80,31 @@ export function AppMasthead({ engineName, appVersion }: AppMastheadProps) {
                                                 localStorage.getItem("axiom.assistant.discovered")
                                                     ? undefined : "axiom-assistant-throb"
                                             }>
-                                            <RobotIcon style={{ color: "#2082a3", transform: "scale(1.25)" }} />
+                                            <RobotIcon className="axiom-masthead__icon" style={{ transform: "scale(1.25)" }} />
                                         </Button>
                                     </Tooltip>
                                 )}
                             </ToolbarItem>
                             <ToolbarItem>
+                                <Tooltip content={themeLabel}>
+                                    <Button variant="plain" aria-label="Toggle theme"
+                                        onClick={cycleTheme}>
+                                        <span className="axiom-masthead__icon">{themeIcon}</span>
+                                    </Button>
+                                </Tooltip>
+                            </ToolbarItem>
+                            <ToolbarItem>
                                 <Tooltip content="About Axiom">
                                     <Button variant="plain" aria-label="About"
                                         onClick={() => setIsAboutOpen(true)}>
-                                        <QuestionCircleIcon style={{ color: "#2082a3" }} />
+                                        <QuestionCircleIcon className="axiom-masthead__icon" />
                                     </Button>
                                 </Tooltip>
                             </ToolbarItem>
                         </ToolbarContent>
                     </Toolbar>
                 </MastheadContent>
-                <div style={{
-                    position: "absolute",
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    height: "3px",
-                    background: "linear-gradient(90deg, #0b2545, #1b6b93, #4fc0d0)",
-                }} />
+                <div className="axiom-masthead__gradient-bar" />
             </Masthead>
 
             <AboutModal

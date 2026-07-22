@@ -175,7 +175,7 @@ export function EngineSettingsPage() {
                                 </div>
                             ))}
                             {models.length === 0 && (
-                                <p style={{ color: "#6a6e73" }}>No models configured.</p>
+                                <p className="axiom-text-subtle">No models configured.</p>
                             )}
                         </CardBody>
                     </Card>

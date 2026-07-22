@@ -79,7 +79,9 @@ async function layoutTrace(traceNodes: TraceNode[]): Promise<{
             target: targetId,
             type: "smoothstep",
             style: {
-                stroke: targetNode?.status === "failed" ? "#c9190b" : "#8a8d90",
+                stroke: targetNode?.status === "failed"
+                    ? "var(--pf-t--global--color--status--danger--default, #c9190b)"
+                    : "var(--pf-t--global--color--status--disabled--default, #8a8d90)",
                 strokeWidth: 2,
             },
             animated: targetNode?.status === "in-progress",

@@ -59,7 +59,7 @@ export function ScriptAiModal({
                 <Title headingLevel="h4" size="md">
                     Script Template
                 </Title>
-                <div style={{ color: "#6a6e73", fontSize: "13px", marginTop: "4px" }}>
+                <div className="axiom-text-subtle" style={{ fontSize: "13px", marginTop: "4px" }}>
                     Available placeholders:{" "}
                     <code>{"{{projectId}}"}</code>,{" "}
                     <code>{"{{eventId}}"}</code>,{" "}

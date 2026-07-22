@@ -99,7 +99,7 @@ export function SecretsPage() {
                 </FlexItem>
             </Flex>
 
-            <p style={{ color: "#6a6e73", marginTop: "8px", marginBottom: "16px" }}>
+            <p className="axiom-text-subtle" style={{ marginTop: "8px", marginBottom: "16px" }}>
                 Secrets are injected as environment variables into AI agent and script
                 subprocesses. Use them for CLI authentication tokens (e.g. GH_TOKEN,
                 JIRA_API_TOKEN). Values are encrypted at rest and never returned by the API.
@@ -127,7 +127,7 @@ export function SecretsPage() {
                                 <Tr key={s.id}>
                                     <Td><code>{s.name}</code></Td>
                                     <Td>{s.description || "—"}</Td>
-                                    <Td style={{ color: "#6a6e73" }}>••••••••</Td>
+                                    <Td className="axiom-text-subtle">••••••••</Td>
                                     <Td>
                                         <Button variant="plain" size="sm" style={{ padding: 0 }}
                                             onClick={() => openEdit(s)} aria-label="Edit">

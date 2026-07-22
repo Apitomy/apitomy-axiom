@@ -23,7 +23,7 @@ export function ToolListEditor({ tools, onAdd, onRemove, onReplace, helpText, em
     return (
         <div style={{ maxWidth: "700px" }}>
             {helpText && (
-                <p style={{ color: "#6a6e73", marginBottom: "16px" }}>
+                <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
                     {helpText}
                 </p>
             )}
