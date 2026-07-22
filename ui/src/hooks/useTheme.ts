@@ -1,10 +1,21 @@
-import { useState, useEffect, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, useCallback } from "react";
 
 export type ThemeMode = "light" | "dark" | "system";
 export type EffectiveTheme = "light" | "dark";
 
 const STORAGE_KEY = "axiom.theme";
 const DARK_CLASS = "pf-v6-theme-dark";
+
+/**
+ * Context providing the resolved (effective) theme to deeply nested components
+ * that need to adapt their rendering to the current color scheme.
+ */
+export const EffectiveThemeContext = createContext<EffectiveTheme>("light");
+
+/** Returns the current effective theme from context. */
+export function useEffectiveTheme(): EffectiveTheme {
+    return useContext(EffectiveThemeContext);
+}
 
 function getSystemPreference(): EffectiveTheme {
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
@@ -24,9 +35,13 @@ function applyTheme(effective: EffectiveTheme): void {
 }
 
 function loadStoredMode(): ThemeMode {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === "light" || stored === "dark" || stored === "system") {
-        return stored;
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored === "light" || stored === "dark" || stored === "system") {
+            return stored;
+        }
+    } catch {
+        // localStorage unavailable (e.g. private browsing in older Safari)
     }
     return "system";
 }
@@ -37,11 +52,16 @@ function loadStoredMode(): ThemeMode {
  * dark-mode class on the document element.
  */
 export function useTheme() {
-    const [mode, setModeState] = useState<ThemeMode>(loadStoredMode);
-    const [effectiveTheme, setEffectiveTheme] = useState<EffectiveTheme>(() => resolveTheme(loadStoredMode()));
+    const initialMode = loadStoredMode();
+    const [mode, setModeState] = useState<ThemeMode>(initialMode);
+    const [effectiveTheme, setEffectiveTheme] = useState<EffectiveTheme>(resolveTheme(initialMode));
 
     const setMode = useCallback((newMode: ThemeMode) => {
-        localStorage.setItem(STORAGE_KEY, newMode);
+        try {
+            localStorage.setItem(STORAGE_KEY, newMode);
+        } catch {
+            // localStorage unavailable
+        }
         setModeState(newMode);
         const effective = resolveTheme(newMode);
         setEffectiveTheme(effective);

@@ -13,6 +13,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import ELK from "elkjs/lib/elk.bundled.js";
 import { EmptyState, EmptyStateBody } from "@patternfly/react-core";
+import { useEffectiveTheme } from "../hooks/useTheme";
 import { fetchTraceDetail, type TraceDetail, type TraceNode } from "../config/api";
 import { nodeTypes } from "./TraceGraphNode";
 import { TraceNodeDetailModal } from "./TraceNodeDetailModal";
@@ -92,6 +93,7 @@ async function layoutTrace(traceNodes: TraceNode[]): Promise<{
 }
 
 function TraceGraphInner({ traceId, traceDetail, refreshKey }: TraceGraphProps) {
+    const effectiveTheme = useEffectiveTheme();
     const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
     const [loading, setLoading] = useState(true);
@@ -147,7 +149,7 @@ function TraceGraphInner({ traceId, traceDetail, refreshKey }: TraceGraphProps) 
                 fitView
                 nodesConnectable={false}
                 nodesDraggable={false}
-                colorMode="system"
+                colorMode={effectiveTheme}
             >
                 <Background />
                 <Controls />
