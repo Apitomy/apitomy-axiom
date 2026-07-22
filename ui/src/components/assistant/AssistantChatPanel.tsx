@@ -302,6 +302,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
             await sendAssistantMessage(sessionId, message);
         } catch (err) {
             console.error("Failed to send message:", err);
+            addMessage({ type: "system", content: "Failed to send message. Please try again." });
             setIsProcessing(false);
         }
     }, [sessionId, addMessage]);
@@ -321,9 +322,10 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
             await respondToAssistantPermission(sessionId, permissionId, allow, toolInput);
         } catch (err) {
             console.error("Failed to respond to permission:", err);
+            addMessage({ type: "system", content: "Failed to submit permission response. Please try again." });
             setIsProcessing(false);
         }
-    }, [sessionId]);
+    }, [sessionId, addMessage]);
 
     const handleCreateAutoApproval = useCallback(async (
         toolName: string, fieldName: string | undefined,
@@ -344,8 +346,9 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
             onAutoApprovalCountChange?.();
         } catch (err) {
             console.error("Failed to create auto-approval:", err);
+            addMessage({ type: "system", content: "Failed to create auto-approval rule. Please try again." });
         }
-    }, [sessionId, onAutoApprovalCountChange]);
+    }, [sessionId, onAutoApprovalCountChange, addMessage]);
 
     return (
         <div style={{

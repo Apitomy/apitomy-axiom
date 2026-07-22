@@ -15,6 +15,7 @@ import {
     ModalFooter,
     ModalHeader,
     Alert,
+    AlertActionCloseButton,
 } from "@patternfly/react-core";
 import { Table, Thead, Tr, Th, Tbody, Td } from "@patternfly/react-table";
 import ArrowLeftIcon from "@patternfly/react-icons/dist/esm/icons/arrow-left-icon";
@@ -49,6 +50,9 @@ export function AssistantSessionPage() {
     const [applying, setApplying] = useState(false);
     const [applyResult, setApplyResult] = useState<AssistantApplyResult | null>(null);
     const [applyError, setApplyError] = useState<string | null>(null);
+    const [endSessionError, setEndSessionError] = useState<string | null>(null);
+    const [renameError, setRenameError] = useState<string | null>(null);
+    const [autoApprovalError, setAutoApprovalError] = useState<string | null>(null);
     const [sessionMode, setSessionMode] = useState<SessionMode>("normal");
     const [itemCount, setItemCount] = useState(0);
     const [isEditingName, setIsEditingName] = useState(false);
@@ -86,6 +90,7 @@ export function AssistantSessionPage() {
             setIsEditingName(false);
             return;
         }
+        setRenameError(null);
         try {
             const updated = await renameAssistantSession(sessionId, editName.trim());
             setSession(updated);
@@ -94,6 +99,7 @@ export function AssistantSessionPage() {
             }
         } catch (err) {
             console.error("Failed to rename session:", err);
+            setRenameError((err as Error).message || "Failed to rename session");
         }
         setIsEditingName(false);
     };
@@ -115,6 +121,7 @@ export function AssistantSessionPage() {
 
     const openAutoApprovalModal = () => {
         if (!sessionId) return;
+        setAutoApprovalError(null);
         fetchAutoApprovals(sessionId)
             .then((rules) => {
                 setAutoApprovalRules(rules);
@@ -126,6 +133,7 @@ export function AssistantSessionPage() {
 
     const handleDeleteAutoApproval = async (ruleId: string) => {
         if (!sessionId) return;
+        setAutoApprovalError(null);
         try {
             await deleteAutoApproval(sessionId, ruleId);
             const updated = autoApprovalRules.filter((r) => r.id !== ruleId);
@@ -133,11 +141,13 @@ export function AssistantSessionPage() {
             setAutoApprovalCount(updated.length);
         } catch (err) {
             console.error("Failed to delete auto-approval:", err);
+            setAutoApprovalError((err as Error).message || "Failed to delete auto-approval rule");
         }
     };
 
     const handleEndSession = async () => {
         if (!sessionId) return;
+        setEndSessionError(null);
         try {
             await deleteAssistantSession(sessionId);
             if (isBreakout) {
@@ -147,6 +157,8 @@ export function AssistantSessionPage() {
             }
         } catch (err) {
             console.error("Failed to end session:", err);
+            setEndSessionError((err as Error).message || "Failed to end session");
+            setIsEndConfirmOpen(false);
         }
     };
 
@@ -318,6 +330,30 @@ export function AssistantSessionPage() {
                 </Alert>
             )}
 
+            {endSessionError && (
+                <Alert
+                    variant="danger"
+                    isInline
+                    title="Failed to end session"
+                    actionClose={<AlertActionCloseButton onClose={() => setEndSessionError(null)} />}
+                    className="axiom-session-page__end-session-error"
+                >
+                    {endSessionError}
+                </Alert>
+            )}
+
+            {renameError && (
+                <Alert
+                    variant="danger"
+                    isInline
+                    title="Failed to rename session"
+                    actionClose={<AlertActionCloseButton onClose={() => setRenameError(null)} />}
+                    className="axiom-session-page__rename-error"
+                >
+                    {renameError}
+                </Alert>
+            )}
+
             {/* Split panels — fills remaining height */}
             <div className="axiom-session-page__split-panels">
                 <div className={`axiom-session-page__chat-panel${isConfigAssistant ? " axiom-session-page__chat-panel--with-sidebar" : ""}`}>
@@ -420,6 +456,17 @@ export function AssistantSessionPage() {
             >
                 <ModalHeader title="Auto-Approval Rules" />
                 <ModalBody>
+                    {autoApprovalError && (
+                        <Alert
+                            variant="danger"
+                            isInline
+                            title="Failed to delete auto-approval rule"
+                            actionClose={<AlertActionCloseButton onClose={() => setAutoApprovalError(null)} />}
+                            className="axiom-session-page__auto-approval-error"
+                        >
+                            {autoApprovalError}
+                        </Alert>
+                    )}
                     {autoApprovalRules.length === 0 ? (
                         <div className="axiom-session-page__auto-approval-empty">
                             No auto-approval rules active.
