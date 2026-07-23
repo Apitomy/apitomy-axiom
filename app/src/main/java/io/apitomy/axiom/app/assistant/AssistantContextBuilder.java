@@ -125,12 +125,17 @@ public class AssistantContextBuilder {
         for (var entry : resolvedServers.entrySet()) {
             ObjectNode serverNode = servers.putObject(entry.getKey());
             McpServerConfig config = entry.getValue();
-            serverNode.put("command", config.command());
-            ArrayNode argsNode = serverNode.putArray("args");
-            config.args().forEach(argsNode::add);
-            if (!config.env().isEmpty()) {
-                ObjectNode envNode = serverNode.putObject("env");
-                config.env().forEach(envNode::put);
+            if (config.isHttpTransport()) {
+                serverNode.put("type", config.type());
+                serverNode.put("url", config.url());
+            } else {
+                serverNode.put("command", config.command());
+                ArrayNode argsNode = serverNode.putArray("args");
+                config.args().forEach(argsNode::add);
+                if (!config.env().isEmpty()) {
+                    ObjectNode envNode = serverNode.putObject("env");
+                    config.env().forEach(envNode::put);
+                }
             }
         }
         return root.toPrettyString();
@@ -138,8 +143,32 @@ public class AssistantContextBuilder {
 
     /**
      * Resolved MCP server configuration ready for the mcp-config.json file.
+     * Supports both stdio transport (command + args) and HTTP transport (url).
      */
     public record McpServerConfig(String command, List<String> args,
-                                    Map<String, String> env) {
+                                    Map<String, String> env,
+                                    String type, String url) {
+
+        /**
+         * Creates a stdio-transport MCP server configuration.
+         */
+        public static McpServerConfig stdio(String command, List<String> args,
+                                             Map<String, String> env) {
+            return new McpServerConfig(command, args, env, null, null);
+        }
+
+        /**
+         * Creates an HTTP-transport MCP server configuration.
+         */
+        public static McpServerConfig http(String url) {
+            return new McpServerConfig(null, List.of(), Map.of(), "http", url);
+        }
+
+        /**
+         * Returns whether this config uses HTTP transport.
+         */
+        public boolean isHttpTransport() {
+            return "http".equals(type);
+        }
     }
 }

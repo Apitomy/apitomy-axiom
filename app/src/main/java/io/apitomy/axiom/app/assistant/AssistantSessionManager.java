@@ -5,10 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.app.ImportExportService;
+import io.apitomy.axiom.app.McpConfigGenerator;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.McpServerEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.WorkspaceService;
@@ -83,6 +85,9 @@ public class AssistantSessionManager {
     WorkspaceService workspaceService;
 
     @Inject
+    McpConfigGenerator mcpConfigGenerator;
+
+    @Inject
     Event<io.apitomy.axiom.core.events.SseEvent> sseEventEmitter;
 
     private final Map<String, AssistantSession> sessions = new ConcurrentHashMap<>();
@@ -131,19 +136,39 @@ public class AssistantSessionManager {
                 }
             }
 
+            // Resolve environment variables early — MCP server resolution needs
+            // them (e.g. @axiom-tools passes env to the tools MCP server).
+            Map<String, String> resolvedEnv = new LinkedHashMap<>();
+            if (environmentResolver.hasCustomEnvironment(template.environment())) {
+                resolvedEnv.putAll(environmentResolver.resolve(template.environment()));
+            }
+
+            // Inject project environment variables
+            if (project != null) {
+                resolvedEnv.put("AXIOM_PROJECT_ID", String.valueOf(project.id));
+                resolvedEnv.put("AXIOM_PROJECT_NAME", project.name);
+                resolvedEnv.put("AXIOM_ISSUE_REF", project.issueRef);
+                resolvedEnv.put("AXIOM_REPOSITORY", project.repository);
+            }
+
+            // Create session directory first — MCP server resolution may need
+            // to write files there (e.g. tools.json for @axiom-tools).
+            String sessionId = UUID.randomUUID().toString();
+            Path sessionDir = contextBuilder.createSessionDirectory(sessionId, null);
+
+            try {
             // Resolve MCP servers from template
             Map<String, AssistantContextBuilder.McpServerConfig> mcpConfigs =
-                    resolveMcpServers(template, project);
+                    resolveMcpServers(template, project, sessionDir, resolvedEnv);
 
             // Resolve allowed tools from template
             List<String> resolvedAllowedTools = resolveAllowedTools(template);
 
-            // Build MCP config JSON
+            // Build and write MCP config JSON to session directory
             String mcpConfig = contextBuilder.buildMcpConfig(mcpConfigs);
-
-            // Create session directory (always under ~/.axiom/assistant/sessions/)
-            String sessionId = UUID.randomUUID().toString();
-            Path sessionDir = contextBuilder.createSessionDirectory(sessionId, mcpConfig);
+            if (mcpConfig != null) {
+                Files.writeString(sessionDir.resolve("mcp-config.json"), mcpConfig);
+            }
 
             // Determine working directory
             Path workDir;
@@ -168,20 +193,6 @@ public class AssistantSessionManager {
             if (template.initScript() != null && !template.initScript().isBlank()) {
                 runInitScript(workDir, sessionDir, template.initScript(),
                         template.initScriptType());
-            }
-
-            // Resolve environment variables (with secret substitution)
-            Map<String, String> resolvedEnv = new LinkedHashMap<>();
-            if (environmentResolver.hasCustomEnvironment(template.environment())) {
-                resolvedEnv.putAll(environmentResolver.resolve(template.environment()));
-            }
-
-            // Inject project environment variables
-            if (project != null) {
-                resolvedEnv.put("AXIOM_PROJECT_ID", String.valueOf(project.id));
-                resolvedEnv.put("AXIOM_PROJECT_NAME", project.name);
-                resolvedEnv.put("AXIOM_ISSUE_REF", project.issueRef);
-                resolvedEnv.put("AXIOM_REPOSITORY", project.repository);
             }
 
             // Build system prompt, augmenting with project context if applicable
@@ -241,6 +252,11 @@ public class AssistantSessionManager {
             }
 
             return session;
+            } catch (Exception e) {
+                // Clean up the session directory if setup fails after creation
+                contextBuilder.deleteSessionDirectory(sessionDir);
+                throw e;
+            }
         } catch (Exception e) {
             sessionCount.decrementAndGet();
             throw e;
@@ -683,48 +699,94 @@ public class AssistantSessionManager {
 
     private Map<String, AssistantContextBuilder.McpServerConfig> resolveMcpServers(
             SessionTemplateService.SessionTemplate template,
-            ProjectEntity project) throws IOException {
+            ProjectEntity project, Path sessionDir,
+            Map<String, String> sessionEnv) throws IOException {
         Map<String, AssistantContextBuilder.McpServerConfig> configs = new LinkedHashMap<>();
+
+        String apiUrl = "http://localhost:" + httpPort + "/api/v1";
 
         for (String serverName : template.mcpServers()) {
             if ("@axiom-assistant".equals(serverName)) {
-                // Special built-in MCP server for the assistant
+                // Built-in MCP server for project-scoped assistant tools
                 Path mcpServerDir = ensureAssistantMcpServerInstalled();
                 String serverJsPath = mcpServerDir.resolve("server.js")
                         .toAbsolutePath().toString();
-                String apiUrl = "http://localhost:" + httpPort + "/api/v1";
                 Map<String, String> env = new LinkedHashMap<>();
                 env.put("AXIOM_API_URL", apiUrl);
                 if (project != null) {
                     env.put("AXIOM_PROJECT_ID", String.valueOf(project.id));
                 }
-                configs.put("axiom", new AssistantContextBuilder.McpServerConfig(
-                        "node",
-                        List.of(serverJsPath),
-                        env));
+                configs.put("axiom", AssistantContextBuilder.McpServerConfig.stdio(
+                        "node", List.of(serverJsPath), env));
+
+            } else if ("@axiom-tools".equals(serverName)) {
+                // Built-in MCP server for user-defined script tools.
+                // Same server project as the task execution path — loads
+                // tool definitions from a generated tools.json file.
+                List<ToolDefinitionEntity> scriptTools =
+                        ToolDefinitionEntity.listAll();
+                if (!scriptTools.isEmpty()) {
+                    Path serverDir = mcpConfigGenerator.ensureMcpServerInstalled();
+                    String toolsJson = mcpConfigGenerator.buildToolsJson(scriptTools);
+                    Path toolsFile = sessionDir.resolve("tools.json");
+                    Files.writeString(toolsFile, toolsJson);
+                    Map<String, String> env = new LinkedHashMap<>(sessionEnv);
+                    env.putIfAbsent("AXIOM_API_URL", apiUrl);
+                    configs.put("axiom-tools",
+                            AssistantContextBuilder.McpServerConfig.stdio("node",
+                                    List.of(serverDir.resolve("tools-server.js")
+                                                    .toAbsolutePath().toString(),
+                                            toolsFile.toAbsolutePath().toString()),
+                                    env));
+                } else {
+                    LOG.infof("No script tools defined — skipping @axiom-tools server");
+                }
+
+            } else if ("@axiom-sdk".equals(serverName)) {
+                // Built-in MCP server for Axiom SDK tools (project/task management)
+                Path serverDir = mcpConfigGenerator.ensureMcpServerInstalled();
+                Map<String, String> env = new LinkedHashMap<>();
+                env.put("AXIOM_API_URL", apiUrl);
+                configs.put("axiom-sdk",
+                        AssistantContextBuilder.McpServerConfig.stdio("node",
+                                List.of(serverDir.resolve("sdk-server.js")
+                                        .toAbsolutePath().toString()),
+                                env));
+
             } else {
                 // Resolve from database
                 McpServerEntity entity = McpServerEntity.find("name", serverName).firstResult();
-                if (entity != null && entity.serverCommand != null) {
-                    List<String> args = new ArrayList<>();
-                    if (entity.serverArgs != null && !entity.serverArgs.isBlank()) {
-                        JsonNode argsNode = objectMapper.readTree(entity.serverArgs);
-                        if (argsNode.isArray()) {
-                            for (JsonNode arg : argsNode) {
-                                args.add(arg.asText());
+                if (entity != null) {
+                    if (entity.serverUrl != null && !entity.serverUrl.isBlank()) {
+                        // HTTP transport
+                        configs.put(serverName,
+                                AssistantContextBuilder.McpServerConfig.http(entity.serverUrl));
+                    } else if (entity.serverCommand != null) {
+                        // Stdio transport
+                        List<String> args = new ArrayList<>();
+                        if (entity.serverArgs != null && !entity.serverArgs.isBlank()) {
+                            JsonNode argsNode = objectMapper.readTree(entity.serverArgs);
+                            if (argsNode.isArray()) {
+                                for (JsonNode arg : argsNode) {
+                                    args.add(arg.asText());
+                                }
                             }
                         }
+                        Map<String, String> env = new LinkedHashMap<>();
+                        if (entity.serverEnv != null && !entity.serverEnv.isBlank()) {
+                            JsonNode envNode = objectMapper.readTree(entity.serverEnv);
+                            envNode.fields().forEachRemaining(
+                                    field -> env.put(field.getKey(),
+                                            field.getValue().asText()));
+                        }
+                        configs.put(serverName,
+                                AssistantContextBuilder.McpServerConfig.stdio(
+                                        entity.serverCommand, args, env));
+                    } else {
+                        LOG.warnf("MCP server has neither URL nor command: %s", serverName);
                     }
-                    Map<String, String> env = new LinkedHashMap<>();
-                    if (entity.serverEnv != null && !entity.serverEnv.isBlank()) {
-                        JsonNode envNode = objectMapper.readTree(entity.serverEnv);
-                        envNode.fields().forEachRemaining(
-                                field -> env.put(field.getKey(), field.getValue().asText()));
-                    }
-                    configs.put(serverName, new AssistantContextBuilder.McpServerConfig(
-                            entity.serverCommand, args, env));
                 } else {
-                    LOG.warnf("MCP server not found or has no command: %s", serverName);
+                    LOG.warnf("MCP server not found: %s", serverName);
                 }
             }
         }
