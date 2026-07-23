@@ -55,6 +55,7 @@ public class AssistantEventParser {
                 case "result" -> parseResult(node);
                 case "sdk_control_request" -> parseSdkControlRequest(node);
                 case "control_request" -> parseControlRequest(node);
+                case "conversation_reset" -> parseConversationReset(node);
                 default -> {
                     ObjectNode data = JsonNodeFactory.instance.objectNode();
                     data.put("rawType", type);
@@ -180,6 +181,18 @@ public class AssistantEventParser {
         data.put("description", request.path("description").asText());
         data.set("toolInput", request.path("input"));
         return List.of(new SseEvent("permission_request", data));
+    }
+
+    /**
+     * Parses a conversation_reset event emitted when the user sends the
+     * {@code /clear} slash command.
+     *
+     * @param root the raw NDJSON node
+     * @return a single conversation_reset SSE event
+     */
+    private List<SseEvent> parseConversationReset(JsonNode root) {
+        ObjectNode data = JsonNodeFactory.instance.objectNode();
+        return List.of(new SseEvent("conversation_reset", data));
     }
 
     /**

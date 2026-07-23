@@ -521,6 +521,9 @@ public class AssistantSession {
                         accumulateCost(event);
                     }
                     synchronized (eventLock) {
+                        if ("conversation_reset".equals(event.type())) {
+                            eventHistory.clear();
+                        }
                         eventHistory.add(event);
                         lastActivityAt = Instant.now();
                         for (Consumer<SseEvent> listener : listeners) {

@@ -194,6 +194,15 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                 setIsProcessing(false);
                 break;
 
+            case "conversation_reset":
+                setMessages([{
+                    id: String(++messageIdCounter),
+                    type: "system",
+                    content: "Conversation cleared.",
+                }]);
+                setIsProcessing(false);
+                break;
+
             case "unhandled_event":
                 addMessage({
                     type: "warning",
