@@ -65,7 +65,6 @@ export function ReportDefinitionsPage() {
         createReportDefinition({
             name: newName,
             schedule: newSchedule,
-            timeWindow: "last-24h",
             promptTemplate: "Summarize recent activity across all repositories.",
             enabled: false,
         })
@@ -123,7 +122,10 @@ export function ReportDefinitionsPage() {
                                             </span>
                                         )}
                                     </Td>
-                                    <Td><Label isCompact>{def.timeWindow}</Label></Td>
+                                    <Td>{def.timeWindow
+                                        ? <Label isCompact>{def.timeWindow}</Label>
+                                        : <span className="axiom-text-subtle">—</span>
+                                    }</Td>
                                     <Td>
                                         <Label isCompact color={def.enabled ? "green" : "grey"}>
                                             {def.enabled ? "Yes" : "No"}

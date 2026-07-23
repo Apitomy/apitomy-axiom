@@ -159,7 +159,6 @@ public final class ReportDefinitionValidator {
     private static void validateTimeWindow(NewReportDefinition def, List<ValidationMessage> messages) {
         String timeWindow = def.getTimeWindow();
         if (timeWindow == null || timeWindow.isBlank()) {
-            messages.add(error("timeWindow", "Time window is required."));
             return;
         }
         if (!VALID_TIME_WINDOWS.contains(timeWindow)) {

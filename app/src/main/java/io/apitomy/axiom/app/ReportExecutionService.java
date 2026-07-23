@@ -111,22 +111,24 @@ public class ReportExecutionService {
             LOG.warnf(e, "Failed to create trace for report %d", reportId);
         }
 
-        // Compute time range
+        // Compute time range (null when no time window is configured)
         Instant now = Instant.now();
-        Instant rangeStart = computeTimeRangeStart(definition, now);
-        Instant rangeEnd = now;
+        boolean hasTimeWindow = definition.timeWindow != null && !definition.timeWindow.isBlank();
+        Instant rangeStart = hasTimeWindow ? computeTimeRangeStart(definition, now) : null;
+        Instant rangeEnd = hasTimeWindow ? now : null;
 
         // Resolve repositories
         String repoList = resolveRepositories(definition);
 
         // Build prompt from template
         DateTimeFormatter fmt = DateTimeFormatter.ISO_INSTANT;
-        String humanWindow = describeTimeWindow(definition.timeWindow, rangeStart, rangeEnd);
+        String humanWindow = hasTimeWindow
+                ? describeTimeWindow(definition.timeWindow, rangeStart, rangeEnd) : "";
 
         String prompt = definition.promptTemplate
                 .replace("{{repositories}}", repoList)
-                .replace("{{timeRangeStart}}", fmt.format(rangeStart))
-                .replace("{{timeRangeEnd}}", fmt.format(rangeEnd))
+                .replace("{{timeRangeStart}}", rangeStart != null ? fmt.format(rangeStart) : "")
+                .replace("{{timeRangeEnd}}", rangeEnd != null ? fmt.format(rangeEnd) : "")
                 .replace("{{timeWindow}}", humanWindow);
 
         // Resolve allowed tools from the definition, falling back to defaults
