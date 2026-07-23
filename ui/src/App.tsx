@@ -42,6 +42,7 @@ import { TraceDetailPage } from "./pages/TraceDetailPage";
 import { InboxPage } from "./pages/InboxPage";
 import { SessionTemplatesPage } from "./pages/SessionTemplatesPage";
 import { SessionTemplateDetailPage } from "./pages/SessionTemplateDetailPage";
+import { SystemSettingsPage } from "./pages/SystemSettingsPage";
 import { type StartupCheck, fetchSystemHealth, fetchSystemConfig } from "./config/api";
 import { sseClient } from "./config/sse";
 
@@ -103,6 +104,7 @@ export function App() {
                         <Route path="/inbox" element={<InboxPage />} />
                         <Route path="/projects" element={<ProjectsPage />} />
                         <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
+                        <Route path="/settings" element={<SystemSettingsPage />} />
                         <Route path="/engine" element={<EngineSettingsPage />} />
                         <Route path="/actors" element={<ActorsPage />} />
                         <Route path="/actors/:actorId" element={<ActorDetailPage />} />

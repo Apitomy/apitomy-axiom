@@ -10,16 +10,15 @@ import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.engine.spi.AiEngine;
 import io.apitomy.axiom.engine.spi.AiEngineConfig;
 import io.apitomy.axiom.engine.spi.AiEngineResult;
+import io.apitomy.axiom.core.services.SystemSettingsService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Service that invokes the AI engine to generate or update tool definitions
@@ -36,11 +35,8 @@ public class ToolAiService {
     @Inject
     AiEngine aiEngine;
 
-    @ConfigProperty(name = "axiom.manager.model")
-    Optional<String> model;
-
-    @ConfigProperty(name = "axiom.ai-assistant.timeout-seconds", defaultValue = "300")
-    int assistantTimeoutSeconds;
+    @Inject
+    SystemSettingsService settingsService;
 
     private static final String SYSTEM_PROMPT = """
             You are a tool definition editor for Apicurio Axiom. Your job is to create \
@@ -121,9 +117,9 @@ public class ToolAiService {
         AiEngineConfig engineConfig = AiEngineConfig.builder()
                 .systemPrompt(SYSTEM_PROMPT)
                 .allowedTools(List.of("StructuredOutput"))
-                .timeoutSeconds(assistantTimeoutSeconds)
+                .timeoutSeconds(settingsService.getAssistantTimeoutSeconds())
                 .maxSteps(3)
-                .model(model.orElse(null))
+                .model(settingsService.getManagerModel())
                 .build();
 
         try {

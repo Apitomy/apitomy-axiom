@@ -18,6 +18,7 @@ import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
+import io.apitomy.axiom.core.services.SystemSettingsService;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -49,11 +50,8 @@ public class AssistantSessionManager {
     private static final String ASSISTANT_MCP_DIR_NAME = "assistant-mcp-server";
     private static final String[] MCP_TEMPLATE_FILES = { "package.json", "server.js" };
 
-    @ConfigProperty(name = "axiom.assistant.max-sessions", defaultValue = "3")
-    int maxSessions;
-
-    @ConfigProperty(name = "axiom.ai-engine", defaultValue = "claude-code")
-    String aiEngine;
+    @Inject
+    SystemSettingsService settingsService;
 
     @ConfigProperty(name = "axiom.claude-code.executable", defaultValue = "claude")
     String claudeExecutable;
@@ -103,17 +101,17 @@ public class AssistantSessionManager {
      */
     public AssistantSession createSession(String name, String templateId,
                                           Long projectId) throws IOException {
-        if (!"claude-code".equals(aiEngine)) {
+        if (!"claude-code".equals(settingsService.getAiEngine())) {
             throw new IllegalStateException(
                     "The AI Assistant requires Claude Code as the active AI engine. "
-                            + "Current engine: " + aiEngine);
+                            + "Current engine: " + settingsService.getAiEngine());
         }
 
         // Atomically reserve a session slot before doing any setup work.
-        if (sessionCount.incrementAndGet() > maxSessions) {
+        if (sessionCount.incrementAndGet() > settingsService.getAssistantMaxSessions()) {
             sessionCount.decrementAndGet();
             throw new SessionLimitReachedException(
-                    "Maximum number of assistant sessions reached (" + maxSessions + ")");
+                    "Maximum number of assistant sessions reached (" + settingsService.getAssistantMaxSessions() + ")");
         }
 
         try {
@@ -447,7 +445,7 @@ public class AssistantSessionManager {
      * @return true if Claude Code is the active engine
      */
     public boolean isAvailable() {
-        return "claude-code".equals(aiEngine);
+        return "claude-code".equals(settingsService.getAiEngine());
     }
 
     /**

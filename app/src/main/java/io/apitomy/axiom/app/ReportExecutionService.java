@@ -13,6 +13,7 @@ import io.apitomy.axiom.core.entities.ReportEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.services.EncryptionService;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
+import io.apitomy.axiom.core.services.SystemSettingsService;
 import io.apitomy.axiom.core.services.ToolsetResolver;
 import io.apitomy.axiom.engine.spi.AiEngine;
 import io.apitomy.axiom.engine.spi.AiEngineConfig;
@@ -21,7 +22,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.nio.file.Path;
@@ -32,7 +32,6 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Executes report generation by invoking the AI engine with a prompt template,
@@ -68,11 +67,8 @@ public class ReportExecutionService {
     @Inject
     TraceService traceService;
 
-    @ConfigProperty(name = "axiom.claude-code.model")
-    Optional<String> model;
-
-    @ConfigProperty(name = "axiom.claude-code.timeout-seconds", defaultValue = "600")
-    int timeoutSeconds;
+    @Inject
+    SystemSettingsService settingsService;
 
     private static final String SYSTEM_PROMPT = """
             You are a report generator for Apicurio Axiom. Your job is to gather \
@@ -148,13 +144,13 @@ public class ReportExecutionService {
 
         // Build engine-agnostic config
         int effectiveTimeout = definition.timeoutSeconds != null
-                ? definition.timeoutSeconds : timeoutSeconds;
+                ? definition.timeoutSeconds : settingsService.getClaudeCodeTimeoutSeconds();
         AiEngineConfig engineConfig = AiEngineConfig.builder()
                 .systemPrompt(SYSTEM_PROMPT)
                 .allowedTools(allowedTools)
                 .timeoutSeconds(effectiveTimeout)
                 .maxSteps(30)
-                .model(model.orElse(null))
+                .model(settingsService.getClaudeCodeModel())
                 .environment(env)
                 .mcpConfigFile(mcpConfig)
                 .build();

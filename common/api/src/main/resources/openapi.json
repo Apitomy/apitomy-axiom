@@ -4132,6 +4132,55 @@
           }
         }
       }
+    },
+    "/system/settings": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Get runtime-configurable system settings",
+        "operationId": "getSystemSettings",
+        "responses": {
+          "200": {
+            "description": "Current system settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemSettings"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Update runtime-configurable system settings",
+        "operationId": "updateSystemSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated system settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemSettings"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -7003,6 +7052,97 @@
           "permissionId": {
             "description": "Optional pending permission ID to also approve immediately",
             "type": "string"
+          }
+        }
+      },
+      "SystemSettings": {
+        "description": "Runtime-configurable system settings. All properties are optional on update; omitted properties retain their current values.",
+        "type": "object",
+        "properties": {
+          "managerMaxTurns": {
+            "description": "Maximum number of turns for Manager AI evaluation.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "managerConfidenceThreshold": {
+            "description": "Confidence threshold for Manager decisions (0.0-1.0).",
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "managerTimeoutSeconds": {
+            "description": "Timeout in seconds for Manager AI evaluation.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "managerModel": {
+            "description": "Model override for the Manager. Null or empty uses the engine default.",
+            "type": "string"
+          },
+          "claudeCodeMaxTurns": {
+            "description": "Maximum number of turns for Claude Code task execution.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "claudeCodeMaxBudgetUsd": {
+            "description": "Maximum budget in USD for Claude Code task execution.",
+            "minimum": 0,
+            "type": "number"
+          },
+          "claudeCodeTimeoutSeconds": {
+            "description": "Timeout in seconds for Claude Code task execution.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "claudeCodeModel": {
+            "description": "Model override for Claude Code. Null or empty uses the engine default.",
+            "type": "string"
+          },
+          "claudeCodeAvailableModels": {
+            "description": "Comma-separated list of available Claude Code models.",
+            "type": "string"
+          },
+          "opencodeMaxSteps": {
+            "description": "Maximum number of steps for OpenCode task execution.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "opencodeTimeoutSeconds": {
+            "description": "Timeout in seconds for OpenCode task execution.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "opencodeModel": {
+            "description": "Model override for OpenCode. Null or empty uses the engine default.",
+            "type": "string"
+          },
+          "opencodeAvailableModels": {
+            "description": "Comma-separated list of available OpenCode models.",
+            "type": "string"
+          },
+          "assistantMaxSessions": {
+            "description": "Maximum number of concurrent AI assistant sessions.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "assistantTimeoutSeconds": {
+            "description": "Timeout in seconds for AI assistant operations.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "aiEngine": {
+            "description": "The active AI engine (e.g. claude-code, opencode).",
+            "type": "string"
+          },
+          "eventSourceLogRetentionDays": {
+            "description": "Number of days to retain event source poll logs.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "scriptTimeoutSeconds": {
+            "description": "Timeout in seconds for script execution.",
+            "minimum": 1,
+            "type": "integer"
           }
         }
       }

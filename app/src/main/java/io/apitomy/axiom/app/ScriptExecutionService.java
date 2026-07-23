@@ -11,6 +11,7 @@ import io.apitomy.axiom.core.entities.ThreadEntryEntity;
 import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.axiom.core.services.EncryptionService;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
+import io.apitomy.axiom.core.services.SystemSettingsService;
 import io.quarkus.arc.Arc;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
@@ -48,11 +49,11 @@ public class ScriptExecutionService {
     @Inject
     TraceService traceService;
 
+    @Inject
+    SystemSettingsService settingsService;
+
     @ConfigProperty(name = "quarkus.http.port", defaultValue = "9090")
     int httpPort;
-
-    @ConfigProperty(name = "axiom.script.timeout-seconds", defaultValue = "60")
-    int timeoutSeconds;
 
     /**
      * Executes the script for a task asynchronously.
@@ -113,7 +114,7 @@ public class ScriptExecutionService {
             scriptFile.toFile().setExecutable(true);
 
             LOG.infof("Executing script for task %d (%s), timeout %ds",
-                    task.id, task.actionType, timeoutSeconds);
+                    task.id, task.actionType, settingsService.getScriptTimeoutSeconds());
 
             ProcessBuilder pb = new ProcessBuilder("/bin/bash", scriptFile.toString())
                     .redirectErrorStream(true);
@@ -136,7 +137,7 @@ public class ScriptExecutionService {
 
             Process process = pb.start();
             String output = new String(process.getInputStream().readAllBytes());
-            boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+            boolean finished = process.waitFor(settingsService.getScriptTimeoutSeconds(), TimeUnit.SECONDS);
             Instant endTime = Instant.now();
             long durationMs = java.time.Duration.between(startTime, endTime).toMillis();
 
@@ -144,7 +145,7 @@ public class ScriptExecutionService {
             if (!finished) {
                 process.destroyForcibly();
                 exitCode = 1;
-                output = output + "\n[Script timed out after " + timeoutSeconds + "s]";
+                output = output + "\n[Script timed out after " + settingsService.getScriptTimeoutSeconds() + "s]";
             } else {
                 exitCode = process.exitValue();
             }

@@ -778,6 +778,45 @@ export async function updateManagerConfig(config: ManagerConfig): Promise<Manage
     return response.json();
 }
 
+// ── System Settings ─────────────────────────────────────────────
+
+export interface SystemSettings {
+    managerMaxTurns?: number;
+    managerConfidenceThreshold?: number;
+    managerTimeoutSeconds?: number;
+    managerModel?: string;
+    claudeCodeMaxTurns?: number;
+    claudeCodeMaxBudgetUsd?: number;
+    claudeCodeTimeoutSeconds?: number;
+    claudeCodeModel?: string;
+    claudeCodeAvailableModels?: string;
+    opencodeMaxSteps?: number;
+    opencodeTimeoutSeconds?: number;
+    opencodeModel?: string;
+    opencodeAvailableModels?: string;
+    assistantMaxSessions?: number;
+    assistantTimeoutSeconds?: number;
+    aiEngine?: string;
+    eventSourceLogRetentionDays?: number;
+    scriptTimeoutSeconds?: number;
+}
+
+export async function fetchSystemSettings(): Promise<SystemSettings> {
+    const response = await fetch(`${API}/system/settings`);
+    if (!response.ok) throw new Error(`Failed to fetch system settings: ${response.status}`);
+    return response.json();
+}
+
+export async function updateSystemSettings(settings: SystemSettings): Promise<SystemSettings> {
+    const response = await fetch(`${API}/system/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settings),
+    });
+    if (!response.ok) throw new Error(`Failed to update system settings: ${response.status}`);
+    return response.json();
+}
+
 // ── Event Sources ────────────────────────────────────────────────
 
 export interface EventSource {

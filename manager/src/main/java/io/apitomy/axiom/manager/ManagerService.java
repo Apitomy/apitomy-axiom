@@ -15,17 +15,16 @@ import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.engine.spi.AiEngine;
 import io.apitomy.axiom.engine.spi.AiEngineConfig;
 import io.apitomy.axiom.engine.spi.AiEngineResult;
+import io.apitomy.axiom.core.services.SystemSettingsService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import io.quarkus.narayana.jta.QuarkusTransaction;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Service that invokes the AI Manager to evaluate events and produce decisions.
@@ -46,17 +45,8 @@ public class ManagerService {
     @Inject
     TraceService traceService;
 
-    @ConfigProperty(name = "axiom.manager.confidence-threshold", defaultValue = "0.7")
-    double confidenceThreshold;
-
-    @ConfigProperty(name = "axiom.manager.timeout-seconds", defaultValue = "120")
-    int timeoutSeconds;
-
-    @ConfigProperty(name = "axiom.manager.max-turns", defaultValue = "5")
-    int maxTurns;
-
-    @ConfigProperty(name = "axiom.manager.model")
-    Optional<String> model;
+    @Inject
+    SystemSettingsService settingsService;
 
     /**
      * Evaluates an event and returns the Manager's decisions.
@@ -126,9 +116,9 @@ public class ManagerService {
         AiEngineConfig engineConfig = AiEngineConfig.builder()
                 .systemPrompt(systemPrompt)
                 .allowedTools(List.of("StructuredOutput"))
-                .timeoutSeconds(timeoutSeconds)
-                .maxSteps(maxTurns)
-                .model(model.orElse(null))
+                .timeoutSeconds(settingsService.getManagerTimeoutSeconds())
+                .maxSteps(settingsService.getManagerMaxTurns())
+                .model(settingsService.getManagerModel())
                 .build();
 
         try {
@@ -221,7 +211,7 @@ public class ManagerService {
      * @return true if the confidence is at or above the threshold
      */
     public boolean meetsConfidenceThreshold(ManagerDecision decision) {
-        return decision.confidence() >= confidenceThreshold;
+        return decision.confidence() >= settingsService.getManagerConfidenceThreshold();
     }
 
     /**

@@ -12,7 +12,7 @@ import {
 import { fetchInboxCount } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 
-const CONFIG_PATHS = ["/actors", "/manager", "/action-types", "/tools", "/toolsets", "/mcp-servers", "/secrets", "/event-sources", "/report-definitions", "/engine", "/configuration-packs", "/session-templates"];
+const CONFIG_PATHS = ["/actors", "/manager", "/action-types", "/tools", "/toolsets", "/mcp-servers", "/secrets", "/event-sources", "/report-definitions", "/engine", "/configuration-packs", "/session-templates", "/settings"];
 
 export function AppSidebar() {
     const navigate = useNavigate();
@@ -86,6 +86,9 @@ export function AppSidebar() {
                             </NavItem>
                         </NavExpandable>
                         <NavExpandable title="Configuration" isActive={isConfigActive} isExpanded={isConfigActive}>
+                            <NavItem isActive={location.pathname === "/settings"} onClick={() => navigate("/settings")}>
+                                Settings
+                            </NavItem>
                             <NavItem isActive={location.pathname.startsWith("/engine")} onClick={() => navigate("/engine")}>
                                 AI Engine
                             </NavItem>

@@ -1,10 +1,11 @@
 package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.core.entities.EventSourceLogEntity;
+import io.apitomy.axiom.core.services.SystemSettingsService;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.time.Instant;
@@ -20,8 +21,8 @@ public class EventSourceLogCleanup {
 
     private static final Logger LOG = Logger.getLogger(EventSourceLogCleanup.class);
 
-    @ConfigProperty(name = "axiom.event-source-logs.retention-days", defaultValue = "7")
-    int retentionDays;
+    @Inject
+    SystemSettingsService settingsService;
 
     /**
      * Deletes event source log entries older than the retention period.
@@ -29,6 +30,7 @@ public class EventSourceLogCleanup {
     @Scheduled(every = "1h", concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     @Transactional
     void cleanup() {
+        int retentionDays = settingsService.getEventSourceLogRetentionDays();
         Instant cutoff = Instant.now().minus(retentionDays, ChronoUnit.DAYS);
         long deleted = EventSourceLogEntity.delete("createdOn < ?1", cutoff);
         if (deleted > 0) {

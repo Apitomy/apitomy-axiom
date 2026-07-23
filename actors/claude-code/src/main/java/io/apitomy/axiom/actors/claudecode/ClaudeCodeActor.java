@@ -4,15 +4,15 @@ import io.apitomy.axiom.actors.spi.Actor;
 import io.apitomy.axiom.actors.spi.ActorContext;
 import io.apitomy.axiom.actors.spi.TaskResult;
 import io.apitomy.axiom.core.entities.TaskEntity;
+import io.apitomy.axiom.core.services.SystemSettingsService;
 import jakarta.enterprise.context.ApplicationScoped;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
+import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -26,17 +26,8 @@ public class ClaudeCodeActor implements Actor {
 
     private static final Logger LOG = Logger.getLogger(ClaudeCodeActor.class);
 
-    @ConfigProperty(name = "axiom.claude-code.model")
-    Optional<String> model;
-
-    @ConfigProperty(name = "axiom.claude-code.max-turns", defaultValue = "50")
-    int maxTurns;
-
-    @ConfigProperty(name = "axiom.claude-code.max-budget-usd", defaultValue = "5.0")
-    double maxBudgetUsd;
-
-    @ConfigProperty(name = "axiom.claude-code.timeout-seconds", defaultValue = "600")
-    int timeoutSeconds;
+    @Inject
+    SystemSettingsService settingsService;
 
     private final Map<Long, ClaudeCodeSubprocess> runningProcesses = new ConcurrentHashMap<>();
 
@@ -67,14 +58,17 @@ public class ClaudeCodeActor implements Actor {
 
         ClaudeCodeCommandBuilder cmdBuilder = ClaudeCodeCommandBuilder
                 .fromContext(prompt, context)
-                .maxTurns(maxTurns)
-                .maxBudgetUsd(maxBudgetUsd);
+                .maxTurns(settingsService.getClaudeCodeMaxTurns())
+                .maxBudgetUsd(settingsService.getClaudeCodeMaxBudgetUsd());
 
         // Per-action-type model takes priority over the global default
         if (context.getModel() != null && !context.getModel().isBlank()) {
             cmdBuilder.model(context.getModel());
         } else {
-            model.ifPresent(cmdBuilder::model);
+            String globalModel = settingsService.getClaudeCodeModel();
+            if (globalModel != null) {
+                cmdBuilder.model(globalModel);
+            }
         }
 
         if (context.getMcpConfigFile() != null) {
@@ -90,7 +84,7 @@ public class ClaudeCodeActor implements Actor {
                 command,
                 workDir,
                 context.getEnvironment() != null ? context.getEnvironment() : Map.of(),
-                Duration.ofSeconds(timeoutSeconds),
+                Duration.ofSeconds(settingsService.getClaudeCodeTimeoutSeconds()),
                 line -> LOG.tracef("Task %d stream: %s", task.id, line),
                 logBuilder
         );

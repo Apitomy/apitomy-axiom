@@ -6,15 +6,14 @@ import io.apitomy.axiom.actors.spi.TaskResult;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.engine.spi.AiEngineConfig;
 import io.apitomy.axiom.engine.spi.AiEngineResult;
+import io.apitomy.axiom.core.services.SystemSettingsService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
  * Actor implementation that executes tasks via the OpenCode AI engine.
@@ -29,14 +28,8 @@ public class OpenCodeActor implements Actor {
     @Inject
     OpenCodeEngine engine;
 
-    @ConfigProperty(name = "axiom.opencode.model")
-    Optional<String> model;
-
-    @ConfigProperty(name = "axiom.opencode.max-steps", defaultValue = "50")
-    int maxSteps;
-
-    @ConfigProperty(name = "axiom.opencode.timeout-seconds", defaultValue = "600")
-    int timeoutSeconds;
+    @Inject
+    SystemSettingsService settingsService;
 
     /** Tracks running sessions for cancellation support. */
     private final Map<Long, String> runningSessions = new ConcurrentHashMap<>();
@@ -59,8 +52,8 @@ public class OpenCodeActor implements Actor {
                 .disallowedTools(context.getDisallowedTools())
                 .workingDirectory(context.getWorkingDirectory())
                 .environment(context.getEnvironment() != null ? context.getEnvironment() : Map.of())
-                .timeoutSeconds(timeoutSeconds)
-                .maxSteps(maxSteps)
+                .timeoutSeconds(settingsService.getOpencodeTimeoutSeconds())
+                .maxSteps(settingsService.getOpencodeMaxSteps())
                 .model(resolveModel(context))
                 .mcpConfigFile(context.getMcpConfigFile())
                 .build();
@@ -96,7 +89,7 @@ public class OpenCodeActor implements Actor {
         if (context.getModel() != null && !context.getModel().isBlank()) {
             return context.getModel();
         }
-        return model.orElse(null);
+        return settingsService.getOpencodeModel();
     }
 
     private String buildPrompt(TaskEntity task, ActorContext context) {

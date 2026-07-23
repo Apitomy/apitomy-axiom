@@ -10,10 +10,10 @@ import io.apitomy.axiom.actors.spi.ActorContext;
 import io.apitomy.axiom.api.beans.ReportAiEditRequest;
 import io.apitomy.axiom.api.beans.ReportAiEditResponse;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
+import io.apitomy.axiom.core.services.SystemSettingsService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.time.Duration;
@@ -21,7 +21,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Service that invokes Claude Code to generate or update report definition
@@ -35,8 +34,8 @@ public class ReportAiService {
     @Inject
     ObjectMapper objectMapper;
 
-    @ConfigProperty(name = "axiom.manager.model")
-    Optional<String> model;
+    @Inject
+    SystemSettingsService settingsService;
 
     private static final String SYSTEM_PROMPT = """
             You are a report definition editor for Apicurio Axiom. Your job is to create \
@@ -136,7 +135,10 @@ public class ReportAiService {
                 .streamJson(true)
                 .maxTurns(3);
 
-        model.ifPresent(cmdBuilder::model);
+        String managerModel = settingsService.getManagerModel();
+        if (managerModel != null) {
+            cmdBuilder.model(managerModel);
+        }
 
         List<String> command = cmdBuilder.build();
         command.add("--json-schema");
