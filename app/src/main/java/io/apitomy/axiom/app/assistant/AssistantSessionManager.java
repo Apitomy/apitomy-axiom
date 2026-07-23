@@ -136,14 +136,30 @@ public class AssistantSessionManager {
                 }
             }
 
+            // Resolve environment variables early — MCP server resolution needs
+            // them (e.g. @axiom-tools passes env to the tools MCP server).
+            Map<String, String> resolvedEnv = new LinkedHashMap<>();
+            if (environmentResolver.hasCustomEnvironment(template.environment())) {
+                resolvedEnv.putAll(environmentResolver.resolve(template.environment()));
+            }
+
+            // Inject project environment variables
+            if (project != null) {
+                resolvedEnv.put("AXIOM_PROJECT_ID", String.valueOf(project.id));
+                resolvedEnv.put("AXIOM_PROJECT_NAME", project.name);
+                resolvedEnv.put("AXIOM_ISSUE_REF", project.issueRef);
+                resolvedEnv.put("AXIOM_REPOSITORY", project.repository);
+            }
+
             // Create session directory first — MCP server resolution may need
             // to write files there (e.g. tools.json for @axiom-tools).
             String sessionId = UUID.randomUUID().toString();
             Path sessionDir = contextBuilder.createSessionDirectory(sessionId, null);
 
+            try {
             // Resolve MCP servers from template
             Map<String, AssistantContextBuilder.McpServerConfig> mcpConfigs =
-                    resolveMcpServers(template, project, sessionDir);
+                    resolveMcpServers(template, project, sessionDir, resolvedEnv);
 
             // Resolve allowed tools from template
             List<String> resolvedAllowedTools = resolveAllowedTools(template);
@@ -177,20 +193,6 @@ public class AssistantSessionManager {
             if (template.initScript() != null && !template.initScript().isBlank()) {
                 runInitScript(workDir, sessionDir, template.initScript(),
                         template.initScriptType());
-            }
-
-            // Resolve environment variables (with secret substitution)
-            Map<String, String> resolvedEnv = new LinkedHashMap<>();
-            if (environmentResolver.hasCustomEnvironment(template.environment())) {
-                resolvedEnv.putAll(environmentResolver.resolve(template.environment()));
-            }
-
-            // Inject project environment variables
-            if (project != null) {
-                resolvedEnv.put("AXIOM_PROJECT_ID", String.valueOf(project.id));
-                resolvedEnv.put("AXIOM_PROJECT_NAME", project.name);
-                resolvedEnv.put("AXIOM_ISSUE_REF", project.issueRef);
-                resolvedEnv.put("AXIOM_REPOSITORY", project.repository);
             }
 
             // Build system prompt, augmenting with project context if applicable
@@ -250,6 +252,11 @@ public class AssistantSessionManager {
             }
 
             return session;
+            } catch (Exception e) {
+                // Clean up the session directory if setup fails after creation
+                contextBuilder.deleteSessionDirectory(sessionDir);
+                throw e;
+            }
         } catch (Exception e) {
             sessionCount.decrementAndGet();
             throw e;
@@ -692,7 +699,8 @@ public class AssistantSessionManager {
 
     private Map<String, AssistantContextBuilder.McpServerConfig> resolveMcpServers(
             SessionTemplateService.SessionTemplate template,
-            ProjectEntity project, Path sessionDir) throws IOException {
+            ProjectEntity project, Path sessionDir,
+            Map<String, String> sessionEnv) throws IOException {
         Map<String, AssistantContextBuilder.McpServerConfig> configs = new LinkedHashMap<>();
 
         String apiUrl = "http://localhost:" + httpPort + "/api/v1";
@@ -722,8 +730,8 @@ public class AssistantSessionManager {
                     String toolsJson = mcpConfigGenerator.buildToolsJson(scriptTools);
                     Path toolsFile = sessionDir.resolve("tools.json");
                     Files.writeString(toolsFile, toolsJson);
-                    Map<String, String> env = new LinkedHashMap<>();
-                    env.put("AXIOM_API_URL", apiUrl);
+                    Map<String, String> env = new LinkedHashMap<>(sessionEnv);
+                    env.putIfAbsent("AXIOM_API_URL", apiUrl);
                     configs.put("axiom-tools",
                             AssistantContextBuilder.McpServerConfig.stdio("node",
                                     List.of(serverDir.resolve("tools-server.js")

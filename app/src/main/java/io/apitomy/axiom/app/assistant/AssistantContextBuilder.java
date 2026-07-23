@@ -168,7 +168,7 @@ public class AssistantContextBuilder {
          * Returns whether this config uses HTTP transport.
          */
         public boolean isHttpTransport() {
-            return url != null && !url.isBlank();
+            return "http".equals(type);
         }
     }
 }
