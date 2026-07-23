@@ -230,6 +230,29 @@ class ClaudeCodeCommandBuilderTest {
     }
 
     @Test
+    void testDeriveBaseToolNamesWithPatterns() {
+        String result = ClaudeCodeCommandBuilder.deriveBaseToolNames(List.of(
+                "Read", "Bash(git log *)", "Bash(git diff *)",
+                "mcp__axiom__axiom_project_get_details"
+        ));
+        assertEquals("Read,Bash,mcp__axiom__axiom_project_get_details", result);
+    }
+
+    @Test
+    void testDeriveBaseToolNamesEmptyList() {
+        String result = ClaudeCodeCommandBuilder.deriveBaseToolNames(List.of());
+        assertEquals("", result);
+    }
+
+    @Test
+    void testDeriveBaseToolNamesNoPatterns() {
+        String result = ClaudeCodeCommandBuilder.deriveBaseToolNames(List.of(
+                "Read", "Write", "Edit"
+        ));
+        assertEquals("Read,Write,Edit", result);
+    }
+
+    @Test
     void testAllowedToolsEmptyListFallsBackToAcceptEdits() {
         ActorContext context = ActorContext.builder()
                 .allowedTools(List.of())

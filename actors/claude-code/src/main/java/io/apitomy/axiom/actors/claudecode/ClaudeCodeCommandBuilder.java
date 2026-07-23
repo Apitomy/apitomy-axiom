@@ -132,13 +132,7 @@ public class ClaudeCodeCommandBuilder {
         //    than prompt.
         if (allowedTools != null && !allowedTools.isEmpty()) {
             // Derive base tool names for --tools (hard availability restriction)
-            String baseTools = allowedTools.stream()
-                    .map(tool -> {
-                        int parenIdx = tool.indexOf('(');
-                        return parenIdx > 0 ? tool.substring(0, parenIdx) : tool;
-                    })
-                    .distinct()
-                    .collect(java.util.stream.Collectors.joining(","));
+            String baseTools = deriveBaseToolNames(allowedTools);
             cmd.add("--tools");
             cmd.add(baseTools);
 
@@ -188,5 +182,24 @@ public class ClaudeCodeCommandBuilder {
         }
 
         return cmd;
+    }
+
+    /**
+     * Derives comma-separated base tool names from a list of allowed tool
+     * patterns. Strips parenthesized pattern suffixes
+     * (e.g. {@code "Bash(git log *)"} becomes {@code "Bash"}) and
+     * deduplicates the result.
+     *
+     * @param allowedTools the list of tool patterns
+     * @return comma-separated base tool names
+     */
+    public static String deriveBaseToolNames(List<String> allowedTools) {
+        return allowedTools.stream()
+                .map(tool -> {
+                    int parenIdx = tool.indexOf('(');
+                    return parenIdx > 0 ? tool.substring(0, parenIdx) : tool;
+                })
+                .distinct()
+                .collect(Collectors.joining(","));
     }
 }

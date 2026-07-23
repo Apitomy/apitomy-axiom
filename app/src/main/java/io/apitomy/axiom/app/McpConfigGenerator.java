@@ -253,12 +253,13 @@ public class McpConfigGenerator {
      * Ensures the Axiom MCP server Node.js project is installed and dependencies
      * are resolved. On first call, copies the template project from classpath
      * resources to {@code ~/.axiom/mcp-server/} and runs {@code npm install}.
-     * Subsequent calls return the cached path.
+     * Subsequent calls return the cached path. Used by both the task execution
+     * path and the assistant session path.
      *
      * @return path to the installed MCP server project directory
      * @throws IOException if the project cannot be installed
      */
-    private Path ensureMcpServerInstalled() throws IOException {
+    public Path ensureMcpServerInstalled() throws IOException {
         if (mcpServerDir != null && Files.exists(mcpServerDir.resolve("node_modules"))
                 && Files.exists(mcpServerDir.resolve("sdk-server.js"))) {
             return mcpServerDir;
@@ -330,12 +331,13 @@ public class McpConfigGenerator {
     }
 
     /**
-     * Builds the JSON array of tool definitions for the MCP server.
+     * Builds the JSON array of tool definitions for the MCP server. Used by
+     * both the task execution path and the assistant session path.
      *
      * @param tools the tool definition entities to serialize
      * @return JSON string representing the tool definitions array
      */
-    private String buildToolsJson(List<ToolDefinitionEntity> tools) {
+    public String buildToolsJson(List<ToolDefinitionEntity> tools) {
         try {
             List<Map<String, Object>> toolsList = new ArrayList<>();
             for (ToolDefinitionEntity tool : tools) {
