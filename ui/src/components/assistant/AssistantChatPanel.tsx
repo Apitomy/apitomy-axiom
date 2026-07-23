@@ -200,6 +200,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                     type: "system",
                     content: "Conversation cleared.",
                 }]);
+                lastSeenIndexRef.current = -1;
                 setIsProcessing(false);
                 break;
 
