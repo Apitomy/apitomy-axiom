@@ -4991,7 +4991,6 @@
         "required": [
           "name",
           "schedule",
-          "timeWindow",
           "promptTemplate"
         ],
         "type": "object",

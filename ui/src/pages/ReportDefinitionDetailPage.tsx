@@ -54,7 +54,7 @@ export function ReportDefinitionDetailPage() {
 
     const [definition, setDefinition] = useState<ReportDefinition | null>(null);
     const [form, setForm] = useState<NewReportDefinition>({
-        name: "", schedule: "daily", timeWindow: "last-24h", promptTemplate: "", enabled: false,
+        name: "", schedule: "daily", promptTemplate: "", enabled: false,
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -389,9 +389,10 @@ function InfoTab({ form, updateForm, initialLabels, onLabelsChange }: {
                         placeholder="08:00" />
                 </FormGroup>
             )}
-            <FormGroup label="Time Window" isRequired fieldId="timeWindow">
-                <FormSelect id="timeWindow" value={form.timeWindow}
-                    onChange={(_e, v) => updateForm({ timeWindow: v })}>
+            <FormGroup label="Time Window" fieldId="timeWindow">
+                <FormSelect id="timeWindow" value={form.timeWindow || ""}
+                    onChange={(_e, v) => updateForm({ timeWindow: v || undefined })}>
+                    <FormSelectOption value="" label="None" />
                     <FormSelectOption value="since-last-run" label="Since Last Run" />
                     <FormSelectOption value="last-24h" label="Last 24 Hours" />
                     <FormSelectOption value="last-7d" label="Last 7 Days" />

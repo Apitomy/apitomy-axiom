@@ -47,8 +47,9 @@ public class ReportDefinitionEntity extends PanacheEntity {
 
     /**
      * Time window for the report: "since-last-run", "last-24h", "last-7d", "last-30d".
+     * Null when the report has no time-based scope.
      */
-    @Column(name = "time_window", nullable = false)
+    @Column(name = "time_window")
     public String timeWindow;
 
     /**

@@ -204,13 +204,21 @@ class ReportDefinitionValidatorTest {
     // ── Time window validation ──────────────────────────────────────
 
     @Test
-    void missingTimeWindowIsError() {
+    void nullTimeWindowIsAccepted() {
         NewReportDefinition def = makeDef("test", "desc", "daily", null, "prompt {{repositories}}");
 
         ValidationResult result = ReportDefinitionValidator.validate(def);
 
-        assertTrue(result.hasErrors());
-        assertTrue(result.errors().stream().anyMatch(m -> m.field().equals("timeWindow")));
+        assertFalse(result.errors().stream().anyMatch(m -> m.field().equals("timeWindow")));
+    }
+
+    @Test
+    void blankTimeWindowIsAccepted() {
+        NewReportDefinition def = makeDef("test", "desc", "daily", "  ", "prompt {{repositories}}");
+
+        ValidationResult result = ReportDefinitionValidator.validate(def);
+
+        assertFalse(result.errors().stream().anyMatch(m -> m.field().equals("timeWindow")));
     }
 
     @Test
