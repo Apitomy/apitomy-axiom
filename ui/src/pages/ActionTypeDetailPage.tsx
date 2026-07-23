@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useEffectiveTheme } from "../hooks/useTheme";
 import { useParams, Link } from "react-router-dom";
 import {
     Breadcrumb,
@@ -464,6 +465,7 @@ function PromptTemplateTab({ value, onChange }: {
     value: string;
     onChange: (v: string) => void;
 }) {
+    const effectiveTheme = useEffectiveTheme();
     return (
         <div>
             <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
@@ -479,6 +481,7 @@ function PromptTemplateTab({ value, onChange }: {
                 onCodeChange={(v) => onChange(v)}
                 language={Language.markdown}
                 height="500px"
+                isDarkTheme={effectiveTheme === "dark"}
                 isLineNumbersVisible
                 onEditorDidMount={(editor, monaco) => {
                     registerPlaceholderCompletions(editor, monaco, "markdown", ACTION_TYPE_PLACEHOLDERS);
@@ -492,6 +495,7 @@ function ScriptTab({ value, onChange }: {
     value: string;
     onChange: (v: string) => void;
 }) {
+    const effectiveTheme = useEffectiveTheme();
     return (
         <div>
             <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
@@ -511,6 +515,7 @@ function ScriptTab({ value, onChange }: {
                 onCodeChange={(v) => onChange(v)}
                 language={Language.shell}
                 height="500px"
+                isDarkTheme={effectiveTheme === "dark"}
                 isLineNumbersVisible
             />
         </div>

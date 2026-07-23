@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useEffectiveTheme } from "../hooks/useTheme";
 import {
     Button,
     EmptyState,
@@ -22,6 +23,7 @@ import {
 } from "../config/api";
 
 export function ManagerConfigPage() {
+    const effectiveTheme = useEffectiveTheme();
     const [config, setConfig] = useState<ManagerConfig>({});
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -89,6 +91,7 @@ export function ManagerConfigPage() {
                             onCodeChange={(v) => { setConfig({ ...config, systemPrompt: v }); setDirty(true); }}
                             language={Language.markdown}
                             height="500px"
+                            isDarkTheme={effectiveTheme === "dark"}
                             isLineNumbersVisible
                         />
                     </TabContent>
@@ -113,6 +116,7 @@ export function ManagerConfigPage() {
                             onCodeChange={(v) => { setConfig({ ...config, promptTemplate: v }); setDirty(true); }}
                             language={Language.markdown}
                             height="500px"
+                            isDarkTheme={effectiveTheme === "dark"}
                             isLineNumbersVisible
                             onEditorDidMount={(editor, monaco) => {
                                 registerPlaceholderCompletions(editor, monaco, "markdown", MANAGER_PLACEHOLDERS);

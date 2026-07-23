@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useEffectiveTheme } from "../hooks/useTheme";
 import {
     Button,
     EmptyState,
@@ -32,6 +33,7 @@ interface ExecutionLogModalProps {
  */
 export function ExecutionLogModal({ isOpen, projectId, taskId, activityId, reportId,
                                      onClose }: ExecutionLogModalProps) {
+    const effectiveTheme = useEffectiveTheme();
     const [content, setContent] = useState("");
     const [loading, setLoading] = useState(false);
 
@@ -83,6 +85,7 @@ export function ExecutionLogModal({ isOpen, projectId, taskId, activityId, repor
                     <CodeEditor
                         code={content}
                         language={Language.markdown}
+                        isDarkTheme={effectiveTheme === "dark"}
                         height="600px"
                         isReadOnly
                         isLineNumbersVisible

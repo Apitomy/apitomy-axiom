@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useEffectiveTheme } from "../hooks/useTheme";
 import {
     StackItem,
     Title,
@@ -24,6 +25,7 @@ interface ScriptAiModalProps {
 export function ScriptAiModal({
     isOpen, script, actionTypeName, actionTypeDescription, onApply, onClose,
 }: ScriptAiModalProps) {
+    const effectiveTheme = useEffectiveTheme();
     const [localScript, setLocalScript] = useState(script);
 
     useEffect(() => {
@@ -76,6 +78,7 @@ export function ScriptAiModal({
                     code={localScript || ""}
                     language={Language.shell}
                     isFullHeight
+                    isDarkTheme={effectiveTheme === "dark"}
                     isReadOnly={false}
                     isLineNumbersVisible
                 />

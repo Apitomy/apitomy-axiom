@@ -11,6 +11,7 @@ import {
     Title,
 } from "@patternfly/react-core";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
+import { useEffectiveTheme } from "../hooks/useTheme";
 import { type AxiomEvent } from "../config/api";
 
 interface EventDetailModalProps {
@@ -23,6 +24,7 @@ interface EventDetailModalProps {
  * metadata and the raw JSON payload in a read-only code editor.
  */
 export function EventDetailModal({ event, onClose }: EventDetailModalProps) {
+    const effectiveTheme = useEffectiveTheme();
     const formatPayload = (payload?: string): string => {
         if (!payload) return "";
         try {
@@ -94,6 +96,7 @@ export function EventDetailModal({ event, onClose }: EventDetailModalProps) {
                         <CodeEditor
                             code={formatPayload(event.payload)}
                             language={Language.json}
+                            isDarkTheme={effectiveTheme === "dark"}
                             height="400px"
                             isReadOnly
                             isLineNumbersVisible

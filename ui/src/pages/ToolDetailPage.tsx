@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useEffectiveTheme } from "../hooks/useTheme";
 import { useParams, Link } from "react-router-dom";
 import {
     Breadcrumb,
@@ -375,6 +376,7 @@ function ScriptTemplateTab({ value, onChange }: {
     value: string;
     onChange: (v: string) => void;
 }) {
+    const effectiveTheme = useEffectiveTheme();
     return (
         <div>
             <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
@@ -389,6 +391,7 @@ function ScriptTemplateTab({ value, onChange }: {
                 onCodeChange={(v) => onChange(v)}
                 language={Language.shell}
                 height="400px"
+                isDarkTheme={effectiveTheme === "dark"}
                 isLineNumbersVisible
             />
         </div>
@@ -419,6 +422,7 @@ function TestTab({ toolId, params, scriptTemplate }: {
     params: ToolParameter[];
     scriptTemplate?: string;
 }) {
+    const effectiveTheme = useEffectiveTheme();
     const [paramValues, setParamValues] = useState<Record<string, string>>({});
     const [running, setRunning] = useState(false);
     const [result, setResult] = useState<ToolTestResponse | null>(null);
@@ -522,6 +526,7 @@ function TestTab({ toolId, params, scriptTemplate }: {
                                     code={result.resolvedScript}
                                     language={Language.shell}
                                     height="150px"
+                                    isDarkTheme={effectiveTheme === "dark"}
                                     isReadOnly
                                     isLineNumbersVisible
                                 />
@@ -536,6 +541,7 @@ function TestTab({ toolId, params, scriptTemplate }: {
                                 code={formatJson(result.output)}
                                 language={Language.json}
                                 height="400px"
+                                isDarkTheme={effectiveTheme === "dark"}
                                 isReadOnly
                                 isLineNumbersVisible
                             />
