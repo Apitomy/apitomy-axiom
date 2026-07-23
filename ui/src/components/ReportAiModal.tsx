@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useEffectiveTheme } from "../hooks/useTheme";
 import {
     Flex,
     FlexItem,
@@ -28,6 +29,7 @@ export function ReportAiModal({
     isOpen, promptTemplate, allowedTools, reportName, reportDescription,
     onApply, onClose,
 }: ReportAiModalProps) {
+    const effectiveTheme = useEffectiveTheme();
     const [localPrompt, setLocalPrompt] = useState(promptTemplate);
     const [localTools, setLocalTools] = useState(allowedTools);
 
@@ -121,6 +123,7 @@ export function ReportAiModal({
                     code={localPrompt || ""}
                     language={Language.markdown}
                     isFullHeight
+                    isDarkTheme={effectiveTheme === "dark"}
                     isReadOnly={false}
                     isLineNumbersVisible
                 />

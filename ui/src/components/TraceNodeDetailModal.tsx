@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useEffectiveTheme } from "../hooks/useTheme";
 import { Link } from "react-router-dom";
 import {
     DescriptionList,
@@ -121,24 +122,32 @@ function renderDetail(nodeType: string, entityType: string | undefined,
         case "event":
             return <EventDetail detail={detail} />;
         default:
-            return (
-                <CodeEditor
-                    code={JSON.stringify(detail, null, 2)}
-                    language={Language.json}
-                    isReadOnly
-                    height="400px"
-                />
-            );
+            return <RawJsonDetail detail={detail} />;
     }
 }
 
+function RawJsonDetail({ detail }: { detail: Record<string, unknown> }) {
+    const effectiveTheme = useEffectiveTheme();
+    return (
+        <CodeEditor
+            code={JSON.stringify(detail, null, 2)}
+            language={Language.json}
+            isDarkTheme={effectiveTheme === "dark"}
+            isReadOnly
+            height="400px"
+        />
+    );
+}
+
 function ReasoningDetail({ detail }: { detail: Record<string, unknown> }) {
+    const effectiveTheme = useEffectiveTheme();
     return (
         <>
             <h4 style={{ marginBottom: "4px", fontWeight: "bold" }}>Reasoning</h4>
             <CodeEditor
                 code={String(detail.summary || "")}
                 language={Language.plaintext}
+                isDarkTheme={effectiveTheme === "dark"}
                 isReadOnly
                 height="200px"
                 options={{ wordWrap: "on" }}
@@ -163,12 +172,14 @@ function ReportLinkDetail({ detail }: { detail: Record<string, unknown> }) {
 }
 
 function ReportExecutionLogDetail({ detail }: { detail: Record<string, unknown> }) {
+    const effectiveTheme = useEffectiveTheme();
     return (
         <>
             <h4 style={{ marginBottom: "4px", fontWeight: "bold" }}>Execution Log</h4>
             <CodeEditor
                 code={String(detail.executionLog || "")}
                 language={Language.markdown}
+                isDarkTheme={effectiveTheme === "dark"}
                 isReadOnly
                 height="400px"
             />
@@ -177,6 +188,7 @@ function ReportExecutionLogDetail({ detail }: { detail: Record<string, unknown> 
 }
 
 function DecisionDetail({ detail }: { detail: Record<string, unknown> }) {
+    const effectiveTheme = useEffectiveTheme();
     return (
         <>
             {detail.summary && (
@@ -191,6 +203,7 @@ function DecisionDetail({ detail }: { detail: Record<string, unknown> }) {
                     <CodeEditor
                         code={String(detail.details)}
                         language={Language.markdown}
+                        isDarkTheme={effectiveTheme === "dark"}
                         isReadOnly
                         height="300px"
                     />
@@ -201,6 +214,7 @@ function DecisionDetail({ detail }: { detail: Record<string, unknown> }) {
 }
 
 function ToolExecutionDetail({ detail }: { detail: Record<string, unknown> }) {
+    const effectiveTheme = useEffectiveTheme();
     const [toolId, setToolId] = useState<number | null>(null);
     const [activeTab, setActiveTab] = useState(0);
     const toolName = String(detail.toolName || "");
@@ -234,6 +248,7 @@ function ToolExecutionDetail({ detail }: { detail: Record<string, unknown> }) {
                         <CodeEditor
                             code={formatJson(String(detail.toolInput || "{}"))}
                             language={Language.json}
+                            isDarkTheme={effectiveTheme === "dark"}
                             isReadOnly
                             height="300px"
                             options={{ wordWrap: "on" }}
@@ -245,6 +260,7 @@ function ToolExecutionDetail({ detail }: { detail: Record<string, unknown> }) {
                         <CodeEditor
                             code={formatJson(String(detail.toolOutput || ""))}
                             language={Language.json}
+                            isDarkTheme={effectiveTheme === "dark"}
                             isReadOnly
                             height="300px"
                             options={{ wordWrap: "on" }}
@@ -257,6 +273,7 @@ function ToolExecutionDetail({ detail }: { detail: Record<string, unknown> }) {
 }
 
 function TaskDetail({ detail }: { detail: Record<string, unknown> }) {
+    const effectiveTheme = useEffectiveTheme();
     const [activeTab, setActiveTab] = useState(0);
 
     return (
@@ -267,6 +284,7 @@ function TaskDetail({ detail }: { detail: Record<string, unknown> }) {
                     <CodeEditor
                         code={String(detail.input || "")}
                         language={Language.markdown}
+                        isDarkTheme={effectiveTheme === "dark"}
                         isReadOnly
                         height="300px"
                         options={{ wordWrap: "on" }}
@@ -278,6 +296,7 @@ function TaskDetail({ detail }: { detail: Record<string, unknown> }) {
                     <CodeEditor
                         code={String(detail.output || "")}
                         language={Language.markdown}
+                        isDarkTheme={effectiveTheme === "dark"}
                         isReadOnly
                         height="300px"
                         options={{ wordWrap: "on" }}
@@ -289,6 +308,7 @@ function TaskDetail({ detail }: { detail: Record<string, unknown> }) {
                     <CodeEditor
                         code={String(detail.executionLog || "")}
                         language={Language.markdown}
+                        isDarkTheme={effectiveTheme === "dark"}
                         isReadOnly
                         height="400px"
                     />
@@ -299,6 +319,7 @@ function TaskDetail({ detail }: { detail: Record<string, unknown> }) {
 }
 
 function ActivityLogDetail({ detail }: { detail: Record<string, unknown> }) {
+    const effectiveTheme = useEffectiveTheme();
     return (
         <>
             {detail.summary && (
@@ -315,6 +336,7 @@ function ActivityLogDetail({ detail }: { detail: Record<string, unknown> }) {
                     <CodeEditor
                         code={String(detail.details)}
                         language={Language.markdown}
+                        isDarkTheme={effectiveTheme === "dark"}
                         isReadOnly
                         height="400px"
                     />
@@ -360,6 +382,7 @@ function AiUsageDetail({ detail }: { detail: Record<string, unknown> }) {
 }
 
 function EventDetail({ detail }: { detail: Record<string, unknown> }) {
+    const effectiveTheme = useEffectiveTheme();
     return (
         <>
             <DescriptionList isHorizontal isCompact style={{ marginBottom: "12px" }}>
@@ -388,6 +411,7 @@ function EventDetail({ detail }: { detail: Record<string, unknown> }) {
                     <CodeEditor
                         code={formatJson(String(detail.payload))}
                         language={Language.json}
+                        isDarkTheme={effectiveTheme === "dark"}
                         isReadOnly
                         height="400px"
                     />

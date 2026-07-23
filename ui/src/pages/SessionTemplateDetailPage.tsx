@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useEffectiveTheme } from "../hooks/useTheme";
 import { useParams, Link } from "react-router-dom";
 import {
     Alert,
@@ -39,6 +40,7 @@ import {
 
 export function SessionTemplateDetailPage() {
     const { templateId } = useParams<{ templateId: string }>();
+    const effectiveTheme = useEffectiveTheme();
     const [template, setTemplate] = useState<SessionTemplate | null>(null);
     const [form, setForm] = useState<NewSessionTemplate>({
         name: "", description: "", systemPrompt: "",
@@ -289,6 +291,7 @@ export function SessionTemplateDetailPage() {
                             onChange={(v) => updateForm({ systemPrompt: v })}
                             language={Language.markdown}
                             height="500px"
+                            isDarkTheme={effectiveTheme === "dark"}
                             isReadOnly={isReadOnly}
                             isLineNumbersVisible
                             options={{
@@ -430,6 +433,7 @@ export function SessionTemplateDetailPage() {
                             language={(form.initScriptType || "bash") === "bash"
                                 ? Language.shell : Language.javascript}
                             height="400px"
+                            isDarkTheme={effectiveTheme === "dark"}
                             isReadOnly={isReadOnly}
                             isLineNumbersVisible
                             options={{

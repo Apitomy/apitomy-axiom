@@ -13,6 +13,7 @@ import {
 } from "@patternfly/react-core";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { useState } from "react";
+import { useEffectiveTheme } from "../../hooks/useTheme";
 import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
 
 import { ValidationProblemsTab } from "./ValidationProblemsTab";
@@ -27,6 +28,7 @@ interface ToolsetDetailModalProps {
 }
 
 export function ToolsetDetailModal({ isOpen, onClose, name, content, errors }: ToolsetDetailModalProps) {
+    const effectiveTheme = useEffectiveTheme();
     const [activeTab, setActiveTab] = useState(0);
 
     const description = (content.description as string) || "";
@@ -77,6 +79,7 @@ export function ToolsetDetailModal({ isOpen, onClose, name, content, errors }: T
                             <CodeEditor
                                 code={JSON.stringify(content, null, 2)}
                                 language={Language.json}
+                                isDarkTheme={effectiveTheme === "dark"}
                                 height="100%"
                                 isReadOnly
                                 isLineNumbersVisible

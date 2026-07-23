@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useEffectiveTheme } from "../hooks/useTheme";
 import {
     StackItem,
     Title,
@@ -22,6 +23,7 @@ interface ToolAiModalProps {
  * by AI). Right side is a chat interface for giving instructions.
  */
 export function ToolAiModal({ isOpen, form, params, onApply, onClose }: ToolAiModalProps) {
+    const effectiveTheme = useEffectiveTheme();
     const [localForm, setLocalForm] = useState(form);
     const [localParams, setLocalParams] = useState(params);
 
@@ -112,6 +114,7 @@ export function ToolAiModal({ isOpen, form, params, onApply, onClose }: ToolAiMo
                     code={localForm.scriptTemplate || ""}
                     language={Language.shell}
                     isFullHeight
+                    isDarkTheme={effectiveTheme === "dark"}
                     isReadOnly={false}
                     isLineNumbersVisible
                 />
