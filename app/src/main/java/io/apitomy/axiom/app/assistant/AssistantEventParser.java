@@ -25,6 +25,7 @@ import java.util.List;
  *   <li>{@code user} (with tool_use_result) → {@code tool_result}</li>
  *   <li>{@code result} → {@code turn_complete}</li>
  *   <li>{@code sdk_control_request} / {@code control_request} → {@code permission_request}</li>
+ *   <li>{@code conversation_reset} → {@code conversation_reset}</li>
  * </ul>
  */
 public class AssistantEventParser {
@@ -55,6 +56,7 @@ public class AssistantEventParser {
                 case "result" -> parseResult(node);
                 case "sdk_control_request" -> parseSdkControlRequest(node);
                 case "control_request" -> parseControlRequest(node);
+                case "conversation_reset" -> parseConversationReset(node);
                 default -> {
                     ObjectNode data = JsonNodeFactory.instance.objectNode();
                     data.put("rawType", type);
@@ -183,10 +185,23 @@ public class AssistantEventParser {
     }
 
     /**
+     * Parses a conversation_reset event emitted when the user sends the
+     * {@code /clear} slash command.
+     *
+     * @param root the raw NDJSON node
+     * @return a single conversation_reset SSE event
+     */
+    private List<SseEvent> parseConversationReset(JsonNode root) {
+        ObjectNode data = JsonNodeFactory.instance.objectNode();
+        return List.of(new SseEvent("conversation_reset", data));
+    }
+
+    /**
      * A normalised SSE event parsed from Claude Code's NDJSON output.
      *
      * @param type the normalised event type (session_init, assistant_text,
-     *             tool_use, tool_result, turn_complete, permission_request, thinking)
+     *             tool_use, tool_result, turn_complete, permission_request,
+     *             thinking, conversation_reset)
      * @param data the extracted/transformed JSON data
      */
     public record SseEvent(String type, JsonNode data) {

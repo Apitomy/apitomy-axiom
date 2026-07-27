@@ -194,6 +194,15 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                 setIsProcessing(false);
                 break;
 
+            case "conversation_reset":
+                setMessages([{
+                    id: String(++messageIdCounter),
+                    type: "system",
+                    content: "Conversation cleared.",
+                }]);
+                setIsProcessing(false);
+                break;
+
             case "unhandled_event":
                 addMessage({
                     type: "warning",
@@ -233,6 +242,12 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                     buffer.push({ eventType, eventData, eventIndex });
                     return;
                 }
+                if (eventType === "conversation_reset") {
+                    console.log(`[ChatPanel] Processing live ${eventType} idx=${eventIndex} for ${sessionShort} (bypass dedup)`);
+                    lastSeenIndexRef.current = eventIndex;
+                    processEvent(eventType, eventData);
+                    return;
+                }
                 if (eventIndex <= lastSeenIndexRef.current) {
                     console.log(`[ChatPanel] Skipping (already seen) ${eventType} idx=${eventIndex} <= ${lastSeenIndexRef.current} for ${sessionShort}`);
                     return;
@@ -254,12 +269,22 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                     const newEvents = history.filter(e => e.eventIndex > lastSeenIndexRef.current);
                     console.log(`[ChatPanel] History: ${history.length} total, ${newEvents.length} new (lastSeen=${lastSeenIndexRef.current}) for ${sessionShort}`);
                     for (const event of history) {
+                        if (event.eventType === "conversation_reset") {
+                            lastSeenIndexRef.current = event.eventIndex;
+                            processEvent(event.eventType, event.eventData);
+                            continue;
+                        }
                         if (event.eventIndex <= lastSeenIndexRef.current) continue;
                         processEvent(event.eventType, event.eventData);
                         lastSeenIndexRef.current = Math.max(lastSeenIndexRef.current, event.eventIndex);
                     }
                     historyLoaded = true;
                     for (const event of buffer) {
+                        if (event.eventType === "conversation_reset") {
+                            lastSeenIndexRef.current = event.eventIndex;
+                            processEvent(event.eventType, event.eventData);
+                            continue;
+                        }
                         if (event.eventIndex <= lastSeenIndexRef.current) continue;
                         lastSeenIndexRef.current = event.eventIndex;
                         processEvent(event.eventType, event.eventData);
@@ -293,11 +318,18 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
     }, [sessionId, processEvent]);
 
     const handleSend = useCallback(async (message: string) => {
-        addMessage({ type: "user", content: message });
-        setProcessingText(
-            randomThinkingMessage()
-        );
-        setIsProcessing(true);
+        if (message.trim() === "/clear") {
+            setMessages([{
+                id: String(++messageIdCounter),
+                type: "system",
+                content: "Conversation cleared.",
+            }]);
+            setIsProcessing(false);
+        } else {
+            addMessage({ type: "user", content: message });
+            setProcessingText(randomThinkingMessage());
+            setIsProcessing(true);
+        }
         try {
             await sendAssistantMessage(sessionId, message);
         } catch (err) {

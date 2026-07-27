@@ -257,13 +257,19 @@ public class AssistantSession {
      * Atomically snapshots the event history since a given event index and
      * registers a listener. Used for SSE reconnect with {@code Last-Event-Id}.
      *
+     * <p>If {@code sinceId} exceeds the current history size (e.g., because the
+     * history was cleared by a {@code conversation_reset}), the full current
+     * history is returned so the client can catch up from the reset.</p>
+     *
      * @param listener the event consumer to register
      * @param sinceId the last event index the client received, or -1 to replay all
      * @return the event history snapshot to replay (events after sinceId)
      */
     public List<SseEvent> addListenerWithHistory(Consumer<SseEvent> listener, long sinceId) {
         synchronized (eventLock) {
-            int fromIndex = (int) Math.min(sinceId + 1, eventHistory.size());
+            int fromIndex = (sinceId + 1 > eventHistory.size())
+                    ? 0
+                    : (int) (sinceId + 1);
             if (fromIndex < 0) {
                 fromIndex = 0;
             }
@@ -521,6 +527,9 @@ public class AssistantSession {
                         accumulateCost(event);
                     }
                     synchronized (eventLock) {
+                        if ("conversation_reset".equals(event.type())) {
+                            eventHistory.clear();
+                        }
                         eventHistory.add(event);
                         lastActivityAt = Instant.now();
                         for (Consumer<SseEvent> listener : listeners) {

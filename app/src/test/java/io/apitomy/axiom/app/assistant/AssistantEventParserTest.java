@@ -193,6 +193,18 @@ class AssistantEventParserTest {
         assertTrue(events.isEmpty());
     }
 
+    // ── Conversation reset ────────────────────────────────────────
+
+    @Test
+    void parseConversationResetEvent() {
+        String line = """
+                {"type":"conversation_reset"}""";
+
+        List<SseEvent> events = parser.parse(line);
+        assertEquals(1, events.size());
+        assertEquals("conversation_reset", events.get(0).type());
+    }
+
     // ── Unknown types ───────────────────────────────────────────────
 
     @Test
