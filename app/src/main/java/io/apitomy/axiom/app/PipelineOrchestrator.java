@@ -24,6 +24,7 @@ import org.jboss.logging.Logger;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 
 /**
  * The central event processing pipeline. Dequeues events, invokes the AI Manager
@@ -39,6 +40,11 @@ import java.util.List;
 public class PipelineOrchestrator {
 
     private static final Logger LOG = Logger.getLogger(PipelineOrchestrator.class);
+
+    private static final Set<String> SLASH_COMMANDS = Set.of(
+            "/ready", "/retry", "/accept", "/reject", "/disable-tests",
+            "/enable-tests", "/unstale", "/skip-review", "/auto-merge", "/merge"
+    );
 
     @Inject
     ManagerService managerService;
@@ -97,6 +103,46 @@ public class PipelineOrchestrator {
     }
 
     /**
+     * Returns a skip reason if the event should be filtered out without
+     * invoking the AI Manager, or {@code null} if the event should be processed.
+     */
+    private String shouldSkipEvent(EventEntity event) {
+        if (event.payload == null || event.payload.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode payload = objectMapper.readTree(event.payload);
+
+            // Extract the author login from the event payload
+            String login = null;
+            JsonNode comment = payload.path("comment");
+            if (!comment.isMissingNode()) {
+                login = comment.path("user").path("login").asText(null);
+            }
+            if (login == null) {
+                login = payload.path("user").path("login").asText(null);
+            }
+
+            // Skip events from GitHub App bot accounts (all use the [bot] suffix)
+            if (login != null && login.endsWith("[bot]")) {
+                return "bot activity from " + login;
+            }
+
+            // Skip slash command comments (lifecycle orchestrator handles these)
+            if ("comment-added".equals(event.eventType) && !comment.isMissingNode()) {
+                String body = comment.path("body").asText("").trim();
+                if (SLASH_COMMANDS.stream().anyMatch(cmd ->
+                        body.equals(cmd) || body.startsWith(cmd + " "))) {
+                    return "slash command: " + body.split("\\s+")[0];
+                }
+            }
+        } catch (Exception e) {
+            LOG.tracef("Failed to parse event payload for pre-filtering: %s", e.getMessage());
+        }
+        return null;
+    }
+
+    /**
      * Processes a single queued event through the full pipeline: load the event,
      * invoke the AI Manager, and persist the resulting decisions.
      *
@@ -122,6 +168,18 @@ public class PipelineOrchestrator {
 
         LOG.infof("Processing event %d: %s [%s] from %s",
                 event.id, event.eventType, event.issueRef, event.source);
+
+        // Pre-filter: skip events from known bots without invoking the AI Manager
+        String skipReason = shouldSkipEvent(event);
+        if (skipReason != null) {
+            LOG.infof("Pre-filtered event %d: %s", event.id, skipReason);
+            QuarkusTransaction.requiringNew().run(() -> {
+                logActivity(null, null, event.id, "event-pre-filtered",
+                        "Event pre-filtered: " + event.eventType + " — " + skipReason);
+                markQueueEntry(queueEntryId, "completed");
+            });
+            return;
+        }
 
         // Trace creation (TraceService manages its own transactions)
         TraceContext traceCtx = null;
