@@ -13,7 +13,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 /**
@@ -164,17 +166,19 @@ public class ClaudeCodeSubprocess {
         boolean completed = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
         if (!completed) {
             LOG.warnf("Claude Code subprocess timed out after %s", timeout);
-            process.destroyForcibly();
-            process.waitFor(5, TimeUnit.SECONDS);
+            destroyProcessTree();
             logBuilder.footer("Timed Out", null, null, null,
                     Duration.between(startTime, Instant.now()));
             return new ClaudeCodeResult("Process timed out after " + timeout,
                     null, null, null, null, 124, logBuilder.build());
         }
 
-        // Wait for stream readers to finish
-        stdoutFuture.join();
-        stderrFuture.join();
+        // Kill any orphan child processes that may hold pipes open
+        destroyProcessTree();
+
+        // Wait for stream readers to finish (bounded to avoid hanging on orphan pipes)
+        joinWithTimeout(stdoutFuture, "stdout");
+        joinWithTimeout(stderrFuture, "stderr");
 
         int exitCode = process.exitValue();
         LOG.tracef("Claude Code subprocess exited with code %d", exitCode);
@@ -254,6 +258,33 @@ public class ClaudeCodeSubprocess {
                     jsonLine.substring(0, Math.min(jsonLine.length(), 200)));
             // Fall back to treating the raw output as the result text
             return new ClaudeCodeResult(jsonLine, null, null, null, null, exitCode, null);
+        }
+    }
+
+    private void destroyProcessTree() {
+        process.descendants().forEach(ph -> {
+            LOG.tracef("Killing descendant process %d", ph.pid());
+            ph.destroyForcibly();
+        });
+        process.destroyForcibly();
+        try {
+            process.waitFor(5, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void joinWithTimeout(CompletableFuture<Void> future, String name) {
+        try {
+            future.get(30, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            LOG.warnf("%s reader did not finish within 30s after process exit, cancelling", name);
+            future.cancel(true);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            future.cancel(true);
+        } catch (ExecutionException e) {
+            LOG.warnf(e.getCause(), "Error in %s reader", name);
         }
     }
 
