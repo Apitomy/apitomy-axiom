@@ -87,7 +87,7 @@ public class ClaudeCodeSubprocess {
     public void kill() {
         if (process != null && process.isAlive()) {
             LOG.warn("Killing Claude Code subprocess");
-            process.destroyForcibly();
+            destroyProcessTree();
         }
     }
 
