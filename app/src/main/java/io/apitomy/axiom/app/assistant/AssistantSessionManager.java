@@ -157,12 +157,15 @@ public class AssistantSessionManager {
             Path sessionDir = contextBuilder.createSessionDirectory(sessionId, null);
 
             try {
-            // Resolve MCP servers from template
-            Map<String, AssistantContextBuilder.McpServerConfig> mcpConfigs =
-                    resolveMcpServers(template, project, sessionDir, resolvedEnv);
-
-            // Resolve allowed tools from template
+            // Resolve allowed tools first — MCP server resolution needs them
+            // to auto-include servers implied by tool names.
             List<String> resolvedAllowedTools = resolveAllowedTools(template);
+
+            // Resolve MCP servers from template, augmented with any servers
+            // implied by the allowed tools list.
+            Map<String, AssistantContextBuilder.McpServerConfig> mcpConfigs =
+                    resolveMcpServers(template, project, sessionDir, resolvedEnv,
+                            resolvedAllowedTools);
 
             // Build and write MCP config JSON to session directory
             String mcpConfig = contextBuilder.buildMcpConfig(mcpConfigs);
@@ -700,12 +703,19 @@ public class AssistantSessionManager {
     private Map<String, AssistantContextBuilder.McpServerConfig> resolveMcpServers(
             SessionTemplateService.SessionTemplate template,
             ProjectEntity project, Path sessionDir,
-            Map<String, String> sessionEnv) throws IOException {
+            Map<String, String> sessionEnv,
+            List<String> allowedTools) throws IOException {
         Map<String, AssistantContextBuilder.McpServerConfig> configs = new LinkedHashMap<>();
 
         String apiUrl = "http://localhost:" + httpPort + "/api/v1";
 
-        for (String serverName : template.mcpServers()) {
+        // Build the effective server list: start with the template's explicit
+        // mcpServers, then auto-include any servers implied by the allowed
+        // tools list (mirroring the task-execution path in McpConfigGenerator).
+        List<String> serverNames = new ArrayList<>(template.mcpServers());
+        augmentServersFromAllowedTools(serverNames, allowedTools);
+
+        for (String serverName : serverNames) {
             if ("@axiom-assistant".equals(serverName)) {
                 // Built-in MCP server for project-scoped assistant tools
                 Path mcpServerDir = ensureAssistantMcpServerInstalled();
@@ -792,6 +802,49 @@ public class AssistantSessionManager {
         }
 
         return configs;
+    }
+
+    /**
+     * Inspects the allowed tools list and adds any MCP server entries that are
+     * implied but not already present. This mirrors the auto-derivation logic
+     * in {@link McpConfigGenerator#generateMcpConfig} so that users don't have
+     * to manually keep the MCP servers list and allowed tools list in sync.
+     */
+    private void augmentServersFromAllowedTools(List<String> serverNames,
+                                                List<String> allowedTools) {
+        if (allowedTools == null || allowedTools.isEmpty()) {
+            return;
+        }
+
+        boolean needsAxiomTools = !serverNames.contains("@axiom-tools")
+                && allowedTools.stream().anyMatch(t -> t.startsWith("mcp__axiom-tools__"));
+        boolean needsAxiomSdk = !serverNames.contains("@axiom-sdk")
+                && allowedTools.stream().anyMatch(t -> t.startsWith("mcp__axiom-sdk__"));
+
+        if (needsAxiomTools) {
+            LOG.infof("Auto-including @axiom-tools server (implied by allowed tools)");
+            serverNames.add("@axiom-tools");
+        }
+        if (needsAxiomSdk) {
+            LOG.infof("Auto-including @axiom-sdk server (implied by allowed tools)");
+            serverNames.add("@axiom-sdk");
+        }
+
+        // Auto-include external MCP servers referenced in allowed tools
+        for (String tool : allowedTools) {
+            if (tool.startsWith("mcp__") && !tool.startsWith("mcp__axiom-tools__")
+                    && !tool.startsWith("mcp__axiom-sdk__")) {
+                int secondSep = tool.indexOf("__", 5);
+                if (secondSep > 5) {
+                    String externalName = tool.substring(5, secondSep);
+                    if (!serverNames.contains(externalName)) {
+                        LOG.infof("Auto-including MCP server '%s' (implied by allowed tools)",
+                                externalName);
+                        serverNames.add(externalName);
+                    }
+                }
+            }
+        }
     }
 
     private List<String> resolveAllowedTools(
