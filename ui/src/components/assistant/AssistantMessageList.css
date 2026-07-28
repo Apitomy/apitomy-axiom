@@ -59,11 +59,34 @@
 }
 
 .axiom-message-list__assistant-bubble {
+    position: relative;
     max-width: 80%;
     padding: 10px 14px;
     border-radius: 12px 12px 12px 2px;
     background-color: var(--pf-t--global--background--color--secondary--default, #f0f0f0);
     font-size: 14px;
+}
+
+.axiom-message-list__copy-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    opacity: 0;
+    transition: opacity 0.15s ease-in-out;
+}
+
+.axiom-message-list__assistant-bubble:hover .axiom-message-list__copy-btn {
+    opacity: 1;
+}
+
+.axiom-message-list__copy-btn .pf-v6-c-button {
+    padding: 2px;
+    font-size: 12px;
+    color: var(--pf-t--global--text--color--subtle, #6a6e73);
+}
+
+.axiom-message-list__copy-btn .pf-v6-c-button:hover {
+    color: var(--pf-t--global--text--color--regular, #151515);
 }
 
 /* Processing spinner */
