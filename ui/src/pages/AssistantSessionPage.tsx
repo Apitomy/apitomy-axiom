@@ -67,6 +67,7 @@ export function AssistantSessionPage() {
     const [autoApprovalRules, setAutoApprovalRules] = useState<AutoApprovalRule[]>([]);
     const [isAutoApprovalModalOpen, setIsAutoApprovalModalOpen] = useState(false);
     const [allowAll, setAllowAll] = useState(false);
+    const [allowAllError, setAllowAllError] = useState<string | null>(null);
     const [isAllowAllConfirmOpen, setIsAllowAllConfirmOpen] = useState(false);
 
     useEffect(() => {
@@ -153,21 +154,25 @@ export function AssistantSessionPage() {
     const handleAllowAllConfirm = async () => {
         if (!sessionId) return;
         setIsAllowAllConfirmOpen(false);
+        setAllowAllError(null);
         try {
             await apiSetAllowAll(sessionId, true);
             setAllowAll(true);
         } catch (err) {
             console.error("Failed to enable Allow All:", err);
+            setAllowAllError((err as Error).message || "Failed to enable Allow All");
         }
     };
 
     const handleAllowAllDisable = async () => {
         if (!sessionId) return;
+        setAllowAllError(null);
         try {
             await apiSetAllowAll(sessionId, false);
             setAllowAll(false);
         } catch (err) {
             console.error("Failed to disable Allow All:", err);
+            setAllowAllError((err as Error).message || "Failed to disable Allow All");
         }
     };
 
@@ -399,6 +404,18 @@ export function AssistantSessionPage() {
                     className="axiom-session-page__rename-error"
                 >
                     {renameError}
+                </Alert>
+            )}
+
+            {allowAllError && (
+                <Alert
+                    variant="danger"
+                    isInline
+                    title="Allow All toggle failed"
+                    actionClose={<AlertActionCloseButton onClose={() => setAllowAllError(null)} />}
+                    className="axiom-session-page__allow-all-error"
+                >
+                    {allowAllError}
                 </Alert>
             )}
 

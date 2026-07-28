@@ -516,9 +516,10 @@ public class AssistantResourceImpl implements AssistantResource {
     @Override
     public void setAllowAll(String sessionId, SetAllowAllRequest data) {
         AssistantSession session = requireSession(sessionId);
-        session.setAllowAll(data.getEnabled());
+        boolean enabled = data.getEnabled() != null && data.getEnabled();
+        session.setAllowAll(enabled);
         ObjectNode eventData = objectMapper.createObjectNode();
-        eventData.put("enabled", data.getEnabled());
+        eventData.put("enabled", enabled);
         session.addEvent(new SseEvent("allow_all_changed", eventData));
     }
 
