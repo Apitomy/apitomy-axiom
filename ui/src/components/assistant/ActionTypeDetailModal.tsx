@@ -40,6 +40,8 @@ export function ActionTypeDetailModal({ isOpen, onClose, name, content, errors }
     const scriptTemplate = (content.scriptTemplate as string) || "";
     const model = (content.model as string) || "";
     const engine = (content.engine as string) || "";
+    const maxSteps = content.maxSteps as number | undefined;
+    const maxBudgetUsd = content.maxBudgetUsd as number | undefined;
 
     const toolsList = Array.isArray(rawAllowedTools)
         ? rawAllowedTools as string[]
@@ -117,6 +119,18 @@ export function ActionTypeDetailModal({ isOpen, onClose, name, content, errors }
                                     <DescriptionListGroup>
                                         <DescriptionListTerm>Engine</DescriptionListTerm>
                                         <DescriptionListDescription>{engine}</DescriptionListDescription>
+                                    </DescriptionListGroup>
+                                )}
+                                {maxSteps != null && (
+                                    <DescriptionListGroup>
+                                        <DescriptionListTerm style={{ whiteSpace: "nowrap" }}>Max Steps</DescriptionListTerm>
+                                        <DescriptionListDescription>{maxSteps}</DescriptionListDescription>
+                                    </DescriptionListGroup>
+                                )}
+                                {maxBudgetUsd != null && (
+                                    <DescriptionListGroup>
+                                        <DescriptionListTerm style={{ whiteSpace: "nowrap" }}>Max Budget (USD)</DescriptionListTerm>
+                                        <DescriptionListDescription>${maxBudgetUsd.toFixed(2)}</DescriptionListDescription>
                                     </DescriptionListGroup>
                                 )}
                             </DescriptionList>
