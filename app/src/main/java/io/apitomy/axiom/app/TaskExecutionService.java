@@ -181,6 +181,8 @@ public class TaskExecutionService {
                 .mcpConfigFile(mcpConfig)
                 .environment(env)
                 .model(actionTypeEntity != null ? actionTypeEntity.model : null)
+                .maxSteps(actionTypeEntity != null ? actionTypeEntity.maxSteps : null)
+                .maxBudgetUsd(actionTypeEntity != null ? actionTypeEntity.maxBudgetUsd : null)
                 .build();
 
         // Execute asynchronously

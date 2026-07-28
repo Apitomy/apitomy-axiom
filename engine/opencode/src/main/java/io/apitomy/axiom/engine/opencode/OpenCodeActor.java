@@ -60,7 +60,7 @@ public class OpenCodeActor implements Actor {
                 .workingDirectory(context.getWorkingDirectory())
                 .environment(context.getEnvironment() != null ? context.getEnvironment() : Map.of())
                 .timeoutSeconds(timeoutSeconds)
-                .maxSteps(maxSteps)
+                .maxSteps(context.getMaxSteps() != null ? context.getMaxSteps() : maxSteps)
                 .model(resolveModel(context))
                 .mcpConfigFile(context.getMcpConfigFile())
                 .build();

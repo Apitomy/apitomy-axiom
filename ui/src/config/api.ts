@@ -331,6 +331,8 @@ export interface ActionType {
     scriptTemplate?: string;
     model?: string;
     engine?: string;
+    maxSteps?: number;
+    maxBudgetUsd?: number;
     emitsEvent: boolean;
     environment?: Record<string, string>;
 }

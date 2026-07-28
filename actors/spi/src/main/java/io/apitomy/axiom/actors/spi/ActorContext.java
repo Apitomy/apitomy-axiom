@@ -18,6 +18,8 @@ public class ActorContext {
     private final Path mcpConfigFile;
     private final Map<String, String> environment;
     private final String model;
+    private final Integer maxSteps;
+    private final Double maxBudgetUsd;
 
     private ActorContext(Builder builder) {
         this.workingDirectory = builder.workingDirectory;
@@ -28,6 +30,8 @@ public class ActorContext {
         this.mcpConfigFile = builder.mcpConfigFile;
         this.environment = builder.environment;
         this.model = builder.model;
+        this.maxSteps = builder.maxSteps;
+        this.maxBudgetUsd = builder.maxBudgetUsd;
     }
 
     /**
@@ -86,6 +90,20 @@ public class ActorContext {
         return model;
     }
 
+    /**
+     * @return the max steps/turns override for this action type, or null to use the global default
+     */
+    public Integer getMaxSteps() {
+        return maxSteps;
+    }
+
+    /**
+     * @return the max budget (USD) override for this action type, or null to use the global default
+     */
+    public Double getMaxBudgetUsd() {
+        return maxBudgetUsd;
+    }
+
     public static Builder builder() {
         return new Builder();
     }
@@ -99,6 +117,8 @@ public class ActorContext {
         private Path mcpConfigFile;
         private Map<String, String> environment = Map.of();
         private String model;
+        private Integer maxSteps;
+        private Double maxBudgetUsd;
 
         public Builder workingDirectory(Path workingDirectory) {
             this.workingDirectory = workingDirectory;
@@ -137,6 +157,16 @@ public class ActorContext {
 
         public Builder model(String model) {
             this.model = model;
+            return this;
+        }
+
+        public Builder maxSteps(Integer maxSteps) {
+            this.maxSteps = maxSteps;
+            return this;
+        }
+
+        public Builder maxBudgetUsd(Double maxBudgetUsd) {
+            this.maxBudgetUsd = maxBudgetUsd;
             return this;
         }
 

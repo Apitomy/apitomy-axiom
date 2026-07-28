@@ -181,6 +181,9 @@ public class ActionResourceImpl implements ActionResource {
         entity.promptTemplate = data.getPromptTemplate();
         entity.scriptTemplate = data.getScriptTemplate();
         entity.model = data.getModel();
+        entity.engine = data.getEngine();
+        entity.maxSteps = data.getMaxSteps();
+        entity.maxBudgetUsd = data.getMaxBudgetUsd();
         entity.emitsEvent = data.getEmitsEvent() != null ? data.getEmitsEvent() : false;
         entity.environment = environmentToJson(data.getEnvironment());
     }
@@ -209,6 +212,9 @@ public class ActionResourceImpl implements ActionResource {
         actionType.setPromptTemplate(entity.promptTemplate);
         actionType.setScriptTemplate(entity.scriptTemplate);
         actionType.setModel(entity.model);
+        actionType.setEngine(entity.engine);
+        actionType.setMaxSteps(entity.maxSteps);
+        actionType.setMaxBudgetUsd(entity.maxBudgetUsd);
         actionType.setEmitsEvent(entity.emitsEvent);
         actionType.setEnvironment(jsonToEnvironment(entity.environment));
         return actionType;
