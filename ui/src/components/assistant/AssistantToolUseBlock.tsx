@@ -42,6 +42,7 @@ interface AssistantToolUseBlockProps {
     input?: Record<string, unknown>;
     result?: string;
     isError?: boolean;
+    elapsedSeconds?: number;
     permissionId?: string;
     permissionResolved?: boolean;
     permissionAllowed?: boolean;
@@ -51,7 +52,7 @@ interface AssistantToolUseBlockProps {
 }
 
 export function AssistantToolUseBlock({
-    toolName, input, result, isError,
+    toolName, input, result, isError, elapsedSeconds,
     permissionId, permissionResolved, permissionAllowed, onPermissionRespond,
     onCreateAutoApproval,
 }: AssistantToolUseBlockProps) {
@@ -84,6 +85,11 @@ export function AssistantToolUseBlock({
                             <Label isCompact color={isError ? "red" : getToolColor(toolName)}>
                                 {toolName}
                             </Label>
+                            {!result && elapsedSeconds != null && (
+                                <span className="axiom-tool-use__elapsed">
+                                    {formatElapsed(elapsedSeconds)}
+                                </span>
+                            )}
                             {inputPreview && (
                                 <span className="axiom-tool-use__input-preview">
                                     {inputPreview}{input && JSON.stringify(input).length > 100 ? "..." : ""}
@@ -422,6 +428,13 @@ function getSuggestedPatterns(toolName: string, input?: Record<string, unknown>)
     }
 
     return suggestions;
+}
+
+function formatElapsed(seconds: number): string {
+    if (seconds < 60) return `${seconds}s`;
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
 }
 
 function escapeRegex(text: string): string {

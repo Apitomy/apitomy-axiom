@@ -203,6 +203,16 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                 setIsProcessing(false);
                 break;
 
+            case "tool_progress":
+                setMessages((prev) =>
+                    prev.map((m) =>
+                        m.type === "tool_use" && m.toolUseId === data.toolUseId
+                            ? { ...m, elapsedSeconds: data.elapsedSeconds as number }
+                            : m
+                    )
+                );
+                break;
+
             case "unhandled_event":
                 addMessage({
                     type: "warning",
