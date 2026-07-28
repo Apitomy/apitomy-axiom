@@ -70,6 +70,7 @@ public class AssistantSession {
     private final CopyOnWriteArrayList<Consumer<SseEvent>> listeners = new CopyOnWriteArrayList<>();
     private final Object eventLock = new Object();
     private final CopyOnWriteArrayList<AutoApprovalRule> autoApprovalRules = new CopyOnWriteArrayList<>();
+    private volatile boolean allowAll;
     private final Long projectId;
     private final String projectName;
 
@@ -480,6 +481,24 @@ public class AssistantSession {
     }
 
     /**
+     * Returns whether Allow All mode is active for this session.
+     *
+     * @return true if all permissions are auto-approved
+     */
+    public boolean isAllowAll() {
+        return allowAll;
+    }
+
+    /**
+     * Enables or disables Allow All mode for this session.
+     *
+     * @param allowAll true to auto-approve all permissions
+     */
+    public void setAllowAll(boolean allowAll) {
+        this.allowAll = allowAll;
+    }
+
+    /**
      * Checks whether a tool permission request matches any auto-approval rule.
      *
      * @param toolName the tool name from the permission request
@@ -555,10 +574,25 @@ public class AssistantSession {
         }
         String toolName = event.data().path("toolName").asText("");
         JsonNode toolInput = event.data().path("toolInput");
+        String requestId = event.data().path("requestId").asText("");
+
+        // Allow All short-circuit: auto-approve everything but keep the event
+        // visible in the stream so the UI can show it as auto-approved.
+        if (allowAll) {
+            LOG.infof("Auto-approving %s (allow-all) in session %s", toolName, id);
+            try {
+                addEvent(event);
+                respondToPermission(requestId, true, toolInput);
+            } catch (IOException e) {
+                LOG.warnf(e, "Failed to auto-approve %s in session %s", toolName, id);
+                return false;
+            }
+            return true;
+        }
+
         if (!checkAutoApproval(toolName, toolInput)) {
             return false;
         }
-        String requestId = event.data().path("requestId").asText("");
         LOG.infof("Auto-approving %s (rule matched) in session %s", toolName, id);
         try {
             respondToPermission(requestId, true, toolInput);

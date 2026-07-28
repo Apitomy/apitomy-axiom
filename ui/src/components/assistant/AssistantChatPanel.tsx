@@ -17,13 +17,14 @@ interface AssistantChatPanelProps {
     onItemsChanged?: () => void;
     onModeChange?: (mode: SessionMode) => void;
     onAutoApprovalCountChange?: () => void;
+    onAllowAllChanged?: (enabled: boolean) => void;
     onModelDetected?: (model: string) => void;
     onCostUpdate?: (costUsd: number, inputTokens: number, outputTokens: number) => void;
 }
 
 let messageIdCounter = 0;
 
-export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, onAutoApprovalCountChange, onModelDetected, onCostUpdate }: AssistantChatPanelProps) {
+export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, onAutoApprovalCountChange, onAllowAllChanged, onModelDetected, onCostUpdate }: AssistantChatPanelProps) {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [processingText, setProcessingText] = useState("");
@@ -34,9 +35,11 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
     const onItemsChangedRef = useRef(onItemsChanged);
     const onModeChangeRef = useRef(onModeChange);
     const onModelDetectedRef = useRef(onModelDetected);
+    const onAllowAllChangedRef = useRef(onAllowAllChanged);
     const onCostUpdateRef = useRef(onCostUpdate);
     useEffect(() => { onItemsChangedRef.current = onItemsChanged; }, [onItemsChanged]);
     useEffect(() => { onModeChangeRef.current = onModeChange; }, [onModeChange]);
+    useEffect(() => { onAllowAllChangedRef.current = onAllowAllChanged; }, [onAllowAllChanged]);
     useEffect(() => { onModelDetectedRef.current = onModelDetected; }, [onModelDetected]);
     useEffect(() => { onCostUpdateRef.current = onCostUpdate; }, [onCostUpdate]);
 
@@ -211,6 +214,10 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                             : m
                     )
                 );
+                break;
+
+            case "allow_all_changed":
+                onAllowAllChangedRef.current?.(data.enabled as boolean);
                 break;
 
             case "unhandled_event":

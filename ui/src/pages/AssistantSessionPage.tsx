@@ -4,6 +4,7 @@ import {
     Badge,
     PageSection,
     Button,
+    Switch,
     TextInput,
     Flex,
     FlexItem,
@@ -32,6 +33,7 @@ import {
     renameAssistantSession,
     fetchAutoApprovals,
     deleteAutoApproval,
+    setAllowAll as apiSetAllowAll,
     type AssistantSessionInfo,
     type AutoApprovalRule,
     type AssistantApplyResult,
@@ -64,6 +66,8 @@ export function AssistantSessionPage() {
     const [autoApprovalCount, setAutoApprovalCount] = useState(0);
     const [autoApprovalRules, setAutoApprovalRules] = useState<AutoApprovalRule[]>([]);
     const [isAutoApprovalModalOpen, setIsAutoApprovalModalOpen] = useState(false);
+    const [allowAll, setAllowAll] = useState(false);
+    const [isAllowAllConfirmOpen, setIsAllowAllConfirmOpen] = useState(false);
 
     useEffect(() => {
         if (!sessionId) return;
@@ -71,6 +75,7 @@ export function AssistantSessionPage() {
         fetchAssistantSession(sessionId)
             .then((s) => {
                 setSession(s);
+                setAllowAll(!!s.allowAll);
                 if (isBreakout) {
                     document.title = `${s.name} — AI Assistant`;
                 }
@@ -145,6 +150,31 @@ export function AssistantSessionPage() {
         }
     };
 
+    const handleAllowAllConfirm = async () => {
+        if (!sessionId) return;
+        setIsAllowAllConfirmOpen(false);
+        try {
+            await apiSetAllowAll(sessionId, true);
+            setAllowAll(true);
+        } catch (err) {
+            console.error("Failed to enable Allow All:", err);
+        }
+    };
+
+    const handleAllowAllDisable = async () => {
+        if (!sessionId) return;
+        try {
+            await apiSetAllowAll(sessionId, false);
+            setAllowAll(false);
+        } catch (err) {
+            console.error("Failed to disable Allow All:", err);
+        }
+    };
+
+    const handleAllowAllChanged = useCallback((enabled: boolean) => {
+        setAllowAll(enabled);
+    }, []);
+
     const handleEndSession = async () => {
         if (!sessionId) return;
         setEndSessionError(null);
@@ -213,7 +243,8 @@ export function AssistantSessionPage() {
             className="axiom-session-page">
             {/* Header — fixed at top */}
             <Flex className="axiom-session-page__header"
-                data-mode={sessionMode === "plan" ? "plan" : undefined}>
+                data-mode={sessionMode === "plan" ? "plan" : undefined}
+                data-allow-all={allowAll ? "true" : undefined}>
                 {!isBreakout && (
                     <FlexItem>
                         <Button variant="plain" onClick={() => navigate("/assistant")}>
@@ -288,6 +319,23 @@ export function AssistantSessionPage() {
                             Apply All
                         </Button>
                     )}
+                    <Tooltip content={allowAll
+                        ? "All tool permissions are being auto-approved"
+                        : "Auto-approve all tool permissions for this session"}>
+                        <Switch
+                            id="allow-all-toggle"
+                            label="Allow All"
+                            isChecked={allowAll}
+                            onChange={(_event, checked) => {
+                                if (checked) {
+                                    setIsAllowAllConfirmOpen(true);
+                                } else {
+                                    handleAllowAllDisable();
+                                }
+                            }}
+                            className={`axiom-session-page__allow-all-switch${allowAll ? " axiom-session-page__allow-all-switch--active" : ""}`}
+                        />
+                    </Tooltip>
                     {autoApprovalCount > 0 && (
                         <Tooltip content={`${autoApprovalCount} auto-approval rule(s) active`}>
                             <Button variant="plain" onClick={openAutoApprovalModal}
@@ -362,6 +410,7 @@ export function AssistantSessionPage() {
                         onItemsChanged={isConfigAssistant ? handleItemsChanged : undefined}
                         onModeChange={setSessionMode}
                         onAutoApprovalCountChange={handleAutoApprovalCountChange}
+                        onAllowAllChanged={handleAllowAllChanged}
                         onModelDetected={setSessionModel}
                         onCostUpdate={(cost, tokensIn, tokensOut) => {
                             setSessionCost(cost);
@@ -400,6 +449,29 @@ export function AssistantSessionPage() {
                         End Session
                     </Button>
                     <Button variant="link" onClick={() => setIsEndConfirmOpen(false)}>
+                        Cancel
+                    </Button>
+                </ModalFooter>
+            </Modal>
+
+            {/* Allow All confirmation */}
+            <Modal
+                isOpen={isAllowAllConfirmOpen}
+                onClose={() => setIsAllowAllConfirmOpen(false)}
+                variant="small"
+                aria-label="Enable Allow All confirmation"
+            >
+                <ModalHeader title="Enable Allow All?" />
+                <ModalBody>
+                    All tool invocations will be approved automatically without prompting.
+                    This includes file modifications, command execution, and any other tool
+                    actions. You can disable this at any time.
+                </ModalBody>
+                <ModalFooter>
+                    <Button variant="warning" onClick={handleAllowAllConfirm}>
+                        Enable
+                    </Button>
+                    <Button variant="link" onClick={() => setIsAllowAllConfirmOpen(false)}>
                         Cancel
                     </Button>
                 </ModalFooter>

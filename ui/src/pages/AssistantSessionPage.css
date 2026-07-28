@@ -65,6 +65,19 @@
     margin-right: 8px;
 }
 
+/* Allow All toggle */
+.axiom-session-page__allow-all-switch {
+    margin-right: 12px;
+}
+
+.axiom-session-page__allow-all-switch--active .pf-v6-c-switch__toggle {
+    --pf-v6-c-switch__toggle--before--BackgroundColor: var(--pf-t--global--color--status--warning--default, #f0ab00);
+}
+
+.axiom-session-page__header[data-allow-all="true"] {
+    border-left: 3px solid var(--pf-t--global--color--status--warning--default, #f0ab00);
+}
+
 .axiom-session-page__shield-btn {
     margin-right: 4px;
 }
