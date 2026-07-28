@@ -67,8 +67,8 @@ public class ClaudeCodeActor implements Actor {
 
         ClaudeCodeCommandBuilder cmdBuilder = ClaudeCodeCommandBuilder
                 .fromContext(prompt, context)
-                .maxTurns(maxTurns)
-                .maxBudgetUsd(maxBudgetUsd);
+                .maxTurns(context.getMaxSteps() != null ? context.getMaxSteps() : maxTurns)
+                .maxBudgetUsd(context.getMaxBudgetUsd() != null ? context.getMaxBudgetUsd() : maxBudgetUsd);
 
         // Per-action-type model takes priority over the global default
         if (context.getModel() != null && !context.getModel().isBlank()) {

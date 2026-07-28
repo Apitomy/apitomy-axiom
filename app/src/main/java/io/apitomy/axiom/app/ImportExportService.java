@@ -293,6 +293,8 @@ public class ImportExportService {
             entity.scriptTemplate = textOrNull(item, "scriptTemplate");
             entity.model = textOrNull(item, "model");
             entity.engine = textOrNull(item, "engine");
+            entity.maxSteps = item.has("maxSteps") ? item.path("maxSteps").asInt() : null;
+            entity.maxBudgetUsd = item.has("maxBudgetUsd") ? item.path("maxBudgetUsd").asDouble() : null;
             entity.environment = jsonOrNull(item, "environment");
             entity.persist();
             count++;
@@ -378,6 +380,8 @@ public class ImportExportService {
             entity.scriptTemplate = textOrNull(item, "scriptTemplate");
             entity.model = textOrNull(item, "model");
             entity.engine = textOrNull(item, "engine");
+            entity.maxSteps = item.has("maxSteps") ? item.path("maxSteps").asInt() : null;
+            entity.maxBudgetUsd = item.has("maxBudgetUsd") ? item.path("maxBudgetUsd").asDouble() : null;
             entity.environment = jsonOrNull(item, "environment");
             entity.persist();
             if (isNew) created++;
@@ -537,6 +541,8 @@ public class ImportExportService {
         putIfNotNull(n, "scriptTemplate", e.scriptTemplate);
         putIfNotNull(n, "model", e.model);
         putIfNotNull(n, "engine", e.engine);
+        if (e.maxSteps != null) n.put("maxSteps", e.maxSteps);
+        if (e.maxBudgetUsd != null) n.put("maxBudgetUsd", e.maxBudgetUsd);
         putIfNotNull(n, "environment", e.environment);
         return n;
     }

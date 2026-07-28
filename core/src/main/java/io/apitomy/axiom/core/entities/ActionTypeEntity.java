@@ -55,6 +55,20 @@ public class ActionTypeEntity extends PanacheEntity {
     @Column(name = "engine")
     public String engine;
 
+    /**
+     * Optional max steps/turns override for this action type.
+     * When null, the global default max-steps is used.
+     */
+    @Column(name = "max_steps")
+    public Integer maxSteps;
+
+    /**
+     * Optional max budget (USD) override for this action type.
+     * When null, the global default max-budget-usd is used.
+     */
+    @Column(name = "max_budget_usd")
+    public Double maxBudgetUsd;
+
     @Column(name = "manager_triggerable", nullable = false)
     public boolean managerTriggerable;
 
