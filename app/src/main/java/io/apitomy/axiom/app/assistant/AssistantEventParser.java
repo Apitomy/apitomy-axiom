@@ -26,6 +26,7 @@ import java.util.List;
  *   <li>{@code result} → {@code turn_complete}</li>
  *   <li>{@code sdk_control_request} / {@code control_request} → {@code permission_request}</li>
  *   <li>{@code conversation_reset} → {@code conversation_reset}</li>
+ *   <li>{@code tool_progress} → {@code tool_progress}</li>
  * </ul>
  */
 public class AssistantEventParser {
@@ -57,6 +58,7 @@ public class AssistantEventParser {
                 case "sdk_control_request" -> parseSdkControlRequest(node);
                 case "control_request" -> parseControlRequest(node);
                 case "conversation_reset" -> parseConversationReset(node);
+                case "tool_progress" -> parseToolProgress(node);
                 default -> {
                     ObjectNode data = JsonNodeFactory.instance.objectNode();
                     data.put("rawType", type);
@@ -197,11 +199,32 @@ public class AssistantEventParser {
     }
 
     /**
+     * Parses a tool_progress event that reports elapsed time while a tool
+     * is executing.
+     *
+     * @param root the raw NDJSON node
+     * @return a single tool_progress SSE event, or empty if required fields are missing
+     */
+    private List<SseEvent> parseToolProgress(JsonNode root) {
+        JsonNode toolUseId = root.path("tool_use_id");
+        JsonNode toolName = root.path("tool_name");
+        JsonNode elapsed = root.path("elapsed_time_seconds");
+        if (toolUseId.isMissingNode() || toolName.isMissingNode() || elapsed.isMissingNode()) {
+            return Collections.emptyList();
+        }
+        ObjectNode data = JsonNodeFactory.instance.objectNode();
+        data.put("toolUseId", toolUseId.asText());
+        data.put("toolName", toolName.asText());
+        data.put("elapsedSeconds", elapsed.asInt());
+        return List.of(new SseEvent("tool_progress", data));
+    }
+
+    /**
      * A normalised SSE event parsed from Claude Code's NDJSON output.
      *
      * @param type the normalised event type (session_init, assistant_text,
-     *             tool_use, tool_result, turn_complete, permission_request,
-     *             thinking, conversation_reset)
+     *             tool_use, tool_result, tool_progress, turn_complete,
+     *             permission_request, thinking, conversation_reset)
      * @param data the extracted/transformed JSON data
      */
     public record SseEvent(String type, JsonNode data) {

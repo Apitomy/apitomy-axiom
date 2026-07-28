@@ -205,6 +205,32 @@ class AssistantEventParserTest {
         assertEquals("conversation_reset", events.get(0).type());
     }
 
+    // ── Tool progress events ──────────────────────────────────────
+
+    @Test
+    void parseToolProgressEvent() {
+        String line = """
+                {"type":"tool_progress","tool_use_id":"tu-42","tool_name":"Bash","elapsed_time_seconds":5}""";
+
+        List<SseEvent> events = parser.parse(line);
+
+        assertEquals(1, events.size());
+        SseEvent event = events.get(0);
+        assertEquals("tool_progress", event.type());
+        assertEquals("tu-42", event.data().path("toolUseId").asText());
+        assertEquals("Bash", event.data().path("toolName").asText());
+        assertEquals(5, event.data().path("elapsedSeconds").asInt());
+    }
+
+    @Test
+    void parseToolProgressMissingFieldsIsIgnored() {
+        String line = """
+                {"type":"tool_progress","tool_use_id":"tu-42"}""";
+
+        List<SseEvent> events = parser.parse(line);
+        assertTrue(events.isEmpty());
+    }
+
     // ── Unknown types ───────────────────────────────────────────────
 
     @Test

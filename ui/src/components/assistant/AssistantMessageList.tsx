@@ -19,6 +19,7 @@ export interface ChatMessage {
     permissionId?: string;
     permissionResolved?: boolean;
     permissionAllowed?: boolean;
+    elapsedSeconds?: number;
 }
 
 interface AssistantMessageListProps {
@@ -86,6 +87,7 @@ export function AssistantMessageList({ messages, onPermissionRespond, onCreateAu
                                 input={msg.toolInput}
                                 result={msg.toolResult}
                                 isError={msg.isError}
+                                elapsedSeconds={msg.elapsedSeconds}
                                 permissionId={msg.permissionId}
                                 permissionResolved={msg.permissionResolved}
                                 permissionAllowed={msg.permissionAllowed}
