@@ -1,13 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Button, Content, Spinner, Tooltip } from "@patternfly/react-core";
+import { Button, Content, ExpandableSection, Spinner, Tooltip } from "@patternfly/react-core";
 import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
 import CopyIcon from "@patternfly/react-icons/dist/esm/icons/copy-icon";
 import ExclamationTriangleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-triangle-icon";
+import { Light as SyntaxHighlighter } from "react-syntax-highlighter";
+import json from "react-syntax-highlighter/dist/esm/languages/hljs/json";
+import { stackoverflowLight } from "react-syntax-highlighter/dist/esm/styles/hljs";
+import { stackoverflowDark } from "react-syntax-highlighter/dist/esm/styles/hljs";
+import { useEffectiveTheme } from "../../hooks/useTheme";
 import { AssistantToolUseBlock } from "./AssistantToolUseBlock";
 import { AssistantPermissionPrompt } from "./AssistantPermissionPrompt";
 import "./AssistantMessageList.css";
+
+SyntaxHighlighter.registerLanguage("json", json);
 
 export interface ChatMessage {
     id: string;
@@ -22,6 +29,44 @@ export interface ChatMessage {
     permissionResolved?: boolean;
     permissionAllowed?: boolean;
     elapsedSeconds?: number;
+    rawPayload?: string;
+}
+
+function formatPayload(raw: string): string {
+    try {
+        return JSON.stringify(JSON.parse(raw), null, 2);
+    } catch {
+        return raw;
+    }
+}
+
+function WarningBlock({ content, rawPayload }: { content?: string; rawPayload?: string }) {
+    const effectiveTheme = useEffectiveTheme();
+    const syntaxStyle = effectiveTheme === "dark" ? stackoverflowDark : stackoverflowLight;
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    return (
+        <div className="axiom-message-list__warning">
+            <div className="axiom-message-list__warning-header">
+                <ExclamationTriangleIcon className="axiom-message-list__warning-icon" />
+                {content}
+            </div>
+            {rawPayload && (
+                <ExpandableSection
+                    toggleText={isExpanded ? "Hide payload" : "Show payload"}
+                    isExpanded={isExpanded}
+                    onToggle={(_e, expanded) => setIsExpanded(expanded)}
+                    isIndented
+                >
+                    <div className="axiom-message-list__warning-payload">
+                        <SyntaxHighlighter language="json" style={syntaxStyle} wrapLongLines>
+                            {formatPayload(rawPayload)}
+                        </SyntaxHighlighter>
+                    </div>
+                </ExpandableSection>
+            )}
+        </div>
+    );
 }
 
 interface AssistantMessageListProps {
@@ -75,10 +120,11 @@ export function AssistantMessageList({ messages, onPermissionRespond, onCreateAu
 
                     case "warning":
                         return (
-                            <div key={msg.id} className="axiom-message-list__warning">
-                                <ExclamationTriangleIcon className="axiom-message-list__warning-icon" />
-                                {msg.content}
-                            </div>
+                            <WarningBlock
+                                key={msg.id}
+                                content={msg.content}
+                                rawPayload={msg.rawPayload}
+                            />
                         );
 
                     case "user":

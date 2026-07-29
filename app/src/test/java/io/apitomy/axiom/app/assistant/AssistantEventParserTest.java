@@ -242,6 +242,13 @@ class AssistantEventParserTest {
         assertEquals(1, events.size());
         assertEquals("unhandled_event", events.get(0).type());
         assertEquals("something_else", events.get(0).data().path("rawType").asText());
+
+        String raw = events.get(0).data().path("raw").asText();
+        assertFalse(raw.isEmpty(), "raw field should contain the full JSON payload");
+        assertTrue(raw.contains("\"type\":\"something_else\""),
+                "raw field should contain the original event type");
+        assertTrue(raw.contains("\"data\":\"ignored\""),
+                "raw field should contain the original event data");
     }
 
     // ── Edge cases ──────────────────────────────────────────────────
