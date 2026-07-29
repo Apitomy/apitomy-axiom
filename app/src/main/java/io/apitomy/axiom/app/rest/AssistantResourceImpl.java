@@ -3,6 +3,7 @@ package io.apitomy.axiom.app.rest;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.api.beans.Environment;
 import io.apitomy.axiom.api.AssistantResource;
 import io.apitomy.axiom.api.beans.AssistantApplyResult;
@@ -16,6 +17,7 @@ import io.apitomy.axiom.api.beans.NewSessionTemplate;
 import io.apitomy.axiom.api.beans.RenameAssistantSessionRequest;
 import io.apitomy.axiom.api.beans.SendAssistantMessageRequest;
 import io.apitomy.axiom.api.beans.SessionTemplate;
+import io.apitomy.axiom.api.beans.SetAllowAllRequest;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
 import io.apitomy.axiom.app.assistant.AssistantSession;
 import io.apitomy.axiom.app.ImportExportService;
@@ -508,6 +510,19 @@ public class AssistantResourceImpl implements AssistantResource {
         session.removeAutoApprovalRule(ruleId);
     }
 
+    // ── Allow All ───────────────────────────────────────────────────
+
+    /** {@inheritDoc} */
+    @Override
+    public void setAllowAll(String sessionId, SetAllowAllRequest data) {
+        AssistantSession session = requireSession(sessionId);
+        boolean enabled = data.getEnabled() != null && data.getEnabled();
+        session.setAllowAll(enabled);
+        ObjectNode eventData = objectMapper.createObjectNode();
+        eventData.put("enabled", enabled);
+        session.addEvent(new SseEvent("allow_all_changed", eventData));
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────
 
     private AssistantSession requireSession(String sessionId) {
@@ -541,6 +556,7 @@ public class AssistantResourceImpl implements AssistantResource {
         info.setTurnCount(session.getTurnCount());
         info.setProjectId(session.getProjectId());
         info.setProjectName(session.getProjectName());
+        info.setAllowAll(session.isAllowAll());
         return info;
     }
 

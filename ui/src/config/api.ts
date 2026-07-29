@@ -1236,6 +1236,7 @@ export interface AssistantSessionInfo {
     turnCount?: number;
     projectId?: number;
     projectName?: string;
+    allowAll?: boolean;
 }
 
 export interface AssistantItem {
@@ -1403,6 +1404,15 @@ export async function deleteAutoApproval(sessionId: string, ruleId: string): Pro
         { method: "DELETE" }
     );
     if (!response.ok) throw new Error("Failed to delete auto-approval");
+}
+
+export async function setAllowAll(sessionId: string, enabled: boolean): Promise<void> {
+    const response = await fetch(`${API}/assistant/sessions/${sessionId}/allow-all`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+    });
+    if (!response.ok) throw new Error("Failed to update Allow All mode");
 }
 
 export function assistantEventsUrl(sessionId: string): string {

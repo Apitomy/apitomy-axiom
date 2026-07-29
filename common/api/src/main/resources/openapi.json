@@ -4132,6 +4132,44 @@
           }
         }
       }
+    },
+    "/assistant/sessions/{sessionId}/allow-all": {
+      "put": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Enable or disable Allow All mode for a session",
+        "description": "Sets the Allow All mode for the specified assistant session. When enabled, all tool permission requests are automatically approved without user interaction. The state is transient and resets when the session ends.",
+        "operationId": "setAllowAll",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "description": "The assistant session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAllowAllRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Allow All mode updated successfully"
+          },
+          "404": {
+            "description": "Session not found"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -6145,6 +6183,10 @@
           "projectName": {
             "description": "Project name if session is scoped to a project",
             "type": "string"
+          },
+          "allowAll": {
+            "description": "Whether Allow All mode is active for this session",
+            "type": "boolean"
           }
         }
       },
@@ -7022,6 +7064,18 @@
           "permissionId": {
             "description": "Optional pending permission ID to also approve immediately",
             "type": "string"
+          }
+        }
+      },
+      "SetAllowAllRequest": {
+        "required": [
+          "enabled"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Whether to enable or disable the Allow All mode",
+            "type": "boolean"
           }
         }
       }
