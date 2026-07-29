@@ -33,6 +33,8 @@ import {
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
+import { EditLabelsModal } from "../components/EditLabelsModal";
+import { LabelDisplay } from "../components/LabelDisplay";
 import {
     type EventSource,
     type EventSourceLog,
@@ -59,6 +61,7 @@ export function EventSourceDetailPage() {
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
     const [activeTab, setActiveTab] = useState(0);
+    const [isLabelsOpen, setIsLabelsOpen] = useState(false);
 
     const loadData = useCallback(() => {
         if (!id) return;
@@ -157,7 +160,9 @@ export function EventSourceDetailPage() {
                         style={{ marginTop: "24px" }}>
                         <InfoTab form={form} updateForm={updateForm}
                             sourceUrl={sourceUrl} setSourceUrl={(v) => { setSourceUrl(v); setDirty(true); }}
-                            secrets={secrets} />
+                            secrets={secrets}
+                            labels={source.labels || []}
+                            onEditLabels={() => setIsLabelsOpen(true)} />
                     </TabContent>
                 </Tab>
                 <Tab eventKey={1} title={<TabTitleText>
@@ -173,19 +178,34 @@ export function EventSourceDetailPage() {
                     </TabContent>
                 </Tab>
             </Tabs>
+
+            <EditLabelsModal
+                isOpen={isLabelsOpen}
+                labels={source.labels || []}
+                onSave={async (labels) => {
+                    const updated = await updateEventSource(id, { ...source, labels } as EventSource);
+                    setSource(updated);
+                }}
+                onClose={() => setIsLabelsOpen(false)}
+            />
         </PageSection>
     );
 }
 
-function InfoTab({ form, updateForm, sourceUrl, setSourceUrl, secrets }: {
+function InfoTab({ form, updateForm, sourceUrl, setSourceUrl, secrets, labels, onEditLabels }: {
     form: Partial<EventSource>;
     updateForm: (updates: Partial<EventSource>) => void;
     sourceUrl: string;
     setSourceUrl: (v: string) => void;
     secrets: Secret[];
+    labels: string[];
+    onEditLabels: () => void;
 }) {
     return (
         <Form style={{ maxWidth: "600px" }}>
+            <FormGroup label="Labels" fieldId="labels">
+                <LabelDisplay labels={labels} onEdit={onEditLabels} />
+            </FormGroup>
             <FormGroup label="Name" isRequired fieldId="name">
                 <TextInput id="name" isRequired value={form.name || ""}
                     onChange={(_e, v) => updateForm({ name: v })} />

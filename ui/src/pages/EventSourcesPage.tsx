@@ -25,6 +25,8 @@ import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import { BooleanStatusIcon } from "../components/BooleanStatusIcon";
+import { ColoredLabel } from "../components/ColoredLabel";
+import { LabelInput } from "../components/LabelInput";
 import {
     type EventSource,
     type NewEventSource,
@@ -94,7 +96,7 @@ export function EventSourcesPage() {
 
     const openCreate = () => {
         setEditing(null);
-        setForm({ name: "", sourceType: "github", enabled: true });
+        setForm({ name: "", sourceType: "github", enabled: true, labels: [] });
         setGhUrl("");
         setJiraUrl("");
         setIsModalOpen(true);
@@ -189,6 +191,7 @@ export function EventSourcesPage() {
                                 <Th>Name</Th>
                                 <Th>Type</Th>
                                 <Th>Source</Th>
+                                <Th>Labels</Th>
                                 <Th>Enabled</Th>
                                 <Th>Poll Interval</Th>
                                 <Th />
@@ -200,6 +203,14 @@ export function EventSourcesPage() {
                                     <Td>{s.name}</Td>
                                     <Td>{s.sourceType}</Td>
                                     <Td><code>{describeSource(s)}</code></Td>
+                                    <Td>
+                                        {s.labels?.map((label) => (
+                                            <ColoredLabel key={label} isCompact
+                                                style={{ marginRight: "4px" }}>
+                                                {label}
+                                            </ColoredLabel>
+                                        ))}
+                                    </Td>
                                     <Td><BooleanStatusIcon value={s.enabled} /></Td>
                                     <Td>{s.pollInterval != null ? `${s.pollInterval}s` : "—"}</Td>
                                     <Td>
@@ -276,6 +287,10 @@ export function EventSourcesPage() {
                                 ))}
                             </FormSelect>
                             <HelperText><HelperTextItem>Select a secret from the Secrets store for API authentication. If not set, falls back to the default provider secret (e.g. GH_TOKEN).</HelperTextItem></HelperText>
+                        </FormGroup>
+                        <FormGroup label="Labels" fieldId="labels">
+                            <LabelInput labels={form.labels || []}
+                                onChange={(labels) => setForm({ ...form, labels })} />
                         </FormGroup>
                     </Form>
                 </ModalBody>

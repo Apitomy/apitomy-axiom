@@ -791,6 +791,7 @@ export interface EventSource {
     pollInterval?: number;
     secretName?: string;
     configuration?: Record<string, string>;
+    labels?: string[];
 }
 
 export type NewEventSource = Omit<EventSource, "id">;

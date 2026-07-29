@@ -107,6 +107,10 @@ public class EventSourcesResourceImpl implements EventResource {
         } else {
             entity.configuration = "{}";
         }
+        entity.labels.clear();
+        if (data.getLabels() != null) {
+            entity.labels.addAll(data.getLabels());
+        }
     }
 
     /**
@@ -147,6 +151,7 @@ public class EventSourcesResourceImpl implements EventResource {
                 // ignore parse errors
             }
         }
+        bean.setLabels(entity.labels);
         return bean;
     }
 

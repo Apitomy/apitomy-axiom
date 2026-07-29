@@ -1,11 +1,17 @@
 package io.apitomy.axiom.core.entities;
 
 import io.quarkus.hibernate.orm.panache.PanacheEntity;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * A configured event source that Axiom monitors for new events.
@@ -49,4 +55,9 @@ public class EventSourceEntity extends PanacheEntity {
      */
     @Column(nullable = false, columnDefinition = "TEXT")
     public String configuration;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "event_source_label", joinColumns = @JoinColumn(name = "event_source_id"))
+    @Column(name = "label")
+    public List<String> labels = new ArrayList<>();
 }
