@@ -35,7 +35,7 @@ interface AssistantMessageListProps {
 export function AssistantMessageList({ messages, onPermissionRespond, onCreateAutoApproval, isProcessing, processingText }: AssistantMessageListProps) {
     const endRef = useRef<HTMLDivElement>(null);
     const [copiedId, setCopiedId] = useState<string | null>(null);
-    const copyTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+    const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
     const handleCopyMarkdown = (msgId: string, content: string) => {
         navigator.clipboard.writeText(content).then(() => {
@@ -44,8 +44,18 @@ export function AssistantMessageList({ messages, onPermissionRespond, onCreateAu
             }
             setCopiedId(msgId);
             copyTimeoutRef.current = setTimeout(() => setCopiedId(null), 2000);
+        }).catch((err) => {
+            console.warn("Failed to copy to clipboard:", err);
         });
     };
+
+    useEffect(() => {
+        return () => {
+            if (copyTimeoutRef.current) {
+                clearTimeout(copyTimeoutRef.current);
+            }
+        };
+    }, []);
 
     useEffect(() => {
         endRef.current?.scrollIntoView({ behavior: "auto" });
