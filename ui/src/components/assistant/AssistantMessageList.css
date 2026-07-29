@@ -25,6 +25,9 @@
     background-color: var(--axiom--color--warning--bg, #fdf7e7);
     border: 1px solid var(--axiom--color--warning--border, #f0d67b);
     border-radius: 4px;
+}
+
+.axiom-message-list__warning-header {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -32,6 +35,15 @@
 
 .axiom-message-list__warning-icon {
     color: var(--axiom--color--warning--text, #795600);
+    flex-shrink: 0;
+}
+
+.axiom-message-list__warning-payload pre {
+    margin: 0;
+    border-radius: 4px;
+    font-size: 12px;
+    max-height: 250px;
+    overflow: auto;
 }
 
 /* User message */

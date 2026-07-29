@@ -224,6 +224,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                 addMessage({
                     type: "warning",
                     content: `Unhandled event type: ${data.rawType}`,
+                    rawPayload: data.raw as string,
                 });
                 break;
 
