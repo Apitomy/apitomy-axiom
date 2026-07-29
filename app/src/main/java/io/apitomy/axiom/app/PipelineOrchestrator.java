@@ -7,6 +7,7 @@ import io.apitomy.axiom.core.tracing.TraceService;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.EventEntity;
 import io.apitomy.axiom.core.entities.EventQueueEntity;
+import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
@@ -543,6 +544,12 @@ public class PipelineOrchestrator {
         project.repository = event.repository != null ? event.repository : "unknown";
         project.createdOn = Instant.now();
         project.updatedOn = Instant.now();
+        if (event.eventSourceId != null) {
+            EventSourceEntity eventSource = EventSourceEntity.findById(event.eventSourceId);
+            if (eventSource != null && eventSource.labels != null && !eventSource.labels.isEmpty()) {
+                project.labels.addAll(eventSource.labels);
+            }
+        }
         project.persist();
 
         LOG.infof("Auto-created project %d for issue %s", project.id, event.issueRef);

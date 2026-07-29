@@ -4793,6 +4793,13 @@
             "description": "Source-specific configuration (JSON object)",
             "type": "object",
             "additionalProperties": {}
+          },
+          "labels": {
+            "description": "Free-form labels for categorization",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -4831,6 +4838,13 @@
             "description": "Source-specific configuration (JSON object)",
             "type": "object",
             "additionalProperties": {}
+          },
+          "labels": {
+            "description": "Free-form labels for categorization",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
