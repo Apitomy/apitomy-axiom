@@ -52,6 +52,7 @@ export function AssistantPage() {
     const [sessions, setSessions] = useState<AssistantSessionInfo[]>([]);
     const [loading, setLoading] = useState(true);
     const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false);
+    const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
 
     const [filterName, setFilterName] = useState("");
     const [filterTemplateId, setFilterTemplateId] = useState("");
@@ -73,6 +74,12 @@ export function AssistantPage() {
     useEffect(() => {
         load();
     }, [load]);
+
+    useEffect(() => {
+        if (pendingSessionId) {
+            navigate(`/assistant/${pendingSessionId}`);
+        }
+    }, [pendingSessionId, navigate]);
 
     const filteredSessions = sessions.filter((s) => {
         if (filterName && !s.name.toLowerCase().includes(filterName.toLowerCase())) {
@@ -265,7 +272,7 @@ export function AssistantPage() {
                 onClose={() => setIsTemplatePickerOpen(false)}
                 onSessionCreated={(session) => {
                     setIsTemplatePickerOpen(false);
-                    navigate(`/assistant/${session.id}`);
+                    setPendingSessionId(session.id);
                 }}
             />
 

@@ -92,9 +92,6 @@ export function CreateSessionModal({
         try {
             const session = await createAssistantSession(
                 selectedTemplate.templateId, newName || undefined, projectId);
-            setIsNameModalOpen(false);
-            setNewName("");
-            setSelectedTemplate(null);
             onSessionCreated(session);
         } catch (err: unknown) {
             const e = err as { message?: string };
