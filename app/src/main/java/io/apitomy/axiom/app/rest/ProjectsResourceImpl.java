@@ -18,6 +18,7 @@ import io.apitomy.axiom.api.beans.UpdateProject;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.EventEntity;
+import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
@@ -41,10 +42,13 @@ import java.math.BigInteger;
 
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Implementation of the Projects REST API (includes tasks and threads).
@@ -362,9 +366,10 @@ public class ProjectsResourceImpl implements ProjectsResource {
     @Override
     public List<Event> listProjectEvents(long projectId) {
         ProjectEntity project = findProjectOrThrow(projectId);
-        return EventEntity.<EventEntity>list("issueRef", project.issueRef)
-                .stream()
-                .map(this::toEventBean)
+        List<EventEntity> entities = EventEntity.list("issueRef", project.issueRef);
+        Map<Long, List<String>> labelsMap = loadEventSourceLabels(entities);
+        return entities.stream()
+                .map(e -> toEventBean(e, labelsMap.getOrDefault(e.eventSourceId, Collections.emptyList())))
                 .toList();
     }
 
@@ -542,7 +547,23 @@ public class ProjectsResourceImpl implements ProjectsResource {
         return entry;
     }
 
-    private Event toEventBean(EventEntity entity) {
+    /**
+     * Batch-loads Event Source labels for a list of event entities.
+     */
+    private Map<Long, List<String>> loadEventSourceLabels(List<EventEntity> entities) {
+        Set<Long> sourceIds = entities.stream()
+                .map(e -> e.eventSourceId)
+                .filter(id -> id != null)
+                .collect(Collectors.toSet());
+        if (sourceIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        return EventSourceEntity.<EventSourceEntity>list("id in ?1", List.copyOf(sourceIds))
+                .stream()
+                .collect(Collectors.toMap(es -> es.id, es -> es.labels));
+    }
+
+    private Event toEventBean(EventEntity entity, List<String> labels) {
         Event event = new Event();
         event.setId(entity.id);
         event.setSource(entity.source);
@@ -552,6 +573,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
         event.setProjectId(entity.projectId);
         event.setTaskId(entity.taskId);
         event.setReceivedAt(Date.from(entity.receivedAt));
+        event.setLabels(labels);
         if (entity.traceId != null) {
             event.setTraceId(entity.traceId);
         }

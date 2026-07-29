@@ -77,6 +77,7 @@ export function EventSourceDetailPage() {
                     pollInterval: src.pollInterval,
                     secretName: src.secretName,
                     configuration: src.configuration,
+                    labels: src.labels || [],
                 });
                 setSourceUrl(buildUrlFromConfig(src));
                 setSecrets(secs);
@@ -161,7 +162,7 @@ export function EventSourceDetailPage() {
                         <InfoTab form={form} updateForm={updateForm}
                             sourceUrl={sourceUrl} setSourceUrl={(v) => { setSourceUrl(v); setDirty(true); }}
                             secrets={secrets}
-                            labels={source.labels || []}
+                            labels={form.labels || []}
                             onEditLabels={() => setIsLabelsOpen(true)} />
                     </TabContent>
                 </Tab>
@@ -181,10 +182,9 @@ export function EventSourceDetailPage() {
 
             <EditLabelsModal
                 isOpen={isLabelsOpen}
-                labels={source.labels || []}
+                labels={form.labels || []}
                 onSave={async (labels) => {
-                    const updated = await updateEventSource(id, { ...source, labels } as EventSource);
-                    setSource(updated);
+                    updateForm({ labels });
                 }}
                 onClose={() => setIsLabelsOpen(false)}
             />
@@ -203,12 +203,12 @@ function InfoTab({ form, updateForm, sourceUrl, setSourceUrl, secrets, labels, o
 }) {
     return (
         <Form style={{ maxWidth: "600px" }}>
-            <FormGroup label="Labels" fieldId="labels">
-                <LabelDisplay labels={labels} onEdit={onEditLabels} />
-            </FormGroup>
             <FormGroup label="Name" isRequired fieldId="name">
                 <TextInput id="name" isRequired value={form.name || ""}
                     onChange={(_e, v) => updateForm({ name: v })} />
+            </FormGroup>
+            <FormGroup label="Labels" fieldId="labels">
+                <LabelDisplay labels={labels} onEdit={onEditLabels} />
             </FormGroup>
             <FormGroup label="Source Type" fieldId="sourceType">
                 <TextInput id="sourceType" value={form.sourceType || ""} isDisabled />
