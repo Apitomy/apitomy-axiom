@@ -398,6 +398,34 @@ function InfoTab({ form, updateForm, availableModels, availableEngines }: {
                 </FormGroup>
             )}
             {form.executionMode === "actor" && (
+                <FormGroup label="Max Steps" fieldId="maxSteps">
+                    <HelperText>
+                        <HelperTextItem>Maximum number of agent steps/turns. Leave empty to use the global default.</HelperTextItem>
+                    </HelperText>
+                    <TextInput
+                        id="maxSteps"
+                        type="number"
+                        value={form.maxSteps ?? ""}
+                        onChange={(_e, v) => updateForm({ maxSteps: v === "" ? undefined : Number(v) })}
+                        placeholder="Global default"
+                    />
+                </FormGroup>
+            )}
+            {form.executionMode === "actor" && (
+                <FormGroup label="Max Budget (USD)" fieldId="maxBudgetUsd">
+                    <HelperText>
+                        <HelperTextItem>Maximum budget in USD for this action type. Leave empty to use the global default.</HelperTextItem>
+                    </HelperText>
+                    <TextInput
+                        id="maxBudgetUsd"
+                        type="number"
+                        value={form.maxBudgetUsd ?? ""}
+                        onChange={(_e, v) => updateForm({ maxBudgetUsd: v === "" ? undefined : Number(v) })}
+                        placeholder="Global default"
+                    />
+                </FormGroup>
+            )}
+            {form.executionMode === "actor" && (
                 <FormGroup label="Model" fieldId="model">
                     <HelperText>
                         <HelperTextItem>AI model to use for this action type. Select 'Global default' to use the system-wide setting.</HelperTextItem>
