@@ -4,6 +4,7 @@ import {
     Button,
     Form,
     FormGroup,
+    Label,
     Modal,
     ModalBody,
     ModalFooter,
@@ -72,12 +73,14 @@ export function CreateSessionModal({
         }
     }, [isNameModalOpen]);
 
-    const filteredTemplates = templates.filter((t) => {
-        if (!templateFilter) return true;
-        const lower = templateFilter.toLowerCase();
-        return t.name.toLowerCase().includes(lower)
-            || t.description.toLowerCase().includes(lower);
-    });
+    const filteredTemplates = templates
+        .filter((t) => {
+            if (!templateFilter) return true;
+            const lower = templateFilter.toLowerCase();
+            return t.name.toLowerCase().includes(lower)
+                || t.description.toLowerCase().includes(lower);
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
 
     const handleTemplateSelect = (template: SessionTemplate) => {
         setSelectedTemplate(template);
@@ -140,6 +143,10 @@ export function CreateSessionModal({
                                 >
                                     <div className="axiom-assistant-page__template-item__name">
                                         {t.name}
+                                        {t.builtIn && (
+                                            <Label className="axiom-assistant-page__template-item__badge"
+                                                isCompact>Built-in</Label>
+                                        )}
                                     </div>
                                     {t.description && (
                                         <div className="axiom-assistant-page__template-item__desc">

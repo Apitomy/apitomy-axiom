@@ -70,6 +70,9 @@
 }
 
 .axiom-assistant-page__template-item__name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-weight: 600;
     font-size: 14px;
 }
