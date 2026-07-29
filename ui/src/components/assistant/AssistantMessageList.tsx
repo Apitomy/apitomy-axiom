@@ -1,7 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Content, Spinner } from "@patternfly/react-core";
+import { Button, Content, Spinner, Tooltip } from "@patternfly/react-core";
+import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
+import CopyIcon from "@patternfly/react-icons/dist/esm/icons/copy-icon";
 import ExclamationTriangleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-triangle-icon";
 import { AssistantToolUseBlock } from "./AssistantToolUseBlock";
 import { AssistantPermissionPrompt } from "./AssistantPermissionPrompt";
@@ -33,6 +35,28 @@ interface AssistantMessageListProps {
 
 export function AssistantMessageList({ messages, onPermissionRespond, onCreateAutoApproval, isProcessing, processingText }: AssistantMessageListProps) {
     const endRef = useRef<HTMLDivElement>(null);
+    const [copiedId, setCopiedId] = useState<string | null>(null);
+    const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+    const handleCopyMarkdown = (msgId: string, content: string) => {
+        navigator.clipboard.writeText(content).then(() => {
+            if (copyTimeoutRef.current) {
+                clearTimeout(copyTimeoutRef.current);
+            }
+            setCopiedId(msgId);
+            copyTimeoutRef.current = setTimeout(() => setCopiedId(null), 2000);
+        }).catch((err) => {
+            console.warn("Failed to copy to clipboard:", err);
+        });
+    };
+
+    useEffect(() => {
+        return () => {
+            if (copyTimeoutRef.current) {
+                clearTimeout(copyTimeoutRef.current);
+            }
+        };
+    }, []);
 
     useEffect(() => {
         endRef.current?.scrollIntoView({ behavior: "auto" });
@@ -70,6 +94,20 @@ export function AssistantMessageList({ messages, onPermissionRespond, onCreateAu
                         return (
                             <div key={msg.id} className="axiom-message-list__assistant-row">
                                 <div className="assistant-markdown axiom-message-list__assistant-bubble">
+                                    <div className="axiom-message-list__copy-btn">
+                                        <Tooltip content={copiedId === msg.id ? "Copied!" : "Copy markdown"}>
+                                            <Button
+                                                variant="plain"
+                                                size="sm"
+                                                aria-label="Copy markdown"
+                                                onClick={() => handleCopyMarkdown(msg.id, msg.content?.trim() || "")}
+                                            >
+                                                {copiedId === msg.id
+                                                    ? <CheckCircleIcon color="var(--pf-t--global--color--status--success--default)" />
+                                                    : <CopyIcon />}
+                                            </Button>
+                                        </Tooltip>
+                                    </div>
                                     <Content>
                                         <Markdown remarkPlugins={[remarkGfm]}>
                                             {msg.content?.trim() || ""}
