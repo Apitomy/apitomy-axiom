@@ -154,7 +154,7 @@ export function CreateSessionModal({
             </Modal>
 
             <Modal
-                isOpen={isNameModalOpen}
+                isOpen={isOpen && isNameModalOpen}
                 onClose={handleClose}
                 variant="small"
                 aria-label="Name session"

@@ -72,23 +72,37 @@ export function AssistantSessionPage() {
 
     useEffect(() => {
         if (!sessionId) return;
+        let cancelled = false;
         setLoading(true);
-        fetchAssistantSession(sessionId)
-            .then((s) => {
-                setSession(s);
-                setAllowAll(!!s.allowAll);
-                if (isBreakout) {
-                    document.title = `${s.name} — AI Assistant`;
-                }
-            })
-            .catch((err) => {
-                console.error("Failed to load session:", err);
-                if (!isBreakout) navigate("/assistant");
-            })
-            .finally(() => setLoading(false));
+
+        const loadSession = (retriesLeft: number) => {
+            fetchAssistantSession(sessionId)
+                .then((s) => {
+                    if (cancelled) return;
+                    setSession(s);
+                    setAllowAll(!!s.allowAll);
+                    if (isBreakout) {
+                        document.title = `${s.name} — AI Assistant`;
+                    }
+                    setLoading(false);
+                })
+                .catch((err) => {
+                    if (cancelled) return;
+                    if (retriesLeft > 0) {
+                        setTimeout(() => loadSession(retriesLeft - 1), 500);
+                    } else {
+                        console.error("Failed to load session:", err);
+                        setLoading(false);
+                        if (!isBreakout) navigate("/assistant");
+                    }
+                });
+        };
+        loadSession(3);
+
         fetchAutoApprovals(sessionId)
             .then((rules) => setAutoApprovalCount(rules.length))
             .catch(console.error);
+        return () => { cancelled = true; };
     }, [sessionId, navigate, isBreakout]);
 
     const handleNameSave = async () => {
