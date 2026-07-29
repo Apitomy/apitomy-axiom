@@ -187,7 +187,7 @@ export function EventsPage() {
                                     <Td>
                                         {event.labels && event.labels.length > 0
                                             ? event.labels.map((lbl) => (
-                                                <Label key={lbl} isCompact color="gold"
+                                                <Label key={lbl} isCompact color="yellow"
                                                     style={{ marginRight: "4px" }}>
                                                     {lbl}
                                                 </Label>
