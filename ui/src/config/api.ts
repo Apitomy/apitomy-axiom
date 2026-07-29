@@ -1134,6 +1134,7 @@ export interface AxiomEvent {
     payload?: string;
     receivedAt: string;
     traceId?: string;
+    labels?: string[];
 }
 
 export async function fetchEvent(id: number): Promise<AxiomEvent> {

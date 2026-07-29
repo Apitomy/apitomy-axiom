@@ -277,6 +277,10 @@ export function EventSourcesPage() {
                                 onChange={(_e, v) => setForm({ ...form, pollInterval: v ? parseInt(v) : undefined })}
                                 placeholder="60" />
                         </FormGroup>
+                        <FormGroup label="Labels" fieldId="labels">
+                            <LabelInput labels={form.labels || []}
+                                onChange={(labels) => setForm({ ...form, labels })} />
+                        </FormGroup>
                         <FormGroup label="Authentication Secret" fieldId="secretName">
                             <FormSelect id="secretName"
                                 value={form.secretName || ""}
@@ -287,10 +291,6 @@ export function EventSourcesPage() {
                                 ))}
                             </FormSelect>
                             <HelperText><HelperTextItem>Select a secret from the Secrets store for API authentication. If not set, falls back to the default provider secret (e.g. GH_TOKEN).</HelperTextItem></HelperText>
-                        </FormGroup>
-                        <FormGroup label="Labels" fieldId="labels">
-                            <LabelInput labels={form.labels || []}
-                                onChange={(labels) => setForm({ ...form, labels })} />
                         </FormGroup>
                     </Form>
                 </ModalBody>

@@ -156,6 +156,7 @@ export function EventsPage() {
                                 <Th>#</Th>
                                 <Th>Time</Th>
                                 <Th>Source</Th>
+                                <Th>Labels</Th>
                                 <Th>Event Type</Th>
                                 <Th>Repository</Th>
                                 <Th>Issue</Th>
@@ -182,6 +183,16 @@ export function EventsPage() {
                                             }}>
                                             {event.source}
                                         </Label>
+                                    </Td>
+                                    <Td>
+                                        {event.labels && event.labels.length > 0
+                                            ? event.labels.map((lbl) => (
+                                                <Label key={lbl} isCompact color="gold"
+                                                    style={{ marginRight: "4px" }}>
+                                                    {lbl}
+                                                </Label>
+                                            ))
+                                            : "—"}
                                     </Td>
                                     <Td>{event.eventType}</Td>
                                     <Td>{event.repository || "—"}</Td>

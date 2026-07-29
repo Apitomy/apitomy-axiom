@@ -4896,6 +4896,13 @@
           "traceId": {
             "format": "uuid",
             "type": "string"
+          },
+          "labels": {
+            "description": "Labels inherited from the Event Source",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
