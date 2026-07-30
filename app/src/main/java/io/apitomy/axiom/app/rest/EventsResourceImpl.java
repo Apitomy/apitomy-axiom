@@ -17,6 +17,7 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.WebApplicationException;
 
 import java.math.BigInteger;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -42,7 +43,7 @@ public class EventsResourceImpl implements EventsResource {
     @Override
     public EventSearchResults listEvents(BigInteger page, BigInteger limit,
                                           String filterSource, String filterEventType,
-                                          String filterRepository) {
+                                          String filterRepository, String filterLabels) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
@@ -60,6 +61,15 @@ public class EventsResourceImpl implements EventsResource {
         if (filterRepository != null && !filterRepository.isBlank()) {
             hql.append(" and lower(repository) like :repository");
             params.put("repository", "%" + filterRepository.toLowerCase() + "%");
+        }
+        if (filterLabels != null && !filterLabels.isBlank()) {
+            List<String> labels = Arrays.stream(filterLabels.split(","))
+                    .map(String::trim).filter(s -> !s.isEmpty()).toList();
+            hql.append(" and eventSourceId in (SELECT es.id FROM EventSourceEntity es"
+                    + " JOIN es.labels esl WHERE esl IN :labels"
+                    + " GROUP BY es.id HAVING COUNT(DISTINCT esl) = :labelCount)");
+            params.put("labels", labels);
+            params.put("labelCount", (long) labels.size());
         }
 
         long totalCount = EventEntity.count(hql.toString(), params);

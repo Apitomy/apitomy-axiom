@@ -12,6 +12,7 @@ import {
     ToolbarContent,
     ToolbarItem,
 } from "@patternfly/react-core";
+import { ColoredLabel } from "../components/ColoredLabel";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import {
@@ -33,6 +34,7 @@ const FILTER_TYPES: ChipFilterType[] = [
     { value: "source", label: "Source", testId: "event-filter-source" },
     { value: "eventType", label: "Event Type", testId: "event-filter-eventType" },
     { value: "repository", label: "Repository", testId: "event-filter-repository" },
+    { value: "labels", label: "Labels", testId: "event-filter-labels" },
 ];
 
 export function EventsPage() {
@@ -51,6 +53,10 @@ export function EventsPage() {
     const filterSource = filters.find((f) => f.filterBy.value === "source")?.filterValue;
     const filterEventType = filters.find((f) => f.filterBy.value === "eventType")?.filterValue;
     const filterRepository = filters.find((f) => f.filterBy.value === "repository")?.filterValue;
+    const filterLabels = filters
+        .filter((f) => f.filterBy.value === "labels")
+        .map((f) => f.filterValue)
+        .join(",");
     const isFiltered = filters.length > 0;
 
     const loadData = useCallback(() => {
@@ -59,7 +65,8 @@ export function EventsPage() {
             page, perPage,
             filterSource || undefined,
             filterEventType || undefined,
-            filterRepository || undefined
+            filterRepository || undefined,
+            filterLabels || undefined
         )
             .then((results) => {
                 setEvents(results.items);
@@ -67,19 +74,32 @@ export function EventsPage() {
             })
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [page, perPage, filterSource, filterEventType, filterRepository]);
+    }, [page, perPage, filterSource, filterEventType, filterRepository, filterLabels]);
 
     useEffect(() => { loadData(); }, [loadData]);
 
     const onAddFilterCriteria = (criteria: ChipFilterCriteria) => {
         if (!criteria.filterValue) return;
-        const updated = filters.filter((f) =>
+        const deduplicated = filters.filter((f) =>
             !(f.filterBy.value === criteria.filterBy.value && f.filterValue === criteria.filterValue));
-        // All filter types on this page are single-value
-        const withoutSame = updated.filter((f) => f.filterBy.value !== criteria.filterBy.value);
-        withoutSame.push(criteria);
-        setFilters(withoutSame);
+        if (criteria.filterBy.value === "labels") {
+            deduplicated.push(criteria);
+            setFilters(deduplicated);
+        } else {
+            const withoutSame = deduplicated.filter((f) => f.filterBy.value !== criteria.filterBy.value);
+            withoutSame.push(criteria);
+            setFilters(withoutSame);
+        }
         setPage(1);
+    };
+
+    const addLabelFilter = (label: string) => {
+        const already = filters.some((f) => f.filterBy.value === "labels" && f.filterValue === label);
+        if (!already) {
+            const labelType = FILTER_TYPES.find((t) => t.value === "labels")!;
+            setFilters([...filters, { filterBy: labelType, filterValue: label }]);
+            setPage(1);
+        }
     };
 
     const onRemoveFilterCriteria = (criteria: ChipFilterCriteria) => {
@@ -187,10 +207,14 @@ export function EventsPage() {
                                     <Td>
                                         {event.labels && event.labels.length > 0
                                             ? event.labels.map((lbl) => (
-                                                <Label key={lbl} isCompact color="yellow"
-                                                    style={{ marginRight: "4px" }}>
+                                                <ColoredLabel key={lbl} isCompact
+                                                    style={{ marginRight: "4px", cursor: "pointer" }}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        addLabelFilter(lbl);
+                                                    }}>
                                                     {lbl}
-                                                </Label>
+                                                </ColoredLabel>
                                             ))
                                             : "—"}
                                     </Td>

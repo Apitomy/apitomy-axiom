@@ -1679,6 +1679,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "filterLabels",
+            "in": "query",
+            "description": "Filter by labels (comma-separated, AND logic)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
