@@ -96,6 +96,14 @@ public class ImportExportService {
             }
         }
 
+        if (request.getSessionTemplateIds() != null && !request.getSessionTemplateIds().isEmpty()) {
+            ArrayNode arr = pack.putArray("sessionTemplates");
+            for (String templateId : request.getSessionTemplateIds()) {
+                SessionTemplateEntity entity = SessionTemplateEntity.find("templateId", templateId).firstResult();
+                if (entity != null) arr.add(serializeSessionTemplate(entity));
+            }
+        }
+
         LOG.infof("Exported configuration pack '%s'", request.getName());
         return pack;
     }
@@ -116,6 +124,7 @@ public class ImportExportService {
         checkConflicts(pack, "mcpServers", "name", "mcpServer", conflicts);
         checkConflicts(pack, "actionTypes", "name", "actionType", conflicts);
         checkConflicts(pack, "reportDefinitions", "name", "reportDefinition", conflicts);
+        checkConflicts(pack, "sessionTemplates", "templateId", "sessionTemplate", conflicts);
 
         if (!conflicts.isEmpty()) {
             ObjectNode error = objectMapper.createObjectNode();
@@ -135,11 +144,13 @@ public class ImportExportService {
         int mcpServers = importMcpServers(pack.path("mcpServers"));
         int actionTypes = importActionTypes(pack.path("actionTypes"));
         int reportDefinitions = importReportDefinitions(pack.path("reportDefinitions"));
+        int sessionTemplates = importSessionTemplates(pack.path("sessionTemplates"));
 
         String packName = pack.path("metadata").path("name").asText("unnamed");
         LOG.infof("Imported configuration pack '%s': %d tools, %d toolsets, %d MCP servers, "
-                        + "%d action types, %d report definitions",
-                packName, tools, toolsets, mcpServers, actionTypes, reportDefinitions);
+                        + "%d action types, %d report definitions, %d session templates",
+                packName, tools, toolsets, mcpServers, actionTypes, reportDefinitions,
+                sessionTemplates);
 
         ImportResult result = new ImportResult();
         result.setTools(tools);
@@ -147,6 +158,7 @@ public class ImportExportService {
         result.setMcpServers(mcpServers);
         result.setActionTypes(actionTypes);
         result.setReportDefinitions(reportDefinitions);
+        result.setSessionTemplates(sessionTemplates);
         return result;
     }
 
@@ -214,6 +226,7 @@ public class ImportExportService {
                 case "mcpServer" -> McpServerEntity.count("name", name) > 0;
                 case "actionType" -> ActionTypeEntity.count("name", name) > 0;
                 case "reportDefinition" -> ReportDefinitionEntity.count("name", name) > 0;
+                case "sessionTemplate" -> SessionTemplateEntity.count("templateId", name) > 0;
                 default -> false;
             };
             if (exists) {
@@ -321,6 +334,47 @@ public class ImportExportService {
             entity.enabled = false;
             entity.createdOn = Instant.now();
             entity.updatedOn = Instant.now();
+            entity.persist();
+            count++;
+        }
+        return count;
+    }
+
+    private int importSessionTemplates(JsonNode items) {
+        if (!items.isArray()) return 0;
+        int count = 0;
+        for (JsonNode item : items) {
+            String templateId = item.path("templateId").asText(null);
+            if (templateId == null || templateId.isBlank()) {
+                templateId = java.util.UUID.randomUUID().toString();
+            }
+            if (sessionTemplateService.isBuiltIn(templateId)) {
+                LOG.warnf("Skipping built-in session template '%s' — cannot be imported", templateId);
+                continue;
+            }
+            SessionTemplateEntity entity = new SessionTemplateEntity();
+            entity.templateId = templateId;
+            entity.name = item.path("name").asText("");
+            entity.description = textOrNull(item, "description");
+            entity.systemPrompt = textOrNull(item, "systemPrompt");
+            entity.welcomeMessage = textOrNull(item, "welcomeMessage");
+            entity.workingDirectory = textOrNull(item, "workingDirectory");
+            entity.model = textOrNull(item, "model");
+            entity.initScript = textOrNull(item, "initScript");
+            entity.initScriptType = textOrNull(item, "initScriptType");
+            entity.environment = jsonOrNull(item, "environment");
+            JsonNode mcpNode = item.path("mcpServers");
+            if (mcpNode.isArray()) {
+                for (JsonNode s : mcpNode) {
+                    entity.mcpServers.add(s.asText());
+                }
+            }
+            JsonNode toolsNode = item.path("allowedTools");
+            if (toolsNode.isArray()) {
+                for (JsonNode t : toolsNode) {
+                    entity.allowedTools.add(t.asText());
+                }
+            }
             entity.persist();
             count++;
         }
@@ -559,6 +613,29 @@ public class ImportExportService {
         putIfNotNull(n, "allowedTools", e.allowedTools);
         putIfNotNull(n, "environment", e.environment);
         if (e.timeoutSeconds != null) n.put("timeoutSeconds", e.timeoutSeconds);
+        return n;
+    }
+
+    private ObjectNode serializeSessionTemplate(SessionTemplateEntity e) {
+        ObjectNode n = objectMapper.createObjectNode();
+        n.put("templateId", e.templateId);
+        n.put("name", e.name);
+        putIfNotNull(n, "description", e.description);
+        putIfNotNull(n, "systemPrompt", e.systemPrompt);
+        putIfNotNull(n, "welcomeMessage", e.welcomeMessage);
+        putIfNotNull(n, "workingDirectory", e.workingDirectory);
+        putIfNotNull(n, "model", e.model);
+        putIfNotNull(n, "initScript", e.initScript);
+        putIfNotNull(n, "initScriptType", e.initScriptType);
+        putIfNotNull(n, "environment", e.environment);
+        if (e.mcpServers != null && !e.mcpServers.isEmpty()) {
+            ArrayNode arr = n.putArray("mcpServers");
+            e.mcpServers.forEach(arr::add);
+        }
+        if (e.allowedTools != null && !e.allowedTools.isEmpty()) {
+            ArrayNode arr = n.putArray("allowedTools");
+            e.allowedTools.forEach(arr::add);
+        }
         return n;
     }
 

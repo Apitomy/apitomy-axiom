@@ -37,6 +37,7 @@ import {
     type Toolset,
     type McpServer,
     type ReportDefinition,
+    type SessionTemplate,
     type PackExportRequest,
     type ImportResult,
     fetchActionTypes,
@@ -44,6 +45,7 @@ import {
     fetchToolsets,
     fetchMcpServers,
     fetchReportDefinitions,
+    fetchAssistantTemplates,
     exportPack,
     importPack,
 } from "../config/api";
@@ -54,6 +56,7 @@ export function ConfigurationPacksPage() {
     const [toolsets, setToolsets] = useState<Toolset[]>([]);
     const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
     const [reportDefs, setReportDefs] = useState<ReportDefinition[]>([]);
+    const [sessionTemplates, setSessionTemplates] = useState<SessionTemplate[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState(0);
 
@@ -65,6 +68,7 @@ export function ConfigurationPacksPage() {
     const [selectedToolsets, setSelectedToolsets] = useState<Set<number>>(new Set());
     const [selectedMcpServers, setSelectedMcpServers] = useState<Set<number>>(new Set());
     const [selectedReportDefs, setSelectedReportDefs] = useState<Set<number>>(new Set());
+    const [selectedSessionTemplates, setSelectedSessionTemplates] = useState<Set<string>>(new Set());
     const [exporting, setExporting] = useState(false);
 
     // Import state
@@ -85,13 +89,15 @@ export function ConfigurationPacksPage() {
             fetchToolsets(),
             fetchMcpServers(),
             fetchReportDefinitions(),
+            fetchAssistantTemplates(),
         ])
-            .then(([at, t, ts, mcp, rd]) => {
+            .then(([at, t, ts, mcp, rd, st]) => {
                 setActionTypes(at);
                 setTools(t.items);
                 setToolsets(ts);
                 setMcpServers(mcp);
                 setReportDefs(rd);
+                setSessionTemplates(st.filter((s: SessionTemplate) => !s.builtIn));
             })
             .catch(console.error)
             .finally(() => setLoading(false));
@@ -100,7 +106,8 @@ export function ConfigurationPacksPage() {
     useEffect(() => { loadData(); }, [loadData]);
 
     const totalSelected = selectedActionTypes.size + selectedTools.size
-        + selectedToolsets.size + selectedMcpServers.size + selectedReportDefs.size;
+        + selectedToolsets.size + selectedMcpServers.size + selectedReportDefs.size
+        + selectedSessionTemplates.size;
 
     const handleExport = async () => {
         setExporting(true);
@@ -113,6 +120,7 @@ export function ConfigurationPacksPage() {
                 toolsetIds: [...selectedToolsets],
                 mcpServerIds: [...selectedMcpServers],
                 reportDefinitionIds: [...selectedReportDefs],
+                sessionTemplateIds: [...selectedSessionTemplates],
             };
             const blob = await exportPack(request);
             const url = URL.createObjectURL(blob);
@@ -144,6 +152,7 @@ export function ConfigurationPacksPage() {
                     if (json.toolsets?.length) preview["Toolsets"] = json.toolsets.length;
                     if (json.mcpServers?.length) preview["MCP Servers"] = json.mcpServers.length;
                     if (json.reportDefinitions?.length) preview["Report Definitions"] = json.reportDefinitions.length;
+                    if (json.sessionTemplates?.length) preview["Session Templates"] = json.sessionTemplates.length;
                     setImportPreview(preview);
                     setImportPackName(json.metadata?.name || "");
                 } catch {
@@ -261,9 +270,9 @@ export function ConfigurationPacksPage() {
             </Title>
             <p className="axiom-text-subtle" style={{ marginTop: "8px", marginBottom: "16px" }}>
                 Configuration packs bundle related items — action types, tools, toolsets,
-                MCP servers, and report definitions — into a portable JSON file. Create a pack
-                to share your setup with others, or import one to quickly add pre-configured
-                functionality to your Axiom instance.
+                MCP servers, report definitions, and session templates — into a portable JSON
+                file. Create a pack to share your setup with others, or import one to quickly
+                add pre-configured functionality to your Axiom instance.
             </p>
 
             <Tabs activeKey={activeTab} onSelect={(_e, k) => setActiveTab(k as number)}>
@@ -381,6 +390,29 @@ export function ConfigurationPacksPage() {
                                     renderModal={(props) => (
                                         <ReportDefinitionPickerModal {...props} allReportDefs={reportDefs} />
                                     )} />
+                                <SessionTemplateCheckboxSection
+                                    templates={sessionTemplates}
+                                    selected={selectedSessionTemplates}
+                                    onToggle={(templateId) => {
+                                        const next = new Set(selectedSessionTemplates);
+                                        if (next.has(templateId)) next.delete(templateId); else next.add(templateId);
+                                        setSelectedSessionTemplates(next);
+                                        // Auto-select referenced MCP servers
+                                        if (!next.has(templateId)) return;
+                                        const st = sessionTemplates.find((s) => s.templateId === templateId);
+                                        if (st?.mcpServers?.length) {
+                                            const newMcpIds = new Set(selectedMcpServers);
+                                            for (const serverName of st.mcpServers) {
+                                                const server = mcpServers.find((m) => m.name === serverName);
+                                                if (server) newMcpIds.add(server.id);
+                                            }
+                                            if (newMcpIds.size > selectedMcpServers.size) setSelectedMcpServers(newMcpIds);
+                                        }
+                                        // Auto-select referenced tools/toolsets
+                                        if (st?.allowedTools?.length) {
+                                            autoSelectReferencedItems([st.allowedTools]);
+                                        }
+                                    }} />
                             </div>
 
                             <div style={{ marginTop: "24px" }}>
@@ -464,6 +496,7 @@ export function ConfigurationPacksPage() {
                                         {importResult.mcpServers ? <li>{importResult.mcpServers} MCP server(s)</li> : null}
                                         {importResult.actionTypes ? <li>{importResult.actionTypes} action type(s)</li> : null}
                                         {importResult.reportDefinitions ? <li>{importResult.reportDefinitions} report definition(s)</li> : null}
+                                        {importResult.sessionTemplates ? <li>{importResult.sessionTemplates} session template(s)</li> : null}
                                     </ul>
                                 </Alert>
                             )}
@@ -931,6 +964,45 @@ function ToolsetPickerModal({ isOpen, onClose, availableItems, modalSelected, to
                 <Button variant="link" onClick={onClose}>Cancel</Button>
             </ModalFooter>
         </Modal>
+    );
+}
+
+function SessionTemplateCheckboxSection({ templates, selected, onToggle }: {
+    templates: SessionTemplate[];
+    selected: Set<string>;
+    onToggle: (templateId: string) => void;
+}) {
+    if (templates.length === 0) return null;
+
+    const selectedCount = templates.filter((t) => selected.has(t.templateId)).length;
+
+    return (
+        <div style={{ marginBottom: "16px" }}>
+            <div style={{ fontWeight: 600, marginBottom: "8px", fontSize: "14px" }}>
+                Session Templates
+                {selectedCount > 0 && (
+                    <Label isCompact color="blue" style={{ marginLeft: "8px" }}>
+                        {selectedCount} selected
+                    </Label>
+                )}
+            </div>
+            <div style={{
+                display: "flex", flexDirection: "column", gap: "4px",
+                maxHeight: "200px", overflowY: "auto",
+                padding: "8px 12px",
+                backgroundColor: "var(--pf-t--global--background--color--secondary--default)",
+                borderRadius: "4px",
+            }}>
+                {templates.map((t) => (
+                    <Checkbox key={t.templateId}
+                        id={`session-template-${t.templateId}`}
+                        label={t.name}
+                        description={t.description}
+                        isChecked={selected.has(t.templateId)}
+                        onChange={() => onToggle(t.templateId)} />
+                ))}
+            </div>
+        </div>
     );
 }
 

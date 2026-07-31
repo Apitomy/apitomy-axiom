@@ -6073,6 +6073,13 @@
               "format": "int64",
               "type": "integer"
             }
+          },
+          "sessionTemplateIds": {
+            "description": "Template IDs of session templates to include",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -6092,6 +6099,9 @@
             "type": "integer"
           },
           "reportDefinitions": {
+            "type": "integer"
+          },
+          "sessionTemplates": {
             "type": "integer"
           }
         }
