@@ -8,6 +8,7 @@ import io.apitomy.axiom.core.services.EncryptionService;
 import io.apitomy.axiom.events.core.ApiResult;
 import io.apitomy.axiom.events.core.EventService;
 import io.quarkus.scheduler.Scheduled;
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -50,6 +51,13 @@ public class JiraPoller {
     private static final int DEFAULT_POLL_INTERVAL = 60;
     private static final int TICK_INTERVAL = 10;
 
+    private volatile boolean shuttingDown = false;
+
+    @PreDestroy
+    void onShutdown() {
+        shuttingDown = true;
+    }
+
     /**
      * Tick every 10 seconds and check each enabled Jira event source
      * to see if its per-source poll interval has elapsed since the last poll.
@@ -57,6 +65,9 @@ public class JiraPoller {
     @Scheduled(every = "${axiom.jira.tick-interval:" + TICK_INTERVAL + "s}",
                concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     void poll() {
+        if (shuttingDown) {
+            return;
+        }
         List<EventSourceEntity> sources = EventSourceEntity
                 .list("sourceType = ?1 and enabled = ?2", "jira", true);
 

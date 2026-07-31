@@ -12,6 +12,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -32,7 +33,11 @@ public class JiraApiClient {
     @Inject
     ObjectMapper objectMapper;
 
-    private final HttpClient httpClient = HttpClient.newHttpClient();
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
+
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
 
     /**
      * Searches for issues in a project that have been updated since the given timestamp.
@@ -71,6 +76,7 @@ public class JiraApiClient {
                     .uri(URI.create(url))
                     .header("Accept", "application/json")
                     .header("Content-Type", "application/json")
+                    .timeout(REQUEST_TIMEOUT)
                     .POST(HttpRequest.BodyPublishers.ofString(jsonBody));
 
             if (credentials != null && !credentials.isEmpty()) {
