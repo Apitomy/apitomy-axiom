@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
     Button,
     ExpandableSection,
@@ -35,6 +35,7 @@ export function AssistantAskUserQuestion({
     onRespond,
     resolved,
 }: AssistantAskUserQuestionProps) {
+    const blockId = useId();
     const [answers, setAnswers] = useState<Record<number, string | string[]>>({});
     const [otherText, setOtherText] = useState<Record<number, string>>({});
     const [isExpanded, setIsExpanded] = useState(!resolved);
@@ -148,7 +149,7 @@ export function AssistantAskUserQuestion({
                                     return (
                                         <div key={opt.label}>
                                             <Checkbox
-                                                id={`q${qIdx}-${opt.label}`}
+                                                id={`${blockId}-q${qIdx}-${opt.label}`}
                                                 label={
                                                     <span>
                                                         {opt.label}
@@ -179,8 +180,8 @@ export function AssistantAskUserQuestion({
                                 return (
                                     <div key={opt.label}>
                                         <Radio
-                                            id={`q${qIdx}-${opt.label}`}
-                                            name={`question-${qIdx}`}
+                                            id={`${blockId}-q${qIdx}-${opt.label}`}
+                                            name={`${blockId}-question-${qIdx}`}
                                             label={
                                                 <span>
                                                     {opt.label}
