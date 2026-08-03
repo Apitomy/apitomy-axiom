@@ -128,6 +128,7 @@ export interface PackExportRequest {
     toolsetIds?: number[];
     mcpServerIds?: number[];
     reportDefinitionIds?: number[];
+    sessionTemplateIds?: string[];
 }
 
 export interface ImportResult {
@@ -136,6 +137,7 @@ export interface ImportResult {
     toolsets?: number;
     mcpServers?: number;
     reportDefinitions?: number;
+    sessionTemplates?: number;
 }
 
 export interface AssistantApplyResult {
