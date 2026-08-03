@@ -363,6 +363,7 @@ public class ImportExportService {
             entity.initScript = textOrNull(item, "initScript");
             entity.initScriptType = textOrNull(item, "initScriptType");
             entity.environment = jsonOrNull(item, "environment");
+            entity.initialMessage = textOrNull(item, "initialMessage");
             JsonNode mcpNode = item.path("mcpServers");
             if (mcpNode.isArray()) {
                 for (JsonNode s : mcpNode) {
@@ -528,6 +529,7 @@ public class ImportExportService {
             entity.initScript = textOrNull(item, "initScript");
             entity.initScriptType = textOrNull(item, "initScriptType");
             entity.environment = jsonOrNull(item, "environment");
+            entity.initialMessage = textOrNull(item, "initialMessage");
             JsonNode mcpNode = item.path("mcpServers");
             if (mcpNode.isArray()) {
                 for (JsonNode s : mcpNode) {
@@ -628,6 +630,7 @@ public class ImportExportService {
         putIfNotNull(n, "initScript", e.initScript);
         putIfNotNull(n, "initScriptType", e.initScriptType);
         putIfNotNull(n, "environment", e.environment);
+        putIfNotNull(n, "initialMessage", e.initialMessage);
         if (e.mcpServers != null && !e.mcpServers.isEmpty()) {
             ArrayNode arr = n.putArray("mcpServers");
             e.mcpServers.forEach(arr::add);
