@@ -1,15 +1,18 @@
 import { isValidElement, useEffect, useState, type ComponentPropsWithoutRef } from "react";
 import mermaid from "mermaid";
+import { useEffectiveTheme, type EffectiveTheme } from "../hooks/useTheme";
 
-let initialized = false;
-let counter = 0;
+let lastTheme: string | null = null;
 
-function ensureInitialized(): void {
-    if (!initialized) {
-        mermaid.initialize({ startOnLoad: false, theme: "default" });
-        initialized = true;
+function ensureInitialized(theme: EffectiveTheme): void {
+    const mermaidTheme = theme === "dark" ? "dark" : "default";
+    if (lastTheme !== mermaidTheme) {
+        mermaid.initialize({ startOnLoad: false, theme: mermaidTheme });
+        lastTheme = mermaidTheme;
     }
 }
+
+let counter = 0;
 
 interface MermaidBlockProps {
     chart: string;
@@ -22,9 +25,10 @@ interface MermaidBlockProps {
 export function MermaidBlock({ chart }: MermaidBlockProps) {
     const [svg, setSvg] = useState("");
     const [error, setError] = useState<string | null>(null);
+    const effectiveTheme = useEffectiveTheme();
 
     useEffect(() => {
-        ensureInitialized();
+        ensureInitialized(effectiveTheme);
         let cancelled = false;
         const id = `mermaid-${counter++}`;
 
@@ -43,7 +47,7 @@ export function MermaidBlock({ chart }: MermaidBlockProps) {
             });
 
         return () => { cancelled = true; };
-    }, [chart]);
+    }, [chart, effectiveTheme]);
 
     if (error) {
         return (
