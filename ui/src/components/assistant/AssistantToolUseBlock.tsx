@@ -20,6 +20,7 @@ import bash from "react-syntax-highlighter/dist/esm/languages/hljs/bash";
 import { stackoverflowLight } from "react-syntax-highlighter/dist/esm/styles/hljs";
 import { stackoverflowDark } from "react-syntax-highlighter/dist/esm/styles/hljs";
 import { useEffectiveTheme } from "../../hooks/useTheme";
+import { markdownMermaidComponents } from "../MermaidBlock";
 import { AssistantAskUserQuestion } from "./AssistantAskUserQuestion";
 import "./AssistantToolUseBlock.css";
 
@@ -176,7 +177,7 @@ export function AssistantToolUseBlock({
                             {!!input?.plan && (
                                 <div className="assistant-markdown axiom-tool-use__plan-content">
                                     <Content>
-                                        <Markdown remarkPlugins={[remarkGfm]}>
+                                        <Markdown remarkPlugins={[remarkGfm]} components={markdownMermaidComponents}>
                                             {input.plan as string}
                                         </Markdown>
                                     </Content>
@@ -230,7 +231,7 @@ export function AssistantToolUseBlock({
                             <ModalBody>
                                 <Content>
                                     <div className="assistant-markdown">
-                                        <Markdown remarkPlugins={[remarkGfm]}>
+                                        <Markdown remarkPlugins={[remarkGfm]} components={markdownMermaidComponents}>
                                             {input.plan as string}
                                         </Markdown>
                                     </div>

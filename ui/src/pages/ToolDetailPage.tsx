@@ -31,6 +31,7 @@ import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { markdownMermaidComponents } from "../components/MermaidBlock";
 import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
 import PlayIcon from "@patternfly/react-icons/dist/esm/icons/play-icon";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
@@ -554,7 +555,7 @@ function TestTab({ toolId, params, scriptTemplate }: {
                                 overflow: "auto",
                             }}>
                                 <Content>
-                                    <Markdown remarkPlugins={[remarkGfm]}>{result.output}</Markdown>
+                                    <Markdown remarkPlugins={[remarkGfm]} components={markdownMermaidComponents}>{result.output}</Markdown>
                                 </Content>
                             </div>
                         )}

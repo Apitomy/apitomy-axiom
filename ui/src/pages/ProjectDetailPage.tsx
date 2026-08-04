@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { markdownMermaidComponents } from "../components/MermaidBlock";
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -651,7 +652,7 @@ function ThreadTab({ entries }: { entries: ThreadEntry[] }) {
                             </FlexItem>
                         </Flex>
                         <Content>
-                            <Markdown remarkPlugins={[remarkGfm]}>{entry.content}</Markdown>
+                            <Markdown remarkPlugins={[remarkGfm]} components={markdownMermaidComponents}>{entry.content}</Markdown>
                         </Content>
                     </CardBody>
                 </Card>
