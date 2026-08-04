@@ -42,7 +42,10 @@ public class DashboardsResourceImpl implements DashboardsResource {
     @Override
     public List<Dashboard> listDashboards() {
         return DashboardEntity.<DashboardEntity>listAll()
-                .stream().map(this::toBean).toList();
+                .stream()
+                .sorted(java.util.Comparator.comparing(e -> e.name))
+                .map(this::toBean)
+                .toList();
     }
 
     /**
@@ -52,11 +55,7 @@ public class DashboardsResourceImpl implements DashboardsResource {
     @Transactional
     public Dashboard createDashboard(NewDashboard data) {
         DashboardEntity entity = new DashboardEntity();
-        entity.name = data.getName();
-        entity.description = data.getDescription();
-        entity.isDefault = data.getIsDefault() != null ? data.getIsDefault() : false;
-        entity.labels = data.getLabels() != null ? new ArrayList<>(data.getLabels()) : new ArrayList<>();
-        entity.widgets = serializeWidgets(data.getWidgets());
+        applyFields(entity, data);
         entity.createdOn = Instant.now();
         entity.updatedOn = Instant.now();
         entity.persist();
@@ -81,14 +80,7 @@ public class DashboardsResourceImpl implements DashboardsResource {
     @Transactional
     public Dashboard updateDashboard(long dashboardId, NewDashboard data) {
         DashboardEntity entity = findOrThrow(dashboardId);
-        entity.name = data.getName();
-        entity.description = data.getDescription();
-        entity.isDefault = data.getIsDefault() != null ? data.getIsDefault() : false;
-        entity.labels.clear();
-        if (data.getLabels() != null) {
-            entity.labels.addAll(data.getLabels());
-        }
-        entity.widgets = serializeWidgets(data.getWidgets());
+        applyFields(entity, data);
         entity.updatedOn = Instant.now();
         if (entity.isDefault) {
             clearOtherDefaults(entity.id);
@@ -108,6 +100,23 @@ public class DashboardsResourceImpl implements DashboardsResource {
 
     private void clearOtherDefaults(Long currentId) {
         DashboardEntity.update("isDefault = false WHERE id != ?1 AND isDefault = true", currentId);
+    }
+
+    /**
+     * Applies common fields from the API bean to the entity.
+     *
+     * @param entity the entity to update
+     * @param data the API bean with new values
+     */
+    private void applyFields(DashboardEntity entity, NewDashboard data) {
+        entity.name = data.getName();
+        entity.description = data.getDescription();
+        entity.isDefault = data.getIsDefault() != null ? data.getIsDefault() : false;
+        entity.widgets = serializeWidgets(data.getWidgets());
+        entity.labels.clear();
+        if (data.getLabels() != null) {
+            entity.labels.addAll(data.getLabels());
+        }
     }
 
     private DashboardEntity findOrThrow(long id) {

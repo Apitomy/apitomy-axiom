@@ -14,6 +14,8 @@ export interface ConfigField {
     type: "select" | "number" | "multiselect" | "toggle";
     options?: { label: string; value: string }[];
     default: unknown;
+    min?: number;
+    max?: number;
 }
 
 export interface WidgetRegistryEntry {

@@ -61,22 +61,27 @@ export function WidgetConfigModal({
                                     ))}
                                 </FormSelect>
                             )}
-                            {field.type === "number" && (
-                                <NumberInput
-                                    id={field.key}
-                                    value={Number(draft[field.key] ?? field.default)}
-                                    min={1}
-                                    max={100}
-                                    onMinus={() => updateField(field.key,
-                                        Math.max(1, Number(draft[field.key] ?? field.default) - 1))}
-                                    onPlus={() => updateField(field.key,
-                                        Number(draft[field.key] ?? field.default) + 1)}
-                                    onChange={(event) => {
-                                        const val = Number((event.target as HTMLInputElement).value);
-                                        if (!isNaN(val)) updateField(field.key, val);
-                                    }}
-                                />
-                            )}
+                            {field.type === "number" && (() => {
+                                const minVal = field.min ?? 0;
+                                const maxVal = field.max ?? Number.MAX_SAFE_INTEGER;
+                                const current = Number(draft[field.key] ?? field.default);
+                                return (
+                                    <NumberInput
+                                        id={field.key}
+                                        value={current}
+                                        min={minVal}
+                                        max={maxVal}
+                                        onMinus={() => updateField(field.key,
+                                            Math.max(minVal, current - 1))}
+                                        onPlus={() => updateField(field.key,
+                                            Math.min(maxVal, current + 1))}
+                                        onChange={(event) => {
+                                            const val = Number((event.target as HTMLInputElement).value);
+                                            if (!isNaN(val)) updateField(field.key, val);
+                                        }}
+                                    />
+                                );
+                            })()}
                             {field.type === "toggle" && (
                                 <Switch
                                     id={field.key}

@@ -12,6 +12,7 @@ import CogIcon from "@patternfly/react-icons/dist/esm/icons/cog-icon";
 import TimesIcon from "@patternfly/react-icons/dist/esm/icons/times-icon";
 import { ConfirmDeleteModal } from "../ConfirmDeleteModal";
 import { WidgetConfigModal } from "./WidgetConfigModal";
+import { WidgetErrorBoundary } from "./WidgetErrorBoundary";
 import { getWidget, type WidgetProps } from "./widget-registry";
 
 interface WidgetCardProps {
@@ -75,8 +76,10 @@ export function WidgetCard({ widgetType, config, labels, isEditing, onConfigChan
                     </Flex>
                 </CardHeader>
                 <CardBody isFilled>
-                    <WidgetComponent config={config} labels={labels}
-                                     onConfigChange={onConfigChange} />
+                    <WidgetErrorBoundary>
+                        <WidgetComponent config={config} labels={labels}
+                                         onConfigChange={onConfigChange} />
+                    </WidgetErrorBoundary>
                 </CardBody>
             </Card>
 

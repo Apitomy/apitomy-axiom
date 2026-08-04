@@ -4250,6 +4250,9 @@
                 }
               }
             }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
           }
         }
       },
@@ -4279,6 +4282,9 @@
                 }
               }
             }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
           }
         }
       },
@@ -4291,6 +4297,9 @@
         "responses": {
           "204": {
             "description": "Dashboard deleted successfully"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
           }
         }
       },
