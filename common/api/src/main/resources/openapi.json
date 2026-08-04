@@ -4179,6 +4179,142 @@
           }
         }
       }
+    },
+    "/dashboards": {
+      "get": {
+        "tags": [
+          "Dashboards"
+        ],
+        "summary": "List all dashboards",
+        "operationId": "listDashboards",
+        "responses": {
+          "200": {
+            "description": "List of all dashboards",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Dashboard"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Dashboards"
+        ],
+        "summary": "Create a new dashboard",
+        "operationId": "createDashboard",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewDashboard"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The created dashboard",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dashboard"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dashboards/{dashboardId}": {
+      "get": {
+        "tags": [
+          "Dashboards"
+        ],
+        "summary": "Get a single dashboard",
+        "operationId": "getDashboard",
+        "responses": {
+          "200": {
+            "description": "The requested dashboard",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dashboard"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Dashboards"
+        ],
+        "summary": "Update a dashboard",
+        "operationId": "updateDashboard",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewDashboard"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The updated dashboard",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dashboard"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Dashboards"
+        ],
+        "summary": "Delete a dashboard",
+        "operationId": "deleteDashboard",
+        "responses": {
+          "204": {
+            "description": "Dashboard deleted successfully"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "dashboardId",
+          "in": "path",
+          "description": "Dashboard ID",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
     }
   },
   "components": {
@@ -7118,6 +7254,152 @@
             "type": "boolean"
           }
         }
+      },
+      "DashboardWidgetLayout": {
+        "required": [
+          "x",
+          "y",
+          "w",
+          "h"
+        ],
+        "type": "object",
+        "properties": {
+          "x": {
+            "description": "Column position (0-11 in a 12-column grid)",
+            "type": "integer"
+          },
+          "y": {
+            "description": "Row position",
+            "type": "integer"
+          },
+          "w": {
+            "description": "Width in columns",
+            "type": "integer"
+          },
+          "h": {
+            "description": "Height in rows",
+            "type": "integer"
+          }
+        }
+      },
+      "DashboardWidget": {
+        "required": [
+          "id",
+          "type",
+          "config",
+          "layout"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "Unique widget identifier within the dashboard",
+            "type": "string"
+          },
+          "type": {
+            "description": "Widget registry key, e.g. project-status-summary",
+            "type": "string"
+          },
+          "config": {
+            "description": "Per-widget settings (time window, max rows, etc.)",
+            "type": "object",
+            "additionalProperties": true
+          },
+          "layout": {
+            "$ref": "#/components/schemas/DashboardWidgetLayout"
+          }
+        }
+      },
+      "Dashboard": {
+        "required": [
+          "id",
+          "name",
+          "labels",
+          "isDefault",
+          "widgets",
+          "createdOn",
+          "updatedOn"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "format": "int64",
+            "description": "Dashboard ID",
+            "type": "integer"
+          },
+          "name": {
+            "description": "Dashboard name",
+            "type": "string"
+          },
+          "description": {
+            "description": "Optional dashboard description",
+            "type": "string"
+          },
+          "labels": {
+            "description": "Dashboard-level label filters",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "isDefault": {
+            "description": "Whether this is the default dashboard",
+            "type": "boolean"
+          },
+          "widgets": {
+            "description": "Widgets on this dashboard",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DashboardWidget"
+            }
+          },
+          "createdOn": {
+            "format": "date-time",
+            "description": "Creation timestamp",
+            "type": "string"
+          },
+          "updatedOn": {
+            "format": "date-time",
+            "description": "Last update timestamp",
+            "type": "string"
+          }
+        }
+      },
+      "NewDashboard": {
+        "required": [
+          "name",
+          "labels",
+          "isDefault",
+          "widgets"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Dashboard name",
+            "type": "string"
+          },
+          "description": {
+            "description": "Optional dashboard description",
+            "type": "string"
+          },
+          "labels": {
+            "description": "Dashboard-level label filters",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "isDefault": {
+            "description": "Whether this is the default dashboard",
+            "type": "boolean"
+          },
+          "widgets": {
+            "description": "Widgets on this dashboard",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DashboardWidget"
+            }
+          }
+        }
       }
     },
     "responses": {
@@ -7241,6 +7523,10 @@
     {
       "name": "Inbox",
       "description": "Human task inbox operations"
+    },
+    {
+      "name": "Dashboards",
+      "description": "Custom dashboard management"
     }
   ]
 }

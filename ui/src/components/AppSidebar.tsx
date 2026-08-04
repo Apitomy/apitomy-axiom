@@ -41,8 +41,8 @@ export function AppSidebar() {
             <PageSidebarBody>
                 <Nav>
                     <NavList>
-                        <NavItem isActive={location.pathname === "/"} onClick={() => navigate("/")}>
-                            Dashboard
+                        <NavItem isActive={location.pathname.startsWith("/dashboards")} onClick={() => navigate("/dashboards")}>
+                            Dashboards
                         </NavItem>
                         <NavItem isActive={location.pathname.startsWith("/inbox")} onClick={() => navigate("/inbox")}>
                             Inbox{" "}
