@@ -1,6 +1,7 @@
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Content } from "@patternfly/react-core";
+import { markdownMermaidComponents } from "./MermaidBlock";
 import "./RenderedReport.css";
 
 interface RenderedReportProps {
@@ -16,7 +17,7 @@ export function RenderedReport({ content }: RenderedReportProps) {
     return (
         <div className="axiom-rendered-report">
             <Content>
-                <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>
+                <Markdown remarkPlugins={[remarkGfm]} components={markdownMermaidComponents}>{content}</Markdown>
             </Content>
         </div>
     );

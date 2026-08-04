@@ -15,6 +15,7 @@ import {
 } from "@patternfly/react-core";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { markdownMermaidComponents } from "./MermaidBlock";
 import PaperPlaneIcon from "@patternfly/react-icons/dist/esm/icons/paper-plane-icon";
 
 interface ChatMessage {
@@ -124,7 +125,7 @@ export function AiEditModal({
                                     }}>
                                         {msg.role === "assistant" ? (
                                             <Content>
-                                                <Markdown remarkPlugins={[remarkGfm]}>{msg.content}</Markdown>
+                                                <Markdown remarkPlugins={[remarkGfm]} components={markdownMermaidComponents}>{msg.content}</Markdown>
                                             </Content>
                                         ) : msg.content}
                                     </div>
