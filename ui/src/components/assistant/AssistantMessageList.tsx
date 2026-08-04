@@ -10,6 +10,7 @@ import json from "react-syntax-highlighter/dist/esm/languages/hljs/json";
 import { stackoverflowLight } from "react-syntax-highlighter/dist/esm/styles/hljs";
 import { stackoverflowDark } from "react-syntax-highlighter/dist/esm/styles/hljs";
 import { useEffectiveTheme } from "../../hooks/useTheme";
+import { markdownMermaidComponents } from "../MermaidBlock";
 import { AssistantToolUseBlock } from "./AssistantToolUseBlock";
 import { AssistantPermissionPrompt } from "./AssistantPermissionPrompt";
 import "./AssistantMessageList.css";
@@ -155,7 +156,7 @@ export function AssistantMessageList({ messages, onPermissionRespond, onCreateAu
                                         </Tooltip>
                                     </div>
                                     <Content>
-                                        <Markdown remarkPlugins={[remarkGfm]}>
+                                        <Markdown remarkPlugins={[remarkGfm]} components={markdownMermaidComponents}>
                                             {msg.content?.trim() || ""}
                                         </Markdown>
                                     </Content>
