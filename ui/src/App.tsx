@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
 import { useTheme, EffectiveThemeContext } from "./hooks/useTheme";
-import { Routes, Route, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Page } from "@patternfly/react-core";
 
-import { DashboardPage } from "./pages/DashboardPage";
+import { DashboardsPage } from "./pages/DashboardsPage";
+import { DashboardViewPage } from "./pages/DashboardViewPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { ActorsPage } from "./pages/ActorsPage";
 import { ActorDetailPage } from "./pages/ActorDetailPage";
@@ -99,7 +100,9 @@ export function App() {
                     <ConfigurationWarning checks={startupChecks!} />
                 ) : (
                     <Routes>
-                        <Route path="/" element={<DashboardPage />} />
+                        <Route path="/" element={<Navigate to="/dashboards" replace />} />
+                        <Route path="/dashboards" element={<DashboardsPage />} />
+                        <Route path="/dashboards/:dashboardId" element={<DashboardViewPage />} />
                         <Route path="/inbox" element={<InboxPage />} />
                         <Route path="/projects" element={<ProjectsPage />} />
                         <Route path="/projects/:projectId" element={<ProjectDetailPage />} />

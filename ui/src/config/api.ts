@@ -1678,3 +1678,73 @@ export async function completeInboxItem(taskId: number, data: Record<string, unk
         throw new Error(`Failed to complete inbox item: ${error}`);
     }
 }
+
+// ── Dashboard Types ──────────────────────────────────────────────
+
+export interface DashboardWidgetLayout {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+}
+
+export interface DashboardWidget {
+    id: string;
+    type: string;
+    config: Record<string, unknown>;
+    layout: DashboardWidgetLayout;
+}
+
+export interface Dashboard {
+    id: number;
+    name: string;
+    description?: string;
+    labels: string[];
+    isDefault: boolean;
+    widgets: DashboardWidget[];
+    createdOn: string;
+    updatedOn: string;
+}
+
+export type NewDashboard = Omit<Dashboard, "id" | "createdOn" | "updatedOn">;
+
+// ── Dashboard API ────────────────────────────────────────────────
+
+export async function fetchDashboards(): Promise<Dashboard[]> {
+    const response = await fetch(`${API}/dashboards`);
+    if (!response.ok) throw new Error(`Failed to fetch dashboards: ${response.status}`);
+    return response.json();
+}
+
+export async function createDashboard(data: NewDashboard): Promise<Dashboard> {
+    const response = await fetch(`${API}/dashboards`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(`Failed to create dashboard: ${response.status}`);
+    return response.json();
+}
+
+export async function fetchDashboard(dashboardId: number): Promise<Dashboard> {
+    const response = await fetch(`${API}/dashboards/${dashboardId}`);
+    if (!response.ok) throw new Error(`Failed to fetch dashboard: ${response.status}`);
+    return response.json();
+}
+
+export async function updateDashboard(dashboardId: number, data: NewDashboard): Promise<Dashboard> {
+    const response = await fetch(`${API}/dashboards/${dashboardId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(`Failed to update dashboard: ${response.status}`);
+    return response.json();
+}
+
+export async function deleteDashboard(dashboardId: number): Promise<void> {
+    const response = await fetch(`${API}/dashboards/${dashboardId}`, {
+        method: "DELETE",
+    });
+    if (!response.ok) throw new Error(`Failed to delete dashboard: ${response.status}`);
+}

@@ -1,0 +1,11 @@
+import "./ProjectStatusSummaryWidget";
+import "./ActiveProjectsWidget";
+import "./ProjectSpotlightWidget";
+import "./RecentActivityWidget";
+import "./InboxWidget";
+import "./RecentEventsWidget";
+import "./AiCostSummaryWidget";
+import "./AiCostByProjectWidget";
+import "./RecentReportsWidget";
+import "./SystemStatusWidget";
+import "./EventSourceHealthWidget";
