@@ -20,6 +20,8 @@ import {
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
+import StarIcon from "@patternfly/react-icons/dist/esm/icons/star-icon";
+import OutlinedStarIcon from "@patternfly/react-icons/dist/esm/icons/outlined-star-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import {
     type Dashboard,
@@ -27,6 +29,7 @@ import {
     fetchDashboards,
     createDashboard,
     deleteDashboard,
+    updateDashboard,
 } from "../config/api";
 import { ColoredLabel } from "../components/ColoredLabel";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
@@ -66,6 +69,19 @@ export function DashboardsPage() {
                 navigate(`/dashboards/${created.id}`);
             })
             .catch(console.error);
+    };
+
+    const handleSetDefault = (e: React.MouseEvent, dashboard: Dashboard) => {
+        e.stopPropagation();
+        if (dashboard.isDefault) return;
+        const data: NewDashboard = {
+            name: dashboard.name,
+            description: dashboard.description,
+            labels: dashboard.labels,
+            isDefault: true,
+            widgets: dashboard.widgets,
+        };
+        updateDashboard(dashboard.id, data).then(load).catch(console.error);
     };
 
     const handleDelete = (e: React.MouseEvent, id: number) => {
@@ -147,11 +163,25 @@ export function DashboardsPage() {
                                     <Td>{d.widgets.length}</Td>
                                     <Td>{formatDate(d.updatedOn)}</Td>
                                     <Td>
-                                        <Button variant="plain" size="sm"
-                                                style={{ padding: 0 }}
-                                                onClick={(e) => handleDelete(e, d.id)}>
-                                            <TrashIcon />
-                                        </Button>
+                                        <Flex gap={{ default: "gapSm" }}
+                                              flexWrap={{ default: "nowrap" }}>
+                                            <FlexItem>
+                                                <Button variant="plain" size="sm"
+                                                        style={{ padding: 0 }}
+                                                        aria-label={d.isDefault ? "Default dashboard" : "Set as default"}
+                                                        isDisabled={d.isDefault}
+                                                        onClick={(e) => handleSetDefault(e, d)}>
+                                                    {d.isDefault ? <StarIcon color="var(--pf-t--global--color--status--info--default)" /> : <OutlinedStarIcon />}
+                                                </Button>
+                                            </FlexItem>
+                                            <FlexItem>
+                                                <Button variant="plain" size="sm"
+                                                        style={{ padding: 0 }}
+                                                        onClick={(e) => handleDelete(e, d.id)}>
+                                                    <TrashIcon />
+                                                </Button>
+                                            </FlexItem>
+                                        </Flex>
                                     </Td>
                                 </Tr>
                             ))}

@@ -12,6 +12,7 @@ import {
     FlexItem,
     Form,
     FormGroup,
+    Label,
     PageSection,
     TextArea,
     TextInput,
@@ -21,6 +22,7 @@ import { ColoredLabel } from "../components/ColoredLabel";
 import PencilAltIcon from "@patternfly/react-icons/dist/esm/icons/pencil-alt-icon";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
+import StarIcon from "@patternfly/react-icons/dist/esm/icons/star-icon";
 import TimesIcon from "@patternfly/react-icons/dist/esm/icons/times-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import {
@@ -106,6 +108,20 @@ export function DashboardViewPage() {
         if (!dashboard) return;
         deleteDashboard(dashboard.id)
             .then(() => navigate("/dashboards"))
+            .catch(console.error);
+    };
+
+    const handleSetDefault = () => {
+        if (!dashboard || dashboard.isDefault) return;
+        const data: NewDashboard = {
+            name: dashboard.name,
+            description: dashboard.description,
+            labels: dashboard.labels,
+            isDefault: true,
+            widgets: dashboard.widgets,
+        };
+        updateDashboard(dashboard.id, data)
+            .then(setDashboard)
             .catch(console.error);
     };
 
@@ -207,6 +223,11 @@ export function DashboardViewPage() {
                             <FlexItem>
                                 <Title headingLevel="h1" size="lg">{dashboard.name}</Title>
                             </FlexItem>
+                            {dashboard.isDefault && (
+                                <FlexItem>
+                                    <Label isCompact color="blue">Default</Label>
+                                </FlexItem>
+                            )}
                             <FlexItem>
                                 {dashboard.labels.map(l => (
                                     <ColoredLabel key={l} isCompact
@@ -246,12 +267,22 @@ export function DashboardViewPage() {
                                 </FlexItem>
                             </>
                         ) : (
-                            <FlexItem>
-                                <Button variant="secondary" icon={<PencilAltIcon />}
-                                        onClick={enterEditMode}>
-                                    Edit
-                                </Button>
-                            </FlexItem>
+                            <>
+                                {!dashboard.isDefault && (
+                                    <FlexItem>
+                                        <Button variant="secondary" icon={<StarIcon />}
+                                                onClick={handleSetDefault}>
+                                            Set as Default
+                                        </Button>
+                                    </FlexItem>
+                                )}
+                                <FlexItem>
+                                    <Button variant="secondary" icon={<PencilAltIcon />}
+                                            onClick={enterEditMode}>
+                                        Edit
+                                    </Button>
+                                </FlexItem>
+                            </>
                         )}
                     </Flex>
                 </FlexItem>
