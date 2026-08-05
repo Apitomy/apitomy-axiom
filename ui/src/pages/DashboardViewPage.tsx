@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { Responsive, WidthProvider } from "react-grid-layout";
 import type { Layout } from "react-grid-layout";
 import {
+    Breadcrumb,
+    BreadcrumbItem,
     Button,
     EmptyState,
     EmptyStateBody,
@@ -182,6 +184,10 @@ export function DashboardViewPage() {
 
     return (
         <PageSection>
+            <Breadcrumb style={{ marginBottom: "16px" }}>
+                <BreadcrumbItem><Link to="/dashboards">Dashboards</Link></BreadcrumbItem>
+                <BreadcrumbItem isActive>{dashboard.name}</BreadcrumbItem>
+            </Breadcrumb>
             {/* Top bar */}
             <Flex justifyContent={{ default: "justifyContentSpaceBetween" }}
                   alignItems={{ default: "alignItemsCenter" }}
