@@ -28,6 +28,7 @@ import {
     createDashboard,
     deleteDashboard,
 } from "../config/api";
+import { ColoredLabel } from "../components/ColoredLabel";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 export function DashboardsPage() {
@@ -138,8 +139,8 @@ export function DashboardsPage() {
                                     </Td>
                                     <Td>
                                         {d.labels.map(l => (
-                                            <Label key={l} isCompact
-                                                   style={{ marginRight: "4px" }}>{l}</Label>
+                                            <ColoredLabel key={l} isCompact
+                                                   style={{ marginRight: "4px" }}>{l}</ColoredLabel>
                                         ))}
                                         {d.labels.length === 0 && "—"}
                                     </Td>
