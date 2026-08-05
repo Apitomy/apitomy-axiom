@@ -34,6 +34,7 @@ import {
 import { WidgetCard } from "../components/dashboards/WidgetCard";
 import { AddWidgetModal } from "../components/dashboards/AddWidgetModal";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
+import { LabelInput } from "../components/LabelInput";
 import { getWidget, getDefaultConfig } from "../components/dashboards/widget-registry";
 
 import "../components/dashboards/widgets";
@@ -54,7 +55,7 @@ export function DashboardViewPage() {
 
     const [editName, setEditName] = useState("");
     const [editDescription, setEditDescription] = useState("");
-    const [editLabels, setEditLabels] = useState("");
+    const [editLabels, setEditLabels] = useState<string[]>([]);
     const [editWidgets, setEditWidgets] = useState<DashboardWidget[]>([]);
 
     const [addWidgetOpen, setAddWidgetOpen] = useState(false);
@@ -75,7 +76,7 @@ export function DashboardViewPage() {
         if (!dashboard) return;
         setEditName(dashboard.name);
         setEditDescription(dashboard.description ?? "");
-        setEditLabels(dashboard.labels.join(", "));
+        setEditLabels([...dashboard.labels]);
         setEditWidgets(structuredClone(dashboard.widgets));
         setIsEditing(true);
     };
@@ -86,11 +87,10 @@ export function DashboardViewPage() {
 
     const handleSave = () => {
         if (!dashboard) return;
-        const labels = editLabels.split(",").map(l => l.trim()).filter(l => l.length > 0);
         const data: NewDashboard = {
             name: editName,
             description: editDescription || undefined,
-            labels,
+            labels: editLabels,
             isDefault: dashboard.isDefault,
             widgets: editWidgets,
         };
@@ -149,9 +149,7 @@ export function DashboardViewPage() {
     };
 
     const activeWidgets = isEditing ? editWidgets : (dashboard?.widgets ?? []);
-    const activeLabels = isEditing
-        ? editLabels.split(",").map(l => l.trim()).filter(l => l.length > 0)
-        : (dashboard?.labels ?? []);
+    const activeLabels = isEditing ? editLabels : (dashboard?.labels ?? []);
 
     const gridItems: Layout[] = activeWidgets.map(w => {
         const entry = getWidget(w.type);
@@ -268,9 +266,9 @@ export function DashboardViewPage() {
                                       onChange={(_e, v) => setEditDescription(v)}
                                       rows={2} />
                         </FormGroup>
-                        <FormGroup label="Labels (comma-separated)" fieldId="edit-labels">
-                            <TextInput id="edit-labels" value={editLabels}
-                                       onChange={(_e, v) => setEditLabels(v)} />
+                        <FormGroup label="Labels" fieldId="edit-labels">
+                            <LabelInput labels={editLabels}
+                                onChange={(labels) => setEditLabels(labels)} />
                         </FormGroup>
                     </Form>
                 </div>
