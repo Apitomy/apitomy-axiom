@@ -12,6 +12,7 @@ import {
     FlexItem,
     Form,
     FormGroup,
+    Label,
     PageSection,
     TextArea,
     TextInput,
