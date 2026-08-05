@@ -39,6 +39,7 @@
 
 .react-grid-item > .pf-v6-c-card {
     overflow: hidden;
+    padding: 5px;
 }
 
 .react-grid-item > .pf-v6-c-card > .pf-v6-c-card__body {
@@ -65,4 +66,14 @@
 .react-draggable-dragging .pf-v6-c-card__header {
     cursor: grabbing;
     background-color: var(--pf-t--global--background--color--primary--hover);
+}
+
+.widget-gallery .pf-v6-c-card {
+    border: 1px solid var(--pf-t--global--border--color--default);
+    transition: border-color 150ms ease;
+    cursor: pointer;
+}
+
+.widget-gallery .pf-v6-c-card:hover {
+    border-color: var(--pf-t--global--border--color--hover);
 }
