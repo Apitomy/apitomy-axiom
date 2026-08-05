@@ -45,7 +45,8 @@ export function WidgetCard({ widgetType, config, labels, isEditing, onConfigChan
 
     return (
         <>
-            <Card isFullHeight>
+            <Card isFullHeight
+                  style={isEditing ? { border: "1px dashed var(--pf-t--global--border--color--default)", borderBottomRightRadius: 0 } : undefined}>
                 <CardHeader>
                     <Flex justifyContent={{ default: "justifyContentSpaceBetween" }}
                           alignItems={{ default: "alignItemsCenter" }}

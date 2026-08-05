@@ -10,12 +10,12 @@ import {
     FlexItem,
     Form,
     FormGroup,
-    Label,
     PageSection,
     TextArea,
     TextInput,
     Title,
 } from "@patternfly/react-core";
+import { ColoredLabel } from "../components/ColoredLabel";
 import PencilAltIcon from "@patternfly/react-icons/dist/esm/icons/pencil-alt-icon";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
@@ -38,6 +38,7 @@ import "../components/dashboards/widgets";
 
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
+import "./DashboardViewPage.css";
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
@@ -204,8 +205,8 @@ export function DashboardViewPage() {
                             </FlexItem>
                             <FlexItem>
                                 {dashboard.labels.map(l => (
-                                    <Label key={l} isCompact
-                                           style={{ marginRight: "4px" }}>{l}</Label>
+                                    <ColoredLabel key={l} isCompact
+                                               style={{ marginRight: "4px" }}>{l}</ColoredLabel>
                                 ))}
                             </FlexItem>
                         </Flex>
@@ -269,12 +270,6 @@ export function DashboardViewPage() {
                 </div>
             )}
 
-            {/* Normal mode: description */}
-            {!isEditing && dashboard.description && (
-                <p style={{ marginBottom: "16px", color: "var(--pf-t--global--color--200)" }}>
-                    {dashboard.description}
-                </p>
-            )}
 
             {/* Widget grid */}
             {activeWidgets.length === 0 ? (
@@ -296,6 +291,7 @@ export function DashboardViewPage() {
                     isResizable={isEditing}
                     onLayoutChange={isEditing ? onGridLayoutChange : undefined}
                     draggableHandle=".pf-v6-c-card__header"
+                    draggableCancel=".pf-v6-c-button"
                 >
                     {activeWidgets.map(w => (
                         <div key={w.id}>

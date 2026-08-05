@@ -1,0 +1,55 @@
+.react-resizable-handle {
+    background-image: none !important;
+    width: 20px !important;
+    height: 20px !important;
+}
+
+.react-resizable-handle::before,
+.react-resizable-handle::after {
+    content: "";
+    position: absolute;
+    border-color: var(--pf-t--global--icon--color--subtle);
+    border-style: solid;
+    border-width: 0;
+    transition: border-color 150ms ease;
+}
+
+.react-resizable-handle::before {
+    right: 4px;
+    bottom: 4px;
+    width: 12px;
+    height: 12px;
+    border-right-width: 2px;
+    border-bottom-width: 2px;
+}
+
+.react-resizable-handle::after {
+    right: 4px;
+    bottom: 4px;
+    width: 6px;
+    height: 6px;
+    border-right-width: 2px;
+    border-bottom-width: 2px;
+}
+
+.react-resizable-handle:hover::before,
+.react-resizable-handle:hover::after {
+    border-color: var(--pf-t--global--border--color--hover);
+}
+
+.react-draggable .pf-v6-c-card__header {
+    cursor: grab;
+    transition: background-color 150ms ease;
+    border-radius: inherit;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.react-draggable .pf-v6-c-card__header:hover {
+    background-color: var(--pf-t--global--background--color--primary--hover);
+}
+
+.react-draggable-dragging .pf-v6-c-card__header {
+    cursor: grabbing;
+    background-color: var(--pf-t--global--background--color--primary--hover);
+}
