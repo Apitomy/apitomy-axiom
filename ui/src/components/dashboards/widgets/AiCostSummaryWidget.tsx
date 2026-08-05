@@ -8,7 +8,7 @@ const TIME_WINDOWS: Record<string, number> = {
     "24h": 1, "7d": 7, "30d": 30, "90d": 90,
 };
 
-function AiCostSummaryWidget({ config }: WidgetProps) {
+function AiCostSummaryWidget({ config, labels }: WidgetProps) {
     const [totalCost, setTotalCost] = useState(0);
     const [totalInput, setTotalInput] = useState(0);
     const [totalOutput, setTotalOutput] = useState(0);
@@ -21,7 +21,8 @@ function AiCostSummaryWidget({ config }: WidgetProps) {
         let cancelled = false;
         const days = TIME_WINDOWS[timeWindow] || 7;
         const from = new Date(Date.now() - days * 86400000).toISOString();
-        fetchUsage(1, 1, undefined, undefined, undefined, undefined, from)
+        const labelsParam = labels.length > 0 ? labels.join(",") : undefined;
+        fetchUsage(1, 1, undefined, undefined, undefined, undefined, from, undefined, labelsParam)
             .then(result => {
                 if (cancelled) return;
                 setTotalCost(result.totalCostUsd);
@@ -31,7 +32,7 @@ function AiCostSummaryWidget({ config }: WidgetProps) {
             })
             .catch(() => { if (!cancelled) setError(true); });
         return () => { cancelled = true; };
-    }, [timeWindow]);
+    }, [labels, timeWindow]);
 
     if (error) return <WidgetError />;
 

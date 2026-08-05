@@ -19,6 +19,7 @@ import java.math.BigInteger;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -45,7 +46,8 @@ public class UsageResourceImpl implements UsageResource {
                                            BigInteger filterActorId,
                                            String filterActionType,
                                            String filterDateFrom,
-                                           String filterDateTo) {
+                                           String filterDateTo,
+                                           String filterLabels) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
@@ -79,6 +81,15 @@ public class UsageResourceImpl implements UsageResource {
                     .plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
             hql.append(" and createdOn < :dateTo");
             params.put("dateTo", toInstant);
+        }
+        if (filterLabels != null && !filterLabels.isBlank()) {
+            List<String> labels = Arrays.stream(filterLabels.split(","))
+                    .map(String::trim).filter(s -> !s.isEmpty()).toList();
+            hql.append(" and projectId in (SELECT p.id FROM ProjectEntity p"
+                    + " JOIN p.labels pl WHERE pl IN :labels"
+                    + " GROUP BY p.id HAVING COUNT(DISTINCT pl) = :labelCount)");
+            params.put("labels", labels);
+            params.put("labelCount", (long) labels.size());
         }
 
         long totalCount = AiUsageEntity.count(hql.toString(), params);

@@ -8,18 +8,19 @@ const TYPE_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "purple
     decision: "blue", result: "green", update: "orange", error: "grey", message: "purple",
 };
 
-function RecentActivityWidget({ config }: WidgetProps) {
+function RecentActivityWidget({ config, labels }: WidgetProps) {
     const [entries, setEntries] = useState<ActivityLogEntry[]>([]);
     const [error, setError] = useState(false);
     const maxEntries = Number(config.maxEntries) || 15;
 
     useEffect(() => {
         let cancelled = false;
-        fetchActivityLog(1, maxEntries)
+        const labelsParam = labels.length > 0 ? labels.join(",") : undefined;
+        fetchActivityLog(1, maxEntries, undefined, undefined, undefined, undefined, labelsParam)
             .then(result => { if (!cancelled) setEntries(result.items); })
             .catch(() => { if (!cancelled) setError(true); });
         return () => { cancelled = true; };
-    }, [maxEntries]);
+    }, [labels, maxEntries]);
 
     if (error) return <WidgetError />;
 
