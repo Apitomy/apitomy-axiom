@@ -29,6 +29,7 @@ import {
     deleteDashboard,
 } from "../config/api";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
+import { LabelInput } from "../components/LabelInput";
 
 export function DashboardsPage() {
     const navigate = useNavigate();
@@ -38,7 +39,7 @@ export function DashboardsPage() {
     const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
     const [newName, setNewName] = useState("");
     const [newDescription, setNewDescription] = useState("");
-    const [newLabels, setNewLabels] = useState("");
+    const [newLabels, setNewLabels] = useState<string[]>([]);
 
     const load = useCallback(() => {
         setLoading(true);
@@ -48,11 +49,10 @@ export function DashboardsPage() {
     useEffect(() => { load(); }, [load]);
 
     const handleCreate = () => {
-        const labels = newLabels.split(",").map(l => l.trim()).filter(l => l.length > 0);
         const data: NewDashboard = {
             name: newName,
             description: newDescription || undefined,
-            labels,
+            labels: newLabels,
             isDefault: dashboards.length === 0,
             widgets: [],
         };
@@ -61,7 +61,7 @@ export function DashboardsPage() {
                 setIsCreateOpen(false);
                 setNewName("");
                 setNewDescription("");
-                setNewLabels("");
+                setNewLabels([]);
                 navigate(`/dashboards/${created.id}`);
             })
             .catch(console.error);
@@ -95,7 +95,7 @@ export function DashboardsPage() {
                     <Button variant="primary" icon={<PlusCircleIcon />} onClick={() => {
                         setNewName("");
                         setNewDescription("");
-                        setNewLabels("");
+                        setNewLabels([]);
                         setIsCreateOpen(true);
                     }}>
                         Create Dashboard
@@ -182,9 +182,9 @@ export function DashboardsPage() {
                             <TextArea id="description" value={newDescription}
                                       onChange={(_e, v) => setNewDescription(v)} />
                         </FormGroup>
-                        <FormGroup label="Labels (comma-separated)" fieldId="labels">
-                            <TextInput id="labels" value={newLabels}
-                                       onChange={(_e, v) => setNewLabels(v)} />
+                        <FormGroup label="Labels" fieldId="labels">
+                            <LabelInput labels={newLabels}
+                                onChange={(labels) => setNewLabels(labels)} />
                         </FormGroup>
                     </Form>
                 </ModalBody>
