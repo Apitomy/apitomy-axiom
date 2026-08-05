@@ -1081,7 +1081,8 @@ export async function fetchUsage(
     page = 1, limit = 20,
     filterInvocationType?: string, filterProjectId?: number,
     filterActorId?: number, filterActionType?: string,
-    filterDateFrom?: string, filterDateTo?: string
+    filterDateFrom?: string, filterDateTo?: string,
+    filterLabels?: string
 ): Promise<AiUsageSearchResults> {
     const params = new URLSearchParams();
     params.set("page", String(page));
@@ -1092,6 +1093,7 @@ export async function fetchUsage(
     if (filterActionType) params.set("filterActionType", filterActionType);
     if (filterDateFrom) params.set("filterDateFrom", filterDateFrom);
     if (filterDateTo) params.set("filterDateTo", filterDateTo);
+    if (filterLabels) params.set("filterLabels", filterLabels);
     const response = await fetch(`${API}/usage/ai?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch usage: ${response.status}`);
     return response.json();
@@ -1173,7 +1175,8 @@ export async function fetchEvents(
 export async function fetchActivityLog(
     page = 1, limit = 20,
     filterEventId?: number, filterSummary?: string,
-    filterProjectId?: number, filterEntryType?: string
+    filterProjectId?: number, filterEntryType?: string,
+    filterLabels?: string
 ): Promise<SearchResults<ActivityLogEntry>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
@@ -1182,6 +1185,7 @@ export async function fetchActivityLog(
     if (filterSummary) params.set("filterSummary", filterSummary);
     if (filterProjectId != null) params.set("filterProjectId", String(filterProjectId));
     if (filterEntryType) params.set("filterEntryType", filterEntryType);
+    if (filterLabels) params.set("filterLabels", filterLabels);
     const response = await fetch(`${API}/activity?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch activity log: ${response.status}`);
     return response.json();
@@ -1629,10 +1633,13 @@ export interface InboxCount {
     count: number;
 }
 
-export async function fetchInboxItems(page = 1, limit = 20): Promise<SearchResults<InboxItem>> {
+export async function fetchInboxItems(
+    page = 1, limit = 20, filterLabels?: string
+): Promise<SearchResults<InboxItem>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
     params.set("limit", String(limit));
+    if (filterLabels) params.set("filterLabels", filterLabels);
     const response = await fetch(`${API}/inbox?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch inbox items: ${response.status}`);
     return response.json();

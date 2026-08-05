@@ -30,7 +30,8 @@ public class ActivityResourceImpl implements ActivityResource {
     @Override
     public ActivityLogSearchResults listActivityLog(BigInteger page, BigInteger limit,
                                                      BigInteger filterEventId, String filterSummary,
-                                                     BigInteger filterProjectId, String filterEntryType) {
+                                                     BigInteger filterProjectId, String filterEntryType,
+                                                     String filterLabels) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
@@ -54,6 +55,15 @@ public class ActivityResourceImpl implements ActivityResource {
                     .map(String::trim).filter(s -> !s.isEmpty()).toList();
             hql.append(" and entryType in :types");
             params.put("types", types);
+        }
+        if (filterLabels != null && !filterLabels.isBlank()) {
+            List<String> labels = Arrays.stream(filterLabels.split(","))
+                    .map(String::trim).filter(s -> !s.isEmpty()).toList();
+            hql.append(" and projectId in (SELECT p.id FROM ProjectEntity p"
+                    + " JOIN p.labels pl WHERE pl IN :labels"
+                    + " GROUP BY p.id HAVING COUNT(DISTINCT pl) = :labelCount)");
+            params.put("labels", labels);
+            params.put("labelCount", (long) labels.size());
         }
 
         long totalCount = ActivityLogEntity.count(hql.toString(), params);
