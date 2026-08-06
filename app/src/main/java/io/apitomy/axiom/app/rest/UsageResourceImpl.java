@@ -69,14 +69,15 @@ public class UsageResourceImpl implements UsageResource {
             params.put("actionType", "%" + filterActionType.toLowerCase() + "%");
         }
         if (filterDateFrom != null && !filterDateFrom.isBlank()) {
-            Instant fromInstant = LocalDate.parse(filterDateFrom)
-                    .atStartOfDay(ZoneId.systemDefault()).toInstant();
+            Instant fromInstant = parseInstant(filterDateFrom);
             hql.append(" and createdOn >= :dateFrom");
             params.put("dateFrom", fromInstant);
         }
         if (filterDateTo != null && !filterDateTo.isBlank()) {
-            Instant toInstant = LocalDate.parse(filterDateTo)
-                    .plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+            Instant toInstant = filterDateTo.contains("T")
+                    ? Instant.parse(filterDateTo)
+                    : LocalDate.parse(filterDateTo).plusDays(1)
+                            .atStartOfDay(ZoneId.systemDefault()).toInstant();
             hql.append(" and createdOn < :dateTo");
             params.put("dateTo", toInstant);
         }
@@ -163,6 +164,17 @@ public class UsageResourceImpl implements UsageResource {
         project.setProjectName(entity.name);
         project.setDiskUsageBytes(entity.diskUsageBytes != null ? entity.diskUsageBytes : 0L);
         return project;
+    }
+
+    /**
+     * Parses a date string that may be either ISO-8601 datetime (e.g. "2026-07-30T12:00:00.000Z")
+     * or date-only (e.g. "2026-07-30"), returning an {@link Instant}.
+     */
+    private Instant parseInstant(String value) {
+        if (value.contains("T")) {
+            return Instant.parse(value);
+        }
+        return LocalDate.parse(value).atStartOfDay(ZoneId.systemDefault()).toInstant();
     }
 
     private AiUsage toBean(AiUsageEntity entity) {
