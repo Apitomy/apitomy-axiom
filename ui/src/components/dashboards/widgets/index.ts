@@ -9,3 +9,4 @@ import "./AiCostByProjectWidget";
 import "./RecentReportsWidget";
 import "./SystemStatusWidget";
 import "./EventSourceHealthWidget";
+import "./DiskUsageWidget";
