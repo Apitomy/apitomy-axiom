@@ -30,7 +30,9 @@ import jakarta.transaction.Transactional;
 import java.math.BigInteger;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -58,13 +60,28 @@ public class InboxResourceImpl implements InboxResource {
      * {@inheritDoc}
      */
     @Override
-    public InboxSearchResults listInboxItems(BigInteger page, BigInteger limit) {
+    public InboxSearchResults listInboxItems(BigInteger page, BigInteger limit,
+                                             String filterLabels) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
-        long totalCount = TaskEntity.count("status", "AwaitingInput");
+        StringBuilder hql = new StringBuilder("status = :status");
+        Map<String, Object> params = new HashMap<>();
+        params.put("status", "AwaitingInput");
+
+        if (filterLabels != null && !filterLabels.isBlank()) {
+            List<String> labels = Arrays.stream(filterLabels.split(","))
+                    .map(String::trim).filter(s -> !s.isEmpty()).toList();
+            hql.append(" and projectId in (SELECT p.id FROM ProjectEntity p"
+                    + " JOIN p.labels pl WHERE pl IN :labels"
+                    + " GROUP BY p.id HAVING COUNT(DISTINCT pl) = :labelCount)");
+            params.put("labels", labels);
+            params.put("labelCount", (long) labels.size());
+        }
+
+        long totalCount = TaskEntity.count(hql.toString(), params);
         List<TaskEntity> taskEntities = TaskEntity.<TaskEntity>find(
-                        "status = ?1", Sort.descending("createdOn"), "AwaitingInput")
+                        hql.toString(), Sort.descending("createdOn"), params)
                 .page(Page.of(pageNum - 1, pageSize))
                 .list();
 

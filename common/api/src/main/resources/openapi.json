@@ -1507,6 +1507,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "filterLabels",
+            "in": "query",
+            "description": "Comma-separated list of project labels to filter by (AND logic)",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1820,6 +1828,14 @@
             "name": "filterEntryType",
             "in": "query",
             "description": "Comma-separated list of entry types to include",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filterLabels",
+            "in": "query",
+            "description": "Comma-separated list of project labels to filter by (AND logic)",
             "schema": {
               "type": "string"
             }
@@ -3816,6 +3832,15 @@
             "required": false,
             "schema": {
               "type": "integer"
+            }
+          },
+          {
+            "name": "filterLabels",
+            "in": "query",
+            "description": "Comma-separated list of project labels to filter by (AND logic)",
+            "required": false,
+            "schema": {
+              "type": "string"
             }
           }
         ],

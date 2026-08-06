@@ -6,7 +6,7 @@ import { type InboxItem, fetchInboxItems } from "../../../config/api";
 import { registerWidget, type WidgetProps } from "../widget-registry";
 import { WidgetError } from "../WidgetError";
 
-function InboxWidget({ config }: WidgetProps) {
+function InboxWidget({ config, labels }: WidgetProps) {
     const navigate = useNavigate();
     const [items, setItems] = useState<InboxItem[]>([]);
     const [error, setError] = useState(false);
@@ -14,11 +14,12 @@ function InboxWidget({ config }: WidgetProps) {
 
     useEffect(() => {
         let cancelled = false;
-        fetchInboxItems(1, maxRows)
+        const labelsParam = labels.length > 0 ? labels.join(",") : undefined;
+        fetchInboxItems(1, maxRows, labelsParam)
             .then(result => { if (!cancelled) setItems(result.items); })
             .catch(() => { if (!cancelled) setError(true); });
         return () => { cancelled = true; };
-    }, [maxRows]);
+    }, [labels, maxRows]);
 
     if (error) return <WidgetError />;
 
