@@ -19,6 +19,7 @@ import java.math.BigInteger;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
@@ -71,14 +72,15 @@ public class UsageResourceImpl implements UsageResource {
             params.put("actionType", "%" + filterActionType.toLowerCase() + "%");
         }
         if (filterDateFrom != null && !filterDateFrom.isBlank()) {
-            Instant fromInstant = LocalDate.parse(filterDateFrom)
-                    .atStartOfDay(ZoneId.systemDefault()).toInstant();
+            Instant fromInstant = parseInstant(filterDateFrom);
             hql.append(" and createdOn >= :dateFrom");
             params.put("dateFrom", fromInstant);
         }
         if (filterDateTo != null && !filterDateTo.isBlank()) {
-            Instant toInstant = LocalDate.parse(filterDateTo)
-                    .plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
+            Instant toInstant = parseInstant(filterDateTo);
+            if (!filterDateTo.contains("T")) {
+                toInstant = toInstant.plus(1, ChronoUnit.DAYS);
+            }
             hql.append(" and createdOn < :dateTo");
             params.put("dateTo", toInstant);
         }
@@ -174,6 +176,17 @@ public class UsageResourceImpl implements UsageResource {
         project.setProjectName(entity.name);
         project.setDiskUsageBytes(entity.diskUsageBytes != null ? entity.diskUsageBytes : 0L);
         return project;
+    }
+
+    /**
+     * Parses a date string that may be either ISO-8601 datetime (e.g. "2026-07-30T12:00:00.000Z")
+     * or date-only (e.g. "2026-07-30"), returning an {@link Instant}.
+     */
+    private Instant parseInstant(String value) {
+        if (value.contains("T")) {
+            return Instant.parse(value);
+        }
+        return LocalDate.parse(value).atStartOfDay(ZoneId.systemDefault()).toInstant();
     }
 
     private AiUsage toBean(AiUsageEntity entity) {
