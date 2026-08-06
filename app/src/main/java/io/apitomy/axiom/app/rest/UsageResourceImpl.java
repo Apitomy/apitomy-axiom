@@ -19,6 +19,7 @@ import java.math.BigInteger;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -74,10 +75,10 @@ public class UsageResourceImpl implements UsageResource {
             params.put("dateFrom", fromInstant);
         }
         if (filterDateTo != null && !filterDateTo.isBlank()) {
-            Instant toInstant = filterDateTo.contains("T")
-                    ? Instant.parse(filterDateTo)
-                    : LocalDate.parse(filterDateTo).plusDays(1)
-                            .atStartOfDay(ZoneId.systemDefault()).toInstant();
+            Instant toInstant = parseInstant(filterDateTo);
+            if (!filterDateTo.contains("T")) {
+                toInstant = toInstant.plus(1, ChronoUnit.DAYS);
+            }
             hql.append(" and createdOn < :dateTo");
             params.put("dateTo", toInstant);
         }
