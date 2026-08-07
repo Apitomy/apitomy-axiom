@@ -52,6 +52,13 @@ public class EventSourcesResourceImpl implements EventResource {
     public EventSource createEventSource(NewEventSource data) {
         EventSourceEntity entity = new EventSourceEntity();
         applyFields(entity, data);
+        if (entity.filters == null) {
+            try {
+                entity.filters = objectMapper.writeValueAsString(defaultFilters());
+            } catch (Exception e) {
+                entity.filters = null;
+            }
+        }
         entity.persist();
         return toBean(entity);
     }
@@ -86,6 +93,34 @@ public class EventSourcesResourceImpl implements EventResource {
     }
 
     /**
+     * Creates the default filter configuration for new event sources.
+     *
+     * @return the default filters that skip bot activity and slash commands
+     */
+    private io.apitomy.axiom.api.beans.EventSourceFilters defaultFilters() {
+        io.apitomy.axiom.api.beans.EventSourceFilters filters = new io.apitomy.axiom.api.beans.EventSourceFilters();
+        filters.setInclude(List.of());
+
+        io.apitomy.axiom.api.beans.EventSourceFilterRule botRule = new io.apitomy.axiom.api.beans.EventSourceFilterRule();
+        botRule.setType(io.apitomy.axiom.api.beans.EventSourceFilterRule.Type.payload);
+        botRule.setPointer("/user/login");
+        botRule.setPattern("*[bot]");
+
+        io.apitomy.axiom.api.beans.EventSourceFilterRule commentBotRule = new io.apitomy.axiom.api.beans.EventSourceFilterRule();
+        commentBotRule.setType(io.apitomy.axiom.api.beans.EventSourceFilterRule.Type.payload);
+        commentBotRule.setPointer("/comment/user/login");
+        commentBotRule.setPattern("*[bot]");
+
+        io.apitomy.axiom.api.beans.EventSourceFilterRule slashRule = new io.apitomy.axiom.api.beans.EventSourceFilterRule();
+        slashRule.setType(io.apitomy.axiom.api.beans.EventSourceFilterRule.Type.payload);
+        slashRule.setPointer("/comment/body");
+        slashRule.setPattern("/*");
+
+        filters.setExclude(List.of(botRule, commentBotRule, slashRule));
+        return filters;
+    }
+
+    /**
      * Applies field values from the API bean to the entity.
      *
      * @param entity the entity to update
@@ -110,6 +145,15 @@ public class EventSourcesResourceImpl implements EventResource {
         entity.labels.clear();
         if (data.getLabels() != null) {
             entity.labels.addAll(data.getLabels());
+        }
+        if (data.getFilters() != null) {
+            try {
+                entity.filters = objectMapper.writeValueAsString(data.getFilters());
+            } catch (Exception e) {
+                entity.filters = null;
+            }
+        } else {
+            entity.filters = null;
         }
     }
 
@@ -152,6 +196,14 @@ public class EventSourcesResourceImpl implements EventResource {
             }
         }
         bean.setLabels(entity.labels);
+        if (entity.filters != null) {
+            try {
+                bean.setFilters(objectMapper.readValue(entity.filters,
+                        io.apitomy.axiom.api.beans.EventSourceFilters.class));
+            } catch (Exception e) {
+                // ignore parse errors
+            }
+        }
         return bean;
     }
 

@@ -2,6 +2,9 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.core.filters.EventFilterEvaluator;
+import io.apitomy.axiom.core.filters.EventSourceFilters;
+import io.apitomy.axiom.core.filters.FilterResult;
 import io.apitomy.axiom.core.tracing.TraceContext;
 import io.apitomy.axiom.core.tracing.TraceService;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
@@ -42,10 +45,8 @@ public class PipelineOrchestrator {
 
     private static final Logger LOG = Logger.getLogger(PipelineOrchestrator.class);
 
-    private static final Set<String> SLASH_COMMANDS = Set.of(
-            "/ready", "/retry", "/accept", "/reject", "/disable-tests",
-            "/enable-tests", "/unstale", "/skip-review", "/auto-merge", "/merge"
-    );
+    @Inject
+    EventFilterEvaluator filterEvaluator;
 
     @Inject
     ManagerService managerService;
@@ -104,43 +105,27 @@ public class PipelineOrchestrator {
     }
 
     /**
-     * Returns a skip reason if the event should be filtered out without
-     * invoking the AI Manager, or {@code null} if the event should be processed.
+     * Evaluates event against the filters configured on its source.
+     *
+     * @param event the event to evaluate
+     * @return the filter evaluation result
      */
-    private String shouldSkipEvent(EventEntity event) {
-        if (event.payload == null || event.payload.isBlank()) {
-            return null;
+    private FilterResult evaluateFilters(EventEntity event) {
+        if (event.eventSourceId == null) {
+            return FilterResult.ALLOWED;
+        }
+        EventSourceEntity source = EventSourceEntity.findById(event.eventSourceId);
+        if (source == null || source.filters == null) {
+            return FilterResult.ALLOWED;
         }
         try {
+            EventSourceFilters filters = objectMapper.readValue(source.filters, EventSourceFilters.class);
             JsonNode payload = objectMapper.readTree(event.payload);
-
-            // Extract the author login from the event payload
-            String login = null;
-            JsonNode comment = payload.path("comment");
-            if (!comment.isMissingNode()) {
-                login = comment.path("user").path("login").asText(null);
-            }
-            if (login == null) {
-                login = payload.path("user").path("login").asText(null);
-            }
-
-            // Skip events from GitHub App bot accounts (all use the [bot] suffix)
-            if (login != null && login.endsWith("[bot]")) {
-                return "bot activity from " + login;
-            }
-
-            // Skip slash command comments (lifecycle orchestrator handles these)
-            if ("comment-added".equals(event.eventType) && !comment.isMissingNode()) {
-                String body = comment.path("body").asText("").trim();
-                if (SLASH_COMMANDS.stream().anyMatch(cmd ->
-                        body.equals(cmd) || body.startsWith(cmd + " "))) {
-                    return "slash command: " + body.split("\\s+")[0];
-                }
-            }
+            return filterEvaluator.evaluate(filters, event.eventType, payload);
         } catch (Exception e) {
-            LOG.tracef("Failed to parse event payload for pre-filtering: %s", e.getMessage());
+            LOG.warnf("Failed to evaluate filters for event %d: %s", event.id, e.getMessage());
+            return FilterResult.ALLOWED;
         }
-        return null;
     }
 
     /**
@@ -170,13 +155,13 @@ public class PipelineOrchestrator {
         LOG.infof("Processing event %d: %s [%s] from %s",
                 event.id, event.eventType, event.issueRef, event.source);
 
-        // Pre-filter: skip events from known bots without invoking the AI Manager
-        String skipReason = shouldSkipEvent(event);
-        if (skipReason != null) {
-            LOG.infof("Pre-filtered event %d: %s", event.id, skipReason);
+        // Pre-filter: evaluate event against source filters before invoking the AI Manager
+        FilterResult filterResult = evaluateFilters(event);
+        if (!filterResult.allowed()) {
+            LOG.infof("Pre-filtered event %d: %s", event.id, filterResult.matchedRule());
             QuarkusTransaction.requiringNew().run(() -> {
                 logActivity(null, null, event.id, "event-pre-filtered",
-                        "Event pre-filtered: " + event.eventType + " — " + skipReason);
+                        "Event pre-filtered: " + event.eventType + " — " + filterResult.matchedRule());
                 markQueueEntry(queueEntryId, "completed");
             });
             return;
