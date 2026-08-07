@@ -56,6 +56,9 @@ public class EventSourceEntity extends PanacheEntity {
     @Column(nullable = false, columnDefinition = "TEXT")
     public String configuration;
 
+    @Column(columnDefinition = "TEXT")
+    public String filters;
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "event_source_label", joinColumns = @JoinColumn(name = "event_source_id"))
     @Column(name = "label")
