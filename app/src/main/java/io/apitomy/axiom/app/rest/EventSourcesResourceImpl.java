@@ -181,8 +181,6 @@ public class EventSourcesResourceImpl implements EventResource {
             } catch (Exception e) {
                 entity.filters = null;
             }
-        } else {
-            entity.filters = null;
         }
     }
 
@@ -322,7 +320,7 @@ public class EventSourcesResourceImpl implements EventResource {
     private List<DryRunEvent> fetchDryRunEvents(FilterDryRunRequest request) {
         String sourceType = request.getSourceType().value();
         Map<String, Object> config = request.getConfiguration().getAdditionalProperties();
-        String token = resolveSecretValue(request.getSecretName());
+        String token = resolveSecretValue(request.getSecretName(), sourceType);
 
         if (token == null) {
             throw new WebApplicationException("Secret not found or could not be decrypted", 401);
@@ -365,12 +363,14 @@ public class EventSourcesResourceImpl implements EventResource {
     }
 
     /**
-     * Resolves a secret value by name using the same logic as the pollers.
+     * Resolves a secret value by name, with fallbacks to well-known secrets
+     * and environment variables matching the poller resolution logic.
      *
-     * @param secretName the name of the secret to resolve
+     * @param secretName the name of the secret to resolve (may be null)
+     * @param sourceType the source type ("github" or "jira") for fallback resolution
      * @return the decrypted secret value, or null if not found
      */
-    private String resolveSecretValue(String secretName) {
+    private String resolveSecretValue(String secretName, String sourceType) {
         if (secretName != null && !secretName.isBlank()) {
             SecretEntity secret = SecretEntity.find("name", secretName).firstResult();
             if (secret != null) {
@@ -379,6 +379,27 @@ public class EventSourcesResourceImpl implements EventResource {
                 } catch (Exception e) {
                     LOG.warnf("Failed to decrypt secret '%s'", secretName);
                 }
+            }
+        }
+
+        List<String> fallbackNames = "github".equals(sourceType)
+                ? List.of("GH_TOKEN", "GITHUB_TOKEN")
+                : List.of("JIRA_API_TOKEN");
+        for (String name : fallbackNames) {
+            SecretEntity secret = SecretEntity.find("name", name).firstResult();
+            if (secret != null) {
+                try {
+                    return encryptionService.decrypt(secret.encryptedValue);
+                } catch (Exception e) {
+                    LOG.warnf("Failed to decrypt %s secret", name);
+                }
+            }
+        }
+
+        for (String name : fallbackNames) {
+            String envValue = System.getenv(name);
+            if (envValue != null && !envValue.isBlank()) {
+                return envValue;
             }
         }
         return null;

@@ -518,7 +518,7 @@ function FiltersTab({ source, onSave }: {
                             <Td>
                                 <TextInput value={newRulePattern}
                                     onChange={(_e, v) => setNewRulePattern(v)}
-                                    placeholder="^pattern.*" />
+                                    placeholder="*[bot]" />
                             </Td>
                             <Td>
                                 <Button variant="primary" size="sm" style={{ marginRight: "8px" }}
