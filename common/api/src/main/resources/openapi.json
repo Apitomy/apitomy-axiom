@@ -7576,6 +7576,10 @@
           "matchedRule": {
             "description": "Description of the filter rule that matched, if blocked",
             "type": "string"
+          },
+          "payload": {
+            "description": "The raw event payload JSON",
+            "type": "string"
           }
         }
       }

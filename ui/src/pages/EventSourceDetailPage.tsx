@@ -1,9 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
     Breadcrumb,
     BreadcrumbItem,
     Button,
+    Card,
+    CardBody,
+    CardTitle,
     EmptyState,
     EmptyStateBody,
     Flex,
@@ -16,6 +19,10 @@ import {
     HelperTextItem,
     CodeBlock,
     CodeBlockCode,
+    DescriptionList,
+    DescriptionListDescription,
+    DescriptionListGroup,
+    DescriptionListTerm,
     Label,
     Modal,
     ModalBody,
@@ -36,6 +43,8 @@ import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
 import TimesCircleIcon from "@patternfly/react-icons/dist/esm/icons/times-circle-icon";
+import { CodeEditor, Language } from "@patternfly/react-code-editor";
+import { useEffectiveTheme } from "../hooks/useTheme";
 import { EditLabelsModal } from "../components/EditLabelsModal";
 import { LabelDisplay } from "../components/LabelDisplay";
 import {
@@ -45,6 +54,7 @@ import {
     type EventSourceFilterRule,
     type FilterDryRunRequest,
     type FilterDryRunResponse,
+    type FilterDryRunResult,
     type Secret,
     fetchEventSource,
     updateEventSource,
@@ -59,6 +69,7 @@ export function EventSourceDetailPage() {
 
     const [source, setSource] = useState<EventSource | null>(null);
     const [form, setForm] = useState<Partial<EventSource>>({});
+    const [filters, setFilters] = useState<EventSourceFilters>({ include: [], exclude: [] });
     const [sourceUrl, setSourceUrl] = useState("");
     const [secrets, setSecrets] = useState<Secret[]>([]);
     const [logs, setLogs] = useState<EventSourceLog[]>([]);
@@ -87,6 +98,7 @@ export function EventSourceDetailPage() {
                     configuration: src.configuration,
                     labels: src.labels || [],
                 });
+                setFilters(src.filters ?? { include: [], exclude: [] });
                 setSourceUrl(buildUrlFromConfig(src));
                 setSecrets(secs);
                 setLogs(logResults.items);
@@ -105,10 +117,15 @@ export function EventSourceDetailPage() {
         setDirty(true);
     };
 
+    const updateFilters = (updated: EventSourceFilters) => {
+        setFilters(updated);
+        setDirty(true);
+    };
+
     const handleSave = () => {
         setSaving(true);
         const config = buildConfigFromUrl(form.sourceType || "", sourceUrl);
-        const data = { ...form, configuration: config } as EventSource;
+        const data = { ...form, configuration: config, filters } as EventSource;
         updateEventSource(id, data)
             .then((updated) => { setSource(updated); setDirty(false); })
             .catch(console.error)
@@ -180,13 +197,9 @@ export function EventSourceDetailPage() {
                         {source && (
                             <FiltersTab
                                 source={source}
-                                onSave={async (filters) => {
-                                    await updateEventSource(source.id, {
-                                        ...source,
-                                        filters,
-                                    });
-                                    loadData();
-                                }}
+                                filters={filters}
+                                onFiltersChange={updateFilters}
+                                isActive={activeTab === 1}
                             />
                         )}
                     </TabContent>
@@ -400,19 +413,17 @@ function LogsTab({ logs, totalCount, page, perPage, onPageChange, onPerPageChang
     );
 }
 
-function FiltersTab({ source, onSave }: {
+function FiltersTab({ source, filters, onFiltersChange, isActive }: {
     source: EventSource;
-    onSave: (filters: EventSourceFilters) => Promise<void>;
+    filters: EventSourceFilters;
+    onFiltersChange: (filters: EventSourceFilters) => void;
+    isActive: boolean;
 }) {
-    const [filters, setFilters] = useState<EventSourceFilters>(
-        source.filters ?? { include: [], exclude: [] }
-    );
-    const [dirty, setDirty] = useState(false);
-    const [saving, setSaving] = useState(false);
     const [dryRunResults, setDryRunResults] = useState<FilterDryRunResponse | null>(null);
     const [dryRunLoading, setDryRunLoading] = useState(false);
+    const [selectedResult, setSelectedResult] = useState<FilterDryRunResult | null>(null);
+    const prevActiveRef = useRef(false);
 
-    // State for the "add rule" form
     const [addingTo, setAddingTo] = useState<"include" | "exclude" | null>(null);
     const [newRuleType, setNewRuleType] = useState<"event-type" | "payload">("event-type");
     const [newRulePointer, setNewRulePointer] = useState("");
@@ -426,8 +437,7 @@ function FiltersTab({ source, onSave }: {
         };
         const updated = { ...filters };
         updated[list] = [...updated[list], rule];
-        setFilters(updated);
-        setDirty(true);
+        onFiltersChange(updated);
         setAddingTo(null);
         setNewRuleType("event-type");
         setNewRulePointer("");
@@ -437,21 +447,10 @@ function FiltersTab({ source, onSave }: {
     const handleDeleteRule = (list: "include" | "exclude", index: number) => {
         const updated = { ...filters };
         updated[list] = updated[list].filter((_, i) => i !== index);
-        setFilters(updated);
-        setDirty(true);
+        onFiltersChange(updated);
     };
 
-    const handleSave = async () => {
-        setSaving(true);
-        try {
-            await onSave(filters);
-            setDirty(false);
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const handleDryRun = async () => {
+    const handleDryRun = useCallback(async () => {
         setDryRunLoading(true);
         try {
             const request: FilterDryRunRequest = {
@@ -467,156 +466,281 @@ function FiltersTab({ source, onSave }: {
         } finally {
             setDryRunLoading(false);
         }
-    };
+    }, [source, filters]);
+
+    useEffect(() => {
+        if (isActive && !prevActiveRef.current) {
+            handleDryRun();
+        }
+        prevActiveRef.current = isActive;
+    }, [isActive, handleDryRun]);
+
+    useEffect(() => {
+        if (isActive) {
+            handleDryRun();
+        }
+    }, [filters]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const renderRuleTable = (list: "include" | "exclude", rules: EventSourceFilterRule[]) => (
-        <div style={{ marginBottom: "24px" }}>
-            <Title headingLevel="h3" size="md" style={{ marginBottom: "12px" }}>
+        <Card style={{ marginBottom: "24px" }}>
+            <CardTitle>
                 {list === "include" ? "Include Rules" : "Exclude Rules"}
-            </Title>
-            <Table aria-label={`${list} rules`} variant="compact">
-                <Thead>
-                    <Tr>
-                        <Th>Type</Th>
-                        <Th>Pointer</Th>
-                        <Th>Pattern</Th>
-                        <Th>Actions</Th>
-                    </Tr>
-                </Thead>
-                <Tbody>
-                    {rules.map((rule, index) => (
-                        <Tr key={index}>
-                            <Td>{rule.type}</Td>
-                            <Td>{rule.pointer ?? "—"}</Td>
-                            <Td><code>{rule.pattern}</code></Td>
-                            <Td>
-                                <Button variant="plain" aria-label="Delete rule"
-                                    onClick={() => handleDeleteRule(list, index)}>
-                                    <TrashIcon />
-                                </Button>
-                            </Td>
-                        </Tr>
-                    ))}
-                    {addingTo === list && (
+            </CardTitle>
+            <CardBody>
+                <Table aria-label={`${list} rules`} variant="compact">
+                    <Thead>
                         <Tr>
-                            <Td>
-                                <FormSelect value={newRuleType}
-                                    onChange={(_e, v) => setNewRuleType(v as "event-type" | "payload")}>
-                                    <FormSelectOption value="event-type" label="event-type" />
-                                    <FormSelectOption value="payload" label="payload" />
-                                </FormSelect>
-                            </Td>
-                            <Td>
-                                {newRuleType === "payload" ? (
-                                    <TextInput value={newRulePointer}
-                                        onChange={(_e, v) => setNewRulePointer(v)}
-                                        placeholder="/path/to/field" />
-                                ) : (
-                                    <span>—</span>
-                                )}
-                            </Td>
-                            <Td>
-                                <TextInput value={newRulePattern}
-                                    onChange={(_e, v) => setNewRulePattern(v)}
-                                    placeholder="*[bot]" />
-                            </Td>
-                            <Td>
-                                <Button variant="primary" size="sm" style={{ marginRight: "8px" }}
-                                    isDisabled={!newRulePattern}
-                                    onClick={() => handleAddRule(list)}>
-                                    Add
-                                </Button>
-                                <Button variant="link" size="sm"
-                                    onClick={() => {
-                                        setAddingTo(null);
-                                        setNewRuleType("event-type");
-                                        setNewRulePointer("");
-                                        setNewRulePattern("");
-                                    }}>
-                                    Cancel
-                                </Button>
-                            </Td>
+                            <Th>Type</Th>
+                            <Th>Pointer</Th>
+                            <Th>Pattern</Th>
+                            <Th>Actions</Th>
                         </Tr>
-                    )}
-                </Tbody>
-            </Table>
-            {addingTo !== list && (
-                <Button variant="link" onClick={() => setAddingTo(list)}
-                    style={{ marginTop: "8px" }}>
-                    Add {list} rule
-                </Button>
-            )}
-        </div>
+                    </Thead>
+                    <Tbody>
+                        {rules.map((rule, index) => (
+                            <Tr key={index}>
+                                <Td>{rule.type}</Td>
+                                <Td>{rule.pointer ?? "—"}</Td>
+                                <Td><code>{rule.pattern}</code></Td>
+                                <Td>
+                                    <Button variant="plain" aria-label="Delete rule"
+                                        onClick={() => handleDeleteRule(list, index)}>
+                                        <TrashIcon />
+                                    </Button>
+                                </Td>
+                            </Tr>
+                        ))}
+                        {addingTo === list && (
+                            <Tr>
+                                <Td>
+                                    <FormSelect value={newRuleType}
+                                        onChange={(_e, v) => setNewRuleType(v as "event-type" | "payload")}>
+                                        <FormSelectOption value="event-type" label="event-type" />
+                                        <FormSelectOption value="payload" label="payload" />
+                                    </FormSelect>
+                                </Td>
+                                <Td>
+                                    {newRuleType === "payload" ? (
+                                        <TextInput value={newRulePointer}
+                                            onChange={(_e, v) => setNewRulePointer(v)}
+                                            placeholder="/path/to/field" />
+                                    ) : (
+                                        <span>—</span>
+                                    )}
+                                </Td>
+                                <Td>
+                                    <TextInput value={newRulePattern}
+                                        onChange={(_e, v) => setNewRulePattern(v)}
+                                        placeholder="*[bot]" />
+                                </Td>
+                                <Td>
+                                    <Button variant="primary" size="sm" style={{ marginRight: "8px" }}
+                                        isDisabled={!newRulePattern}
+                                        onClick={() => handleAddRule(list)}>
+                                        Add
+                                    </Button>
+                                    <Button variant="link" size="sm"
+                                        onClick={() => {
+                                            setAddingTo(null);
+                                            setNewRuleType("event-type");
+                                            setNewRulePointer("");
+                                            setNewRulePattern("");
+                                        }}>
+                                        Cancel
+                                    </Button>
+                                </Td>
+                            </Tr>
+                        )}
+                    </Tbody>
+                </Table>
+                {addingTo !== list && (
+                    <Button variant="link" onClick={() => setAddingTo(list)}
+                        style={{ marginTop: "8px" }}>
+                        Add {list} rule
+                    </Button>
+                )}
+            </CardBody>
+        </Card>
     );
 
     return (
-        <div>
-            <Flex justifyContent={{ default: "justifyContentSpaceBetween" }}
-                alignItems={{ default: "alignItemsCenter" }}
-                style={{ marginBottom: "16px" }}>
-                <FlexItem>
-                    <p className="axiom-text-subtle">
-                        Configure filter rules to control which events are processed. Include rules allow matching events; exclude rules block them.
-                    </p>
-                </FlexItem>
-                <FlexItem>
-                    <Button variant="primary" icon={<SaveIcon />} onClick={handleSave}
-                        isDisabled={!dirty || saving} isLoading={saving}>
-                        {saving ? "Saving..." : "Save"}
-                    </Button>
-                </FlexItem>
-            </Flex>
+        <Flex direction={{ default: "column", lg: "row" }}
+            alignItems={{ default: "alignItemsStretch" }}
+            style={{ gap: "24px" }}>
+            <FlexItem flex={{ default: "flex_1" }}>
+                <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
+                    Configure filter rules to control which events are processed. Include rules
+                    allow matching events; exclude rules block them.
+                </p>
 
-            {renderRuleTable("include", filters.include)}
-            {renderRuleTable("exclude", filters.exclude)}
+                {renderRuleTable("include", filters.include)}
+                {renderRuleTable("exclude", filters.exclude)}
+            </FlexItem>
 
-            <div style={{ marginTop: "24px", marginBottom: "24px" }}>
-                <Button variant="secondary" onClick={handleDryRun}
-                    isLoading={dryRunLoading}
-                    isDisabled={dryRunLoading}>
-                    {dryRunLoading ? "Testing..." : "Test Filters"}
-                </Button>
-            </div>
+            <FlexItem flex={{ default: "flex_1" }}>
+                <Card>
+                    <CardTitle>
+                        <Flex justifyContent={{ default: "justifyContentSpaceBetween" }}
+                            alignItems={{ default: "alignItemsCenter" }}>
+                            <FlexItem>Matching Events Preview</FlexItem>
+                            <FlexItem>
+                                <Button variant="secondary" icon={<SyncAltIcon />}
+                                    onClick={handleDryRun}
+                                    isLoading={dryRunLoading}
+                                    isDisabled={dryRunLoading}>
+                                    Refresh
+                                </Button>
+                            </FlexItem>
+                        </Flex>
+                    </CardTitle>
+                    <CardBody>
+                        {!dryRunResults ? (
+                            <EmptyState>
+                                <EmptyStateBody>
+                                    Click "Refresh" to preview how the current rules would apply
+                                    to recent events.
+                                </EmptyStateBody>
+                            </EmptyState>
+                        ) : (
+                            <>
+                                <p style={{ marginBottom: "12px" }}>
+                                    <strong>{dryRunResults.totalAllowed} allowed</strong>,{" "}
+                                    <strong>{dryRunResults.totalBlocked} blocked</strong> out of{" "}
+                                    <strong>{dryRunResults.totalEvaluated}</strong> events
+                                </p>
+                                <div style={{ maxHeight: "60vh", overflow: "auto" }}>
+                                    <Table aria-label="Filter test results" variant="compact">
+                                        <Thead>
+                                            <Tr>
+                                                <Th>Result</Th>
+                                                <Th>Event Type</Th>
+                                                <Th>Reference</Th>
+                                                <Th>Summary</Th>
+                                                <Th>Matched Rule</Th>
+                                            </Tr>
+                                        </Thead>
+                                        <Tbody>
+                                            {dryRunResults.results.map((result, index) => (
+                                                <Tr key={index} isClickable
+                                                    onRowClick={() => setSelectedResult(result)}>
+                                                    <Td>
+                                                        <Label isCompact
+                                                            color={result.allowed ? "green" : "red"}
+                                                            icon={result.allowed
+                                                                ? <CheckCircleIcon />
+                                                                : <TimesCircleIcon />}>
+                                                            {result.allowed ? "Allowed" : "Blocked"}
+                                                        </Label>
+                                                    </Td>
+                                                    <Td>{result.eventType}</Td>
+                                                    <Td>{result.issueRef}</Td>
+                                                    <Td>{result.summary}</Td>
+                                                    <Td>{result.matchedRule ?? "—"}</Td>
+                                                </Tr>
+                                            ))}
+                                        </Tbody>
+                                    </Table>
+                                </div>
+                            </>
+                        )}
+                    </CardBody>
+                </Card>
+            </FlexItem>
 
-            {dryRunResults && (
-                <div style={{ marginTop: "24px" }}>
-                    <Title headingLevel="h3" size="md" style={{ marginBottom: "12px" }}>
-                        Test Results
-                    </Title>
-                    <p style={{ marginBottom: "12px" }}>
-                        <strong>{dryRunResults.totalAllowed} allowed</strong>, <strong>{dryRunResults.totalBlocked} blocked</strong> out of <strong>{dryRunResults.totalEvaluated}</strong> events
-                    </p>
-                    <Table aria-label="Filter test results" variant="compact">
-                        <Thead>
-                            <Tr>
-                                <Th>Result</Th>
-                                <Th>Event Type</Th>
-                                <Th>Reference</Th>
-                                <Th>Summary</Th>
-                                <Th>Matched Rule</Th>
-                            </Tr>
-                        </Thead>
-                        <Tbody>
-                            {dryRunResults.results.map((result, index) => (
-                                <Tr key={index}>
-                                    <Td>
-                                        <Label isCompact
-                                            color={result.allowed ? "green" : "red"}
-                                            icon={result.allowed ? <CheckCircleIcon /> : <TimesCircleIcon />}>
-                                            {result.allowed ? "Allowed" : "Blocked"}
-                                        </Label>
-                                    </Td>
-                                    <Td>{result.eventType}</Td>
-                                    <Td>{result.issueRef}</Td>
-                                    <Td>{result.summary}</Td>
-                                    <Td>{result.matchedRule ?? "—"}</Td>
-                                </Tr>
-                            ))}
-                        </Tbody>
-                    </Table>
-                </div>
-            )}
-        </div>
+            <DryRunEventDetailModal
+                result={selectedResult}
+                onClose={() => setSelectedResult(null)}
+            />
+        </Flex>
+    );
+}
+
+function DryRunEventDetailModal({ result, onClose }: {
+    result: FilterDryRunResult | null;
+    onClose: () => void;
+}) {
+    const effectiveTheme = useEffectiveTheme();
+    const formatPayload = (payload?: string): string => {
+        if (!payload) return "";
+        try {
+            return JSON.stringify(JSON.parse(payload), null, 2);
+        } catch {
+            return payload;
+        }
+    };
+
+    return (
+        <Modal isOpen={result !== null} onClose={onClose} variant="large"
+            aria-label="Event details">
+            <ModalHeader
+                title="Event Details"
+                description={result
+                    ? `${result.eventType} — ${result.issueRef}`
+                    : undefined}
+            />
+            <ModalBody>
+                {result && (
+                    <>
+                        <Card style={{ marginBottom: "8px" }}>
+                            <CardBody>
+                                <DescriptionList isHorizontal isCompact>
+                                    <DescriptionListGroup>
+                                        <DescriptionListTerm>Event Type</DescriptionListTerm>
+                                        <DescriptionListDescription>
+                                            {result.eventType}
+                                        </DescriptionListDescription>
+                                    </DescriptionListGroup>
+                                    <DescriptionListGroup>
+                                        <DescriptionListTerm>Reference</DescriptionListTerm>
+                                        <DescriptionListDescription>
+                                            {result.issueRef}
+                                        </DescriptionListDescription>
+                                    </DescriptionListGroup>
+                                    <DescriptionListGroup>
+                                        <DescriptionListTerm>Summary</DescriptionListTerm>
+                                        <DescriptionListDescription>
+                                            {result.summary}
+                                        </DescriptionListDescription>
+                                    </DescriptionListGroup>
+                                    <DescriptionListGroup>
+                                        <DescriptionListTerm>Result</DescriptionListTerm>
+                                        <DescriptionListDescription>
+                                            <Label isCompact
+                                                color={result.allowed ? "green" : "red"}
+                                                icon={result.allowed
+                                                    ? <CheckCircleIcon />
+                                                    : <TimesCircleIcon />}>
+                                                {result.allowed ? "Allowed" : "Blocked"}
+                                            </Label>
+                                        </DescriptionListDescription>
+                                    </DescriptionListGroup>
+                                    {result.matchedRule && (
+                                        <DescriptionListGroup>
+                                            <DescriptionListTerm>Matched Rule</DescriptionListTerm>
+                                            <DescriptionListDescription>
+                                                {result.matchedRule}
+                                            </DescriptionListDescription>
+                                        </DescriptionListGroup>
+                                    )}
+                                </DescriptionList>
+                            </CardBody>
+                        </Card>
+
+                        <Title headingLevel="h4" size="md" style={{ marginBottom: "8px" }}>
+                            Payload
+                        </Title>
+                        <CodeEditor
+                            code={formatPayload(result.payload)}
+                            language={Language.json}
+                            isDarkTheme={effectiveTheme === "dark"}
+                            height="400px"
+                            isReadOnly
+                            isLineNumbersVisible
+                        />
+                    </>
+                )}
+            </ModalBody>
+        </Modal>
     );
 }
 

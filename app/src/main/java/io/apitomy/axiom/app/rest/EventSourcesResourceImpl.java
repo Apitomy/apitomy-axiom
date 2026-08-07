@@ -298,6 +298,7 @@ public class EventSourcesResourceImpl implements EventResource {
             result.setSummary(event.summary());
             result.setAllowed(filterResult.allowed());
             result.setMatchedRule(filterResult.matchedRule());
+            result.setPayload(event.payload() != null ? event.payload().toString() : null);
             results.add(result);
             if (filterResult.allowed()) allowed++;
             else blocked++;
@@ -318,6 +319,7 @@ public class EventSourcesResourceImpl implements EventResource {
      * @return list of classified events
      */
     private List<DryRunEvent> fetchDryRunEvents(FilterDryRunRequest request) {
+        final int MAX_EVENTS = 200;
         String sourceType = request.getSourceType().value();
         Map<String, Object> config = request.getConfiguration().getAdditionalProperties();
         String token = resolveSecretValue(request.getSecretName(), sourceType);
@@ -326,16 +328,23 @@ public class EventSourcesResourceImpl implements EventResource {
             throw new WebApplicationException("Secret not found or could not be decrypted", 401);
         }
 
+        List<DryRunEvent> events;
         if ("github".equals(sourceType)) {
             String owner = String.valueOf(config.get("owner"));
             String name = String.valueOf(config.get("name"));
-            return githubDryRunService.fetchRecentEvents(owner, name, token);
+            events = githubDryRunService.fetchRecentEvents(owner, name, token);
         } else if ("jira".equals(sourceType)) {
             String baseUrl = String.valueOf(config.get("baseUrl"));
             String project = String.valueOf(config.get("project"));
-            return jiraDryRunService.fetchRecentEvents(baseUrl, project, token);
+            events = jiraDryRunService.fetchRecentEvents(baseUrl, project, token);
+        } else {
+            return List.of();
         }
-        return List.of();
+
+        if (events.size() > MAX_EVENTS) {
+            return events.subList(events.size() - MAX_EVENTS, events.size());
+        }
+        return events;
     }
 
     /**

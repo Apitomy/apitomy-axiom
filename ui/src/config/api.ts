@@ -880,6 +880,7 @@ export interface FilterDryRunResult {
     summary: string;
     allowed: boolean;
     matchedRule?: string;
+    payload?: string;
 }
 
 export interface FilterDryRunResponse {
