@@ -1,13 +1,26 @@
 package io.apitomy.axiom.app.rest;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.EventResource;
 import io.apitomy.axiom.api.beans.EventSource;
 import io.apitomy.axiom.api.beans.EventSourceLog;
 import io.apitomy.axiom.api.beans.EventSourceLogSearchResults;
+import io.apitomy.axiom.api.beans.FilterDryRunRequest;
+import io.apitomy.axiom.api.beans.FilterDryRunResponse;
+import io.apitomy.axiom.api.beans.FilterDryRunResult;
 import io.apitomy.axiom.api.beans.NewEventSource;
 import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.EventSourceLogEntity;
+import io.apitomy.axiom.core.entities.SecretEntity;
+import io.apitomy.axiom.core.filters.EventFilterEvaluator;
+import io.apitomy.axiom.core.filters.EventSourceFilterRule;
+import io.apitomy.axiom.core.filters.EventSourceFilters;
+import io.apitomy.axiom.core.filters.FilterResult;
+import io.apitomy.axiom.core.services.EncryptionService;
+import io.apitomy.axiom.events.core.DryRunEvent;
+import io.apitomy.axiom.events.github.GitHubDryRunService;
+import io.apitomy.axiom.events.jira.JiraDryRunService;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -15,8 +28,10 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
+import org.jboss.logging.Logger;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
@@ -29,8 +44,22 @@ import java.util.Map;
 @RunOnVirtualThread
 public class EventSourcesResourceImpl implements EventResource {
 
+    private static final Logger LOG = Logger.getLogger(EventSourcesResourceImpl.class);
+
     @Inject
     ObjectMapper objectMapper;
+
+    @Inject
+    GitHubDryRunService githubDryRunService;
+
+    @Inject
+    JiraDryRunService jiraDryRunService;
+
+    @Inject
+    EventFilterEvaluator filterEvaluator;
+
+    @Inject
+    EncryptionService encryptionService;
 
     /**
      * {@inheritDoc}
@@ -244,5 +273,114 @@ public class EventSourcesResourceImpl implements EventResource {
         log.setEventsIngested(entity.eventsIngested);
         log.setCreatedOn(Date.from(entity.createdOn));
         return log;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public FilterDryRunResponse dryRunFilters(FilterDryRunRequest request) {
+        // Convert API filter beans to core filter model
+        EventSourceFilters coreFilters = toCoreFilters(request.getFilters());
+
+        // Fetch recent events from the source
+        List<DryRunEvent> events = fetchDryRunEvents(request);
+
+        // Evaluate filters against each event
+        List<FilterDryRunResult> results = new ArrayList<>();
+        int allowed = 0;
+        int blocked = 0;
+
+        for (DryRunEvent event : events) {
+            FilterResult filterResult = filterEvaluator.evaluate(
+                    coreFilters, event.eventType(), event.payload());
+            FilterDryRunResult result = new FilterDryRunResult();
+            result.setEventType(event.eventType());
+            result.setIssueRef(event.issueRef());
+            result.setSummary(event.summary());
+            result.setAllowed(filterResult.allowed());
+            result.setMatchedRule(filterResult.matchedRule());
+            results.add(result);
+            if (filterResult.allowed()) allowed++;
+            else blocked++;
+        }
+
+        FilterDryRunResponse response = new FilterDryRunResponse();
+        response.setResults(results);
+        response.setTotalEvaluated(events.size());
+        response.setTotalAllowed(allowed);
+        response.setTotalBlocked(blocked);
+        return response;
+    }
+
+    /**
+     * Fetches recent events from the configured event source for dry-run evaluation.
+     *
+     * @param request the dry-run request containing source configuration
+     * @return list of classified events
+     */
+    private List<DryRunEvent> fetchDryRunEvents(FilterDryRunRequest request) {
+        String sourceType = request.getSourceType().value();
+        Map<String, Object> config = request.getConfiguration();
+        String token = resolveSecretValue(request.getSecretName());
+
+        if (token == null) {
+            throw new WebApplicationException("Secret not found or could not be decrypted", 401);
+        }
+
+        if ("github".equals(sourceType)) {
+            String owner = String.valueOf(config.get("owner"));
+            String name = String.valueOf(config.get("name"));
+            return githubDryRunService.fetchRecentEvents(owner, name, token);
+        } else if ("jira".equals(sourceType)) {
+            String baseUrl = String.valueOf(config.get("baseUrl"));
+            String project = String.valueOf(config.get("project"));
+            return jiraDryRunService.fetchRecentEvents(baseUrl, project, token);
+        }
+        return List.of();
+    }
+
+    /**
+     * Converts API filter beans to core filter model.
+     *
+     * @param apiFilters the API filter configuration
+     * @return the core filter model
+     */
+    private EventSourceFilters toCoreFilters(
+            io.apitomy.axiom.api.beans.EventSourceFilters apiFilters) {
+        if (apiFilters == null) return EventSourceFilters.allowAll();
+        List<EventSourceFilterRule> include = apiFilters.getInclude() != null
+                ? apiFilters.getInclude().stream()
+                    .map(r -> new EventSourceFilterRule(
+                            r.getType().value(), r.getPointer(), r.getPattern()))
+                    .toList()
+                : List.of();
+        List<EventSourceFilterRule> exclude = apiFilters.getExclude() != null
+                ? apiFilters.getExclude().stream()
+                    .map(r -> new EventSourceFilterRule(
+                            r.getType().value(), r.getPointer(), r.getPattern()))
+                    .toList()
+                : List.of();
+        return new EventSourceFilters(include, exclude);
+    }
+
+    /**
+     * Resolves a secret value by name using the same logic as the pollers.
+     *
+     * @param secretName the name of the secret to resolve
+     * @return the decrypted secret value, or null if not found
+     */
+    private String resolveSecretValue(String secretName) {
+        if (secretName != null && !secretName.isBlank()) {
+            SecretEntity secret = SecretEntity.find("name", secretName).firstResult();
+            if (secret != null) {
+                try {
+                    return encryptionService.decrypt(secret.encryptedValue);
+                } catch (Exception e) {
+                    LOG.warnf("Failed to decrypt secret '%s'", secretName);
+                }
+            }
+        }
+        return null;
     }
 }
