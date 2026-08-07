@@ -1,13 +1,26 @@
 package io.apitomy.axiom.app.rest;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.EventResource;
 import io.apitomy.axiom.api.beans.EventSource;
 import io.apitomy.axiom.api.beans.EventSourceLog;
 import io.apitomy.axiom.api.beans.EventSourceLogSearchResults;
+import io.apitomy.axiom.api.beans.FilterDryRunRequest;
+import io.apitomy.axiom.api.beans.FilterDryRunResponse;
+import io.apitomy.axiom.api.beans.FilterDryRunResult;
 import io.apitomy.axiom.api.beans.NewEventSource;
 import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.EventSourceLogEntity;
+import io.apitomy.axiom.core.entities.SecretEntity;
+import io.apitomy.axiom.core.filters.EventFilterEvaluator;
+import io.apitomy.axiom.core.filters.EventSourceFilterRule;
+import io.apitomy.axiom.core.filters.EventSourceFilters;
+import io.apitomy.axiom.core.filters.FilterResult;
+import io.apitomy.axiom.core.services.EncryptionService;
+import io.apitomy.axiom.events.core.DryRunEvent;
+import io.apitomy.axiom.events.github.GitHubDryRunService;
+import io.apitomy.axiom.events.jira.JiraDryRunService;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -15,8 +28,10 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
+import org.jboss.logging.Logger;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
@@ -29,8 +44,22 @@ import java.util.Map;
 @RunOnVirtualThread
 public class EventSourcesResourceImpl implements EventResource {
 
+    private static final Logger LOG = Logger.getLogger(EventSourcesResourceImpl.class);
+
     @Inject
     ObjectMapper objectMapper;
+
+    @Inject
+    GitHubDryRunService githubDryRunService;
+
+    @Inject
+    JiraDryRunService jiraDryRunService;
+
+    @Inject
+    EventFilterEvaluator filterEvaluator;
+
+    @Inject
+    EncryptionService encryptionService;
 
     /**
      * {@inheritDoc}
@@ -52,6 +81,13 @@ public class EventSourcesResourceImpl implements EventResource {
     public EventSource createEventSource(NewEventSource data) {
         EventSourceEntity entity = new EventSourceEntity();
         applyFields(entity, data);
+        if (entity.filters == null) {
+            try {
+                entity.filters = objectMapper.writeValueAsString(defaultFilters());
+            } catch (Exception e) {
+                entity.filters = null;
+            }
+        }
         entity.persist();
         return toBean(entity);
     }
@@ -86,6 +122,34 @@ public class EventSourcesResourceImpl implements EventResource {
     }
 
     /**
+     * Creates the default filter configuration for new event sources.
+     *
+     * @return the default filters that skip bot activity and slash commands
+     */
+    private io.apitomy.axiom.api.beans.EventSourceFilters defaultFilters() {
+        io.apitomy.axiom.api.beans.EventSourceFilters filters = new io.apitomy.axiom.api.beans.EventSourceFilters();
+        filters.setInclude(List.of());
+
+        io.apitomy.axiom.api.beans.EventSourceFilterRule botRule = new io.apitomy.axiom.api.beans.EventSourceFilterRule();
+        botRule.setType(io.apitomy.axiom.api.beans.EventSourceFilterRule.Type.PAYLOAD);
+        botRule.setPointer("/user/login");
+        botRule.setPattern("*[bot]");
+
+        io.apitomy.axiom.api.beans.EventSourceFilterRule commentBotRule = new io.apitomy.axiom.api.beans.EventSourceFilterRule();
+        commentBotRule.setType(io.apitomy.axiom.api.beans.EventSourceFilterRule.Type.PAYLOAD);
+        commentBotRule.setPointer("/comment/user/login");
+        commentBotRule.setPattern("*[bot]");
+
+        io.apitomy.axiom.api.beans.EventSourceFilterRule slashRule = new io.apitomy.axiom.api.beans.EventSourceFilterRule();
+        slashRule.setType(io.apitomy.axiom.api.beans.EventSourceFilterRule.Type.PAYLOAD);
+        slashRule.setPointer("/comment/body");
+        slashRule.setPattern("/*");
+
+        filters.setExclude(List.of(botRule, commentBotRule, slashRule));
+        return filters;
+    }
+
+    /**
      * Applies field values from the API bean to the entity.
      *
      * @param entity the entity to update
@@ -110,6 +174,13 @@ public class EventSourcesResourceImpl implements EventResource {
         entity.labels.clear();
         if (data.getLabels() != null) {
             entity.labels.addAll(data.getLabels());
+        }
+        if (data.getFilters() != null) {
+            try {
+                entity.filters = objectMapper.writeValueAsString(data.getFilters());
+            } catch (Exception e) {
+                entity.filters = null;
+            }
         }
     }
 
@@ -152,6 +223,14 @@ public class EventSourcesResourceImpl implements EventResource {
             }
         }
         bean.setLabels(entity.labels);
+        if (entity.filters != null) {
+            try {
+                bean.setFilters(objectMapper.readValue(entity.filters,
+                        io.apitomy.axiom.api.beans.EventSourceFilters.class));
+            } catch (Exception e) {
+                // ignore parse errors
+            }
+        }
         return bean;
     }
 
@@ -192,5 +271,146 @@ public class EventSourcesResourceImpl implements EventResource {
         log.setEventsIngested(entity.eventsIngested);
         log.setCreatedOn(Date.from(entity.createdOn));
         return log;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public FilterDryRunResponse dryRunFilters(FilterDryRunRequest request) {
+        // Convert API filter beans to core filter model
+        EventSourceFilters coreFilters = toCoreFilters(request.getFilters());
+
+        // Fetch recent events from the source
+        List<DryRunEvent> events = fetchDryRunEvents(request);
+
+        // Evaluate filters against each event
+        List<FilterDryRunResult> results = new ArrayList<>();
+        int allowed = 0;
+        int blocked = 0;
+
+        for (DryRunEvent event : events) {
+            FilterResult filterResult = filterEvaluator.evaluate(
+                    coreFilters, event.eventType(), event.payload());
+            FilterDryRunResult result = new FilterDryRunResult();
+            result.setEventType(event.eventType());
+            result.setIssueRef(event.issueRef());
+            result.setSummary(event.summary());
+            result.setAllowed(filterResult.allowed());
+            result.setMatchedRule(filterResult.matchedRule());
+            result.setPayload(event.payload() != null ? event.payload().toString() : null);
+            results.add(result);
+            if (filterResult.allowed()) allowed++;
+            else blocked++;
+        }
+
+        FilterDryRunResponse response = new FilterDryRunResponse();
+        response.setResults(results);
+        response.setTotalEvaluated(events.size());
+        response.setTotalAllowed(allowed);
+        response.setTotalBlocked(blocked);
+        return response;
+    }
+
+    /**
+     * Fetches recent events from the configured event source for dry-run evaluation.
+     *
+     * @param request the dry-run request containing source configuration
+     * @return list of classified events
+     */
+    private List<DryRunEvent> fetchDryRunEvents(FilterDryRunRequest request) {
+        final int MAX_EVENTS = 200;
+        String sourceType = request.getSourceType().value();
+        Map<String, Object> config = request.getConfiguration().getAdditionalProperties();
+        String token = resolveSecretValue(request.getSecretName(), sourceType);
+
+        if (token == null) {
+            throw new WebApplicationException("Secret not found or could not be decrypted", 401);
+        }
+
+        List<DryRunEvent> events;
+        if ("github".equals(sourceType)) {
+            String owner = String.valueOf(config.get("owner"));
+            String name = String.valueOf(config.get("name"));
+            events = githubDryRunService.fetchRecentEvents(owner, name, token);
+        } else if ("jira".equals(sourceType)) {
+            String baseUrl = String.valueOf(config.get("baseUrl"));
+            String project = String.valueOf(config.get("project"));
+            events = jiraDryRunService.fetchRecentEvents(baseUrl, project, token);
+        } else {
+            return List.of();
+        }
+
+        if (events.size() > MAX_EVENTS) {
+            return events.subList(events.size() - MAX_EVENTS, events.size());
+        }
+        return events;
+    }
+
+    /**
+     * Converts API filter beans to core filter model.
+     *
+     * @param apiFilters the API filter configuration
+     * @return the core filter model
+     */
+    private EventSourceFilters toCoreFilters(
+            io.apitomy.axiom.api.beans.EventSourceFilters apiFilters) {
+        if (apiFilters == null) return EventSourceFilters.allowAll();
+        List<EventSourceFilterRule> include = apiFilters.getInclude() != null
+                ? apiFilters.getInclude().stream()
+                    .map(r -> new EventSourceFilterRule(
+                            r.getType().value(), r.getPointer(), r.getPattern()))
+                    .toList()
+                : List.of();
+        List<EventSourceFilterRule> exclude = apiFilters.getExclude() != null
+                ? apiFilters.getExclude().stream()
+                    .map(r -> new EventSourceFilterRule(
+                            r.getType().value(), r.getPointer(), r.getPattern()))
+                    .toList()
+                : List.of();
+        return new EventSourceFilters(include, exclude);
+    }
+
+    /**
+     * Resolves a secret value by name, with fallbacks to well-known secrets
+     * and environment variables matching the poller resolution logic.
+     *
+     * @param secretName the name of the secret to resolve (may be null)
+     * @param sourceType the source type ("github" or "jira") for fallback resolution
+     * @return the decrypted secret value, or null if not found
+     */
+    private String resolveSecretValue(String secretName, String sourceType) {
+        if (secretName != null && !secretName.isBlank()) {
+            SecretEntity secret = SecretEntity.find("name", secretName).firstResult();
+            if (secret != null) {
+                try {
+                    return encryptionService.decrypt(secret.encryptedValue);
+                } catch (Exception e) {
+                    LOG.warnf("Failed to decrypt secret '%s'", secretName);
+                }
+            }
+        }
+
+        List<String> fallbackNames = "github".equals(sourceType)
+                ? List.of("GH_TOKEN", "GITHUB_TOKEN")
+                : List.of("JIRA_API_TOKEN");
+        for (String name : fallbackNames) {
+            SecretEntity secret = SecretEntity.find("name", name).firstResult();
+            if (secret != null) {
+                try {
+                    return encryptionService.decrypt(secret.encryptedValue);
+                } catch (Exception e) {
+                    LOG.warnf("Failed to decrypt %s secret", name);
+                }
+            }
+        }
+
+        for (String name : fallbackNames) {
+            String envValue = System.getenv(name);
+            if (envValue != null && !envValue.isBlank()) {
+                return envValue;
+            }
+        }
+        return null;
     }
 }

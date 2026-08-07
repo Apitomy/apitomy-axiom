@@ -9,12 +9,11 @@ import java.time.Instant;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests for PR event type determination logic in {@link GitHubPoller}.
+ * Tests for PR event type determination logic in {@link GitHubEventClassifier}.
  */
 class GitHubPollerPrEventTypeTest {
 
     private final ObjectMapper mapper = new ObjectMapper();
-    private final GitHubPoller poller = new GitHubPoller();
 
     private final Instant since = Instant.parse("2025-06-01T00:00:00Z");
     private static final String AFTER = "2025-06-02T00:00:00Z";
@@ -26,7 +25,7 @@ class GitHubPollerPrEventTypeTest {
         pr.put("state", "open");
         pr.put("created_at", AFTER);
         pr.put("updated_at", AFTER);
-        assertEquals("pr-created", poller.determinePrEventType(pr, since));
+        assertEquals("pr-created", GitHubEventClassifier.determinePrEventType(pr, since));
     }
 
     @Test
@@ -37,7 +36,7 @@ class GitHubPollerPrEventTypeTest {
         pr.put("updated_at", AFTER);
         pr.put("closed_at", AFTER);
         pr.put("merged_at", AFTER);
-        assertEquals("pr-merged", poller.determinePrEventType(pr, since));
+        assertEquals("pr-merged", GitHubEventClassifier.determinePrEventType(pr, since));
     }
 
     @Test
@@ -47,7 +46,7 @@ class GitHubPollerPrEventTypeTest {
         pr.put("created_at", BEFORE);
         pr.put("updated_at", AFTER);
         pr.put("closed_at", AFTER);
-        assertEquals("pr-closed", poller.determinePrEventType(pr, since));
+        assertEquals("pr-closed", GitHubEventClassifier.determinePrEventType(pr, since));
     }
 
     @Test
@@ -57,7 +56,7 @@ class GitHubPollerPrEventTypeTest {
         pr.put("created_at", BEFORE);
         pr.put("updated_at", AFTER);
         pr.put("closed_at", BEFORE);
-        assertEquals("pr-reopened", poller.determinePrEventType(pr, since));
+        assertEquals("pr-reopened", GitHubEventClassifier.determinePrEventType(pr, since));
     }
 
     @Test
@@ -66,7 +65,7 @@ class GitHubPollerPrEventTypeTest {
         pr.put("state", "open");
         pr.put("created_at", BEFORE);
         pr.put("updated_at", AFTER);
-        assertEquals("pr-updated", poller.determinePrEventType(pr, since));
+        assertEquals("pr-updated", GitHubEventClassifier.determinePrEventType(pr, since));
     }
 
     @Test
@@ -75,7 +74,7 @@ class GitHubPollerPrEventTypeTest {
         pr.put("state", "open");
         pr.put("created_at", BEFORE);
         pr.put("updated_at", BEFORE);
-        assertNull(poller.determinePrEventType(pr, since));
+        assertNull(GitHubEventClassifier.determinePrEventType(pr, since));
     }
 
     @Test
@@ -84,7 +83,7 @@ class GitHubPollerPrEventTypeTest {
         pr.put("state", "open");
         pr.put("created_at", AFTER);
         pr.put("updated_at", AFTER);
-        assertNull(poller.determinePrEventType(pr, null));
+        assertNull(GitHubEventClassifier.determinePrEventType(pr, null));
     }
 
     @Test
@@ -95,7 +94,7 @@ class GitHubPollerPrEventTypeTest {
         pr.put("updated_at", AFTER);
         pr.put("closed_at", AFTER);
         pr.put("merged_at", AFTER);
-        assertEquals("pr-merged", poller.determinePrEventType(pr, since));
+        assertEquals("pr-merged", GitHubEventClassifier.determinePrEventType(pr, since));
     }
 
     @Test
@@ -106,6 +105,6 @@ class GitHubPollerPrEventTypeTest {
         pr.put("updated_at", AFTER);
         pr.put("closed_at", AFTER);
         pr.put("merged_at", AFTER);
-        assertEquals("pr-created", poller.determinePrEventType(pr, since));
+        assertEquals("pr-created", GitHubEventClassifier.determinePrEventType(pr, since));
     }
 }

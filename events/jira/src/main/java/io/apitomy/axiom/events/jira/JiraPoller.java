@@ -176,11 +176,11 @@ public class JiraPoller {
 
             JsonNode fields = issue.path("fields");
 
-            String eventType = determineEventType(fields, since);
+            String eventType = JiraEventClassifier.determineEventType(fields, since);
             if (eventType != null) {
                 try {
                     String payload = objectMapper.writeValueAsString(
-                            buildIssuePayload(issueKey, fields, baseUrl, eventType));
+                            JiraEventClassifier.buildIssuePayload(objectMapper, issue, fields, baseUrl, eventType));
                     eventService.ingestEvent(source.id, "jira", eventType,
                             issueKey, project, payload);
                     logLines.add("  " + eventType + ": " + issueKey + " — "
@@ -192,7 +192,7 @@ public class JiraPoller {
                 }
             }
 
-            int comments = ingestNewComments(source.id, issueKey, project,
+            int comments = ingestNewComments(source.id, issue, project,
                     fields, baseUrl, since, logLines);
             eventsIngested += comments;
         }
@@ -213,51 +213,27 @@ public class JiraPoller {
                 String.join("\n", logLines), eventsIngested);
     }
 
-    /**
-     * Determines the event type based on issue field timestamps.
-     */
-    private String determineEventType(JsonNode fields, Instant since) {
-        Instant createdAt = parseJiraTimestamp(fields.path("created").asText(null));
-        Instant updatedAt = parseJiraTimestamp(fields.path("updated").asText(null));
-
-        if (createdAt != null && createdAt.isAfter(since)) {
-            return "issue-created";
-        }
-
-        JsonNode resolution = fields.path("resolution");
-        JsonNode status = fields.path("status");
-        String statusCategory = status.path("statusCategory").path("key").asText("");
-
-        if ("done".equals(statusCategory) && updatedAt != null && updatedAt.isAfter(since)) {
-            return "issue-closed";
-        }
-
-        if (updatedAt != null && updatedAt.isAfter(since)) {
-            return "issue-updated";
-        }
-
-        return null;
-    }
 
     /**
      * Extracts new comments from an issue's comment field and ingests them as events.
      */
-    private int ingestNewComments(Long eventSourceId, String issueKey, String project,
+    private int ingestNewComments(Long eventSourceId, JsonNode issue, String project,
                                    JsonNode fields, String baseUrl, Instant since,
                                    List<String> logLines) {
+        String issueKey = issue.path("key").asText("");
         JsonNode commentNode = fields.path("comment").path("comments");
         if (!commentNode.isArray()) return 0;
 
         int count = 0;
         for (JsonNode comment : commentNode) {
-            Instant createdAt = parseJiraTimestamp(comment.path("created").asText(null));
+            Instant createdAt = JiraEventClassifier.parseJiraTimestamp(comment.path("created").asText(null));
             if (createdAt == null || !createdAt.isAfter(since)) {
                 continue;
             }
 
             try {
                 String payload = objectMapper.writeValueAsString(
-                        buildCommentPayload(issueKey, fields, comment, baseUrl));
+                        JiraEventClassifier.buildCommentPayload(objectMapper, issue, fields, comment, baseUrl));
                 eventService.ingestEvent(eventSourceId, "jira", "comment-added",
                         issueKey, project, payload);
                 String author = comment.path("author").path("displayName").asText("unknown");
@@ -271,97 +247,6 @@ public class JiraPoller {
         return count;
     }
 
-    /**
-     * Builds a normalized issue payload for consistency with other event sources.
-     */
-    private JsonNode buildIssuePayload(String issueKey, JsonNode fields,
-                                        String baseUrl, String eventType) {
-        String action = switch (eventType) {
-            case "issue-created" -> "created";
-            case "issue-closed" -> "closed";
-            case "issue-reopened" -> "reopened";
-            default -> "updated";
-        };
-
-        var node = objectMapper.createObjectNode();
-        node.put("action", action);
-        node.put("polled", true);
-
-        var issueNode = node.putObject("issue");
-        issueNode.put("key", issueKey);
-        issueNode.put("summary", fields.path("summary").asText(""));
-        issueNode.put("status", fields.path("status").path("name").asText(""));
-        issueNode.put("priority", fields.path("priority").path("name").asText(""));
-        issueNode.put("created", fields.path("created").asText(""));
-        issueNode.put("updated", fields.path("updated").asText(""));
-        issueNode.put("url", baseUrl + "/browse/" + issueKey);
-
-        JsonNode assignee = fields.path("assignee");
-        if (!assignee.isMissingNode() && !assignee.isNull()) {
-            issueNode.put("assignee", assignee.path("emailAddress")
-                    .asText(assignee.path("displayName").asText("")));
-        }
-
-        JsonNode reporter = fields.path("reporter");
-        if (!reporter.isMissingNode() && !reporter.isNull()) {
-            issueNode.put("reporter", reporter.path("emailAddress")
-                    .asText(reporter.path("displayName").asText("")));
-        }
-
-        JsonNode labels = fields.path("labels");
-        if (labels.isArray()) {
-            var labelsArray = issueNode.putArray("labels");
-            for (JsonNode label : labels) {
-                labelsArray.add(label.asText());
-            }
-        }
-
-        JsonNode resolution = fields.path("resolution");
-        if (!resolution.isMissingNode() && !resolution.isNull()) {
-            issueNode.put("resolution", resolution.path("name").asText(""));
-        }
-
-        return node;
-    }
-
-    /**
-     * Builds a normalized comment payload.
-     */
-    private JsonNode buildCommentPayload(String issueKey, JsonNode fields,
-                                          JsonNode comment, String baseUrl) {
-        var node = objectMapper.createObjectNode();
-        node.put("action", "commented");
-        node.put("polled", true);
-
-        var issueNode = node.putObject("issue");
-        issueNode.put("key", issueKey);
-        issueNode.put("summary", fields.path("summary").asText(""));
-        issueNode.put("url", baseUrl + "/browse/" + issueKey);
-
-        var commentNode = node.putObject("comment");
-        JsonNode author = comment.path("author");
-        commentNode.put("author", author.path("emailAddress")
-                .asText(author.path("displayName").asText("")));
-        commentNode.put("body", comment.path("body").asText(""));
-        commentNode.put("created", comment.path("created").asText(""));
-
-        return node;
-    }
-
-    private Instant parseJiraTimestamp(String timestamp) {
-        if (timestamp == null || timestamp.isEmpty()) return null;
-        try {
-            return DateTimeFormatter.ISO_DATE_TIME.parse(timestamp, Instant::from);
-        } catch (Exception e) {
-            try {
-                return DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ")
-                        .parse(timestamp, Instant::from);
-            } catch (Exception e2) {
-                LOG.tracef("Failed to parse Jira timestamp: %s", timestamp);
-                return null;
-            }
-        }
-    }
 
     @Transactional
     void updateLastPolledAt(Long sourceId, Instant polledAt) {

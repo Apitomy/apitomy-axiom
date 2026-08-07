@@ -225,15 +225,15 @@ public class GitHubPoller {
         for (JsonNode issue : result.data()) {
             if (issue.has("pull_request")) continue;
 
-            String eventType = determineIssueEventType(issue, since);
+            String eventType = GitHubEventClassifier.determineIssueEventType(issue, since);
             if (eventType == null) continue;
 
             int number = issue.path("number").asInt(0);
             String issueRef = repoFullName + "#" + number;
 
             try {
-                String payload = objectMapper.writeValueAsString(wrapIssueAsWebhookPayload(
-                        issue, repoFullName, eventType));
+                String payload = objectMapper.writeValueAsString(GitHubEventClassifier.wrapIssue(
+                        objectMapper, issue, eventType));
                 eventService.ingestEvent(eventSourceId, "github", eventType, issueRef, repoFullName, payload);
                 logLines.add("  " + eventType + ": " + issueRef + " — " + issue.path("title").asText(""));
                 count++;
@@ -263,7 +263,7 @@ public class GitHubPoller {
                 continue;
             }
 
-            Instant createdAt = parseGitHubTimestamp(comment.path("created_at").asText(null));
+            Instant createdAt = GitHubEventClassifier.parseGitHubTimestamp(comment.path("created_at").asText(null));
             if (since != null && createdAt != null && !createdAt.isAfter(since)) {
                 continue;
             }
@@ -271,8 +271,8 @@ public class GitHubPoller {
             String issueRef = repoFullName + "#" + issueNumber;
 
             try {
-                String payload = objectMapper.writeValueAsString(wrapCommentAsWebhookPayload(
-                        comment, repoFullName, issueNumber));
+                String payload = objectMapper.writeValueAsString(GitHubEventClassifier.wrapComment(
+                        objectMapper, comment, issueNumber));
                 eventService.ingestEvent(eventSourceId, "github", "comment-added", issueRef, repoFullName, payload);
                 String author = comment.path("user").path("login").asText("unknown");
                 logLines.add("  comment-added: " + issueRef + " by " + author);
@@ -298,20 +298,20 @@ public class GitHubPoller {
         String repoFullName = owner + "/" + name;
 
         for (JsonNode pr : result.data()) {
-            Instant updatedAt = parseGitHubTimestamp(pr.path("updated_at").asText(null));
+            Instant updatedAt = GitHubEventClassifier.parseGitHubTimestamp(pr.path("updated_at").asText(null));
             if (since != null && updatedAt != null && !updatedAt.isAfter(since)) {
                 continue;
             }
 
-            String eventType = determinePrEventType(pr, since);
+            String eventType = GitHubEventClassifier.determinePrEventType(pr, since);
             if (eventType == null) continue;
 
             int number = pr.path("number").asInt(0);
             String issueRef = repoFullName + "#" + number;
 
             try {
-                String payload = objectMapper.writeValueAsString(wrapPrAsWebhookPayload(
-                        pr, repoFullName, eventType));
+                String payload = objectMapper.writeValueAsString(GitHubEventClassifier.wrapPullRequest(
+                        objectMapper, pr, eventType));
                 eventService.ingestEvent(eventSourceId, "github", eventType, issueRef, repoFullName, payload);
                 logLines.add("  " + eventType + ": " + issueRef + " — " + pr.path("title").asText(""));
                 count++;
@@ -341,7 +341,7 @@ public class GitHubPoller {
                 continue;
             }
 
-            Instant createdAt = parseGitHubTimestamp(comment.path("created_at").asText(null));
+            Instant createdAt = GitHubEventClassifier.parseGitHubTimestamp(comment.path("created_at").asText(null));
             if (since != null && createdAt != null && !createdAt.isAfter(since)) {
                 continue;
             }
@@ -349,8 +349,8 @@ public class GitHubPoller {
             String issueRef = repoFullName + "#" + prNumber;
 
             try {
-                String payload = objectMapper.writeValueAsString(wrapReviewCommentAsWebhookPayload(
-                        comment, repoFullName, prNumber));
+                String payload = objectMapper.writeValueAsString(GitHubEventClassifier.wrapReviewComment(
+                        objectMapper, comment, prNumber));
                 eventService.ingestEvent(eventSourceId, "github", "pr-review-comment", issueRef, repoFullName, payload);
                 String author = comment.path("user").path("login").asText("unknown");
                 logLines.add("  pr-review-comment: " + issueRef + " by " + author);
@@ -364,144 +364,6 @@ public class GitHubPoller {
         return count;
     }
 
-    /**
-     * Determines the event type for an issue based on its state and timing.
-     */
-    private String determineIssueEventType(JsonNode issue, Instant since) {
-        String state = issue.path("state").asText("");
-        Instant createdAt = parseGitHubTimestamp(issue.path("created_at").asText(null));
-        Instant updatedAt = parseGitHubTimestamp(issue.path("updated_at").asText(null));
-        Instant closedAt = parseGitHubTimestamp(issue.path("closed_at").asText(null));
-
-        if (since == null) {
-            return null;
-        }
-
-        if (createdAt != null && createdAt.isAfter(since)) {
-            return "issue-created";
-        }
-
-        if ("closed".equals(state) && closedAt != null && closedAt.isAfter(since)) {
-            return "issue-closed";
-        }
-
-        if (updatedAt != null && updatedAt.isAfter(since)) {
-            if ("open".equals(state) && closedAt != null) {
-                return "issue-reopened";
-            }
-            return "issue-updated";
-        }
-
-        return null;
-    }
-
-    /**
-     * Determines the event type for a pull request based on its state and timing.
-     */
-    String determinePrEventType(JsonNode pr, Instant since) {
-        String state = pr.path("state").asText("");
-        Instant createdAt = parseGitHubTimestamp(pr.path("created_at").asText(null));
-        Instant updatedAt = parseGitHubTimestamp(pr.path("updated_at").asText(null));
-        Instant closedAt = parseGitHubTimestamp(pr.path("closed_at").asText(null));
-        Instant mergedAt = parseGitHubTimestamp(pr.path("merged_at").asText(null));
-
-        if (since == null) {
-            return null;
-        }
-
-        if (createdAt != null && createdAt.isAfter(since)) {
-            return "pr-created";
-        }
-
-        if (mergedAt != null && mergedAt.isAfter(since)) {
-            return "pr-merged";
-        }
-
-        if ("closed".equals(state) && closedAt != null && closedAt.isAfter(since) && mergedAt == null) {
-            return "pr-closed";
-        }
-
-        if (updatedAt != null && updatedAt.isAfter(since)) {
-            if ("open".equals(state) && closedAt != null) {
-                return "pr-reopened";
-            }
-            return "pr-updated";
-        }
-
-        return null;
-    }
-
-    /**
-     * Wraps a GitHub Issues API response into a structure resembling a webhook payload,
-     * so the downstream processing is consistent regardless of event source.
-     */
-    private JsonNode wrapIssueAsWebhookPayload(JsonNode issue, String repoFullName, String eventType) {
-        String action = switch (eventType) {
-            case "issue-created" -> "opened";
-            case "issue-closed" -> "closed";
-            case "issue-reopened" -> "reopened";
-            default -> "edited";
-        };
-        var node = objectMapper.createObjectNode();
-        node.put("action", action);
-        node.put("polled", true);
-        node.set("issue", issue);
-        return node;
-    }
-
-    /**
-     * Wraps a GitHub Comments API response into a structure resembling a webhook payload.
-     */
-    private JsonNode wrapCommentAsWebhookPayload(JsonNode comment, String repoFullName, int issueNumber) {
-        var node = objectMapper.createObjectNode();
-        node.put("action", "created");
-        node.put("polled", true);
-        node.putObject("issue").put("number", issueNumber);
-        node.set("comment", comment);
-        return node;
-    }
-
-    /**
-     * Wraps a GitHub Pulls API response into a structure resembling a webhook payload,
-     * so the downstream processing is consistent regardless of event source.
-     */
-    private JsonNode wrapPrAsWebhookPayload(JsonNode pr, String repoFullName, String eventType) {
-        String action = switch (eventType) {
-            case "pr-created" -> "opened";
-            case "pr-closed" -> "closed";
-            case "pr-merged" -> "closed";
-            case "pr-reopened" -> "reopened";
-            default -> "edited";
-        };
-        var node = objectMapper.createObjectNode();
-        node.put("action", action);
-        node.put("polled", true);
-        node.set("pull_request", pr);
-        return node;
-    }
-
-    /**
-     * Wraps a GitHub Pull Review Comments API response into a structure resembling a webhook payload.
-     */
-    private JsonNode wrapReviewCommentAsWebhookPayload(JsonNode comment, String repoFullName, int prNumber) {
-        var node = objectMapper.createObjectNode();
-        node.put("action", "created");
-        node.put("polled", true);
-        node.putObject("pull_request").put("number", prNumber);
-        node.set("comment", comment);
-        return node;
-    }
-
-    Instant parseGitHubTimestamp(String timestamp) {
-        if (timestamp == null || timestamp.isEmpty()) {
-            return null;
-        }
-        try {
-            return DateTimeFormatter.ISO_DATE_TIME.parse(timestamp, Instant::from);
-        } catch (Exception e) {
-            return null;
-        }
-    }
 
     private int extractIssueNumberFromUrl(String issueUrl) {
         if (issueUrl == null || issueUrl.isEmpty()) {
