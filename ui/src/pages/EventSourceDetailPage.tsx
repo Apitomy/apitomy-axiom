@@ -33,16 +33,24 @@ import {
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
+import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
+import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
+import TimesCircleIcon from "@patternfly/react-icons/dist/esm/icons/times-circle-icon";
 import { EditLabelsModal } from "../components/EditLabelsModal";
 import { LabelDisplay } from "../components/LabelDisplay";
 import {
     type EventSource,
     type EventSourceLog,
+    type EventSourceFilters,
+    type EventSourceFilterRule,
+    type FilterDryRunRequest,
+    type FilterDryRunResponse,
     type Secret,
     fetchEventSource,
     updateEventSource,
     fetchEventSourceLogs,
     fetchSecrets,
+    dryRunFilters,
 } from "../config/api";
 
 export function EventSourceDetailPage() {
@@ -166,10 +174,27 @@ export function EventSourceDetailPage() {
                             onEditLabels={() => setIsLabelsOpen(true)} />
                     </TabContent>
                 </Tab>
-                <Tab eventKey={1} title={<TabTitleText>
+                <Tab eventKey={1} title={<TabTitleText>Filters</TabTitleText>}>
+                    <TabContent id="filters-tab" eventKey={1} activeKey={activeTab}
+                        style={{ marginTop: "24px" }}>
+                        {source && (
+                            <FiltersTab
+                                source={source}
+                                onSave={async (filters) => {
+                                    await updateEventSource(source.id, {
+                                        ...source,
+                                        filters,
+                                    });
+                                    loadData();
+                                }}
+                            />
+                        )}
+                    </TabContent>
+                </Tab>
+                <Tab eventKey={2} title={<TabTitleText>
                     Poll Logs{logs.length > 0 ? ` (${logs.length})` : ""}
                 </TabTitleText>}>
-                    <TabContent id="logs-tab" eventKey={1} activeKey={activeTab}
+                    <TabContent id="logs-tab" eventKey={2} activeKey={activeTab}
                         style={{ marginTop: "24px" }}>
                         <LogsTab logs={logs} totalCount={logsTotalCount}
                             page={logsPage} perPage={logsPerPage}
@@ -371,6 +396,226 @@ function LogsTab({ logs, totalCount, page, perPage, onPageChange, onPerPageChang
                     )}
                 </ModalBody>
             </Modal>
+        </div>
+    );
+}
+
+function FiltersTab({ source, onSave }: {
+    source: EventSource;
+    onSave: (filters: EventSourceFilters) => Promise<void>;
+}) {
+    const [filters, setFilters] = useState<EventSourceFilters>(
+        source.filters ?? { include: [], exclude: [] }
+    );
+    const [dirty, setDirty] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [dryRunResults, setDryRunResults] = useState<FilterDryRunResponse | null>(null);
+    const [dryRunLoading, setDryRunLoading] = useState(false);
+
+    // State for the "add rule" form
+    const [addingTo, setAddingTo] = useState<"include" | "exclude" | null>(null);
+    const [newRuleType, setNewRuleType] = useState<"event-type" | "payload">("event-type");
+    const [newRulePointer, setNewRulePointer] = useState("");
+    const [newRulePattern, setNewRulePattern] = useState("");
+
+    const handleAddRule = (list: "include" | "exclude") => {
+        const rule: EventSourceFilterRule = {
+            type: newRuleType,
+            pattern: newRulePattern,
+            ...(newRuleType === "payload" ? { pointer: newRulePointer } : {}),
+        };
+        const updated = { ...filters };
+        updated[list] = [...updated[list], rule];
+        setFilters(updated);
+        setDirty(true);
+        setAddingTo(null);
+        setNewRuleType("event-type");
+        setNewRulePointer("");
+        setNewRulePattern("");
+    };
+
+    const handleDeleteRule = (list: "include" | "exclude", index: number) => {
+        const updated = { ...filters };
+        updated[list] = updated[list].filter((_, i) => i !== index);
+        setFilters(updated);
+        setDirty(true);
+    };
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            await onSave(filters);
+            setDirty(false);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDryRun = async () => {
+        setDryRunLoading(true);
+        try {
+            const request: FilterDryRunRequest = {
+                sourceType: source.sourceType,
+                configuration: source.configuration ?? {},
+                secretName: source.secretName,
+                filters,
+            };
+            const response = await dryRunFilters(request);
+            setDryRunResults(response);
+        } catch (e) {
+            console.error("Dry run failed:", e);
+        } finally {
+            setDryRunLoading(false);
+        }
+    };
+
+    const renderRuleTable = (list: "include" | "exclude", rules: EventSourceFilterRule[]) => (
+        <div style={{ marginBottom: "24px" }}>
+            <Title headingLevel="h3" size="md" style={{ marginBottom: "12px" }}>
+                {list === "include" ? "Include Rules" : "Exclude Rules"}
+            </Title>
+            <Table aria-label={`${list} rules`} variant="compact">
+                <Thead>
+                    <Tr>
+                        <Th>Type</Th>
+                        <Th>Pointer</Th>
+                        <Th>Pattern</Th>
+                        <Th>Actions</Th>
+                    </Tr>
+                </Thead>
+                <Tbody>
+                    {rules.map((rule, index) => (
+                        <Tr key={index}>
+                            <Td>{rule.type}</Td>
+                            <Td>{rule.pointer ?? "—"}</Td>
+                            <Td><code>{rule.pattern}</code></Td>
+                            <Td>
+                                <Button variant="plain" aria-label="Delete rule"
+                                    onClick={() => handleDeleteRule(list, index)}>
+                                    <TrashIcon />
+                                </Button>
+                            </Td>
+                        </Tr>
+                    ))}
+                    {addingTo === list && (
+                        <Tr>
+                            <Td>
+                                <FormSelect value={newRuleType}
+                                    onChange={(_e, v) => setNewRuleType(v as "event-type" | "payload")}>
+                                    <FormSelectOption value="event-type" label="event-type" />
+                                    <FormSelectOption value="payload" label="payload" />
+                                </FormSelect>
+                            </Td>
+                            <Td>
+                                {newRuleType === "payload" ? (
+                                    <TextInput value={newRulePointer}
+                                        onChange={(_e, v) => setNewRulePointer(v)}
+                                        placeholder="/path/to/field" />
+                                ) : (
+                                    <span>—</span>
+                                )}
+                            </Td>
+                            <Td>
+                                <TextInput value={newRulePattern}
+                                    onChange={(_e, v) => setNewRulePattern(v)}
+                                    placeholder="^pattern.*" />
+                            </Td>
+                            <Td>
+                                <Button variant="primary" size="sm" style={{ marginRight: "8px" }}
+                                    isDisabled={!newRulePattern}
+                                    onClick={() => handleAddRule(list)}>
+                                    Add
+                                </Button>
+                                <Button variant="link" size="sm"
+                                    onClick={() => {
+                                        setAddingTo(null);
+                                        setNewRuleType("event-type");
+                                        setNewRulePointer("");
+                                        setNewRulePattern("");
+                                    }}>
+                                    Cancel
+                                </Button>
+                            </Td>
+                        </Tr>
+                    )}
+                </Tbody>
+            </Table>
+            {addingTo !== list && (
+                <Button variant="link" onClick={() => setAddingTo(list)}
+                    style={{ marginTop: "8px" }}>
+                    Add {list} rule
+                </Button>
+            )}
+        </div>
+    );
+
+    return (
+        <div>
+            <Flex justifyContent={{ default: "justifyContentSpaceBetween" }}
+                alignItems={{ default: "alignItemsCenter" }}
+                style={{ marginBottom: "16px" }}>
+                <FlexItem>
+                    <p className="axiom-text-subtle">
+                        Configure filter rules to control which events are processed. Include rules allow matching events; exclude rules block them.
+                    </p>
+                </FlexItem>
+                <FlexItem>
+                    <Button variant="primary" icon={<SaveIcon />} onClick={handleSave}
+                        isDisabled={!dirty || saving} isLoading={saving}>
+                        {saving ? "Saving..." : "Save"}
+                    </Button>
+                </FlexItem>
+            </Flex>
+
+            {renderRuleTable("include", filters.include)}
+            {renderRuleTable("exclude", filters.exclude)}
+
+            <div style={{ marginTop: "24px", marginBottom: "24px" }}>
+                <Button variant="secondary" onClick={handleDryRun}
+                    isLoading={dryRunLoading}
+                    isDisabled={dryRunLoading}>
+                    {dryRunLoading ? "Testing..." : "Test Filters"}
+                </Button>
+            </div>
+
+            {dryRunResults && (
+                <div style={{ marginTop: "24px" }}>
+                    <Title headingLevel="h3" size="md" style={{ marginBottom: "12px" }}>
+                        Test Results
+                    </Title>
+                    <p style={{ marginBottom: "12px" }}>
+                        <strong>{dryRunResults.totalAllowed} allowed</strong>, <strong>{dryRunResults.totalBlocked} blocked</strong> out of <strong>{dryRunResults.totalEvaluated}</strong> events
+                    </p>
+                    <Table aria-label="Filter test results" variant="compact">
+                        <Thead>
+                            <Tr>
+                                <Th>Result</Th>
+                                <Th>Event Type</Th>
+                                <Th>Reference</Th>
+                                <Th>Summary</Th>
+                                <Th>Matched Rule</Th>
+                            </Tr>
+                        </Thead>
+                        <Tbody>
+                            {dryRunResults.results.map((result, index) => (
+                                <Tr key={index}>
+                                    <Td>
+                                        <Label isCompact
+                                            color={result.allowed ? "green" : "red"}
+                                            icon={result.allowed ? <CheckCircleIcon /> : <TimesCircleIcon />}>
+                                            {result.allowed ? "Allowed" : "Blocked"}
+                                        </Label>
+                                    </Td>
+                                    <Td>{result.eventType}</Td>
+                                    <Td>{result.issueRef}</Td>
+                                    <Td>{result.summary}</Td>
+                                    <Td>{result.matchedRule ?? "—"}</Td>
+                                </Tr>
+                            ))}
+                        </Tbody>
+                    </Table>
+                </div>
+            )}
         </div>
     );
 }

@@ -794,6 +794,7 @@ export interface EventSource {
     secretName?: string;
     configuration?: Record<string, string>;
     labels?: string[];
+    filters?: EventSourceFilters;
 }
 
 export type NewEventSource = Omit<EventSource, "id">;
@@ -835,6 +836,16 @@ export async function fetchEventSource(id: number): Promise<EventSource> {
     return response.json();
 }
 
+export async function dryRunFilters(request: FilterDryRunRequest): Promise<FilterDryRunResponse> {
+    const response = await fetch(`${API}/event-sources/filters/dry-run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+    });
+    if (!response.ok) throw new Error(`Dry run failed: ${response.statusText}`);
+    return response.json();
+}
+
 export interface EventSourceLog {
     id: number;
     eventSourceId: number;
@@ -843,6 +854,39 @@ export interface EventSourceLog {
     detail?: string;
     eventsIngested?: number;
     createdOn: string;
+}
+
+export interface EventSourceFilterRule {
+    type: "event-type" | "payload";
+    pointer?: string;
+    pattern: string;
+}
+
+export interface EventSourceFilters {
+    include: EventSourceFilterRule[];
+    exclude: EventSourceFilterRule[];
+}
+
+export interface FilterDryRunRequest {
+    sourceType: string;
+    configuration: Record<string, string>;
+    secretName?: string;
+    filters: EventSourceFilters;
+}
+
+export interface FilterDryRunResult {
+    eventType: string;
+    issueRef: string;
+    summary: string;
+    allowed: boolean;
+    matchedRule?: string;
+}
+
+export interface FilterDryRunResponse {
+    results: FilterDryRunResult[];
+    totalEvaluated: number;
+    totalAllowed: number;
+    totalBlocked: number;
 }
 
 export async function fetchEventSourceLogs(
