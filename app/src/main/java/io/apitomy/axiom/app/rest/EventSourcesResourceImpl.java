@@ -131,17 +131,17 @@ public class EventSourcesResourceImpl implements EventResource {
         filters.setInclude(List.of());
 
         io.apitomy.axiom.api.beans.EventSourceFilterRule botRule = new io.apitomy.axiom.api.beans.EventSourceFilterRule();
-        botRule.setType(io.apitomy.axiom.api.beans.EventSourceFilterRule.Type.payload);
+        botRule.setType(io.apitomy.axiom.api.beans.EventSourceFilterRule.Type.PAYLOAD);
         botRule.setPointer("/user/login");
         botRule.setPattern("*[bot]");
 
         io.apitomy.axiom.api.beans.EventSourceFilterRule commentBotRule = new io.apitomy.axiom.api.beans.EventSourceFilterRule();
-        commentBotRule.setType(io.apitomy.axiom.api.beans.EventSourceFilterRule.Type.payload);
+        commentBotRule.setType(io.apitomy.axiom.api.beans.EventSourceFilterRule.Type.PAYLOAD);
         commentBotRule.setPointer("/comment/user/login");
         commentBotRule.setPattern("*[bot]");
 
         io.apitomy.axiom.api.beans.EventSourceFilterRule slashRule = new io.apitomy.axiom.api.beans.EventSourceFilterRule();
-        slashRule.setType(io.apitomy.axiom.api.beans.EventSourceFilterRule.Type.payload);
+        slashRule.setType(io.apitomy.axiom.api.beans.EventSourceFilterRule.Type.PAYLOAD);
         slashRule.setPointer("/comment/body");
         slashRule.setPattern("/*");
 
@@ -321,7 +321,7 @@ public class EventSourcesResourceImpl implements EventResource {
      */
     private List<DryRunEvent> fetchDryRunEvents(FilterDryRunRequest request) {
         String sourceType = request.getSourceType().value();
-        Map<String, Object> config = request.getConfiguration();
+        Map<String, Object> config = request.getConfiguration().getAdditionalProperties();
         String token = resolveSecretValue(request.getSecretName());
 
         if (token == null) {
