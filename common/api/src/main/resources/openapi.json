@@ -2863,6 +2863,38 @@
         }
       ]
     },
+    "/event-sources/filters/dry-run": {
+      "post": {
+        "tags": [
+          "EventSources"
+        ],
+        "summary": "Test filter configuration against live events",
+        "description": "Fetches recent events from the source API and evaluates the provided filter configuration against them. No events are ingested. Use this to preview what filters would allow or block before saving.",
+        "operationId": "dryRunFilters",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FilterDryRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Dry run results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilterDryRunResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/system/packs/export": {
       "post": {
         "tags": [
@@ -4970,6 +5002,9 @@
             "items": {
               "type": "string"
             }
+          },
+          "filters": {
+            "$ref": "#/components/schemas/EventSourceFilters"
           }
         }
       },
@@ -5015,6 +5050,9 @@
             "items": {
               "type": "string"
             }
+          },
+          "filters": {
+            "$ref": "#/components/schemas/EventSourceFilters"
           }
         }
       },
@@ -7423,6 +7461,121 @@
             "items": {
               "$ref": "#/components/schemas/DashboardWidget"
             }
+          }
+        }
+      },
+      "EventSourceFilterRule": {
+        "required": [
+          "type",
+          "pattern"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "What the rule matches against: event-type or payload field",
+            "enum": [
+              "event-type",
+              "payload"
+            ],
+            "type": "string"
+          },
+          "pointer": {
+            "description": "JSON Pointer (RFC 6901) to the payload field. Required when type is payload.",
+            "type": "string"
+          },
+          "pattern": {
+            "description": "Glob pattern to match against. Supports * (any sequence) and ? (any single character) wildcards.",
+            "type": "string"
+          }
+        }
+      },
+      "EventSourceFilters": {
+        "type": "object",
+        "properties": {
+          "include": {
+            "description": "Rules for events to include. An empty list means allow all event types.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventSourceFilterRule"
+            }
+          },
+          "exclude": {
+            "description": "Rules for events to exclude. Applied after include rules.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventSourceFilterRule"
+            }
+          }
+        }
+      },
+      "FilterDryRunRequest": {
+        "required": [
+          "sourceType",
+          "configuration",
+          "filters"
+        ],
+        "type": "object",
+        "properties": {
+          "sourceType": {
+            "enum": [
+              "github",
+              "jira"
+            ],
+            "type": "string"
+          },
+          "configuration": {
+            "description": "Source-specific configuration (same shape as EventSource.configuration)",
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "secretName": {
+            "description": "Name of the secret to use for authentication",
+            "type": "string"
+          },
+          "filters": {
+            "$ref": "#/components/schemas/EventSourceFilters"
+          }
+        }
+      },
+      "FilterDryRunResponse": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FilterDryRunResult"
+            }
+          },
+          "totalEvaluated": {
+            "type": "integer"
+          },
+          "totalAllowed": {
+            "type": "integer"
+          },
+          "totalBlocked": {
+            "type": "integer"
+          }
+        }
+      },
+      "FilterDryRunResult": {
+        "type": "object",
+        "properties": {
+          "eventType": {
+            "type": "string"
+          },
+          "issueRef": {
+            "type": "string"
+          },
+          "summary": {
+            "description": "Human-readable summary of the event (e.g. issue title, comment author)",
+            "type": "string"
+          },
+          "allowed": {
+            "type": "boolean"
+          },
+          "matchedRule": {
+            "description": "Description of the filter rule that matched, if blocked",
+            "type": "string"
           }
         }
       }
