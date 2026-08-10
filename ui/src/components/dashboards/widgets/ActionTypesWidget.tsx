@@ -47,7 +47,7 @@ function ActionTypesWidget({ config, labels }: WidgetProps) {
                             </Label>
                         </Td>
                         <Td>
-                            {at.managerTriggerable && <Label isCompact color="green" style={{ marginRight: 4 }}>manager</Label>}
+                            {at.managerTriggerable && <Label isCompact color="green" style={{ marginRight: "4px" }}>manager</Label>}
                             {at.userTriggerable && <Label isCompact color="blue">user</Label>}
                             {!at.managerTriggerable && !at.userTriggerable && "—"}
                         </Td>
