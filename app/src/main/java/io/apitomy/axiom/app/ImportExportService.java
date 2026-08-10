@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.api.beans.ImportResult;
 import io.apitomy.axiom.api.beans.PackExportRequest;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
+import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.McpServerEntity;
 import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
@@ -170,7 +171,8 @@ public class ImportExportService {
             int actionTypesCreated, int actionTypesUpdated,
             int reportDefinitionsCreated, int reportDefinitionsUpdated,
             int toolsetsCreated, int toolsetsUpdated,
-            int sessionTemplatesCreated, int sessionTemplatesUpdated
+            int sessionTemplatesCreated, int sessionTemplatesUpdated,
+            int eventSourcesCreated, int eventSourcesUpdated
     ) {}
 
     /**
@@ -188,26 +190,30 @@ public class ImportExportService {
         int[] reportDefinitions = upsertReportDefinitions(pack.path("reportDefinitions"));
         int[] toolsets = upsertToolsets(pack.path("toolsets"));
         int[] sessionTemplates = upsertSessionTemplates(pack.path("sessionTemplates"));
+        int[] eventSources = upsertEventSources(pack.path("eventSources"));
 
         String packName = pack.path("metadata").path("name").asText("unnamed");
         LOG.infof("Upserted configuration pack '%s': %d tools created, %d updated; "
                         + "%d action types created, %d updated; "
                         + "%d report definitions created, %d updated; "
                         + "%d toolsets created, %d updated; "
-                        + "%d session templates created, %d updated",
+                        + "%d session templates created, %d updated; "
+                        + "%d event sources created, %d updated",
                 packName,
                 tools[0], tools[1],
                 actionTypes[0], actionTypes[1],
                 reportDefinitions[0], reportDefinitions[1],
                 toolsets[0], toolsets[1],
-                sessionTemplates[0], sessionTemplates[1]);
+                sessionTemplates[0], sessionTemplates[1],
+                eventSources[0], eventSources[1]);
 
         return new UpsertResult(
                 tools[0], tools[1],
                 actionTypes[0], actionTypes[1],
                 reportDefinitions[0], reportDefinitions[1],
                 toolsets[0], toolsets[1],
-                sessionTemplates[0], sessionTemplates[1]
+                sessionTemplates[0], sessionTemplates[1],
+                eventSources[0], eventSources[1]
         );
     }
 
@@ -553,6 +559,42 @@ public class ImportExportService {
             if (toolsNode.isArray()) {
                 for (JsonNode t : toolsNode) {
                     entity.allowedTools.add(t.asText());
+                }
+            }
+            entity.persist();
+            if (isNew) created++;
+            else updated++;
+        }
+        return new int[]{created, updated};
+    }
+
+    private int[] upsertEventSources(JsonNode items) {
+        if (!items.isArray()) return new int[]{0, 0};
+        int created = 0, updated = 0;
+        for (JsonNode item : items) {
+            String name = item.path("name").asText();
+            EventSourceEntity entity = EventSourceEntity.find("name", name).firstResult();
+            boolean isNew = (entity == null);
+            if (isNew) {
+                entity = new EventSourceEntity();
+                entity.name = name;
+            }
+            entity.description = textOrNull(item, "description");
+            entity.sourceType = item.path("sourceType").asText("github");
+            entity.enabled = item.path("enabled").asBoolean(false);
+            entity.pollInterval = item.has("pollInterval")
+                    ? item.path("pollInterval").asInt() : null;
+            entity.secretName = textOrNull(item, "secretName");
+            entity.configuration = jsonOrNull(item, "configuration");
+            if (entity.configuration == null) {
+                entity.configuration = "{}";
+            }
+            entity.filters = jsonOrNull(item, "filters");
+            entity.labels.clear();
+            JsonNode labelsNode = item.path("labels");
+            if (labelsNode.isArray()) {
+                for (JsonNode l : labelsNode) {
+                    entity.labels.add(l.asText());
                 }
             }
             entity.persist();

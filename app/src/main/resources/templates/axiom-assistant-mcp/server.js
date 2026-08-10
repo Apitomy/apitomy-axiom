@@ -208,6 +208,19 @@ const TOOLS = [
         },
     },
     {
+        name: "axiom_get_event_source",
+        description: "Get full details of a specific event source by name, including its configuration, filters, poll interval, and labels.",
+        parameters: [
+            { name: "name", type: "string", description: "The event source name", required: true },
+        ],
+        handler: async (args) => {
+            const items = JSON.parse(await axiomApi("GET", "/event-sources"));
+            const es = items.find(e => e.name === args.name);
+            if (!es) return `Event source '${args.name}' not found.`;
+            return JSON.stringify(es, null, 2);
+        },
+    },
+    {
         name: "axiom_list_secrets",
         description: "List all secret names in Axiom. Returns names and descriptions only (values are never exposed). Use these names with ${secret:NAME} syntax in environment variables and configuration.",
         parameters: [],
