@@ -145,7 +145,7 @@ public class UsageResourceImpl implements UsageResource {
         long totalCount = ProjectEntity.count(hql.toString(), params);
 
         List<DiskUsageProject> items = ProjectEntity.<ProjectEntity>find(
-                        hql.toString(), Sort.ascending("name"), params)
+                        hql.toString(), Sort.descending("diskUsageBytes"), params)
                 .page(Page.of(pageNum - 1, pageSize))
                 .list()
                 .stream()
