@@ -1,9 +1,16 @@
 package io.apitomy.axiom.core.entities;
 
 import io.quarkus.hibernate.orm.panache.PanacheEntity;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Defines a kind of work that can be performed within the system.
@@ -82,4 +89,9 @@ public class ActionTypeEntity extends PanacheEntity {
 
     @Column(name = "emits_event", nullable = false)
     public boolean emitsEvent;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "action_type_label", joinColumns = @JoinColumn(name = "action_type_id"))
+    @Column(name = "label")
+    public List<String> labels = new ArrayList<>();
 }

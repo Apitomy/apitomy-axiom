@@ -186,6 +186,10 @@ public class ActionResourceImpl implements ActionResource {
         entity.maxBudgetUsd = data.getMaxBudgetUsd();
         entity.emitsEvent = data.getEmitsEvent() != null ? data.getEmitsEvent() : false;
         entity.environment = environmentToJson(data.getEnvironment());
+        entity.labels.clear();
+        if (data.getLabels() != null) {
+            entity.labels.addAll(data.getLabels());
+        }
     }
 
     private ActionTypeEntity findOrThrow(long id) {
@@ -217,6 +221,7 @@ public class ActionResourceImpl implements ActionResource {
         actionType.setMaxBudgetUsd(entity.maxBudgetUsd);
         actionType.setEmitsEvent(entity.emitsEvent);
         actionType.setEnvironment(jsonToEnvironment(entity.environment));
+        actionType.setLabels(entity.labels);
         return actionType;
     }
 

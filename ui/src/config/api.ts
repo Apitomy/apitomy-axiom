@@ -337,6 +337,7 @@ export interface ActionType {
     maxBudgetUsd?: number;
     emitsEvent: boolean;
     environment?: Record<string, string>;
+    labels?: string[];
 }
 
 export type NewActionType = Omit<ActionType, "id">;
