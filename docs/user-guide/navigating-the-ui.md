@@ -10,7 +10,7 @@ find things.
 
 The masthead runs across the top of every page. It contains:
 
-- **Apitomy Axiom** — click the title to return to the Dashboard from any page
+- **Apitomy Axiom** — click the title to return to the Dashboards page from any page
 - **Robot icon** — opens the [AI Assistant](ai-assistant.md) (visible only when the
   Claude Code engine is active)
 - **Question mark icon** — opens the About dialog showing the application version, active
@@ -18,29 +18,77 @@ The masthead runs across the top of every page. It contains:
 
 ---
 
-## Dashboard
+## Dashboards
 
-The Dashboard is the landing page. It gives you a snapshot of the system at a glance:
+Dashboards are the landing page. Rather than a single fixed view, Axiom supports
+multiple **user-configurable dashboards**, each populated with widgets chosen from a
+built-in catalog.
 
-- **Project status cards** — counts of total, in-progress, idle, created, and completed
-  projects
-- **Active Projects** — a table of projects that aren't completed, with links to their
-  detail pages
-- **Recent Reports** — reports generated in the last 24 hours, with status, duration,
-  and cost
-- **Recent Activity** — a chronological feed of system events (tasks created, projects
-  opened, reports generated, etc.)
-- **Configuration summary** — counts of event sources, actors, action types, tools, and
-  report definitions, each linking to its configuration page
+### Dashboard List
 
-If required configuration is missing (e.g. no actors or no action types), the Dashboard
-shows a **Setup Incomplete** warning with links to the relevant configuration pages.
+The **Dashboards** page shows all dashboards with their name, description, labels, and
+creation date. From here you can:
+
+- **Create** a new dashboard with a name, description, and optional labels
+- **Set as default** — click the star icon to designate a dashboard as the default
+  landing page (only one dashboard can be default at a time)
+- **Delete** — remove a dashboard with a confirmation prompt
+
+Click any dashboard to open its view page.
+
+### Dashboard View
+
+Each dashboard displays its widgets on a responsive grid. The view page has two modes:
+
+- **Normal mode** (default) — widgets are displayed read-only; the layout is locked
+- **Edit mode** — click **Edit** in the toolbar to enable drag-and-drop repositioning,
+  widget resizing, per-widget configuration (gear icon), and widget removal (X icon).
+  You can also edit the dashboard's name, description, and labels inline.
+
+Click **Add Widget** in edit mode to open the widget catalog, which lets you browse and
+search widgets organized by category.
+
+### Dashboard Labels
+
+Dashboards support labels for organization. Dashboard labels also serve as **data
+filters** — when a dashboard has labels, its widgets filter their data to show only
+items matching those labels. For example, a dashboard labeled `"team-a"` would show
+only projects, events, and activity associated with that label.
+
+### Widget Catalog
+
+Axiom ships with 12 built-in widget types across four categories:
+
+| Category | Widgets |
+|----------|---------|
+| **Projects** | Project Status Summary, Active Projects, Project Spotlight |
+| **Operations** | Recent Activity, Inbox, Recent Events |
+| **AI & Cost** | AI Cost Summary, AI Cost by Project |
+| **Reports** | Recent Reports |
+| **System** | System Status, Event Source Health, Disk Usage Breakdown |
+
+Each widget has a default size but can be resized on the grid. Many widgets support
+per-widget configuration — for example, the Active Projects widget has a configurable
+maximum row count, and the AI Cost Summary widget lets you choose a time window
+(24 hours, 7 days, 30 days, or 90 days). Click the gear icon on a widget in edit mode
+to adjust its settings.
 
 ---
 
 ## Sidebar Navigation
 
-The sidebar organizes the UI into four sections.
+The sidebar organizes the UI into six sections.
+
+### Dashboards
+
+See [Dashboards](#dashboards) above.
+
+### Inbox
+
+The **Inbox** page shows Manager decisions that require human review — typically
+low-confidence decisions that were not auto-executed. A badge on the sidebar shows
+the count of unreviewed items. Click any item to review the Manager's reasoning and
+approve or reject the proposed action.
 
 ### Reports
 
@@ -117,12 +165,12 @@ edit, and delete configuration items:
 | Page | Purpose |
 |------|---------|
 | **AI Engine** | View the active engine, health checks, and available models |
-| **Action Types** | Define kinds of work — prompt templates, allowed tools, execution mode |
+| **Action Types** | Define kinds of work — prompt templates, allowed tools, execution mode, and labels for event source scoping |
 | **Actors** | Register AI agents and human actors with capabilities |
 | **Manager** | Edit the Manager's system prompt and prompt template |
 | **MCP Servers** | Register external MCP tool servers (HTTP or stdio) |
 | **Report Definitions** | Create report templates with schedules, time windows, and prompts |
-| **Event Sources** | Connect to GitHub or Jira repositories for event polling |
+| **Event Sources** | Connect to GitHub or Jira repositories for event polling, with labels and event filters |
 | **Secrets** | Store encrypted credentials injected into subprocesses |
 | **Tools** | Define script-based tools with parameters and bash templates |
 | **Toolsets** | Group tools into named collections for reuse |

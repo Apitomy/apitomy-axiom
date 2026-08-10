@@ -124,10 +124,14 @@ An event source connects Axiom to an external system. Each source is configured 
 | **Repository/Project URL** | Full URL to the GitHub repo or Jira project |
 | **Poll interval** | How often to check for new activity (in seconds) |
 | **Authentication secret** | Which secret to use for API access (or auto-detect) |
+| **Labels** | Free-form labels for categorization and action type scoping (see [Label-Based Action Type Filtering](#label-based-action-type-filtering)) |
 | **Enabled** | Whether polling is active |
 
 When enabled, a GitHub event source polls for new issues, pull requests, comments, and
 reviews. A Jira event source polls for new issues and comments.
+
+When the Manager creates a new project from an event, the event source's labels are
+automatically copied to the new project.
 
 ### AI Manager
 
@@ -143,7 +147,7 @@ The Manager's behavior is controlled by two editable templates:
 
 | Placeholder | Value |
 |-------------|-------|
-| `{{actionTypes}}` | Formatted list of all configured action types |
+| `{{actionTypes}}` | Formatted list of action types available for this event (filtered by label compatibility — see [Label-Based Action Type Filtering](#label-based-action-type-filtering)) |
 | `{{actors}}` | Formatted list of all configured actors |
 | `{{source}}` | Event source type (e.g. "github") |
 | `{{eventType}}` | Event type (e.g. "issue-created", "comment-added") |
@@ -167,6 +171,25 @@ The Manager produces one of these decision types:
 Each decision includes a **confidence score** (0.0–1.0). Only decisions above the
 configured threshold (default 0.7) are auto-executed. Lower-confidence decisions are
 flagged for human review in the UI.
+
+#### Label-Based Action Type Filtering
+
+Before the Manager evaluates an event, Axiom filters the list of candidate action
+types based on **label compatibility** between the event's source and the action types:
+
+- **Action types with no labels** are always included. This is the default — existing
+  action types without labels continue to work for all event sources.
+- **Action types with labels** are included only if their labels are a **subset** of
+  the event source's labels.
+
+This lets you scope action types to specific teams, environments, or domains. For
+example, if you label an event source `"frontend"` and an action type `"frontend"`,
+that action type will only be offered to the Manager for events from that source. An
+action type labeled `"frontend", "security"` would require an event source with *both*
+labels to be included.
+
+Action types with no labels remain universally available, so existing configurations
+are unaffected.
 
 ### Projects
 
@@ -209,6 +232,7 @@ specifies:
 | **Allowed tools** | Which tools the AI agent may use |
 | **Environment** | Custom environment variables for the subprocess |
 | **Model / Engine** | Override the global AI model or engine for this action type |
+| **Labels** | Free-form labels that scope this action type to matching event sources (see [Label-Based Action Type Filtering](#label-based-action-type-filtering)) |
 | **User triggerable** | Can be manually triggered from the project detail page |
 | **Manager triggerable** | Can be selected by the AI Manager during triage |
 | **Emits event** | Whether completing this action creates an internal event (enabling chained actions) |
@@ -413,6 +437,46 @@ report definitions, toolsets, and session templates), and you can create your ow
 templates for custom workflows.
 
 For full details, see the [AI Assistant](ai-assistant.md) guide.
+
+---
+
+## Dashboards
+
+Dashboards provide a customizable at-a-glance view of your Axiom instance. You can
+create multiple dashboards, each with a different set of **widgets** arranged on a
+drag-and-drop grid.
+
+### Widgets
+
+Axiom ships with a catalog of built-in widgets organized by category:
+
+| Category | Widgets |
+|----------|---------|
+| **Projects** | Project Status Summary, Active Projects, Project Spotlight |
+| **Operations** | Recent Activity, Inbox, Recent Events |
+| **AI & Cost** | AI Cost Summary, AI Cost by Project |
+| **Reports** | Recent Reports |
+| **System** | System Status, Event Source Health, Disk Usage Breakdown |
+
+Each widget is self-contained — it fetches its own data and renders independently.
+Many widgets support per-widget configuration (e.g. time window, maximum rows, or
+which project to spotlight).
+
+### Dashboard Labels and Filtering
+
+Dashboards support labels for organization. When a dashboard has labels, those labels
+are passed to all its widgets as **data filters**. Widgets use these labels to scope
+their data — for example, a dashboard labeled `"team-a"` would show only projects,
+events, and activity associated with that label.
+
+### Default Dashboard
+
+One dashboard can be designated as the **default**. The default dashboard is displayed
+when you navigate to the Dashboards page. If no default is set, the dashboards list
+is shown instead.
+
+For details on the dashboard UI, see
+[Navigating the UI](navigating-the-ui.md#dashboards).
 
 ---
 
