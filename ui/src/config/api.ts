@@ -156,6 +156,8 @@ export interface AssistantApplyResult {
     toolsetsUpdated?: number;
     sessionTemplatesCreated?: number;
     sessionTemplatesUpdated?: number;
+    eventSourcesCreated?: number;
+    eventSourcesUpdated?: number;
 }
 
 export async function exportPack(request: PackExportRequest): Promise<Blob> {

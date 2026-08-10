@@ -26,13 +26,13 @@ interface AssistantGeneratedItemsProps {
     onItemCountChanged?: (count: number) => void;
 }
 
-const TYPE_LABELS: Record<string, { label: string; color: "blue" | "green" | "purple" | "teal" | "orange" | "cyan" }> = {
+const TYPE_LABELS: Record<string, { label: string; color: "blue" | "green" | "purple" | "teal" | "orange" | "grey" }> = {
     "tools": { label: "Tool", color: "blue" },
     "action-types": { label: "Action Type", color: "green" },
     "report-definitions": { label: "Report", color: "purple" },
     "toolsets": { label: "Toolset", color: "teal" },
     "session-templates": { label: "Template", color: "orange" },
-    "event-sources": { label: "Event Source", color: "cyan" },
+    "event-sources": { label: "Event Source", color: "grey" },
 };
 
 export function AssistantGeneratedItems({ sessionId, refreshTrigger, onItemCountChanged }: AssistantGeneratedItemsProps) {
