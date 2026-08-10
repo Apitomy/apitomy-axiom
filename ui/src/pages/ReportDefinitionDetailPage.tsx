@@ -406,7 +406,7 @@ function InfoTab({ form, updateForm, initialLabels, onLabelsChange }: {
                     onChange={(_e, v) => updateForm({ timeoutSeconds: v ? parseInt(v) : undefined })}
                     placeholder="Global default (600)" />
             </FormGroup>
-            <FormGroup label="Initial Labels" fieldId="initialLabels">
+            <FormGroup label="Labels" fieldId="initialLabels">
                 <LabelInput labels={initialLabels}
                     onChange={onLabelsChange} />
             </FormGroup>

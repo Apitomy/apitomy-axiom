@@ -30,6 +30,7 @@ import {
     deleteActionType,
 } from "../config/api";
 import { BooleanStatusIcon } from "../components/BooleanStatusIcon";
+import { ColoredLabel } from "../components/ColoredLabel";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 export function ActionTypesPage() {
@@ -103,11 +104,11 @@ export function ActionTypesPage() {
                             <Tr>
                                 <Th>Name</Th>
                                 <Th>Mode</Th>
+                                <Th>Labels</Th>
                                 <Th>User Triggerable</Th>
                                 <Th>Manager Triggerable</Th>
                                 <Th>Emits Event</Th>
                                 <Th>Tools</Th>
-                                <Th>Template</Th>
                                 <Th />
                             </Tr>
                         </Thead>
@@ -124,13 +125,18 @@ export function ActionTypesPage() {
                                             {at.executionMode}
                                         </Label>
                                     </Td>
+                                    <Td>
+                                        {at.labels?.map((label) => (
+                                            <ColoredLabel key={label} isCompact
+                                                style={{ marginRight: "4px" }}>
+                                                {label}
+                                            </ColoredLabel>
+                                        ))}
+                                    </Td>
                                     <Td><BooleanStatusIcon value={at.userTriggerable} /></Td>
                                     <Td><BooleanStatusIcon value={at.managerTriggerable} /></Td>
                                     <Td><BooleanStatusIcon value={at.emitsEvent} /></Td>
                                     <Td>{at.executionMode === "actor" ? `${at.allowedTools?.length || 0} tools` : "—"}</Td>
-                                    <Td>{at.executionMode === "actor"
-                                        ? (at.promptTemplate ? "Configured" : "—")
-                                        : (at.scriptTemplate ? "Configured" : "—")}</Td>
                                     <Td>
                                         <Button variant="plain" size="sm" style={{ padding: 0 }}
                                             onClick={(e) => handleDelete(e, at.id)}>

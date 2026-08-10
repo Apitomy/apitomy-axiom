@@ -28,6 +28,7 @@ import {
     createReportDefinition,
     deleteReportDefinition,
 } from "../config/api";
+import { ColoredLabel } from "../components/ColoredLabel";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 export function ReportDefinitionsPage() {
@@ -103,6 +104,7 @@ export function ReportDefinitionsPage() {
                             <Tr>
                                 <Th>Name</Th>
                                 <Th>Schedule</Th>
+                                <Th>Labels</Th>
                                 <Th>Time Window</Th>
                                 <Th>Enabled</Th>
                                 <Th>Last Run</Th>
@@ -121,6 +123,14 @@ export function ReportDefinitionsPage() {
                                                 at {def.scheduleTime}
                                             </span>
                                         )}
+                                    </Td>
+                                    <Td>
+                                        {def.initialLabels?.map((label) => (
+                                            <ColoredLabel key={label} isCompact
+                                                style={{ marginRight: "4px" }}>
+                                                {label}
+                                            </ColoredLabel>
+                                        ))}
                                     </Td>
                                     <Td>{def.timeWindow
                                         ? <Label isCompact>{def.timeWindow}</Label>
