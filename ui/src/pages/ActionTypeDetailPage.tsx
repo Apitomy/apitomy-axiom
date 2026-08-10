@@ -26,7 +26,9 @@ import {
 } from "@patternfly/react-core";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { registerPlaceholderCompletions, ACTION_TYPE_PLACEHOLDERS } from "../components/PlaceholderCompletionProvider";
+import { EditLabelsModal } from "../components/EditLabelsModal";
 import { EnvironmentTab } from "../components/EnvironmentTab";
+import { LabelDisplay } from "../components/LabelDisplay";
 import { ToolListEditor } from "../components/ToolListEditor";
 import { ScriptAiModal } from "../components/ScriptAiModal";
 import { ActionTypeAiModal } from "../components/ActionTypeAiModal";
@@ -61,6 +63,7 @@ export function ActionTypeDetailPage() {
     const [dirty, setDirty] = useState(false);
     const [activeTab, setActiveTab] = useState(0);
     const [aiModalOpen, setAiModalOpen] = useState(false);
+    const [isLabelsOpen, setIsLabelsOpen] = useState(false);
     const [availableModels, setAvailableModels] = useState<string[]>([]);
     const [availableEngines, setAvailableEngines] = useState<string[]>([]);
     const [validationMessages, setValidationMessages] = useState<ToolValidationMessage[]>([]);
@@ -108,6 +111,7 @@ export function ActionTypeDetailPage() {
                     engine: at.engine,
                     maxSteps: at.maxSteps,
                     maxBudgetUsd: at.maxBudgetUsd,
+                    labels: at.labels || [],
                 });
                 setTools(at.allowedTools || []);
                 setEnvVars(at.environment || {});
@@ -233,7 +237,7 @@ export function ActionTypeDetailPage() {
             <Tabs activeKey={activeTab} onSelect={(_e, k) => setActiveTab(k as number)}>
                 <Tab eventKey={0} title={<TabTitleText>Info</TabTitleText>}>
                     <TabContent id="info-tab" eventKey={0} activeKey={activeTab} style={{ marginTop: "24px" }}>
-                        <InfoTab form={form} updateForm={updateForm} availableModels={availableModels} availableEngines={availableEngines} />
+                        <InfoTab form={form} updateForm={updateForm} availableModels={availableModels} availableEngines={availableEngines} onEditLabels={() => setIsLabelsOpen(true)} />
                     </TabContent>
                 </Tab>
                 {form.executionMode === "actor" && (
@@ -342,15 +346,25 @@ export function ActionTypeDetailPage() {
                     onClose={() => setAiModalOpen(false)}
                 />
             )}
+
+            <EditLabelsModal
+                isOpen={isLabelsOpen}
+                labels={form.labels || []}
+                onSave={async (labels) => {
+                    updateForm({ labels });
+                }}
+                onClose={() => setIsLabelsOpen(false)}
+            />
         </PageSection>
     );
 }
 
-function InfoTab({ form, updateForm, availableModels, availableEngines }: {
+function InfoTab({ form, updateForm, availableModels, availableEngines, onEditLabels }: {
     form: NewActionType;
     updateForm: (updates: Partial<NewActionType>) => void;
     availableModels: string[];
     availableEngines: string[];
+    onEditLabels: () => void;
 }) {
     return (
         <Form style={{ maxWidth: "600px" }}>
@@ -369,6 +383,9 @@ function InfoTab({ form, updateForm, availableModels, availableEngines }: {
                     onChange={(_e, v) => updateForm({ description: v })}
                     rows={3}
                 />
+            </FormGroup>
+            <FormGroup label="Labels" fieldId="labels">
+                <LabelDisplay labels={form.labels || []} onEdit={onEditLabels} />
             </FormGroup>
             <FormGroup label="Execution Mode" isRequired fieldId="executionMode">
                 <FormSelect

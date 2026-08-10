@@ -9,6 +9,7 @@ import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.ActorEntity;
 import io.apitomy.axiom.core.entities.EventEntity;
+import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.ManagerConfigEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
@@ -24,8 +25,10 @@ import org.jboss.logging.Logger;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Service that invokes the AI Manager to evaluate events and produce decisions.
@@ -87,6 +90,17 @@ public class ManagerService {
         // Load context (short transaction — releases connection before AI call)
         EvalContext ctx = QuarkusTransaction.requiringNew().call(() -> {
             List<ActionTypeEntity> actionTypes = ActionTypeEntity.list("managerTriggerable", true);
+
+            // Filter action types by label compatibility with the event source
+            List<String> eventSourceLabels = Collections.emptyList();
+            if (event.eventSourceId != null) {
+                EventSourceEntity eventSource = EventSourceEntity.findById(event.eventSourceId);
+                if (eventSource != null && eventSource.labels != null) {
+                    eventSourceLabels = eventSource.labels;
+                }
+            }
+            actionTypes = filterByLabels(actionTypes, eventSourceLabels);
+
             List<ActorEntity> actors = ActorEntity.listAll();
 
             ProjectEntity project = null;
@@ -183,6 +197,29 @@ public class ManagerService {
             completeEvalNode(evalNodeId, "failed", null);
             return Collections.emptyList();
         }
+    }
+
+    /**
+     * Filters action types by label compatibility with the event's source labels.
+     * Action types with no labels are always included (backwards-compatible).
+     * Action types with labels are included only if their labels are a subset
+     * of the event source labels.
+     *
+     * @param actionTypes the candidate action types
+     * @param eventSourceLabels the labels from the event's source
+     * @return the filtered list
+     */
+    static List<ActionTypeEntity> filterByLabels(List<ActionTypeEntity> actionTypes,
+                                                  List<String> eventSourceLabels) {
+        if (actionTypes == null || actionTypes.isEmpty()) {
+            return actionTypes;
+        }
+        Set<String> eventLabels = eventSourceLabels != null
+                ? new HashSet<>(eventSourceLabels) : Collections.emptySet();
+        return actionTypes.stream()
+                .filter(at -> at.labels == null || at.labels.isEmpty()
+                        || eventLabels.containsAll(at.labels))
+                .toList();
     }
 
     /**

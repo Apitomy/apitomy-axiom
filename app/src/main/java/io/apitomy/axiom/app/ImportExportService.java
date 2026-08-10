@@ -309,6 +309,12 @@ public class ImportExportService {
             entity.maxSteps = item.has("maxSteps") ? item.path("maxSteps").asInt() : null;
             entity.maxBudgetUsd = item.has("maxBudgetUsd") ? item.path("maxBudgetUsd").asDouble() : null;
             entity.environment = jsonOrNull(item, "environment");
+            JsonNode labelsNode = item.path("labels");
+            if (labelsNode.isArray()) {
+                for (JsonNode l : labelsNode) {
+                    entity.labels.add(l.asText());
+                }
+            }
             entity.persist();
             count++;
         }
@@ -438,6 +444,13 @@ public class ImportExportService {
             entity.maxSteps = item.has("maxSteps") ? item.path("maxSteps").asInt() : null;
             entity.maxBudgetUsd = item.has("maxBudgetUsd") ? item.path("maxBudgetUsd").asDouble() : null;
             entity.environment = jsonOrNull(item, "environment");
+            entity.labels.clear();
+            JsonNode labelsNode = item.path("labels");
+            if (labelsNode.isArray()) {
+                for (JsonNode l : labelsNode) {
+                    entity.labels.add(l.asText());
+                }
+            }
             entity.persist();
             if (isNew) created++;
             else updated++;
@@ -600,6 +613,10 @@ public class ImportExportService {
         if (e.maxSteps != null) n.put("maxSteps", e.maxSteps);
         if (e.maxBudgetUsd != null) n.put("maxBudgetUsd", e.maxBudgetUsd);
         putIfNotNull(n, "environment", e.environment);
+        if (e.labels != null && !e.labels.isEmpty()) {
+            var labelsArr = n.putArray("labels");
+            e.labels.forEach(labelsArr::add);
+        }
         return n;
     }
 
