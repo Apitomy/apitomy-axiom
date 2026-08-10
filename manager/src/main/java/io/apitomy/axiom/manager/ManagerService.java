@@ -214,7 +214,8 @@ public class ManagerService {
         if (actionTypes == null || actionTypes.isEmpty()) {
             return actionTypes;
         }
-        Set<String> eventLabels = new HashSet<>(eventSourceLabels);
+        Set<String> eventLabels = eventSourceLabels != null
+                ? new HashSet<>(eventSourceLabels) : Collections.emptySet();
         return actionTypes.stream()
                 .filter(at -> at.labels == null || at.labels.isEmpty()
                         || eventLabels.containsAll(at.labels))
