@@ -84,6 +84,7 @@ public class AssistantItemValidator {
             case "report-definitions" -> validateReportDefinition(content, workingDirectory, errors, warnings);
             case "toolsets" -> validateToolset(content, errors, warnings);
             case "session-templates" -> validateSessionTemplate(content, errors, warnings);
+            case "event-sources" -> validateEventSource(content, errors, warnings);
             default -> errors.add("Unknown item type: " + itemType);
         }
 
@@ -106,6 +107,7 @@ public class AssistantItemValidator {
             case "report-definitions" -> "report-definitions";
             case "toolsets" -> "toolsets";
             case "session-templates" -> "session-templates";
+            case "event-sources" -> "event-sources";
             default -> null;
         };
     }
@@ -211,6 +213,54 @@ public class AssistantItemValidator {
         JsonNode allowedTools = node.path("allowedTools");
         if (allowedTools.isMissingNode() || (allowedTools.isArray() && allowedTools.isEmpty())) {
             warnings.add("'allowedTools' is empty — the session will have no tool access.");
+        }
+    }
+
+    private void validateEventSource(String json, List<String> errors, List<String> warnings) {
+        JsonNode node;
+        try {
+            node = objectMapper.readTree(json);
+        } catch (Exception e) {
+            errors.add("Invalid JSON: " + e.getMessage());
+            return;
+        }
+
+        String name = node.path("name").asText(null);
+        if (name == null || name.isBlank()) {
+            errors.add("'name' is required and must not be blank.");
+        }
+
+        String sourceType = node.path("sourceType").asText(null);
+        if (sourceType == null || sourceType.isBlank()) {
+            errors.add("'sourceType' is required and must be 'github' or 'jira'.");
+        } else if (!"github".equals(sourceType) && !"jira".equals(sourceType)) {
+            errors.add("'sourceType' must be 'github' or 'jira', got: " + sourceType);
+        }
+
+        JsonNode configNode = node.path("configuration");
+        if (configNode.isMissingNode() || configNode.isNull()
+                || (configNode.isObject() && configNode.isEmpty())) {
+            errors.add("'configuration' is required and must not be empty.");
+        } else if (configNode.isObject() && sourceType != null) {
+            if ("github".equals(sourceType)) {
+                if (!configNode.has("owner") || configNode.path("owner").asText("").isBlank()) {
+                    errors.add("GitHub configuration requires 'owner' field.");
+                }
+                if (!configNode.has("name") || configNode.path("name").asText("").isBlank()) {
+                    errors.add("GitHub configuration requires 'name' field.");
+                }
+            } else if ("jira".equals(sourceType)) {
+                if (!configNode.has("baseUrl") || configNode.path("baseUrl").asText("").isBlank()) {
+                    errors.add("Jira configuration requires 'baseUrl' field.");
+                }
+                if (!configNode.has("project") || configNode.path("project").asText("").isBlank()) {
+                    errors.add("Jira configuration requires 'project' field.");
+                }
+            }
+        }
+
+        if (!node.has("description") || node.path("description").asText("").isBlank()) {
+            warnings.add("'description' is recommended for event sources.");
         }
     }
 

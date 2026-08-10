@@ -392,6 +392,7 @@ public class AssistantSessionManager {
         collectItems(workDir, "report-definitions", items);
         collectItems(workDir, "toolsets", items);
         collectItems(workDir, "session-templates", items);
+        collectItems(workDir, "event-sources", items);
 
         return items;
     }
@@ -603,6 +604,7 @@ public class AssistantSessionManager {
                 validateAndFeedback(workDir, "report-definitions", session);
                 validateAndFeedback(workDir, "toolsets", session);
                 validateAndFeedback(workDir, "session-templates", session);
+                validateAndFeedback(workDir, "event-sources", session);
             } catch (Exception e) {
                 LOG.warnf(e, "Validation listener error in session %s",
                         session.getId());
@@ -682,6 +684,7 @@ public class AssistantSessionManager {
         ArrayNode reportDefsArr = pack.putArray("reportDefinitions");
         ArrayNode toolsetsArr = pack.putArray("toolsets");
         ArrayNode templatesArr = pack.putArray("sessionTemplates");
+        ArrayNode eventSourcesArr = pack.putArray("eventSources");
 
         for (AssistantItem item : items) {
             Path file = session.getWorkingDirectory()
@@ -694,6 +697,7 @@ public class AssistantSessionManager {
                 case "report-definitions" -> reportDefsArr.add(content);
                 case "toolsets" -> toolsetsArr.add(content);
                 case "session-templates" -> templatesArr.add(content);
+                case "event-sources" -> eventSourcesArr.add(content);
             }
         }
 
