@@ -18,13 +18,12 @@ function DiskUsageWidget({ config }: WidgetProps) {
 
     useEffect(() => {
         let cancelled = false;
-        fetchDiskUsage(1, maxProjects)
+        fetchDiskUsage(1, maxProjects, undefined, "diskUsageBytes", "desc")
             .then(result => {
                 if (cancelled) return;
                 const items = result.items
                     .map(p => ({ name: p.projectName, bytes: p.diskUsageBytes }))
-                    .filter(p => p.bytes > 0)
-                    .sort((a, b) => b.bytes - a.bytes);
+                    .filter(p => p.bytes > 0);
                 setData(items);
                 setTotalBytes(result.totalDiskUsageBytes);
             })
