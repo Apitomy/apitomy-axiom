@@ -7,6 +7,7 @@ import io.apitomy.axiom.api.beans.DiskUsageProject;
 import io.apitomy.axiom.api.beans.DiskUsageSearchResults;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.quarkus.hibernate.orm.panache.PanacheQuery;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -130,7 +131,8 @@ public class UsageResourceImpl implements UsageResource {
      */
     @Override
     public DiskUsageSearchResults listDiskUsage(BigInteger page, BigInteger limit,
-                                                 String filterName) {
+                                                 String filterName, String sortBy,
+                                                 String sortOrder) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
@@ -144,8 +146,20 @@ public class UsageResourceImpl implements UsageResource {
 
         long totalCount = ProjectEntity.count(hql.toString(), params);
 
-        List<DiskUsageProject> items = ProjectEntity.<ProjectEntity>find(
-                        hql.toString(), Sort.descending("diskUsageBytes"), params)
+        String sortField = "diskUsageBytes".equals(sortBy) ? "diskUsageBytes" : "name";
+        boolean descending = "desc".equalsIgnoreCase(sortOrder);
+
+        PanacheQuery<ProjectEntity> query;
+        if ("diskUsageBytes".equals(sortField)) {
+            String dir = descending ? "DESC" : "ASC";
+            String fullHql = hql + " ORDER BY COALESCE(diskUsageBytes, 0) " + dir;
+            query = ProjectEntity.find(fullHql, params);
+        } else {
+            Sort sort = descending ? Sort.descending("name") : Sort.ascending("name");
+            query = ProjectEntity.find(hql.toString(), sort, params);
+        }
+
+        List<DiskUsageProject> items = query
                 .page(Page.of(pageNum - 1, pageSize))
                 .list()
                 .stream()

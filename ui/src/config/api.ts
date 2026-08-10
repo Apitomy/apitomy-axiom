@@ -1159,12 +1159,15 @@ export interface DiskUsageSearchResults extends SearchResults<DiskUsageProject> 
 }
 
 export async function fetchDiskUsage(
-    page = 1, limit = 20, filterName?: string
+    page = 1, limit = 20, filterName?: string,
+    sortBy?: "name" | "diskUsageBytes", sortOrder?: "asc" | "desc"
 ): Promise<DiskUsageSearchResults> {
     const params = new URLSearchParams();
     params.set("page", String(page));
     params.set("limit", String(limit));
     if (filterName) params.set("filterName", filterName);
+    if (sortBy) params.set("sortBy", sortBy);
+    if (sortOrder) params.set("sortOrder", sortOrder);
     const response = await fetch(`${API}/usage/disk?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch disk usage: ${response.status}`);
     return response.json();

@@ -38,15 +38,20 @@ export function DiskUsagePage() {
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState(20);
     const [loading, setLoading] = useState(true);
+    const [activeSortIndex, setActiveSortIndex] = useState(0);
+    const [activeSortDirection, setActiveSortDirection] = useState<"asc" | "desc">("asc");
 
     const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
 
     const filterName = filters.find((f) => f.filterBy.value === "name")?.filterValue;
     const isFiltered = filters.length > 0;
 
+    const columnSortKeys: ("name" | "diskUsageBytes")[] = ["name", "diskUsageBytes"];
+    const sortBy = columnSortKeys[activeSortIndex];
+
     const loadData = useCallback(() => {
         setLoading(true);
-        fetchDiskUsage(page, perPage, filterName || undefined)
+        fetchDiskUsage(page, perPage, filterName || undefined, sortBy, activeSortDirection)
             .then((results) => {
                 setProjects(results.items);
                 setTotalCount(results.totalCount);
@@ -55,7 +60,7 @@ export function DiskUsagePage() {
             })
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [page, perPage, filterName]);
+    }, [page, perPage, filterName, sortBy, activeSortDirection]);
 
     useEffect(() => { loadData(); }, [loadData]);
 
@@ -75,6 +80,12 @@ export function DiskUsagePage() {
 
     const onClearAllFilters = () => {
         setFilters([]);
+        setPage(1);
+    };
+
+    const onSort = (_event: React.MouseEvent, columnIndex: number, direction: "asc" | "desc") => {
+        setActiveSortIndex(columnIndex);
+        setActiveSortDirection(direction);
         setPage(1);
     };
 
@@ -164,8 +175,16 @@ export function DiskUsagePage() {
                 <Table aria-label="Disk Usage by Project" variant="compact">
                     <Thead>
                         <Tr>
-                            <Th>Project</Th>
-                            <Th>Disk Usage</Th>
+                            <Th sort={{
+                                sortBy: { index: activeSortIndex, direction: activeSortDirection },
+                                onSort,
+                                columnIndex: 0,
+                            }}>Project</Th>
+                            <Th sort={{
+                                sortBy: { index: activeSortIndex, direction: activeSortDirection },
+                                onSort,
+                                columnIndex: 1,
+                            }}>Disk Usage</Th>
                         </Tr>
                     </Thead>
                     <Tbody>
