@@ -11,9 +11,10 @@ function EventSourceHealthWidget({ labels }: WidgetProps) {
 
     useEffect(() => {
         let cancelled = false;
-        fetchEventSources()
-            .then(all => {
+        fetchEventSources(1, 1000)
+            .then(results => {
                 if (cancelled) return;
+                const all = results.items;
                 if (labels.length > 0) {
                     setSources(all.filter(s =>
                         s.labels?.some((l: string) => labels.includes(l))

@@ -12,10 +12,10 @@ function ActionTypesWidget({ config, labels }: WidgetProps) {
 
     useEffect(() => {
         let cancelled = false;
-        fetchActionTypes()
-            .then(all => {
+        fetchActionTypes(1, 1000)
+            .then(results => {
                 if (cancelled) return;
-                let filtered = all;
+                let filtered = results.items;
                 if (labels.length > 0) {
                     // Subset logic: include action types with no labels,
                     // or whose labels are a subset of the dashboard's labels.

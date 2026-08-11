@@ -6,6 +6,7 @@ import io.apitomy.axiom.api.EventResource;
 import io.apitomy.axiom.api.beans.EventSource;
 import io.apitomy.axiom.api.beans.EventSourceLog;
 import io.apitomy.axiom.api.beans.EventSourceLogSearchResults;
+import io.apitomy.axiom.api.beans.EventSourceSearchResults;
 import io.apitomy.axiom.api.beans.FilterDryRunRequest;
 import io.apitomy.axiom.api.beans.FilterDryRunResponse;
 import io.apitomy.axiom.api.beans.FilterDryRunResult;
@@ -32,8 +33,10 @@ import org.jboss.logging.Logger;
 
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -65,12 +68,47 @@ public class EventSourcesResourceImpl implements EventResource {
      * {@inheritDoc}
      */
     @Override
-    public List<EventSource> listEventSources() {
-        return EventSourceEntity.<EventSourceEntity>listAll()
-                .stream()
-                .sorted(Comparator.comparing(e -> e.name))
-                .map(this::toBean)
-                .toList();
+    public EventSourceSearchResults listEventSources(BigInteger page, BigInteger limit,
+                                                     String filterName, String filterType,
+                                                     String filterLabels) {
+        int pageNum = page != null ? page.intValue() : 1;
+        int pageSize = limit != null ? limit.intValue() : 20;
+
+        StringBuilder hql = new StringBuilder("1=1");
+        Map<String, Object> params = new HashMap<>();
+
+        if (filterName != null && !filterName.isBlank()) {
+            hql.append(" and (lower(name) like :name or lower(description) like :name)");
+            params.put("name", "%" + filterName.toLowerCase() + "%");
+        }
+
+        if (filterType != null && !filterType.isBlank()) {
+            hql.append(" and sourceType = :sourceType");
+            params.put("sourceType", filterType.toLowerCase());
+        }
+
+        if (filterLabels != null && !filterLabels.isBlank()) {
+            List<String> labels = Arrays.stream(filterLabels.split(","))
+                    .map(String::trim).filter(s -> !s.isEmpty()).toList();
+            hql.append(" and id in (SELECT e.id FROM EventSourceEntity e"
+                    + " JOIN e.labels el WHERE el IN :labels"
+                    + " GROUP BY e.id HAVING COUNT(DISTINCT el) = :labelCount)");
+            params.put("labels", labels);
+            params.put("labelCount", (long) labels.size());
+        }
+
+        long totalCount = EventSourceEntity.count(hql.toString(), params);
+        List<EventSource> items = EventSourceEntity.<EventSourceEntity>find(
+                        hql.toString(), Sort.ascending("name"), params)
+                .page(Page.of(pageNum - 1, pageSize))
+                .list().stream().map(this::toBean).toList();
+
+        EventSourceSearchResults results = new EventSourceSearchResults();
+        results.setItems(items);
+        results.setTotalCount(totalCount);
+        results.setPage(pageNum);
+        results.setLimit(pageSize);
+        return results;
     }
 
     /**

@@ -344,8 +344,16 @@ export interface ActionType {
 
 export type NewActionType = Omit<ActionType, "id">;
 
-export async function fetchActionTypes(): Promise<ActionType[]> {
-    const response = await fetch(`${API}/action-types`);
+export async function fetchActionTypes(
+    page = 1, limit = 20, filterName?: string, filterMode?: string, filterLabels?: string
+): Promise<SearchResults<ActionType>> {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(limit));
+    if (filterName) params.set("filterName", filterName);
+    if (filterMode) params.set("filterMode", filterMode);
+    if (filterLabels) params.set("filterLabels", filterLabels);
+    const response = await fetch(`${API}/action-types?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch action types: ${response.status}`);
     return response.json();
 }
@@ -802,8 +810,16 @@ export interface EventSource {
 
 export type NewEventSource = Omit<EventSource, "id">;
 
-export async function fetchEventSources(): Promise<EventSource[]> {
-    const response = await fetch(`${API}/event-sources`);
+export async function fetchEventSources(
+    page = 1, limit = 20, filterName?: string, filterType?: string, filterLabels?: string
+): Promise<SearchResults<EventSource>> {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(limit));
+    if (filterName) params.set("filterName", filterName);
+    if (filterType) params.set("filterType", filterType);
+    if (filterLabels) params.set("filterLabels", filterLabels);
+    const response = await fetch(`${API}/event-sources?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch event sources: ${response.status}`);
     return response.json();
 }

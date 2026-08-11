@@ -2,6 +2,7 @@ package io.apitomy.axiom.app.rest;
 
 import io.apitomy.axiom.api.ActionResource;
 import io.apitomy.axiom.api.beans.ActionType;
+import io.apitomy.axiom.api.beans.ActionTypeSearchResults;
 import io.apitomy.axiom.api.beans.NewActionType;
 import io.apitomy.axiom.api.beans.ReportAiEditRequest;
 import io.apitomy.axiom.api.beans.ReportAiEditResponse;
@@ -19,6 +20,7 @@ import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
 import io.apitomy.axiom.core.services.ActionTypeValidator;
+import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -28,6 +30,8 @@ import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 
 import java.math.BigInteger;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -52,11 +56,47 @@ public class ActionResourceImpl implements ActionResource {
      * {@inheritDoc}
      */
     @Override
-    public List<ActionType> listActionTypes() {
-        return ActionTypeEntity.<ActionTypeEntity>listAll(Sort.ascending("name"))
-                .stream()
-                .map(this::toBean)
-                .toList();
+    public ActionTypeSearchResults listActionTypes(BigInteger page, BigInteger limit,
+                                                   String filterName, String filterMode,
+                                                   String filterLabels) {
+        int pageNum = page != null ? page.intValue() : 1;
+        int pageSize = limit != null ? limit.intValue() : 20;
+
+        StringBuilder hql = new StringBuilder("1=1");
+        Map<String, Object> params = new HashMap<>();
+
+        if (filterName != null && !filterName.isBlank()) {
+            hql.append(" and (lower(name) like :name or lower(description) like :name)");
+            params.put("name", "%" + filterName.toLowerCase() + "%");
+        }
+
+        if (filterMode != null && !filterMode.isBlank()) {
+            hql.append(" and executionMode = :mode");
+            params.put("mode", filterMode.toLowerCase());
+        }
+
+        if (filterLabels != null && !filterLabels.isBlank()) {
+            List<String> labels = Arrays.stream(filterLabels.split(","))
+                    .map(String::trim).filter(s -> !s.isEmpty()).toList();
+            hql.append(" and id in (SELECT a.id FROM ActionTypeEntity a"
+                    + " JOIN a.labels al WHERE al IN :labels"
+                    + " GROUP BY a.id HAVING COUNT(DISTINCT al) = :labelCount)");
+            params.put("labels", labels);
+            params.put("labelCount", (long) labels.size());
+        }
+
+        long totalCount = ActionTypeEntity.count(hql.toString(), params);
+        List<ActionType> items = ActionTypeEntity.<ActionTypeEntity>find(
+                        hql.toString(), Sort.ascending("name"), params)
+                .page(Page.of(pageNum - 1, pageSize))
+                .list().stream().map(this::toBean).toList();
+
+        ActionTypeSearchResults results = new ActionTypeSearchResults();
+        results.setItems(items);
+        results.setTotalCount(totalCount);
+        results.setPage(pageNum);
+        results.setLimit(pageSize);
+        return results;
     }
 
     /**

@@ -138,9 +138,9 @@ export function ProjectDetailPage() {
     }, [loadData]);
 
     const openActionModal = () => {
-        fetchActionTypes()
-            .then((types) => {
-                const triggerable = types.filter(
+        fetchActionTypes(1, 1000)
+            .then((results) => {
+                const triggerable = results.items.filter(
                     (t) => t.userTriggerable
                 );
                 setActionTypes(triggerable);
