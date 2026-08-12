@@ -19,7 +19,7 @@ function ActionTypesWidget({ config, labels }: WidgetProps) {
                 if (labels.length > 0) {
                     // Subset logic: include action types with no labels,
                     // or whose labels are a subset of the dashboard's labels.
-                    filtered = all.filter(at =>
+                    filtered = filtered.filter(at =>
                         !at.labels || at.labels.length === 0
                         || at.labels.every(l => labels.includes(l))
                     );
