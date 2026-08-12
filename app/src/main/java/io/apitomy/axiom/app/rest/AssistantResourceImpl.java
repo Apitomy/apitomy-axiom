@@ -395,6 +395,9 @@ public class AssistantResourceImpl implements AssistantResource {
             applyResult.setSessionTemplates(result.sessionTemplatesCreated() + result.sessionTemplatesUpdated());
             applyResult.setSessionTemplatesCreated(result.sessionTemplatesCreated());
             applyResult.setSessionTemplatesUpdated(result.sessionTemplatesUpdated());
+            applyResult.setScheduledJobs(result.scheduledJobsCreated() + result.scheduledJobsUpdated());
+            applyResult.setScheduledJobsCreated(result.scheduledJobsCreated());
+            applyResult.setScheduledJobsUpdated(result.scheduledJobsUpdated());
             return applyResult;
         } catch (ValidationException e) {
             throw new WebApplicationException(e.getMessage(), 422);

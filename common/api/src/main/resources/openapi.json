@@ -3471,7 +3471,7 @@
         {
           "name": "itemType",
           "in": "path",
-          "description": "Item type (tools, action-types, report-definitions)",
+          "description": "Item type (tools, action-types, report-definitions, toolsets, session-templates, event-sources, scheduled-jobs)",
           "required": true,
           "schema": {
             "type": "string"
@@ -4488,6 +4488,262 @@
           }
         }
       ]
+    },
+    "/scheduled-jobs": {
+      "get": {
+        "tags": [
+          "ScheduledJobs"
+        ],
+        "summary": "List all scheduled jobs",
+        "operationId": "listScheduledJobs",
+        "responses": {
+          "200": {
+            "description": "List of scheduled jobs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ScheduledJob"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "ScheduledJobs"
+        ],
+        "summary": "Create a new scheduled job",
+        "operationId": "createScheduledJob",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewScheduledJob"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Created scheduled job",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledJob"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-jobs/{jobId}": {
+      "get": {
+        "tags": [
+          "ScheduledJobs"
+        ],
+        "summary": "Get a scheduled job by ID",
+        "operationId": "getScheduledJob",
+        "responses": {
+          "200": {
+            "description": "Scheduled job details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledJob"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "ScheduledJobs"
+        ],
+        "summary": "Update a scheduled job",
+        "operationId": "updateScheduledJob",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewScheduledJob"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated scheduled job",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledJob"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "ScheduledJobs"
+        ],
+        "summary": "Delete a scheduled job",
+        "operationId": "deleteScheduledJob",
+        "responses": {
+          "204": {
+            "description": "Scheduled job deleted"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "jobId",
+          "in": "path",
+          "description": "Scheduled job ID",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/scheduled-jobs/{jobId}/run": {
+      "post": {
+        "tags": [
+          "ScheduledJobs"
+        ],
+        "summary": "Manually trigger a scheduled job run",
+        "operationId": "runScheduledJob",
+        "responses": {
+          "200": {
+            "description": "The created job run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledJobRun"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "jobId",
+          "in": "path",
+          "description": "Scheduled job ID",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/scheduled-jobs/{jobId}/runs": {
+      "get": {
+        "tags": [
+          "ScheduledJobs"
+        ],
+        "summary": "List run history for a scheduled job",
+        "operationId": "listScheduledJobRuns",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (1-indexed)",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of results per page",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of job runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledJobRunSearchResults"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "jobId",
+          "in": "path",
+          "description": "Scheduled job ID",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/scheduled-jobs/validate": {
+      "post": {
+        "tags": [
+          "ScheduledJobs"
+        ],
+        "summary": "Validate a scheduled job definition",
+        "operationId": "validateScheduledJob",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewScheduledJob"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Validation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolValidationResult"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -6409,6 +6665,13 @@
             "items": {
               "type": "string"
             }
+          },
+          "scheduledJobIds": {
+            "type": "array",
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            }
           }
         }
       },
@@ -6431,6 +6694,9 @@
             "type": "integer"
           },
           "sessionTemplates": {
+            "type": "integer"
+          },
+          "scheduledJobs": {
             "type": "integer"
           }
         }
@@ -6635,7 +6901,7 @@
         "type": "object",
         "properties": {
           "type": {
-            "description": "Item type directory (tools, action-types, report-definitions, toolsets, session-templates)",
+            "description": "Item type directory (tools, action-types, report-definitions, toolsets, session-templates, event-sources, scheduled-jobs)",
             "type": "string"
           },
           "name": {
@@ -6716,6 +6982,18 @@
           },
           "sessionTemplatesUpdated": {
             "description": "Number of existing session templates updated",
+            "type": "integer"
+          },
+          "scheduledJobs": {
+            "description": "Total number of scheduled jobs applied (created + updated)",
+            "type": "integer"
+          },
+          "scheduledJobsCreated": {
+            "description": "Number of new scheduled jobs created",
+            "type": "integer"
+          },
+          "scheduledJobsUpdated": {
+            "description": "Number of existing scheduled jobs updated",
             "type": "integer"
           }
         }
@@ -7754,6 +8032,254 @@
             "type": "integer"
           }
         }
+      },
+      "ScheduledJob": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "schedule": {
+            "description": "Schedule preset: hourly, daily, weekly, monthly, or none",
+            "type": "string"
+          },
+          "scheduleTime": {
+            "description": "Time of day (HH:MM)",
+            "type": "string"
+          },
+          "scheduleDayOfWeek": {
+            "description": "Day of week for weekly schedule",
+            "type": "string"
+          },
+          "nextRunAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "lastRunAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "executionMode": {
+            "description": "Execution mode: actor or script",
+            "type": "string"
+          },
+          "promptTemplate": {
+            "description": "Prompt template for actor mode",
+            "type": "string"
+          },
+          "scriptTemplate": {
+            "description": "Script template for script mode",
+            "type": "string"
+          },
+          "model": {
+            "description": "Optional AI model override",
+            "type": "string"
+          },
+          "engine": {
+            "description": "Optional AI engine override",
+            "type": "string"
+          },
+          "allowedTools": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "maxSteps": {
+            "description": "Max agent steps",
+            "type": "integer"
+          },
+          "maxBudgetUsd": {
+            "format": "double",
+            "description": "Max budget in USD",
+            "type": "number"
+          },
+          "environment": {
+            "description": "Custom environment variables. Values can reference secrets using ${secret:NAME} syntax.",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "createdOn": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedOn": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      },
+      "NewScheduledJob": {
+        "required": [
+          "name",
+          "schedule",
+          "executionMode"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "schedule": {
+            "description": "Schedule preset: hourly, daily, weekly, monthly, or none",
+            "type": "string"
+          },
+          "scheduleTime": {
+            "description": "Time of day (HH:MM)",
+            "type": "string"
+          },
+          "scheduleDayOfWeek": {
+            "description": "Day of week for weekly schedule",
+            "type": "string"
+          },
+          "executionMode": {
+            "description": "Execution mode: actor or script",
+            "type": "string"
+          },
+          "promptTemplate": {
+            "description": "Prompt template for actor mode",
+            "type": "string"
+          },
+          "scriptTemplate": {
+            "description": "Script template for script mode",
+            "type": "string"
+          },
+          "model": {
+            "description": "Optional AI model override",
+            "type": "string"
+          },
+          "engine": {
+            "description": "Optional AI engine override",
+            "type": "string"
+          },
+          "allowedTools": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "maxSteps": {
+            "description": "Max agent steps",
+            "type": "integer"
+          },
+          "maxBudgetUsd": {
+            "format": "double",
+            "description": "Max budget in USD",
+            "type": "number"
+          },
+          "environment": {
+            "description": "Custom environment variables. Values can reference secrets using ${secret:NAME} syntax.",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ScheduledJobRun": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "jobId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "status": {
+            "description": "Run status: Pending, Running, Completed, or Failed",
+            "type": "string"
+          },
+          "trigger": {
+            "description": "How the run was triggered: scheduled or manual",
+            "type": "string"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "completedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "output": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "executionLog": {
+            "type": "string"
+          },
+          "costUsd": {
+            "format": "double",
+            "type": "number"
+          },
+          "durationMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "traceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "createdOn": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      },
+      "ScheduledJobRunSearchResults": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduledJobRun"
+            }
+          },
+          "totalCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        }
       }
     },
     "responses": {
@@ -7881,6 +8407,10 @@
     {
       "name": "Dashboards",
       "description": "Custom dashboard management"
+    },
+    {
+      "name": "ScheduledJobs",
+      "description": "Scheduled Jobs CRUD and execution"
     }
   ]
 }

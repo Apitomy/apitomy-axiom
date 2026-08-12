@@ -1,0 +1,579 @@
+import { useState, useEffect, useCallback, Fragment } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import {
+    Breadcrumb,
+    BreadcrumbItem,
+    Button,
+    EmptyState,
+    EmptyStateBody,
+    Flex,
+    FlexItem,
+    Form,
+    FormGroup,
+    FormSelect,
+    FormSelectOption,
+    FormSelectOptionGroup,
+    HelperText,
+    HelperTextItem,
+    Label,
+    PageSection,
+    Switch,
+    TextArea,
+    TextInput,
+    Title,
+} from "@patternfly/react-core";
+import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
+import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
+import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
+import PlayIcon from "@patternfly/react-icons/dist/esm/icons/play-icon";
+import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
+import {
+    type ScheduledJob,
+    type NewScheduledJob,
+    type ScheduledJobRun,
+    fetchScheduledJob,
+    updateScheduledJob,
+    deleteScheduledJob,
+    runScheduledJob,
+    fetchScheduledJobRuns,
+    fetchModels,
+    fetchEngines,
+} from "../config/api";
+
+const RUN_STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
+    "Pending": "grey",
+    "Running": "blue",
+    "Completed": "green",
+    "Failed": "red",
+};
+
+function formatDuration(ms: number): string {
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+    const mins = Math.floor(ms / 60_000);
+    const secs = Math.round((ms % 60_000) / 1000);
+    return `${mins}m ${secs}s`;
+}
+
+function formatCost(cost?: number): string {
+    return cost != null ? `$${cost.toFixed(4)}` : "--";
+}
+
+function formatTimestamp(iso?: string): string {
+    if (!iso) return "--";
+    const d = new Date(iso);
+    return d.toLocaleString();
+}
+
+export function ScheduledJobDetailPage() {
+    const { jobId } = useParams<{ jobId: string }>();
+    const navigate = useNavigate();
+    const id = Number(jobId);
+
+    const [job, setJob] = useState<ScheduledJob | null>(null);
+    const [form, setForm] = useState<NewScheduledJob>({
+        name: "",
+        description: "",
+        enabled: false,
+        schedule: "none",
+        executionMode: "actor",
+    });
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [dirty, setDirty] = useState(false);
+    const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+
+    const [runs, setRuns] = useState<ScheduledJobRun[]>([]);
+    const [expandedRunId, setExpandedRunId] = useState<number | null>(null);
+
+    const [availableModels, setAvailableModels] = useState<string[]>([]);
+    const [availableEngines, setAvailableEngines] = useState<string[]>([]);
+
+    const loadData = useCallback(() => {
+        if (!id) return;
+        setLoading(true);
+        Promise.all([
+            fetchScheduledJob(id),
+            fetchScheduledJobRuns(id, 1, 10),
+        ])
+            .then(([jobData, runsData]) => {
+                setJob(jobData);
+                setForm({
+                    name: jobData.name,
+                    description: jobData.description,
+                    labels: jobData.labels,
+                    enabled: jobData.enabled,
+                    schedule: jobData.schedule,
+                    scheduleTime: jobData.scheduleTime,
+                    scheduleDayOfWeek: jobData.scheduleDayOfWeek,
+                    executionMode: jobData.executionMode,
+                    promptTemplate: jobData.promptTemplate,
+                    scriptTemplate: jobData.scriptTemplate,
+                    model: jobData.model,
+                    engine: jobData.engine,
+                    allowedTools: jobData.allowedTools,
+                    maxSteps: jobData.maxSteps,
+                    maxBudgetUsd: jobData.maxBudgetUsd,
+                    environment: jobData.environment,
+                });
+                setRuns(runsData.items);
+                setDirty(false);
+            })
+            .catch(console.error)
+            .finally(() => setLoading(false));
+    }, [id]);
+
+    useEffect(() => { loadData(); }, [loadData]);
+
+    useEffect(() => {
+        fetchEngines().then(setAvailableEngines).catch(console.error);
+    }, []);
+
+    useEffect(() => {
+        fetchModels(form.engine || undefined).then(setAvailableModels).catch(console.error);
+    }, [form.engine]);
+
+    const updateForm = (updates: Partial<NewScheduledJob>) => {
+        if (updates.engine !== undefined && updates.engine !== form.engine) {
+            updates = { ...updates, model: undefined };
+        }
+        setForm((prev) => ({ ...prev, ...updates }));
+        setDirty(true);
+    };
+
+    const handleSave = () => {
+        setSaving(true);
+        const envToSend = form.environment && Object.keys(form.environment).length > 0
+            ? form.environment : undefined;
+        const data: NewScheduledJob = {
+            ...form,
+            allowedTools: form.allowedTools && form.allowedTools.length > 0
+                ? form.allowedTools : undefined,
+            environment: envToSend,
+        };
+        updateScheduledJob(id, data)
+            .then((updated) => {
+                setJob(updated);
+                setDirty(false);
+            })
+            .catch(console.error)
+            .finally(() => setSaving(false));
+    };
+
+    const handleRunNow = () => {
+        runScheduledJob(id)
+            .then(() => {
+                fetchScheduledJobRuns(id, 1, 10)
+                    .then((runsData) => setRuns(runsData.items))
+                    .catch(console.error);
+            })
+            .catch(console.error);
+    };
+
+    const handleDelete = () => {
+        deleteScheduledJob(id)
+            .then(() => navigate("/scheduled-jobs"))
+            .catch(console.error);
+    };
+
+    if (loading) {
+        return (
+            <PageSection>
+                <EmptyState><EmptyStateBody>Loading scheduled job...</EmptyStateBody></EmptyState>
+            </PageSection>
+        );
+    }
+
+    if (!job) {
+        return (
+            <PageSection>
+                <EmptyState><EmptyStateBody>Scheduled job not found.</EmptyStateBody></EmptyState>
+            </PageSection>
+        );
+    }
+
+    return (
+        <PageSection>
+            <Breadcrumb style={{ marginBottom: "16px" }}>
+                <BreadcrumbItem><Link to="/scheduled-jobs">Scheduled Jobs</Link></BreadcrumbItem>
+                <BreadcrumbItem isActive>{job.name}</BreadcrumbItem>
+            </Breadcrumb>
+
+            <Flex
+                justifyContent={{ default: "justifyContentSpaceBetween" }}
+                alignItems={{ default: "alignItemsCenter" }}
+                style={{ marginBottom: "16px" }}
+            >
+                <FlexItem>
+                    <Title headingLevel="h1" size="lg">{job.name}</Title>
+                </FlexItem>
+                <FlexItem>
+                    <Switch
+                        id="enabled-toggle"
+                        label="Enabled"
+                        isChecked={form.enabled}
+                        onChange={(_e, v) => updateForm({ enabled: v })}
+                        style={{ marginRight: "16px" }}
+                    />
+                    <Button variant="secondary" icon={<PlayIcon />} onClick={handleRunNow}
+                        style={{ marginRight: "8px" }}>
+                        Run Now
+                    </Button>
+                    <Button variant="primary" icon={<SaveIcon />} onClick={handleSave}
+                        isDisabled={!dirty || !form.name || saving}
+                        isLoading={saving}
+                        style={{ marginRight: "8px" }}>
+                        {saving ? "Saving..." : "Save Changes"}
+                    </Button>
+                    <Button variant="danger" icon={<TrashIcon />}
+                        onClick={() => setIsDeleteOpen(true)}>
+                        Delete
+                    </Button>
+                </FlexItem>
+            </Flex>
+
+            <Title headingLevel="h2" size="md" style={{ marginBottom: "16px", marginTop: "24px" }}>
+                General
+            </Title>
+            <GeneralSection form={form} updateForm={updateForm} />
+
+            <Title headingLevel="h2" size="md" style={{ marginBottom: "16px", marginTop: "24px" }}>
+                Schedule
+            </Title>
+            <ScheduleSection form={form} updateForm={updateForm} />
+
+            <Title headingLevel="h2" size="md" style={{ marginBottom: "16px", marginTop: "24px" }}>
+                Execution
+            </Title>
+            <ExecutionSection
+                form={form}
+                updateForm={updateForm}
+                availableModels={availableModels}
+                availableEngines={availableEngines}
+            />
+
+            <Title headingLevel="h2" size="md" style={{ marginBottom: "16px", marginTop: "24px" }}>
+                Labels
+            </Title>
+            <LabelsSection form={form} updateForm={updateForm} />
+
+            <Title headingLevel="h2" size="md" style={{ marginBottom: "16px", marginTop: "24px" }}>
+                Run History
+            </Title>
+            <RunHistorySection runs={runs} expandedRunId={expandedRunId}
+                onToggleExpand={(runId) => setExpandedRunId(expandedRunId === runId ? null : runId)} />
+
+            <ConfirmDeleteModal isOpen={isDeleteOpen} title="Delete Scheduled Job"
+                onConfirm={handleDelete} onCancel={() => setIsDeleteOpen(false)}>
+                Are you sure you want to delete this scheduled job and all its
+                run history? This action cannot be undone.
+            </ConfirmDeleteModal>
+        </PageSection>
+    );
+}
+
+function GeneralSection({ form, updateForm }: {
+    form: NewScheduledJob;
+    updateForm: (updates: Partial<NewScheduledJob>) => void;
+}) {
+    return (
+        <Form style={{ maxWidth: "600px" }}>
+            <FormGroup label="Name" isRequired fieldId="name">
+                <TextInput id="name" isRequired value={form.name}
+                    onChange={(_e, v) => updateForm({ name: v })} />
+            </FormGroup>
+            <FormGroup label="Description" fieldId="description">
+                <TextArea id="description" value={form.description || ""}
+                    onChange={(_e, v) => updateForm({ description: v })} rows={3} />
+            </FormGroup>
+        </Form>
+    );
+}
+
+function ScheduleSection({ form, updateForm }: {
+    form: NewScheduledJob;
+    updateForm: (updates: Partial<NewScheduledJob>) => void;
+}) {
+    return (
+        <Form style={{ maxWidth: "600px" }}>
+            <FormGroup label="Schedule" isRequired fieldId="schedule">
+                <FormSelect id="schedule" value={form.schedule}
+                    onChange={(_e, v) => updateForm({ schedule: v })}>
+                    <FormSelectOption value="none" label="Not Scheduled (ad hoc only)" />
+                    <FormSelectOption value="hourly" label="Hourly" />
+                    <FormSelectOption value="daily" label="Daily" />
+                    <FormSelectOption value="weekly" label="Weekly" />
+                    <FormSelectOption value="monthly" label="Monthly" />
+                </FormSelect>
+            </FormGroup>
+            {form.schedule !== "none" && form.schedule !== "hourly" && (
+                <FormGroup label="Time of Day" fieldId="scheduleTime">
+                    <TextInput id="scheduleTime" value={form.scheduleTime || ""}
+                        onChange={(_e, v) => updateForm({ scheduleTime: v })}
+                        placeholder="08:00" />
+                </FormGroup>
+            )}
+            {form.schedule === "weekly" && (
+                <FormGroup label="Day of Week" fieldId="scheduleDayOfWeek">
+                    <FormSelect id="scheduleDayOfWeek"
+                        value={form.scheduleDayOfWeek || ""}
+                        onChange={(_e, v) => updateForm({ scheduleDayOfWeek: v || undefined })}>
+                        <FormSelectOption value="" label="Same day each week" />
+                        <FormSelectOption value="monday" label="Monday" />
+                        <FormSelectOption value="tuesday" label="Tuesday" />
+                        <FormSelectOption value="wednesday" label="Wednesday" />
+                        <FormSelectOption value="thursday" label="Thursday" />
+                        <FormSelectOption value="friday" label="Friday" />
+                        <FormSelectOption value="saturday" label="Saturday" />
+                        <FormSelectOption value="sunday" label="Sunday" />
+                    </FormSelect>
+                </FormGroup>
+            )}
+        </Form>
+    );
+}
+
+function ExecutionSection({ form, updateForm, availableModels, availableEngines }: {
+    form: NewScheduledJob;
+    updateForm: (updates: Partial<NewScheduledJob>) => void;
+    availableModels: string[];
+    availableEngines: string[];
+}) {
+    return (
+        <Form style={{ maxWidth: "600px" }}>
+            <FormGroup label="Execution Mode" isRequired fieldId="executionMode">
+                <FormSelect id="executionMode" value={form.executionMode}
+                    onChange={(_e, v) => updateForm({ executionMode: v })}>
+                    <FormSelectOption value="actor" label="Actor -- executed by an AI agent" />
+                    <FormSelectOption value="script" label="Script -- executes a bash script" />
+                </FormSelect>
+            </FormGroup>
+            {form.executionMode === "actor" && (
+                <FormGroup label="Prompt Template" fieldId="promptTemplate">
+                    <TextArea id="promptTemplate" value={form.promptTemplate || ""}
+                        onChange={(_e, v) => updateForm({ promptTemplate: v })}
+                        rows={6} />
+                </FormGroup>
+            )}
+            {form.executionMode === "script" && (
+                <FormGroup label="Script Template" fieldId="scriptTemplate">
+                    <TextArea id="scriptTemplate" value={form.scriptTemplate || ""}
+                        onChange={(_e, v) => updateForm({ scriptTemplate: v })}
+                        rows={6} />
+                </FormGroup>
+            )}
+            {form.executionMode === "actor" && availableEngines.length > 1 && (
+                <FormGroup label="AI Engine" fieldId="engine">
+                    <HelperText>
+                        <HelperTextItem>AI engine to use for this job. Select 'Global default' to use the system-wide setting.</HelperTextItem>
+                    </HelperText>
+                    <FormSelect id="engine" value={form.engine || ""}
+                        onChange={(_e, v) => updateForm({ engine: v || undefined })}>
+                        <FormSelectOption value="" label="Global default" />
+                        {availableEngines.map((e) => (
+                            <FormSelectOption key={e} value={e}
+                                label={e === "opencode" ? "OpenCode" : e === "claude-code" ? "Claude Code" : e} />
+                        ))}
+                    </FormSelect>
+                </FormGroup>
+            )}
+            {form.executionMode === "actor" && (
+                <FormGroup label="Model" fieldId="model">
+                    <HelperText>
+                        <HelperTextItem>AI model to use for this job. Select 'Global default' to use the system-wide setting.</HelperTextItem>
+                    </HelperText>
+                    <FormSelect id="model" value={form.model || ""}
+                        onChange={(_e, v) => updateForm({ model: v || undefined })}>
+                        <FormSelectOption value="" label="Global default" />
+                        {(() => {
+                            const hasProviders = availableModels.some((m) => m.includes("/"));
+                            if (hasProviders) {
+                                const groups: Record<string, string[]> = {};
+                                for (const m of availableModels) {
+                                    if (m.includes("/")) {
+                                        const [provider] = m.split("/", 2);
+                                        const key = provider.charAt(0).toUpperCase() + provider.slice(1);
+                                        if (!groups[key]) groups[key] = [];
+                                        groups[key].push(m);
+                                    } else {
+                                        if (!groups["Other"]) groups["Other"] = [];
+                                        groups["Other"].push(m);
+                                    }
+                                }
+                                return Object.entries(groups).map(([provider, models]) => (
+                                    <FormSelectOptionGroup key={provider} label={provider}>
+                                        {models.map((m) => (
+                                            <FormSelectOption key={m} value={m} label={m.split("/").pop() || m} />
+                                        ))}
+                                    </FormSelectOptionGroup>
+                                ));
+                            }
+                            return availableModels.map((m) => (
+                                <FormSelectOption key={m} value={m} label={m} />
+                            ));
+                        })()}
+                    </FormSelect>
+                </FormGroup>
+            )}
+            {form.executionMode === "actor" && (
+                <FormGroup label="Allowed Tools" fieldId="allowedTools">
+                    <HelperText>
+                        <HelperTextItem>Comma-separated list of tools the AI agent is allowed to use.</HelperTextItem>
+                    </HelperText>
+                    <TextArea id="allowedTools"
+                        value={(form.allowedTools || []).join(", ")}
+                        onChange={(_e, v) => updateForm({
+                            allowedTools: v.split(",").map((t) => t.trim()).filter(Boolean),
+                        })}
+                        rows={3} />
+                </FormGroup>
+            )}
+            {form.executionMode === "actor" && (
+                <FormGroup label="Max Steps" fieldId="maxSteps">
+                    <HelperText>
+                        <HelperTextItem>Maximum number of agent steps/turns. Leave empty to use the global default.</HelperTextItem>
+                    </HelperText>
+                    <TextInput id="maxSteps" type="number"
+                        value={form.maxSteps ?? ""}
+                        onChange={(_e, v) => updateForm({ maxSteps: v === "" ? undefined : Number(v) })}
+                        placeholder="Global default" />
+                </FormGroup>
+            )}
+            {form.executionMode === "actor" && (
+                <FormGroup label="Max Budget (USD)" fieldId="maxBudgetUsd">
+                    <HelperText>
+                        <HelperTextItem>Maximum budget in USD for this job. Leave empty to use the global default.</HelperTextItem>
+                    </HelperText>
+                    <TextInput id="maxBudgetUsd" type="number"
+                        value={form.maxBudgetUsd ?? ""}
+                        onChange={(_e, v) => updateForm({ maxBudgetUsd: v === "" ? undefined : Number(v) })}
+                        placeholder="Global default" />
+                </FormGroup>
+            )}
+        </Form>
+    );
+}
+
+function LabelsSection({ form, updateForm }: {
+    form: NewScheduledJob;
+    updateForm: (updates: Partial<NewScheduledJob>) => void;
+}) {
+    return (
+        <Form style={{ maxWidth: "600px" }}>
+            <FormGroup label="Labels" fieldId="labels">
+                <HelperText>
+                    <HelperTextItem>Comma-separated list of labels for this job.</HelperTextItem>
+                </HelperText>
+                <TextArea id="labels"
+                    value={(form.labels || []).join(", ")}
+                    onChange={(_e, v) => updateForm({
+                        labels: v.split(",").map((l) => l.trim()).filter(Boolean),
+                    })}
+                    rows={2} />
+            </FormGroup>
+        </Form>
+    );
+}
+
+function RunHistorySection({ runs, expandedRunId, onToggleExpand }: {
+    runs: ScheduledJobRun[];
+    expandedRunId: number | null;
+    onToggleExpand: (runId: number) => void;
+}) {
+    if (runs.length === 0) {
+        return (
+            <EmptyState>
+                <EmptyStateBody>No runs yet. Use "Run Now" to trigger the first execution.</EmptyStateBody>
+            </EmptyState>
+        );
+    }
+
+    return (
+        <Table aria-label="Run History" variant="compact">
+            <Thead>
+                <Tr>
+                    <Th>Status</Th>
+                    <Th>Trigger</Th>
+                    <Th>Started At</Th>
+                    <Th>Duration</Th>
+                    <Th>Cost</Th>
+                </Tr>
+            </Thead>
+            <Tbody>
+                {runs.map((run) => (
+                    <Fragment key={run.id}>
+                        <Tr
+                            isClickable
+                            onRowClick={() => onToggleExpand(run.id)}
+                            isRowSelected={expandedRunId === run.id}>
+                            <Td>
+                                <Label isCompact
+                                    color={RUN_STATUS_COLORS[run.status] || "grey"}>
+                                    {run.status}
+                                </Label>
+                            </Td>
+                            <Td>{run.trigger}</Td>
+                            <Td style={{ whiteSpace: "nowrap" }}>
+                                {formatTimestamp(run.startedAt)}
+                            </Td>
+                            <Td style={{ whiteSpace: "nowrap" }}>
+                                {run.durationMs != null ? formatDuration(run.durationMs) : "--"}
+                            </Td>
+                            <Td>{formatCost(run.costUsd)}</Td>
+                        </Tr>
+                        {expandedRunId === run.id && (
+                            <Tr key={`${run.id}-detail`}>
+                                <Td colSpan={5}>
+                                    <RunDetail run={run} />
+                                </Td>
+                            </Tr>
+                        )}
+                    </Fragment>
+                ))}
+            </Tbody>
+        </Table>
+    );
+}
+
+function RunDetail({ run }: { run: ScheduledJobRun }) {
+    return (
+        <div style={{ padding: "16px" }}>
+            {run.output && (
+                <div style={{ marginBottom: "12px" }}>
+                    <Title headingLevel="h4" size="md">Output</Title>
+                    <pre style={{
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-word",
+                        background: "var(--pf-v5-global--BackgroundColor--200)",
+                        padding: "12px",
+                        borderRadius: "4px",
+                        maxHeight: "300px",
+                        overflow: "auto",
+                    }}>
+                        {run.output}
+                    </pre>
+                </div>
+            )}
+            {run.error && (
+                <div style={{ marginBottom: "12px" }}>
+                    <Title headingLevel="h4" size="md">Error</Title>
+                    <pre style={{
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-word",
+                        background: "var(--pf-v5-global--BackgroundColor--200)",
+                        padding: "12px",
+                        borderRadius: "4px",
+                        color: "var(--pf-v5-global--danger-color--100)",
+                        maxHeight: "300px",
+                        overflow: "auto",
+                    }}>
+                        {run.error}
+                    </pre>
+                </div>
+            )}
+            {!run.output && !run.error && (
+                <p className="axiom-text-subtle">No output or error details available for this run.</p>
+            )}
+        </div>
+    );
+}

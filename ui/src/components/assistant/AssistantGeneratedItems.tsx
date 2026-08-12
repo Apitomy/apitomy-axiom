@@ -5,6 +5,11 @@ import {
     EmptyStateBody,
     Spinner,
     Tooltip,
+    Modal,
+    ModalBody,
+    ModalHeader,
+    CodeBlock,
+    CodeBlockCode,
 } from "@patternfly/react-core";
 import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
 import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
@@ -33,6 +38,7 @@ const TYPE_LABELS: Record<string, { label: string; color: "blue" | "green" | "pu
     "toolsets": { label: "Toolset", color: "teal" },
     "session-templates": { label: "Template", color: "orange" },
     "event-sources": { label: "Event Source", color: "grey" },
+    "scheduled-jobs": { label: "Scheduled Job", color: "purple" },
 };
 
 export function AssistantGeneratedItems({ sessionId, refreshTrigger, onItemCountChanged }: AssistantGeneratedItemsProps) {
@@ -98,7 +104,7 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger, onItemCount
                     <EmptyStateBody>
                         No items generated yet. Ask the assistant to create tools,
                         action types, report definitions, toolsets, session
-                        templates, or event sources.
+                        templates, event sources, or scheduled jobs.
                     </EmptyStateBody>
                 </EmptyState>
             )}
@@ -190,6 +196,21 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger, onItemCount
                     content={itemContent}
                     errors={selectedItem.validationErrors}
                 />
+            )}
+            {selectedItem?.type === "scheduled-jobs" && itemContent && (
+                <Modal
+                    isOpen
+                    onClose={closeModal}
+                    variant="large"
+                    aria-label={`Scheduled Job: ${selectedItem.name}`}
+                >
+                    <ModalHeader title={`Scheduled Job: ${selectedItem.name}`} />
+                    <ModalBody>
+                        <CodeBlock>
+                            <CodeBlockCode>{JSON.stringify(itemContent, null, 2)}</CodeBlockCode>
+                        </CodeBlock>
+                    </ModalBody>
+                </Modal>
             )}
         </div>
     );

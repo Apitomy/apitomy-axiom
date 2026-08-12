@@ -37,6 +37,7 @@ import {
     type Toolset,
     type McpServer,
     type ReportDefinition,
+    type ScheduledJob,
     type SessionTemplate,
     type PackExportRequest,
     type ImportResult,
@@ -45,6 +46,7 @@ import {
     fetchToolsets,
     fetchMcpServers,
     fetchReportDefinitions,
+    fetchScheduledJobs,
     fetchAssistantTemplates,
     exportPack,
     importPack,
@@ -56,6 +58,7 @@ export function ConfigurationPacksPage() {
     const [toolsets, setToolsets] = useState<Toolset[]>([]);
     const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
     const [reportDefs, setReportDefs] = useState<ReportDefinition[]>([]);
+    const [scheduledJobs, setScheduledJobs] = useState<ScheduledJob[]>([]);
     const [sessionTemplates, setSessionTemplates] = useState<SessionTemplate[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState(0);
@@ -68,6 +71,7 @@ export function ConfigurationPacksPage() {
     const [selectedToolsets, setSelectedToolsets] = useState<Set<number>>(new Set());
     const [selectedMcpServers, setSelectedMcpServers] = useState<Set<number>>(new Set());
     const [selectedReportDefs, setSelectedReportDefs] = useState<Set<number>>(new Set());
+    const [selectedScheduledJobs, setSelectedScheduledJobs] = useState<Set<number>>(new Set());
     const [selectedSessionTemplates, setSelectedSessionTemplates] = useState<Set<string>>(new Set());
     const [exporting, setExporting] = useState(false);
 
@@ -89,14 +93,16 @@ export function ConfigurationPacksPage() {
             fetchToolsets(),
             fetchMcpServers(),
             fetchReportDefinitions(),
+            fetchScheduledJobs(),
             fetchAssistantTemplates(),
         ])
-            .then(([at, t, ts, mcp, rd, st]) => {
+            .then(([at, t, ts, mcp, rd, sj, st]) => {
                 setActionTypes(at.items);
                 setTools(t.items);
                 setToolsets(ts);
                 setMcpServers(mcp);
                 setReportDefs(rd);
+                setScheduledJobs(sj);
                 setSessionTemplates(st.filter((s: SessionTemplate) => !s.builtIn));
             })
             .catch(console.error)
@@ -107,7 +113,7 @@ export function ConfigurationPacksPage() {
 
     const totalSelected = selectedActionTypes.size + selectedTools.size
         + selectedToolsets.size + selectedMcpServers.size + selectedReportDefs.size
-        + selectedSessionTemplates.size;
+        + selectedScheduledJobs.size + selectedSessionTemplates.size;
 
     const handleExport = async () => {
         setExporting(true);
@@ -120,6 +126,7 @@ export function ConfigurationPacksPage() {
                 toolsetIds: [...selectedToolsets],
                 mcpServerIds: [...selectedMcpServers],
                 reportDefinitionIds: [...selectedReportDefs],
+                scheduledJobIds: [...selectedScheduledJobs],
                 sessionTemplateIds: [...selectedSessionTemplates],
             };
             const blob = await exportPack(request);
@@ -152,6 +159,7 @@ export function ConfigurationPacksPage() {
                     if (json.toolsets?.length) preview["Toolsets"] = json.toolsets.length;
                     if (json.mcpServers?.length) preview["MCP Servers"] = json.mcpServers.length;
                     if (json.reportDefinitions?.length) preview["Report Definitions"] = json.reportDefinitions.length;
+                    if (json.scheduledJobs?.length) preview["Scheduled Jobs"] = json.scheduledJobs.length;
                     if (json.sessionTemplates?.length) preview["Session Templates"] = json.sessionTemplates.length;
                     setImportPreview(preview);
                     setImportPackName(json.metadata?.name || "");
@@ -270,7 +278,7 @@ export function ConfigurationPacksPage() {
             </Title>
             <p className="axiom-text-subtle" style={{ marginTop: "8px", marginBottom: "16px" }}>
                 Configuration packs bundle related items — action types, tools, toolsets,
-                MCP servers, report definitions, and session templates — into a portable JSON
+                MCP servers, report definitions, scheduled jobs, and session templates — into a portable JSON
                 file. Create a pack to share your setup with others, or import one to quickly
                 add pre-configured functionality to your Axiom instance.
             </p>
@@ -390,6 +398,33 @@ export function ConfigurationPacksPage() {
                                     renderModal={(props) => (
                                         <ReportDefinitionPickerModal {...props} allReportDefs={reportDefs} />
                                     )} />
+                                <SelectedItemsSection title="Scheduled Jobs" allItems={scheduledJobs}
+                                    selected={selectedScheduledJobs}
+                                    onAdd={(ids) => {
+                                        setSelectedScheduledJobs(new Set([...selectedScheduledJobs, ...ids]));
+                                        autoSelectReferencedItems(
+                                            ids.map((id) => scheduledJobs.find((sj) => sj.id === id)?.allowedTools));
+                                    }}
+                                    onRemove={(id) => { const next = new Set(selectedScheduledJobs); next.delete(id); setSelectedScheduledJobs(next); }}
+                                    renderItem={(item) => {
+                                        const sj = scheduledJobs.find((x) => x.id === item.id);
+                                        return (
+                                            <Flex alignItems={{ default: "alignItemsCenter" }} style={{ gap: "8px" }}>
+                                                <FlexItem><span style={{ fontWeight: 600 }}>{item.name}</span></FlexItem>
+                                                <FlexItem>
+                                                    <Label isCompact>{sj?.schedule || "—"}</Label>
+                                                </FlexItem>
+                                                <FlexItem>
+                                                    <Label isCompact color={sj?.enabled ? "green" : "grey"}>
+                                                        {sj?.enabled ? "enabled" : "disabled"}
+                                                    </Label>
+                                                </FlexItem>
+                                            </Flex>
+                                        );
+                                    }}
+                                    renderModal={(props) => (
+                                        <ScheduledJobPickerModal {...props} allScheduledJobs={scheduledJobs} />
+                                    )} />
                                 <SessionTemplateCheckboxSection
                                     templates={sessionTemplates}
                                     selected={selectedSessionTemplates}
@@ -496,6 +531,7 @@ export function ConfigurationPacksPage() {
                                         {importResult.mcpServers ? <li>{importResult.mcpServers} MCP server(s)</li> : null}
                                         {importResult.actionTypes ? <li>{importResult.actionTypes} action type(s)</li> : null}
                                         {importResult.reportDefinitions ? <li>{importResult.reportDefinitions} report definition(s)</li> : null}
+                                        {importResult.scheduledJobs ? <li>{importResult.scheduledJobs} scheduled job(s)</li> : null}
                                         {importResult.sessionTemplates ? <li>{importResult.sessionTemplates} session template(s)</li> : null}
                                     </ul>
                                 </Alert>
@@ -1064,6 +1100,84 @@ function ReportDefinitionPickerModal({ isOpen, onClose, availableItems, modalSel
                                     <Td>{rd.name}</Td>
                                     <Td><Label isCompact>{rd.schedule}</Label></Td>
                                     <Td><Label isCompact color="grey">{rd.timeWindow}</Label></Td>
+                                </Tr>
+                            ))}
+                        </Tbody>
+                    </Table>
+                )}
+            </ModalBody>
+            <ModalFooter>
+                <Button variant="primary" onClick={onConfirm} isDisabled={modalSelected.size === 0}>
+                    Add {modalSelected.size > 0 ? `(${modalSelected.size})` : ""}
+                </Button>
+                <Button variant="link" onClick={onClose}>Cancel</Button>
+            </ModalFooter>
+        </Modal>
+    );
+}
+
+function ScheduledJobPickerModal({ isOpen, onClose, availableItems, modalSelected, toggleItem, selectAll, onConfirm, allScheduledJobs }: {
+    isOpen: boolean;
+    onClose: () => void;
+    availableItems: Array<{ id: number; name: string }>;
+    modalSelected: Set<number>;
+    toggleItem: (id: number) => void;
+    selectAll: (ids: number[]) => void;
+    onConfirm: () => void;
+    allScheduledJobs: ScheduledJob[];
+}) {
+    const [filter, setFilter] = useState("");
+
+    const available = allScheduledJobs.filter((sj) => availableItems.some((i) => i.id === sj.id));
+    const filtered = filter
+        ? available.filter((sj) =>
+            sj.name.toLowerCase().includes(filter.toLowerCase())
+            || (sj.description && sj.description.toLowerCase().includes(filter.toLowerCase())))
+        : available;
+
+    const allFilteredSelected = filtered.length > 0 && filtered.every((sj) => modalSelected.has(sj.id));
+    const handleSelectAll = () => {
+        if (allFilteredSelected) {
+            selectAll([...modalSelected].filter((id) => !filtered.some((sj) => sj.id === id)));
+        } else {
+            selectAll([...new Set([...modalSelected, ...filtered.map((sj) => sj.id)])]);
+        }
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} variant="large" aria-label="Add Scheduled Jobs">
+            <ModalHeader title="Add Scheduled Jobs" />
+            <ModalBody>
+                <TextInput placeholder="Filter scheduled jobs..." value={filter}
+                    onChange={(_e, v) => setFilter(v)} aria-label="Filter scheduled jobs"
+                    style={{ marginBottom: "16px" }} />
+                {filtered.length === 0 ? (
+                    <p className="axiom-text-subtle" style={{ fontStyle: "italic" }}>
+                        {available.length === 0 ? "All scheduled jobs are already selected." : "No scheduled jobs match the filter."}
+                    </p>
+                ) : (
+                    <Table aria-label="Scheduled Jobs" variant="compact">
+                        <Thead>
+                            <Tr>
+                                <Th style={{ width: "40px" }}><Checkbox id="select-all-scheduledjobs" isChecked={allFilteredSelected}
+                                    onChange={handleSelectAll} aria-label="Select all" /></Th>
+                                <Th>Name</Th>
+                                <Th>Schedule</Th>
+                                <Th>Status</Th>
+                            </Tr>
+                        </Thead>
+                        <Tbody>
+                            {filtered.map((sj) => (
+                                <Tr key={sj.id}>
+                                    <Td><Checkbox id={`sj-pick-${sj.id}`} isChecked={modalSelected.has(sj.id)}
+                                        onChange={() => toggleItem(sj.id)} aria-label={`Select ${sj.name}`} /></Td>
+                                    <Td>{sj.name}</Td>
+                                    <Td><Label isCompact>{sj.schedule}</Label></Td>
+                                    <Td>
+                                        <Label isCompact color={sj.enabled ? "green" : "grey"}>
+                                            {sj.enabled ? "enabled" : "disabled"}
+                                        </Label>
+                                    </Td>
                                 </Tr>
                             ))}
                         </Tbody>

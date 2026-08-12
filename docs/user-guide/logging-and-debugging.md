@@ -1,8 +1,9 @@
 # Logging and Debugging
 
-When something isn't working as expected — a report fails, a task produces the wrong
-result, or an event seems to be ignored — Axiom provides several layers of logging
-to help you trace what happened and why. This guide explains how to use them.
+When something isn't working as expected — a report fails, a scheduled job produces
+the wrong result, a task goes sideways, or an event seems to be ignored — Axiom
+provides several layers of logging to help you trace what happened and why. This
+guide explains how to use them.
 
 ---
 
@@ -23,6 +24,12 @@ Event Source polls → Event created → Manager evaluates → Decision made →
 Schedule triggers (or Run Now) → AI agent launched → Tools executed → Report generated
 ```
 
+**For scheduled jobs:**
+
+```
+Schedule triggers (or Run Now) → AI agent or script launched → Run recorded
+```
+
 At each stage, Axiom records what happened. Debugging is a matter of finding where in
 the pipeline things went wrong and examining the logs at that stage.
 
@@ -39,6 +46,9 @@ the pipeline things went wrong and examining the logs at that stage.
 | Task completed but result is wrong | Project detail page > Tasks tab > **View Log** |
 | Report failed | Report detail page > **View Log** |
 | Report content is wrong or incomplete | Report detail page > **View Log** — check tool output |
+| Scheduled job failed | Scheduled job detail page > Runs tab > **View Log** |
+| Scheduled job produced wrong result | Scheduled job detail page > Runs tab > **View Log** |
+| Scheduled job never runs | Scheduled job detail page — check **Enabled** and **Schedule** settings |
 | Want to see the full pipeline tree for one event | **Logs > Traces** or click **View Trace** on an event row |
 | Want to see what tools a report agent called | Report detail page > **View Execution Trace** |
 | Don't know where to start | **Logs > All Activity** — scan the timeline |

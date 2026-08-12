@@ -43,6 +43,8 @@ import { TraceDetailPage } from "./pages/TraceDetailPage";
 import { InboxPage } from "./pages/InboxPage";
 import { SessionTemplatesPage } from "./pages/SessionTemplatesPage";
 import { SessionTemplateDetailPage } from "./pages/SessionTemplateDetailPage";
+import { ScheduledJobsPage } from "./pages/ScheduledJobsPage";
+import { ScheduledJobDetailPage } from "./pages/ScheduledJobDetailPage";
 import { type StartupCheck, fetchSystemHealth, fetchSystemConfig } from "./config/api";
 import { sseClient } from "./config/sse";
 
@@ -134,6 +136,8 @@ export function App() {
                         <Route path="/event-sources/:eventSourceId" element={<EventSourceDetailPage />} />
                         <Route path="/secrets" element={<SecretsPage />} />
                         <Route path="/configuration-packs" element={<ConfigurationPacksPage />} />
+                        <Route path="/scheduled-jobs" element={<ScheduledJobsPage />} />
+                        <Route path="/scheduled-jobs/:jobId" element={<ScheduledJobDetailPage />} />
                         <Route path="/session-templates" element={<SessionTemplatesPage />} />
                         <Route path="/session-templates/:templateId" element={<SessionTemplateDetailPage />} />
                         <Route path="/assistant" element={<AssistantPage />} />

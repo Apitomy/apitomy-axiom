@@ -170,6 +170,7 @@ edit, and delete configuration items:
 | **Manager** | Edit the Manager's system prompt and prompt template |
 | **MCP Servers** | Register external MCP tool servers (HTTP or stdio) |
 | **Report Definitions** | Create report templates with schedules, time windows, and prompts |
+| **Scheduled Jobs** | Define CRON-style automation with schedules, prompt or script templates, and allowed tools |
 | **Event Sources** | Connect to GitHub or Jira repositories for event polling, with labels and event filters |
 | **Secrets** | Store encrypted credentials injected into subprocesses |
 | **Tools** | Define script-based tools with parameters and bash templates |

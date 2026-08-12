@@ -537,6 +537,8 @@ export function AssistantSessionPage() {
                                     {(applyResult.sessionTemplatesUpdated ?? 0) > 0 && <li>{applyResult.sessionTemplatesUpdated} session template(s) updated</li>}
                                     {(applyResult.eventSourcesCreated ?? 0) > 0 && <li>{applyResult.eventSourcesCreated} event source(s) created</li>}
                                     {(applyResult.eventSourcesUpdated ?? 0) > 0 && <li>{applyResult.eventSourcesUpdated} event source(s) updated</li>}
+                                    {(applyResult.scheduledJobsCreated ?? 0) > 0 && <li>{applyResult.scheduledJobsCreated} scheduled job(s) created</li>}
+                                    {(applyResult.scheduledJobsUpdated ?? 0) > 0 && <li>{applyResult.scheduledJobsUpdated} scheduled job(s) updated</li>}
                                 </ul>
                             </div>
                         )}

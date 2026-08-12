@@ -141,6 +141,30 @@ public record SseEvent(
     }
 
     /**
+     * Creates a scheduled-job-updated event.
+     *
+     * @param jobId the scheduled job that changed
+     * @return a new SSE event
+     */
+    public static SseEvent scheduledJobUpdated(Long jobId) {
+        return new SseEvent("scheduled-job-updated",
+                "{\"jobId\":" + jobId + "}");
+    }
+
+    /**
+     * Creates a scheduled-job-run-updated event.
+     *
+     * @param runId the scheduled job run that changed
+     * @param status the new run status
+     * @return a new SSE event
+     */
+    public static SseEvent scheduledJobRunUpdated(Long runId, String status) {
+        return new SseEvent("scheduled-job-run-updated",
+                "{\"runId\":" + runId
+                        + ",\"status\":\"" + status + "\"}");
+    }
+
+    /**
      * Creates a heartbeat event to keep SSE connections alive through proxies.
      *
      * @return a new heartbeat SSE event
