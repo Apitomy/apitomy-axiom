@@ -12,18 +12,30 @@ import {
     HelperText,
     HelperTextItem,
     FormSelectOption,
+    Label,
     Modal,
     ModalBody,
     ModalFooter,
     ModalHeader,
     PageSection,
+    Pagination,
     Switch,
     TextInput,
     Title,
+    Toolbar,
+    ToolbarContent,
+    ToolbarItem,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
+import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
+import {
+    type ChipFilterCriteria,
+    type ChipFilterType,
+    ChipFilterInput,
+    FilterChips,
+} from "@apitomy/common-ui-components";
 import { BooleanStatusIcon } from "../components/BooleanStatusIcon";
 import { ColoredLabel } from "../components/ColoredLabel";
 import { LabelInput } from "../components/LabelInput";
@@ -39,9 +51,16 @@ import {
 } from "../config/api";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
+const FILTER_TYPES: ChipFilterType[] = [
+    { value: "name", label: "Name", testId: "event-source-filter-name" },
+    { value: "type", label: "Type", testId: "event-source-filter-type" },
+    { value: "labels", label: "Labels", testId: "event-source-filter-labels" },
+];
+
 export function EventSourcesPage() {
     const navigate = useNavigate();
     const [sources, setSources] = useState<EventSource[]>([]);
+    const [totalCount, setTotalCount] = useState(0);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editing, setEditing] = useState<EventSource | null>(null);
@@ -59,13 +78,74 @@ export function EventSourcesPage() {
     // Jira-specific fields
     const [jiraUrl, setJiraUrl] = useState("");
 
+    const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
+    const [page, setPage] = useState(1);
+    const [perPage, setPerPage] = useState(20);
+
+    const filterName = filters.find((f) => f.filterBy.value === "name")?.filterValue;
+    const filterType = filters.find((f) => f.filterBy.value === "type")?.filterValue;
+    const filterLabels = filters
+        .filter((f) => f.filterBy.value === "labels")
+        .map((f) => f.filterValue)
+        .join(",");
+    const isFiltered = filters.length > 0;
+
     const load = useCallback(() => {
         setLoading(true);
-        fetchEventSources().then(setSources).catch(console.error).finally(() => setLoading(false));
-    }, []);
+        fetchEventSources(page, perPage, filterName || undefined, filterType || undefined, filterLabels || undefined)
+            .then((results) => {
+                setSources(results.items);
+                setTotalCount(results.totalCount);
+            })
+            .catch(console.error)
+            .finally(() => setLoading(false));
+    }, [page, perPage, filterName, filterType, filterLabels]);
 
     useEffect(() => { load(); }, [load]);
     useEffect(() => { fetchSecrets().then(setSecrets).catch(console.error); }, []);
+
+    const onAddFilterCriteria = (criteria: ChipFilterCriteria) => {
+        if (!criteria.filterValue) return;
+        const updated = filters.filter((f) =>
+            !(f.filterBy.value === criteria.filterBy.value && f.filterValue === criteria.filterValue));
+        if (criteria.filterBy.value === "name" || criteria.filterBy.value === "type") {
+            const withoutSame = updated.filter((f) => f.filterBy.value !== criteria.filterBy.value);
+            withoutSame.push(criteria);
+            setFilters(withoutSame);
+        } else {
+            updated.push(criteria);
+            setFilters(updated);
+        }
+        setPage(1);
+    };
+
+    const onRemoveFilterCriteria = (criteria: ChipFilterCriteria) => {
+        setFilters(filters.filter((f) =>
+            !(f.filterBy.value === criteria.filterBy.value && f.filterValue === criteria.filterValue)));
+        setPage(1);
+    };
+
+    const onClearAllFilters = () => {
+        setFilters([]);
+        setPage(1);
+    };
+
+    const addLabelFilter = (label: string) => {
+        const already = filters.some((f) => f.filterBy.value === "labels" && f.filterValue === label);
+        if (!already) {
+            const labelType = FILTER_TYPES.find((t) => t.value === "labels")!;
+            setFilters([...filters, { filterBy: labelType, filterValue: label }]);
+            setPage(1);
+        }
+    };
+
+    const addTypeFilter = (type: string) => {
+        const typeFilterType = FILTER_TYPES.find((t) => t.value === "type")!;
+        const withoutType = filters.filter((f) => f.filterBy.value !== "type");
+        withoutType.push({ filterBy: typeFilterType, filterValue: type });
+        setFilters(withoutType);
+        setPage(1);
+    };
 
     const parseGitHubUrl = (url: string): { owner: string; name: string; instance: string } | null => {
         try {
@@ -84,8 +164,6 @@ export function EventSourcesPage() {
             const trimmed = url.replace(/\/+$/, "");
             const parsed = new URL(trimmed);
             const parts = parsed.pathname.split("/").filter(Boolean);
-            // Find "projects" anywhere in the path and take the next segment as the key
-            // Supports: /projects/KEY, /browse/KEY, /jira/software/c/projects/KEY/...
             const idx = parts.findIndex((p) => p === "projects" || p === "browse");
             if (idx >= 0 && idx + 1 < parts.length) {
                 return { baseUrl: parsed.origin, project: parts[idx + 1] };
@@ -177,12 +255,53 @@ export function EventSourcesPage() {
                 </FlexItem>
             </Flex>
 
-            <div style={{ marginTop: "16px" }}>
+            <Toolbar style={{ marginTop: "16px" }}>
+                <ToolbarContent>
+                    <ToolbarItem>
+                        <ChipFilterInput
+                            filterTypes={FILTER_TYPES}
+                            onAddCriteria={onAddFilterCriteria} />
+                    </ToolbarItem>
+                    <ToolbarItem>
+                        <Button variant="control" aria-label="Refresh" onClick={load}>
+                            <SyncAltIcon />
+                        </Button>
+                    </ToolbarItem>
+                    <ToolbarItem variant="pagination" align={{ default: "alignEnd" }}>
+                        <Pagination
+                            itemCount={totalCount}
+                            perPage={perPage}
+                            page={page}
+                            onSetPage={(_e, p) => setPage(p)}
+                            onPerPageSelect={(_e, pp) => { setPerPage(pp); setPage(1); }}
+                            isCompact
+                        />
+                    </ToolbarItem>
+                </ToolbarContent>
+            </Toolbar>
+            {isFiltered && (
+                <Toolbar>
+                    <ToolbarContent>
+                        <ToolbarItem>
+                            <FilterChips
+                                criteria={filters}
+                                onClearAllCriteria={onClearAllFilters}
+                                onRemoveCriteria={onRemoveFilterCriteria} />
+                        </ToolbarItem>
+                    </ToolbarContent>
+                </Toolbar>
+            )}
+
+            <div>
                 {loading ? (
                     <EmptyState><EmptyStateBody>Loading...</EmptyStateBody></EmptyState>
                 ) : sources.length === 0 ? (
                     <EmptyState>
-                        <EmptyStateBody>No event sources configured.</EmptyStateBody>
+                        <EmptyStateBody>
+                            {isFiltered
+                                ? "No event sources match the current filters."
+                                : "No event sources configured."}
+                        </EmptyStateBody>
                     </EmptyState>
                 ) : (
                     <Table aria-label="Event Sources" variant="compact">
@@ -201,12 +320,25 @@ export function EventSourcesPage() {
                             {sources.map((s) => (
                                 <Tr key={s.id} isClickable onRowClick={() => navigate(`/event-sources/${s.id}`)}>
                                     <Td>{s.name}</Td>
-                                    <Td>{s.sourceType}</Td>
+                                    <Td>
+                                        <Label isCompact
+                                            style={{ cursor: "pointer" }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                addTypeFilter(s.sourceType);
+                                            }}>
+                                            {s.sourceType}
+                                        </Label>
+                                    </Td>
                                     <Td><code>{describeSource(s)}</code></Td>
                                     <Td>
                                         {s.labels?.map((label) => (
                                             <ColoredLabel key={label} isCompact
-                                                style={{ marginRight: "4px" }}>
+                                                style={{ marginRight: "4px", cursor: "pointer" }}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    addLabelFilter(label);
+                                                }}>
                                                 {label}
                                             </ColoredLabel>
                                         ))}

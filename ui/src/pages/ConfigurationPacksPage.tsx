@@ -84,7 +84,7 @@ export function ConfigurationPacksPage() {
     const loadData = useCallback(() => {
         setLoading(true);
         Promise.all([
-            fetchActionTypes(),
+            fetchActionTypes(1, 1000),
             fetchTools(1, 1000),
             fetchToolsets(),
             fetchMcpServers(),
@@ -92,7 +92,7 @@ export function ConfigurationPacksPage() {
             fetchAssistantTemplates(),
         ])
             .then(([at, t, ts, mcp, rd, st]) => {
-                setActionTypes(at);
+                setActionTypes(at.items);
                 setTools(t.items);
                 setToolsets(ts);
                 setMcpServers(mcp);

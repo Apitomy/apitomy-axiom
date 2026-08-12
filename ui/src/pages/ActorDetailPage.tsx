@@ -281,7 +281,7 @@ function CapabilitiesTab({ capabilities, onAdd, onRemove }: {
     const [actionTypes, setActionTypes] = useState<ActionType[]>([]);
 
     useEffect(() => {
-        fetchActionTypes().then(setActionTypes).catch(console.error);
+        fetchActionTypes(1, 1000).then((r) => setActionTypes(r.items)).catch(console.error);
     }, []);
 
     const suggestions: TypeaheadAddSuggestion[] = actionTypes.map((at) => ({
