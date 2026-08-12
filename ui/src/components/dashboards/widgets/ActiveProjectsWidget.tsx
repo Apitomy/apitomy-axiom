@@ -2,6 +2,10 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Label } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
+import CodeBranchIcon from "@patternfly/react-icons/dist/esm/icons/code-branch-icon";
+import BugIcon from "@patternfly/react-icons/dist/esm/icons/bug-icon";
+import GithubIcon from "@patternfly/react-icons/dist/esm/icons/github-icon";
+import JiraIcon from "@patternfly/react-icons/dist/esm/icons/jira-icon";
 import { type Project, fetchProjects } from "../../../config/api";
 import { registerWidget, type WidgetProps } from "../widget-registry";
 import { WidgetError } from "../WidgetError";
@@ -35,7 +39,13 @@ function ActiveProjectsWidget({ config, labels }: WidgetProps) {
             <Tbody>
                 {projects.map(p => (
                     <Tr key={p.id} isClickable onRowClick={() => navigate(`/projects/${p.id}`)}>
-                        <Td>{p.name}</Td>
+                        <Td>
+                            {p.issueSource === "github" && <GithubIcon style={{ marginRight: 6 }} />}
+                            {p.issueSource === "jira" && <JiraIcon style={{ marginRight: 6 }} />}
+                            {p.type === "issue" && <BugIcon style={{ marginRight: 6 }} />}
+                            {p.type === "pull-request" && <CodeBranchIcon style={{ marginRight: 6 }} />}
+                            {p.name}
+                        </Td>
                         <Td>
                             <Label isCompact color={STATUS_COLORS[p.status] || "grey"}>
                                 {p.status}
