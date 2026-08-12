@@ -23,6 +23,7 @@ import PencilAltIcon from "@patternfly/react-icons/dist/esm/icons/pencil-alt-ico
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
 import StarIcon from "@patternfly/react-icons/dist/esm/icons/star-icon";
+import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import TimesIcon from "@patternfly/react-icons/dist/esm/icons/times-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import {
@@ -62,6 +63,7 @@ export function DashboardViewPage() {
 
     const [addWidgetOpen, setAddWidgetOpen] = useState(false);
     const [deleteOpen, setDeleteOpen] = useState(false);
+    const [refreshKey, setRefreshKey] = useState(0);
 
     const load = useCallback(() => {
         if (!dashboardId) return;
@@ -268,6 +270,13 @@ export function DashboardViewPage() {
                             </>
                         ) : (
                             <>
+                                <FlexItem>
+                                    <Button variant="plain"
+                                            aria-label="Refresh"
+                                            onClick={() => setRefreshKey(k => k + 1)}>
+                                        <SyncAltIcon />
+                                    </Button>
+                                </FlexItem>
                                 {!dashboard.isDefault && (
                                     <FlexItem>
                                         <Button variant="secondary" icon={<StarIcon />}
@@ -331,6 +340,7 @@ export function DashboardViewPage() {
                     {activeWidgets.map(w => (
                         <div key={w.id}>
                             <WidgetCard
+                                key={refreshKey}
                                 widgetType={w.type}
                                 config={w.config}
                                 labels={activeLabels}
