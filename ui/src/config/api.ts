@@ -129,6 +129,7 @@ export interface PackExportRequest {
     mcpServerIds?: number[];
     reportDefinitionIds?: number[];
     sessionTemplateIds?: string[];
+    scheduledJobIds?: number[];
 }
 
 export interface ImportResult {
@@ -138,6 +139,7 @@ export interface ImportResult {
     mcpServers?: number;
     reportDefinitions?: number;
     sessionTemplates?: number;
+    scheduledJobs?: number;
 }
 
 export interface AssistantApplyResult {
@@ -146,6 +148,7 @@ export interface AssistantApplyResult {
     reportDefinitions?: number;
     toolsets?: number;
     sessionTemplates?: number;
+    scheduledJobs?: number;
     toolsCreated?: number;
     toolsUpdated?: number;
     actionTypesCreated?: number;
@@ -158,6 +161,8 @@ export interface AssistantApplyResult {
     sessionTemplatesUpdated?: number;
     eventSourcesCreated?: number;
     eventSourcesUpdated?: number;
+    scheduledJobsCreated?: number;
+    scheduledJobsUpdated?: number;
 }
 
 export async function exportPack(request: PackExportRequest): Promise<Blob> {
@@ -1821,4 +1826,117 @@ export async function deleteDashboard(dashboardId: number): Promise<void> {
         method: "DELETE",
     });
     if (!response.ok) throw new Error(`Failed to delete dashboard: ${response.status}`);
+}
+
+// ── Scheduled Jobs ──────────────────────────────────────────────
+
+export interface ScheduledJob {
+    id: number;
+    name: string;
+    description?: string;
+    labels?: string[];
+    enabled: boolean;
+    schedule: string;
+    scheduleTime?: string;
+    scheduleDayOfWeek?: string;
+    nextRunAt?: string;
+    lastRunAt?: string;
+    executionMode: string;
+    promptTemplate?: string;
+    scriptTemplate?: string;
+    model?: string;
+    engine?: string;
+    allowedTools?: string[];
+    maxSteps?: number;
+    maxBudgetUsd?: number;
+    environment?: Record<string, string>;
+    createdOn: string;
+    updatedOn: string;
+}
+
+export type NewScheduledJob = Omit<ScheduledJob, "id" | "createdOn" | "updatedOn" | "nextRunAt" | "lastRunAt">;
+
+export interface ScheduledJobRun {
+    id: number;
+    jobId: number;
+    status: string;
+    trigger: string;
+    startedAt?: string;
+    completedAt?: string;
+    output?: string;
+    error?: string;
+    executionLog?: string;
+    costUsd?: number;
+    durationMs?: number;
+    traceId?: string;
+    createdOn: string;
+}
+
+export async function fetchScheduledJobs(): Promise<ScheduledJob[]> {
+    const response = await fetch(`${API}/scheduled-jobs`);
+    if (!response.ok) throw new Error(`Failed to fetch scheduled jobs: ${response.status}`);
+    return response.json();
+}
+
+export async function fetchScheduledJob(jobId: number): Promise<ScheduledJob> {
+    const response = await fetch(`${API}/scheduled-jobs/${jobId}`);
+    if (!response.ok) throw new Error(`Failed to fetch scheduled job: ${response.status}`);
+    return response.json();
+}
+
+export async function createScheduledJob(data: NewScheduledJob): Promise<ScheduledJob> {
+    const response = await fetch(`${API}/scheduled-jobs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(`Failed to create scheduled job: ${response.status}`);
+    return response.json();
+}
+
+export async function updateScheduledJob(jobId: number, data: NewScheduledJob): Promise<ScheduledJob> {
+    const response = await fetch(`${API}/scheduled-jobs/${jobId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(`Failed to update scheduled job: ${response.status}`);
+    return response.json();
+}
+
+export async function deleteScheduledJob(jobId: number): Promise<void> {
+    const response = await fetch(`${API}/scheduled-jobs/${jobId}`, {
+        method: "DELETE",
+    });
+    if (!response.ok) throw new Error(`Failed to delete scheduled job: ${response.status}`);
+}
+
+export async function runScheduledJob(jobId: number): Promise<ScheduledJobRun> {
+    const response = await fetch(`${API}/scheduled-jobs/${jobId}/run`, {
+        method: "POST",
+    });
+    if (!response.ok) throw new Error(`Failed to trigger scheduled job: ${response.status}`);
+    return response.json();
+}
+
+export async function fetchScheduledJobRuns(
+    jobId: number,
+    page = 1,
+    limit = 20
+): Promise<SearchResults<ScheduledJobRun>> {
+    const response = await fetch(
+        `${API}/scheduled-jobs/${jobId}/runs?page=${page}&limit=${limit}`
+    );
+    if (!response.ok) throw new Error(`Failed to fetch job runs: ${response.status}`);
+    return response.json();
+}
+
+export async function validateScheduledJob(data: NewScheduledJob): Promise<ToolValidationResult> {
+    const response = await fetch(`${API}/scheduled-jobs/validate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(`Failed to validate scheduled job: ${response.status}`);
+    return response.json();
 }

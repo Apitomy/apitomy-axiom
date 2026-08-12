@@ -157,6 +157,25 @@ ReportExecutionService
   │  Writes generated Markdown to ReportEntity
 ```
 
+### Scheduled Job Execution
+
+```
+ScheduledJobScheduler
+  │  @Scheduled — checks for due scheduled jobs
+  │  Creates ScheduledJobRunEntity (status: Pending)
+  │
+  ▼
+ScheduledJobQueueConsumer
+  │  Sequential FIFO queue (one job at a time)
+  │  Daemon thread blocks on BlockingQueue.take()
+  │
+  ▼
+ScheduledJobExecutionService
+  │  Actor mode: invokes AI engine with job prompt and tools
+  │  Script mode: runs bash script via ProcessBuilder
+  │  Writes output to ScheduledJobRunEntity
+```
+
 ### AI Assistant Sessions
 
 ```
@@ -303,3 +322,4 @@ All background processing uses Quarkus `@Scheduled` with
 | `PipelineOrchestrator` | Dequeue and process events |
 | `TaskQueuePoller` | Dispatch pending tasks to actors |
 | `ReportScheduler` | Check for due report definitions |
+| `ScheduledJobScheduler` | Check for due scheduled jobs |

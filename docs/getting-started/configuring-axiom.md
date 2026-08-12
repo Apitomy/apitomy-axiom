@@ -72,6 +72,14 @@ The AI Manager triages incoming events and decides what actions to take.
 | `axiom.manager.timeout-seconds` | `120` | Manager subprocess timeout |
 | `axiom.manager.max-turns` | `5` | Maximum agentic turns for the Manager |
 
+### Scheduled Jobs
+
+Scheduled Jobs run on a configurable CRON-style schedule.
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `axiom.scheduled-jobs.poll-interval` | `60s` | How often to check for due scheduled jobs |
+
 ### AI Assistant
 
 The interactive AI Assistant allows users to create and update configuration items through

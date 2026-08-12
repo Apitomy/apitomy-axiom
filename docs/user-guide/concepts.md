@@ -1,16 +1,18 @@
 # Concepts
 
 Apitomy Axiom is an event-driven orchestration platform that uses AI to automate
-software development workflows. It has three primary capabilities:
+software development workflows. It has four primary capabilities:
 
 - **Reports** — AI-generated reports about your repositories and projects, produced
   on a schedule or on demand
 - **Event-driven automation** — monitor GitHub and Jira for activity, triage incoming
   events with an AI Manager, and delegate work to AI or human actors
-- **AI Assistant** — an interactive conversational interface for arbitrary tasks, powered by
-  customizable session templates
+- **Scheduled Jobs** — CRON-style automation that runs on a configurable schedule,
+  independent of events or reports
+- **AI Assistant** — an interactive conversational interface for arbitrary tasks,
+  powered by customizable session templates
 
-All three capabilities share a common set of configuration items — tools, secrets, MCP
+All four capabilities share a common set of configuration items — tools, secrets, MCP
 servers, and more — that give the AI agents the capabilities they need. This guide
 explains each concept and how they relate.
 
@@ -315,9 +317,100 @@ actors serves two purposes:
 
 ---
 
+## Scheduled Jobs
+
+Scheduled Jobs provide CRON-style automation that runs on a configurable schedule,
+independent of the event pipeline or report system. Use them for recurring maintenance
+tasks, periodic data syncs, automated cleanups, or any work that should happen on a
+fixed cadence.
+
+### How Scheduled Jobs Work
+
+```
+Scheduled Job ──► Axiom triggers execution ──► Agent or script runs ──► Run record
+  (definition)      (on schedule or ad hoc)      (actor or bash)        (stored + viewable)
+```
+
+1. You create a **Scheduled Job** that defines what to do and when to do it
+2. Axiom triggers execution on the configured schedule, or when you click **Run Now**
+3. The job runs using the configured execution mode — an AI agent (actor mode) or a
+   bash script (script mode)
+4. The result is recorded as a **Run** with status, output, cost, and duration
+
+### Scheduled Job Configuration
+
+Each scheduled job includes:
+
+| Field | Purpose |
+|-------|---------|
+| **Name** | Display name for the job |
+| **Description** | What the job does |
+| **Schedule** | When to run: hourly, daily, weekly, monthly, or none (manual only) |
+| **Time of day** | Time to run (e.g. `08:00`) |
+| **Day of week** | For weekly schedules (e.g. `monday`) |
+| **Execution mode** | `actor` (AI agent) or `script` (bash script) |
+| **Prompt template** | Instructions for the AI agent (actor mode) |
+| **Script template** | Bash script to execute (script mode) |
+| **Allowed tools** | Tools the AI agent may use (actor mode) |
+| **Environment** | Custom environment variables with `${secret:NAME}` support |
+| **Model / Engine** | Override the global AI model or engine |
+| **Max steps** | Optional limit on agent turns |
+| **Max budget** | Optional cost limit in USD |
+| **Labels** | Free-form labels for organization |
+| **Enabled** | Whether the schedule is active |
+
+#### Execution Modes
+
+**Actor mode** — the job is executed by an AI agent. The agent receives the prompt
+template with placeholders substituted:
+
+| Placeholder | Value |
+|-------------|-------|
+| `{{jobName}}` | The scheduled job name |
+| `{{apiBaseUrl}}` | Axiom's own API base URL |
+
+**Script mode** — a bash script runs directly. The script template supports
+additional placeholders:
+
+| Placeholder | Value |
+|-------------|-------|
+| `{{jobName}}` | The scheduled job name |
+| `{{jobId}}` | Internal job ID |
+| `{{runId}}` | The current run ID |
+| `{{apiBaseUrl}}` | Axiom's own API base URL |
+
+### Job Runs
+
+Each time a scheduled job executes, it produces a **Run** — a record of the execution
+with metadata:
+
+- **Status** — Pending, Running, Completed, or Failed
+- **Trigger** — whether the run was triggered by the schedule or manually
+- **Output** — the execution result
+- **Cost** — AI token cost in USD (actor mode)
+- **Duration** — how long execution took
+- **Execution log** — full transcript for debugging
+
+Runs are viewable from the scheduled job detail page.
+
+### Differences from Reports and Action Types
+
+Scheduled Jobs fill a gap between reports and action types:
+
+- **Unlike reports**, scheduled jobs do not produce a Markdown document or use time
+  window placeholders. They are designed for executing tasks, not generating
+  documents.
+- **Unlike action types**, scheduled jobs are not triggered by events or tied to
+  projects. They run on a fixed schedule and are global to the Axiom instance.
+- **Like both**, scheduled jobs support allowed tools, environment variables, and
+  model/engine overrides.
+
+---
+
 ## Supporting Configuration
 
-Both reports and event-driven automation share the following configuration items.
+Reports, event-driven automation, and scheduled jobs share the following
+configuration items.
 
 ### Tools
 
@@ -418,6 +511,7 @@ files. A pack can include any combination of:
 - Toolsets
 - MCP servers
 - Report definitions
+- Scheduled jobs
 
 This is useful for sharing configurations between Axiom instances, backing up
 configuration, or distributing pre-built setups.
@@ -430,11 +524,11 @@ The AI Assistant is an interactive conversational interface built on top of Clau
 can use it for arbitrary tasks — from creating Axiom configuration items to general-purpose
 coding, analysis, or exploration.
 
-Sessions are created from **Session Templates**, which define the assistant's system prompt,
-available tools, MCP servers, and working directory. Axiom ships with built-in templates
-(including the Configuration Assistant for creating and updating tools, action types,
-report definitions, toolsets, and session templates), and you can create your own
-templates for custom workflows.
+Sessions are created from **Session Templates**, which define the assistant's system
+prompt, available tools, MCP servers, and working directory. Axiom ships with built-in
+templates (including the Configuration Assistant for creating and updating tools, action
+types, report definitions, scheduled jobs, toolsets, and session templates), and you can
+create your own templates for custom workflows.
 
 For full details, see the [AI Assistant](ai-assistant.md) guide.
 
@@ -512,12 +606,23 @@ The diagram below shows how the concepts relate:
 │                             Secrets ◄──────────────────────────┘     │
 │                                                                     │
 │                         AI Engine (Claude Code / OpenCode)           │
+│                                                                     │
+├─────────────────────────────────────────────────────────────────────┤
+│                      SCHEDULED JOBS                                  │
+│                                                                     │
+│  Scheduled Job ──► AI Agent or Script ──► Run                        │
+│    ├─ prompt / script      │                                         │
+│    ├─ schedule             │ uses                                     │
+│    ├─ allowed tools ───────┼──► Tools / @Toolsets / MCP Servers       │
+│    └─ environment ─────────┼──► Secrets                               │
+│                            │                                         │
+│                        AI Engine (Claude Code / OpenCode)             │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 **Shared building blocks**: Tools, Toolsets, MCP Servers, Secrets, and the AI Engine
-are shared across both use-cases. Configure them once and reference them from any
-number of report definitions and action types.
+are shared across all use-cases. Configure them once and reference them from any
+number of report definitions, action types, and scheduled jobs.
 
 **Reports** are self-contained — they only need a report definition with a prompt
 template and tools. No event sources, projects, or actors are required.
@@ -525,6 +630,11 @@ template and tools. No event sources, projects, or actors are required.
 **Event-driven automation** uses the full pipeline — event sources feed events to the
 Manager, which creates projects and assigns tasks to actors using action types. The
 action types determine what tools and prompts the actors use.
+
+**Scheduled Jobs** are self-contained like reports — they need a job definition with
+a schedule and either a prompt template (actor mode) or a script template (script
+mode). They run independently of the event pipeline and do not produce Markdown
+reports.
 
 ---
 

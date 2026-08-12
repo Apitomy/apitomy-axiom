@@ -7,10 +7,10 @@ tailored to specific workflows, from generating Axiom configuration to general-p
 coding assistance.
 
 Out of the box, Axiom ships three built-in templates: a **Configuration Assistant** for
-creating and updating tools, action types, report definitions, toolsets, and session
-templates, a **General Assistant** for open-ended tasks, and a **Project Assistant** for
-working within the context of a specific project. You can also create your own templates
-to define custom workflows.
+creating and updating tools, action types, report definitions, scheduled jobs, toolsets,
+and session templates, a **General Assistant** for open-ended tasks, and a **Project
+Assistant** for working within the context of a specific project. You can also create
+your own templates to define custom workflows.
 
 !!! note
     The AI Assistant requires **Claude Code** as the AI engine. The `claude` CLI must
@@ -52,7 +52,8 @@ Axiom ships three immutable built-in templates:
 
 - **Configuration Assistant** (`axiom-config-assistant`) — purpose-built for creating
   and updating Axiom configuration items (tools, action types, report definitions,
-  toolsets, and session templates) with a two-panel layout and Apply workflow.
+  scheduled jobs, toolsets, and session templates) with a two-panel layout and Apply
+  workflow.
 - **General Assistant** (`general-assistant`) — a minimal template for open-ended tasks
   with no sidebar or special behavior.
 - **Project Assistant** (`project-assistant`) — scoped to a specific Axiom project, with
@@ -265,13 +266,14 @@ the standard session interface with a two-panel layout and an Apply workflow.
 ### Generated Items
 
 As the assistant creates or updates items, they appear in the sidebar. The assistant
-can work with five types of configuration items:
+can work with six types of configuration items:
 
 | Type | What it produces |
 |------|-----------------|
 | **Tools** | Script-based tools with parameters, descriptions, and bash script templates |
 | **Action Types** | Actor or script-mode action types with prompt templates, allowed tools, and trigger settings |
 | **Report Definitions** | Scheduled or ad-hoc reports with prompt templates, allowed tools, and time windows |
+| **Scheduled Jobs** | CRON-style automation with prompt or script templates, allowed tools, and schedule settings |
 | **Toolsets** | Named groups of tools that can be referenced in action types and session templates using `@ToolsetName` |
 | **Session Templates** | Custom AI Assistant session configurations with a persona, system prompt, MCP servers, and allowed tools |
 
@@ -309,9 +311,9 @@ updated"). After applying, the session ends and you are returned to the sessions
 
 The Configuration Assistant has access to an MCP server that lets it query your
 existing Axiom configuration — it can list your current tools, action types, event
-sources, and more to understand what is already set up. This is especially useful
-when updating existing items, as the assistant fetches the current definition before
-making changes.
+sources, scheduled jobs, and more to understand what is already set up. This is
+especially useful when updating existing items, as the assistant fetches the current
+definition before making changes.
 
 ### Example Conversation
 
@@ -365,8 +367,8 @@ modal.
   and what to change. It will fetch the current definition, apply your changes, and
   write the updated JSON. When you apply, matching names are updated in place.
 - **Ask about existing configuration.** The assistant can query your current tools,
-  action types, toolsets, session templates, and other configuration to understand
-  your setup before creating or updating items.
+  action types, scheduled jobs, toolsets, session templates, and other configuration
+  to understand your setup before creating or updating items.
 
 ### General Tips
 

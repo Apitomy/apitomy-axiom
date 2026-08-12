@@ -9,6 +9,7 @@ long-lived projects around them, and delegates work to human and AI actors.
 - **Human + AI Actors** — pluggable actor system supports Claude Code, OpenCode, and human actors
 - **Project Lifecycle** — long-lived projects track work from triage through completion
 - **Event Sources** — watches GitHub and Jira repositories via webhooks or polling
+- **Scheduled Jobs** — CRON-style automation with AI actor or script execution modes
 - **Web Dashboard** — React + PatternFly UI with real-time SSE updates
 - **AI Assistant** — interactive conversational interface with customizable session templates,
   real-time tool permission management, and plan mode
