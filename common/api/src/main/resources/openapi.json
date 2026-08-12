@@ -782,11 +782,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ActionTypeSearchResults",
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ActionType"
-                  }
+                  "$ref": "#/components/schemas/ActionTypeSearchResults"
                 }
               }
             }
@@ -1014,11 +1010,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EventSourceSearchResults",
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/EventSource"
-                  }
+                  "$ref": "#/components/schemas/EventSourceSearchResults"
                 }
               }
             }

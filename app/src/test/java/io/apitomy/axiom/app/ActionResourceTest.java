@@ -23,8 +23,8 @@ class ActionResourceTest {
             .then()
                 .statusCode(200)
                 .contentType(ContentType.JSON)
-                .body("$.size()", greaterThanOrEqualTo(2))
-                .body("name", hasItems("auto-tag", "close-project"));
+                .body("items.size()", greaterThanOrEqualTo(2))
+                .body("items.name", hasItems("auto-tag", "close-project"));
     }
 
     @Test
@@ -34,7 +34,7 @@ class ActionResourceTest {
                 .get(ACTION_TYPES_PATH)
             .then()
                 .statusCode(200)
-                .extract().path("find { it.name == 'auto-tag' }.id");
+                .extract().path("items.find { it.name == 'auto-tag' }.id");
 
         given()
             .when()
@@ -54,7 +54,7 @@ class ActionResourceTest {
                 .get(ACTION_TYPES_PATH)
             .then()
                 .statusCode(200)
-                .extract().path("find { it.name == 'close-project' }.id");
+                .extract().path("items.find { it.name == 'close-project' }.id");
 
         given()
             .when()
