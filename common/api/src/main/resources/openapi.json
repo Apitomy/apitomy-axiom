@@ -4529,7 +4529,7 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "201": {
             "description": "Created scheduled job",
             "content": {
               "application/json": {

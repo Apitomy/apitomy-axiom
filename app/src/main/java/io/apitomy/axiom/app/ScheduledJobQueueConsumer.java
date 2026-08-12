@@ -53,6 +53,16 @@ public class ScheduledJobQueueConsumer {
     @Transactional
     void onStart(@Observes StartupEvent event) {
         ScheduledJobRunEntity.<ScheduledJobRunEntity>list(
+                        "status = 'Running' order by createdOn asc")
+                .forEach(r -> {
+                    LOG.infof("Failing orphaned running scheduled job run %d from previous run",
+                            r.id);
+                    r.status = "Failed";
+                    r.error = "Application restarted while run was in progress.";
+                    r.completedAt = java.time.Instant.now();
+                });
+
+        ScheduledJobRunEntity.<ScheduledJobRunEntity>list(
                         "status = 'Pending' order by createdOn asc")
                 .forEach(r -> {
                     LOG.infof("Re-enqueuing pending scheduled job run %d from previous run",

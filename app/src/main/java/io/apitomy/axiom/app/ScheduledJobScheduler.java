@@ -140,12 +140,18 @@ public class ScheduledJobScheduler {
                 DayOfWeek targetDay = parseDayOfWeek(job.scheduleDayOfWeek);
                 if (targetDay != null) {
                     ZonedDateTime nextOccurrence = todayAtTime.with(
-                            TemporalAdjusters.next(targetDay));
+                            TemporalAdjusters.nextOrSame(targetDay));
+                    if (!nextOccurrence.isAfter(now)) {
+                        nextOccurrence = nextOccurrence.plusWeeks(1);
+                    }
                     return nextOccurrence.toInstant();
                 }
                 return todayAtTime.plusWeeks(1).toInstant();
             }
             case "monthly" -> {
+                if (todayAtTime.isAfter(now)) {
+                    return todayAtTime.toInstant();
+                }
                 return todayAtTime.plusMonths(1).toInstant();
             }
             case "hourly" -> {

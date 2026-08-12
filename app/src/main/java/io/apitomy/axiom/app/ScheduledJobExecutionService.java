@@ -186,12 +186,13 @@ public class ScheduledJobExecutionService {
             Instant startTime = Instant.now();
 
             Path scriptFile = Files.createTempFile("axiom-scheduled-job-", ".sh");
+            Path outputFile = Files.createTempFile("axiom-scheduled-job-output-", ".log");
             try {
                 Files.writeString(scriptFile, script);
                 scriptFile.toFile().setExecutable(true);
-
                 ProcessBuilder pb = new ProcessBuilder("/bin/bash", scriptFile.toString())
-                        .redirectErrorStream(true);
+                        .redirectErrorStream(true)
+                        .redirectOutput(outputFile.toFile());
                 String apiBaseUrl = "http://localhost:" + httpPort + "/api/v1";
                 pb.environment().put("AXIOM_API_URL", apiBaseUrl);
                 pb.environment().put("AXIOM_JOB_ID", String.valueOf(job.id));
@@ -211,7 +212,6 @@ public class ScheduledJobExecutionService {
                 }
 
                 Process process = pb.start();
-                String output = new String(process.getInputStream().readAllBytes());
                 boolean finished = process.waitFor(scriptTimeoutSeconds, TimeUnit.SECONDS);
                 Instant endTime = Instant.now();
                 long durationMs = Duration.between(startTime, endTime).toMillis();
@@ -220,9 +220,13 @@ public class ScheduledJobExecutionService {
                 if (!finished) {
                     process.destroyForcibly();
                     exitCode = 1;
-                    output = output + "\n[Script timed out after " + scriptTimeoutSeconds + "s]";
                 } else {
                     exitCode = process.exitValue();
+                }
+
+                String output = readOutputFile(outputFile, 1024 * 1024);
+                if (!finished) {
+                    output = output + "\n[Script timed out after " + scriptTimeoutSeconds + "s]";
                 }
 
                 String executionLog = buildScriptExecutionLog(job, script, output,
@@ -235,6 +239,7 @@ public class ScheduledJobExecutionService {
                 }
             } finally {
                 Files.deleteIfExists(scriptFile);
+                Files.deleteIfExists(outputFile);
             }
         } catch (Exception e) {
             LOG.errorf(e, "Script execution failed for scheduled job run %d", runId);
@@ -397,10 +402,34 @@ public class ScheduledJobExecutionService {
         if (template == null) return "";
         String apiBaseUrl = "http://localhost:" + httpPort + "/api/v1";
         return template
-                .replace("{{jobName}}", job.name != null ? job.name : "")
+                .replace("{{jobName}}", shellEscape(job.name != null ? job.name : ""))
                 .replace("{{jobId}}", String.valueOf(job.id))
                 .replace("{{runId}}", String.valueOf(runId))
                 .replace("{{apiBaseUrl}}", apiBaseUrl);
+    }
+
+    /**
+     * Escapes a string for safe interpolation into a bash script using POSIX single-quote escaping.
+     */
+    private String shellEscape(String value) {
+        if (value == null || value.isEmpty()) return "''";
+        return "'" + value.replace("'", "'\\''") + "'";
+    }
+
+    /**
+     * Reads a process output file up to a maximum number of bytes.
+     */
+    private String readOutputFile(Path outputFile, int maxBytes) throws IOException {
+        long fileSize = Files.size(outputFile);
+        if (fileSize <= maxBytes) {
+            return Files.readString(outputFile);
+        }
+        byte[] buffer = new byte[maxBytes];
+        try (var is = Files.newInputStream(outputFile)) {
+            int bytesRead = is.readNBytes(buffer, 0, maxBytes);
+            return new String(buffer, 0, bytesRead) + "\n[Output truncated at "
+                    + (maxBytes / 1024) + " KB]";
+        }
     }
 
     private List<String> resolveAllowedTools(ScheduledJobEntity job) {
