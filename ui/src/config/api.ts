@@ -1890,7 +1890,10 @@ export async function createScheduledJob(data: NewScheduledJob): Promise<Schedul
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error(`Failed to create scheduled job: ${response.status}`);
+    if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.message || `Failed to create scheduled job: ${response.status}`);
+    }
     return response.json();
 }
 
@@ -1900,7 +1903,10 @@ export async function updateScheduledJob(jobId: number, data: NewScheduledJob): 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error(`Failed to update scheduled job: ${response.status}`);
+    if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.message || `Failed to update scheduled job: ${response.status}`);
+    }
     return response.json();
 }
 
