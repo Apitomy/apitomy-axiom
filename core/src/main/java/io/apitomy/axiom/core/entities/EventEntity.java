@@ -44,4 +44,10 @@ public class EventEntity extends PanacheEntity {
 
     @Column(name = "received_at", nullable = false)
     public Instant receivedAt;
+
+    @Column(name = "filter_status")
+    public String filterStatus;
+
+    @Column(name = "filter_matched_rule")
+    public String filterMatchedRule;
 }

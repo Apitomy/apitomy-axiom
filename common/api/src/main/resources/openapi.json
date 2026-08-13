@@ -1862,6 +1862,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "filterFilterStatus",
+            "in": "query",
+            "description": "Filter by filter status (allowed or blocked)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -5493,23 +5502,23 @@
         "type": "object",
         "properties": {
           "closedProjectRetentionDays": {
-            "description": "Number of days to retain closed projects before automatic deletion.",
             "format": "int32",
+            "description": "Number of days to retain closed projects before automatic deletion.",
             "type": "integer"
           },
           "traceRetentionDays": {
-            "description": "Number of days to retain execution traces before automatic deletion.",
             "format": "int32",
+            "description": "Number of days to retain execution traces before automatic deletion.",
             "type": "integer"
           },
           "eventRetentionDays": {
-            "description": "Number of days to retain ingested events before automatic deletion.",
             "format": "int32",
+            "description": "Number of days to retain ingested events before automatic deletion.",
             "type": "integer"
           },
           "eventSourceLogRetentionDays": {
-            "description": "Number of days to retain event source poll logs before automatic deletion.",
             "format": "int32",
+            "description": "Number of days to retain event source poll logs before automatic deletion.",
             "type": "integer"
           }
         }
@@ -5669,6 +5678,14 @@
             "items": {
               "type": "string"
             }
+          },
+          "filterStatus": {
+            "description": "Filter evaluation result: allowed, blocked, or null for legacy events",
+            "type": "string"
+          },
+          "filterMatchedRule": {
+            "description": "Description of the filter rule that blocked the event, if applicable",
+            "type": "string"
           }
         }
       },

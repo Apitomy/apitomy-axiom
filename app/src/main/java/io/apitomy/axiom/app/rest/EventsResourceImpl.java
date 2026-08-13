@@ -43,7 +43,8 @@ public class EventsResourceImpl implements EventsResource {
     @Override
     public EventSearchResults listEvents(BigInteger page, BigInteger limit,
                                           String filterSource, String filterEventType,
-                                          String filterRepository, String filterLabels) {
+                                          String filterRepository, String filterLabels,
+                                          String filterFilterStatus) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
@@ -70,6 +71,10 @@ public class EventsResourceImpl implements EventsResource {
                     + " GROUP BY es.id HAVING COUNT(DISTINCT esl) = :labelCount)");
             params.put("labels", labels);
             params.put("labelCount", (long) labels.size());
+        }
+        if (filterFilterStatus != null && !filterFilterStatus.isBlank()) {
+            hql.append(" and filterStatus = :filterStatus");
+            params.put("filterStatus", filterFilterStatus);
         }
 
         long totalCount = EventEntity.count(hql.toString(), params);
@@ -174,6 +179,8 @@ public class EventsResourceImpl implements EventsResource {
         if (entity.traceId != null) {
             event.setTraceId(entity.traceId);
         }
+        event.setFilterStatus(entity.filterStatus);
+        event.setFilterMatchedRule(entity.filterMatchedRule);
         return event;
     }
 }

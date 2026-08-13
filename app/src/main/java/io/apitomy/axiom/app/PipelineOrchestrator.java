@@ -160,12 +160,25 @@ public class PipelineOrchestrator {
         if (!filterResult.allowed()) {
             LOG.infof("Pre-filtered event %d: %s", event.id, filterResult.matchedRule());
             QuarkusTransaction.requiringNew().run(() -> {
+                EventEntity managed = EventEntity.findById(eventId);
+                if (managed != null) {
+                    managed.filterStatus = "blocked";
+                    managed.filterMatchedRule = filterResult.matchedRule();
+                }
                 logActivity(null, null, event.id, "event-pre-filtered",
                         "Event pre-filtered: " + event.eventType + " — " + filterResult.matchedRule());
                 markQueueEntry(queueEntryId, "completed");
             });
             return;
         }
+
+        // Mark event as allowed through filters
+        QuarkusTransaction.requiringNew().run(() -> {
+            EventEntity managed = EventEntity.findById(eventId);
+            if (managed != null) {
+                managed.filterStatus = "allowed";
+            }
+        });
 
         // Trace creation (TraceService manages its own transactions)
         TraceContext traceCtx = null;

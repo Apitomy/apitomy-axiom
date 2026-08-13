@@ -86,6 +86,25 @@ export function EventDetailModal({ event, onClose }: EventDetailModalProps) {
                                             </DescriptionListDescription>
                                         </DescriptionListGroup>
                                     )}
+                                    {event.filterStatus && (
+                                        <DescriptionListGroup>
+                                            <DescriptionListTerm>Filter Status</DescriptionListTerm>
+                                            <DescriptionListDescription>
+                                                <Label isCompact
+                                                    color={event.filterStatus === "allowed" ? "green" : "red"}>
+                                                    {event.filterStatus}
+                                                </Label>
+                                            </DescriptionListDescription>
+                                        </DescriptionListGroup>
+                                    )}
+                                    {event.filterMatchedRule && (
+                                        <DescriptionListGroup>
+                                            <DescriptionListTerm>Matched Rule</DescriptionListTerm>
+                                            <DescriptionListDescription>
+                                                {event.filterMatchedRule}
+                                            </DescriptionListDescription>
+                                        </DescriptionListGroup>
+                                    )}
                                 </DescriptionList>
                             </CardBody>
                         </Card>

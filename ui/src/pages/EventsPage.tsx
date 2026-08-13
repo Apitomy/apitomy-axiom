@@ -30,11 +30,17 @@ const SOURCE_COLORS: Record<string, "blue" | "green" | "orange" | "grey"> = {
     internal: "orange",
 };
 
+const FILTER_STATUS_COLORS: Record<string, "green" | "red" | "grey"> = {
+    allowed: "green",
+    blocked: "red",
+};
+
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "source", label: "Source", testId: "event-filter-source" },
     { value: "eventType", label: "Event Type", testId: "event-filter-eventType" },
     { value: "repository", label: "Repository", testId: "event-filter-repository" },
     { value: "labels", label: "Labels", testId: "event-filter-labels" },
+    { value: "filterStatus", label: "Filter Status", testId: "event-filter-filterStatus" },
 ];
 
 export function EventsPage() {
@@ -57,6 +63,7 @@ export function EventsPage() {
         .filter((f) => f.filterBy.value === "labels")
         .map((f) => f.filterValue)
         .join(",");
+    const filterFilterStatus = filters.find((f) => f.filterBy.value === "filterStatus")?.filterValue;
     const isFiltered = filters.length > 0;
 
     const loadData = useCallback(() => {
@@ -66,7 +73,8 @@ export function EventsPage() {
             filterSource || undefined,
             filterEventType || undefined,
             filterRepository || undefined,
-            filterLabels || undefined
+            filterLabels || undefined,
+            filterFilterStatus || undefined
         )
             .then((results) => {
                 setEvents(results.items);
@@ -74,7 +82,7 @@ export function EventsPage() {
             })
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [page, perPage, filterSource, filterEventType, filterRepository, filterLabels]);
+    }, [page, perPage, filterSource, filterEventType, filterRepository, filterLabels, filterFilterStatus]);
 
     useEffect(() => { loadData(); }, [loadData]);
 
@@ -176,6 +184,7 @@ export function EventsPage() {
                                 <Th>#</Th>
                                 <Th>Time</Th>
                                 <Th>Source</Th>
+                                <Th>Filter</Th>
                                 <Th>Labels</Th>
                                 <Th>Event Type</Th>
                                 <Th>Repository</Th>
@@ -203,6 +212,22 @@ export function EventsPage() {
                                             }}>
                                             {event.source}
                                         </Label>
+                                    </Td>
+                                    <Td>
+                                        {event.filterStatus ? (
+                                            <Label isCompact
+                                                color={FILTER_STATUS_COLORS[event.filterStatus] || "grey"}
+                                                style={{ cursor: "pointer" }}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const statusType = FILTER_TYPES.find((t) => t.value === "filterStatus")!;
+                                                    onAddFilterCriteria({ filterBy: statusType, filterValue: event.filterStatus! });
+                                                }}>
+                                                {event.filterStatus}
+                                            </Label>
+                                        ) : (
+                                            <Label isCompact color="grey">—</Label>
+                                        )}
                                     </Td>
                                     <Td>
                                         {event.labels && event.labels.length > 0
