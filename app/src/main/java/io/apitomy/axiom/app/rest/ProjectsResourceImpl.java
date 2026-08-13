@@ -1,6 +1,7 @@
 package io.apitomy.axiom.app.rest;
 
 import io.apitomy.axiom.actors.human.HumanActor;
+import io.apitomy.axiom.app.ProjectDeletionService;
 import io.apitomy.axiom.api.ProjectsResource;
 import io.apitomy.axiom.api.beans.Event;
 import io.apitomy.axiom.api.beans.Trace;
@@ -70,6 +71,9 @@ public class ProjectsResourceImpl implements ProjectsResource {
 
     @Inject
     TraceService traceService;
+
+    @Inject
+    ProjectDeletionService projectDeletionService;
 
     // ── Projects ──────────────────────────────────────────────────────
 
@@ -196,14 +200,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
             throw new WebApplicationException(
                     "Only closed projects can be deleted. Current status: " + entity.status, 409);
         }
-
-        ThreadEntryEntity.delete("projectId", projectId);
-        AiUsageEntity.delete("projectId", projectId);
-        ActivityLogEntity.delete("projectId", projectId);
-        EventEntity.update("projectId = null where projectId = ?1", projectId);
-        TaskEntity.delete("projectId", projectId);
-        workspaceService.deleteWorkspace(entity);
-        entity.delete();
+        projectDeletionService.deleteProject(entity);
     }
 
     /**

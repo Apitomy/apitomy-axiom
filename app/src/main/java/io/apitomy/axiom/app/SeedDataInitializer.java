@@ -6,6 +6,7 @@ import java.time.Instant;
 import io.apitomy.axiom.core.entities.ActorEntity;
 import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.ManagerConfigEntity;
+import io.apitomy.axiom.core.entities.RetentionConfigEntity;
 import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
@@ -90,6 +91,7 @@ public class SeedDataInitializer {
         ensureAxiomSdkToolset();
         seedActors();
         seedManagerConfig();
+        seedRetentionConfig();
         seedEventSource();
         seedReportDefinitions();
         seedSecrets();
@@ -249,6 +251,22 @@ public class SeedDataInitializer {
         config.persist();
 
         LOG.info("Seeded default manager configuration");
+    }
+
+    private void seedRetentionConfig() {
+        if (RetentionConfigEntity.count() > 0) {
+            LOG.info("Retention config already exists, skipping seed");
+            return;
+        }
+
+        RetentionConfigEntity config = new RetentionConfigEntity();
+        config.closedProjectRetentionDays = 90;
+        config.traceRetentionDays = 30;
+        config.eventRetentionDays = 90;
+        config.eventSourceLogRetentionDays = 7;
+        config.persist();
+
+        LOG.info("Seeded default retention configuration");
     }
 
     private void seedEventSource() {
