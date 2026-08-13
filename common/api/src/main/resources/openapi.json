@@ -118,6 +118,56 @@
         }
       }
     },
+    "/system/retention": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Get data retention configuration",
+        "operationId": "getRetentionConfig",
+        "responses": {
+          "200": {
+            "description": "Current retention configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetentionConfig"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Update data retention configuration",
+        "operationId": "updateRetentionConfig",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetentionConfig"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Retention configuration updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetentionConfig"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/projects": {
       "get": {
         "tags": [
@@ -5436,6 +5486,31 @@
           },
           "promptTemplate": {
             "type": "string"
+          }
+        }
+      },
+      "RetentionConfig": {
+        "type": "object",
+        "properties": {
+          "closedProjectRetentionDays": {
+            "description": "Number of days to retain closed projects before automatic deletion.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "traceRetentionDays": {
+            "description": "Number of days to retain execution traces before automatic deletion.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "eventRetentionDays": {
+            "description": "Number of days to retain ingested events before automatic deletion.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "eventSourceLogRetentionDays": {
+            "description": "Number of days to retain event source poll logs before automatic deletion.",
+            "format": "int32",
+            "type": "integer"
           }
         }
       },

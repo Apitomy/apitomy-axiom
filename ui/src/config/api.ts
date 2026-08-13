@@ -798,6 +798,31 @@ export async function updateManagerConfig(config: ManagerConfig): Promise<Manage
     return response.json();
 }
 
+// ── Retention Configuration ─────────────────────────────────────
+
+export interface RetentionConfig {
+    closedProjectRetentionDays?: number;
+    traceRetentionDays?: number;
+    eventRetentionDays?: number;
+    eventSourceLogRetentionDays?: number;
+}
+
+export async function fetchRetentionConfig(): Promise<RetentionConfig> {
+    const response = await fetch(`${API}/system/retention`);
+    if (!response.ok) throw new Error(`Failed to fetch retention config: ${response.status}`);
+    return response.json();
+}
+
+export async function updateRetentionConfig(config: RetentionConfig): Promise<RetentionConfig> {
+    const response = await fetch(`${API}/system/retention`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(config),
+    });
+    if (!response.ok) throw new Error(`Failed to update retention config: ${response.status}`);
+    return response.json();
+}
+
 // ── Event Sources ────────────────────────────────────────────────
 
 export interface EventSource {

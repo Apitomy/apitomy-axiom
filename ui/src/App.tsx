@@ -34,6 +34,7 @@ import { AppMasthead } from "./components/AppMasthead";
 import { AppSidebar } from "./components/AppSidebar";
 import { ConfigurationWarning } from "./components/ConfigurationWarning";
 import { ConfigurationPacksPage } from "./pages/ConfigurationPacksPage";
+import { DataRetentionPage } from "./pages/DataRetentionPage";
 import { EngineSettingsPage } from "./pages/EngineSettingsPage";
 import { EventSourceDetailPage } from "./pages/EventSourceDetailPage";
 import { AssistantPage } from "./pages/AssistantPage";
@@ -138,6 +139,7 @@ export function App() {
                         <Route path="/event-sources/:eventSourceId" element={<EventSourceDetailPage />} />
                         <Route path="/secrets" element={<SecretsPage />} />
                         <Route path="/configuration-packs" element={<ConfigurationPacksPage />} />
+                        <Route path="/data-retention" element={<DataRetentionPage />} />
                         <Route path="/scheduled-jobs" element={<ScheduledJobsPage />} />
                         <Route path="/scheduled-jobs/:jobId" element={<ScheduledJobDetailPage />} />
                         <Route path="/session-templates" element={<SessionTemplatesPage />} />
