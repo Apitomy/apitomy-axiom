@@ -12,7 +12,8 @@ import {
 import { fetchInboxCount } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 
-const CONFIG_PATHS = ["/actors", "/manager", "/action-types", "/tools", "/toolsets", "/mcp-servers", "/secrets", "/event-sources", "/report-definitions", "/engine", "/configuration-packs", "/session-templates", "/scheduled-jobs", "/data-retention"];
+const COMPONENT_PATHS = ["/action-types", "/actors", "/session-templates", "/event-sources", "/mcp-servers", "/report-definitions", "/scheduled-jobs", "/secrets", "/tools", "/toolsets"];
+const SETTINGS_PATHS = ["/engine", "/manager", "/data-retention", "/configuration-packs"];
 
 export function AppSidebar() {
     const navigate = useNavigate();
@@ -32,7 +33,10 @@ export function AppSidebar() {
         return unsubscribe;
     }, []);
 
-    const isConfigActive = CONFIG_PATHS.some(
+    const isComponentsActive = COMPONENT_PATHS.some(
+        (p) => location.pathname === p || location.pathname.startsWith(p + "/")
+    );
+    const isSettingsActive = SETTINGS_PATHS.some(
         (p) => location.pathname === p || location.pathname.startsWith(p + "/")
     );
 
@@ -88,30 +92,24 @@ export function AppSidebar() {
                                 Disk Usage
                             </NavItem>
                         </NavExpandable>
-                        <NavExpandable title="Configuration" isActive={isConfigActive} isExpanded={isConfigActive}>
-                            <NavItem isActive={location.pathname.startsWith("/engine")} onClick={() => navigate("/engine")}>
-                                AI Engine
-                            </NavItem>
-                            <NavItem isActive={location.pathname.startsWith("/session-templates")} onClick={() => navigate("/session-templates")}>
-                                AI Assistant
-                            </NavItem>
+                        <NavExpandable title="Components" isActive={isComponentsActive} isExpanded={isComponentsActive}>
                             <NavItem isActive={location.pathname.startsWith("/action-types")} onClick={() => navigate("/action-types")}>
                                 Action Types
                             </NavItem>
                             <NavItem isActive={location.pathname.startsWith("/actors")} onClick={() => navigate("/actors")}>
                                 Actors
                             </NavItem>
-                            <NavItem isActive={location.pathname.startsWith("/manager")} onClick={() => navigate("/manager")}>
-                                Manager
+                            <NavItem isActive={location.pathname.startsWith("/session-templates")} onClick={() => navigate("/session-templates")}>
+                                AI Assistant
+                            </NavItem>
+                            <NavItem isActive={location.pathname.startsWith("/event-sources")} onClick={() => navigate("/event-sources")}>
+                                Event Sources
                             </NavItem>
                             <NavItem isActive={location.pathname.startsWith("/mcp-servers")} onClick={() => navigate("/mcp-servers")}>
                                 MCP Servers
                             </NavItem>
                             <NavItem isActive={location.pathname.startsWith("/report-definitions")} onClick={() => navigate("/report-definitions")}>
                                 Report Definitions
-                            </NavItem>
-                            <NavItem isActive={location.pathname.startsWith("/event-sources")} onClick={() => navigate("/event-sources")}>
-                                Event Sources
                             </NavItem>
                             <NavItem isActive={location.pathname.startsWith("/scheduled-jobs")} onClick={() => navigate("/scheduled-jobs")}>
                                 Scheduled Jobs
@@ -125,11 +123,19 @@ export function AppSidebar() {
                             <NavItem isActive={location.pathname.startsWith("/toolsets")} onClick={() => navigate("/toolsets")}>
                                 Toolsets
                             </NavItem>
+                        </NavExpandable>
+                        <NavExpandable title="Settings" isActive={isSettingsActive} isExpanded={isSettingsActive}>
+                            <NavItem isActive={location.pathname.startsWith("/engine")} onClick={() => navigate("/engine")}>
+                                AI Engine
+                            </NavItem>
                             <NavItem isActive={location.pathname === "/configuration-packs"} onClick={() => navigate("/configuration-packs")}>
                                 Configuration Packs
                             </NavItem>
                             <NavItem isActive={location.pathname === "/data-retention"} onClick={() => navigate("/data-retention")}>
                                 Data Retention
+                            </NavItem>
+                            <NavItem isActive={location.pathname.startsWith("/manager")} onClick={() => navigate("/manager")}>
+                                Manager
                             </NavItem>
                         </NavExpandable>
                     </NavList>
