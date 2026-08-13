@@ -68,6 +68,7 @@ public class ScheduledJobsResourceImpl implements ScheduledResource {
     @Transactional
     public ScheduledJob createScheduledJob(NewScheduledJob data) {
         validateOrThrow(data);
+        checkDuplicateName(data.getName(), null);
         ScheduledJobEntity entity = new ScheduledJobEntity();
         applyFields(entity, data);
         entity.createdOn = Instant.now();
@@ -91,6 +92,7 @@ public class ScheduledJobsResourceImpl implements ScheduledResource {
     @Transactional
     public ScheduledJob updateScheduledJob(long jobId, NewScheduledJob data) {
         validateOrThrow(data);
+        checkDuplicateName(data.getName(), jobId);
         ScheduledJobEntity entity = findOrThrow(jobId);
         applyFields(entity, data);
         entity.updatedOn = Instant.now();
@@ -146,8 +148,8 @@ public class ScheduledJobsResourceImpl implements ScheduledResource {
                                                               BigInteger limit) {
         findOrThrow(jobId);
 
-        int pageNum = page != null ? page.intValue() : 1;
-        int pageSize = limit != null ? limit.intValue() : 20;
+        int pageNum = page != null ? Math.max(1, page.intValue()) : 1;
+        int pageSize = limit != null ? Math.max(1, limit.intValue()) : 20;
 
         long totalCount = ScheduledJobRunEntity.count("jobId", jobId);
         List<ScheduledJobRunEntity> runs = ScheduledJobRunEntity
@@ -233,6 +235,18 @@ public class ScheduledJobsResourceImpl implements ScheduledResource {
                 "mcp__axiom-sdk__axiom_list_report_definitions"
         );
         return new ScheduledJobValidator.KnownNames(secrets, tools, toolsets, sdkTools);
+    }
+
+    private void checkDuplicateName(String name, Long excludeId) {
+        if (name == null || name.isBlank()) return;
+        ScheduledJobEntity existing = ScheduledJobEntity.find("name", name).firstResult();
+        if (existing != null && (excludeId == null || !excludeId.equals(existing.id))) {
+            throw new WebApplicationException(
+                    Response.status(409)
+                            .entity(Map.of("message",
+                                    "A scheduled job named '" + name + "' already exists."))
+                            .build());
+        }
     }
 
     private ScheduledJobEntity findOrThrow(long id) {

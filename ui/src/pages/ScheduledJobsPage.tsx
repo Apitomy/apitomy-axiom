@@ -126,7 +126,7 @@ export function ScheduledJobsPage() {
                                     <Td>{job.name}</Td>
                                     <Td>
                                         <Label isCompact>{job.schedule}</Label>
-                                        {job.scheduleTime && (
+                                        {job.scheduleTime && ["daily", "weekly", "monthly"].includes(job.schedule) && (
                                             <span className="axiom-text-subtle" style={{ marginLeft: "4px", fontSize: "12px" }}>
                                                 at {job.scheduleTime}
                                             </span>
