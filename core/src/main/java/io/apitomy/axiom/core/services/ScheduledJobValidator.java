@@ -168,8 +168,14 @@ public final class ScheduledJobValidator {
         }
         String prompt = def.getPromptTemplate();
         if (prompt == null || prompt.isBlank()) {
-            messages.add(error("promptTemplate",
-                    "Prompt template is required for actor-mode scheduled jobs."));
+            boolean enabled = def.getEnabled() != null && def.getEnabled();
+            if (enabled) {
+                messages.add(error("promptTemplate",
+                        "Prompt template is required for actor-mode scheduled jobs."));
+            } else {
+                messages.add(warning("promptTemplate",
+                        "Prompt template is recommended for actor-mode scheduled jobs."));
+            }
             return;
         }
 
@@ -192,8 +198,14 @@ public final class ScheduledJobValidator {
         }
         String script = def.getScriptTemplate();
         if (script == null || script.isBlank()) {
-            messages.add(error("scriptTemplate",
-                    "Script template is required for script-mode scheduled jobs."));
+            boolean enabled = def.getEnabled() != null && def.getEnabled();
+            if (enabled) {
+                messages.add(error("scriptTemplate",
+                        "Script template is required for script-mode scheduled jobs."));
+            } else {
+                messages.add(warning("scriptTemplate",
+                        "Script template is recommended for script-mode scheduled jobs."));
+            }
             return;
         }
 

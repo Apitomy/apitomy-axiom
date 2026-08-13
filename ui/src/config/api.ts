@@ -1859,6 +1859,7 @@ export type NewScheduledJob = Omit<ScheduledJob, "id" | "createdOn" | "updatedOn
 export interface ScheduledJobRun {
     id: number;
     jobId: number;
+    jobName?: string;
     status: string;
     trigger: string;
     startedAt?: string;
@@ -1890,7 +1891,10 @@ export async function createScheduledJob(data: NewScheduledJob): Promise<Schedul
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error(`Failed to create scheduled job: ${response.status}`);
+    if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.message || `Failed to create scheduled job: ${response.status}`);
+    }
     return response.json();
 }
 
@@ -1900,7 +1904,10 @@ export async function updateScheduledJob(jobId: number, data: NewScheduledJob): 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error(`Failed to update scheduled job: ${response.status}`);
+    if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.message || `Failed to update scheduled job: ${response.status}`);
+    }
     return response.json();
 }
 
@@ -1928,6 +1935,27 @@ export async function fetchScheduledJobRuns(
         `${API}/scheduled-jobs/${jobId}/runs?page=${page}&limit=${limit}`
     );
     if (!response.ok) throw new Error(`Failed to fetch job runs: ${response.status}`);
+    return response.json();
+}
+
+export async function fetchAllScheduledJobRuns(
+    page = 1, limit = 20,
+    filterJobName?: string, filterStatus?: string, filterTrigger?: string
+): Promise<SearchResults<ScheduledJobRun>> {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(limit));
+    if (filterJobName) params.set("filterJobName", filterJobName);
+    if (filterStatus) params.set("filterStatus", filterStatus);
+    if (filterTrigger) params.set("filterTrigger", filterTrigger);
+    const response = await fetch(`${API}/scheduled-jobs/runs?${params}`);
+    if (!response.ok) throw new Error(`Failed to fetch job runs: ${response.status}`);
+    return response.json();
+}
+
+export async function fetchScheduledJobRun(runId: number): Promise<ScheduledJobRun> {
+    const response = await fetch(`${API}/scheduled-jobs/runs/${runId}`);
+    if (!response.ok) throw new Error(`Failed to fetch job run: ${response.status}`);
     return response.json();
 }
 

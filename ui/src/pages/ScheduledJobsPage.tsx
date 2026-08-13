@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+    Alert,
     Button,
     EmptyState,
     EmptyStateBody,
@@ -41,6 +42,7 @@ export function ScheduledJobsPage() {
     const [newName, setNewName] = useState("");
     const [newSchedule, setNewSchedule] = useState("daily");
     const [newExecutionMode, setNewExecutionMode] = useState("actor");
+    const [createError, setCreateError] = useState("");
 
     const loadData = useCallback(() => {
         setLoading(true);
@@ -65,6 +67,7 @@ export function ScheduledJobsPage() {
     };
 
     const handleCreate = () => {
+        setCreateError("");
         const data: NewScheduledJob = {
             name: newName,
             schedule: newSchedule,
@@ -76,7 +79,9 @@ export function ScheduledJobsPage() {
                 setIsModalOpen(false);
                 navigate(`/scheduled-jobs/${job.id}`);
             })
-            .catch(console.error);
+            .catch((err) => {
+                setCreateError(err?.message || "Failed to create scheduled job.");
+            });
     };
 
     return (
@@ -88,7 +93,7 @@ export function ScheduledJobsPage() {
                 </FlexItem>
                 <FlexItem>
                     <Button variant="primary" icon={<PlusCircleIcon />}
-                        onClick={() => { setNewName(""); setNewSchedule("daily"); setNewExecutionMode("actor"); setIsModalOpen(true); }}>
+                        onClick={() => { setNewName(""); setNewSchedule("daily"); setNewExecutionMode("actor"); setCreateError(""); setIsModalOpen(true); }}>
                         Create Scheduled Job
                     </Button>
                 </FlexItem>
@@ -121,7 +126,7 @@ export function ScheduledJobsPage() {
                                     <Td>{job.name}</Td>
                                     <Td>
                                         <Label isCompact>{job.schedule}</Label>
-                                        {job.scheduleTime && (
+                                        {job.scheduleTime && ["daily", "weekly", "monthly"].includes(job.schedule) && (
                                             <span className="axiom-text-subtle" style={{ marginLeft: "4px", fontSize: "12px" }}>
                                                 at {job.scheduleTime}
                                             </span>
@@ -168,6 +173,10 @@ export function ScheduledJobsPage() {
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} variant="medium">
                 <ModalHeader title="Create Scheduled Job" />
                 <ModalBody>
+                    {createError && (
+                        <Alert variant="danger" isInline isPlain title={createError}
+                            style={{ marginBottom: "16px" }} />
+                    )}
                     <Form>
                         <FormGroup label="Name" isRequired fieldId="name">
                             <TextInput id="name" isRequired value={newName}

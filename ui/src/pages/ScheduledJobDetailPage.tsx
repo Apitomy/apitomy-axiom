@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, Fragment } from "react";
+import { useEffectiveTheme } from "../hooks/useTheme";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
+    Alert,
     Breadcrumb,
     BreadcrumbItem,
     Button,
@@ -18,12 +20,20 @@ import {
     Label,
     PageSection,
     Switch,
+    Tab,
+    TabContent,
+    TabTitleText,
+    Tabs,
     TextArea,
     TextInput,
     Title,
 } from "@patternfly/react-core";
+import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
+import { EnvironmentTab } from "../components/EnvironmentTab";
+import { ToolListEditor } from "../components/ToolListEditor";
+import { LabelInput } from "../components/LabelInput";
 import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
 import PlayIcon from "@patternfly/react-icons/dist/esm/icons/play-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
@@ -81,10 +91,15 @@ export function ScheduledJobDetailPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
+    const [activeTab, setActiveTab] = useState(0);
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
     const [runs, setRuns] = useState<ScheduledJobRun[]>([]);
     const [expandedRunId, setExpandedRunId] = useState<number | null>(null);
+
+    const [tools, setTools] = useState<string[]>([]);
+    const [labels, setLabels] = useState<string[]>([]);
+    const [envVars, setEnvVars] = useState<Record<string, string>>({});
 
     const [availableModels, setAvailableModels] = useState<string[]>([]);
     const [availableEngines, setAvailableEngines] = useState<string[]>([]);
@@ -101,7 +116,6 @@ export function ScheduledJobDetailPage() {
                 setForm({
                     name: jobData.name,
                     description: jobData.description,
-                    labels: jobData.labels,
                     enabled: jobData.enabled,
                     schedule: jobData.schedule,
                     scheduleTime: jobData.scheduleTime,
@@ -111,11 +125,12 @@ export function ScheduledJobDetailPage() {
                     scriptTemplate: jobData.scriptTemplate,
                     model: jobData.model,
                     engine: jobData.engine,
-                    allowedTools: jobData.allowedTools,
                     maxSteps: jobData.maxSteps,
                     maxBudgetUsd: jobData.maxBudgetUsd,
-                    environment: jobData.environment,
                 });
+                setTools(jobData.allowedTools || []);
+                setLabels(jobData.labels || []);
+                setEnvVars(jobData.environment || {});
                 setRuns(runsData.items);
                 setDirty(false);
             })
@@ -143,12 +158,11 @@ export function ScheduledJobDetailPage() {
 
     const handleSave = () => {
         setSaving(true);
-        const envToSend = form.environment && Object.keys(form.environment).length > 0
-            ? form.environment : undefined;
+        const envToSend = Object.keys(envVars).length > 0 ? envVars : undefined;
         const data: NewScheduledJob = {
             ...form,
-            allowedTools: form.allowedTools && form.allowedTools.length > 0
-                ? form.allowedTools : undefined,
+            allowedTools: tools.length > 0 ? tools : undefined,
+            labels: labels.length > 0 ? labels : undefined,
             environment: envToSend,
         };
         updateScheduledJob(id, data)
@@ -174,6 +188,23 @@ export function ScheduledJobDetailPage() {
         deleteScheduledJob(id)
             .then(() => navigate("/scheduled-jobs"))
             .catch(console.error);
+    };
+
+    const addTool = (tool: string) => {
+        if (tool && !tools.includes(tool)) {
+            setTools([...tools, tool]);
+            setDirty(true);
+        }
+    };
+
+    const removeTool = (tool: string) => {
+        setTools(tools.filter((t) => t !== tool));
+        setDirty(true);
+    };
+
+    const replaceTools = (newTools: string[]) => {
+        setTools(newTools);
+        setDirty(true);
     };
 
     if (loading) {
@@ -208,13 +239,6 @@ export function ScheduledJobDetailPage() {
                     <Title headingLevel="h1" size="lg">{job.name}</Title>
                 </FlexItem>
                 <FlexItem>
-                    <Switch
-                        id="enabled-toggle"
-                        label="Enabled"
-                        isChecked={form.enabled}
-                        onChange={(_e, v) => updateForm({ enabled: v })}
-                        style={{ marginRight: "16px" }}
-                    />
                     <Button variant="secondary" icon={<PlayIcon />} onClick={handleRunNow}
                         style={{ marginRight: "8px" }}>
                         Run Now
@@ -232,36 +256,93 @@ export function ScheduledJobDetailPage() {
                 </FlexItem>
             </Flex>
 
-            <Title headingLevel="h2" size="md" style={{ marginBottom: "16px", marginTop: "24px" }}>
-                General
-            </Title>
-            <GeneralSection form={form} updateForm={updateForm} />
-
-            <Title headingLevel="h2" size="md" style={{ marginBottom: "16px", marginTop: "24px" }}>
-                Schedule
-            </Title>
-            <ScheduleSection form={form} updateForm={updateForm} />
-
-            <Title headingLevel="h2" size="md" style={{ marginBottom: "16px", marginTop: "24px" }}>
-                Execution
-            </Title>
-            <ExecutionSection
-                form={form}
-                updateForm={updateForm}
-                availableModels={availableModels}
-                availableEngines={availableEngines}
-            />
-
-            <Title headingLevel="h2" size="md" style={{ marginBottom: "16px", marginTop: "24px" }}>
-                Labels
-            </Title>
-            <LabelsSection form={form} updateForm={updateForm} />
-
-            <Title headingLevel="h2" size="md" style={{ marginBottom: "16px", marginTop: "24px" }}>
-                Run History
-            </Title>
-            <RunHistorySection runs={runs} expandedRunId={expandedRunId}
-                onToggleExpand={(runId) => setExpandedRunId(expandedRunId === runId ? null : runId)} />
+            <Tabs activeKey={activeTab} onSelect={(_e, k) => setActiveTab(k as number)}>
+                <Tab eventKey={0} title={<TabTitleText>Info</TabTitleText>}>
+                    <TabContent id="info-tab" eventKey={0} activeKey={activeTab}
+                        style={{ marginTop: "24px" }}>
+                        <InfoTab form={form} updateForm={updateForm}
+                            labels={labels}
+                            onLabelsChange={(l) => { setLabels(l); setDirty(true); }}
+                            availableModels={availableModels}
+                            availableEngines={availableEngines} />
+                    </TabContent>
+                </Tab>
+                <Tab eventKey={1} title={<TabTitleText>Allowed Tools ({tools.length})</TabTitleText>}>
+                    <TabContent id="tools-tab" eventKey={1} activeKey={activeTab}
+                        style={{ marginTop: "24px" }}>
+                        {form.executionMode === "actor" ? (
+                            <ToolListEditor
+                                tools={tools}
+                                onAdd={addTool}
+                                onRemove={removeTool}
+                                onReplace={replaceTools}
+                                helpText={<>
+                                    Define which tools the AI agent is allowed to use when running
+                                    this job. Use patterns like <code>Bash(gh issue *)</code> for
+                                    specific shell commands and <code>mcp__axiom-tools__*</code> for
+                                    MCP tools. Reference a toolset using <code>@ToolsetName</code>{" "}
+                                    (e.g. <code>@Report Tools</code>) to include all tools from that
+                                    collection.
+                                </>}
+                                emptyContent={
+                                    <Alert variant="info"
+                                        title="No tools configured. A default set of tools will be used."
+                                        ouiaId="InfoAlert" />
+                                }
+                            />
+                        ) : (
+                            <EmptyState>
+                                <EmptyStateBody>
+                                    Tool configuration is only available for Actor execution mode.
+                                </EmptyStateBody>
+                            </EmptyState>
+                        )}
+                    </TabContent>
+                </Tab>
+                <Tab eventKey={2} title={<TabTitleText>
+                    Environment{Object.keys(envVars).length > 0
+                        ? ` (${Object.keys(envVars).length})` : ""}
+                </TabTitleText>}>
+                    <TabContent id="env-tab" eventKey={2} activeKey={activeTab}
+                        style={{ marginTop: "24px" }}>
+                        <EnvironmentTab
+                            envVars={envVars}
+                            onChange={(updated) => {
+                                setEnvVars(updated);
+                                setDirty(true);
+                            }}
+                        />
+                    </TabContent>
+                </Tab>
+                <Tab eventKey={3} title={<TabTitleText>
+                    {form.executionMode === "script" ? "Script" : "Prompt Template"}
+                </TabTitleText>}>
+                    <TabContent id="template-tab" eventKey={3} activeKey={activeTab}
+                        style={{ marginTop: "24px" }}>
+                        {form.executionMode === "actor" ? (
+                            <PromptTemplateTab
+                                value={form.promptTemplate || ""}
+                                onChange={(v) => updateForm({ promptTemplate: v })}
+                            />
+                        ) : (
+                            <ScriptTab
+                                value={form.scriptTemplate || ""}
+                                onChange={(v) => updateForm({ scriptTemplate: v })}
+                            />
+                        )}
+                    </TabContent>
+                </Tab>
+                <Tab eventKey={4} title={<TabTitleText>
+                    Run History{runs.length > 0 ? ` (${runs.length})` : ""}
+                </TabTitleText>}>
+                    <TabContent id="history-tab" eventKey={4} activeKey={activeTab}
+                        style={{ marginTop: "24px" }}>
+                        <RunHistorySection runs={runs} expandedRunId={expandedRunId}
+                            onToggleExpand={(runId) =>
+                                setExpandedRunId(expandedRunId === runId ? null : runId)} />
+                    </TabContent>
+                </Tab>
+            </Tabs>
 
             <ConfirmDeleteModal isOpen={isDeleteOpen} title="Delete Scheduled Job"
                 onConfirm={handleDelete} onCancel={() => setIsDeleteOpen(false)}>
@@ -272,9 +353,13 @@ export function ScheduledJobDetailPage() {
     );
 }
 
-function GeneralSection({ form, updateForm }: {
+function InfoTab({ form, updateForm, labels, onLabelsChange, availableModels, availableEngines }: {
     form: NewScheduledJob;
     updateForm: (updates: Partial<NewScheduledJob>) => void;
+    labels: string[];
+    onLabelsChange: (labels: string[]) => void;
+    availableModels: string[];
+    availableEngines: string[];
 }) {
     return (
         <Form style={{ maxWidth: "600px" }}>
@@ -286,16 +371,6 @@ function GeneralSection({ form, updateForm }: {
                 <TextArea id="description" value={form.description || ""}
                     onChange={(_e, v) => updateForm({ description: v })} rows={3} />
             </FormGroup>
-        </Form>
-    );
-}
-
-function ScheduleSection({ form, updateForm }: {
-    form: NewScheduledJob;
-    updateForm: (updates: Partial<NewScheduledJob>) => void;
-}) {
-    return (
-        <Form style={{ maxWidth: "600px" }}>
             <FormGroup label="Schedule" isRequired fieldId="schedule">
                 <FormSelect id="schedule" value={form.schedule}
                     onChange={(_e, v) => updateForm({ schedule: v })}>
@@ -306,13 +381,6 @@ function ScheduleSection({ form, updateForm }: {
                     <FormSelectOption value="monthly" label="Monthly" />
                 </FormSelect>
             </FormGroup>
-            {form.schedule !== "none" && form.schedule !== "hourly" && (
-                <FormGroup label="Time of Day" fieldId="scheduleTime">
-                    <TextInput id="scheduleTime" value={form.scheduleTime || ""}
-                        onChange={(_e, v) => updateForm({ scheduleTime: v })}
-                        placeholder="08:00" />
-                </FormGroup>
-            )}
             {form.schedule === "weekly" && (
                 <FormGroup label="Day of Week" fieldId="scheduleDayOfWeek">
                     <FormSelect id="scheduleDayOfWeek"
@@ -329,50 +397,35 @@ function ScheduleSection({ form, updateForm }: {
                     </FormSelect>
                 </FormGroup>
             )}
-        </Form>
-    );
-}
-
-function ExecutionSection({ form, updateForm, availableModels, availableEngines }: {
-    form: NewScheduledJob;
-    updateForm: (updates: Partial<NewScheduledJob>) => void;
-    availableModels: string[];
-    availableEngines: string[];
-}) {
-    return (
-        <Form style={{ maxWidth: "600px" }}>
+            {form.schedule !== "none" && form.schedule !== "hourly" && (
+                <FormGroup label="Time of Day" fieldId="scheduleTime">
+                    <TextInput id="scheduleTime" value={form.scheduleTime || ""}
+                        onChange={(_e, v) => updateForm({ scheduleTime: v })}
+                        placeholder="08:00" />
+                </FormGroup>
+            )}
             <FormGroup label="Execution Mode" isRequired fieldId="executionMode">
                 <FormSelect id="executionMode" value={form.executionMode}
                     onChange={(_e, v) => updateForm({ executionMode: v })}>
-                    <FormSelectOption value="actor" label="Actor -- executed by an AI agent" />
-                    <FormSelectOption value="script" label="Script -- executes a bash script" />
+                    <FormSelectOption value="actor" label="Actor — executed by an AI agent" />
+                    <FormSelectOption value="script" label="Script — executes a bash script" />
                 </FormSelect>
             </FormGroup>
-            {form.executionMode === "actor" && (
-                <FormGroup label="Prompt Template" fieldId="promptTemplate">
-                    <TextArea id="promptTemplate" value={form.promptTemplate || ""}
-                        onChange={(_e, v) => updateForm({ promptTemplate: v })}
-                        rows={6} />
-                </FormGroup>
-            )}
-            {form.executionMode === "script" && (
-                <FormGroup label="Script Template" fieldId="scriptTemplate">
-                    <TextArea id="scriptTemplate" value={form.scriptTemplate || ""}
-                        onChange={(_e, v) => updateForm({ scriptTemplate: v })}
-                        rows={6} />
-                </FormGroup>
-            )}
             {form.executionMode === "actor" && availableEngines.length > 1 && (
                 <FormGroup label="AI Engine" fieldId="engine">
                     <HelperText>
-                        <HelperTextItem>AI engine to use for this job. Select 'Global default' to use the system-wide setting.</HelperTextItem>
+                        <HelperTextItem>
+                            AI engine to use for this job. Select &lsquo;Global default&rsquo; to
+                            use the system-wide setting.
+                        </HelperTextItem>
                     </HelperText>
                     <FormSelect id="engine" value={form.engine || ""}
                         onChange={(_e, v) => updateForm({ engine: v || undefined })}>
                         <FormSelectOption value="" label="Global default" />
                         {availableEngines.map((e) => (
                             <FormSelectOption key={e} value={e}
-                                label={e === "opencode" ? "OpenCode" : e === "claude-code" ? "Claude Code" : e} />
+                                label={e === "opencode" ? "OpenCode"
+                                    : e === "claude-code" ? "Claude Code" : e} />
                         ))}
                     </FormSelect>
                 </FormGroup>
@@ -380,7 +433,10 @@ function ExecutionSection({ form, updateForm, availableModels, availableEngines 
             {form.executionMode === "actor" && (
                 <FormGroup label="Model" fieldId="model">
                     <HelperText>
-                        <HelperTextItem>AI model to use for this job. Select 'Global default' to use the system-wide setting.</HelperTextItem>
+                        <HelperTextItem>
+                            AI model to use for this job. Select &lsquo;Global default&rsquo; to
+                            use the system-wide setting.
+                        </HelperTextItem>
                     </HelperText>
                     <FormSelect id="model" value={form.model || ""}
                         onChange={(_e, v) => updateForm({ model: v || undefined })}>
@@ -392,7 +448,8 @@ function ExecutionSection({ form, updateForm, availableModels, availableEngines 
                                 for (const m of availableModels) {
                                     if (m.includes("/")) {
                                         const [provider] = m.split("/", 2);
-                                        const key = provider.charAt(0).toUpperCase() + provider.slice(1);
+                                        const key = provider.charAt(0).toUpperCase()
+                                            + provider.slice(1);
                                         if (!groups[key]) groups[key] = [];
                                         groups[key].push(m);
                                     } else {
@@ -403,7 +460,8 @@ function ExecutionSection({ form, updateForm, availableModels, availableEngines 
                                 return Object.entries(groups).map(([provider, models]) => (
                                     <FormSelectOptionGroup key={provider} label={provider}>
                                         {models.map((m) => (
-                                            <FormSelectOption key={m} value={m} label={m.split("/").pop() || m} />
+                                            <FormSelectOption key={m} value={m}
+                                                label={m.split("/").pop() || m} />
                                         ))}
                                     </FormSelectOptionGroup>
                                 ));
@@ -416,62 +474,93 @@ function ExecutionSection({ form, updateForm, availableModels, availableEngines 
                 </FormGroup>
             )}
             {form.executionMode === "actor" && (
-                <FormGroup label="Allowed Tools" fieldId="allowedTools">
-                    <HelperText>
-                        <HelperTextItem>Comma-separated list of tools the AI agent is allowed to use.</HelperTextItem>
-                    </HelperText>
-                    <TextArea id="allowedTools"
-                        value={(form.allowedTools || []).join(", ")}
-                        onChange={(_e, v) => updateForm({
-                            allowedTools: v.split(",").map((t) => t.trim()).filter(Boolean),
-                        })}
-                        rows={3} />
-                </FormGroup>
-            )}
-            {form.executionMode === "actor" && (
                 <FormGroup label="Max Steps" fieldId="maxSteps">
                     <HelperText>
-                        <HelperTextItem>Maximum number of agent steps/turns. Leave empty to use the global default.</HelperTextItem>
+                        <HelperTextItem>
+                            Maximum number of agent steps/turns. Leave empty to use the global
+                            default.
+                        </HelperTextItem>
                     </HelperText>
                     <TextInput id="maxSteps" type="number"
                         value={form.maxSteps ?? ""}
-                        onChange={(_e, v) => updateForm({ maxSteps: v === "" ? undefined : Number(v) })}
+                        onChange={(_e, v) => updateForm({
+                            maxSteps: v === "" ? undefined : Number(v),
+                        })}
                         placeholder="Global default" />
                 </FormGroup>
             )}
             {form.executionMode === "actor" && (
                 <FormGroup label="Max Budget (USD)" fieldId="maxBudgetUsd">
                     <HelperText>
-                        <HelperTextItem>Maximum budget in USD for this job. Leave empty to use the global default.</HelperTextItem>
+                        <HelperTextItem>
+                            Maximum budget in USD for this job. Leave empty to use the global
+                            default.
+                        </HelperTextItem>
                     </HelperText>
                     <TextInput id="maxBudgetUsd" type="number"
                         value={form.maxBudgetUsd ?? ""}
-                        onChange={(_e, v) => updateForm({ maxBudgetUsd: v === "" ? undefined : Number(v) })}
+                        onChange={(_e, v) => updateForm({
+                            maxBudgetUsd: v === "" ? undefined : Number(v),
+                        })}
                         placeholder="Global default" />
+                </FormGroup>
+            )}
+            <FormGroup label="Labels" fieldId="labels">
+                <LabelInput labels={labels} onChange={onLabelsChange} />
+            </FormGroup>
+            {form.schedule !== "none" && (
+                <FormGroup fieldId="enabled">
+                    <Switch id="enabled-toggle"
+                        label="Enabled — job will run automatically on schedule"
+                        isChecked={form.enabled}
+                        onChange={(_e, v) => updateForm({ enabled: v })} />
                 </FormGroup>
             )}
         </Form>
     );
 }
 
-function LabelsSection({ form, updateForm }: {
-    form: NewScheduledJob;
-    updateForm: (updates: Partial<NewScheduledJob>) => void;
+function PromptTemplateTab({ value, onChange }: {
+    value: string;
+    onChange: (v: string) => void;
 }) {
+    const effectiveTheme = useEffectiveTheme();
     return (
-        <Form style={{ maxWidth: "600px" }}>
-            <FormGroup label="Labels" fieldId="labels">
-                <HelperText>
-                    <HelperTextItem>Comma-separated list of labels for this job.</HelperTextItem>
-                </HelperText>
-                <TextArea id="labels"
-                    value={(form.labels || []).join(", ")}
-                    onChange={(_e, v) => updateForm({
-                        labels: v.split(",").map((l) => l.trim()).filter(Boolean),
-                    })}
-                    rows={2} />
-            </FormGroup>
-        </Form>
+        <div>
+            <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
+                Instructions for the AI agent when executing this scheduled job.
+            </p>
+            <CodeEditor
+                code={value}
+                onCodeChange={(v) => onChange(v)}
+                language={Language.markdown}
+                height="400px"
+                isDarkTheme={effectiveTheme === "dark"}
+                isLineNumbersVisible
+            />
+        </div>
+    );
+}
+
+function ScriptTab({ value, onChange }: {
+    value: string;
+    onChange: (v: string) => void;
+}) {
+    const effectiveTheme = useEffectiveTheme();
+    return (
+        <div>
+            <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
+                Bash script to execute when this scheduled job runs.
+            </p>
+            <CodeEditor
+                code={value}
+                onCodeChange={(v) => onChange(v)}
+                language={Language.shell}
+                height="400px"
+                isDarkTheme={effectiveTheme === "dark"}
+                isLineNumbersVisible
+            />
+        </div>
     );
 }
 
@@ -483,7 +572,9 @@ function RunHistorySection({ runs, expandedRunId, onToggleExpand }: {
     if (runs.length === 0) {
         return (
             <EmptyState>
-                <EmptyStateBody>No runs yet. Use "Run Now" to trigger the first execution.</EmptyStateBody>
+                <EmptyStateBody>
+                    No runs yet. Use &ldquo;Run Now&rdquo; to trigger the first execution.
+                </EmptyStateBody>
             </EmptyState>
         );
     }
@@ -572,7 +663,9 @@ function RunDetail({ run }: { run: ScheduledJobRun }) {
                 </div>
             )}
             {!run.output && !run.error && (
-                <p className="axiom-text-subtle">No output or error details available for this run.</p>
+                <p className="axiom-text-subtle">
+                    No output or error details available for this run.
+                </p>
             )}
         </div>
     );

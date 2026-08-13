@@ -71,6 +71,9 @@ export function AppSidebar() {
                             <NavItem isActive={location.pathname === "/logs/tasks"} onClick={() => navigate("/logs/tasks")}>
                                 Tasks
                             </NavItem>
+                            <NavItem isActive={location.pathname === "/logs/job-runs"} onClick={() => navigate("/logs/job-runs")}>
+                                Job Runs
+                            </NavItem>
                             <NavItem isActive={location.pathname.startsWith("/logs/traces")} onClick={() => navigate("/logs/traces")}>
                                 Traces
                             </NavItem>

@@ -7,7 +7,7 @@ export default defineConfig({
         port: 9191,
         proxy: {
             "/api/v1/sse": {
-                target: "http://localhost:9090",
+                target: `http://localhost:${process.env.VITE_BACKEND_PORT || 9090}`,
                 changeOrigin: true,
                 // Required for SSE: disable response buffering
                 configure: (proxy) => {
@@ -18,7 +18,7 @@ export default defineConfig({
                 },
             },
             "/api": {
-                target: "http://localhost:9090",
+                target: `http://localhost:${process.env.VITE_BACKEND_PORT || 9090}`,
                 changeOrigin: true,
             },
         },

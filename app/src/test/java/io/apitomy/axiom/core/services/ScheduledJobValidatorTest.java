@@ -219,9 +219,10 @@ class ScheduledJobValidatorTest {
     // ── Prompt template validation (actor mode) ─────────────────────
 
     @Test
-    void actorMissingPromptTemplateIsError() {
+    void actorMissingPromptTemplateIsErrorWhenEnabled() {
         NewScheduledJob job = makeActor("test", "desc", "daily", null);
         job.setScheduleTime("08:00");
+        job.setEnabled(true);
 
         ValidationResult result = ScheduledJobValidator.validate(job);
 
@@ -230,9 +231,22 @@ class ScheduledJobValidatorTest {
     }
 
     @Test
-    void actorBlankPromptTemplateIsError() {
+    void actorMissingPromptTemplateIsWarningWhenDisabled() {
+        NewScheduledJob job = makeActor("test", "desc", "daily", null);
+        job.setScheduleTime("08:00");
+        job.setEnabled(false);
+
+        ValidationResult result = ScheduledJobValidator.validate(job);
+
+        assertFalse(result.errors().stream().anyMatch(m -> m.field().equals("promptTemplate")));
+        assertTrue(result.warnings().stream().anyMatch(m -> m.field().equals("promptTemplate")));
+    }
+
+    @Test
+    void actorBlankPromptTemplateIsErrorWhenEnabled() {
         NewScheduledJob job = makeActor("test", "desc", "daily", "  ");
         job.setScheduleTime("08:00");
+        job.setEnabled(true);
 
         ValidationResult result = ScheduledJobValidator.validate(job);
 
@@ -289,14 +303,27 @@ class ScheduledJobValidatorTest {
     // ── Script template validation (script mode) ────────────────────
 
     @Test
-    void scriptMissingScriptTemplateIsError() {
+    void scriptMissingScriptTemplateIsErrorWhenEnabled() {
         NewScheduledJob job = makeScript("test", "desc", "daily", null);
         job.setScheduleTime("08:00");
+        job.setEnabled(true);
 
         ValidationResult result = ScheduledJobValidator.validate(job);
 
         assertTrue(result.hasErrors());
         assertTrue(result.errors().stream().anyMatch(m -> m.field().equals("scriptTemplate")));
+    }
+
+    @Test
+    void scriptMissingScriptTemplateIsWarningWhenDisabled() {
+        NewScheduledJob job = makeScript("test", "desc", "daily", null);
+        job.setScheduleTime("08:00");
+        job.setEnabled(false);
+
+        ValidationResult result = ScheduledJobValidator.validate(job);
+
+        assertFalse(result.errors().stream().anyMatch(m -> m.field().equals("scriptTemplate")));
+        assertTrue(result.warnings().stream().anyMatch(m -> m.field().equals("scriptTemplate")));
     }
 
     @Test
