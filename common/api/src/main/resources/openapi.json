@@ -4714,6 +4714,103 @@
         }
       ]
     },
+    "/scheduled-jobs/runs": {
+      "get": {
+        "tags": [
+          "ScheduledJobs"
+        ],
+        "summary": "List all scheduled job runs across all jobs",
+        "operationId": "listAllScheduledJobRuns",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "filterJobName",
+            "in": "query",
+            "description": "Filter by job name (substring match)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filterStatus",
+            "in": "query",
+            "description": "Filter by status (comma-separated for multiple)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filterTrigger",
+            "in": "query",
+            "description": "Filter by trigger type (scheduled or manual)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of scheduled job runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledJobRunSearchResults"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-jobs/runs/{runId}": {
+      "get": {
+        "tags": [
+          "ScheduledJobs"
+        ],
+        "summary": "Get a single scheduled job run by ID",
+        "operationId": "getScheduledJobRun",
+        "responses": {
+          "200": {
+            "description": "The scheduled job run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledJobRun"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "runId",
+          "in": "path",
+          "description": "Scheduled job run ID",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
     "/scheduled-jobs/validate": {
       "post": {
         "tags": [
@@ -8252,6 +8349,10 @@
           },
           "traceId": {
             "format": "uuid",
+            "type": "string"
+          },
+          "jobName": {
+            "description": "Name of the scheduled job this run belongs to",
             "type": "string"
           },
           "createdOn": {

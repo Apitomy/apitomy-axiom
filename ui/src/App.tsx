@@ -45,6 +45,7 @@ import { SessionTemplatesPage } from "./pages/SessionTemplatesPage";
 import { SessionTemplateDetailPage } from "./pages/SessionTemplateDetailPage";
 import { ScheduledJobsPage } from "./pages/ScheduledJobsPage";
 import { ScheduledJobDetailPage } from "./pages/ScheduledJobDetailPage";
+import { ScheduledJobRunsPage } from "./pages/ScheduledJobRunsPage";
 import { type StartupCheck, fetchSystemHealth, fetchSystemConfig } from "./config/api";
 import { sseClient } from "./config/sse";
 
@@ -124,6 +125,7 @@ export function App() {
                         <Route path="/logs/events" element={<EventsPage />} />
                         <Route path="/logs/manager" element={<ManagerDecisionsPage />} />
                         <Route path="/logs/tasks" element={<TasksPage />} />
+                        <Route path="/logs/job-runs" element={<ScheduledJobRunsPage />} />
                         <Route path="/logs/traces" element={<TracesPage />} />
                         <Route path="/logs/traces/:traceId" element={<TraceDetailPage />} />
                         <Route path="/reports" element={<ReportsPage />} />

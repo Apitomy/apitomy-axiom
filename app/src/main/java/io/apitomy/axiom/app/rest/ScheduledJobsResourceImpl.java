@@ -30,9 +30,11 @@ import jakarta.ws.rs.core.Response;
 import java.math.BigInteger;
 import java.time.Instant;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Implementation of the Scheduled Jobs REST API.
@@ -137,7 +139,70 @@ public class ScheduledJobsResourceImpl implements ScheduledResource {
         return scheduler.createRunForManualTrigger(job);
     }
 
-    // ── Run History ─────────────────────────────────────────────────
+    // ── Cross-Job Run Listing ───────────────────────────────────────
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public ScheduledJobRunSearchResults listAllScheduledJobRuns(BigInteger page,
+                                                                 BigInteger limit,
+                                                                 String filterJobName,
+                                                                 String filterStatus,
+                                                                 String filterTrigger) {
+        int pageNum = page != null ? Math.max(1, page.intValue()) : 1;
+        int pageSize = limit != null ? Math.max(1, limit.intValue()) : 20;
+
+        StringBuilder hql = new StringBuilder("1=1");
+        Map<String, Object> params = new HashMap<>();
+
+        if (filterJobName != null && !filterJobName.isBlank()) {
+            List<Long> matchingJobIds = ScheduledJobEntity.<ScheduledJobEntity>find(
+                            "lower(name) like :name", Map.of("name", "%" + filterJobName.toLowerCase() + "%"))
+                    .list().stream().map(j -> j.id).toList();
+            if (matchingJobIds.isEmpty()) {
+                return emptyResults(pageNum, pageSize);
+            }
+            hql.append(" and jobId in :jobIds");
+            params.put("jobIds", matchingJobIds);
+        }
+        if (filterStatus != null && !filterStatus.isBlank()) {
+            List<String> statuses = List.of(filterStatus.split(","));
+            hql.append(" and status in :statuses");
+            params.put("statuses", statuses);
+        }
+        if (filterTrigger != null && !filterTrigger.isBlank()) {
+            hql.append(" and trigger = :trigger");
+            params.put("trigger", filterTrigger);
+        }
+
+        long totalCount = ScheduledJobRunEntity.count(hql.toString(), params);
+        List<ScheduledJobRunEntity> runs = ScheduledJobRunEntity.<ScheduledJobRunEntity>find(
+                        hql.toString(), Sort.descending("createdOn"), params)
+                .page(Page.of(pageNum - 1, pageSize))
+                .list();
+
+        Map<Long, String> jobNames = resolveJobNames(runs);
+
+        ScheduledJobRunSearchResults results = new ScheduledJobRunSearchResults();
+        results.setItems(runs.stream().map(r -> toRunBean(r, jobNames)).toList());
+        results.setTotalCount(totalCount);
+        results.setPage(pageNum);
+        results.setLimit(pageSize);
+        return results;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public ScheduledJobRun getScheduledJobRun(long runId) {
+        ScheduledJobRunEntity run = findRunOrThrow(runId);
+        Map<Long, String> jobNames = resolveJobNames(List.of(run));
+        return toRunBean(run, jobNames);
+    }
+
+    // ── Per-Job Run History ─────────────────────────────────────────
 
     /**
      * {@inheritDoc}
@@ -313,6 +378,32 @@ public class ScheduledJobsResourceImpl implements ScheduledResource {
         bean.setEnvironment(jsonToEnvironment(entity.environment));
         bean.setCreatedOn(Date.from(entity.createdOn));
         bean.setUpdatedOn(Date.from(entity.updatedOn));
+        return bean;
+    }
+
+    private ScheduledJobRunSearchResults emptyResults(int pageNum, int pageSize) {
+        ScheduledJobRunSearchResults results = new ScheduledJobRunSearchResults();
+        results.setItems(List.of());
+        results.setTotalCount(0L);
+        results.setPage(pageNum);
+        results.setLimit(pageSize);
+        return results;
+    }
+
+    /**
+     * Batch-resolves job names for a list of run entities.
+     */
+    private Map<Long, String> resolveJobNames(List<ScheduledJobRunEntity> runs) {
+        Set<Long> jobIds = runs.stream().map(r -> r.jobId).collect(Collectors.toSet());
+        if (jobIds.isEmpty()) return Map.of();
+        return ScheduledJobEntity.<ScheduledJobEntity>find("id in :ids", Map.of("ids", jobIds))
+                .list().stream()
+                .collect(Collectors.toMap(j -> j.id, j -> j.name));
+    }
+
+    private ScheduledJobRun toRunBean(ScheduledJobRunEntity entity, Map<Long, String> jobNames) {
+        ScheduledJobRun bean = toRunBean(entity);
+        bean.setJobName(jobNames.getOrDefault(entity.jobId, "Unknown"));
         return bean;
     }
 

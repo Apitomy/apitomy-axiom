@@ -17,9 +17,10 @@
 #   is missing. The backend builds all Maven modules before starting.
 #
 # Usage:
-#   ./dev.sh              # start both backend and UI
-#   ./dev.sh --skip-ui    # start backend only (Quarkus dev mode)
-#   ./dev.sh --persist    # enable persistent storage (H2 file-based DB)
+#   ./dev.sh                    # start both backend and UI
+#   ./dev.sh --skip-ui          # start backend only (Quarkus dev mode)
+#   ./dev.sh --persist          # enable persistent storage (H2 file-based DB)
+#   ./dev.sh --portOffset=100   # offset all ports by 100 (backend 9190, UI 9291)
 #
 # Open http://localhost:9191 in your browser.
 #
@@ -31,12 +32,17 @@ cd "$SCRIPT_DIR"
 
 SKIP_UI=false
 PERSIST=false
+PORT_OFFSET=0
 for arg in "$@"; do
     case "$arg" in
         --skip-ui) SKIP_UI=true ;;
         --persist) PERSIST=true ;;
+        --portOffset=*) PORT_OFFSET="${arg#--portOffset=}" ;;
     esac
 done
+
+BACKEND_PORT=$((9090 + PORT_OFFSET))
+UI_PORT=$((9191 + PORT_OFFSET))
 
 # ── Prerequisites ─────────────────────────────────────────────────
 
@@ -112,19 +118,19 @@ trap cleanup EXIT INT TERM
 
 # ── Start backend ─────────────────────────────────────────────────
 
-JAVA_ARGS=(-Dquarkus.http.port=9090)
+JAVA_ARGS=(-Dquarkus.http.port="$BACKEND_PORT")
 if [[ "$PERSIST" == true ]]; then
     JAVA_ARGS+=(-Dquarkus.profile=persist)
-    echo "Starting backend on http://localhost:9090 (persistence enabled) ..."
+    echo "Starting backend on http://localhost:$BACKEND_PORT (persistence enabled) ..."
 else
     JAVA_ARGS+=(-Dquarkus.profile=dev)
-    echo "Starting backend on http://localhost:9090 ..."
+    echo "Starting backend on http://localhost:$BACKEND_PORT ..."
 fi
 java "${JAVA_ARGS[@]}" -jar app/target/quarkus-app/quarkus-run.jar &
 PIDS+=($!)
 
 echo -n "Waiting for backend API ..."
-until curl -sf http://localhost:9090/api/v1/system/health >/dev/null 2>&1; do
+until curl -sf "http://localhost:$BACKEND_PORT/api/v1/system/health" >/dev/null 2>&1; do
     echo -n "."
     sleep 2
 done
@@ -133,12 +139,12 @@ echo " ready!"
 # ── Start Vite dev server ─────────────────────────────────────────
 
 if [[ "$SKIP_UI" == false ]]; then
-    echo "Starting Vite UI on http://localhost:9191 ..."
-    (cd ui && npm run dev) &
+    echo "Starting Vite UI on http://localhost:$UI_PORT ..."
+    (cd ui && VITE_BACKEND_PORT="$BACKEND_PORT" npx vite --port "$UI_PORT") &
     PIDS+=($!)
 
     echo -n "Waiting for UI ..."
-    until curl -sf http://localhost:9191/api/v1/system/health >/dev/null 2>&1; do
+    until curl -sf "http://localhost:$UI_PORT/api/v1/system/health" >/dev/null 2>&1; do
         echo -n "."
         sleep 2
     done
@@ -148,9 +154,9 @@ fi
 echo ""
 echo "============================================"
 if [[ "$SKIP_UI" == false ]]; then
-    echo "  UI:      http://localhost:9191"
+    echo "  UI:      http://localhost:$UI_PORT"
 fi
-echo "  API:     http://localhost:9090/api/v1"
+echo "  API:     http://localhost:$BACKEND_PORT/api/v1"
 echo "  Ctrl+C to stop"
 echo "============================================"
 echo ""
