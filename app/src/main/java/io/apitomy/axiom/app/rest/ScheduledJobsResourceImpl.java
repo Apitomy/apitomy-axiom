@@ -296,8 +296,18 @@ public class ScheduledJobsResourceImpl implements ScheduledResource {
                 "mcp__axiom-sdk__axiom_reopen_project",
                 "mcp__axiom-sdk__axiom_add_project_label",
                 "mcp__axiom-sdk__axiom_remove_project_label",
+                "mcp__axiom-sdk__axiom_add_report_label",
+                "mcp__axiom-sdk__axiom_remove_report_label",
                 "mcp__axiom-sdk__axiom_list_tools",
-                "mcp__axiom-sdk__axiom_list_report_definitions"
+                "mcp__axiom-sdk__axiom_list_report_definitions",
+                "mcp__axiom-sdk__axiom_list_reports",
+                "mcp__axiom-sdk__axiom_get_project_thread",
+                "mcp__axiom-sdk__axiom_list_action_types",
+                "mcp__axiom-sdk__axiom_list_actors",
+                "mcp__axiom-sdk__axiom_update_project",
+                "mcp__axiom-sdk__axiom_list_events",
+                "mcp__axiom-sdk__axiom_respond_to_task",
+                "mcp__axiom-sdk__axiom_get_activity_log"
         );
         return new ScheduledJobValidator.KnownNames(secrets, tools, toolsets, sdkTools);
     }
