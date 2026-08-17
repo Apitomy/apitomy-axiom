@@ -37,7 +37,6 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.core.StreamingOutput;
 import jakarta.ws.rs.sse.OutboundSseEvent;
 import jakarta.ws.rs.sse.Sse;
 import jakarta.ws.rs.sse.SseEventSink;
@@ -303,25 +302,7 @@ public class AssistantResourceImpl implements AssistantResource {
     /** {@inheritDoc} */
     @Override
     public String getAssistantSessionRawEvents(String sessionId) {
-        // Overridden below with streaming file download.
-        requireSession(sessionId);
-        return "";
-    }
-
-    /**
-     * Downloads the raw NDJSON event log file for an assistant session.
-     * The file is streamed directly from disk to avoid loading large logs
-     * into memory.
-     */
-    @GET
-    @Path("/sessions/{sessionId}/raw-events")
-    @Produces(MediaType.TEXT_PLAIN)
-    public Response getAssistantSessionRawEventsStream(
-            @PathParam("sessionId") String sessionId) {
-        AssistantSession session = sessionManager.getSession(sessionId);
-        if (session == null) {
-            throw new WebApplicationException("Session not found: " + sessionId, 404);
-        }
+        AssistantSession session = requireSession(sessionId);
 
         java.nio.file.Path rawEventsFile = session.getRawEventsFile();
         if (!java.nio.file.Files.exists(rawEventsFile)) {
@@ -329,13 +310,12 @@ public class AssistantResourceImpl implements AssistantResource {
                     "No raw events log available for session: " + sessionId, 404);
         }
 
-        StreamingOutput stream = output -> {
-            try (var input = java.nio.file.Files.newInputStream(rawEventsFile)) {
-                input.transferTo(output);
-            }
-        };
-
-        return Response.ok(stream, MediaType.TEXT_PLAIN).build();
+        try {
+            return java.nio.file.Files.readString(rawEventsFile, java.nio.charset.StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new WebApplicationException(
+                    "Failed to read raw events log: " + e.getMessage(), 500);
+        }
     }
 
     /** {@inheritDoc} */
