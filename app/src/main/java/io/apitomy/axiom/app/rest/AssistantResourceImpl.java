@@ -301,6 +301,25 @@ public class AssistantResourceImpl implements AssistantResource {
 
     /** {@inheritDoc} */
     @Override
+    public String getAssistantSessionRawEvents(String sessionId) {
+        AssistantSession session = requireSession(sessionId);
+
+        java.nio.file.Path rawEventsFile = session.getRawEventsFile();
+        if (!java.nio.file.Files.exists(rawEventsFile)) {
+            throw new WebApplicationException(
+                    "No raw events log available for session: " + sessionId, 404);
+        }
+
+        try {
+            return java.nio.file.Files.readString(rawEventsFile, java.nio.charset.StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new WebApplicationException(
+                    "Failed to read raw events log: " + e.getMessage(), 500);
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public void sendAssistantMessage(String sessionId, SendAssistantMessageRequest data) {
         AssistantSession session = requireSession(sessionId);
         if (data.getMessage() == null || data.getMessage().isBlank()) {
