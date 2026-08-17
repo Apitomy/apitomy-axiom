@@ -330,6 +330,31 @@ const SDK_TOOLS = [
         },
     },
     {
+        name: "axiom_create_project",
+        description: "Create a new Axiom project programmatically.",
+        parameters: [
+            { name: "name", type: "string", description: "The project name", required: true },
+            { name: "type", type: "string", description: "The project type (e.g. 'bug-fix', 'feature', 'issue', 'pull-request', 'question', 'help', 'other')", required: true },
+            { name: "issueRef", type: "string", description: "Issue reference (e.g. 'owner/repo#123' or 'CVE-2024-12345')", required: true },
+            { name: "issueSource", type: "string", description: "Issue source (e.g. 'github', 'jira')", required: true },
+            { name: "repository", type: "string", description: "Repository identifier (e.g. 'owner/repo')", required: true },
+            { name: "description", type: "string", description: "Optional project description", required: false },
+            { name: "metadata", type: "string", description: "Optional JSON object of key-value metadata (e.g. '{\"priority\":\"high\"}')", required: false },
+        ],
+        handler: async (args) => {
+            const body = {
+                name: args.name,
+                type: args.type,
+                issueRef: args.issueRef,
+                issueSource: args.issueSource,
+                repository: args.repository,
+            };
+            if (args.description) body.description = args.description;
+            if (args.metadata) body.metadata = JSON.parse(args.metadata);
+            return await axiomApi("POST", "/projects", body);
+        },
+    },
+    {
         name: "axiom_get_activity_log",
         description: "Get the global activity log, optionally filtered by project. Returns a timeline of events, tasks, and actions.",
         parameters: [

@@ -34,7 +34,8 @@ public final class SdkToolNames {
             PREFIX + "axiom_list_events",
             PREFIX + "axiom_respond_to_task",
             PREFIX + "axiom_get_activity_log",
-            PREFIX + "axiom_update_project_body"
+            PREFIX + "axiom_update_project_body",
+            PREFIX + "axiom_create_project"
     );
 
     /** All SDK tool names as a comma-separated string. */
