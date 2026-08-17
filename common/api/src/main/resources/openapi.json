@@ -1871,6 +1871,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "filterEventSourceId",
+            "in": "query",
+            "description": "Filter by event source ID",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
           }
         ],
         "responses": {

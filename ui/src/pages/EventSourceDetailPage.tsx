@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -55,13 +55,16 @@ import {
     type FilterDryRunRequest,
     type FilterDryRunResponse,
     type FilterDryRunResult,
+    type AxiomEvent,
     type Secret,
     fetchEventSource,
     updateEventSource,
     fetchEventSourceLogs,
+    fetchEvents,
     fetchSecrets,
     dryRunFilters,
 } from "../config/api";
+import { EventDetailModal } from "../components/EventDetailModal";
 
 export function EventSourceDetailPage() {
     const { eventSourceId } = useParams<{ eventSourceId: string }>();
@@ -204,10 +207,16 @@ export function EventSourceDetailPage() {
                         )}
                     </TabContent>
                 </Tab>
-                <Tab eventKey={2} title={<TabTitleText>
+                <Tab eventKey={2} title={<TabTitleText>Events</TabTitleText>}>
+                    <TabContent id="events-tab" eventKey={2} activeKey={activeTab}
+                        style={{ marginTop: "24px" }}>
+                        <EventsTab eventSourceId={id} isActive={activeTab === 2} />
+                    </TabContent>
+                </Tab>
+                <Tab eventKey={3} title={<TabTitleText>
                     Poll Logs{logs.length > 0 ? ` (${logs.length})` : ""}
                 </TabTitleText>}>
-                    <TabContent id="logs-tab" eventKey={2} activeKey={activeTab}
+                    <TabContent id="logs-tab" eventKey={3} activeKey={activeTab}
                         style={{ marginTop: "24px" }}>
                         <LogsTab logs={logs} totalCount={logsTotalCount}
                             page={logsPage} perPage={logsPerPage}
@@ -290,6 +299,156 @@ function InfoTab({ form, updateForm, sourceUrl, setSourceUrl, secrets, labels, o
                 <HelperText><HelperTextItem>Select a secret for API authentication. Falls back to the default provider secret if not set.</HelperTextItem></HelperText>
             </FormGroup>
         </Form>
+    );
+}
+
+const SOURCE_COLORS: Record<string, "blue" | "green" | "orange" | "grey"> = {
+    github: "blue",
+    jira: "green",
+    internal: "orange",
+};
+
+const FILTER_STATUS_COLORS: Record<string, "green" | "red" | "grey"> = {
+    allowed: "green",
+    blocked: "red",
+};
+
+function EventsTab({ eventSourceId, isActive }: {
+    eventSourceId: number;
+    isActive: boolean;
+}) {
+    const navigate = useNavigate();
+    const [events, setEvents] = useState<AxiomEvent[]>([]);
+    const [totalCount, setTotalCount] = useState(0);
+    const [page, setPage] = useState(1);
+    const [perPage, setPerPage] = useState(20);
+    const [loading, setLoading] = useState(false);
+    const [selectedEvent, setSelectedEvent] = useState<AxiomEvent | null>(null);
+    const loadedRef = useRef(false);
+
+    const loadEvents = useCallback((p?: number, pp?: number) => {
+        const pg = p ?? page;
+        const sz = pp ?? perPage;
+        setLoading(true);
+        fetchEvents(pg, sz, undefined, undefined, undefined, undefined, undefined, eventSourceId)
+            .then((results) => {
+                setEvents(results.items);
+                setTotalCount(results.totalCount);
+            })
+            .catch(console.error)
+            .finally(() => setLoading(false));
+    }, [eventSourceId, page, perPage]);
+
+    useEffect(() => {
+        if (isActive && !loadedRef.current) {
+            loadedRef.current = true;
+            loadEvents();
+        }
+    }, [isActive, loadEvents]);
+
+    return (
+        <div>
+            <Flex justifyContent={{ default: "justifyContentSpaceBetween" }}
+                alignItems={{ default: "alignItemsCenter" }}
+                style={{ marginBottom: "16px" }}>
+                <FlexItem>
+                    <p className="axiom-text-subtle">
+                        Events fired by this event source. Click a row to view details.
+                    </p>
+                </FlexItem>
+                <FlexItem>
+                    <Button variant="plain" aria-label="Refresh" onClick={() => loadEvents()}>
+                        <SyncAltIcon />
+                    </Button>
+                </FlexItem>
+            </Flex>
+
+            {loading ? (
+                <EmptyState>
+                    <EmptyStateBody>Loading events...</EmptyStateBody>
+                </EmptyState>
+            ) : events.length === 0 ? (
+                <EmptyState>
+                    <EmptyStateBody>No events recorded for this source yet.</EmptyStateBody>
+                </EmptyState>
+            ) : (
+                <>
+                    <Table aria-label="Events" variant="compact">
+                        <Thead>
+                            <Tr>
+                                <Th>Time</Th>
+                                <Th>Source</Th>
+                                <Th>Filter</Th>
+                                <Th>Event Type</Th>
+                                <Th>Repository</Th>
+                                <Th>Issue</Th>
+                                <Th>Project</Th>
+                                <Th>Trace</Th>
+                            </Tr>
+                        </Thead>
+                        <Tbody>
+                            {events.map((event) => (
+                                <Tr key={event.id} isClickable
+                                    onRowClick={() => setSelectedEvent(event)}>
+                                    <Td style={{ whiteSpace: "nowrap" }}>
+                                        {new Date(event.receivedAt).toLocaleString()}
+                                    </Td>
+                                    <Td>
+                                        <Label isCompact
+                                            color={SOURCE_COLORS[event.source] || "grey"}>
+                                            {event.source}
+                                        </Label>
+                                    </Td>
+                                    <Td>
+                                        {event.filterStatus ? (
+                                            <Label isCompact
+                                                color={FILTER_STATUS_COLORS[event.filterStatus] || "grey"}>
+                                                {event.filterStatus}
+                                            </Label>
+                                        ) : (
+                                            <Label isCompact color="grey">—</Label>
+                                        )}
+                                    </Td>
+                                    <Td>{event.eventType}</Td>
+                                    <Td>{event.repository || "—"}</Td>
+                                    <Td>{event.issueRef || "—"}</Td>
+                                    <Td>
+                                        {event.projectId
+                                            ? `Project #${event.projectId}`
+                                            : "—"}
+                                    </Td>
+                                    <Td>
+                                        {event.traceId ? (
+                                            <Button variant="link" isInline
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    navigate(`/logs/traces/${event.traceId}`);
+                                                }}>
+                                                View Trace
+                                            </Button>
+                                        ) : "—"}
+                                    </Td>
+                                </Tr>
+                            ))}
+                        </Tbody>
+                    </Table>
+                    <Pagination
+                        itemCount={totalCount}
+                        page={page}
+                        perPage={perPage}
+                        onSetPage={(_e, p) => { setPage(p); loadEvents(p); }}
+                        onPerPageSelect={(_e, pp) => { setPerPage(pp); setPage(1); loadEvents(1, pp); }}
+                        variant="bottom"
+                        style={{ marginTop: "8px" }}
+                    />
+                </>
+            )}
+
+            <EventDetailModal
+                event={selectedEvent}
+                onClose={() => setSelectedEvent(null)}
+            />
+        </div>
     );
 }
 

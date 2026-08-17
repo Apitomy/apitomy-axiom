@@ -1255,7 +1255,7 @@ export async function fetchProjectEvents(projectId: number): Promise<AxiomEvent[
 export async function fetchEvents(
     page = 1, limit = 20,
     filterSource?: string, filterEventType?: string, filterRepository?: string,
-    filterLabels?: string, filterFilterStatus?: string
+    filterLabels?: string, filterFilterStatus?: string, filterEventSourceId?: number
 ): Promise<SearchResults<AxiomEvent>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
@@ -1265,6 +1265,7 @@ export async function fetchEvents(
     if (filterRepository) params.set("filterRepository", filterRepository);
     if (filterLabels) params.set("filterLabels", filterLabels);
     if (filterFilterStatus) params.set("filterFilterStatus", filterFilterStatus);
+    if (filterEventSourceId != null) params.set("filterEventSourceId", String(filterEventSourceId));
     const response = await fetch(`${API}/events?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch events: ${response.status}`);
     return response.json();
