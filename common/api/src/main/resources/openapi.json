@@ -218,6 +218,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "filterRef",
+            "in": "query",
+            "description": "Exact-match filter on the project issue reference (e.g. 'owner/repo#42')",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {

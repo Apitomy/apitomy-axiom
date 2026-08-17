@@ -83,7 +83,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
     @Override
     public ProjectSearchResults listProjects(BigInteger page, BigInteger limit,
                                               String filterName, String filterStatus,
-                                              String filterLabels) {
+                                              String filterLabels, String filterRef) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
@@ -108,6 +108,10 @@ public class ProjectsResourceImpl implements ProjectsResource {
                     + " GROUP BY p.id HAVING COUNT(DISTINCT pl) = :labelCount)");
             params.put("labels", labels);
             params.put("labelCount", (long) labels.size());
+        }
+        if (filterRef != null && !filterRef.isBlank()) {
+            hql.append(" and issueRef = :ref");
+            params.put("ref", filterRef);
         }
 
         long totalCount = ProjectEntity.count(hql.toString(), params);
