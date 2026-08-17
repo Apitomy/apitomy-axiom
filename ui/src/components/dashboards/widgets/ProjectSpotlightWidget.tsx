@@ -46,10 +46,10 @@ function ProjectSpotlightWidget({ config }: WidgetProps) {
                     <Label isCompact>{project.issueRef}</Label>
                 </FlexItem>
             </Flex>
-            {project.description && (
+            {project.body && (
                 <p style={{ marginTop: "8px", fontSize: "0.9em",
                             color: "var(--pf-t--global--color--200)" }}>
-                    {project.description}
+                    {project.body}
                 </p>
             )}
             <div style={{ marginTop: "12px" }}>

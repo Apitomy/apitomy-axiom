@@ -328,8 +328,8 @@ public class TaskExecutionService {
         sb.append("You are working on project: ").append(project.name).append("\n");
         sb.append("Issue: ").append(project.issueRef).append("\n");
         sb.append("Action type: ").append(task.actionType).append("\n");
-        if (project.description != null) {
-            sb.append("Project description: ").append(project.description).append("\n");
+        if (project.body != null) {
+            sb.append("Project description: ").append(project.body).append("\n");
         }
         return sb.toString();
     }
