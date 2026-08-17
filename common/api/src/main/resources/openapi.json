@@ -397,6 +397,39 @@
         }
       ]
     },
+    "/projects/{projectId}/body": {
+      "put": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Update a project's body",
+        "description": "Replaces the project body with the supplied markdown content.",
+        "operationId": "updateProjectBody",
+        "requestBody": {
+          "content": {
+            "text/markdown": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Body updated"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ProjectId"
+        }
+      ]
+    },
     "/projects/{projectId}/tasks": {
       "get": {
         "tags": [
@@ -5024,7 +5057,8 @@
           "name": {
             "type": "string"
           },
-          "description": {
+          "body": {
+            "description": "Markdown content (e.g. issue body)",
             "type": "string"
           },
           "type": {
@@ -5097,7 +5131,8 @@
           "name": {
             "type": "string"
           },
-          "description": {
+          "body": {
+            "description": "Markdown content (e.g. issue body)",
             "type": "string"
           },
           "type": {
@@ -5139,7 +5174,8 @@
           "name": {
             "type": "string"
           },
-          "description": {
+          "body": {
+            "description": "Markdown content (e.g. issue body)",
             "type": "string"
           },
           "type": {

@@ -42,6 +42,9 @@ import ChatIcon from "@patternfly/react-icons/dist/esm/icons/chat-icon";
 import PlayIcon from "@patternfly/react-icons/dist/esm/icons/play-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
+import PencilAltIcon from "@patternfly/react-icons/dist/esm/icons/pencil-alt-icon";
+import CheckIcon from "@patternfly/react-icons/dist/esm/icons/check-icon";
+import TimesIcon from "@patternfly/react-icons/dist/esm/icons/times-icon";
 import CodeBranchIcon from "@patternfly/react-icons/dist/esm/icons/code-branch-icon";
 import BugIcon from "@patternfly/react-icons/dist/esm/icons/bug-icon";
 import GithubIcon from "@patternfly/react-icons/dist/esm/icons/github-icon";
@@ -63,6 +66,7 @@ import {
     createTask,
     deleteProject,
     updateProject,
+    updateProjectBody,
     formatBytes,
     respondToTask,
 } from "../config/api";
@@ -97,6 +101,10 @@ export function ProjectDetailPage() {
 
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
     const [isLabelsOpen, setIsLabelsOpen] = useState(false);
+
+    // Body edit state
+    const [isEditingBody, setIsEditingBody] = useState(false);
+    const [editBody, setEditBody] = useState("");
 
     // Trigger Action state
     const [isActionModalOpen, setIsActionModalOpen] = useState(false);
@@ -306,14 +314,6 @@ export function ProjectDetailPage() {
                         </code>
                     </DescriptionListDescription>
                 </DescriptionListGroup>
-                {project.description && (
-                    <DescriptionListGroup>
-                        <DescriptionListTerm>Description</DescriptionListTerm>
-                        <DescriptionListDescription>
-                            {project.description}
-                        </DescriptionListDescription>
-                    </DescriptionListGroup>
-                )}
                 <DescriptionListGroup>
                     <DescriptionListTerm>Labels</DescriptionListTerm>
                     <DescriptionListDescription>
@@ -322,6 +322,65 @@ export function ProjectDetailPage() {
                     </DescriptionListDescription>
                 </DescriptionListGroup>
             </DescriptionList>
+
+            {/* Body */}
+            {(project.body || isEditingBody) && (
+                <Card isCompact style={{ marginTop: "16px" }}>
+                    <CardBody>
+                        <Flex justifyContent={{ default: "justifyContentSpaceBetween" }}
+                            alignItems={{ default: "alignItemsCenter" }}
+                            style={{ marginBottom: "8px" }}>
+                            <FlexItem>
+                                <Title headingLevel="h3" size="md">Body</Title>
+                            </FlexItem>
+                            <FlexItem>
+                                {isEditingBody ? (
+                                    <>
+                                        <Button variant="plain" aria-label="Save body"
+                                            onClick={() => {
+                                                updateProjectBody(id, editBody)
+                                                    .then(() => {
+                                                        setProject({ ...project, body: editBody });
+                                                        setIsEditingBody(false);
+                                                    })
+                                                    .catch(console.error);
+                                            }}>
+                                            <CheckIcon />
+                                        </Button>
+                                        <Button variant="plain" aria-label="Cancel edit"
+                                            onClick={() => setIsEditingBody(false)}>
+                                            <TimesIcon />
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <Button variant="plain" aria-label="Edit body"
+                                        onClick={() => {
+                                            setEditBody(project.body || "");
+                                            setIsEditingBody(true);
+                                        }}>
+                                        <PencilAltIcon />
+                                    </Button>
+                                )}
+                            </FlexItem>
+                        </Flex>
+                        {isEditingBody ? (
+                            <TextArea
+                                id="project-body-edit"
+                                value={editBody}
+                                onChange={(_e, v) => setEditBody(v)}
+                                rows={12}
+                                style={{ fontFamily: "var(--pf-t--global--font--family--mono)" }}
+                            />
+                        ) : (
+                            <Content>
+                                <Markdown remarkPlugins={[remarkGfm]} components={markdownMermaidComponents}>
+                                    {project.body || ""}
+                                </Markdown>
+                            </Content>
+                        )}
+                    </CardBody>
+                </Card>
+            )}
 
             {/* Tabs */}
             <div style={{ marginTop: "24px" }}>

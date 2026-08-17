@@ -349,14 +349,14 @@ export function ProjectsPage() {
                                 }
                             />
                         </FormGroup>
-                        <FormGroup label="Description" fieldId="description">
+                        <FormGroup label="Body" fieldId="body">
                             <TextArea
-                                id="description"
-                                value={newProject.description || ""}
+                                id="body"
+                                value={newProject.body || ""}
                                 onChange={(_e, v) =>
                                     setNewProject({
                                         ...newProject,
-                                        description: v,
+                                        body: v,
                                     })
                                 }
                             />
