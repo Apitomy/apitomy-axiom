@@ -44,8 +44,6 @@ import jakarta.ws.rs.sse.SseEventSink;
 import org.jboss.logging.Logger;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -325,14 +323,14 @@ public class AssistantResourceImpl implements AssistantResource {
             throw new WebApplicationException("Session not found: " + sessionId, 404);
         }
 
-        Path rawEventsFile = session.getRawEventsFile();
-        if (!Files.exists(rawEventsFile)) {
+        java.nio.file.Path rawEventsFile = session.getRawEventsFile();
+        if (!java.nio.file.Files.exists(rawEventsFile)) {
             throw new WebApplicationException(
                     "No raw events log available for session: " + sessionId, 404);
         }
 
         StreamingOutput stream = output -> {
-            try (var input = Files.newInputStream(rawEventsFile)) {
+            try (var input = java.nio.file.Files.newInputStream(rawEventsFile)) {
                 input.transferTo(output);
             }
         };
