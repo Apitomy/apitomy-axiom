@@ -7,9 +7,12 @@ import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
 import org.jboss.logging.Logger;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -40,6 +43,7 @@ public class AssistantSession {
 
     private static final Logger LOG = Logger.getLogger(AssistantSession.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final String RAW_EVENTS_FILE = "raw-events.jsonl";
 
     /** Possible session states. */
     public enum Status { STARTING, RUNNING, STOPPED, ERROR }
@@ -71,6 +75,7 @@ public class AssistantSession {
     private final Object eventLock = new Object();
     private final CopyOnWriteArrayList<AutoApprovalRule> autoApprovalRules = new CopyOnWriteArrayList<>();
     private volatile boolean allowAll;
+    private volatile BufferedWriter rawEventsWriter;
     private final Long projectId;
     private final String projectName;
 
@@ -137,6 +142,15 @@ public class AssistantSession {
 
         process = pb.start();
         stdin = process.getOutputStream();
+
+        try {
+            rawEventsWriter = new BufferedWriter(new OutputStreamWriter(
+                    new FileOutputStream(sessionDirectory.resolve(RAW_EVENTS_FILE).toFile()),
+                    StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            LOG.warnf(e, "Failed to open raw events log for session %s; raw logging disabled", id);
+            rawEventsWriter = null;
+        }
 
         // Read stdout (NDJSON) on a virtual thread
         Thread.ofVirtual().name("assistant-stdout-" + id).start(this::readStdout);
@@ -323,6 +337,8 @@ public class AssistantSession {
     public void destroy() {
         LOG.infof("Destroying assistant session %s", id);
         status = Status.STOPPED;
+        closeQuietly(rawEventsWriter);
+        rawEventsWriter = null;
         if (process != null && process.isAlive()) {
             process.destroyForcibly();
         }
@@ -371,6 +387,15 @@ public class AssistantSession {
      */
     public Path getSessionDirectory() {
         return sessionDirectory;
+    }
+
+    /**
+     * Returns the path to the raw NDJSON event log file.
+     *
+     * @return the raw events log file path
+     */
+    public Path getRawEventsFile() {
+        return sessionDirectory.resolve(RAW_EVENTS_FILE);
     }
 
     public Path getWorkingDirectory() {
@@ -532,39 +557,74 @@ public class AssistantSession {
         }
     }
 
+    private void writeRawEvent(String line) {
+        BufferedWriter writer = rawEventsWriter;
+        if (writer == null) {
+            return;
+        }
+        try {
+            writer.write("{\"ts\":\"");
+            writer.write(Instant.now().toString());
+            writer.write("\",\"raw\":");
+            writer.write(line);
+            writer.write("}");
+            writer.newLine();
+            writer.flush();
+        } catch (IOException e) {
+            LOG.warnf(e, "Failed to write raw event for session %s; disabling raw logging", id);
+            rawEventsWriter = null;
+            closeQuietly(writer);
+        }
+    }
+
+    private static void closeQuietly(AutoCloseable closeable) {
+        if (closeable != null) {
+            try {
+                closeable.close();
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
     private void readStdout() {
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                List<SseEvent> events = parser.parse(line);
-                for (SseEvent event : events) {
-                    if (handleAutoApproval(event)) {
-                        continue;
-                    }
-                    if ("turn_complete".equals(event.type())) {
-                        accumulateCost(event);
-                    }
-                    synchronized (eventLock) {
-                        if ("conversation_reset".equals(event.type())) {
-                            eventHistory.clear();
+        try {
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    writeRawEvent(line);
+                    List<SseEvent> events = parser.parse(line);
+                    for (SseEvent event : events) {
+                        if (handleAutoApproval(event)) {
+                            continue;
                         }
-                        eventHistory.add(event);
-                        lastActivityAt = Instant.now();
-                        for (Consumer<SseEvent> listener : listeners) {
-                            try {
-                                listener.accept(event);
-                            } catch (Exception e) {
-                                LOG.warnf(e, "SSE listener error in session %s", id);
+                        if ("turn_complete".equals(event.type())) {
+                            accumulateCost(event);
+                        }
+                        synchronized (eventLock) {
+                            if ("conversation_reset".equals(event.type())) {
+                                eventHistory.clear();
+                            }
+                            eventHistory.add(event);
+                            lastActivityAt = Instant.now();
+                            for (Consumer<SseEvent> listener : listeners) {
+                                try {
+                                    listener.accept(event);
+                                } catch (Exception e) {
+                                    LOG.warnf(e, "SSE listener error in session %s", id);
+                                }
                             }
                         }
                     }
                 }
+            } catch (IOException e) {
+                if (status == Status.RUNNING) {
+                    LOG.warnf("Error reading stdout for session %s: %s", id, e.getMessage());
+                }
             }
-        } catch (IOException e) {
-            if (status == Status.RUNNING) {
-                LOG.warnf("Error reading stdout for session %s: %s", id, e.getMessage());
-            }
+        } finally {
+            closeQuietly(rawEventsWriter);
+            rawEventsWriter = null;
         }
     }
 

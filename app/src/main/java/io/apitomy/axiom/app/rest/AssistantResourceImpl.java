@@ -37,12 +37,15 @@ import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.StreamingOutput;
 import jakarta.ws.rs.sse.OutboundSseEvent;
 import jakarta.ws.rs.sse.Sse;
 import jakarta.ws.rs.sse.SseEventSink;
 import org.jboss.logging.Logger;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -297,6 +300,44 @@ public class AssistantResourceImpl implements AssistantResource {
         json.append("]");
 
         return Response.ok(json.toString(), MediaType.APPLICATION_JSON).build();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String getAssistantSessionRawEvents(String sessionId) {
+        // Overridden below with streaming file download.
+        requireSession(sessionId);
+        return "";
+    }
+
+    /**
+     * Downloads the raw NDJSON event log file for an assistant session.
+     * The file is streamed directly from disk to avoid loading large logs
+     * into memory.
+     */
+    @GET
+    @Path("/sessions/{sessionId}/raw-events")
+    @Produces(MediaType.TEXT_PLAIN)
+    public Response getAssistantSessionRawEventsStream(
+            @PathParam("sessionId") String sessionId) {
+        AssistantSession session = sessionManager.getSession(sessionId);
+        if (session == null) {
+            throw new WebApplicationException("Session not found: " + sessionId, 404);
+        }
+
+        Path rawEventsFile = session.getRawEventsFile();
+        if (!Files.exists(rawEventsFile)) {
+            throw new WebApplicationException(
+                    "No raw events log available for session: " + sessionId, 404);
+        }
+
+        StreamingOutput stream = output -> {
+            try (var input = Files.newInputStream(rawEventsFile)) {
+                input.transferTo(output);
+            }
+        };
+
+        return Response.ok(stream, MediaType.TEXT_PLAIN).build();
     }
 
     /** {@inheritDoc} */

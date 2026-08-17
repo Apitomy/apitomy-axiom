@@ -4900,6 +4900,42 @@
           }
         }
       }
+    },
+    "/assistant/sessions/{sessionId}/raw-events": {
+      "get": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Get the raw NDJSON event log for an assistant session",
+        "description": "Returns the raw NDJSON event log captured from the Claude Code subprocess stdout. Each line is a JSON object with a 'ts' (ISO-8601 timestamp) field and a 'raw' field containing the original NDJSON event. The log is available while the session exists and is deleted when the session is destroyed.",
+        "operationId": "getAssistantSessionRawEvents",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "description": "The assistant session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The raw NDJSON event log",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found or no raw events log available"
+          }
+        }
+      }
     }
   },
   "components": {
