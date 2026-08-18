@@ -535,6 +535,7 @@ public class PipelineOrchestrator {
     private ProjectEntity createProjectFromEvent(EventEntity event) {
         ProjectEntity project = new ProjectEntity();
         project.name = extractIssueTitle(event);
+        project.body = extractIssueBody(event);
         project.type = determineProjectType(event.eventType);
         project.status = ProjectStatus.Created.name();
         project.issueSource = event.source;
@@ -613,6 +614,29 @@ public class PipelineOrchestrator {
             }
         }
         return event.issueRef != null ? event.issueRef : "Project from event " + event.id;
+    }
+
+    /**
+     * Extracts the issue/PR body from the event payload. Returns {@code null}
+     * if the body cannot be found.
+     */
+    private String extractIssueBody(EventEntity event) {
+        if (event.payload != null) {
+            try {
+                JsonNode root = objectMapper.readTree(event.payload);
+                String body = root.path("issue").path("body").asText(null);
+                if (body != null && !body.isBlank()) {
+                    return body;
+                }
+                body = root.path("pull_request").path("body").asText(null);
+                if (body != null && !body.isBlank()) {
+                    return body;
+                }
+            } catch (Exception e) {
+                LOG.debugf("Could not parse event payload for issue body: %s", e.getMessage());
+            }
+        }
+        return null;
     }
 
     private void logActivity(Long projectId, Long taskId, Long eventId,

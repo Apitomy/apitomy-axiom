@@ -24,7 +24,7 @@ public class ProjectEntity extends PanacheEntity {
     public String name;
 
     @Column(columnDefinition = "TEXT")
-    public String description;
+    public String body;
 
     @Column(nullable = false)
     public String type;

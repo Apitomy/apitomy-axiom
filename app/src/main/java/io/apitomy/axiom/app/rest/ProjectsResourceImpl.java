@@ -135,7 +135,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
     public Project createProject(NewProject data) {
         ProjectEntity entity = new ProjectEntity();
         entity.name = data.getName();
-        entity.description = data.getDescription();
+        entity.body = data.getBody();
         entity.type = data.getType().value();
         entity.status = ProjectStatus.Created.name();
         entity.issueSource = data.getIssueSource().value();
@@ -165,8 +165,8 @@ public class ProjectsResourceImpl implements ProjectsResource {
         if (data.getName() != null) {
             entity.name = data.getName();
         }
-        if (data.getDescription() != null) {
-            entity.description = data.getDescription();
+        if (data.getBody() != null) {
+            entity.body = data.getBody();
         }
         if (data.getType() != null) {
             entity.type = data.getType().value();
@@ -225,6 +225,17 @@ public class ProjectsResourceImpl implements ProjectsResource {
         entity.status = "InProgress";
         entity.updatedOn = Instant.now();
         return toProjectBean(entity);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    @Transactional
+    public void updateProjectBody(long projectId, String body) {
+        ProjectEntity entity = findProjectOrThrow(projectId);
+        entity.body = body;
+        entity.updatedOn = Instant.now();
     }
 
     // ── Tasks ─────────────────────────────────────────────────────────
@@ -496,7 +507,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
         Project project = new Project();
         project.setId(entity.id);
         project.setName(entity.name);
-        project.setDescription(entity.description);
+        project.setBody(entity.body);
         project.setType(Project.Type.fromValue(entity.type));
         project.setStatus(Project.Status.fromValue(entity.status));
         project.setIssueSource(Project.IssueSource.fromValue(entity.issueSource));

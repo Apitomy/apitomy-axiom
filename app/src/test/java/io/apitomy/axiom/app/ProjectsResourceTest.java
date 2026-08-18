@@ -38,7 +38,7 @@ class ProjectsResourceTest {
             .body("""
                 {
                     "name": "Test Project",
-                    "description": "A test project",
+                    "body": "A test project",
                     "type": "bug-fix",
                     "issueSource": "github",
                     "issueRef": "owner/repo#1",
@@ -50,7 +50,7 @@ class ProjectsResourceTest {
             .then()
                 .statusCode(200)
                 .body("name", equalTo("Test Project"))
-                .body("description", equalTo("A test project"))
+                .body("body", equalTo("A test project"))
                 .body("type", equalTo("bug-fix"))
                 .body("status", equalTo("Created"))
                 .body("issueSource", equalTo("github"))
@@ -79,7 +79,7 @@ class ProjectsResourceTest {
             .body("""
                 {
                     "name": "Updated Name",
-                    "description": "Updated description"
+                    "body": "Updated description"
                 }
                 """)
             .when()
@@ -87,7 +87,7 @@ class ProjectsResourceTest {
             .then()
                 .statusCode(200)
                 .body("name", equalTo("Updated Name"))
-                .body("description", equalTo("Updated description"))
+                .body("body", equalTo("Updated description"))
                 .body("type", equalTo("feature"));
     }
 
@@ -117,6 +117,37 @@ class ProjectsResourceTest {
         given()
             .when()
                 .get(PROJECTS_PATH + "/999999")
+            .then()
+                .statusCode(404);
+    }
+
+    @Test
+    void testUpdateProjectBody() {
+        int id = createProject("Body Test", "feature", "owner/repo#150");
+
+        given()
+            .contentType("text/markdown")
+            .body("# Hello\n\nThis is **markdown** body content.")
+            .when()
+                .put(PROJECTS_PATH + "/" + id + "/body")
+            .then()
+                .statusCode(204);
+
+        given()
+            .when()
+                .get(PROJECTS_PATH + "/" + id)
+            .then()
+                .statusCode(200)
+                .body("body", equalTo("# Hello\n\nThis is **markdown** body content."));
+    }
+
+    @Test
+    void testUpdateProjectBodyNotFound() {
+        given()
+            .contentType("text/markdown")
+            .body("some content")
+            .when()
+                .put(PROJECTS_PATH + "/999999/body")
             .then()
                 .statusCode(404);
     }

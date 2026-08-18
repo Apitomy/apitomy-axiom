@@ -16,13 +16,13 @@ function log(level, message, data) {
 
 const AXIOM_API_URL = process.env.AXIOM_API_URL || "http://localhost:9090/api/v1";
 
-async function axiomApi(method, path, body) {
+async function axiomApi(method, path, body, { contentType = "application/json", rawBody = false } = {}) {
     const url = `${AXIOM_API_URL}${path}`;
     const opts = {
         method,
-        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        headers: { "Content-Type": contentType, "Accept": "application/json" },
     };
-    if (body) opts.body = JSON.stringify(body);
+    if (body) opts.body = rawBody ? body : JSON.stringify(body);
     const resp = await fetch(url, opts);
     const text = await resp.text();
     if (!resp.ok) {
@@ -276,19 +276,33 @@ const SDK_TOOLS = [
     },
     {
         name: "axiom_update_project",
-        description: "Update an Axiom project's metadata such as name, description, or labels.",
+        description: "Update an Axiom project's metadata such as name, body, or labels.",
         parameters: [
             { name: "projectId", type: "number", description: "The project ID to update", required: true },
             { name: "name", type: "string", description: "New project name", required: false },
-            { name: "description", type: "string", description: "New project description", required: false },
+            { name: "body", type: "string", description: "New project body (markdown)", required: false },
             { name: "labels", type: "string", description: "Comma-separated list of labels to set on the project", required: false },
         ],
         handler: async (args) => {
-            const body = {};
-            if (args.name) body.name = args.name;
-            if (args.description) body.description = args.description;
-            if (args.labels) body.labels = args.labels.split(",").map(l => l.trim()).filter(Boolean);
-            return await axiomApi("PUT", `/projects/${args.projectId}`, body);
+            const payload = {};
+            if (args.name) payload.name = args.name;
+            if (args.body) payload.body = args.body;
+            if (args.labels) payload.labels = args.labels.split(",").map(l => l.trim()).filter(Boolean);
+            return await axiomApi("PUT", `/projects/${args.projectId}`, payload);
+        },
+    },
+    {
+        name: "axiom_update_project_body",
+        description: "Update an Axiom project's body with markdown content.",
+        parameters: [
+            { name: "projectId", type: "number", description: "The project ID", required: true },
+            { name: "body", type: "string", description: "The markdown body content", required: true },
+        ],
+        handler: async (args) => {
+            await axiomApi("PUT", `/projects/${args.projectId}/body`, args.body, {
+                contentType: "text/markdown", rawBody: true,
+            });
+            return "OK";
         },
     },
     {

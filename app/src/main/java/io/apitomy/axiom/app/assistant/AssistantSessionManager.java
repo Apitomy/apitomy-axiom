@@ -522,8 +522,8 @@ public class AssistantSessionManager {
         context.append("\n\n## Project Context\n\n");
         context.append("This session is scoped to the following project:\n\n");
         context.append("- **Name**: ").append(project.name).append("\n");
-        if (project.description != null && !project.description.isBlank()) {
-            context.append("- **Description**: ").append(project.description).append("\n");
+        if (project.body != null && !project.body.isBlank()) {
+            context.append("- **Description**: ").append(project.body).append("\n");
         }
         context.append("- **Type**: ").append(project.type).append("\n");
         context.append("- **Status**: ").append(project.status).append("\n");

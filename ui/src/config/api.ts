@@ -46,7 +46,7 @@ export interface SearchResults<T> {
 export interface Project {
     id: number;
     name: string;
-    description?: string;
+    body?: string;
     type: string;
     status: string;
     issueSource: string;
@@ -60,7 +60,7 @@ export interface Project {
 
 export interface NewProject {
     name: string;
-    description?: string;
+    body?: string;
     type: string;
     issueSource: string;
     issueRef: string;
@@ -249,6 +249,15 @@ export async function createProject(project: NewProject): Promise<Project> {
 export async function deleteProject(id: number): Promise<void> {
     const response = await fetch(`${API}/projects/${id}`, { method: "DELETE" });
     if (!response.ok) throw new Error(`Failed to delete project: ${response.status}`);
+}
+
+export async function updateProjectBody(id: number, body: string): Promise<void> {
+    const response = await fetch(`${API}/projects/${id}/body`, {
+        method: "PUT",
+        headers: { "Content-Type": "text/markdown" },
+        body,
+    });
+    if (!response.ok) throw new Error(`Failed to update project body: ${response.status}`);
 }
 
 // ── Tasks ─────────────────────────────────────────────────────────

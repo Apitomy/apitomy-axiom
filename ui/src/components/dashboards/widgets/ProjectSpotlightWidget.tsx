@@ -4,6 +4,19 @@ import { type Project, type Task, fetchProject, fetchProjectTasks } from "../../
 import { registerWidget, type WidgetProps } from "../widget-registry";
 import { WidgetError } from "../WidgetError";
 
+function stripMarkdown(md: string): string {
+    const plain = md
+        .replace(/^#{1,6}\s+/gm, "")
+        .replace(/\*\*(.+?)\*\*/g, "$1")
+        .replace(/\*(.+?)\*/g, "$1")
+        .replace(/`(.+?)`/g, "$1")
+        .replace(/\[(.+?)\]\(.+?\)/g, "$1")
+        .replace(/^[-*+]\s+/gm, "")
+        .replace(/\n+/g, " ")
+        .trim();
+    return plain.length > 150 ? plain.slice(0, 147) + "..." : plain;
+}
+
 function ProjectSpotlightWidget({ config }: WidgetProps) {
     const [project, setProject] = useState<Project | null>(null);
     const [tasks, setTasks] = useState<Task[]>([]);
@@ -46,10 +59,10 @@ function ProjectSpotlightWidget({ config }: WidgetProps) {
                     <Label isCompact>{project.issueRef}</Label>
                 </FlexItem>
             </Flex>
-            {project.description && (
+            {project.body && (
                 <p style={{ marginTop: "8px", fontSize: "0.9em",
                             color: "var(--pf-t--global--color--200)" }}>
-                    {project.description}
+                    {stripMarkdown(project.body)}
                 </p>
             )}
             <div style={{ marginTop: "12px" }}>
