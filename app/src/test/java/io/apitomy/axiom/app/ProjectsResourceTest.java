@@ -121,6 +121,37 @@ class ProjectsResourceTest {
                 .statusCode(404);
     }
 
+    @Test
+    void testUpdateProjectBody() {
+        int id = createProject("Body Test", "feature", "owner/repo#150");
+
+        given()
+            .contentType("text/markdown")
+            .body("# Hello\n\nThis is **markdown** body content.")
+            .when()
+                .put(PROJECTS_PATH + "/" + id + "/body")
+            .then()
+                .statusCode(204);
+
+        given()
+            .when()
+                .get(PROJECTS_PATH + "/" + id)
+            .then()
+                .statusCode(200)
+                .body("body", equalTo("# Hello\n\nThis is **markdown** body content."));
+    }
+
+    @Test
+    void testUpdateProjectBodyNotFound() {
+        given()
+            .contentType("text/markdown")
+            .body("some content")
+            .when()
+                .put(PROJECTS_PATH + "/999999/body")
+            .then()
+                .statusCode(404);
+    }
+
     // ── Project Lifecycle ─────────────────────────────────────────────
 
     @Test

@@ -16,13 +16,13 @@ function log(level, message, data) {
 
 const AXIOM_API_URL = process.env.AXIOM_API_URL || "http://localhost:9090/api/v1";
 
-async function axiomApi(method, path, body) {
+async function axiomApi(method, path, body, { contentType = "application/json", rawBody = false } = {}) {
     const url = `${AXIOM_API_URL}${path}`;
     const opts = {
         method,
-        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        headers: { "Content-Type": contentType, "Accept": "application/json" },
     };
-    if (body) opts.body = JSON.stringify(body);
+    if (body) opts.body = rawBody ? body : JSON.stringify(body);
     const resp = await fetch(url, opts);
     const text = await resp.text();
     if (!resp.ok) {
@@ -299,16 +299,9 @@ const SDK_TOOLS = [
             { name: "body", type: "string", description: "The markdown body content", required: true },
         ],
         handler: async (args) => {
-            const url = `${AXIOM_API_URL}/projects/${args.projectId}/body`;
-            const resp = await fetch(url, {
-                method: "PUT",
-                headers: { "Content-Type": "text/markdown" },
-                body: args.body,
+            await axiomApi("PUT", `/projects/${args.projectId}/body`, args.body, {
+                contentType: "text/markdown", rawBody: true,
             });
-            if (!resp.ok) {
-                const text = await resp.text();
-                throw new Error(`Axiom API PUT /projects/${args.projectId}/body returned ${resp.status}: ${text.substring(0, 500)}`);
-            }
             return "OK";
         },
     },
