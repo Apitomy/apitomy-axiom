@@ -16,6 +16,7 @@ import {
     type Toolset,
     type ToolDefinition,
 } from "../config/api";
+import { SDK_TOOLS as SDK_TOOL_ENTRIES } from "../config/sdkTools";
 
 interface ToolEntry {
     value: string;
@@ -24,22 +25,7 @@ interface ToolEntry {
     category: "toolset" | "custom" | "sdk";
 }
 
-const SDK_TOOLS: ToolEntry[] = [
-    { value: "mcp__axiom-sdk__axiom_fire_event", label: "axiom_fire_event", description: "Fire a new event into Axiom for processing by the Manager", category: "sdk" },
-    { value: "mcp__axiom-sdk__axiom_list_projects", label: "axiom_list_projects", description: "List existing Axiom projects with optional filtering", category: "sdk" },
-    { value: "mcp__axiom-sdk__axiom_get_project", label: "axiom_get_project", description: "Get details of a specific Axiom project", category: "sdk" },
-    { value: "mcp__axiom-sdk__axiom_create_task", label: "axiom_create_task", description: "Create a new task on an Axiom project", category: "sdk" },
-    { value: "mcp__axiom-sdk__axiom_get_task_status", label: "axiom_get_task_status", description: "Get the status and details of a specific task", category: "sdk" },
-    { value: "mcp__axiom-sdk__axiom_add_thread_entry", label: "axiom_add_thread_entry", description: "Post an update or message to a project's conversation thread", category: "sdk" },
-    { value: "mcp__axiom-sdk__axiom_close_project", label: "axiom_close_project", description: "Close (complete) an Axiom project", category: "sdk" },
-    { value: "mcp__axiom-sdk__axiom_reopen_project", label: "axiom_reopen_project", description: "Reopen a previously closed Axiom project", category: "sdk" },
-    { value: "mcp__axiom-sdk__axiom_add_project_label", label: "axiom_add_project_label", description: "Add a label to an Axiom project", category: "sdk" },
-    { value: "mcp__axiom-sdk__axiom_remove_project_label", label: "axiom_remove_project_label", description: "Remove a label from an Axiom project", category: "sdk" },
-    { value: "mcp__axiom-sdk__axiom_list_tools", label: "axiom_list_tools", description: "List all custom tool definitions configured in Axiom", category: "sdk" },
-    { value: "mcp__axiom-sdk__axiom_list_report_definitions", label: "axiom_list_report_definitions", description: "List all report definitions configured in Axiom", category: "sdk" },
-    { value: "mcp__axiom-sdk__axiom_update_project", label: "axiom_update_project", description: "Update an Axiom project's metadata such as name, body, or labels", category: "sdk" },
-    { value: "mcp__axiom-sdk__axiom_update_project_body", label: "axiom_update_project_body", description: "Update an Axiom project's body with markdown content", category: "sdk" },
-];
+const SDK_TOOLS: ToolEntry[] = SDK_TOOL_ENTRIES.map(t => ({ ...t, category: "sdk" as const }));
 
 interface BrowseToolsModalProps {
     isOpen: boolean;

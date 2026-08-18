@@ -8,6 +8,7 @@ import {
 } from "../config/api";
 import { TypeaheadAddInput, type TypeaheadAddSuggestion } from "./TypeaheadAddInput";
 import { BrowseToolsModal } from "./BrowseToolsModal";
+import { SDK_TOOL_VALUES } from "../config/sdkTools";
 
 /**
  * Well-known Claude Code built-in tools available for autocomplete.
@@ -44,23 +45,6 @@ const BUILTIN_TOOLS = [
     "Bash(mkdir *)",
     "Bash(cp *)",
     "Bash(mv *)",
-];
-
-const AXIOM_SDK_TOOLS = [
-    "mcp__axiom-sdk__axiom_fire_event",
-    "mcp__axiom-sdk__axiom_list_projects",
-    "mcp__axiom-sdk__axiom_get_project",
-    "mcp__axiom-sdk__axiom_create_task",
-    "mcp__axiom-sdk__axiom_get_task_status",
-    "mcp__axiom-sdk__axiom_add_thread_entry",
-    "mcp__axiom-sdk__axiom_close_project",
-    "mcp__axiom-sdk__axiom_reopen_project",
-    "mcp__axiom-sdk__axiom_add_project_label",
-    "mcp__axiom-sdk__axiom_remove_project_label",
-    "mcp__axiom-sdk__axiom_list_tools",
-    "mcp__axiom-sdk__axiom_list_report_definitions",
-    "mcp__axiom-sdk__axiom_update_project",
-    "mcp__axiom-sdk__axiom_update_project_body",
 ];
 
 const TOOLSET_STYLE: React.CSSProperties = {
@@ -117,7 +101,7 @@ export function AddToolInput({
         customTools.forEach((t) =>
             items.push({ value: `mcp__axiom-tools__${t.name}`, style: MCP_STYLE }));
 
-        AXIOM_SDK_TOOLS.forEach((t) =>
+        SDK_TOOL_VALUES.forEach((t) =>
             items.push({ value: t, style: MCP_STYLE }));
 
         mcpServers.forEach((s) =>
