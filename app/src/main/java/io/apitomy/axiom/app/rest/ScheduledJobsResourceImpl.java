@@ -10,6 +10,7 @@ import io.apitomy.axiom.api.beans.ToolValidationMessage;
 import io.apitomy.axiom.api.beans.ToolValidationResult;
 import io.apitomy.axiom.app.ScheduledJobQueueConsumer;
 import io.apitomy.axiom.app.ScheduledJobScheduler;
+import io.apitomy.axiom.core.SdkToolNames;
 import io.apitomy.axiom.core.entities.ScheduledJobEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
@@ -285,20 +286,7 @@ public class ScheduledJobsResourceImpl implements ScheduledResource {
         Set<String> toolsets = ToolsetEntity.<ToolsetEntity>listAll().stream()
                 .map(t -> t.name)
                 .collect(java.util.stream.Collectors.toSet());
-        Set<String> sdkTools = Set.of(
-                "mcp__axiom-sdk__axiom_fire_event",
-                "mcp__axiom-sdk__axiom_list_projects",
-                "mcp__axiom-sdk__axiom_get_project",
-                "mcp__axiom-sdk__axiom_create_task",
-                "mcp__axiom-sdk__axiom_get_task_status",
-                "mcp__axiom-sdk__axiom_add_thread_entry",
-                "mcp__axiom-sdk__axiom_close_project",
-                "mcp__axiom-sdk__axiom_reopen_project",
-                "mcp__axiom-sdk__axiom_add_project_label",
-                "mcp__axiom-sdk__axiom_remove_project_label",
-                "mcp__axiom-sdk__axiom_list_tools",
-                "mcp__axiom-sdk__axiom_list_report_definitions"
-        );
+        Set<String> sdkTools = SdkToolNames.ALL;
         return new ScheduledJobValidator.KnownNames(secrets, tools, toolsets, sdkTools);
     }
 
