@@ -44,7 +44,7 @@ public class EventsResourceImpl implements EventsResource {
     public EventSearchResults listEvents(BigInteger page, BigInteger limit,
                                           String filterSource, String filterEventType,
                                           String filterRepository, String filterLabels,
-                                          String filterFilterStatus) {
+                                          String filterFilterStatus, BigInteger filterEventSourceId) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
@@ -75,6 +75,10 @@ public class EventsResourceImpl implements EventsResource {
         if (filterFilterStatus != null && !filterFilterStatus.isBlank()) {
             hql.append(" and filterStatus = :filterStatus");
             params.put("filterStatus", filterFilterStatus);
+        }
+        if (filterEventSourceId != null) {
+            hql.append(" and eventSourceId = :eventSourceId");
+            params.put("eventSourceId", filterEventSourceId.longValue());
         }
 
         long totalCount = EventEntity.count(hql.toString(), params);
