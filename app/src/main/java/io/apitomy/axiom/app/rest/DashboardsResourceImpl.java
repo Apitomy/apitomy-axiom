@@ -5,7 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.DashboardsResource;
 import io.apitomy.axiom.api.beans.Dashboard;
-import io.apitomy.axiom.api.beans.DashboardWidget;
+import io.apitomy.axiom.api.beans.DashboardTab;
 import io.apitomy.axiom.api.beans.NewDashboard;
 import io.apitomy.axiom.core.entities.DashboardEntity;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -30,7 +30,7 @@ public class DashboardsResourceImpl implements DashboardsResource {
 
     private static final Logger LOG = Logger.getLogger(DashboardsResourceImpl.class);
 
-    private static final TypeReference<List<DashboardWidget>> WIDGET_LIST_TYPE =
+    private static final TypeReference<List<DashboardTab>> TAB_LIST_TYPE =
             new TypeReference<>() {};
 
     @Inject
@@ -112,7 +112,7 @@ public class DashboardsResourceImpl implements DashboardsResource {
         entity.name = data.getName();
         entity.description = data.getDescription();
         entity.isDefault = data.getIsDefault() != null ? data.getIsDefault() : false;
-        entity.widgets = serializeWidgets(data.getWidgets());
+        entity.tabs = serializeTabs(data.getTabs());
         entity.labels.clear();
         if (data.getLabels() != null) {
             entity.labels.addAll(data.getLabels());
@@ -134,32 +134,32 @@ public class DashboardsResourceImpl implements DashboardsResource {
         bean.setDescription(entity.description);
         bean.setIsDefault(entity.isDefault);
         bean.setLabels(entity.labels);
-        bean.setWidgets(deserializeWidgets(entity.widgets));
+        bean.setTabs(deserializeTabs(entity.tabs));
         bean.setCreatedOn(Date.from(entity.createdOn));
         bean.setUpdatedOn(Date.from(entity.updatedOn));
         return bean;
     }
 
-    private String serializeWidgets(List<DashboardWidget> widgets) {
-        if (widgets == null || widgets.isEmpty()) {
+    private String serializeTabs(List<DashboardTab> tabs) {
+        if (tabs == null || tabs.isEmpty()) {
             return "[]";
         }
         try {
-            return objectMapper.writeValueAsString(widgets);
+            return objectMapper.writeValueAsString(tabs);
         } catch (JsonProcessingException e) {
-            throw new WebApplicationException("Failed to serialize widgets", 500);
+            throw new WebApplicationException("Failed to serialize tabs", 500);
         }
     }
 
-    private List<DashboardWidget> deserializeWidgets(String json) {
+    private List<DashboardTab> deserializeTabs(String json) {
         if (json == null || json.isBlank()) {
             return new ArrayList<>();
         }
         try {
-            return objectMapper.readValue(json, WIDGET_LIST_TYPE);
+            return objectMapper.readValue(json, TAB_LIST_TYPE);
         } catch (JsonProcessingException e) {
-            LOG.warnf("Failed to deserialize widgets JSON: %s", e.getMessage());
-            throw new WebApplicationException("Failed to deserialize dashboard widgets", 500);
+            LOG.warnf("Failed to deserialize tabs JSON: %s", e.getMessage());
+            throw new WebApplicationException("Failed to deserialize dashboard tabs", 500);
         }
     }
 }

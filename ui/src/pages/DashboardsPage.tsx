@@ -58,7 +58,7 @@ export function DashboardsPage() {
             description: newDescription || undefined,
             labels: newLabels,
             isDefault: dashboards.length === 0,
-            widgets: [],
+            tabs: [{ id: crypto.randomUUID(), name: "Default", widgets: [] }],
         };
         createDashboard(data)
             .then((created) => {
@@ -79,7 +79,7 @@ export function DashboardsPage() {
             description: dashboard.description,
             labels: dashboard.labels,
             isDefault: true,
-            widgets: dashboard.widgets,
+            tabs: dashboard.tabs,
         };
         updateDashboard(dashboard.id, data).then(load).catch(console.error);
     };
@@ -160,7 +160,7 @@ export function DashboardsPage() {
                                         ))}
                                         {d.labels.length === 0 && "—"}
                                     </Td>
-                                    <Td>{d.widgets.length}</Td>
+                                    <Td>{d.tabs.reduce((n, t) => n + t.widgets.length, 0)}</Td>
                                     <Td>{formatDate(d.updatedOn)}</Td>
                                     <Td>
                                         <Flex gap={{ default: "gapSm" }}

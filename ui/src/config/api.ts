@@ -1812,13 +1812,19 @@ export interface DashboardWidget {
     layout: DashboardWidgetLayout;
 }
 
+export interface DashboardTab {
+    id: string;
+    name: string;
+    widgets: DashboardWidget[];
+}
+
 export interface Dashboard {
     id: number;
     name: string;
     description?: string;
     labels: string[];
     isDefault: boolean;
-    widgets: DashboardWidget[];
+    tabs: DashboardTab[];
     createdOn: string;
     updatedOn: string;
 }
