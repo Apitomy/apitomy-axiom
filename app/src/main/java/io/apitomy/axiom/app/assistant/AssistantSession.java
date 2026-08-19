@@ -636,9 +636,9 @@ public class AssistantSession {
         JsonNode toolInput = event.data().path("toolInput");
         String requestId = event.data().path("requestId").asText("");
 
-        // Allow All short-circuit: auto-approve everything but keep the event
-        // visible in the stream so the UI can show it as auto-approved.
-        if (allowAll) {
+        // Allow All short-circuit: auto-approve everything except AskUserQuestion,
+        // which requires the user to provide answers rather than just approval.
+        if (allowAll && !"AskUserQuestion".equals(toolName)) {
             LOG.infof("Auto-approving %s (allow-all) in session %s", toolName, id);
             try {
                 addEvent(event);
