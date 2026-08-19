@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { AssistantMessageList, type ChatMessage } from "./AssistantMessageList";
 import { AssistantMessageInput } from "./AssistantMessageInput";
+import { AssistantSubagentPanel } from "./AssistantSubagentPanel";
+import type { SubagentCardData, SubagentActivityEntry } from "./AssistantSubagentCard";
 import {
     sendAssistantMessage,
     respondToAssistantPermission,
@@ -29,6 +31,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
     const [isProcessing, setIsProcessing] = useState(false);
     const [processingText, setProcessingText] = useState("");
     const [slashCommands, setSlashCommands] = useState<string[]>([]);
+    const [subagentCards, setSubagentCards] = useState<Map<string, SubagentCardData>>(new Map());
     const sessionEndedRef = useRef(false);
     const lastSeenIndexRef = useRef(-1);
 
@@ -203,6 +206,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                     type: "system",
                     content: "Conversation cleared.",
                 }]);
+                setSubagentCards(new Map());
                 setIsProcessing(false);
                 break;
 
@@ -218,6 +222,77 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
 
             case "allow_all_changed":
                 onAllowAllChangedRef.current?.(data.enabled as boolean);
+                break;
+
+            case "subagent_started":
+                setSubagentCards((prev) => {
+                    const next = new Map(prev);
+                    next.set(data.toolUseId as string, {
+                        id: data.toolUseId as string,
+                        taskId: data.taskId as string,
+                        description: data.description as string,
+                        subagentType: data.subagentType as string,
+                        status: "running",
+                        toolCount: 0,
+                        durationMs: 0,
+                        activityLog: [],
+                        dismissed: false,
+                    });
+                    return next;
+                });
+                break;
+
+            case "subagent_progress":
+                setSubagentCards((prev) => {
+                    const card = prev.get(data.toolUseId as string);
+                    if (!card) return prev;
+                    const entry: SubagentActivityEntry = {
+                        id: String(++messageIdCounter),
+                        toolName: data.lastToolName as string,
+                        description: data.description as string,
+                    };
+                    const next = new Map(prev);
+                    next.set(card.id, {
+                        ...card,
+                        currentActivity: data.description as string,
+                        lastToolName: data.lastToolName as string,
+                        toolCount: data.toolCount as number,
+                        durationMs: data.durationMs as number,
+                        activityLog: [...card.activityLog, entry],
+                    });
+                    return next;
+                });
+                break;
+
+            case "subagent_status":
+                setSubagentCards((prev) => {
+                    for (const [id, card] of prev) {
+                        if (card.taskId === (data.taskId as string)) {
+                            const next = new Map(prev);
+                            next.set(id, {
+                                ...card,
+                                status: (data.status as string) === "completed"
+                                    ? "completed" : card.status,
+                            });
+                            return next;
+                        }
+                    }
+                    return prev;
+                });
+                break;
+
+            case "subagent_completed":
+                setSubagentCards((prev) => {
+                    const card = prev.get(data.toolUseId as string);
+                    if (!card) return prev;
+                    const next = new Map(prev);
+                    next.set(card.id, {
+                        ...card,
+                        status: "completed",
+                        summary: data.summary as string,
+                    });
+                    return next;
+                });
                 break;
 
             case "unhandled_event":
@@ -400,21 +475,63 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
         }
     }, [sessionId, onAutoApprovalCountChange, addMessage]);
 
+    const handleDismissSubagent = useCallback((id: string) => {
+        setSubagentCards((prev) => {
+            const card = prev.get(id);
+            if (!card) return prev;
+            const next = new Map(prev);
+            next.set(id, { ...card, dismissed: true });
+            return next;
+        });
+    }, []);
+
+    const handleDismissAllCompleted = useCallback(() => {
+        setSubagentCards((prev) => {
+            const next = new Map(prev);
+            for (const [id, card] of next) {
+                if (card.status === "completed") {
+                    next.set(id, { ...card, dismissed: true });
+                }
+            }
+            return next;
+        });
+    }, []);
+
+    const visibleCards = Array.from(subagentCards.values()).filter(c => !c.dismissed);
+
     return (
         <div style={{
             display: "flex",
-            flexDirection: "column",
             flex: "1 1 0",
             minHeight: 0,
         }}>
-            <AssistantMessageList
-                messages={messages}
-                onPermissionRespond={handlePermissionRespond}
-                onCreateAutoApproval={handleCreateAutoApproval}
-                isProcessing={isProcessing}
-                processingText={processingText}
-            />
-            <AssistantMessageInput onSend={handleSend} disabled={isProcessing} slashCommands={slashCommands} />
+            <div style={{
+                display: "flex",
+                flexDirection: "column",
+                flex: "1 1 0",
+                minWidth: 0,
+                minHeight: 0,
+            }}>
+                <AssistantMessageList
+                    messages={messages}
+                    onPermissionRespond={handlePermissionRespond}
+                    onCreateAutoApproval={handleCreateAutoApproval}
+                    isProcessing={isProcessing}
+                    processingText={processingText}
+                />
+                <AssistantMessageInput
+                    onSend={handleSend}
+                    disabled={isProcessing}
+                    slashCommands={slashCommands}
+                />
+            </div>
+            {visibleCards.length > 0 && (
+                <AssistantSubagentPanel
+                    cards={visibleCards}
+                    onDismiss={handleDismissSubagent}
+                    onDismissAllCompleted={handleDismissAllCompleted}
+                />
+            )}
         </div>
     );
 }

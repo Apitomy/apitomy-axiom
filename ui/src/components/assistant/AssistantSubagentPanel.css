@@ -1,0 +1,28 @@
+.axiom-subagent-panel {
+    width: 320px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+    background-color: var(--pf-t--global--background--color--primary--default, #fff);
+}
+
+.axiom-subagent-panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+    flex-shrink: 0;
+}
+
+.axiom-subagent-panel__title {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.axiom-subagent-panel__cards {
+    flex: 1 1 0;
+    overflow-y: auto;
+    padding: 8px;
+}

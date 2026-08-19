@@ -1,0 +1,126 @@
+/* Card container */
+.axiom-subagent-card {
+    border: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    overflow: hidden;
+    background-color: var(--pf-t--global--background--color--primary--default, #fff);
+}
+
+.axiom-subagent-card--highlighted {
+    border-color: var(--pf-t--global--color--status--info--default, #2b9af3);
+    box-shadow: 0 0 8px var(--pf-t--global--color--status--info--default, #2b9af3);
+    animation: axiom-subagent-card-highlight-fade 2s ease-out forwards;
+}
+
+@keyframes axiom-subagent-card-highlight-fade {
+    from {
+        border-color: var(--pf-t--global--color--status--info--default, #2b9af3);
+        box-shadow: 0 0 8px var(--pf-t--global--color--status--info--default, #2b9af3);
+    }
+    to {
+        border-color: var(--pf-t--global--border--color--default, #d2d2d2);
+        box-shadow: none;
+    }
+}
+
+/* Header section */
+.axiom-subagent-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background-color: var(--pf-t--global--background--color--secondary--default, #f0f0f0);
+    gap: 8px;
+}
+
+.axiom-subagent-card__title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1 1 0;
+}
+
+.axiom-subagent-card__description {
+    font-size: 13px;
+    color: var(--pf-t--global--text--color--regular, #151515);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.axiom-subagent-card__close-btn {
+    flex-shrink: 0;
+    padding: 2px 6px;
+}
+
+/* Status section */
+.axiom-subagent-card__status {
+    padding: 8px 12px;
+    background-color: var(--pf-t--global--background--color--secondary--default, #f0f0f0);
+    font-size: 12px;
+}
+
+.axiom-subagent-card__completed {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--pf-t--global--color--status--success--default, #3e8635);
+}
+
+.axiom-subagent-card__running {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--pf-t--global--text--color--subtle, #6a6e73);
+}
+
+.axiom-subagent-card__activity {
+    flex: 1 1 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.axiom-subagent-card__stats {
+    font-family: var(--pf-t--global--font--family--mono, monospace);
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+/* Activity section */
+.axiom-subagent-card__activity-section {
+    padding: 0 12px 8px;
+}
+
+.axiom-subagent-card__activity-log {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.axiom-subagent-card__activity-entry {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 3px 0;
+}
+
+.axiom-subagent-card__tool-badge {
+    flex-shrink: 0;
+}
+
+.axiom-subagent-card__activity-desc {
+    font-size: 12px;
+    color: var(--pf-t--global--text--color--subtle, #6a6e73);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Navigate button */
+.axiom-subagent-card__navigate {
+    padding: 8px 12px;
+    font-size: 12px;
+}
