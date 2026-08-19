@@ -338,7 +338,7 @@ const SDK_TOOLS = [
             { name: "issueRef", type: "string", description: "Issue reference (e.g. 'owner/repo#123' or 'CVE-2024-12345')", required: true },
             { name: "issueSource", type: "string", description: "Issue source (e.g. 'github', 'jira')", required: true },
             { name: "repository", type: "string", description: "Repository identifier (e.g. 'owner/repo')", required: true },
-            { name: "description", type: "string", description: "Optional project description", required: false },
+            { name: "body", type: "string", description: "Optional markdown body content (e.g. issue body)", required: false },
             { name: "metadata", type: "string", description: "Optional JSON object of key-value metadata (e.g. '{\"priority\":\"high\"}')", required: false },
         ],
         handler: async (args) => {
@@ -349,8 +349,14 @@ const SDK_TOOLS = [
                 issueSource: args.issueSource,
                 repository: args.repository,
             };
-            if (args.description) body.description = args.description;
-            if (args.metadata) body.metadata = JSON.parse(args.metadata);
+            if (args.body) body.body = args.body;
+            if (args.metadata) {
+                try {
+                    body.metadata = JSON.parse(args.metadata);
+                } catch (e) {
+                    throw new Error(`Invalid JSON in metadata parameter: ${e.message}`);
+                }
+            }
             return await axiomApi("POST", "/projects", body);
         },
     },
