@@ -8065,7 +8065,7 @@
           "name",
           "labels",
           "isDefault",
-          "widgets",
+          "tabs",
           "createdOn",
           "updatedOn"
         ],
@@ -8095,13 +8095,6 @@
             "description": "Whether this is the default dashboard",
             "type": "boolean"
           },
-          "widgets": {
-            "description": "Widgets on this dashboard",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/DashboardWidget"
-            }
-          },
           "createdOn": {
             "format": "date-time",
             "description": "Creation timestamp",
@@ -8111,6 +8104,13 @@
             "format": "date-time",
             "description": "Last update timestamp",
             "type": "string"
+          },
+          "tabs": {
+            "description": "Tabs containing widgets on this dashboard",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DashboardTab"
+            }
           }
         }
       },
@@ -8119,7 +8119,7 @@
           "name",
           "labels",
           "isDefault",
-          "widgets"
+          "tabs"
         ],
         "type": "object",
         "properties": {
@@ -8142,11 +8142,11 @@
             "description": "Whether this is the default dashboard",
             "type": "boolean"
           },
-          "widgets": {
-            "description": "Widgets on this dashboard",
+          "tabs": {
+            "description": "Tabs containing widgets on this dashboard",
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/DashboardWidget"
+              "$ref": "#/components/schemas/DashboardTab"
             }
           }
         }
@@ -8561,6 +8561,31 @@
           },
           "limit": {
             "type": "integer"
+          }
+        }
+      },
+      "DashboardTab": {
+        "required": [
+          "id",
+          "name",
+          "widgets"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "Unique tab identifier",
+            "type": "string"
+          },
+          "name": {
+            "description": "Display name of the tab",
+            "type": "string"
+          },
+          "widgets": {
+            "description": "Widgets on this tab",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DashboardWidget"
+            }
           }
         }
       }

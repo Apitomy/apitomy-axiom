@@ -29,8 +29,8 @@ public class DashboardEntity extends PanacheEntity {
     @Column(name = "is_default")
     public boolean isDefault;
 
-    @Column(columnDefinition = "TEXT")
-    public String widgets;
+    @Column(name = "tabs", columnDefinition = "TEXT")
+    public String tabs;
 
     @Column(name = "created_on", nullable = false)
     public Instant createdOn;

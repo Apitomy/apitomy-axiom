@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Responsive, WidthProvider } from "react-grid-layout";
 import type { Layout } from "react-grid-layout";
@@ -14,6 +14,9 @@ import {
     FormGroup,
     Label,
     PageSection,
+    Tab,
+    Tabs,
+    TabTitleText,
     TextArea,
     TextInput,
     Title,
@@ -28,6 +31,7 @@ import TimesIcon from "@patternfly/react-icons/dist/esm/icons/times-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import {
     type Dashboard,
+    type DashboardTab,
     type DashboardWidget,
     type NewDashboard,
     fetchDashboard,
@@ -59,34 +63,65 @@ export function DashboardViewPage() {
     const [editName, setEditName] = useState("");
     const [editDescription, setEditDescription] = useState("");
     const [editLabels, setEditLabels] = useState<string[]>([]);
-    const [editWidgets, setEditWidgets] = useState<DashboardWidget[]>([]);
+    const [editTabs, setEditTabs] = useState<DashboardTab[]>([]);
+
+    const [activeTabId, setActiveTabId] = useState<string>("");
+    const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
+    const [renameValue, setRenameValue] = useState("");
+    const renameInputRef = useRef<HTMLInputElement>(null);
 
     const [addWidgetOpen, setAddWidgetOpen] = useState(false);
     const [deleteOpen, setDeleteOpen] = useState(false);
+    const [deleteTabTarget, setDeleteTabTarget] = useState<string | null>(null);
     const [refreshKey, setRefreshKey] = useState(0);
 
     const load = useCallback(() => {
         if (!dashboardId) return;
         setLoading(true);
         fetchDashboard(Number(dashboardId))
-            .then(setDashboard)
+            .then((d) => {
+                setDashboard(d);
+                if (d.tabs.length > 0 && !activeTabId) {
+                    setActiveTabId(d.tabs[0].id);
+                }
+            })
             .catch(console.error)
             .finally(() => setLoading(false));
     }, [dashboardId]);
 
     useEffect(() => { load(); }, [load]);
 
+    useEffect(() => {
+        if (renamingTabId && renameInputRef.current) {
+            renameInputRef.current.focus();
+            renameInputRef.current.select();
+        }
+    }, [renamingTabId]);
+
+    const activeTabs = isEditing ? editTabs : (dashboard?.tabs ?? []);
+    const activeTab = activeTabs.find(t => t.id === activeTabId);
+    const activeWidgets = activeTab?.widgets ?? [];
+    const activeLabels = isEditing ? editLabels : (dashboard?.labels ?? []);
+    const showTabBar = activeTabs.length > 1 || isEditing;
+
     const enterEditMode = () => {
         if (!dashboard) return;
         setEditName(dashboard.name);
         setEditDescription(dashboard.description ?? "");
         setEditLabels([...dashboard.labels]);
-        setEditWidgets(structuredClone(dashboard.widgets));
+        setEditTabs(structuredClone(dashboard.tabs));
+        if (dashboard.tabs.length > 0) {
+            setActiveTabId(dashboard.tabs[0].id);
+        }
         setIsEditing(true);
     };
 
     const cancelEdit = () => {
         setIsEditing(false);
+        setRenamingTabId(null);
+        if (dashboard && dashboard.tabs.length > 0) {
+            setActiveTabId(dashboard.tabs[0].id);
+        }
     };
 
     const handleSave = () => {
@@ -96,12 +131,19 @@ export function DashboardViewPage() {
             description: editDescription || undefined,
             labels: editLabels,
             isDefault: dashboard.isDefault,
-            widgets: editWidgets,
+            tabs: editTabs,
         };
         updateDashboard(dashboard.id, data)
             .then((updated) => {
                 setDashboard(updated);
                 setIsEditing(false);
+                setRenamingTabId(null);
+                if (updated.tabs.length > 0) {
+                    const stillExists = updated.tabs.find(t => t.id === activeTabId);
+                    if (!stillExists) {
+                        setActiveTabId(updated.tabs[0].id);
+                    }
+                }
             })
             .catch(console.error);
     };
@@ -120,7 +162,7 @@ export function DashboardViewPage() {
             description: dashboard.description,
             labels: dashboard.labels,
             isDefault: true,
-            widgets: dashboard.widgets,
+            tabs: dashboard.tabs,
         };
         updateDashboard(dashboard.id, data)
             .then(setDashboard)
@@ -141,33 +183,95 @@ export function DashboardViewPage() {
                 h: entry.defaultSize.h,
             },
         };
-        setEditWidgets(prev => [...prev, newWidget]);
+        setEditTabs(prev => prev.map(t =>
+            t.id === activeTabId
+                ? { ...t, widgets: [...t.widgets, newWidget] }
+                : t
+        ));
         setAddWidgetOpen(false);
     };
 
     const handleRemoveWidget = (widgetId: string) => {
-        setEditWidgets(prev => prev.filter(w => w.id !== widgetId));
+        setEditTabs(prev => prev.map(t =>
+            t.id === activeTabId
+                ? { ...t, widgets: t.widgets.filter(w => w.id !== widgetId) }
+                : t
+        ));
     };
 
     const handleWidgetConfigChange = (widgetId: string, config: Record<string, unknown>) => {
-        setEditWidgets(prev => prev.map(w =>
-            w.id === widgetId ? { ...w, config } : w
+        setEditTabs(prev => prev.map(t =>
+            t.id === activeTabId
+                ? { ...t, widgets: t.widgets.map(w => w.id === widgetId ? { ...w, config } : w) }
+                : t
         ));
     };
 
     const onGridLayoutChange = (layout: Layout[]) => {
-        setEditWidgets(prev => prev.map(w => {
-            const item = layout.find(l => l.i === w.id);
-            if (!item) return w;
+        setEditTabs(prev => prev.map(t => {
+            if (t.id !== activeTabId) return t;
             return {
-                ...w,
-                layout: { x: item.x, y: item.y, w: item.w, h: item.h },
+                ...t,
+                widgets: t.widgets.map(w => {
+                    const item = layout.find(l => l.i === w.id);
+                    if (!item) return w;
+                    return {
+                        ...w,
+                        layout: { x: item.x, y: item.y, w: item.w, h: item.h },
+                    };
+                }),
             };
         }));
     };
 
-    const activeWidgets = isEditing ? editWidgets : (dashboard?.widgets ?? []);
-    const activeLabels = isEditing ? editLabels : (dashboard?.labels ?? []);
+    // Tab management (edit mode)
+    const handleAddTab = () => {
+        const newTab: DashboardTab = {
+            id: crypto.randomUUID(),
+            name: "New Tab",
+            widgets: [],
+        };
+        setEditTabs(prev => [...prev, newTab]);
+        setActiveTabId(newTab.id);
+    };
+
+    const handleDeleteTab = (tabId: string) => {
+        const tab = editTabs.find(t => t.id === tabId);
+        if (tab && tab.widgets.length > 0) {
+            setDeleteTabTarget(tabId);
+            return;
+        }
+        removeTab(tabId);
+    };
+
+    const removeTab = (tabId: string) => {
+        setEditTabs(prev => {
+            const updated = prev.filter(t => t.id !== tabId);
+            if (activeTabId === tabId && updated.length > 0) {
+                setActiveTabId(updated[0].id);
+            }
+            return updated;
+        });
+        setDeleteTabTarget(null);
+    };
+
+    const startRenameTab = (tabId: string) => {
+        const tab = editTabs.find(t => t.id === tabId);
+        if (!tab) return;
+        setRenamingTabId(tabId);
+        setRenameValue(tab.name);
+    };
+
+    const commitRename = () => {
+        if (!renamingTabId) return;
+        const trimmed = renameValue.trim();
+        if (trimmed) {
+            setEditTabs(prev => prev.map(t =>
+                t.id === renamingTabId ? { ...t, name: trimmed } : t
+            ));
+        }
+        setRenamingTabId(null);
+    };
 
     const gridItems: Layout[] = activeWidgets.map(w => {
         const entry = getWidget(w.type);
@@ -314,6 +418,81 @@ export function DashboardViewPage() {
                 </div>
             )}
 
+            {/* Tab bar */}
+            {showTabBar && (
+                <Flex alignItems={{ default: "alignItemsCenter" }}
+                      style={{ marginBottom: "16px" }}>
+                    <FlexItem grow={{ default: "grow" }}>
+                        <Tabs activeKey={activeTabId}
+                              onSelect={(_e, tabId) => setActiveTabId(String(tabId))}>
+                            {activeTabs.map(tab => (
+                                <Tab key={tab.id} eventKey={tab.id}
+                                     title={
+                                         <Flex alignItems={{ default: "alignItemsCenter" }}
+                                               gap={{ default: "gapSm" }}
+                                               flexWrap={{ default: "nowrap" }}>
+                                             <FlexItem>
+                                                 {isEditing && renamingTabId === tab.id ? (
+                                                     <input
+                                                         ref={renamingTabId === tab.id ? renameInputRef : undefined}
+                                                         value={renameValue}
+                                                         onChange={(e) => setRenameValue(e.target.value)}
+                                                         onBlur={commitRename}
+                                                         onKeyDown={(e) => {
+                                                             if (e.key === "Enter") commitRename();
+                                                             if (e.key === "Escape") setRenamingTabId(null);
+                                                         }}
+                                                         style={{
+                                                             border: "1px solid var(--pf-t--global--border--color--default)",
+                                                             borderRadius: "3px",
+                                                             padding: "2px 6px",
+                                                             fontSize: "inherit",
+                                                             width: `${Math.max(renameValue.length, 4) + 2}ch`,
+                                                         }}
+                                                         onClick={(e) => e.stopPropagation()}
+                                                     />
+                                                 ) : (
+                                                     <TabTitleText>
+                                                         <span onDoubleClick={(e) => {
+                                                             if (isEditing) {
+                                                                 e.stopPropagation();
+                                                                 startRenameTab(tab.id);
+                                                             }
+                                                         }}>
+                                                             {tab.name}
+                                                         </span>
+                                                     </TabTitleText>
+                                                 )}
+                                             </FlexItem>
+                                             {isEditing && activeTabs.length > 1 && (
+                                                 <FlexItem>
+                                                     <Button variant="plain" size="sm"
+                                                             aria-label={`Delete tab ${tab.name}`}
+                                                             style={{ padding: 0 }}
+                                                             onClick={(e) => {
+                                                                 e.stopPropagation();
+                                                                 handleDeleteTab(tab.id);
+                                                             }}>
+                                                         <TimesIcon />
+                                                     </Button>
+                                                 </FlexItem>
+                                             )}
+                                         </Flex>
+                                     }
+                                />
+                            ))}
+                        </Tabs>
+                    </FlexItem>
+                    {isEditing && (
+                        <FlexItem>
+                            <Button variant="link" icon={<PlusCircleIcon />}
+                                    onClick={handleAddTab}>
+                                Add Tab
+                            </Button>
+                        </FlexItem>
+                    )}
+                </Flex>
+            )}
 
             {/* Widget grid */}
             {activeWidgets.length === 0 ? (
@@ -326,6 +505,7 @@ export function DashboardViewPage() {
                 </EmptyState>
             ) : (
                 <ResponsiveGridLayout
+                    key={activeTabId}
                     className="layout"
                     layouts={{ lg: gridItems }}
                     breakpoints={{ lg: 1200, md: 996, sm: 768 }}
@@ -367,6 +547,17 @@ export function DashboardViewPage() {
                 onCancel={() => setDeleteOpen(false)}
             >
                 Permanently delete <strong>{dashboard.name}</strong> and all its widgets?
+            </ConfirmDeleteModal>
+
+            <ConfirmDeleteModal
+                isOpen={deleteTabTarget !== null}
+                title="Delete Tab"
+                onConfirm={() => deleteTabTarget && removeTab(deleteTabTarget)}
+                onCancel={() => setDeleteTabTarget(null)}
+            >
+                This tab contains widgets. Delete <strong>
+                    {editTabs.find(t => t.id === deleteTabTarget)?.name}
+                </strong> and all its widgets?
             </ConfirmDeleteModal>
         </PageSection>
     );
