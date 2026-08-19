@@ -417,6 +417,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                 type: "system",
                 content: "Conversation cleared.",
             }]);
+            setSubagentCards(new Map());
             setIsProcessing(false);
         } else {
             addMessage({ type: "user", content: message });
