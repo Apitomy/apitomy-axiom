@@ -1,14 +1,20 @@
-import { useCallback, useEffect, useRef } from "react";
-import { Button } from "@patternfly/react-core";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Button, Tab, TabTitleText, Tabs } from "@patternfly/react-core";
 import {
     AssistantSubagentCard,
     type SubagentCardData,
 } from "./AssistantSubagentCard";
+import {
+    AssistantBackgroundTaskCard,
+    type BackgroundTaskCardData,
+} from "./AssistantBackgroundTaskCard";
 import "./AssistantSubagentPanel.css";
 
 interface AssistantSubagentPanelProps {
-    cards: SubagentCardData[];
-    onDismiss: (id: string) => void;
+    subagentCards: SubagentCardData[];
+    backgroundTaskCards: BackgroundTaskCardData[];
+    onDismissSubagent: (id: string) => void;
+    onDismissBackgroundTask: (id: string) => void;
     onDismissAllCompleted: () => void;
     onNavigateToAgent?: (toolUseId: string) => void;
     onPermissionRespond?: (permissionId: string, allow: boolean, toolInput?: Record<string, unknown>) => void;
@@ -21,13 +27,18 @@ const MIN_WIDTH = 200;
 const MAX_WIDTH = 500;
 
 export function AssistantSubagentPanel({
-    cards, onDismiss, onDismissAllCompleted, onNavigateToAgent, onPermissionRespond,
+    subagentCards, backgroundTaskCards,
+    onDismissSubagent, onDismissBackgroundTask, onDismissAllCompleted,
+    onNavigateToAgent, onPermissionRespond,
     highlightedCardId, width, onWidthChange,
 }: AssistantSubagentPanelProps) {
-    const hasCompleted = cards.some((c) => c.status === "completed");
+    const [activeTab, setActiveTab] = useState<string | number>("subagents");
     const draggingRef = useRef(false);
     const startXRef = useRef(0);
     const startWidthRef = useRef(0);
+
+    const hasCompletedSubagents = subagentCards.some((c) => c.status === "completed");
+    const hasCompletedBgTasks = backgroundTaskCards.some((c) => c.status === "completed");
 
     const onMouseMove = useCallback((e: MouseEvent) => {
         if (!draggingRef.current) return;
@@ -63,25 +74,64 @@ export function AssistantSubagentPanel({
     return (
         <div className="axiom-subagent-panel" style={{ width }}>
             <div className="axiom-subagent-panel__resize-handle" onMouseDown={handleMouseDown} />
-            <div className="axiom-subagent-panel__header">
-                <span className="axiom-subagent-panel__title">Subagents</span>
-                {hasCompleted && (
-                    <Button variant="link" size="sm" onClick={onDismissAllCompleted}>
-                        Close All
-                    </Button>
+            <Tabs
+                activeKey={activeTab}
+                onSelect={(_e, key) => setActiveTab(key)}
+                className="axiom-subagent-panel__tabs"
+            >
+                <Tab
+                    eventKey="subagents"
+                    title={<TabTitleText>Subagents ({subagentCards.length})</TabTitleText>}
+                />
+                <Tab
+                    eventKey="background"
+                    title={<TabTitleText>Background ({backgroundTaskCards.length})</TabTitleText>}
+                />
+            </Tabs>
+            <div className="axiom-subagent-panel__tab-content">
+                {activeTab === "subagents" && (
+                    <>
+                        {hasCompletedSubagents && (
+                            <div className="axiom-subagent-panel__toolbar">
+                                <Button variant="link" size="sm" onClick={onDismissAllCompleted}>
+                                    Close All
+                                </Button>
+                            </div>
+                        )}
+                        <div className="axiom-subagent-panel__cards">
+                            {subagentCards.map((card) => (
+                                <AssistantSubagentCard
+                                    key={card.id}
+                                    card={card}
+                                    onDismiss={onDismissSubagent}
+                                    onNavigateToAgent={onNavigateToAgent}
+                                    onPermissionRespond={onPermissionRespond}
+                                    highlighted={highlightedCardId === card.id}
+                                />
+                            ))}
+                        </div>
+                    </>
                 )}
-            </div>
-            <div className="axiom-subagent-panel__cards">
-                {cards.map((card) => (
-                    <AssistantSubagentCard
-                        key={card.id}
-                        card={card}
-                        onDismiss={onDismiss}
-                        onNavigateToAgent={onNavigateToAgent}
-                        onPermissionRespond={onPermissionRespond}
-                        highlighted={highlightedCardId === card.id}
-                    />
-                ))}
+                {activeTab === "background" && (
+                    <>
+                        {hasCompletedBgTasks && (
+                            <div className="axiom-subagent-panel__toolbar">
+                                <Button variant="link" size="sm" onClick={onDismissAllCompleted}>
+                                    Close All
+                                </Button>
+                            </div>
+                        )}
+                        <div className="axiom-subagent-panel__cards">
+                            {backgroundTaskCards.map((card) => (
+                                <AssistantBackgroundTaskCard
+                                    key={card.id}
+                                    card={card}
+                                    onDismiss={onDismissBackgroundTask}
+                                />
+                            ))}
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );

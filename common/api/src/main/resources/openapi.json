@@ -4987,6 +4987,40 @@
           }
         }
       }
+    },
+    "/assistant/sessions/{sessionId}/dismiss-card": {
+      "post": {
+        "tags": [
+          "Assistant"
+        ],
+        "summary": "Dismiss a subagent or background task card",
+        "operationId": "dismissAssistantCard",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DismissCardRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Card dismissed"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "sessionId",
+          "in": "path",
+          "description": "The assistant session ID",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
     }
   },
   "components": {
@@ -8586,6 +8620,18 @@
             "items": {
               "$ref": "#/components/schemas/DashboardWidget"
             }
+          }
+        }
+      },
+      "DismissCardRequest": {
+        "required": [
+          "cardId"
+        ],
+        "type": "object",
+        "properties": {
+          "cardId": {
+            "description": "The tool_use_id of the card to dismiss",
+            "type": "string"
           }
         }
       }

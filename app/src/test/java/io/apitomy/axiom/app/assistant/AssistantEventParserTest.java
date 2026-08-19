@@ -310,6 +310,38 @@ class AssistantEventParserTest {
     }
 
     @Test
+    void parseSystemTaskStartedNonAgentEmitsBackgroundTask() {
+        String line = """
+                {"type":"system","subtype":"task_started","task_id":"task-2",\
+                "tool_use_id":"tu-bash-1","description":"Run build.sh",\
+                "task_type":"background_tool"}""";
+
+        List<SseEvent> events = parser.parse(line);
+
+        assertEquals(1, events.size());
+        SseEvent event = events.get(0);
+        assertEquals("background_task_started", event.type());
+        assertEquals("tu-bash-1", event.data().path("toolUseId").asText());
+        assertEquals("task-2", event.data().path("taskId").asText());
+        assertEquals("Run build.sh", event.data().path("description").asText());
+    }
+
+    @Test
+    void parseSystemTaskStartedMissingTaskTypeEmitsBackgroundTask() {
+        String line = """
+                {"type":"system","subtype":"task_started","task_id":"task-3",\
+                "tool_use_id":"tu-bash-2","description":"Start dev server"}""";
+
+        List<SseEvent> events = parser.parse(line);
+
+        assertEquals(1, events.size());
+        SseEvent event = events.get(0);
+        assertEquals("background_task_started", event.type());
+        assertEquals("tu-bash-2", event.data().path("toolUseId").asText());
+        assertEquals("Start dev server", event.data().path("description").asText());
+    }
+
+    @Test
     void parseSystemTaskProgressEvent() {
         String line = """
                 {"type":"system","subtype":"task_progress","task_id":"task-1",\

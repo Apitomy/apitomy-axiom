@@ -23,18 +23,23 @@
     opacity: 0.4;
 }
 
-.axiom-subagent-panel__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+.axiom-subagent-panel__tabs {
     flex-shrink: 0;
 }
 
-.axiom-subagent-panel__title {
-    font-weight: 600;
-    font-size: 14px;
+.axiom-subagent-panel__tab-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+.axiom-subagent-panel__toolbar {
+    display: flex;
+    justify-content: flex-end;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+    flex-shrink: 0;
 }
 
 .axiom-subagent-panel__cards {

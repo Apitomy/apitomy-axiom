@@ -21,7 +21,8 @@ import java.util.List;
  * <h3>Event type mapping</h3>
  * <ul>
  *   <li>{@code system} (subtype init) → {@code session_init}</li>
- *   <li>{@code system} (subtype task_started) → {@code subagent_started}</li>
+ *   <li>{@code system} (subtype task_started, task_type local_agent) → {@code subagent_started}</li>
+ *   <li>{@code system} (subtype task_started, other task_type) → {@code background_task_started}</li>
  *   <li>{@code system} (subtype task_progress) → {@code subagent_progress}</li>
  *   <li>{@code system} (subtype task_updated) → {@code subagent_status}</li>
  *   <li>{@code system} (subtype task_notification) → {@code subagent_completed}</li>
@@ -108,8 +109,13 @@ public class AssistantEventParser {
                 data.put("toolUseId", root.path("tool_use_id").asText());
                 data.put("taskId", root.path("task_id").asText());
                 data.put("description", root.path("description").asText());
-                data.put("subagentType", root.path("subagent_type").asText());
-                yield List.of(new SseEvent("subagent_started", data));
+                String taskType = root.path("task_type").asText("");
+                if ("local_agent".equals(taskType)) {
+                    data.put("subagentType", root.path("subagent_type").asText());
+                    yield List.of(new SseEvent("subagent_started", data));
+                } else {
+                    yield List.of(new SseEvent("background_task_started", data));
+                }
             }
             case "task_progress" -> {
                 ObjectNode data = JsonNodeFactory.instance.objectNode();
@@ -293,7 +299,7 @@ public class AssistantEventParser {
      *             tool_use, tool_result, tool_progress, turn_complete,
      *             permission_request, thinking, conversation_reset,
      *             subagent_started, subagent_progress, subagent_status,
-     *             subagent_completed)
+     *             subagent_completed, background_task_started)
      * @param data the extracted/transformed JSON data
      */
     public record SseEvent(String type, JsonNode data) {

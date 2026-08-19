@@ -3,10 +3,12 @@ import { AssistantMessageList, type ChatMessage } from "./AssistantMessageList";
 import { AssistantMessageInput } from "./AssistantMessageInput";
 import { AssistantSubagentPanel } from "./AssistantSubagentPanel";
 import type { SubagentCardData, SubagentActivityEntry } from "./AssistantSubagentCard";
+import type { BackgroundTaskCardData } from "./AssistantBackgroundTaskCard";
 import {
     sendAssistantMessage,
     respondToAssistantPermission,
     createAutoApproval,
+    dismissAssistantCard,
     fetchAssistantSessionHistory,
 } from "../../config/api";
 import { sseClient } from "../../config/sse";
@@ -32,6 +34,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
     const [processingText, setProcessingText] = useState("");
     const [slashCommands, setSlashCommands] = useState<string[]>([]);
     const [subagentCards, setSubagentCards] = useState<Map<string, SubagentCardData>>(new Map());
+    const [backgroundTaskCards, setBackgroundTaskCards] = useState<Map<string, BackgroundTaskCardData>>(new Map());
     const [panelWidth, setPanelWidth] = useState(320);
     const sessionEndedRef = useRef(false);
     const lastSeenIndexRef = useRef(-1);
@@ -245,6 +248,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                     content: "Conversation cleared.",
                 }]);
                 setSubagentCards(new Map());
+                setBackgroundTaskCards(new Map());
                 setIsProcessing(false);
                 break;
 
@@ -301,10 +305,34 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                     });
                     return next;
                 });
+                setBackgroundTaskCards((prev) => {
+                    const card = prev.get(data.toolUseId as string);
+                    if (!card) return prev;
+                    const next = new Map(prev);
+                    next.set(card.id, {
+                        ...card,
+                        durationMs: data.durationMs as number,
+                    });
+                    return next;
+                });
                 break;
 
             case "subagent_status":
                 setSubagentCards((prev) => {
+                    for (const [id, card] of prev) {
+                        if (card.taskId === (data.taskId as string)) {
+                            const next = new Map(prev);
+                            next.set(id, {
+                                ...card,
+                                status: (data.status as string) === "completed"
+                                    ? "completed" : card.status,
+                            });
+                            return next;
+                        }
+                    }
+                    return prev;
+                });
+                setBackgroundTaskCards((prev) => {
                     for (const [id, card] of prev) {
                         if (card.taskId === (data.taskId as string)) {
                             const next = new Map(prev);
@@ -330,6 +358,45 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                         status: "completed",
                         summary: data.summary as string,
                     });
+                    return next;
+                });
+                setBackgroundTaskCards((prev) => {
+                    const card = prev.get(data.toolUseId as string);
+                    if (!card) return prev;
+                    const next = new Map(prev);
+                    next.set(card.id, { ...card, status: "completed" });
+                    return next;
+                });
+                break;
+
+            case "background_task_started":
+                setBackgroundTaskCards((prev) => {
+                    const next = new Map(prev);
+                    next.set(data.toolUseId as string, {
+                        id: data.toolUseId as string,
+                        taskId: data.taskId as string,
+                        description: data.description as string,
+                        status: "running",
+                        durationMs: 0,
+                        dismissed: false,
+                    });
+                    return next;
+                });
+                break;
+
+            case "card_dismissed":
+                setSubagentCards((prev) => {
+                    const card = prev.get(data.cardId as string);
+                    if (!card) return prev;
+                    const next = new Map(prev);
+                    next.set(card.id, { ...card, dismissed: true });
+                    return next;
+                });
+                setBackgroundTaskCards((prev) => {
+                    const card = prev.get(data.cardId as string);
+                    if (!card) return prev;
+                    const next = new Map(prev);
+                    next.set(card.id, { ...card, dismissed: true });
                     return next;
                 });
                 break;
@@ -457,6 +524,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                 content: "Conversation cleared.",
             }]);
             setSubagentCards(new Map());
+            setBackgroundTaskCards(new Map());
             setIsProcessing(false);
         } else {
             addMessage({ type: "user", content: message });
@@ -528,27 +596,28 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
         }
     }, [sessionId, onAutoApprovalCountChange, addMessage]);
 
-    const handleDismissSubagent = useCallback((id: string) => {
-        setSubagentCards((prev) => {
-            const card = prev.get(id);
-            if (!card) return prev;
-            const next = new Map(prev);
-            next.set(id, { ...card, dismissed: true });
-            return next;
+    const handleDismissCard = useCallback((id: string) => {
+        dismissAssistantCard(sessionId, id).catch((err) => {
+            console.error("Failed to dismiss card:", err);
         });
-    }, []);
+    }, [sessionId]);
 
     const handleDismissAllCompleted = useCallback(() => {
-        setSubagentCards((prev) => {
-            const next = new Map(prev);
-            for (const [id, card] of next) {
-                if (card.status === "completed") {
-                    next.set(id, { ...card, dismissed: true });
-                }
+        for (const card of subagentCards.values()) {
+            if (card.status === "completed" && !card.dismissed) {
+                dismissAssistantCard(sessionId, card.id).catch((err) => {
+                    console.error("Failed to dismiss card:", err);
+                });
             }
-            return next;
-        });
-    }, []);
+        }
+        for (const card of backgroundTaskCards.values()) {
+            if (card.status === "completed" && !card.dismissed) {
+                dismissAssistantCard(sessionId, card.id).catch((err) => {
+                    console.error("Failed to dismiss card:", err);
+                });
+            }
+        }
+    }, [sessionId, subagentCards, backgroundTaskCards]);
 
     const [highlightedCardId, setHighlightedCardId] = useState<string | undefined>(undefined);
     const [highlightedAgentBlockId, setHighlightedAgentBlockId] = useState<string | undefined>(undefined);
@@ -567,7 +636,9 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
         setTimeout(() => setHighlightedAgentBlockId(undefined), 2000);
     }, []);
 
-    const visibleCards = Array.from(subagentCards.values()).filter(c => !c.dismissed);
+    const visibleSubagentCards = Array.from(subagentCards.values()).filter(c => !c.dismissed);
+    const visibleBgTaskCards = Array.from(backgroundTaskCards.values()).filter(c => !c.dismissed);
+    const hasSidePanel = visibleSubagentCards.length > 0 || visibleBgTaskCards.length > 0;
 
     return (
         <div style={{
@@ -597,10 +668,12 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                     slashCommands={slashCommands}
                 />
             </div>
-            {visibleCards.length > 0 && (
+            {hasSidePanel && (
                 <AssistantSubagentPanel
-                    cards={visibleCards}
-                    onDismiss={handleDismissSubagent}
+                    subagentCards={visibleSubagentCards}
+                    backgroundTaskCards={visibleBgTaskCards}
+                    onDismissSubagent={handleDismissCard}
+                    onDismissBackgroundTask={handleDismissCard}
                     onDismissAllCompleted={handleDismissAllCompleted}
                     onNavigateToAgent={handleNavigateToAgent}
                     onPermissionRespond={handlePermissionRespond}

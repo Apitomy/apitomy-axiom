@@ -1436,6 +1436,15 @@ export async function respondToAssistantPermission(
     if (!response.ok) throw new Error(`Failed to respond to permission: ${response.status}`);
 }
 
+export async function dismissAssistantCard(sessionId: string, cardId: string): Promise<void> {
+    const response = await fetch(`${API}/assistant/sessions/${sessionId}/dismiss-card`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cardId }),
+    });
+    if (!response.ok) throw new Error(`Failed to dismiss card: ${response.status}`);
+}
+
 export async function fetchAssistantItems(sessionId: string): Promise<AssistantItem[]> {
     const response = await fetch(`${API}/assistant/sessions/${sessionId}/items`);
     if (!response.ok) throw new Error(`Failed to fetch items: ${response.status}`);

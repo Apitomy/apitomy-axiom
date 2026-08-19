@@ -13,6 +13,7 @@ import io.apitomy.axiom.api.beans.AssistantSessionInfo;
 import io.apitomy.axiom.api.beans.AutoApprovalRule;
 import io.apitomy.axiom.api.beans.CreateAssistantSessionRequest;
 import io.apitomy.axiom.api.beans.CreateAutoApprovalRequest;
+import io.apitomy.axiom.api.beans.DismissCardRequest;
 import io.apitomy.axiom.api.beans.NewSessionTemplate;
 import io.apitomy.axiom.api.beans.RenameAssistantSessionRequest;
 import io.apitomy.axiom.api.beans.SendAssistantMessageRequest;
@@ -351,6 +352,18 @@ public class AssistantResourceImpl implements AssistantResource {
             throw new WebApplicationException(
                     "Failed to respond to permission: " + e.getMessage(), 500);
         }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void dismissAssistantCard(String sessionId, DismissCardRequest data) {
+        AssistantSession session = requireSession(sessionId);
+        if (data.getCardId() == null || data.getCardId().isBlank()) {
+            throw new WebApplicationException("Missing 'cardId' field", 400);
+        }
+        ObjectNode eventData = objectMapper.createObjectNode();
+        eventData.put("cardId", data.getCardId());
+        session.addEvent(new SseEvent("card_dismissed", eventData));
     }
 
     /** {@inheritDoc} */
