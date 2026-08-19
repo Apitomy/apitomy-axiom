@@ -32,6 +32,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
     const [processingText, setProcessingText] = useState("");
     const [slashCommands, setSlashCommands] = useState<string[]>([]);
     const [subagentCards, setSubagentCards] = useState<Map<string, SubagentCardData>>(new Map());
+    const [panelWidth, setPanelWidth] = useState(320);
     const sessionEndedRef = useRef(false);
     const lastSeenIndexRef = useRef(-1);
 
@@ -552,6 +553,8 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                     onDismissAllCompleted={handleDismissAllCompleted}
                     onNavigateToAgent={handleNavigateToAgent}
                     highlightedCardId={highlightedCardId}
+                    width={panelWidth}
+                    onWidthChange={setPanelWidth}
                 />
             )}
         </div>

@@ -1,10 +1,26 @@
 .axiom-subagent-panel {
-    width: 320px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
     border-left: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
     background-color: var(--pf-t--global--background--color--primary--default, #fff);
+    position: relative;
+}
+
+.axiom-subagent-panel__resize-handle {
+    position: absolute;
+    top: 0;
+    left: -3px;
+    width: 6px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 10;
+}
+
+.axiom-subagent-panel__resize-handle:hover,
+.axiom-subagent-panel__resize-handle:active {
+    background-color: var(--pf-t--global--color--brand--default, #0066cc);
+    opacity: 0.4;
 }
 
 .axiom-subagent-panel__header {
