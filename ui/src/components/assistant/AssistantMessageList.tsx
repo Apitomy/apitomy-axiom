@@ -77,9 +77,11 @@ interface AssistantMessageListProps {
         pattern: string | undefined, permissionId: string) => void;
     isProcessing?: boolean;
     processingText?: string;
+    onSubagentClick?: (toolUseId: string) => void;
+    highlightedAgentBlockId?: string;
 }
 
-export function AssistantMessageList({ messages, onPermissionRespond, onCreateAutoApproval, isProcessing, processingText }: AssistantMessageListProps) {
+export function AssistantMessageList({ messages, onPermissionRespond, onCreateAutoApproval, isProcessing, processingText, onSubagentClick, highlightedAgentBlockId }: AssistantMessageListProps) {
     const endRef = useRef<HTMLDivElement>(null);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -166,19 +168,23 @@ export function AssistantMessageList({ messages, onPermissionRespond, onCreateAu
 
                     case "tool_use":
                         return (
-                            <AssistantToolUseBlock
-                                key={msg.id}
-                                toolName={msg.toolName || "unknown"}
-                                input={msg.toolInput}
-                                result={msg.toolResult}
-                                isError={msg.isError}
-                                elapsedSeconds={msg.elapsedSeconds}
-                                permissionId={msg.permissionId}
-                                permissionResolved={msg.permissionResolved}
-                                permissionAllowed={msg.permissionAllowed}
-                                onPermissionRespond={onPermissionRespond}
-                                onCreateAutoApproval={onCreateAutoApproval}
-                            />
+                            <div key={msg.id} data-tool-use-id={msg.toolUseId}>
+                                <AssistantToolUseBlock
+                                    toolName={msg.toolName || "unknown"}
+                                    toolUseId={msg.toolUseId}
+                                    input={msg.toolInput}
+                                    result={msg.toolResult}
+                                    isError={msg.isError}
+                                    elapsedSeconds={msg.elapsedSeconds}
+                                    permissionId={msg.permissionId}
+                                    permissionResolved={msg.permissionResolved}
+                                    permissionAllowed={msg.permissionAllowed}
+                                    onPermissionRespond={onPermissionRespond}
+                                    onCreateAutoApproval={onCreateAutoApproval}
+                                    onSubagentClick={onSubagentClick}
+                                    highlighted={msg.toolUseId === highlightedAgentBlockId}
+                                />
+                            </div>
                         );
 
                     case "thinking":

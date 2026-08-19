@@ -40,6 +40,7 @@ function getToolColor(toolName: string): LabelColor {
 
 interface AssistantToolUseBlockProps {
     toolName: string;
+    toolUseId?: string;
     input?: Record<string, unknown>;
     result?: string;
     isError?: boolean;
@@ -50,12 +51,14 @@ interface AssistantToolUseBlockProps {
     onPermissionRespond?: (permissionId: string, allow: boolean, toolInput?: Record<string, unknown>) => void;
     onCreateAutoApproval?: (toolName: string, fieldName: string | undefined,
         pattern: string | undefined, permissionId: string) => void;
+    onSubagentClick?: (toolUseId: string) => void;
+    highlighted?: boolean;
 }
 
 export function AssistantToolUseBlock({
-    toolName, input, result, isError, elapsedSeconds,
+    toolName, toolUseId, input, result, isError, elapsedSeconds,
     permissionId, permissionResolved, permissionAllowed, onPermissionRespond,
-    onCreateAutoApproval,
+    onCreateAutoApproval, onSubagentClick, highlighted,
 }: AssistantToolUseBlockProps) {
     const effectiveTheme = useEffectiveTheme();
     const syntaxStyle = effectiveTheme === "dark" ? stackoverflowDark : stackoverflowLight;
@@ -78,12 +81,20 @@ export function AssistantToolUseBlock({
     const contextSummary = getContextSummary(toolName, input);
 
     return (
-        <div className="axiom-tool-use" data-border={borderVariant || undefined}>
+        <div className="axiom-tool-use" data-border={borderVariant || undefined}
+            data-highlighted={highlighted || undefined}>
             <div className="axiom-tool-use__header">
                 <ExpandableSection
                     toggleContent={
                         <span>
-                            <Label isCompact color={isError ? "red" : getToolColor(toolName)}>
+                            <Label
+                                isCompact
+                                color={isError ? "red" : getToolColor(toolName)}
+                                onClick={toolName === "Agent" && onSubagentClick && toolUseId
+                                    ? (e) => { e.stopPropagation(); onSubagentClick(toolUseId); }
+                                    : undefined}
+                                style={toolName === "Agent" && onSubagentClick ? { cursor: "pointer" } : undefined}
+                            >
                                 {toolName}
                             </Label>
                             {!result && elapsedSeconds != null && (

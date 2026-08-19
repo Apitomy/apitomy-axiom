@@ -497,6 +497,23 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
         });
     }, []);
 
+    const [highlightedCardId, setHighlightedCardId] = useState<string | null>(null);
+    const [highlightedAgentBlockId, setHighlightedAgentBlockId] = useState<string | null>(null);
+
+    const handleSubagentClick = useCallback((toolUseId: string) => {
+        setHighlightedCardId(toolUseId);
+        setTimeout(() => setHighlightedCardId(null), 2000);
+    }, []);
+
+    const handleNavigateToAgent = useCallback((toolUseId: string) => {
+        const el = document.querySelector(`[data-tool-use-id="${CSS.escape(toolUseId)}"]`);
+        if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+        setHighlightedAgentBlockId(toolUseId);
+        setTimeout(() => setHighlightedAgentBlockId(null), 2000);
+    }, []);
+
     const visibleCards = Array.from(subagentCards.values()).filter(c => !c.dismissed);
 
     return (
@@ -518,6 +535,8 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                     onCreateAutoApproval={handleCreateAutoApproval}
                     isProcessing={isProcessing}
                     processingText={processingText}
+                    onSubagentClick={handleSubagentClick}
+                    highlightedAgentBlockId={highlightedAgentBlockId}
                 />
                 <AssistantMessageInput
                     onSend={handleSend}
@@ -530,6 +549,8 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                     cards={visibleCards}
                     onDismiss={handleDismissSubagent}
                     onDismissAllCompleted={handleDismissAllCompleted}
+                    onNavigateToAgent={handleNavigateToAgent}
+                    highlightedCardId={highlightedCardId}
                 />
             )}
         </div>
