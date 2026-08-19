@@ -54,11 +54,12 @@ const SDK_TOOLS = [
     },
     {
         name: "axiom_list_projects",
-        description: "List existing Axiom projects with optional filtering by name, status, and labels.",
+        description: "List existing Axiom projects with optional filtering by name, status, labels, and ref.",
         parameters: [
             { name: "filterName", type: "string", description: "Filter by project name or issue ref (substring match)", required: false },
             { name: "filterStatus", type: "string", description: "Filter by status: Created, InProgress, Idle, Completed (comma-separated for multiple)", required: false },
             { name: "filterLabels", type: "string", description: "Filter by labels (comma-separated, AND logic)", required: false },
+            { name: "filterRef", type: "string", description: "Exact-match filter on the project issue reference (e.g. 'owner/repo#42')", required: false },
         ],
         handler: async (args) => {
             const params = new URLSearchParams();
@@ -66,6 +67,7 @@ const SDK_TOOLS = [
             if (args.filterName) params.set("filterName", args.filterName);
             if (args.filterStatus) params.set("filterStatus", args.filterStatus);
             if (args.filterLabels) params.set("filterLabels", args.filterLabels);
+            if (args.filterRef) params.set("filterRef", args.filterRef);
             return await axiomApi("GET", `/projects?${params}`);
         },
     },
