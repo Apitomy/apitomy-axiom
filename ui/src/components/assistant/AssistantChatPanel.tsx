@@ -123,28 +123,46 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                 break;
 
             case "permission_request":
-                setMessages((prev) => {
-                    const lastToolIdx = prev.findLastIndex(
-                        (m) => m.type === "tool_use" && m.toolName === data.toolName && !m.permissionId
-                    );
-                    if (lastToolIdx >= 0) {
-                        const updated = [...prev];
-                        updated[lastToolIdx] = {
-                            ...updated[lastToolIdx],
+                if (data.subagentToolUseId) {
+                    setSubagentCards((prev) => {
+                        const card = prev.get(data.subagentToolUseId as string);
+                        if (!card) return prev;
+                        const next = new Map(prev);
+                        next.set(card.id, {
+                            ...card,
+                            permissions: [...card.permissions, {
+                                permissionId: data.requestId as string,
+                                toolName: data.toolName as string,
+                                toolInput: data.toolInput as Record<string, unknown>,
+                                resolved: false,
+                            }],
+                        });
+                        return next;
+                    });
+                } else {
+                    setMessages((prev) => {
+                        const lastToolIdx = prev.findLastIndex(
+                            (m) => m.type === "tool_use" && m.toolName === data.toolName && !m.permissionId
+                        );
+                        if (lastToolIdx >= 0) {
+                            const updated = [...prev];
+                            updated[lastToolIdx] = {
+                                ...updated[lastToolIdx],
+                                permissionId: data.requestId as string,
+                                permissionResolved: false,
+                                toolInput: (data.toolInput as Record<string, unknown>) || updated[lastToolIdx].toolInput,
+                            };
+                            return updated;
+                        }
+                        return [...prev, {
+                            id: String(++messageIdCounter),
+                            type: "permission_request" as const,
                             permissionId: data.requestId as string,
-                            permissionResolved: false,
-                            toolInput: (data.toolInput as Record<string, unknown>) || updated[lastToolIdx].toolInput,
-                        };
-                        return updated;
-                    }
-                    return [...prev, {
-                        id: String(++messageIdCounter),
-                        type: "permission_request" as const,
-                        permissionId: data.requestId as string,
-                        toolName: data.toolName as string,
-                        toolInput: data.toolInput as Record<string, unknown>,
-                    }];
-                });
+                            toolName: data.toolName as string,
+                            toolInput: data.toolInput as Record<string, unknown>,
+                        }];
+                    });
+                }
                 setIsProcessing(false);
 
                 if (document.hidden
@@ -182,6 +200,25 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                             ? { ...m, permissionResolved: true, permissionAllowed: data.allow as boolean }
                             : m
                     );
+                });
+                setSubagentCards((prev) => {
+                    for (const [id, card] of prev) {
+                        const idx = card.permissions.findIndex(
+                            (p) => p.permissionId === (data.permissionId as string)
+                        );
+                        if (idx >= 0) {
+                            const next = new Map(prev);
+                            const updatedPerms = [...card.permissions];
+                            updatedPerms[idx] = {
+                                ...updatedPerms[idx],
+                                resolved: true,
+                                allowed: data.allow as boolean,
+                            };
+                            next.set(id, { ...card, permissions: updatedPerms });
+                            return next;
+                        }
+                    }
+                    return prev;
                 });
                 break;
 
@@ -237,6 +274,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                         toolCount: 0,
                         durationMs: 0,
                         activityLog: [],
+                        permissions: [],
                         dismissed: false,
                     });
                     return next;
@@ -444,6 +482,19 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                     : m
             )
         );
+        setSubagentCards((prev) => {
+            for (const [id, card] of prev) {
+                const idx = card.permissions.findIndex((p) => p.permissionId === permissionId);
+                if (idx >= 0) {
+                    const next = new Map(prev);
+                    const updatedPerms = [...card.permissions];
+                    updatedPerms[idx] = { ...updatedPerms[idx], resolved: true, allowed: allow };
+                    next.set(id, { ...card, permissions: updatedPerms });
+                    return next;
+                }
+            }
+            return prev;
+        });
         setIsProcessing(true);
         try {
             await respondToAssistantPermission(sessionId, permissionId, allow, toolInput);
@@ -552,6 +603,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                     onDismiss={handleDismissSubagent}
                     onDismissAllCompleted={handleDismissAllCompleted}
                     onNavigateToAgent={handleNavigateToAgent}
+                    onPermissionRespond={handlePermissionRespond}
                     highlightedCardId={highlightedCardId}
                     width={panelWidth}
                     onWidthChange={setPanelWidth}

@@ -15,6 +15,14 @@ export interface SubagentActivityEntry {
     description: string;
 }
 
+export interface SubagentPermission {
+    permissionId: string;
+    toolName: string;
+    toolInput?: Record<string, unknown>;
+    resolved: boolean;
+    allowed?: boolean;
+}
+
 export interface SubagentCardData {
     id: string;
     taskId: string;
@@ -27,6 +35,7 @@ export interface SubagentCardData {
     durationMs: number;
     summary?: string;
     activityLog: SubagentActivityEntry[];
+    permissions: SubagentPermission[];
     dismissed: boolean;
 }
 
@@ -34,11 +43,12 @@ interface AssistantSubagentCardProps {
     card: SubagentCardData;
     onDismiss: (id: string) => void;
     onNavigateToAgent?: (toolUseId: string) => void;
+    onPermissionRespond?: (permissionId: string, allow: boolean, toolInput?: Record<string, unknown>) => void;
     highlighted?: boolean;
 }
 
 export function AssistantSubagentCard({
-    card, onDismiss, onNavigateToAgent, highlighted,
+    card, onDismiss, onNavigateToAgent, onPermissionRespond, highlighted,
 }: AssistantSubagentCardProps) {
     const [isExpanded, setIsExpanded] = useState(false);
     const isComplete = card.status === "completed";
@@ -112,6 +122,51 @@ export function AssistantSubagentCard({
                         ))}
                     </div>
                 </ExpandableSection>
+            )}
+
+            {card.permissions.length > 0 && (
+                <div className="axiom-subagent-card__permissions">
+                    {card.permissions.map((perm) => (
+                        <div
+                            key={perm.permissionId}
+                            className="axiom-subagent-card__permission"
+                            data-resolved={perm.resolved}
+                        >
+                            {perm.resolved ? (
+                                <span className="axiom-subagent-card__permission-resolved">
+                                    {perm.allowed ? "Allowed" : "Denied"}: {perm.toolName}
+                                </span>
+                            ) : (
+                                <>
+                                    <div className="axiom-subagent-card__permission-header">
+                                        <Label isCompact color="yellow">{perm.toolName}</Label>
+                                    </div>
+                                    {perm.toolInput && (
+                                        <pre className="axiom-subagent-card__permission-input">
+                                            {JSON.stringify(perm.toolInput, null, 2).substring(0, 200)}
+                                        </pre>
+                                    )}
+                                    <div className="axiom-subagent-card__permission-actions">
+                                        <Button
+                                            variant="primary"
+                                            size="sm"
+                                            onClick={() => onPermissionRespond?.(perm.permissionId, true, perm.toolInput)}
+                                        >
+                                            Allow
+                                        </Button>
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            onClick={() => onPermissionRespond?.(perm.permissionId, false, perm.toolInput)}
+                                        >
+                                            Deny
+                                        </Button>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    ))}
+                </div>
             )}
 
             {onNavigateToAgent && (

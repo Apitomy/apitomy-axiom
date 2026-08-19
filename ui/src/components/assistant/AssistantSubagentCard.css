@@ -119,6 +119,53 @@
     white-space: nowrap;
 }
 
+/* Permission section */
+.axiom-subagent-card__permissions {
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.axiom-subagent-card__permission {
+    border: 1px solid var(--pf-t--global--color--status--warning--default, #f0ab00);
+    border-radius: 4px;
+    padding: 8px;
+    background-color: var(--pf-t--global--background--color--primary--default, #fff);
+}
+
+.axiom-subagent-card__permission[data-resolved="true"] {
+    border-color: var(--pf-t--global--border--color--default, #d2d2d2);
+    background-color: var(--pf-t--global--background--color--secondary--default, #f0f0f0);
+}
+
+.axiom-subagent-card__permission-header {
+    margin-bottom: 4px;
+}
+
+.axiom-subagent-card__permission-input {
+    font-size: 11px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 80px;
+    overflow: auto;
+    margin: 4px 0;
+    padding: 4px;
+    background-color: var(--pf-t--global--background--color--secondary--default, #f0f0f0);
+    border-radius: 2px;
+}
+
+.axiom-subagent-card__permission-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.axiom-subagent-card__permission-resolved {
+    font-size: 12px;
+    color: var(--pf-t--global--text--color--subtle, #6a6e73);
+}
+
 /* Navigate button */
 .axiom-subagent-card__navigate {
     padding: 8px 12px;

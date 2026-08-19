@@ -228,6 +228,10 @@ public class AssistantEventParser {
         data.put("requestId", request.path("request_id").asText());
         data.put("toolName", request.path("tool_name").asText());
         data.set("toolInput", request.path("tool_input"));
+        String parentToolUseId = root.path("parent_tool_use_id").asText("");
+        if (!parentToolUseId.isEmpty()) {
+            data.put("subagentToolUseId", parentToolUseId);
+        }
         return List.of(new SseEvent("permission_request", data));
     }
 
@@ -242,6 +246,10 @@ public class AssistantEventParser {
         data.put("toolName", request.path("tool_name").asText());
         data.put("description", request.path("description").asText());
         data.set("toolInput", request.path("input"));
+        String parentToolUseId = root.path("parent_tool_use_id").asText("");
+        if (!parentToolUseId.isEmpty()) {
+            data.put("subagentToolUseId", parentToolUseId);
+        }
         return List.of(new SseEvent("permission_request", data));
     }
 

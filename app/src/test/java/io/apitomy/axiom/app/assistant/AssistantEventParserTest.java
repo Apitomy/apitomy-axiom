@@ -161,6 +161,34 @@ class AssistantEventParserTest {
     }
 
     @Test
+    void parseSdkControlRequestFromSubagentIncludesSubagentToolUseId() {
+        String line = """
+                {"type":"sdk_control_request","parent_tool_use_id":"tu-agent-1",\
+                "request":{"subtype":"permission","request_id":"perm-3",\
+                "tool_name":"Bash","tool_input":{"command":"ls"}}}""";
+
+        List<SseEvent> events = parser.parse(line);
+
+        assertEquals(1, events.size());
+        SseEvent event = events.get(0);
+        assertEquals("permission_request", event.type());
+        assertEquals("perm-3", event.data().path("requestId").asText());
+        assertEquals("tu-agent-1", event.data().path("subagentToolUseId").asText());
+    }
+
+    @Test
+    void parseSdkControlRequestWithoutParentHasNoSubagentField() {
+        String line = """
+                {"type":"sdk_control_request","request":{"subtype":"permission",\
+                "request_id":"perm-4","tool_name":"Bash","tool_input":{"command":"ls"}}}""";
+
+        List<SseEvent> events = parser.parse(line);
+
+        assertEquals(1, events.size());
+        assertTrue(events.get(0).data().path("subagentToolUseId").isMissingNode());
+    }
+
+    @Test
     void parseSdkControlRequestNonPermissionIsIgnored() {
         String line = """
                 {"type":"sdk_control_request","request":{"subtype":"other"}}""";
@@ -182,6 +210,36 @@ class AssistantEventParserTest {
         assertEquals("permission_request", events.get(0).type());
         assertEquals("perm-2", events.get(0).data().path("requestId").asText());
         assertEquals("Write", events.get(0).data().path("toolName").asText());
+    }
+
+    @Test
+    void parseControlRequestFromSubagentIncludesSubagentToolUseId() {
+        String line = """
+                {"type":"control_request","request_id":"perm-5",\
+                "parent_tool_use_id":"tu-agent-2",\
+                "request":{"subtype":"can_use_tool","tool_name":"Write",\
+                "description":"Write a file","input":{"file_path":"test.json"}}}""";
+
+        List<SseEvent> events = parser.parse(line);
+
+        assertEquals(1, events.size());
+        SseEvent event = events.get(0);
+        assertEquals("permission_request", event.type());
+        assertEquals("perm-5", event.data().path("requestId").asText());
+        assertEquals("tu-agent-2", event.data().path("subagentToolUseId").asText());
+    }
+
+    @Test
+    void parseControlRequestWithoutParentHasNoSubagentField() {
+        String line = """
+                {"type":"control_request","request_id":"perm-6",\
+                "request":{"subtype":"can_use_tool","tool_name":"Write",\
+                "description":"Write a file","input":{"file_path":"test.json"}}}""";
+
+        List<SseEvent> events = parser.parse(line);
+
+        assertEquals(1, events.size());
+        assertTrue(events.get(0).data().path("subagentToolUseId").isMissingNode());
     }
 
     @Test
