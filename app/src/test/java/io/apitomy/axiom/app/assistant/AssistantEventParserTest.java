@@ -231,6 +231,122 @@ class AssistantEventParserTest {
         assertTrue(events.isEmpty());
     }
 
+    // ── Subagent lifecycle events ─────────────────────────────────────
+
+    @Test
+    void parseSystemTaskStartedEvent() {
+        String line = """
+                {"type":"system","subtype":"task_started","task_id":"task-1",\
+                "tool_use_id":"tu-agent-1","description":"Explore codebase",\
+                "subagent_type":"Explore","task_type":"local_agent"}""";
+
+        List<SseEvent> events = parser.parse(line);
+
+        assertEquals(1, events.size());
+        SseEvent event = events.get(0);
+        assertEquals("subagent_started", event.type());
+        assertEquals("tu-agent-1", event.data().path("toolUseId").asText());
+        assertEquals("task-1", event.data().path("taskId").asText());
+        assertEquals("Explore codebase", event.data().path("description").asText());
+        assertEquals("Explore", event.data().path("subagentType").asText());
+    }
+
+    @Test
+    void parseSystemTaskProgressEvent() {
+        String line = """
+                {"type":"system","subtype":"task_progress","task_id":"task-1",\
+                "tool_use_id":"tu-agent-1","description":"Reading src/Main.java",\
+                "subagent_type":"Explore","last_tool_name":"Read",\
+                "usage":{"total_tokens":15000,"tool_uses":5,"duration_ms":8000}}""";
+
+        List<SseEvent> events = parser.parse(line);
+
+        assertEquals(1, events.size());
+        SseEvent event = events.get(0);
+        assertEquals("subagent_progress", event.type());
+        assertEquals("tu-agent-1", event.data().path("toolUseId").asText());
+        assertEquals("Reading src/Main.java", event.data().path("description").asText());
+        assertEquals("Read", event.data().path("lastToolName").asText());
+        assertEquals(5, event.data().path("toolCount").asInt());
+        assertEquals(8000, event.data().path("durationMs").asLong());
+    }
+
+    @Test
+    void parseSystemTaskUpdatedCompletedEvent() {
+        String line = """
+                {"type":"system","subtype":"task_updated","task_id":"task-1",\
+                "patch":{"status":"completed","end_time":1700000000000}}""";
+
+        List<SseEvent> events = parser.parse(line);
+
+        assertEquals(1, events.size());
+        SseEvent event = events.get(0);
+        assertEquals("subagent_status", event.type());
+        assertEquals("task-1", event.data().path("taskId").asText());
+        assertEquals("completed", event.data().path("status").asText());
+    }
+
+    @Test
+    void parseSystemTaskUpdatedNoStatusIsIgnored() {
+        String line = """
+                {"type":"system","subtype":"task_updated","task_id":"task-1","patch":{}}""";
+
+        List<SseEvent> events = parser.parse(line);
+        assertTrue(events.isEmpty());
+    }
+
+    @Test
+    void parseSystemTaskNotificationEvent() {
+        String line = """
+                {"type":"system","subtype":"task_notification","task_id":"task-1",\
+                "tool_use_id":"tu-agent-1","status":"completed",\
+                "summary":"Found 5 relevant files."}""";
+
+        List<SseEvent> events = parser.parse(line);
+
+        assertEquals(1, events.size());
+        SseEvent event = events.get(0);
+        assertEquals("subagent_completed", event.type());
+        assertEquals("tu-agent-1", event.data().path("toolUseId").asText());
+        assertEquals("completed", event.data().path("status").asText());
+        assertEquals("Found 5 relevant files.", event.data().path("summary").asText());
+    }
+
+    // ── Subagent event suppression ────────────────────────────────────
+
+    @Test
+    void parseAssistantWithParentToolUseIdIsIgnored() {
+        String line = """
+                {"type":"assistant","parent_tool_use_id":"tu-agent-1",\
+                "message":{"content":[{"type":"tool_use","id":"tu-sub-1",\
+                "name":"Read","input":{"file_path":"src/Main.java"}}]}}""";
+
+        List<SseEvent> events = parser.parse(line);
+        assertTrue(events.isEmpty());
+    }
+
+    @Test
+    void parseAssistantWithNullParentToolUseIdIsProcessed() {
+        String line = """
+                {"type":"assistant","parent_tool_use_id":null,\
+                "message":{"content":[{"type":"text","text":"Hello"}]}}""";
+
+        List<SseEvent> events = parser.parse(line);
+        assertEquals(1, events.size());
+        assertEquals("assistant_text", events.get(0).type());
+    }
+
+    @Test
+    void parseUserWithParentToolUseIdIsIgnored() {
+        String line = """
+                {"type":"user","parent_tool_use_id":"tu-agent-1",\
+                "message":{"content":[{"type":"tool_result",\
+                "tool_use_id":"tu-sub-1","content":"result"}]}}""";
+
+        List<SseEvent> events = parser.parse(line);
+        assertTrue(events.isEmpty());
+    }
+
     // ── Unknown types ───────────────────────────────────────────────
 
     @Test

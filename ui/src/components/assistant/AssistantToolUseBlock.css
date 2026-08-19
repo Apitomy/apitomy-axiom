@@ -17,6 +17,16 @@
     border: 2px solid var(--pf-t--global--color--nonstatus--orange--default, #f0ab00);
 }
 
+.axiom-tool-use[data-highlighted] {
+    border: 2px solid var(--pf-t--global--color--brand--default, #0066cc);
+    animation: axiom-tool-highlight 2s ease-out forwards;
+}
+
+@keyframes axiom-tool-highlight {
+    0% { box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.3); }
+    100% { box-shadow: none; }
+}
+
 /* Expandable header */
 .axiom-tool-use__header {
     padding: 8px 12px;
