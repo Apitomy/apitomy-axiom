@@ -10,7 +10,7 @@
         "preview": "vite preview"
     },
     "dependencies": {
-        "@apitomy/common-ui-components": "4.1.0",
+        "@apitomy/common-ui-components": "4.1.2",
         "@patternfly/react-charts": "8.6.1",
         "echarts": "5.6.0",
         "victory-area": "37.3.6",
