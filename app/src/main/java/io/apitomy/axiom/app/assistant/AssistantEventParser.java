@@ -21,8 +21,14 @@ import java.util.List;
  * <h3>Event type mapping</h3>
  * <ul>
  *   <li>{@code system} (subtype init) → {@code session_init}</li>
+ *   <li>{@code system} (subtype task_started) → {@code subagent_started}</li>
+ *   <li>{@code system} (subtype task_progress) → {@code subagent_progress}</li>
+ *   <li>{@code system} (subtype task_updated) → {@code subagent_status}</li>
+ *   <li>{@code system} (subtype task_notification) → {@code subagent_completed}</li>
  *   <li>{@code assistant} → {@code assistant_text}, {@code tool_use}, {@code thinking}</li>
+ *   <li>{@code assistant} with non-null {@code parent_tool_use_id} → suppressed</li>
  *   <li>{@code user} (with tool_use_result) → {@code tool_result}</li>
+ *   <li>{@code user} with non-null {@code parent_tool_use_id} → suppressed</li>
  *   <li>{@code result} → {@code turn_complete}</li>
  *   <li>{@code sdk_control_request} / {@code control_request} → {@code permission_request}</li>
  *   <li>{@code conversation_reset} → {@code conversation_reset}</li>
@@ -73,27 +79,76 @@ public class AssistantEventParser {
         }
     }
 
+    /**
+     * Parses system events: session init and subagent lifecycle.
+     *
+     * @param root the raw NDJSON node
+     * @return normalised SSE events for the frontend
+     */
     private List<SseEvent> parseSystem(JsonNode root) {
         String subtype = root.path("subtype").asText("");
-        if (!"init".equals(subtype)) {
-            return Collections.emptyList();
-        }
-        ObjectNode data = JsonNodeFactory.instance.objectNode();
-        data.put("sessionId", root.path("session_id").asText());
-        data.put("cwd", root.path("cwd").asText());
-        data.put("model", root.path("model").asText());
-        JsonNode slashCommands = root.path("slash_commands");
-        if (slashCommands.isArray()) {
-            data.set("slashCommands", slashCommands);
-        }
-        JsonNode tools = root.path("tools");
-        if (tools.isArray()) {
-            data.set("tools", tools);
-        }
-        return List.of(new SseEvent("session_init", data));
+        return switch (subtype) {
+            case "init" -> {
+                ObjectNode data = JsonNodeFactory.instance.objectNode();
+                data.put("sessionId", root.path("session_id").asText());
+                data.put("cwd", root.path("cwd").asText());
+                data.put("model", root.path("model").asText());
+                JsonNode slashCommands = root.path("slash_commands");
+                if (slashCommands.isArray()) {
+                    data.set("slashCommands", slashCommands);
+                }
+                JsonNode tools = root.path("tools");
+                if (tools.isArray()) {
+                    data.set("tools", tools);
+                }
+                yield List.of(new SseEvent("session_init", data));
+            }
+            case "task_started" -> {
+                ObjectNode data = JsonNodeFactory.instance.objectNode();
+                data.put("toolUseId", root.path("tool_use_id").asText());
+                data.put("taskId", root.path("task_id").asText());
+                data.put("description", root.path("description").asText());
+                data.put("subagentType", root.path("subagent_type").asText());
+                yield List.of(new SseEvent("subagent_started", data));
+            }
+            case "task_progress" -> {
+                ObjectNode data = JsonNodeFactory.instance.objectNode();
+                data.put("toolUseId", root.path("tool_use_id").asText());
+                data.put("taskId", root.path("task_id").asText());
+                data.put("description", root.path("description").asText());
+                data.put("lastToolName", root.path("last_tool_name").asText());
+                JsonNode usage = root.path("usage");
+                data.put("toolCount", usage.path("tool_uses").asInt(0));
+                data.put("durationMs", usage.path("duration_ms").asLong(0));
+                yield List.of(new SseEvent("subagent_progress", data));
+            }
+            case "task_updated" -> {
+                String status = root.path("patch").path("status").asText("");
+                if (status.isEmpty()) {
+                    yield Collections.emptyList();
+                }
+                ObjectNode data = JsonNodeFactory.instance.objectNode();
+                data.put("taskId", root.path("task_id").asText());
+                data.put("status", status);
+                yield List.of(new SseEvent("subagent_status", data));
+            }
+            case "task_notification" -> {
+                ObjectNode data = JsonNodeFactory.instance.objectNode();
+                data.put("toolUseId", root.path("tool_use_id").asText());
+                data.put("taskId", root.path("task_id").asText());
+                data.put("status", root.path("status").asText());
+                data.put("summary", root.path("summary").asText());
+                yield List.of(new SseEvent("subagent_completed", data));
+            }
+            default -> Collections.emptyList();
+        };
     }
 
     private List<SseEvent> parseAssistant(JsonNode root) {
+        String parentToolUseId = root.path("parent_tool_use_id").asText("");
+        if (!parentToolUseId.isEmpty()) {
+            return Collections.emptyList();
+        }
         JsonNode content = root.path("message").path("content");
         if (!content.isArray()) {
             return Collections.emptyList();
@@ -124,6 +179,10 @@ public class AssistantEventParser {
     }
 
     private List<SseEvent> parseUser(JsonNode root) {
+        String parentToolUseId = root.path("parent_tool_use_id").asText("");
+        if (!parentToolUseId.isEmpty()) {
+            return Collections.emptyList();
+        }
         JsonNode toolResult = root.path("tool_use_result");
         if (toolResult.isMissingNode()) {
             return Collections.emptyList();
@@ -224,7 +283,9 @@ public class AssistantEventParser {
      *
      * @param type the normalised event type (session_init, assistant_text,
      *             tool_use, tool_result, tool_progress, turn_complete,
-     *             permission_request, thinking, conversation_reset)
+     *             permission_request, thinking, conversation_reset,
+     *             subagent_started, subagent_progress, subagent_status,
+     *             subagent_completed)
      * @param data the extracted/transformed JSON data
      */
     public record SseEvent(String type, JsonNode data) {
