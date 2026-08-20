@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
@@ -65,8 +65,8 @@ export function WorkflowDefinitionDetailPage() {
     const [metadataForm, setMetadataForm] = useState({ name: "", description: "" });
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
-    // EditorSpi for action types
-    const spi: EditorSpi = {
+    // EditorSpi for action types — memoized to avoid re-renders
+    const spi: EditorSpi = useMemo(() => ({
         actionTypes: async () => {
             const results = await fetchActionTypes(1, 1000);
             return results.items.map((at): ActionTypeDescriptor => ({
@@ -75,7 +75,7 @@ export function WorkflowDefinitionDetailPage() {
                 description: at.description,
             }));
         },
-    };
+    }), []);
 
     const loadDefinition = useCallback(() => {
         if (!id) return;
@@ -111,14 +111,14 @@ export function WorkflowDefinitionDetailPage() {
         return () => window.removeEventListener("beforeunload", handler);
     }, [dirty]);
 
-    const handleEditorChange = (updated: Workflow) => {
+    const handleEditorChange = useCallback((updated: Workflow) => {
         setEditorContent(updated);
         setDirty(true);
-    };
+    }, []);
 
-    const handleValidationChange = (problems: ValidationProblem[]) => {
+    const handleValidationChange = useCallback((problems: ValidationProblem[]) => {
         setValidationErrors(problems.filter((p) => p.severity === "error"));
-    };
+    }, []);
 
     const handleSave = () => {
         if (!editorContent) return;
