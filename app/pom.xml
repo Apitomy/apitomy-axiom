@@ -77,6 +77,11 @@
             <groupId>io.apitomy</groupId>
             <artifactId>apitomy-axiom-notifications-telegram</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.apitomy</groupId>
+            <artifactId>apitomy-flow-engine</artifactId>
+            <version>1.0.1-SNAPSHOT</version>
+        </dependency>
 
         <!-- Quarkus -->
         <dependency>
