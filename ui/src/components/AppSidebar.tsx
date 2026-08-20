@@ -12,7 +12,7 @@ import {
 import { fetchInboxCount } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 
-const COMPONENT_PATHS = ["/action-types", "/actors", "/session-templates", "/event-sources", "/mcp-servers", "/report-definitions", "/scheduled-jobs", "/secrets", "/tools", "/toolsets"];
+const COMPONENT_PATHS = ["/action-types", "/actors", "/session-templates", "/event-sources", "/mcp-servers", "/report-definitions", "/scheduled-jobs", "/secrets", "/tools", "/toolsets", "/components/workflows"];
 const SETTINGS_PATHS = ["/engine", "/manager", "/data-retention", "/configuration-packs"];
 
 export function AppSidebar() {
@@ -122,6 +122,9 @@ export function AppSidebar() {
                             </NavItem>
                             <NavItem isActive={location.pathname.startsWith("/toolsets")} onClick={() => navigate("/toolsets")}>
                                 Toolsets
+                            </NavItem>
+                            <NavItem isActive={location.pathname.startsWith("/components/workflows")} onClick={() => navigate("/components/workflows")}>
+                                Workflows
                             </NavItem>
                         </NavExpandable>
                         <NavExpandable title="Settings" isActive={isSettingsActive} isExpanded={isSettingsActive}>

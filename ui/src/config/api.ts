@@ -2021,3 +2021,119 @@ export async function validateScheduledJob(data: NewScheduledJob): Promise<ToolV
     if (!response.ok) throw new Error(`Failed to validate scheduled job: ${response.status}`);
     return response.json();
 }
+
+// ── Workflow Definitions ──────────────────────────────────────────
+
+export interface WorkflowDefinition {
+    id: number;
+    name: string;
+    description?: string;
+    content?: any;
+    currentVersion?: number;
+    createdOn: string;
+    updatedOn: string;
+}
+
+export interface NewWorkflowDefinition {
+    name: string;
+    description?: string;
+}
+
+export interface UpdateWorkflowDefinition {
+    name?: string;
+    description?: string;
+}
+
+export interface WorkflowDefinitionVersion {
+    id: number;
+    definitionId: number;
+    version: number;
+    content?: any;
+    createdOn: string;
+}
+
+export async function fetchWorkflowDefinitions(
+    page = 1, limit = 20, filterName?: string
+): Promise<SearchResults<WorkflowDefinition>> {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(limit));
+    if (filterName) params.set("filterName", filterName);
+    const response = await fetch(`${API}/workflow-definitions?${params}`);
+    if (!response.ok) throw new Error(`Failed to fetch workflow definitions: ${response.status}`);
+    return response.json();
+}
+
+export async function createWorkflowDefinition(
+    data: NewWorkflowDefinition
+): Promise<WorkflowDefinition> {
+    const response = await fetch(`${API}/workflow-definitions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(`Failed to create workflow definition: ${response.status}`);
+    return response.json();
+}
+
+export async function getWorkflowDefinition(id: number): Promise<WorkflowDefinition> {
+    const response = await fetch(`${API}/workflow-definitions/${id}`);
+    if (!response.ok) throw new Error(`Failed to get workflow definition: ${response.status}`);
+    return response.json();
+}
+
+export async function updateWorkflowDefinition(
+    id: number, data: UpdateWorkflowDefinition
+): Promise<WorkflowDefinition> {
+    const response = await fetch(`${API}/workflow-definitions/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(`Failed to update workflow definition: ${response.status}`);
+    return response.json();
+}
+
+export async function updateWorkflowDefinitionContent(
+    id: number, content: any
+): Promise<void> {
+    const response = await fetch(`${API}/workflow-definitions/${id}/content`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(content),
+    });
+    if (!response.ok) throw new Error(`Failed to update workflow content: ${response.status}`);
+}
+
+export async function publishWorkflowDefinition(
+    id: number
+): Promise<WorkflowDefinitionVersion> {
+    const response = await fetch(`${API}/workflow-definitions/${id}/publish`, {
+        method: "POST",
+    });
+    if (!response.ok) throw new Error(`Failed to publish workflow definition: ${response.status}`);
+    return response.json();
+}
+
+export async function deleteWorkflowDefinition(id: number): Promise<void> {
+    const response = await fetch(`${API}/workflow-definitions/${id}`, {
+        method: "DELETE",
+    });
+    if (!response.ok) throw new Error(`Failed to delete workflow definition: ${response.status}`);
+}
+
+export async function listWorkflowDefinitionVersions(
+    id: number
+): Promise<WorkflowDefinitionVersion[]> {
+    const response = await fetch(`${API}/workflow-definitions/${id}/versions`);
+    if (!response.ok) throw new Error(`Failed to list versions: ${response.status}`);
+    return response.json();
+}
+
+export async function getWorkflowDefinitionVersion(
+    id: number, version: number
+): Promise<WorkflowDefinitionVersion> {
+    const response = await fetch(`${API}/workflow-definitions/${id}/versions/${version}`);
+    if (!response.ok) throw new Error(`Failed to get version: ${response.status}`);
+    return response.json();
+}
