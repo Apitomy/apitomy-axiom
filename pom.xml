@@ -25,6 +25,7 @@
         <module>core</module>
         <module>engine/spi</module>
         <module>engine/opencode</module>
+        <module>engine/copilot</module>
         <module>manager</module>
         <module>actors/spi</module>
         <module>actors/claude-code</module>
@@ -92,6 +93,11 @@
             <dependency>
                 <groupId>io.apitomy</groupId>
                 <artifactId>apitomy-axiom-engine-opencode</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.apitomy</groupId>
+                <artifactId>apitomy-axiom-engine-copilot</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

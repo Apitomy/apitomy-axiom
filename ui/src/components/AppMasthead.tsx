@@ -122,6 +122,7 @@ export function AppMasthead({ engineName, appVersion, themeMode, setThemeMode }:
                     <dd>
                         {engineName === "opencode" ? "OpenCode"
                             : engineName === "claude-code" ? "Claude Code"
+                            : engineName === "copilot" ? "GitHub Copilot CLI"
                             : engineName || "—"}
                     </dd>
                     <dt>License</dt>

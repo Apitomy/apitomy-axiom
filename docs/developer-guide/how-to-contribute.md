@@ -37,6 +37,7 @@ When making changes, use this guide to find the right module:
 | Manager behavior | `manager/` |
 | Claude Code engine/actor | `actors/claude-code/` |
 | OpenCode engine/actor | `engine/opencode/` |
+| GitHub Copilot CLI engine/actor | `engine/copilot/` |
 | GitHub polling | `events/github/` |
 | Jira polling | `events/jira/` |
 | Pipeline orchestration | `app/` (PipelineOrchestrator, TaskExecutionService, etc.) |

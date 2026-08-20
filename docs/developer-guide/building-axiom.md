@@ -11,7 +11,7 @@ This guide covers how to build, run, and develop Axiom locally.
 | Java | 25+ | Backend compilation and runtime |
 | Maven | 3.9+ | Build system |
 | Node.js | 22+ | UI build (auto-installed by Maven in release builds) |
-| AI engine CLI | Latest | One of `claude` or `opencode` for AI features |
+| AI engine CLI | Latest | One of `claude`, `opencode`, or `copilot` for AI features |
 | API key | — | `ANTHROPIC_API_KEY` or provider-specific key |
 
 ---

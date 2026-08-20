@@ -60,7 +60,7 @@ export function EngineSettingsPage() {
     }
 
     const engineName = config.engine || "unknown";
-    const engineLabel = engineName === "opencode" ? "OpenCode" : engineName === "claude-code" ? "Claude Code" : engineName;
+    const engineLabel = engineName === "opencode" ? "OpenCode" : engineName === "claude-code" ? "Claude Code" : engineName === "copilot" ? "GitHub Copilot CLI" : engineName;
     const engineChecks = (config.checks || []).filter(
         (c) => !["GitHub API Token", "Node.js"].includes(c.name)
     );

@@ -13,6 +13,7 @@ downloads and runs the latest release automatically.
 |--------|-------------|--------|---------|
 | Claude Code | `claude-code` (default) | `claude` | `npm install -g @anthropic-ai/claude-code` |
 | OpenCode | `opencode` | `opencode` | `curl -fsSL https://opencode.ai/install \| bash` |
+| GitHub Copilot CLI | `copilot` | `copilot` | `npm install -g @github/copilot` |
 
 - An API key for your LLM provider (e.g., `ANTHROPIC_API_KEY` environment variable)
 

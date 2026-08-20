@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.actors.claudecode.ClaudeCodeMcpManager;
 import io.apitomy.axiom.core.entities.McpServerEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
+import io.apitomy.axiom.engine.copilot.CopilotMcpManager;
 import io.apitomy.axiom.engine.opencode.OpenCodeMcpManager;
 import io.apitomy.axiom.engine.opencode.OpenCodeMcpManager.McpServerConfig;
 import jakarta.annotation.PostConstruct;
@@ -40,9 +41,10 @@ import java.util.Map;
  * dependencies. Subsequent invocations reuse the installed project.</p>
  *
  * <p>This class also implements {@link io.apitomy.axiom.engine.spi.AiEngineMcpManager}
- * for the Claude Code engine, via the {@link io.apitomy.axiom.actors.claudecode.ClaudeCodeMcpManager}
- * delegate pattern. On initialization, it registers itself as the MCP config delegate
- * for the active Claude Code engine.</p>
+ * for the Claude Code and Copilot engines, via the {@link io.apitomy.axiom.actors.claudecode.ClaudeCodeMcpManager}
+ * / {@link io.apitomy.axiom.engine.copilot.CopilotMcpManager} delegate pattern. On
+ * initialization, it registers itself as the MCP config delegate for both engines
+ * (both consume the same {@code mcpServers} JSON config format).</p>
  */
 @ApplicationScoped
 public class McpConfigGenerator {
@@ -65,6 +67,9 @@ public class McpConfigGenerator {
     @Inject
     OpenCodeMcpManager openCodeMcpManager;
 
+    @Inject
+    CopilotMcpManager copilotMcpManager;
+
     /** Lazily resolved path to the installed MCP server project directory. */
     private volatile Path mcpServerDir;
 
@@ -78,6 +83,9 @@ public class McpConfigGenerator {
 
         openCodeMcpManager.setDelegate(this::getMcpServersForOpenCode);
         LOG.info("Registered McpConfigGenerator as OpenCodeMcpManager delegate");
+
+        copilotMcpManager.setDelegate(this::generateMcpConfig);
+        LOG.info("Registered McpConfigGenerator as CopilotMcpManager delegate");
     }
 
     /** Prefix for script tools provided by the axiom-tools MCP server. */

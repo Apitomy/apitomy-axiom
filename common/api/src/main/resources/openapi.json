@@ -71,7 +71,7 @@
           {
             "name": "engine",
             "in": "query",
-            "description": "Engine type to list models for (e.g. opencode, claude-code). Defaults to the active engine.",
+            "description": "Engine type to list models for (e.g. opencode, claude-code, copilot). Defaults to the active engine.",
             "required": false,
             "schema": {
               "type": "string"
@@ -100,7 +100,7 @@
           "System"
         ],
         "summary": "List available AI engines",
-        "description": "Returns the list of AI engine types that are available (e.g. claude-code, opencode).",
+        "description": "Returns the list of AI engine types that are available (e.g. claude-code, opencode, copilot).",
         "operationId": "listEngines",
         "responses": {
           "200": {
@@ -5067,7 +5067,7 @@
             "type": "string"
           },
           "engine": {
-            "description": "The active AI engine type (e.g. claude-code, opencode)",
+            "description": "The active AI engine type (e.g. claude-code, opencode, copilot)",
             "type": "string"
           },
           "features": {
@@ -5508,7 +5508,7 @@
             }
           },
           "engine": {
-            "description": "AI engine override for this action type (e.g. opencode, claude-code). When empty, the global default engine is used.",
+            "description": "AI engine override for this action type (e.g. opencode, claude-code, copilot). When empty, the global default engine is used.",
             "type": "string"
           },
           "maxSteps": {
@@ -5589,7 +5589,7 @@
             }
           },
           "engine": {
-            "description": "AI engine override for this action type (e.g. opencode, claude-code). When empty, the global default engine is used.",
+            "description": "AI engine override for this action type (e.g. opencode, claude-code, copilot). When empty, the global default engine is used.",
             "type": "string"
           },
           "maxSteps": {

@@ -47,6 +47,10 @@ public class SystemResourceImpl implements SystemResource {
             defaultValue = "anthropic/claude-sonnet-4-6,anthropic/claude-opus-4-6,anthropic/claude-haiku-4-5-20251001,openai/gpt-4o,openai/o3-mini")
     String openCodeAvailableModels;
 
+    @ConfigProperty(name = "axiom.copilot.available-models",
+            defaultValue = "claude-sonnet-5,claude-opus-5,claude-haiku-4.5,gpt-5.4,gpt-5-mini,auto")
+    String copilotAvailableModels;
+
     @Inject
     AiEngine aiEngine;
 
@@ -113,9 +117,11 @@ public class SystemResourceImpl implements SystemResource {
     @Override
     public List<String> listModels(String engine) {
         String engineType = (engine != null && !engine.isBlank()) ? engine : aiEngine.getType();
-        String models = "opencode".equals(engineType)
-                ? openCodeAvailableModels
-                : claudeAvailableModels;
+        String models = switch (engineType) {
+            case "opencode" -> openCodeAvailableModels;
+            case "copilot" -> copilotAvailableModels;
+            default -> claudeAvailableModels;
+        };
 
         return Arrays.stream(models.split(","))
                 .map(String::trim)
