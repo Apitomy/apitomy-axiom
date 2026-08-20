@@ -270,7 +270,7 @@ export function ProjectsPage() {
                             <Tr>
                                 <Th>Name</Th>
                                 <Th>Status</Th>
-                                <Th>Issue</Th>
+                                <Th>Reference</Th>
                                 <Th>Labels</Th>
                                 <Th>Updated</Th>
                                 <Th />

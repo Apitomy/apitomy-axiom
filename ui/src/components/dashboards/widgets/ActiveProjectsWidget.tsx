@@ -34,7 +34,7 @@ function ActiveProjectsWidget({ config, labels }: WidgetProps) {
     return (
         <Table aria-label="Active Projects" variant="compact" isStickyHeader>
             <Thead><Tr>
-                <Th>Name</Th><Th>Status</Th><Th>Issue</Th>
+                <Th>Name</Th><Th>Status</Th><Th>Reference</Th>
             </Tr></Thead>
             <Tbody>
                 {projects.map(p => (
