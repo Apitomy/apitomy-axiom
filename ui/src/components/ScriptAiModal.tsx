@@ -66,7 +66,7 @@ export function ScriptAiModal({
                     <code>{"{{projectId}}"}</code>,{" "}
                     <code>{"{{eventId}}"}</code>,{" "}
                     <code>{"{{taskId}}"}</code>,{" "}
-                    <code>{"{{issueRef}}"}</code>,{" "}
+                    <code>{"{{ref}}"}</code>,{" "}
                     <code>{"{{repository}}"}</code>,{" "}
                     <code>{"{{projectName}}"}</code>,{" "}
                     <code>{"{{managerInput}}"}</code>,{" "}

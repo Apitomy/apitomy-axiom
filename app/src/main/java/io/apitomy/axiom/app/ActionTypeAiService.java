@@ -47,7 +47,7 @@ public class ActionTypeAiService {
 
             The prompt template supports these placeholders (substituted at runtime):
             - {{managerInput}} — context and instructions from the Manager AI
-            - {{issueRef}} — the issue reference (e.g. "owner/repo#42")
+            - {{ref}} — the project reference (e.g. "owner/repo#42" or "CVE-2024-12345")
             - {{repository}} — the repository name (e.g. "owner/repo")
             - {{projectName}} — the project name
             - {{actionType}} — the action type name

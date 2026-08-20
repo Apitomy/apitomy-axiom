@@ -143,7 +143,7 @@ class ActionTypeValidatorTest {
     @Test
     void actorPromptWithRecognizedPlaceholdersIsValid() {
         NewActionType at = makeActor("test", "desc",
-                "{{input}} for {{repository}} ref {{issueRef}} project {{projectName}}");
+                "{{input}} for {{repository}} ref {{ref}} project {{projectName}}");
 
         assertFalse(ActionTypeValidator.validate(at).hasErrors());
     }

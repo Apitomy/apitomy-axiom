@@ -83,11 +83,11 @@ class PipelineOrchestratorTest {
         orchestrator.processEvent(queueEntry);
 
         // Verify project was auto-created
-        ProjectEntity project = ProjectEntity.find("issueRef", "TestOrg/pipeline-test#1").firstResult();
+        ProjectEntity project = ProjectEntity.find("ref", "TestOrg/pipeline-test#1").firstResult();
         assertNotNull(project, "Project should be auto-created");
         assertEquals("issue", project.type);
         assertEquals("Created", project.status);
-        assertEquals("github", project.issueSource);
+        assertEquals("github", project.refSource);
         assertEquals("TestOrg/pipeline-test", project.repository);
 
         // Verify task was created
@@ -123,7 +123,7 @@ class PipelineOrchestratorTest {
         orchestrator.processEvent(queueEntry);
 
         // Should not create a second project
-        long projectCount = ProjectEntity.count("issueRef", "TestOrg/pipeline-test#2");
+        long projectCount = ProjectEntity.count("ref", "TestOrg/pipeline-test#2");
         assertEquals(1, projectCount);
 
         // Task should be on the existing project
@@ -146,10 +146,10 @@ class PipelineOrchestratorTest {
 
         orchestrator.processEvent(queueEntry);
 
-        ProjectEntity project = ProjectEntity.find("issueRef", "TestOrg/pipeline-test#10").firstResult();
+        ProjectEntity project = ProjectEntity.find("ref", "TestOrg/pipeline-test#10").firstResult();
         assertNotNull(project, "Project should be auto-created for PR event");
         assertEquals("pull-request", project.type);
-        assertEquals("github", project.issueSource);
+        assertEquals("github", project.refSource);
     }
 
     @Test
@@ -166,7 +166,7 @@ class PipelineOrchestratorTest {
 
         orchestrator.processEvent(queueEntry);
 
-        ProjectEntity project = ProjectEntity.find("issueRef", "TestOrg/pipeline-test#11").firstResult();
+        ProjectEntity project = ProjectEntity.find("ref", "TestOrg/pipeline-test#11").firstResult();
         assertNotNull(project, "Project should be auto-created for unknown event type");
         assertEquals("other", project.type);
     }
@@ -188,7 +188,7 @@ class PipelineOrchestratorTest {
 
         orchestrator.processEvent(queueEntry);
 
-        ProjectEntity project = ProjectEntity.find("issueRef", "TestOrg/pipeline-test#3").firstResult();
+        ProjectEntity project = ProjectEntity.find("ref", "TestOrg/pipeline-test#3").firstResult();
         assertNotNull(project);
 
         List<TaskEntity> tasks = TaskEntity.list("projectId", project.id);
@@ -211,7 +211,7 @@ class PipelineOrchestratorTest {
         orchestrator.processEvent(queueEntry);
 
         // No project or task should be created
-        assertNull(ProjectEntity.find("issueRef", "TestOrg/pipeline-test#10").firstResult());
+        assertNull(ProjectEntity.find("ref", "TestOrg/pipeline-test#10").firstResult());
         assertEquals(0, TaskEntity.count("projectId is null"));
 
         // Activity log should record the ignore
@@ -355,7 +355,7 @@ class PipelineOrchestratorTest {
 
         orchestrator.processEvent(queueEntry);
 
-        ProjectEntity project = ProjectEntity.find("issueRef", "TestOrg/pipeline-test#50").firstResult();
+        ProjectEntity project = ProjectEntity.find("ref", "TestOrg/pipeline-test#50").firstResult();
         assertNotNull(project);
 
         // Check activity log entries
@@ -407,8 +407,8 @@ class PipelineOrchestratorTest {
             project.name = issueRef;
             project.type = "other";
             project.status = status;
-            project.issueSource = "github";
-            project.issueRef = issueRef;
+            project.refSource = "github";
+            project.ref = issueRef;
             project.repository = repository;
             project.createdOn = Instant.now();
             project.updatedOn = Instant.now();

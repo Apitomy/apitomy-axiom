@@ -56,7 +56,7 @@ function ProjectSpotlightWidget({ config }: WidgetProps) {
                     }>{project.status}</Label>
                 </FlexItem>
                 <FlexItem>
-                    <Label isCompact>{project.issueRef}</Label>
+                    <Label isCompact>{project.ref}</Label>
                 </FlexItem>
             </Flex>
             {project.body && (

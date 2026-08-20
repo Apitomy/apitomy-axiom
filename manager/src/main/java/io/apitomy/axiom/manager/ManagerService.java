@@ -106,7 +106,7 @@ public class ManagerService {
             ProjectEntity project = null;
             List<TaskEntity> recentTasks = Collections.emptyList();
             if (event.issueRef != null) {
-                project = ProjectEntity.find("issueRef", event.issueRef).firstResult();
+                project = ProjectEntity.find("ref", event.issueRef).firstResult();
                 if (project != null) {
                     recentTasks = TaskEntity.find(
                             "projectId = ?1 order by createdOn desc",

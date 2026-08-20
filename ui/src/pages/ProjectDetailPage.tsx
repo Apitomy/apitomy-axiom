@@ -216,8 +216,8 @@ export function ProjectDetailPage() {
             >
                 <FlexItem>
                     <Title headingLevel="h1" size="lg">
-                        {project.issueSource === "github" && <GithubIcon style={{ marginRight: 8 }} />}
-                        {project.issueSource === "jira" && <JiraIcon style={{ marginRight: 8 }} />}
+                        {project.refSource === "github" && <GithubIcon style={{ marginRight: 8 }} />}
+                        {project.refSource === "jira" && <JiraIcon style={{ marginRight: 8 }} />}
                         {project.type === "issue" && <BugIcon style={{ marginRight: 8 }} />}
                         {project.type === "pull-request" && <CodeBranchIcon style={{ marginRight: 8 }} />}
                         {project.name}
@@ -271,30 +271,34 @@ export function ProjectDetailPage() {
                     </DescriptionListDescription>
                 </DescriptionListGroup>
                 <DescriptionListGroup>
-                    <DescriptionListTerm>Issue</DescriptionListTerm>
+                    <DescriptionListTerm>Reference</DescriptionListTerm>
                     <DescriptionListDescription>
-                        {project.issueSource === "github" && project.issueRef ? (
-                            <a href={`https://github.com/${project.issueRef.replace("#", "/issues/")}`}
+                        {project.refSource === "github" && project.ref ? (
+                            <a href={`https://github.com/${project.ref.replace("#", "/issues/")}`}
                                 target="_blank" rel="noopener noreferrer">
-                                {project.issueRef}
+                                {project.ref}
                             </a>
                         ) : (
-                            project.issueRef
+                            project.ref
                         )}
                     </DescriptionListDescription>
                 </DescriptionListGroup>
-                <DescriptionListGroup>
-                    <DescriptionListTerm>Repository</DescriptionListTerm>
-                    <DescriptionListDescription>
-                        {project.repository}
-                    </DescriptionListDescription>
-                </DescriptionListGroup>
-                <DescriptionListGroup>
-                    <DescriptionListTerm>Source</DescriptionListTerm>
-                    <DescriptionListDescription>
-                        {project.issueSource}
-                    </DescriptionListDescription>
-                </DescriptionListGroup>
+                {project.repository && (
+                    <DescriptionListGroup>
+                        <DescriptionListTerm>Repository</DescriptionListTerm>
+                        <DescriptionListDescription>
+                            {project.repository}
+                        </DescriptionListDescription>
+                    </DescriptionListGroup>
+                )}
+                {project.refSource && (
+                    <DescriptionListGroup>
+                        <DescriptionListTerm>Source</DescriptionListTerm>
+                        <DescriptionListDescription>
+                            {project.refSource}
+                        </DescriptionListDescription>
+                    </DescriptionListGroup>
+                )}
                 <DescriptionListGroup>
                     <DescriptionListTerm>Created</DescriptionListTerm>
                     <DescriptionListDescription>

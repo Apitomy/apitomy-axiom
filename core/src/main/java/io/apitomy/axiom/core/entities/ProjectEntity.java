@@ -32,13 +32,12 @@ public class ProjectEntity extends PanacheEntity {
     @Column(nullable = false)
     public String status;
 
-    @Column(name = "issue_source", nullable = false)
-    public String issueSource;
+    @Column(name = "ref_source")
+    public String refSource;
 
-    @Column(name = "issue_ref", nullable = false, unique = true)
-    public String issueRef;
+    @Column(name = "project_ref", nullable = false, unique = true)
+    public String ref;
 
-    @Column(nullable = false)
     public String repository;
 
     @Column(name = "created_on", nullable = false)

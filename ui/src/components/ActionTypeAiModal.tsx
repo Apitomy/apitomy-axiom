@@ -111,7 +111,7 @@ export function ActionTypeAiModal({
                 <div className="axiom-text-subtle" style={{ fontSize: "13px", marginTop: "2px" }}>
                     Placeholders:{" "}
                     <code>{"{{managerInput}}"}</code>,{" "}
-                    <code>{"{{issueRef}}"}</code>,{" "}
+                    <code>{"{{ref}}"}</code>,{" "}
                     <code>{"{{repository}}"}</code>,{" "}
                     <code>{"{{projectName}}"}</code>
                 </div>
