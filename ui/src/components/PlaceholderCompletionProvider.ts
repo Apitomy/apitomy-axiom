@@ -105,7 +105,7 @@ export const MANAGER_PLACEHOLDERS: PlaceholderItem[] = [
 export const ACTION_TYPE_PLACEHOLDERS: PlaceholderItem[] = [
     { name: "managerInput", description: "Instructions/context from the Manager's decision" },
     { name: "actionType", description: "The action type name" },
-    { name: "issueRef", description: "Issue reference (e.g. 'owner/repo#42')" },
+    { name: "ref", description: "Project reference (e.g. 'owner/repo#42' or 'CVE-2024-12345')" },
     { name: "repository", description: "Repository (e.g. 'owner/repo')" },
     { name: "projectName", description: "Project name" },
 ];

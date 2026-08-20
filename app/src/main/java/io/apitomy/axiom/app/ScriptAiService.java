@@ -50,7 +50,7 @@ public class ScriptAiService {
             - {{projectId}} — the Axiom project ID
             - {{eventId}} — the event ID that triggered this action
             - {{taskId}} — the task ID for this execution
-            - {{issueRef}} — the issue reference (e.g. "owner/repo#42")
+            - {{ref}} — the project reference (e.g. "owner/repo#42" or "CVE-2024-12345")
             - {{repository}} — the repository name (e.g. "owner/repo")
             - {{projectName}} — the project name
             - {{managerInput}} — context/instructions from the Manager

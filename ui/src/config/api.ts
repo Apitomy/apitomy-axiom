@@ -49,9 +49,9 @@ export interface Project {
     body?: string;
     type: string;
     status: string;
-    issueSource: string;
-    issueRef: string;
-    repository: string;
+    refSource?: string;
+    ref: string;
+    repository?: string;
     createdOn: string;
     updatedOn: string;
     metadata?: Record<string, string>;
@@ -62,9 +62,9 @@ export interface NewProject {
     name: string;
     body?: string;
     type: string;
-    issueSource: string;
-    issueRef: string;
-    repository: string;
+    refSource?: string;
+    ref: string;
+    repository?: string;
 }
 
 export interface Task {

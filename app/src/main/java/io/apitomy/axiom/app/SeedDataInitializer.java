@@ -69,7 +69,7 @@ public class SeedDataInitializer {
                    report what labels you would have applied
 
                 ## Issue
-                {{issueRef}} in {{repository}}
+                {{ref}} in {{repository}}
 
                 ## Context from Manager
                 {{managerInput}}

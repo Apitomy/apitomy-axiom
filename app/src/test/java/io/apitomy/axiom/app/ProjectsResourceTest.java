@@ -40,8 +40,8 @@ class ProjectsResourceTest {
                     "name": "Test Project",
                     "body": "A test project",
                     "type": "bug-fix",
-                    "issueSource": "github",
-                    "issueRef": "owner/repo#1",
+                    "refSource": "github",
+                    "ref": "owner/repo#1",
                     "repository": "owner/repo"
                 }
                 """)
@@ -53,8 +53,8 @@ class ProjectsResourceTest {
                 .body("body", equalTo("A test project"))
                 .body("type", equalTo("bug-fix"))
                 .body("status", equalTo("Created"))
-                .body("issueSource", equalTo("github"))
-                .body("issueRef", equalTo("owner/repo#1"))
+                .body("refSource", equalTo("github"))
+                .body("ref", equalTo("owner/repo#1"))
                 .body("repository", equalTo("owner/repo"))
                 .body("id", notNullValue())
                 .body("createdOn", notNullValue())
@@ -385,7 +385,7 @@ class ProjectsResourceTest {
             .then()
                 .statusCode(200)
                 .body("items.size()", greaterThanOrEqualTo(1))
-                .body("items.issueRef", hasItem(containsString("filter-org/filter-repo")));
+                .body("items.ref", hasItem(containsString("filter-org/filter-repo")));
     }
 
     @Test
@@ -454,18 +454,18 @@ class ProjectsResourceTest {
 
     // ── Helpers ───────────────────────────────────────────────────────
 
-    private int createProject(String name, String type, String issueRef) {
+    private int createProject(String name, String type, String ref) {
         return given()
             .contentType(ContentType.JSON)
             .body(String.format("""
                 {
                     "name": "%s",
                     "type": "%s",
-                    "issueSource": "github",
-                    "issueRef": "%s",
+                    "refSource": "github",
+                    "ref": "%s",
                     "repository": "owner/repo"
                 }
-                """, name, type, issueRef))
+                """, name, type, ref))
             .when()
                 .post(PROJECTS_PATH)
             .then()

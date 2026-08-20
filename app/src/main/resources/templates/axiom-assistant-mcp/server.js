@@ -286,8 +286,8 @@ const TOOLS = [
                 id: p.id,
                 name: p.name,
                 status: p.status,
-                issueSource: p.issueSource || "",
-                issueRef: p.issueRef || "",
+                refSource: p.refSource || "",
+                ref: p.ref || "",
                 labels: p.labels || [],
             })), null, 2);
         },

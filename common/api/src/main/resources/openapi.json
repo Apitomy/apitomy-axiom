@@ -5094,9 +5094,7 @@
           "name",
           "type",
           "status",
-          "issueSource",
-          "issueRef",
-          "repository",
+          "ref",
           "createdOn",
           "updatedOn"
         ],
@@ -5113,18 +5111,6 @@
             "description": "Markdown content (e.g. issue body)",
             "type": "string"
           },
-          "type": {
-            "enum": [
-              "bug-fix",
-              "feature",
-              "issue",
-              "pull-request",
-              "question",
-              "help",
-              "other"
-            ],
-            "type": "string"
-          },
           "status": {
             "enum": [
               "Created",
@@ -5132,16 +5118,6 @@
               "Idle",
               "Completed"
             ],
-            "type": "string"
-          },
-          "issueSource": {
-            "enum": [
-              "github",
-              "jira"
-            ],
-            "type": "string"
-          },
-          "issueRef": {
             "type": "string"
           },
           "repository": {
@@ -5167,6 +5143,15 @@
             "items": {
               "type": "string"
             }
+          },
+          "type": {
+            "type": "string"
+          },
+          "refSource": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
           }
         }
       },
@@ -5174,9 +5159,7 @@
         "required": [
           "name",
           "type",
-          "issueSource",
-          "issueRef",
-          "repository"
+          "ref"
         ],
         "type": "object",
         "properties": {
@@ -5187,28 +5170,6 @@
             "description": "Markdown content (e.g. issue body)",
             "type": "string"
           },
-          "type": {
-            "enum": [
-              "bug-fix",
-              "feature",
-              "issue",
-              "pull-request",
-              "question",
-              "help",
-              "other"
-            ],
-            "type": "string"
-          },
-          "issueSource": {
-            "enum": [
-              "github",
-              "jira"
-            ],
-            "type": "string"
-          },
-          "issueRef": {
-            "type": "string"
-          },
           "repository": {
             "type": "string"
           },
@@ -5217,6 +5178,15 @@
             "additionalProperties": {
               "type": "string"
             }
+          },
+          "type": {
+            "type": "string"
+          },
+          "refSource": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
           }
         }
       },
@@ -5228,18 +5198,6 @@
           },
           "body": {
             "description": "Markdown content (e.g. issue body)",
-            "type": "string"
-          },
-          "type": {
-            "enum": [
-              "bug-fix",
-              "feature",
-              "issue",
-              "pull-request",
-              "question",
-              "help",
-              "other"
-            ],
             "type": "string"
           },
           "status": {
@@ -5263,6 +5221,9 @@
             "items": {
               "type": "string"
             }
+          },
+          "type": {
+            "type": "string"
           }
         }
       },

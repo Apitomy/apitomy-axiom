@@ -91,7 +91,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
         Map<String, Object> params = new HashMap<>();
 
         if (filterName != null && !filterName.isBlank()) {
-            hql.append(" and (lower(name) like :name or lower(issueRef) like :name)");
+            hql.append(" and (lower(name) like :name or lower(ref) like :name)");
             params.put("name", "%" + filterName.toLowerCase() + "%");
         }
         if (filterStatus != null && !filterStatus.isBlank()) {
@@ -110,7 +110,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
             params.put("labelCount", (long) labels.size());
         }
         if (filterRef != null && !filterRef.isBlank()) {
-            hql.append(" and issueRef = :ref");
+            hql.append(" and ref = :ref");
             params.put("ref", filterRef);
         }
 
@@ -140,10 +140,10 @@ public class ProjectsResourceImpl implements ProjectsResource {
         ProjectEntity entity = new ProjectEntity();
         entity.name = data.getName();
         entity.body = data.getBody();
-        entity.type = data.getType().value();
+        entity.type = data.getType();
         entity.status = ProjectStatus.Created.name();
-        entity.issueSource = data.getIssueSource().value();
-        entity.issueRef = data.getIssueRef();
+        entity.refSource = data.getRefSource();
+        entity.ref = data.getRef();
         entity.repository = data.getRepository();
         entity.createdOn = Instant.now();
         entity.updatedOn = Instant.now();
@@ -173,7 +173,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
             entity.body = data.getBody();
         }
         if (data.getType() != null) {
-            entity.type = data.getType().value();
+            entity.type = data.getType();
         }
         if (data.getStatus() != null) {
             ProjectStatus currentStatus = ProjectStatus.fromValue(entity.status);
@@ -378,7 +378,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
     @Override
     public List<Event> listProjectEvents(long projectId) {
         ProjectEntity project = findProjectOrThrow(projectId);
-        List<EventEntity> entities = EventEntity.list("issueRef", project.issueRef);
+        List<EventEntity> entities = EventEntity.list("issueRef", project.ref);
         Map<Long, List<String>> labelsMap = loadEventSourceLabels(entities);
         return entities.stream()
                 .map(e -> toEventBean(e, labelsMap.getOrDefault(e.eventSourceId, Collections.emptyList())))
@@ -512,10 +512,10 @@ public class ProjectsResourceImpl implements ProjectsResource {
         project.setId(entity.id);
         project.setName(entity.name);
         project.setBody(entity.body);
-        project.setType(Project.Type.fromValue(entity.type));
+        project.setType(entity.type);
         project.setStatus(Project.Status.fromValue(entity.status));
-        project.setIssueSource(Project.IssueSource.fromValue(entity.issueSource));
-        project.setIssueRef(entity.issueRef);
+        project.setRefSource(entity.refSource);
+        project.setRef(entity.ref);
         project.setRepository(entity.repository);
         project.setCreatedOn(Date.from(entity.createdOn));
         project.setUpdatedOn(Date.from(entity.updatedOn));

@@ -316,7 +316,7 @@ public class TaskExecutionService {
         String resolved = actionType.promptTemplate;
         resolved = resolved.replace("{{managerInput}}", task.input != null ? task.input : "");
         resolved = resolved.replace("{{actionType}}", task.actionType != null ? task.actionType : "");
-        resolved = resolved.replace("{{issueRef}}", project.issueRef != null ? project.issueRef : "");
+        resolved = resolved.replace("{{ref}}", project.ref != null ? project.ref : "");
         resolved = resolved.replace("{{repository}}", project.repository != null ? project.repository : "");
         resolved = resolved.replace("{{projectName}}", project.name != null ? project.name : "");
         resolved = resolved.replace("{{workDir}}", workspace != null ? workspace.toAbsolutePath().toString() : "");
@@ -326,7 +326,7 @@ public class TaskExecutionService {
     private String buildSystemPrompt(TaskEntity task, ProjectEntity project) {
         StringBuilder sb = new StringBuilder();
         sb.append("You are working on project: ").append(project.name).append("\n");
-        sb.append("Issue: ").append(project.issueRef).append("\n");
+        sb.append("Reference: ").append(project.ref).append("\n");
         sb.append("Action type: ").append(task.actionType).append("\n");
         if (project.body != null) {
             sb.append("Project description: ").append(project.body).append("\n");

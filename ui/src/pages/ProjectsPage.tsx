@@ -6,8 +6,6 @@ import {
     EmptyStateBody,
     Form,
     FormGroup,
-    FormSelect,
-    FormSelectOption,
     Label,
     Modal,
     ModalBody,
@@ -87,9 +85,7 @@ export function ProjectsPage() {
     const [newProject, setNewProject] = useState<NewProject>({
         name: "",
         type: "other",
-        issueSource: "github",
-        issueRef: "",
-        repository: "",
+        ref: "",
     });
 
     const filterName = filters.find((f) => f.filterBy.value === "name")?.filterValue;
@@ -183,9 +179,7 @@ export function ProjectsPage() {
                 setNewProject({
                     name: "",
                     type: "other",
-                    issueSource: "github",
-                    issueRef: "",
-                    repository: "",
+                    ref: "",
                 });
                 loadProjects();
             })
@@ -276,7 +270,7 @@ export function ProjectsPage() {
                             <Tr>
                                 <Th>Name</Th>
                                 <Th>Status</Th>
-                                <Th>Issue</Th>
+                                <Th>Reference</Th>
                                 <Th>Labels</Th>
                                 <Th>Updated</Th>
                                 <Th />
@@ -290,8 +284,8 @@ export function ProjectsPage() {
                                     onRowClick={() => navigate(`/projects/${project.id}`)}
                                 >
                                     <Td>
-                                        {project.issueSource === "github" && <GithubIcon style={{ marginRight: 6 }} />}
-                                        {project.issueSource === "jira" && <JiraIcon style={{ marginRight: 6 }} />}
+                                        {project.refSource === "github" && <GithubIcon style={{ marginRight: 6 }} />}
+                                        {project.refSource === "jira" && <JiraIcon style={{ marginRight: 6 }} />}
                                         {project.type === "issue" && <BugIcon style={{ marginRight: 6 }} />}
                                         {project.type === "pull-request" && <CodeBranchIcon style={{ marginRight: 6 }} />}
                                         {project.name}
@@ -301,7 +295,7 @@ export function ProjectsPage() {
                                             {STATUS_LABELS[project.status] || project.status}
                                         </Label>
                                     </Td>
-                                    <Td>{project.issueRef}</Td>
+                                    <Td>{project.ref}</Td>
                                     <Td>
                                         {project.labels?.map((label) => (
                                             <ColoredLabel key={label} isCompact
@@ -362,59 +356,63 @@ export function ProjectsPage() {
                             />
                         </FormGroup>
                         <FormGroup label="Type" isRequired fieldId="type">
-                            <FormSelect
+                            <TextInput
                                 id="type"
+                                isRequired
+                                list="type-suggestions"
+                                placeholder="e.g. bug-fix, feature, cve"
                                 value={newProject.type}
                                 onChange={(_e, v) =>
                                     setNewProject({ ...newProject, type: v })
                                 }
-                            >
-                                <FormSelectOption value="bug-fix" label="Bug Fix" />
-                                <FormSelectOption value="feature" label="Feature" />
-                                <FormSelectOption value="question" label="Question" />
-                                <FormSelectOption value="help" label="Help" />
-                                <FormSelectOption value="other" label="Other" />
-                            </FormSelect>
+                            />
+                            <datalist id="type-suggestions">
+                                <option value="bug-fix" />
+                                <option value="feature" />
+                                <option value="issue" />
+                                <option value="pull-request" />
+                                <option value="cve" />
+                                <option value="question" />
+                                <option value="help" />
+                                <option value="other" />
+                            </datalist>
                         </FormGroup>
-                        <FormGroup label="Issue Source" isRequired fieldId="issueSource">
-                            <FormSelect
-                                id="issueSource"
-                                value={newProject.issueSource}
-                                onChange={(_e, v) =>
-                                    setNewProject({
-                                        ...newProject,
-                                        issueSource: v,
-                                    })
-                                }
-                            >
-                                <FormSelectOption value="github" label="GitHub" />
-                                <FormSelectOption value="jira" label="Jira" />
-                            </FormSelect>
-                        </FormGroup>
-                        <FormGroup label="Issue Reference" isRequired fieldId="issueRef">
+                        <FormGroup label="Reference" isRequired fieldId="ref">
                             <TextInput
-                                id="issueRef"
+                                id="ref"
                                 isRequired
-                                placeholder="owner/repo#123"
-                                value={newProject.issueRef}
+                                placeholder="owner/repo#123 or CVE-2024-12345"
+                                value={newProject.ref}
                                 onChange={(_e, v) =>
                                     setNewProject({
                                         ...newProject,
-                                        issueRef: v,
+                                        ref: v,
                                     })
                                 }
                             />
                         </FormGroup>
-                        <FormGroup label="Repository" isRequired fieldId="repository">
+                        <FormGroup label="Source" fieldId="refSource">
                             <TextInput
-                                id="repository"
-                                isRequired
-                                placeholder="owner/repo"
-                                value={newProject.repository}
+                                id="refSource"
+                                placeholder="e.g. github, jira"
+                                value={newProject.refSource || ""}
                                 onChange={(_e, v) =>
                                     setNewProject({
                                         ...newProject,
-                                        repository: v,
+                                        refSource: v || undefined,
+                                    })
+                                }
+                            />
+                        </FormGroup>
+                        <FormGroup label="Repository" fieldId="repository">
+                            <TextInput
+                                id="repository"
+                                placeholder="owner/repo"
+                                value={newProject.repository || ""}
+                                onChange={(_e, v) =>
+                                    setNewProject({
+                                        ...newProject,
+                                        repository: v || undefined,
                                     })
                                 }
                             />
@@ -427,8 +425,7 @@ export function ProjectsPage() {
                         onClick={handleCreate}
                         isDisabled={
                             !newProject.name ||
-                            !newProject.issueRef ||
-                            !newProject.repository
+                            !newProject.ref
                         }
                     >
                         Create

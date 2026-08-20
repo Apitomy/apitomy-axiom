@@ -336,10 +336,10 @@ const SDK_TOOLS = [
         description: "Create a new Axiom project programmatically.",
         parameters: [
             { name: "name", type: "string", description: "The project name", required: true },
-            { name: "type", type: "string", description: "The project type (e.g. 'bug-fix', 'feature', 'issue', 'pull-request', 'question', 'help', 'other')", required: true },
-            { name: "issueRef", type: "string", description: "Issue reference (e.g. 'owner/repo#123' or 'CVE-2024-12345')", required: true },
-            { name: "issueSource", type: "string", description: "Issue source (e.g. 'github', 'jira')", required: true },
-            { name: "repository", type: "string", description: "Repository identifier (e.g. 'owner/repo')", required: true },
+            { name: "type", type: "string", description: "The project type (e.g. 'bug-fix', 'feature', 'cve', 'issue', 'pull-request')", required: true },
+            { name: "ref", type: "string", description: "Project reference (e.g. 'owner/repo#123' or 'CVE-2024-12345')", required: true },
+            { name: "refSource", type: "string", description: "Reference source (e.g. 'github', 'jira')", required: false },
+            { name: "repository", type: "string", description: "Repository identifier (e.g. 'owner/repo')", required: false },
             { name: "body", type: "string", description: "Optional markdown body content (e.g. issue body)", required: false },
             { name: "metadata", type: "string", description: "Optional JSON object of key-value metadata (e.g. '{\"priority\":\"high\"}')", required: false },
         ],
@@ -347,9 +347,9 @@ const SDK_TOOLS = [
             const body = {
                 name: args.name,
                 type: args.type,
-                issueRef: args.issueRef,
-                issueSource: args.issueSource,
-                repository: args.repository,
+                ref: args.ref,
+                refSource: args.refSource || undefined,
+                repository: args.repository || undefined,
             };
             if (args.body) body.body = args.body;
             if (args.metadata) {

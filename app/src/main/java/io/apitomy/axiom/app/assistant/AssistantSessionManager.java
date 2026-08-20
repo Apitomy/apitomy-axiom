@@ -147,8 +147,8 @@ public class AssistantSessionManager {
             if (project != null) {
                 resolvedEnv.put("AXIOM_PROJECT_ID", String.valueOf(project.id));
                 resolvedEnv.put("AXIOM_PROJECT_NAME", project.name);
-                resolvedEnv.put("AXIOM_ISSUE_REF", project.issueRef);
-                resolvedEnv.put("AXIOM_REPOSITORY", project.repository);
+                resolvedEnv.put("AXIOM_REF", project.ref);
+                resolvedEnv.put("AXIOM_REPOSITORY", project.repository != null ? project.repository : "");
             }
 
             // Create session directory first — MCP server resolution may need
@@ -527,9 +527,13 @@ public class AssistantSessionManager {
         }
         context.append("- **Type**: ").append(project.type).append("\n");
         context.append("- **Status**: ").append(project.status).append("\n");
-        context.append("- **Issue Source**: ").append(project.issueSource).append("\n");
-        context.append("- **Issue Reference**: ").append(project.issueRef).append("\n");
-        context.append("- **Repository**: ").append(project.repository).append("\n");
+        if (project.refSource != null && !project.refSource.isBlank()) {
+            context.append("- **Source**: ").append(project.refSource).append("\n");
+        }
+        context.append("- **Reference**: ").append(project.ref).append("\n");
+        if (project.repository != null && !project.repository.isBlank()) {
+            context.append("- **Repository**: ").append(project.repository).append("\n");
+        }
         if (project.labels != null && !project.labels.isEmpty()) {
             context.append("- **Labels**: ").append(String.join(", ", project.labels)).append("\n");
         }

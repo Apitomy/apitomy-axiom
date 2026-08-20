@@ -519,7 +519,7 @@ function PromptTemplateTab({ value, onChange }: {
                 The prompt sent to the AI agent when executing this action type.
                 Supports placeholders:{" "}
                 <code>{"{{managerInput}}"}</code>,{" "}
-                <code>{"{{issueRef}}"}</code>,{" "}
+                <code>{"{{ref}}"}</code>,{" "}
                 <code>{"{{repository}}"}</code>,{" "}
                 <code>{"{{projectName}}"}</code>
             </p>
@@ -551,7 +551,7 @@ function ScriptTab({ value, onChange }: {
                 <code>{"{{projectId}}"}</code>,{" "}
                 <code>{"{{eventId}}"}</code>,{" "}
                 <code>{"{{taskId}}"}</code>,{" "}
-                <code>{"{{issueRef}}"}</code>,{" "}
+                <code>{"{{ref}}"}</code>,{" "}
                 <code>{"{{repository}}"}</code>,{" "}
                 <code>{"{{projectName}}"}</code>,{" "}
                 <code>{"{{managerInput}}"}</code>,{" "}

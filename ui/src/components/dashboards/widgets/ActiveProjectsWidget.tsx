@@ -34,14 +34,14 @@ function ActiveProjectsWidget({ config, labels }: WidgetProps) {
     return (
         <Table aria-label="Active Projects" variant="compact" isStickyHeader>
             <Thead><Tr>
-                <Th>Name</Th><Th>Status</Th><Th>Issue</Th>
+                <Th>Name</Th><Th>Status</Th><Th>Reference</Th>
             </Tr></Thead>
             <Tbody>
                 {projects.map(p => (
                     <Tr key={p.id} isClickable onRowClick={() => navigate(`/projects/${p.id}`)}>
                         <Td>
-                            {p.issueSource === "github" && <GithubIcon style={{ marginRight: 6 }} />}
-                            {p.issueSource === "jira" && <JiraIcon style={{ marginRight: 6 }} />}
+                            {p.refSource === "github" && <GithubIcon style={{ marginRight: 6 }} />}
+                            {p.refSource === "jira" && <JiraIcon style={{ marginRight: 6 }} />}
                             {p.type === "issue" && <BugIcon style={{ marginRight: 6 }} />}
                             {p.type === "pull-request" && <CodeBranchIcon style={{ marginRight: 6 }} />}
                             {p.name}
@@ -51,7 +51,7 @@ function ActiveProjectsWidget({ config, labels }: WidgetProps) {
                                 {p.status}
                             </Label>
                         </Td>
-                        <Td>{p.issueRef || "—"}</Td>
+                        <Td>{p.ref || "—"}</Td>
                     </Tr>
                 ))}
                 {projects.length === 0 && (

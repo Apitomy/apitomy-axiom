@@ -524,7 +524,7 @@ public class PipelineOrchestrator {
 
     private ProjectEntity findProjectForEvent(EventEntity event) {
         if (event.issueRef != null) {
-            return ProjectEntity.find("issueRef", event.issueRef).firstResult();
+            return ProjectEntity.find("ref", event.issueRef).firstResult();
         }
         if (event.projectId != null) {
             return ProjectEntity.findById(event.projectId);
@@ -538,9 +538,9 @@ public class PipelineOrchestrator {
         project.body = extractIssueBody(event);
         project.type = determineProjectType(event.eventType);
         project.status = ProjectStatus.Created.name();
-        project.issueSource = event.source;
-        project.issueRef = event.issueRef != null ? event.issueRef : "unknown";
-        project.repository = event.repository != null ? event.repository : "unknown";
+        project.refSource = event.source;
+        project.ref = event.issueRef != null ? event.issueRef : "unknown";
+        project.repository = event.repository != null ? event.repository : null;
         project.createdOn = Instant.now();
         project.updatedOn = Instant.now();
         if (event.eventSourceId != null) {

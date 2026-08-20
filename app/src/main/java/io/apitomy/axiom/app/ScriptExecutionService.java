@@ -198,8 +198,8 @@ public class ScriptExecutionService {
         resolved = resolved.replace("{{projectId}}", str(task.projectId));
         resolved = resolved.replace("{{eventId}}", str(task.eventId));
         resolved = resolved.replace("{{taskId}}", str(task.id));
-        resolved = resolved.replace("{{issueRef}}", project != null && project.issueRef != null
-                ? project.issueRef : "");
+        resolved = resolved.replace("{{ref}}", project != null && project.ref != null
+                ? project.ref : "");
         resolved = resolved.replace("{{repository}}", project != null && project.repository != null
                 ? project.repository : "");
         resolved = resolved.replace("{{projectName}}", project != null && project.name != null
