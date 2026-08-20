@@ -47,8 +47,8 @@ import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import EditIcon from "@patternfly/react-icons/dist/esm/icons/edit-icon";
 
 export function WorkflowDefinitionDetailPage() {
-    const { workflowDefId } = useParams<{ workflowDefId: string }>();
-    const id = Number(workflowDefId);
+    const { workflowDefinitionId } = useParams<{ workflowDefinitionId: string }>();
+    const id = Number(workflowDefinitionId);
     const navigate = useNavigate();
     const effectiveTheme = useEffectiveTheme();
 
