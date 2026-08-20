@@ -425,7 +425,8 @@ function InfoTab({ form, updateForm, labels, onLabelsChange, availableModels, av
                         {availableEngines.map((e) => (
                             <FormSelectOption key={e} value={e}
                                 label={e === "opencode" ? "OpenCode"
-                                    : e === "claude-code" ? "Claude Code" : e} />
+                                    : e === "claude-code" ? "Claude Code"
+                                    : e === "copilot" ? "GitHub Copilot CLI" : e} />
                         ))}
                     </FormSelect>
                 </FormGroup>

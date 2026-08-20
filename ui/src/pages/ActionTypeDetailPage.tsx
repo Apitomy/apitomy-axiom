@@ -409,7 +409,7 @@ function InfoTab({ form, updateForm, availableModels, availableEngines, onEditLa
                     >
                         <FormSelectOption value="" label="Global default" />
                         {availableEngines.map((e) => (
-                            <FormSelectOption key={e} value={e} label={e === "opencode" ? "OpenCode" : e === "claude-code" ? "Claude Code" : e} />
+                            <FormSelectOption key={e} value={e} label={e === "opencode" ? "OpenCode" : e === "claude-code" ? "Claude Code" : e === "copilot" ? "GitHub Copilot CLI" : e} />
                         ))}
                     </FormSelect>
                 </FormGroup>

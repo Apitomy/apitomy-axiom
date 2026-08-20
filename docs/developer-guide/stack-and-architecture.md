@@ -18,7 +18,7 @@ and runtime architecture.
 | Build (frontend) | Vite 6.4 |
 | Build (backend) | Maven 3.9+ |
 | API | Contract-first OpenAPI with Apitomy Codegen |
-| AI Engines | Claude Code CLI, OpenCode (pluggable) |
+| AI Engines | Claude Code CLI, OpenCode, GitHub Copilot CLI (pluggable) |
 
 ---
 
@@ -32,7 +32,8 @@ apitomy-axiom/
 ├── core/                Domain entities, lifecycle state machine, services
 ├── engine/
 │   ├── spi/             AI engine abstraction (AiEngine, AiEngineRegistry)
-│   └── opencode/        OpenCode engine + actor implementation
+│   ├── opencode/        OpenCode engine + actor implementation
+│   └── copilot/         GitHub Copilot CLI engine + actor implementation
 ├── manager/             AI Manager — event triage and decision-making
 ├── actors/
 │   ├── spi/             Actor interface (Actor, ActorContext, TaskResult)
@@ -60,10 +61,10 @@ common/api ◄── core ◄── manager
               engine/spi ◄┘
                  ▲
                  │
-           ┌─────┴──────┐
-     engine/opencode  actors/claude-code
-                         ▲
-                         │
+       ┌─────────┼──────────┐
+engine/opencode  engine/copilot  actors/claude-code
+                                       ▲
+                                       │
                     actors/spi ◄── actors/human
                          ▲
                          │

@@ -138,7 +138,7 @@ automatically copied to the new project.
 ### AI Manager
 
 The Manager receives events and produces structured decisions. It uses the configured AI
-engine (Claude Code or OpenCode) to analyze each event in context.
+engine (Claude Code, OpenCode, or GitHub Copilot CLI) to analyze each event in context.
 
 The Manager's behavior is controlled by two editable templates:
 
@@ -285,7 +285,7 @@ duration. Task statuses:
 
 An Actor is an entity that performs tasks. Axiom supports two types:
 
-**AI Agent** — uses the configured AI engine (Claude Code or OpenCode) as a subprocess.
+**AI Agent** — uses the configured AI engine (Claude Code, OpenCode, or GitHub Copilot CLI) as a subprocess.
 The agent receives the action type's prompt template, runs with the allowed tools, and
 reports back with results.
 
@@ -495,6 +495,7 @@ for Manager evaluations and actor task execution:
 |--------|-----|-------------|
 | **Claude Code** | `claude` | Anthropic's Claude Code CLI (default) |
 | **OpenCode** | `opencode` | OpenCode CLI with multi-provider support |
+| **GitHub Copilot CLI** | `copilot` | GitHub's Copilot CLI |
 
 Individual action types can override the global engine and model selection, allowing you
 to use different models for different types of work.
@@ -588,7 +589,7 @@ The diagram below shows how the concepts relate:
 │    ├─ allowed tools ────────┼──► Tools / @Toolsets / MCP Servers     │
 │    └─ environment ──────────┼──► Secrets                             │
 │                             │                                       │
-│                         AI Engine (Claude Code / OpenCode)           │
+│                    AI Engine (Claude Code / OpenCode / Copilot)      │
 │                                                                     │
 ├─────────────────────────────────────────────────────────────────────┤
 │                   EVENT-DRIVEN AUTOMATION                            │
@@ -605,7 +606,7 @@ The diagram below shows how the concepts relate:
 │                             Tools / @Toolsets / MCP Servers ◄──┘     │
 │                             Secrets ◄──────────────────────────┘     │
 │                                                                     │
-│                         AI Engine (Claude Code / OpenCode)           │
+│                    AI Engine (Claude Code / OpenCode / Copilot)      │
 │                                                                     │
 ├─────────────────────────────────────────────────────────────────────┤
 │                      SCHEDULED JOBS                                  │
@@ -616,7 +617,7 @@ The diagram below shows how the concepts relate:
 │    ├─ allowed tools ───────┼──► Tools / @Toolsets / MCP Servers       │
 │    └─ environment ─────────┼──► Secrets                               │
 │                            │                                         │
-│                        AI Engine (Claude Code / OpenCode)             │
+│                   AI Engine (Claude Code / OpenCode / Copilot)        │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 

@@ -41,7 +41,7 @@ Axiom supports multiple AI engines. Set the active engine with:
 
 | Property | Default | Description |
 |----------|---------|-------------|
-| `axiom.ai-engine` | `claude-code` | AI engine to use (`claude-code` or `opencode`) |
+| `axiom.ai-engine` | `claude-code` | AI engine to use (`claude-code`, `opencode`, or `copilot`) |
 
 #### Claude Code Settings
 
@@ -61,6 +61,14 @@ Axiom supports multiple AI engines. Set the active engine with:
 | `axiom.opencode.server.port` | `4096` | OpenCode server port |
 | `axiom.opencode.max-steps` | `50` | Maximum agent steps per task |
 | `axiom.opencode.timeout-seconds` | `600` | HTTP request timeout |
+
+#### GitHub Copilot CLI Settings
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `axiom.copilot.executable` | `copilot` | Path to the Copilot CLI binary |
+| `axiom.copilot.model` | *(engine default)* | AI model override |
+| `axiom.copilot.timeout-seconds` | `600` | Subprocess timeout |
 
 ### Manager
 

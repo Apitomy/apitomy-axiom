@@ -6,14 +6,14 @@ long-lived projects around them, and delegates work to human and AI actors.
 ## Key Features
 
 - **AI-Powered Triage** — an AI Manager triages incoming events and decides what actions to take
-- **Human + AI Actors** — pluggable actor system supports Claude Code, OpenCode, and human actors
+- **Human + AI Actors** — pluggable actor system supports Claude Code, OpenCode, GitHub Copilot CLI, and human actors
 - **Project Lifecycle** — long-lived projects track work from triage through completion
 - **Event Sources** — watches GitHub and Jira repositories via webhooks or polling
 - **Scheduled Jobs** — CRON-style automation with AI actor or script execution modes
 - **Web Dashboard** — React + PatternFly UI with real-time SSE updates
 - **AI Assistant** — interactive conversational interface with customizable session templates,
   real-time tool permission management, and plan mode
-- **Pluggable AI Engines** — swap between Claude Code CLI and OpenCode without code changes
+- **Pluggable AI Engines** — swap between Claude Code CLI, OpenCode, and GitHub Copilot CLI without code changes
 
 ## Quick Links
 
@@ -29,7 +29,7 @@ long-lived projects around them, and delegates work to human and AI actors.
 | Frontend | TypeScript / React 19 / PatternFly 6 |
 | Database | H2 (in-memory dev, file-based prod) |
 | Migrations | Flyway (automatic on startup) |
-| AI Engines | Claude Code CLI, OpenCode (pluggable) |
+| AI Engines | Claude Code CLI, OpenCode, GitHub Copilot CLI (pluggable) |
 | API | Contract-first OpenAPI + Apitomy Codegen |
 
 ## Community

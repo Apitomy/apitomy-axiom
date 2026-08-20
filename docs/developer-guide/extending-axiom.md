@@ -26,7 +26,7 @@ configuration.
 ## Adding an AI Engine
 
 An AI engine provides the ability to invoke an LLM for manager evaluations and task
-execution. Axiom ships with two engines: Claude Code and OpenCode.
+execution. Axiom ships with three engines: Claude Code, OpenCode, and GitHub Copilot CLI.
 
 ### Interface: `AiEngine`
 
@@ -34,7 +34,7 @@ Location: `engine/spi/src/main/java/io/apitomy/axiom/engine/spi/AiEngine.java`
 
 | Method | Purpose |
 |--------|---------|
-| `String getType()` | Engine identifier (e.g. `"claude-code"`, `"opencode"`) |
+| `String getType()` | Engine identifier (e.g. `"claude-code"`, `"opencode"`, `"copilot"`) |
 | `CompletableFuture<AiEngineResult> prompt(AiEngineConfig config, String prompt)` | Invoke the AI with a text prompt |
 | `CompletableFuture<AiEngineResult> promptWithSchema(AiEngineConfig config, String prompt, String jsonSchema)` | Invoke with structured output (JSON schema constraint) |
 | `List<AiEngineCheckResult> healthCheck()` | Startup health checks |
@@ -97,6 +97,8 @@ Register it via `AiEngineProvider.getMcpManager()`.
   subprocess-based, launches `claude` CLI
 - **OpenCode**: `engine/opencode/src/main/java/.../OpenCodeEngine.java` —
   HTTP client against a running OpenCode server
+- **GitHub Copilot CLI**: `engine/copilot/src/main/java/.../CopilotEngine.java` —
+  subprocess-based, launches `copilot` CLI
 
 ---
 
@@ -179,6 +181,8 @@ public class MyActor implements Actor {
   launches `claude` CLI as a subprocess
 - **OpenCode**: `engine/opencode/src/main/java/.../OpenCodeActor.java` — invokes
   OpenCode server via HTTP
+- **GitHub Copilot CLI**: `engine/copilot/src/main/java/.../CopilotActor.java` —
+  launches `copilot` CLI as a subprocess
 - **Human**: `actors/human/` — sends notifications, waits for human response
 
 ---
