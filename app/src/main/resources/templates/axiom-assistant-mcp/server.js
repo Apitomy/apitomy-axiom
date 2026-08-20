@@ -69,7 +69,8 @@ const TOOLS = [
         description: "List all existing action types in Axiom. Returns names, descriptions, and execution modes.",
         parameters: [],
         handler: async () => {
-            const items = JSON.parse(await axiomApi("GET", "/action-types"));
+            const response = JSON.parse(await axiomApi("GET", "/action-types"));
+            const items = response.items || [];
             if (items.length === 0) return "No action types configured.";
             return JSON.stringify(items.map(at => ({
                 name: at.name,
@@ -87,7 +88,8 @@ const TOOLS = [
             { name: "name", type: "string", description: "The action type name", required: true },
         ],
         handler: async (args) => {
-            const items = JSON.parse(await axiomApi("GET", "/action-types"));
+            const response = JSON.parse(await axiomApi("GET", "/action-types"));
+            const items = response.items || [];
             const at = items.find(a => a.name === args.name);
             if (!at) return `Action type '${args.name}' not found.`;
             return JSON.stringify(at, null, 2);
@@ -196,7 +198,8 @@ const TOOLS = [
         description: "List all configured event sources in Axiom. Returns names, source types (github/jira), and whether they are enabled.",
         parameters: [],
         handler: async () => {
-            const items = JSON.parse(await axiomApi("GET", "/event-sources"));
+            const response = JSON.parse(await axiomApi("GET", "/event-sources"));
+            const items = response.items || [];
             if (items.length === 0) return "No event sources configured.";
             return JSON.stringify(items.map(es => ({
                 id: es.id,
@@ -214,7 +217,8 @@ const TOOLS = [
             { name: "name", type: "string", description: "The event source name", required: true },
         ],
         handler: async (args) => {
-            const items = JSON.parse(await axiomApi("GET", "/event-sources"));
+            const response = JSON.parse(await axiomApi("GET", "/event-sources"));
+            const items = response.items || [];
             const es = items.find(e => e.name === args.name);
             if (!es) return `Event source '${args.name}' not found.`;
             return JSON.stringify(es, null, 2);
