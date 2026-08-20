@@ -8914,7 +8914,8 @@
             "type": "string"
           },
           "content": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": {}
           },
           "currentVersion": {
             "format": "int32",
@@ -8976,7 +8977,8 @@
             "type": "integer"
           },
           "content": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": {}
           },
           "createdOn": {
             "format": "date-time",

@@ -2,8 +2,13 @@ package io.apitomy.axiom.app.rest;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.apitomy.axiom.api.WorkflowDefinitionsResource;
-import io.apitomy.axiom.api.beans.*;
+import io.apitomy.axiom.api.WorkflowResource;
+import io.apitomy.axiom.api.beans.Content;
+import io.apitomy.axiom.api.beans.NewWorkflowDefinition;
+import io.apitomy.axiom.api.beans.UpdateWorkflowDefinition;
+import io.apitomy.axiom.api.beans.WorkflowDefinition;
+import io.apitomy.axiom.api.beans.WorkflowDefinitionSearchResults;
+import io.apitomy.axiom.api.beans.WorkflowDefinitionVersion;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.flow.model.Workflow;
@@ -20,16 +25,20 @@ import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 
-import java.math.BigInteger;
+import java.io.InputStream;
 import java.time.Instant;
-import java.util.*;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * Implementation of the Workflow Definitions REST API.
  */
 @ApplicationScoped
 @RunOnVirtualThread
-public class WorkflowDefinitionsResourceImpl implements WorkflowDefinitionsResource {
+public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
 
     @Inject
     ObjectMapper objectMapper;
@@ -41,9 +50,9 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowDefinitionsResou
      */
     @Override
     public WorkflowDefinitionSearchResults listWorkflowDefinitions(
-            BigInteger page, BigInteger limit, String filterName) {
-        int pageNum = page != null ? page.intValue() : 1;
-        int pageSize = limit != null ? limit.intValue() : 20;
+            Integer page, Integer limit, String filterName) {
+        int pageNum = page != null ? page : 1;
+        int pageSize = limit != null ? limit : 20;
 
         StringBuilder hql = new StringBuilder("1=1");
         Map<String, Object> params = new HashMap<>();
@@ -128,7 +137,6 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowDefinitionsResou
     @Transactional
     public void deleteWorkflowDefinition(long workflowDefinitionId) {
         WorkflowDefinitionEntity entity = findOrThrow(workflowDefinitionId);
-        // Versions cascade-deleted via FK ON DELETE CASCADE
         entity.delete();
     }
 
@@ -139,11 +147,11 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowDefinitionsResou
      */
     @Override
     @Transactional
-    public void updateWorkflowDefinitionContent(long workflowDefinitionId, Object content) {
+    public void updateWorkflowDefinitionContent(long workflowDefinitionId, InputStream data) {
         WorkflowDefinitionEntity entity = findOrThrow(workflowDefinitionId);
         try {
-            entity.content = objectMapper.writeValueAsString(content);
-        } catch (JsonProcessingException e) {
+            entity.content = new String(data.readAllBytes());
+        } catch (Exception e) {
             throw new WebApplicationException("Invalid workflow content", 400);
         }
         entity.updatedOn = Instant.now();
@@ -163,7 +171,6 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowDefinitionsResou
             throw new WebApplicationException("No draft content to publish", 400);
         }
 
-        // Deserialize and validate
         Workflow workflow;
         try {
             workflow = objectMapper.readValue(entity.content, Workflow.class);
@@ -171,7 +178,8 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowDefinitionsResou
             throw new WebApplicationException("Invalid workflow JSON: " + e.getMessage(), 400);
         }
 
-        List<ValidationProblem> problems = WorkflowValidator.validate(workflow);
+        WorkflowValidator validator = new WorkflowValidator();
+        List<ValidationProblem> problems = validator.validate(workflow);
         List<ValidationProblem> errors = problems.stream()
                 .filter(p -> p.severity() == ValidationSeverity.ERROR)
                 .toList();
@@ -180,7 +188,6 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowDefinitionsResou
                     Response.status(400).entity(errors).build());
         }
 
-        // Create version
         int newVersion = entity.currentVersion != null ? entity.currentVersion + 1 : 1;
 
         WorkflowDefinitionVersionEntity version = new WorkflowDefinitionVersionEntity();
@@ -233,10 +240,6 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowDefinitionsResou
 
     /**
      * Finds a workflow definition by ID or throws a 404 exception.
-     *
-     * @param id the workflow definition ID
-     * @return the entity
-     * @throws WebApplicationException if not found
      */
     private WorkflowDefinitionEntity findOrThrow(long id) {
         WorkflowDefinitionEntity entity = WorkflowDefinitionEntity.findById(id);
@@ -248,10 +251,6 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowDefinitionsResou
 
     /**
      * Checks if a workflow definition name is already in use.
-     *
-     * @param name the name to check
-     * @param excludeId optional ID to exclude from the check (for updates)
-     * @throws WebApplicationException if a duplicate is found
      */
     private void checkDuplicateName(String name, Long excludeId) {
         WorkflowDefinitionEntity existing = WorkflowDefinitionEntity
@@ -262,10 +261,7 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowDefinitionsResou
     }
 
     /**
-     * Converts a WorkflowDefinitionEntity to a bean.
-     *
-     * @param entity the entity
-     * @return the bean
+     * Converts a WorkflowDefinitionEntity to a response bean.
      */
     private WorkflowDefinition toBean(WorkflowDefinitionEntity entity) {
         WorkflowDefinition bean = new WorkflowDefinition();
@@ -274,7 +270,7 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowDefinitionsResou
         bean.setDescription(entity.description);
         if (entity.content != null) {
             try {
-                bean.setContent(objectMapper.readValue(entity.content, Object.class));
+                bean.setContent(objectMapper.readValue(entity.content, Content.class));
             } catch (JsonProcessingException e) {
                 bean.setContent(null);
             }
@@ -286,10 +282,7 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowDefinitionsResou
     }
 
     /**
-     * Converts a WorkflowDefinitionVersionEntity to a bean.
-     *
-     * @param entity the entity
-     * @return the bean
+     * Converts a WorkflowDefinitionVersionEntity to a response bean.
      */
     private WorkflowDefinitionVersion toVersionBean(WorkflowDefinitionVersionEntity entity) {
         WorkflowDefinitionVersion bean = new WorkflowDefinitionVersion();
@@ -298,7 +291,7 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowDefinitionsResou
         bean.setVersion(entity.version);
         if (entity.content != null) {
             try {
-                bean.setContent(objectMapper.readValue(entity.content, Object.class));
+                bean.setContent(objectMapper.readValue(entity.content, Content.class));
             } catch (JsonProcessingException e) {
                 bean.setContent(null);
             }
@@ -308,10 +301,7 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowDefinitionsResou
     }
 
     /**
-     * Creates an empty workflow with start and end nodes.
-     *
-     * @param name the workflow name
-     * @return the workflow JSON string
+     * Creates an empty workflow JSON with start and end nodes.
      */
     private String createEmptyWorkflowContent(String name) {
         Map<String, Object> startNode = Map.of(
