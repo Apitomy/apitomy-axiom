@@ -3,6 +3,7 @@ package io.apitomy.axiom.app.rest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.actors.human.HumanActor;
+import io.apitomy.axiom.actors.spi.TaskResult;
 import io.apitomy.axiom.api.InboxResource;
 import io.apitomy.axiom.api.beans.HumanContext;
 import io.apitomy.axiom.api.beans.HumanContextReference;
@@ -214,7 +215,13 @@ public class InboxResourceImpl implements InboxResource {
             String responseJson = objectMapper.writeValueAsString(responseMap);
             boolean accepted = humanActor.submitResponse(tid, responseJson);
             if (!accepted) {
-                throw new WebApplicationException("Task is not pending a human response", 409);
+                // The in-memory pending-future used by HumanActor does not survive an
+                // application restart. The database status (AwaitingInput, checked above)
+                // is the real source of truth, so complete the task directly rather than
+                // failing just because no in-memory future is tracking it.
+                LOG.infof("No in-memory pending future for task %d (likely due to a restart); "
+                        + "completing directly from database state", tid);
+                taskExecutionService.onTaskCompleted(tid, TaskResult.success(responseJson).build());
             }
 
             LOG.infof("Inbox item %d completed with structured response", tid);
