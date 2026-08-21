@@ -172,7 +172,7 @@ export function WorkflowDefinitionDetailPage() {
     const handleDelete = () => {
         deleteWorkflowDefinition(id)
             .then(() => {
-                navigate("/workflow-definitions");
+                navigate("/components/workflows");
             })
             .catch((err) => {
                 console.error("Failed to delete workflow definition:", err);
@@ -211,7 +211,7 @@ export function WorkflowDefinitionDetailPage() {
                         <Link to="/">Components</Link>
                     </BreadcrumbItem>
                     <BreadcrumbItem>
-                        <Link to="/workflow-definitions">Workflows</Link>
+                        <Link to="/components/workflows">Workflows</Link>
                     </BreadcrumbItem>
                     <BreadcrumbItem isActive>{definition.name}</BreadcrumbItem>
                 </Breadcrumb>
