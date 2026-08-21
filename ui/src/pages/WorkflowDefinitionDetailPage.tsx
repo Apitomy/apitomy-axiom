@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
@@ -55,6 +55,7 @@ export function WorkflowDefinitionDetailPage() {
     const [definition, setDefinition] = useState<WorkflowDefinition | null>(null);
     const [editorContent, setEditorContent] = useState<Workflow | null>(null);
     const [dirty, setDirty] = useState(false);
+    const savedContentRef = useRef<string>("");
     const [saving, setSaving] = useState(false);
     const [publishing, setPublishing] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -87,6 +88,7 @@ export function WorkflowDefinitionDetailPage() {
             .then(([def, vers]) => {
                 setDefinition(def);
                 setEditorContent(def.content || null);
+                savedContentRef.current = JSON.stringify(def.content || null);
                 setVersions(vers);
                 setDirty(false);
             })
@@ -113,7 +115,8 @@ export function WorkflowDefinitionDetailPage() {
 
     const handleEditorChange = useCallback((updated: Workflow) => {
         setEditorContent(updated);
-        setDirty(true);
+        const isDirty = JSON.stringify(updated) !== savedContentRef.current;
+        setDirty(isDirty);
     }, []);
 
     const handleValidationChange = useCallback((problems: ValidationProblem[]) => {
@@ -125,6 +128,7 @@ export function WorkflowDefinitionDetailPage() {
         setSaving(true);
         updateWorkflowDefinitionContent(id, editorContent)
             .then(() => {
+                savedContentRef.current = JSON.stringify(editorContent);
                 setDirty(false);
             })
             .catch((err) => {
