@@ -80,7 +80,7 @@
         <dependency>
             <groupId>io.apitomy</groupId>
             <artifactId>apitomy-flow-engine</artifactId>
-            <version>1.0.0</version>
+            <version>1.0.1</version>
         </dependency>
 
         <!-- Quarkus -->
