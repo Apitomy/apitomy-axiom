@@ -33,6 +33,7 @@ public class OpenCodeClient {
     public OpenCodeClient(String hostname, int port) {
         this.baseUrl = "http://" + hostname + ":" + port;
         this.httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofSeconds(10))
                 .build();
     }
@@ -62,12 +63,30 @@ public class OpenCodeClient {
     }
 
     /**
-     * Creates a new session.
+     * Creates a new session, using a default 10-second timeout.
      *
      * @param title optional session title
      * @return the session ID
      */
     public String createSession(String title) throws IOException, InterruptedException {
+        return createSession(title, 10);
+    }
+
+    /**
+     * Creates a new session.
+     *
+     * <p>Under load (many concurrent tasks hitting a single {@code opencode serve}
+     * process), session creation can be briefly delayed well past a few seconds even
+     * though the server is healthy and recovers. Callers that already have a
+     * configured request timeout (e.g. the Manager/report timeout-seconds) should
+     * pass it through here rather than relying on the short default, to avoid
+     * spurious timeouts under load.</p>
+     *
+     * @param title          optional session title
+     * @param timeoutSeconds request timeout in seconds
+     * @return the session ID
+     */
+    public String createSession(String title, int timeoutSeconds) throws IOException, InterruptedException {
         ObjectNode body = MAPPER.createObjectNode();
         if (title != null) {
             body.put("title", title);
@@ -77,10 +96,17 @@ public class OpenCodeClient {
                 .uri(URI.create(baseUrl + "/session"))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
-                .timeout(Duration.ofSeconds(10))
+                .timeout(Duration.ofSeconds(timeoutSeconds))
                 .build();
 
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        // Use a fresh, single-use HttpClient rather than the shared pooled one.
+        // Under concurrent load we've observed the shared client occasionally
+        // hang indefinitely waiting on a response over a reused/pooled
+        // connection to the opencode (Bun) server, even though the server
+        // processed the request and responded in milliseconds. A dedicated
+        // client avoids reusing a possibly-stale connection.
+        HttpResponse<String> response = freshClient(timeoutSeconds)
+                .send(request, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() != 200 && response.statusCode() != 201) {
             throw new IOException("Failed to create session: HTTP " + response.statusCode()
                     + " — " + response.body());
@@ -127,14 +153,12 @@ public class OpenCodeClient {
             body.set("format", format);
         }
 
-        // Tool restrictions (sent as system context for the session)
+        // Tool restrictions: OpenCode expects an object mapping tool name to
+        // a boolean (true = allowed), not an array of names.
         if (permissions != null && !permissions.isEmpty()) {
-            // Build a tools restriction list for the request
-            ArrayNode toolsArray = body.putArray("tools");
+            ObjectNode toolsNode = body.putObject("tools");
             for (Map.Entry<String, Object> entry : permissions.entrySet()) {
-                if ("allow".equals(entry.getValue())) {
-                    toolsArray.add(entry.getKey());
-                }
+                toolsNode.put(entry.getKey(), "allow".equals(entry.getValue()));
             }
         }
 
@@ -145,13 +169,31 @@ public class OpenCodeClient {
                 .timeout(Duration.ofSeconds(timeoutSeconds))
                 .build();
 
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        // See createSession() — use a dedicated client to avoid a hang on a
+        // stale pooled connection during this (often long-running) call.
+        HttpResponse<String> response = freshClient(timeoutSeconds)
+                .send(request, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() != 200) {
             throw new IOException("Prompt failed: HTTP " + response.statusCode()
                     + " — " + truncate(response.body(), 500));
         }
 
         return MAPPER.readTree(response.body());
+    }
+
+    /**
+     * Builds a single-use {@link HttpClient} dedicated to one request, rather
+     * than reusing the shared pooled client. Under concurrent load against the
+     * {@code opencode serve} (Bun) process we've observed the shared client's
+     * pooled connections occasionally hang indefinitely waiting on a response
+     * that the server already sent, so long-running/high-value calls
+     * (session creation, prompt sending) use a fresh connection instead.
+     */
+    private HttpClient freshClient(int timeoutSeconds) {
+        return HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(Duration.ofSeconds(Math.min(timeoutSeconds, 10)))
+                .build();
     }
 
     /**

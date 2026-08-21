@@ -137,8 +137,11 @@ public class OpenCodeEngine implements AiEngine, AiEngineProvider {
             try {
                 OpenCodeClient client = getOrStartServer();
 
-                // Create session
-                String sessionId = client.createSession("axiom-" + System.currentTimeMillis());
+                // Create session (use the caller's configured timeout so this
+                // doesn't spuriously time out under server load — see
+                // OpenCodeClient.createSession javadoc)
+                String sessionId = client.createSession(
+                        "axiom-" + System.currentTimeMillis(), config.getTimeoutSeconds());
                 LOG.infof("OpenCode session created: %s", sessionId);
 
                 // Build structured output format if schema provided

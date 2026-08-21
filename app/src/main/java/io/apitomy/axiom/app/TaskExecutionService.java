@@ -66,6 +66,9 @@ public class TaskExecutionService {
     McpConfigGenerator mcpConfigGenerator;
 
     @Inject
+    AiEngineMcpManager aiEngineMcpManager;
+
+    @Inject
     ScriptExecutionService scriptExecutionService;
 
     @Inject
@@ -172,6 +175,14 @@ public class TaskExecutionService {
         // Generate MCP config filtered to only the tools allowed by this action type
         List<String> allowedTools = getToolsFromActionType(task.actionType);
         Path mcpConfig = mcpConfigGenerator.generateMcpConfig(task.id, env, allowedTools);
+        // Also let the active engine's MCP manager configure its own MCP
+        // servers (required for OpenCode, which registers servers dynamically
+        // via HTTP rather than consuming the config file above).
+        try {
+            aiEngineMcpManager.configureMcpServers(task.id, env, allowedTools);
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to configure engine MCP servers for task %d", task.id);
+        }
 
         ActorContext context = ActorContext.builder()
                 .workingDirectory(workspace)

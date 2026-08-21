@@ -17,6 +17,7 @@ import io.apitomy.axiom.core.services.ToolsetResolver;
 import io.apitomy.axiom.engine.spi.AiEngine;
 import io.apitomy.axiom.engine.spi.AiEngineConfig;
 import io.apitomy.axiom.engine.spi.AiEngineResult;
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
@@ -52,6 +53,9 @@ public class ReportExecutionService {
 
     @Inject
     AiEngine aiEngine;
+
+    @Inject
+    io.apitomy.axiom.engine.spi.AiEngineMcpManager aiEngineMcpManager;
 
     @Inject
     McpConfigGenerator mcpConfigGenerator;
@@ -98,27 +102,57 @@ public class ReportExecutionService {
     public void generateReport(ReportDefinitionEntity definition, Long reportId) {
         LOG.infof("Generating report '%s' (ID: %d)", definition.name, reportId);
 
-        // Create trace context (non-fatal — report generation continues if tracing fails)
-        TraceContext traceCtx = null;
-        Long aiNodeId = null;
-        try {
-            traceCtx = traceService.createTrace("report-generation",
-                    "Generating report: " + definition.name,
-                    null, null, reportId,
-                    "report-triggered", "Report triggered: " + definition.name,
-                    "report", reportId);
-        } catch (Exception e) {
-            LOG.warnf(e, "Failed to create trace for report %d", reportId);
-        }
+        // Load DB-backed context (toolset resolution, repository lookup, trace
+        // creation) in a short independent transaction. generateReport() itself
+        // is not @Transactional (it's called directly from the queue consumer's
+        // worker loop, outside any request/transaction scope), so any Panache
+        // queries here — like ToolsetResolver.resolve()'s ToolsetEntity.find()
+        // — would otherwise silently run without an active Hibernate session.
+        GenerationContext genCtx = QuarkusTransaction.requiringNew().call(() -> {
+            TraceContext ctx = null;
+            Long nodeId = null;
+            try {
+                ctx = traceService.createTrace("report-generation",
+                        "Generating report: " + definition.name,
+                        null, null, reportId,
+                        "report-triggered", "Report triggered: " + definition.name,
+                        "report", reportId);
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to create trace for report %d", reportId);
+            }
+
+            String repos = resolveRepositories(definition);
+            List<String> tools = resolveAllowedTools(definition);
+            Map<String, String> resolvedEnv = buildEnvironment(definition.environment);
+
+            if (ctx != null) {
+                try {
+                    resolvedEnv.put("AXIOM_TRACE_ID", ctx.traceId().toString());
+                    nodeId = traceService.addNode(ctx, "report-ai-invoked", "in-progress",
+                            "Report execution (AI agent)", null, null);
+                    resolvedEnv.put("AXIOM_PARENT_NODE_ID", String.valueOf(nodeId));
+                } catch (Exception e) {
+                    LOG.warnf(e, "Failed to add AI invocation trace node for report %d", reportId);
+                }
+            }
+
+            return new GenerationContext(ctx, nodeId, repos, tools, resolvedEnv);
+        });
+
+        TraceContext traceCtx = genCtx.traceCtx();
+        Long aiNodeId = genCtx.aiNodeId();
+        String repoList = genCtx.repoList();
+        List<String> allowedTools = genCtx.allowedTools();
+        Map<String, String> env = genCtx.env();
+
+        LOG.infof("Report %d resolved %d allowed tool(s): %s", reportId,
+                allowedTools.size(), allowedTools);
 
         // Compute time range (null when no time window is configured)
         Instant now = Instant.now();
         boolean hasTimeWindow = definition.timeWindow != null && !definition.timeWindow.isBlank();
         Instant rangeStart = hasTimeWindow ? computeTimeRangeStart(definition, now) : null;
         Instant rangeEnd = hasTimeWindow ? now : null;
-
-        // Resolve repositories
-        String repoList = resolveRepositories(definition);
 
         // Build prompt from template
         DateTimeFormatter fmt = DateTimeFormatter.ISO_INSTANT;
@@ -131,22 +165,19 @@ public class ReportExecutionService {
                 .replace("{{timeRangeEnd}}", rangeEnd != null ? fmt.format(rangeEnd) : "")
                 .replace("{{timeWindow}}", humanWindow);
 
-        // Resolve allowed tools from the definition, falling back to defaults
-        List<String> allowedTools = resolveAllowedTools(definition);
-
         // Generate MCP config with report-related tools and trace env vars
-        Map<String, String> env = buildEnvironment(definition.environment);
-        if (traceCtx != null) {
-            try {
-                env.put("AXIOM_TRACE_ID", traceCtx.traceId().toString());
-                aiNodeId = traceService.addNode(traceCtx, "report-ai-invoked", "in-progress",
-                        "Report execution (AI agent)", null, null);
-                env.put("AXIOM_PARENT_NODE_ID", String.valueOf(aiNodeId));
-            } catch (Exception e) {
-                LOG.warnf(e, "Failed to add AI invocation trace node for report %d", reportId);
-            }
-        }
         Path mcpConfig = mcpConfigGenerator.generateMcpConfig(reportId, env, allowedTools);
+        // Ask the active AI engine's MCP manager to configure its MCP servers
+        // for this task too. For file-config engines (Claude Code, Copilot)
+        // this is a no-op re-generation; for OpenCode this is REQUIRED since
+        // it registers MCP servers dynamically via HTTP rather than a config
+        // file, and generateMcpConfig() above only produces a file that
+        // OpenCode ignores.
+        try {
+            aiEngineMcpManager.configureMcpServers(reportId, env, allowedTools);
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to configure engine MCP servers for report %d", reportId);
+        }
 
         // Build engine-agnostic config
         int effectiveTimeout = definition.timeoutSeconds != null
@@ -186,6 +217,18 @@ public class ReportExecutionService {
                             finalTraceCtx, finalAiNodeId);
                     return null;
                 });
+    }
+
+    /**
+     * Holds the DB-derived context needed to launch report generation, computed
+     * inside a short transaction before the (non-transactional) AI engine call.
+     */
+    private record GenerationContext(
+            TraceContext traceCtx,
+            Long aiNodeId,
+            String repoList,
+            List<String> allowedTools,
+            Map<String, String> env) {
     }
 
     @Transactional
