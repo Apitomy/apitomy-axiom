@@ -47,6 +47,8 @@ import { SessionTemplateDetailPage } from "./pages/SessionTemplateDetailPage";
 import { ScheduledJobsPage } from "./pages/ScheduledJobsPage";
 import { ScheduledJobDetailPage } from "./pages/ScheduledJobDetailPage";
 import { ScheduledJobRunsPage } from "./pages/ScheduledJobRunsPage";
+import { WorkflowDefinitionsPage } from "./pages/WorkflowDefinitionsPage";
+import { WorkflowDefinitionDetailPage } from "./pages/WorkflowDefinitionDetailPage";
 import { type StartupCheck, fetchSystemHealth, fetchSystemConfig } from "./config/api";
 import { sseClient } from "./config/sse";
 
@@ -144,6 +146,8 @@ export function App() {
                         <Route path="/scheduled-jobs/:jobId" element={<ScheduledJobDetailPage />} />
                         <Route path="/session-templates" element={<SessionTemplatesPage />} />
                         <Route path="/session-templates/:templateId" element={<SessionTemplateDetailPage />} />
+                        <Route path="/components/workflows" element={<WorkflowDefinitionsPage />} />
+                        <Route path="/components/workflows/:workflowDefinitionId" element={<WorkflowDefinitionDetailPage />} />
                         <Route path="/assistant" element={<AssistantPage />} />
                         <Route path="/assistant/:sessionId" element={<AssistantSessionPage />} />
                     </Routes>
