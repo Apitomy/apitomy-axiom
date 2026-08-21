@@ -203,7 +203,7 @@ export function WorkflowDefinitionDetailPage() {
     const canPublish = !dirty && !publishing && !hasErrors;
 
     return (
-        <PageSection isFilled style={{ display: "flex", flexDirection: "column", padding: 0 }}>
+        <PageSection isFilled className="workflow-definition-detail" style={{ padding: 0 }}>
             {/* Header bar */}
             <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--pf-t--global--border--color--default)" }}>
                 <Breadcrumb style={{ marginBottom: "16px" }}>

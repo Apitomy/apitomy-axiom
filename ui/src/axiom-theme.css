@@ -68,3 +68,11 @@
 .axiom-generated-item-card:hover {
     background-color: var(--pf-t--global--background--color--tertiary--default, #f0f0f0);
 }
+
+/* Workflow definition detail page: make editor fill available height */
+.workflow-definition-detail > .pf-v6-c-page__main-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+}
