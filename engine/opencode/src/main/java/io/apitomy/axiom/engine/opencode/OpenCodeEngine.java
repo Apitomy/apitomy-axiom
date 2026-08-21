@@ -212,9 +212,13 @@ public class OpenCodeEngine implements AiEngine, AiEngineProvider {
                 }
             }
 
-            // Check for structured output
+            // Check for structured output. OpenCode's AssistantMessage schema exposes
+            // this as "structured" (not "structured_output") — see /doc OpenAPI schema.
             JsonNode info = response.path("info");
-            JsonNode structuredOutput = info.path("structured_output");
+            JsonNode structuredOutput = info.path("structured");
+            if (structuredOutput.isMissingNode() || structuredOutput.isNull()) {
+                structuredOutput = info.path("structured_output");
+            }
             String result;
             if (!structuredOutput.isMissingNode() && !structuredOutput.isNull()) {
                 result = MAPPER.writeValueAsString(structuredOutput);
