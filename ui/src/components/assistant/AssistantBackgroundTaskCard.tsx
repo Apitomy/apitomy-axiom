@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Button, Spinner } from "@patternfly/react-core";
 import TimesIcon from "@patternfly/react-icons/dist/esm/icons/times-icon";
 import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
@@ -17,7 +18,7 @@ interface AssistantBackgroundTaskCardProps {
     onDismiss: (id: string) => void;
 }
 
-export function AssistantBackgroundTaskCard({
+export const AssistantBackgroundTaskCard = memo(function AssistantBackgroundTaskCard({
     card, onDismiss,
 }: AssistantBackgroundTaskCardProps) {
     const isComplete = card.status === "completed";
@@ -58,7 +59,7 @@ export function AssistantBackgroundTaskCard({
             </div>
         </div>
     );
-}
+});
 
 function formatDuration(ms: number): string {
     const seconds = Math.round(ms / 1000);

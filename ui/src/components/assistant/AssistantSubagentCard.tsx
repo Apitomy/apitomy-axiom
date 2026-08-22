@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import {
     Button,
     ExpandableSection,
@@ -47,7 +47,7 @@ interface AssistantSubagentCardProps {
     highlighted?: boolean;
 }
 
-export function AssistantSubagentCard({
+export const AssistantSubagentCard = memo(function AssistantSubagentCard({
     card, onDismiss, onNavigateToAgent, onPermissionRespond, highlighted,
 }: AssistantSubagentCardProps) {
     const [isExpanded, setIsExpanded] = useState(false);
@@ -181,7 +181,7 @@ export function AssistantSubagentCard({
             )}
         </div>
     );
-}
+});
 
 function formatDuration(ms: number): string {
     const seconds = Math.round(ms / 1000);

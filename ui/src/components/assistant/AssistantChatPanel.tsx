@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { AssistantMessageList, type ChatMessage } from "./AssistantMessageList";
 import { AssistantMessageInput } from "./AssistantMessageInput";
 import { AssistantSubagentPanel } from "./AssistantSubagentPanel";
@@ -387,14 +387,14 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
             case "card_dismissed":
                 setSubagentCards((prev) => {
                     const card = prev.get(data.cardId as string);
-                    if (!card) return prev;
+                    if (!card || card.dismissed) return prev;
                     const next = new Map(prev);
                     next.set(card.id, { ...card, dismissed: true });
                     return next;
                 });
                 setBackgroundTaskCards((prev) => {
                     const card = prev.get(data.cardId as string);
-                    if (!card) return prev;
+                    if (!card || card.dismissed) return prev;
                     const next = new Map(prev);
                     next.set(card.id, { ...card, dismissed: true });
                     return next;
@@ -603,6 +603,29 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
     }, [sessionId]);
 
     const handleDismissAllCompleted = useCallback(() => {
+        setSubagentCards((prev) => {
+            const next = new Map(prev);
+            let changed = false;
+            for (const [id, card] of next) {
+                if (card.status === "completed" && !card.dismissed) {
+                    next.set(id, { ...card, dismissed: true });
+                    changed = true;
+                }
+            }
+            return changed ? next : prev;
+        });
+        setBackgroundTaskCards((prev) => {
+            const next = new Map(prev);
+            let changed = false;
+            for (const [id, card] of next) {
+                if (card.status === "completed" && !card.dismissed) {
+                    next.set(id, { ...card, dismissed: true });
+                    changed = true;
+                }
+            }
+            return changed ? next : prev;
+        });
+
         for (const card of subagentCards.values()) {
             if (card.status === "completed" && !card.dismissed) {
                 dismissAssistantCard(sessionId, card.id).catch((err) => {
@@ -636,8 +659,14 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
         setTimeout(() => setHighlightedAgentBlockId(undefined), 2000);
     }, []);
 
-    const visibleSubagentCards = Array.from(subagentCards.values()).filter(c => !c.dismissed);
-    const visibleBgTaskCards = Array.from(backgroundTaskCards.values()).filter(c => !c.dismissed);
+    const visibleSubagentCards = useMemo(
+        () => Array.from(subagentCards.values()).filter(c => !c.dismissed),
+        [subagentCards]
+    );
+    const visibleBgTaskCards = useMemo(
+        () => Array.from(backgroundTaskCards.values()).filter(c => !c.dismissed),
+        [backgroundTaskCards]
+    );
     const hasSidePanel = visibleSubagentCards.length > 0 || visibleBgTaskCards.length > 0;
 
     return (
