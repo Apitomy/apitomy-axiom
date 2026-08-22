@@ -19,6 +19,7 @@ import io.apitomy.axiom.api.beans.RenameAssistantSessionRequest;
 import io.apitomy.axiom.api.beans.SendAssistantMessageRequest;
 import io.apitomy.axiom.api.beans.SessionTemplate;
 import io.apitomy.axiom.api.beans.SetAllowAllRequest;
+import io.apitomy.axiom.api.beans.SetSubagentAllowAllRequest;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
 import io.apitomy.axiom.app.assistant.AssistantSession;
 import io.apitomy.axiom.app.ImportExportService;
@@ -556,6 +557,22 @@ public class AssistantResourceImpl implements AssistantResource {
         ObjectNode eventData = objectMapper.createObjectNode();
         eventData.put("enabled", enabled);
         session.addEvent(new SseEvent("allow_all_changed", eventData));
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setSubagentAllowAll(String sessionId, SetSubagentAllowAllRequest data) {
+        AssistantSession session = requireSession(sessionId);
+        String subagentToolUseId = data.getSubagentToolUseId();
+        if (subagentToolUseId == null || subagentToolUseId.isBlank()) {
+            throw new WebApplicationException("Missing 'subagentToolUseId' field", 400);
+        }
+        boolean enabled = data.getEnabled() != null && data.getEnabled();
+        session.setSubagentAllowAll(subagentToolUseId, enabled);
+        ObjectNode eventData = objectMapper.createObjectNode();
+        eventData.put("subagentToolUseId", subagentToolUseId);
+        eventData.put("enabled", enabled);
+        session.addEvent(new SseEvent("subagent_allow_all_changed", eventData));
     }
 
     // ── Helpers ──────────────────────────────────────────────────────

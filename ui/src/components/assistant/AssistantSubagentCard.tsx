@@ -37,6 +37,7 @@ export interface SubagentCardData {
     activityLog: SubagentActivityEntry[];
     permissions: SubagentPermission[];
     dismissed: boolean;
+    allowAll: boolean;
 }
 
 interface AssistantSubagentCardProps {
@@ -44,11 +45,12 @@ interface AssistantSubagentCardProps {
     onDismiss: (id: string) => void;
     onNavigateToAgent?: (toolUseId: string) => void;
     onPermissionRespond?: (permissionId: string, allow: boolean, toolInput?: Record<string, unknown>) => void;
+    onAllowAll?: (subagentToolUseId: string) => void;
     highlighted?: boolean;
 }
 
 export const AssistantSubagentCard = memo(function AssistantSubagentCard({
-    card, onDismiss, onNavigateToAgent, onPermissionRespond, highlighted,
+    card, onDismiss, onNavigateToAgent, onPermissionRespond, onAllowAll, highlighted,
 }: AssistantSubagentCardProps) {
     const [isExpanded, setIsExpanded] = useState(false);
     const isComplete = card.status === "completed";
@@ -126,6 +128,22 @@ export const AssistantSubagentCard = memo(function AssistantSubagentCard({
 
             {card.permissions.length > 0 && (
                 <div className="axiom-subagent-card__permissions">
+                    {!card.allowAll && card.permissions.some((p) => !p.resolved) && onAllowAll && (
+                        <div className="axiom-subagent-card__allow-all-bar">
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => onAllowAll(card.id)}
+                            >
+                                Allow All
+                            </Button>
+                        </div>
+                    )}
+                    {card.allowAll && (
+                        <div className="axiom-subagent-card__allow-all-badge">
+                            <Label isCompact color="green">Auto-approving all</Label>
+                        </div>
+                    )}
                     {card.permissions.map((perm) => (
                         <div
                             key={perm.permissionId}
@@ -146,22 +164,24 @@ export const AssistantSubagentCard = memo(function AssistantSubagentCard({
                                             {JSON.stringify(perm.toolInput, null, 2).substring(0, 200)}
                                         </pre>
                                     )}
-                                    <div className="axiom-subagent-card__permission-actions">
-                                        <Button
-                                            variant="primary"
-                                            size="sm"
-                                            onClick={() => onPermissionRespond?.(perm.permissionId, true, perm.toolInput)}
-                                        >
-                                            Allow
-                                        </Button>
-                                        <Button
-                                            variant="secondary"
-                                            size="sm"
-                                            onClick={() => onPermissionRespond?.(perm.permissionId, false, perm.toolInput)}
-                                        >
-                                            Deny
-                                        </Button>
-                                    </div>
+                                    {!card.allowAll && (
+                                        <div className="axiom-subagent-card__permission-actions">
+                                            <Button
+                                                variant="primary"
+                                                size="sm"
+                                                onClick={() => onPermissionRespond?.(perm.permissionId, true, perm.toolInput)}
+                                            >
+                                                Allow
+                                            </Button>
+                                            <Button
+                                                variant="secondary"
+                                                size="sm"
+                                                onClick={() => onPermissionRespond?.(perm.permissionId, false, perm.toolInput)}
+                                            >
+                                                Deny
+                                            </Button>
+                                        </div>
+                                    )}
                                 </>
                             )}
                         </div>

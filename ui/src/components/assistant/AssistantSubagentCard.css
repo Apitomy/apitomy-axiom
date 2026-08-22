@@ -166,6 +166,16 @@
     color: var(--pf-t--global--text--color--subtle, #6a6e73);
 }
 
+/* Allow-all controls */
+.axiom-subagent-card__allow-all-bar {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.axiom-subagent-card__allow-all-badge {
+    margin-bottom: 2px;
+}
+
 /* Navigate button */
 .axiom-subagent-card__navigate {
     padding: 8px 12px;
