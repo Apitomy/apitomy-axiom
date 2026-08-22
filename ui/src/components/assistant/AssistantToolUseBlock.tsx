@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import {
     Button,
     Content,
@@ -55,7 +55,7 @@ interface AssistantToolUseBlockProps {
     highlighted?: boolean;
 }
 
-export function AssistantToolUseBlock({
+export const AssistantToolUseBlock = memo(function AssistantToolUseBlock({
     toolName, toolUseId, input, result, isError, elapsedSeconds,
     permissionId, permissionResolved, permissionAllowed, onPermissionRespond,
     onCreateAutoApproval, onSubagentClick, highlighted,
@@ -344,7 +344,7 @@ export function AssistantToolUseBlock({
             )}
         </div>
     );
-}
+});
 
 function getContextSummary(toolName: string, input?: Record<string, unknown>): string | null {
     if (!input) return null;
