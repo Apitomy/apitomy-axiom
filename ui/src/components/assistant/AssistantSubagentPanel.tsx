@@ -18,6 +18,7 @@ interface AssistantSubagentPanelProps {
     onDismissAllCompleted: () => void;
     onNavigateToAgent?: (toolUseId: string) => void;
     onPermissionRespond?: (permissionId: string, allow: boolean, toolInput?: Record<string, unknown>) => void;
+    onAllowAll?: (subagentToolUseId: string) => void;
     highlightedCardId?: string;
     width: number;
     onWidthChange: (width: number) => void;
@@ -29,7 +30,7 @@ const MAX_WIDTH = 500;
 export function AssistantSubagentPanel({
     subagentCards, backgroundTaskCards,
     onDismissSubagent, onDismissBackgroundTask, onDismissAllCompleted,
-    onNavigateToAgent, onPermissionRespond,
+    onNavigateToAgent, onPermissionRespond, onAllowAll,
     highlightedCardId, width, onWidthChange,
 }: AssistantSubagentPanelProps) {
     const [activeTab, setActiveTab] = useState<string | number>("subagents");
@@ -106,6 +107,7 @@ export function AssistantSubagentPanel({
                                     onDismiss={onDismissSubagent}
                                     onNavigateToAgent={onNavigateToAgent}
                                     onPermissionRespond={onPermissionRespond}
+                                    onAllowAll={onAllowAll}
                                     highlighted={highlightedCardId === card.id}
                                 />
                             ))}

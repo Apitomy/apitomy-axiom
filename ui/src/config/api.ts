@@ -1544,6 +1544,20 @@ export async function setAllowAll(sessionId: string, enabled: boolean): Promise<
     if (!response.ok) throw new Error("Failed to update Allow All mode");
 }
 
+export async function setSubagentAllowAll(
+    sessionId: string, subagentToolUseId: string, enabled: boolean
+): Promise<void> {
+    const response = await fetch(
+        `${API}/assistant/sessions/${sessionId}/subagent-allow-all`,
+        {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ subagentToolUseId, enabled }),
+        }
+    );
+    if (!response.ok) throw new Error("Failed to update subagent Allow All mode");
+}
+
 export function assistantEventsUrl(sessionId: string): string {
     return `${API}/assistant/sessions/${sessionId}/events`;
 }

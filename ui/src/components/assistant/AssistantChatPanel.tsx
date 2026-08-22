@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { AssistantMessageList, type ChatMessage } from "./AssistantMessageList";
 import { AssistantMessageInput } from "./AssistantMessageInput";
 import { AssistantSubagentPanel } from "./AssistantSubagentPanel";
-import type { SubagentCardData, SubagentActivityEntry } from "./AssistantSubagentCard";
+import type { SubagentCardData, SubagentActivityEntry, SubagentPermission } from "./AssistantSubagentCard";
 import type { BackgroundTaskCardData } from "./AssistantBackgroundTaskCard";
 import {
     sendAssistantMessage,
@@ -10,6 +10,7 @@ import {
     createAutoApproval,
     dismissAssistantCard,
     fetchAssistantSessionHistory,
+    setSubagentAllowAll,
 } from "../../config/api";
 import { sseClient } from "../../config/sse";
 import { randomThinkingMessage } from "./thinkingMessages";
@@ -38,6 +39,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
     const [panelWidth, setPanelWidth] = useState(320);
     const sessionEndedRef = useRef(false);
     const lastSeenIndexRef = useRef(-1);
+    const pendingSubagentPermissionsRef = useRef<Map<string, SubagentPermission[]>>(new Map());
 
     const onItemsChangedRef = useRef(onItemsChanged);
     const onModeChangeRef = useRef(onModeChange);
@@ -127,18 +129,24 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
 
             case "permission_request":
                 if (data.subagentToolUseId) {
+                    const newPerm: SubagentPermission = {
+                        permissionId: data.requestId as string,
+                        toolName: data.toolName as string,
+                        toolInput: data.toolInput as Record<string, unknown>,
+                        resolved: false,
+                    };
                     setSubagentCards((prev) => {
                         const card = prev.get(data.subagentToolUseId as string);
-                        if (!card) return prev;
+                        if (!card) {
+                            const buf = pendingSubagentPermissionsRef.current;
+                            const key = data.subagentToolUseId as string;
+                            buf.set(key, [...(buf.get(key) || []), newPerm]);
+                            return prev;
+                        }
                         const next = new Map(prev);
                         next.set(card.id, {
                             ...card,
-                            permissions: [...card.permissions, {
-                                permissionId: data.requestId as string,
-                                toolName: data.toolName as string,
-                                toolInput: data.toolInput as Record<string, unknown>,
-                                resolved: false,
-                            }],
+                            permissions: [...card.permissions, newPerm],
                         });
                         return next;
                     });
@@ -249,6 +257,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                 }]);
                 setSubagentCards(new Map());
                 setBackgroundTaskCards(new Map());
+                pendingSubagentPermissionsRef.current.clear();
                 setIsProcessing(false);
                 break;
 
@@ -266,11 +275,24 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                 onAllowAllChangedRef.current?.(data.enabled as boolean);
                 break;
 
+            case "subagent_allow_all_changed":
+                setSubagentCards((prev) => {
+                    const card = prev.get(data.subagentToolUseId as string);
+                    if (!card) return prev;
+                    const next = new Map(prev);
+                    next.set(card.id, { ...card, allowAll: data.enabled as boolean });
+                    return next;
+                });
+                break;
+
             case "subagent_started":
                 setSubagentCards((prev) => {
+                    const toolUseId = data.toolUseId as string;
+                    const buffered = pendingSubagentPermissionsRef.current.get(toolUseId) || [];
+                    pendingSubagentPermissionsRef.current.delete(toolUseId);
                     const next = new Map(prev);
-                    next.set(data.toolUseId as string, {
-                        id: data.toolUseId as string,
+                    next.set(toolUseId, {
+                        id: toolUseId,
                         taskId: data.taskId as string,
                         description: data.description as string,
                         subagentType: data.subagentType as string,
@@ -278,8 +300,9 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                         toolCount: 0,
                         durationMs: 0,
                         activityLog: [],
-                        permissions: [],
+                        permissions: buffered,
                         dismissed: false,
+                        allowAll: false,
                     });
                     return next;
                 });
@@ -573,6 +596,39 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
         }
     }, [sessionId, addMessage]);
 
+    const handleSubagentAllowAll = useCallback(async (subagentToolUseId: string) => {
+        const card = subagentCards.get(subagentToolUseId);
+        const unresolvedPerms = card ? card.permissions.filter((p) => !p.resolved) : [];
+
+        setSubagentCards((prev) => {
+            const c = prev.get(subagentToolUseId);
+            if (!c) return prev;
+            const next = new Map(prev);
+            const updatedPerms = c.permissions.map((p) =>
+                p.resolved ? p : { ...p, resolved: true, allowed: true }
+            );
+            next.set(c.id, { ...c, allowAll: true, permissions: updatedPerms });
+            return next;
+        });
+
+        try {
+            await setSubagentAllowAll(sessionId, subagentToolUseId, true);
+        } catch (err) {
+            console.error("Failed to enable subagent Allow All:", err);
+        }
+
+        for (const perm of unresolvedPerms) {
+            try {
+                await respondToAssistantPermission(sessionId, perm.permissionId, true, perm.toolInput);
+            } catch (err) {
+                console.error("Failed to approve permission:", perm.permissionId, err);
+            }
+        }
+        if (unresolvedPerms.length > 0) {
+            setIsProcessing(true);
+        }
+    }, [sessionId, subagentCards]);
+
     const handleCreateAutoApproval = useCallback(async (
         toolName: string, fieldName: string | undefined,
         pattern: string | undefined, permissionId: string
@@ -706,6 +762,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                     onDismissAllCompleted={handleDismissAllCompleted}
                     onNavigateToAgent={handleNavigateToAgent}
                     onPermissionRespond={handlePermissionRespond}
+                    onAllowAll={handleSubagentAllowAll}
                     highlightedCardId={highlightedCardId}
                     width={panelWidth}
                     onWidthChange={setPanelWidth}

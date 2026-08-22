@@ -19,6 +19,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -75,6 +77,7 @@ public class AssistantSession {
     private final Object eventLock = new Object();
     private final CopyOnWriteArrayList<AutoApprovalRule> autoApprovalRules = new CopyOnWriteArrayList<>();
     private volatile boolean allowAll;
+    private final Set<String> subagentAllowAll = ConcurrentHashMap.newKeySet();
     private volatile BufferedWriter rawEventsWriter;
     private final Long projectId;
     private final String projectName;
@@ -523,6 +526,18 @@ public class AssistantSession {
         this.allowAll = allowAll;
     }
 
+    public boolean isSubagentAllowAll(String subagentToolUseId) {
+        return subagentAllowAll.contains(subagentToolUseId);
+    }
+
+    public void setSubagentAllowAll(String subagentToolUseId, boolean enabled) {
+        if (enabled) {
+            subagentAllowAll.add(subagentToolUseId);
+        } else {
+            subagentAllowAll.remove(subagentToolUseId);
+        }
+    }
+
     /**
      * Checks whether a tool permission request matches any auto-approval rule.
      *
@@ -640,6 +655,22 @@ public class AssistantSession {
         // which requires the user to provide answers rather than just approval.
         if (allowAll && !"AskUserQuestion".equals(toolName)) {
             LOG.infof("Auto-approving %s (allow-all) in session %s", toolName, id);
+            try {
+                addEvent(event);
+                respondToPermission(requestId, true, toolInput);
+            } catch (IOException e) {
+                LOG.warnf(e, "Failed to auto-approve %s in session %s", toolName, id);
+                return false;
+            }
+            return true;
+        }
+
+        // Subagent-scoped allow-all
+        String subagentId = event.data().path("subagentToolUseId").asText("");
+        if (!subagentId.isEmpty() && subagentAllowAll.contains(subagentId)
+                && !"AskUserQuestion".equals(toolName)) {
+            LOG.infof("Auto-approving %s (subagent allow-all for %s) in session %s",
+                    toolName, subagentId, id);
             try {
                 addEvent(event);
                 respondToPermission(requestId, true, toolInput);

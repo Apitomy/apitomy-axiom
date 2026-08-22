@@ -4463,6 +4463,44 @@
         }
       }
     },
+    "/assistant/sessions/{sessionId}/subagent-allow-all": {
+      "put": {
+        "tags": [
+          "assistant"
+        ],
+        "summary": "Enable or disable Allow All mode for a specific subagent",
+        "description": "Sets the Allow All mode for a specific subagent within the session. When enabled, all tool permission requests from this subagent are automatically approved.",
+        "operationId": "setSubagentAllowAll",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "description": "The assistant session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSubagentAllowAllRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Subagent Allow All mode updated successfully"
+          },
+          "404": {
+            "description": "Session not found"
+          }
+        }
+      }
+    },
     "/dashboards": {
       "get": {
         "tags": [
@@ -8295,6 +8333,23 @@
         "properties": {
           "enabled": {
             "description": "Whether to enable or disable the Allow All mode",
+            "type": "boolean"
+          }
+        }
+      },
+      "SetSubagentAllowAllRequest": {
+        "required": [
+          "subagentToolUseId",
+          "enabled"
+        ],
+        "type": "object",
+        "properties": {
+          "subagentToolUseId": {
+            "description": "The tool use ID of the subagent to set allow-all for",
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Whether to enable or disable Allow All mode for this subagent",
             "type": "boolean"
           }
         }
