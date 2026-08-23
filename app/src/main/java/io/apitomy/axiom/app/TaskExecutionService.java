@@ -431,8 +431,19 @@ public class TaskExecutionService {
         }
     }
 
+    /**
+     * Completes a task and records its result. The database is the source of
+     * truth for task state, so this can be called directly (e.g. from
+     * {@code InboxResourceImpl}) even when no in-memory {@code Actor} future
+     * is tracking the task — this happens for human tasks left in
+     * {@code AwaitingInput} across an application restart, since
+     * {@code HumanActor}'s pending-future map does not survive restarts.
+     *
+     * @param taskId the task ID
+     * @param result the task result
+     */
     @Transactional
-    void onTaskCompleted(Long taskId, TaskResult result) {
+    public void onTaskCompleted(Long taskId, TaskResult result) {
         TaskEntity task = TaskEntity.findById(taskId);
         if (task == null) {
             return;
