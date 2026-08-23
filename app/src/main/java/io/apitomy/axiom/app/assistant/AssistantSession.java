@@ -78,6 +78,7 @@ public class AssistantSession {
     private final CopyOnWriteArrayList<AutoApprovalRule> autoApprovalRules = new CopyOnWriteArrayList<>();
     private volatile boolean allowAll;
     private final Set<String> subagentAllowAll = ConcurrentHashMap.newKeySet();
+    private final Map<String, String> subagentTaskToToolUseId = new ConcurrentHashMap<>();
     private volatile BufferedWriter rawEventsWriter;
     private final Long projectId;
     private final String projectName;
@@ -610,6 +611,13 @@ public class AssistantSession {
                     writeRawEvent(line);
                     List<SseEvent> events = parser.parse(line);
                     for (SseEvent event : events) {
+                        if ("subagent_started".equals(event.type())) {
+                            String taskId = event.data().path("taskId").asText("");
+                            String toolUseId = event.data().path("toolUseId").asText("");
+                            if (!taskId.isEmpty() && !toolUseId.isEmpty()) {
+                                subagentTaskToToolUseId.put(taskId, toolUseId);
+                            }
+                        }
                         if (handleAutoApproval(event)) {
                             continue;
                         }
@@ -665,8 +673,15 @@ public class AssistantSession {
             return true;
         }
 
-        // Subagent-scoped allow-all
+        // Subagent-scoped allow-all: check subagentToolUseId directly,
+        // or resolve agentId (taskId) to toolUseId via the mapping
         String subagentId = event.data().path("subagentToolUseId").asText("");
+        if (subagentId.isEmpty()) {
+            String agentId = event.data().path("agentId").asText("");
+            if (!agentId.isEmpty()) {
+                subagentId = subagentTaskToToolUseId.getOrDefault(agentId, "");
+            }
+        }
         if (!subagentId.isEmpty() && subagentAllowAll.contains(subagentId)
                 && !"AskUserQuestion".equals(toolName)) {
             LOG.infof("Auto-approving %s (subagent allow-all for %s) in session %s",

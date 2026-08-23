@@ -256,6 +256,10 @@ public class AssistantEventParser {
         if (!parentToolUseId.isEmpty()) {
             data.put("subagentToolUseId", parentToolUseId);
         }
+        String agentId = request.path("agent_id").asText("");
+        if (!agentId.isEmpty()) {
+            data.put("agentId", agentId);
+        }
         return List.of(new SseEvent("permission_request", data));
     }
 

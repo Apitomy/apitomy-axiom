@@ -127,19 +127,32 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                 onItemsChangedRef.current?.();
                 break;
 
-            case "permission_request":
-                if (data.subagentToolUseId) {
-                    const newPerm: SubagentPermission = {
-                        permissionId: data.requestId as string,
-                        toolName: data.toolName as string,
-                        toolInput: data.toolInput as Record<string, unknown>,
-                        resolved: false,
-                    };
+            case "permission_request": {
+                const newPerm: SubagentPermission = {
+                    permissionId: data.requestId as string,
+                    toolName: data.toolName as string,
+                    toolInput: data.toolInput as Record<string, unknown>,
+                    resolved: false,
+                };
+                const subagentKey = data.subagentToolUseId as string | undefined;
+                const agentId = data.agentId as string | undefined;
+                if (subagentKey || agentId) {
                     setSubagentCards((prev) => {
-                        const card = prev.get(data.subagentToolUseId as string);
+                        let card: SubagentCardData | undefined;
+                        if (subagentKey) {
+                            card = prev.get(subagentKey);
+                        }
+                        if (!card && agentId) {
+                            for (const c of prev.values()) {
+                                if (c.taskId === agentId) {
+                                    card = c;
+                                    break;
+                                }
+                            }
+                        }
                         if (!card) {
                             const buf = pendingSubagentPermissionsRef.current;
-                            const key = data.subagentToolUseId as string;
+                            const key = subagentKey || agentId!;
                             buf.set(key, [...(buf.get(key) || []), newPerm]);
                             return prev;
                         }
@@ -199,6 +212,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                     };
                 }
                 break;
+            }
 
             case "permission_resolved":
                 setMessages((prev) => {
@@ -288,8 +302,11 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
             case "subagent_started":
                 setSubagentCards((prev) => {
                     const toolUseId = data.toolUseId as string;
-                    const buffered = pendingSubagentPermissionsRef.current.get(toolUseId) || [];
-                    pendingSubagentPermissionsRef.current.delete(toolUseId);
+                    const taskId = data.taskId as string;
+                    const buf = pendingSubagentPermissionsRef.current;
+                    const buffered = [...(buf.get(toolUseId) || []), ...(buf.get(taskId) || [])];
+                    buf.delete(toolUseId);
+                    buf.delete(taskId);
                     const next = new Map(prev);
                     next.set(toolUseId, {
                         id: toolUseId,
