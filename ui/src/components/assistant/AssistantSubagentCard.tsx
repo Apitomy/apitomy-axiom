@@ -54,6 +54,9 @@ export const AssistantSubagentCard = memo(function AssistantSubagentCard({
 }: AssistantSubagentCardProps) {
     const [isExpanded, setIsExpanded] = useState(false);
     const isComplete = card.status === "completed";
+    const pendingPerm = !card.allowAll
+        ? card.permissions.find((p) => !p.resolved)
+        : undefined;
 
     return (
         <div
@@ -100,7 +103,7 @@ export const AssistantSubagentCard = memo(function AssistantSubagentCard({
                 )}
             </div>
 
-            {card.activityLog.length > 0 && (
+            {!pendingPerm && card.activityLog.length > 0 && (
                 <ExpandableSection
                     toggleText={isExpanded
                         ? "Hide activity"
@@ -126,70 +129,53 @@ export const AssistantSubagentCard = memo(function AssistantSubagentCard({
                 </ExpandableSection>
             )}
 
-            {card.permissions.length > 0 && (
-                <div className="axiom-subagent-card__permissions">
-                    {!card.allowAll && card.permissions.some((p) => !p.resolved) && onAllowAll && (
-                        <div className="axiom-subagent-card__allow-all-bar">
+            {pendingPerm && (
+                <div className="axiom-subagent-card__approval-takeover">
+                    <div className="axiom-subagent-card__approval-tool">
+                        <Label isCompact color="yellow">{pendingPerm.toolName}</Label>
+                        <span className="axiom-subagent-card__approval-label">
+                            needs approval
+                        </span>
+                    </div>
+                    {pendingPerm.toolInput && (
+                        <pre className="axiom-subagent-card__permission-input">
+                            {JSON.stringify(pendingPerm.toolInput, null, 2).substring(0, 200)}
+                        </pre>
+                    )}
+                    <div className="axiom-subagent-card__approval-actions">
+                        <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => onPermissionRespond?.(pendingPerm.permissionId, true, pendingPerm.toolInput)}
+                        >
+                            Allow
+                        </Button>
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => onPermissionRespond?.(pendingPerm.permissionId, false, pendingPerm.toolInput)}
+                        >
+                            Deny
+                        </Button>
+                        {onAllowAll && (
                             <Button
-                                variant="secondary"
+                                variant="link"
                                 size="sm"
                                 onClick={() => onAllowAll(card.id)}
                             >
                                 Allow All
                             </Button>
-                        </div>
-                    )}
-                    {card.allowAll && (
-                        <div className="axiom-subagent-card__allow-all-badge">
-                            <Label isCompact color="green">Auto-approving all</Label>
-                        </div>
-                    )}
-                    {card.permissions.map((perm) => (
-                        <div
-                            key={perm.permissionId}
-                            className="axiom-subagent-card__permission"
-                            data-resolved={perm.resolved}
-                        >
-                            {perm.resolved ? (
-                                <span className="axiom-subagent-card__permission-resolved">
-                                    {perm.allowed ? "Allowed" : "Denied"}: {perm.toolName}
-                                </span>
-                            ) : (
-                                <>
-                                    <div className="axiom-subagent-card__permission-header">
-                                        <Label isCompact color="yellow">{perm.toolName}</Label>
-                                    </div>
-                                    {perm.toolInput && (
-                                        <pre className="axiom-subagent-card__permission-input">
-                                            {JSON.stringify(perm.toolInput, null, 2).substring(0, 200)}
-                                        </pre>
-                                    )}
-                                    {!card.allowAll && (
-                                        <div className="axiom-subagent-card__permission-actions">
-                                            <Button
-                                                variant="primary"
-                                                size="sm"
-                                                onClick={() => onPermissionRespond?.(perm.permissionId, true, perm.toolInput)}
-                                            >
-                                                Allow
-                                            </Button>
-                                            <Button
-                                                variant="secondary"
-                                                size="sm"
-                                                onClick={() => onPermissionRespond?.(perm.permissionId, false, perm.toolInput)}
-                                            >
-                                                Deny
-                                            </Button>
-                                        </div>
-                                    )}
-                                </>
-                            )}
-                        </div>
-                    ))}
+                        )}
+                    </div>
+                </div>
+            )}
+            {card.allowAll && (
+                <div className="axiom-subagent-card__allow-all-badge">
+                    <Label isCompact color="green">Auto-approving all</Label>
                 </div>
             )}
 
-            {onNavigateToAgent && (
+            {!pendingPerm && onNavigateToAgent && (
                 <Button
                     variant="link"
                     size="sm"

@@ -166,14 +166,35 @@
     color: var(--pf-t--global--text--color--subtle, #6a6e73);
 }
 
-/* Allow-all controls */
-.axiom-subagent-card__allow-all-bar {
-    display: flex;
-    justify-content: flex-end;
+/* Approval takeover */
+.axiom-subagent-card__approval-takeover {
+    padding: 10px 12px;
+    border-top: 2px solid var(--pf-t--global--color--status--warning--default, #f0ab00);
+    background-color: var(--pf-t--global--background--color--primary--default, #fff);
 }
 
+.axiom-subagent-card__approval-tool {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.axiom-subagent-card__approval-label {
+    font-size: 12px;
+    color: var(--pf-t--global--text--color--subtle, #6a6e73);
+}
+
+.axiom-subagent-card__approval-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+/* Allow-all badge (when active) */
 .axiom-subagent-card__allow-all-badge {
-    margin-bottom: 2px;
+    padding: 6px 12px;
 }
 
 /* Navigate button */
