@@ -58,7 +58,7 @@ export function ActionTypesPage() {
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
     const [newName, setNewName] = useState("");
-    const [newMode, setNewMode] = useState("actor");
+    const [newMode, setNewMode] = useState("agent");
 
     const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
     const [page, setPage] = useState(1);
@@ -164,7 +164,7 @@ export function ActionTypesPage() {
                 <FlexItem>
                     <Button variant="primary" icon={<PlusCircleIcon />} onClick={() => {
                         setNewName("");
-                        setNewMode("actor");
+                        setNewMode("agent");
                         setIsCreateOpen(true);
                     }}>
                         Create Action Type
@@ -242,7 +242,7 @@ export function ActionTypesPage() {
                                     <Td>{at.name}</Td>
                                     <Td>
                                         <Label isCompact
-                                            color={at.executionMode === "actor" ? "blue" : "orange"}
+                                            color={at.executionMode === "agent" ? "blue" : "orange"}
                                             style={{ cursor: "pointer" }}
                                             onClick={(e) => {
                                                 e.stopPropagation();
@@ -266,7 +266,7 @@ export function ActionTypesPage() {
                                     <Td><BooleanStatusIcon value={at.userTriggerable} /></Td>
                                     <Td><BooleanStatusIcon value={at.managerTriggerable} /></Td>
                                     <Td><BooleanStatusIcon value={at.emitsEvent} /></Td>
-                                    <Td>{at.executionMode === "actor" ? `${at.allowedTools?.length || 0} tools` : "—"}</Td>
+                                    <Td>{at.executionMode === "agent" ? `${at.allowedTools?.length || 0} tools` : "—"}</Td>
                                     <Td>
                                         <Button variant="plain" size="sm" style={{ padding: 0 }}
                                             onClick={(e) => handleDelete(e, at.id)}>
@@ -309,7 +309,7 @@ export function ActionTypesPage() {
                                 value={newMode}
                                 onChange={(_e, v) => setNewMode(v)}
                             >
-                                <FormSelectOption value="actor" label="Actor — AI agent or human" />
+                                <FormSelectOption value="agent" label="Agent — AI agent" />
                                 <FormSelectOption value="script" label="Script — bash script" />
                             </FormSelect>
                         </FormGroup>

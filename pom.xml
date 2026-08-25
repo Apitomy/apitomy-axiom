@@ -23,13 +23,11 @@
     <modules>
         <module>common/api</module>
         <module>core</module>
-        <module>engine/spi</module>
-        <module>engine/opencode</module>
-        <module>engine/copilot</module>
         <module>manager</module>
-        <module>actors/spi</module>
-        <module>actors/claude-code</module>
-        <module>actors/human</module>
+        <module>agents/spi</module>
+        <module>agents/claude-code</module>
+        <module>agents/opencode</module>
+        <module>agents/copilot</module>
         <module>events/core</module>
         <module>events/github</module>
         <module>events/jira</module>
@@ -87,32 +85,22 @@
             </dependency>
             <dependency>
                 <groupId>io.apitomy</groupId>
-                <artifactId>apitomy-axiom-engine-spi</artifactId>
+                <artifactId>apitomy-axiom-agents-spi</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.apitomy</groupId>
-                <artifactId>apitomy-axiom-engine-opencode</artifactId>
+                <artifactId>apitomy-axiom-agents-claude-code</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.apitomy</groupId>
-                <artifactId>apitomy-axiom-engine-copilot</artifactId>
+                <artifactId>apitomy-axiom-agents-opencode</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.apitomy</groupId>
-                <artifactId>apitomy-axiom-actors-spi</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.apitomy</groupId>
-                <artifactId>apitomy-axiom-actors-claude-code</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.apitomy</groupId>
-                <artifactId>apitomy-axiom-actors-human</artifactId>
+                <artifactId>apitomy-axiom-agents-copilot</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

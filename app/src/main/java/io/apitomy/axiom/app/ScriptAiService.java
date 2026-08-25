@@ -5,9 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.beans.ScriptAiEditRequest;
 import io.apitomy.axiom.api.beans.ScriptAiEditResponse;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
-import io.apitomy.axiom.engine.spi.AiEngine;
-import io.apitomy.axiom.engine.spi.AiEngineConfig;
-import io.apitomy.axiom.engine.spi.AiEngineResult;
+import io.apitomy.axiom.agents.spi.AgentRegistry;
+import io.apitomy.axiom.agents.spi.AgentRequest;
+import io.apitomy.axiom.agents.spi.AgentResult;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -31,7 +31,7 @@ public class ScriptAiService {
     ObjectMapper objectMapper;
 
     @Inject
-    AiEngine aiEngine;
+    AgentRegistry agentRegistry;
 
     @ConfigProperty(name = "axiom.manager.model")
     Optional<String> model;
@@ -113,8 +113,9 @@ public class ScriptAiService {
         userPrompt.append(request.getMessage()).append("\n\n");
         userPrompt.append("Generate the script as structured JSON output.");
 
-        AiEngineConfig engineConfig = AiEngineConfig.builder()
+        AgentRequest agentRequest = AgentRequest.builder()
                 .systemPrompt(SYSTEM_PROMPT)
+                .prompt(userPrompt.toString())
                 .allowedTools(List.of("StructuredOutput"))
                 .timeoutSeconds(assistantTimeoutSeconds)
                 .maxSteps(3)
@@ -122,19 +123,19 @@ public class ScriptAiService {
                 .build();
 
         try {
-            AiEngineResult result = aiEngine.promptWithSchema(engineConfig, userPrompt.toString(),
+            AgentResult result = agentRegistry.getDefaultAgent().executeWithSchema(agentRequest,
                     RESPONSE_SCHEMA).join();
 
             recordAiUsage(result.costUsd(), result.inputTokens(), result.outputTokens());
 
             if (!result.success()) {
-                LOG.errorf("Script AI edit failed: %s", result.result());
+                LOG.errorf("Script AI edit failed: %s", result.output());
                 ScriptAiEditResponse response = new ScriptAiEditResponse();
-                response.setExplanation("Sorry, I encountered an error: " + result.result());
+                response.setExplanation("Sorry, I encountered an error: " + result.output());
                 return response;
             }
 
-            return parseResponse(result.result());
+            return parseResponse(result.output());
 
         } catch (Exception e) {
             LOG.errorf(e, "Script AI edit failed");

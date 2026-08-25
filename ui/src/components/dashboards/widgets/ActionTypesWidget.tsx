@@ -42,7 +42,7 @@ function ActionTypesWidget({ config, labels }: WidgetProps) {
                     <Tr key={at.id}>
                         <Td>{at.name}</Td>
                         <Td>
-                            <Label isCompact color={at.executionMode === "actor" ? "blue" : "purple"}>
+                            <Label isCompact color={at.executionMode === "agent" ? "blue" : "purple"}>
                                 {at.executionMode}
                             </Label>
                         </Td>

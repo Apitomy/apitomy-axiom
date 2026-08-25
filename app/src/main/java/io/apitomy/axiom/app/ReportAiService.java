@@ -2,11 +2,11 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.apitomy.axiom.actors.claudecode.ClaudeCodeCommandBuilder;
-import io.apitomy.axiom.actors.claudecode.ClaudeCodeResult;
-import io.apitomy.axiom.actors.claudecode.ClaudeCodeSubprocess;
-import io.apitomy.axiom.actors.claudecode.ExecutionLogBuilder;
-import io.apitomy.axiom.actors.spi.ActorContext;
+import io.apitomy.axiom.agents.claudecode.ClaudeCodeCommandBuilder;
+import io.apitomy.axiom.agents.claudecode.ClaudeCodeResult;
+import io.apitomy.axiom.agents.claudecode.ClaudeCodeSubprocess;
+import io.apitomy.axiom.agents.claudecode.ExecutionLogBuilder;
+import io.apitomy.axiom.agents.spi.AgentRequest;
 import io.apitomy.axiom.api.beans.ReportAiEditRequest;
 import io.apitomy.axiom.api.beans.ReportAiEditResponse;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
@@ -126,13 +126,14 @@ public class ReportAiService {
         logBuilder.systemPrompt(SYSTEM_PROMPT);
         logBuilder.prompt(userPrompt.toString());
 
-        ActorContext context = ActorContext.builder()
+        AgentRequest agentRequest = AgentRequest.builder()
+                .prompt(userPrompt.toString())
                 .systemPrompt(SYSTEM_PROMPT)
                 .allowedTools(List.of("StructuredOutput"))
                 .build();
 
         ClaudeCodeCommandBuilder cmdBuilder = ClaudeCodeCommandBuilder
-                .fromContext(userPrompt.toString(), context)
+                .fromRequest(agentRequest)
                 .streamJson(true)
                 .maxTurns(3);
 

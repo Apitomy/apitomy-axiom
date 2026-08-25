@@ -74,7 +74,7 @@ public class TasksResourceImpl implements TasksResource {
         task.setEventId(entity.eventId);
         task.setActionType(entity.actionType);
         task.setCreatedBy(Task.CreatedBy.fromValue(entity.createdBy));
-        task.setAssignedActor(entity.assignedActor);
+        task.setAssignedAgent(entity.assignedAgent);
         task.setStatus(Task.Status.fromValue(entity.status));
         task.setInput(entity.input);
         task.setOutput(entity.output);

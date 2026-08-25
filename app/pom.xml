@@ -31,27 +31,19 @@
         </dependency>
         <dependency>
             <groupId>io.apitomy</groupId>
-            <artifactId>apitomy-axiom-engine-spi</artifactId>
+            <artifactId>apitomy-axiom-agents-spi</artifactId>
         </dependency>
         <dependency>
             <groupId>io.apitomy</groupId>
-            <artifactId>apitomy-axiom-actors-spi</artifactId>
+            <artifactId>apitomy-axiom-agents-claude-code</artifactId>
         </dependency>
         <dependency>
             <groupId>io.apitomy</groupId>
-            <artifactId>apitomy-axiom-actors-claude-code</artifactId>
+            <artifactId>apitomy-axiom-agents-opencode</artifactId>
         </dependency>
         <dependency>
             <groupId>io.apitomy</groupId>
-            <artifactId>apitomy-axiom-engine-opencode</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.apitomy</groupId>
-            <artifactId>apitomy-axiom-engine-copilot</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.apitomy</groupId>
-            <artifactId>apitomy-axiom-actors-human</artifactId>
+            <artifactId>apitomy-axiom-agents-copilot</artifactId>
         </dependency>
         <dependency>
             <groupId>io.apitomy</groupId>

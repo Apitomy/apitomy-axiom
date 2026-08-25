@@ -106,13 +106,13 @@ public final class ActionTypeValidator {
     }
 
     private static void validatePromptTemplate(NewActionType def, List<ValidationMessage> messages) {
-        if (!"actor".equals(executionMode(def))) {
+        if (!"agent".equals(executionMode(def))) {
             return;
         }
         String prompt = def.getPromptTemplate();
         if (prompt == null || prompt.isBlank()) {
             messages.add(error("promptTemplate",
-                    "Prompt template is required for actor-mode action types."));
+                    "Prompt template is required for agent-mode action types."));
             return;
         }
 
@@ -155,7 +155,7 @@ public final class ActionTypeValidator {
 
     private static void validateAllowedTools(NewActionType def, KnownNames known,
                                               List<ValidationMessage> messages) {
-        if (!"actor".equals(executionMode(def))) {
+        if (!"agent".equals(executionMode(def))) {
             return;
         }
         List<String> tools = def.getAllowedTools();

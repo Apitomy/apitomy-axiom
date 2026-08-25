@@ -83,12 +83,12 @@ class ActionTypeValidatorTest {
         NewActionType at = new NewActionType();
         at.setName("test");
         at.setDescription("desc");
-        at.setExecutionMode(NewActionType.ExecutionMode.fromValue("actor"));
+        at.setExecutionMode(NewActionType.ExecutionMode.fromValue("agent"));
         // Can't really set an invalid enum via the generated bean, so test the string
         // validation indirectly — the generated enum prevents invalid values at parse time
     }
 
-    // ── Prompt template validation (actor mode) ─────────────────────
+    // ── Prompt template validation (agent mode) ─────────────────────
 
     @Test
     void actorMissingPromptIsError() {
@@ -206,7 +206,7 @@ class ActionTypeValidatorTest {
                 .anyMatch(m -> m.field().equals("scriptTemplate")));
     }
 
-    // ── Allowed tools validation (actor mode only) ──────────────────
+    // ── Allowed tools validation (agent mode only) ──────────────────
 
     @Test
     void toolsetRefToMissingToolsetIsError() {
@@ -337,7 +337,7 @@ class ActionTypeValidatorTest {
         NewActionType at = new NewActionType();
         at.setName(name);
         at.setDescription(description);
-        at.setExecutionMode(NewActionType.ExecutionMode.ACTOR);
+        at.setExecutionMode(NewActionType.ExecutionMode.AGENT);
         at.setPromptTemplate(promptTemplate);
         at.setUserTriggerable(true);
         at.setManagerTriggerable(true);

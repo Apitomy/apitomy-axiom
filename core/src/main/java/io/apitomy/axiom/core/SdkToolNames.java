@@ -29,7 +29,7 @@ public final class SdkToolNames {
             PREFIX + "axiom_list_reports",
             PREFIX + "axiom_get_project_thread",
             PREFIX + "axiom_list_action_types",
-            PREFIX + "axiom_list_actors",
+            PREFIX + "axiom_list_agents",
             PREFIX + "axiom_update_project",
             PREFIX + "axiom_list_events",
             PREFIX + "axiom_respond_to_task",

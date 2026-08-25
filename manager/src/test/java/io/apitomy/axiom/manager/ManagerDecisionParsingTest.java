@@ -34,7 +34,7 @@ class ManagerDecisionParsingTest {
                         {
                             "decision": "create_task",
                             "actionType": "analyze",
-                            "actorHint": "claude-agent",
+                            "agentHint": "claude-agent",
                             "inputContext": "Please analyze this new issue",
                             "confidence": 0.92,
                             "reasoning": "New issue detected, needs analysis"
@@ -49,7 +49,7 @@ class ManagerDecisionParsingTest {
         ManagerDecision d = decisions.getFirst();
         assertTrue(d.isCreateTask());
         assertEquals("analyze", d.actionType());
-        assertEquals("claude-agent", d.actorHint());
+        assertEquals("claude-agent", d.agentHint());
         assertEquals("Please analyze this new issue", d.inputContext());
         assertEquals(0.92, d.confidence(), 0.01);
         assertEquals("New issue detected, needs analysis", d.reasoning());
@@ -209,7 +209,7 @@ class ManagerDecisionParsingTest {
         ManagerDecision d = decisions.getFirst();
         assertEquals("ignore", d.decision()); // default
         assertNull(d.actionType());
-        assertNull(d.actorHint());
+        assertNull(d.agentHint());
         assertNull(d.inputContext());
     }
 
@@ -221,7 +221,7 @@ class ManagerDecisionParsingTest {
                         {
                             "decision": "create_task",
                             "actionType": "approve-deployment",
-                            "actorHint": "human",
+                            "agentHint": "human",
                             "inputContext": "PR #42 needs deployment approval",
                             "confidence": 0.95,
                             "reasoning": "Deployment requires human sign-off",
@@ -262,7 +262,7 @@ class ManagerDecisionParsingTest {
         assertEquals(1, decisions.size());
         ManagerDecision d = decisions.getFirst();
         assertTrue(d.isCreateTask());
-        assertEquals("human", d.actorHint());
+        assertEquals("human", d.agentHint());
 
         // humanContext should be a JSON string
         assertNotNull(d.humanContext());
@@ -284,7 +284,7 @@ class ManagerDecisionParsingTest {
                         {
                             "decision": "create_task",
                             "actionType": "review",
-                            "actorHint": "human",
+                            "agentHint": "human",
                             "inputContext": "Review this PR",
                             "confidence": 0.8,
                             "reasoning": "Needs human review"

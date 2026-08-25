@@ -20,7 +20,7 @@ class ManagerDecisionTest {
         assertFalse(decision.isScriptAction());
         assertFalse(decision.isEscalate());
         assertEquals("analyze", decision.actionType());
-        assertEquals("claude-agent", decision.actorHint());
+        assertEquals("claude-agent", decision.agentHint());
         assertEquals(0.9, decision.confidence());
     }
 

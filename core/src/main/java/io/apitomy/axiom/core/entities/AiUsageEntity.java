@@ -13,7 +13,7 @@ import java.time.Instant;
  *
  * <p>Every time Claude Code is invoked — whether for a task execution or
  * a Manager evaluation — a row is written to this table. The metadata
- * columns allow querying and aggregating by actor, project, action type,
+ * columns allow querying and aggregating by agent, project, action type,
  * invocation type, and time range.</p>
  */
 @Entity
@@ -45,10 +45,10 @@ public class AiUsageEntity extends PanacheEntity {
     public Long projectId;
 
     /**
-     * Actor ID (the AI actor that performed the invocation).
+     * Agent ID (the AI agent that performed the invocation).
      */
-    @Column(name = "actor_id")
-    public Long actorId;
+    @Column(name = "agent_id")
+    public Long agentId;
 
     /**
      * Action type name (e.g. "analyze", "answer-question", "manager-evaluate").

@@ -7,15 +7,15 @@ import io.apitomy.axiom.core.tracing.TraceService;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
-import io.apitomy.axiom.core.entities.ActorEntity;
+import io.apitomy.axiom.core.entities.AgentEntity;
 import io.apitomy.axiom.core.entities.EventEntity;
 import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.ManagerConfigEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
-import io.apitomy.axiom.engine.spi.AiEngine;
-import io.apitomy.axiom.engine.spi.AiEngineConfig;
-import io.apitomy.axiom.engine.spi.AiEngineResult;
+import io.apitomy.axiom.agents.spi.AgentRegistry;
+import io.apitomy.axiom.agents.spi.AgentRequest;
+import io.apitomy.axiom.agents.spi.AgentResult;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import io.quarkus.narayana.jta.QuarkusTransaction;
@@ -32,7 +32,7 @@ import java.util.Set;
 
 /**
  * Service that invokes the AI Manager to evaluate events and produce decisions.
- * Uses the pluggable {@link AiEngine} SPI to invoke the configured AI engine
+ * Uses the pluggable {@link AgentRegistry} to invoke the default AI agent
  * with a structured JSON schema for decision output.
  */
 @ApplicationScoped
@@ -44,7 +44,7 @@ public class ManagerService {
     ObjectMapper objectMapper;
 
     @Inject
-    AiEngine aiEngine;
+    AgentRegistry agentRegistry;
 
     @Inject
     TraceService traceService;
@@ -64,7 +64,7 @@ public class ManagerService {
     /**
      * Evaluates an event and returns the Manager's decisions.
      *
-     * <p>Context loading (action types, actors, project data, config) runs in a short
+     * <p>Context loading (action types, agents, project data, config) runs in a short
      * independent transaction so the subsequent AI engine call does not hold a database
      * connection.</p>
      *
@@ -101,7 +101,7 @@ public class ManagerService {
             }
             actionTypes = filterByLabels(actionTypes, eventSourceLabels);
 
-            List<ActorEntity> actors = ActorEntity.listAll();
+            List<AgentEntity> agents = AgentEntity.listAll();
 
             ProjectEntity project = null;
             List<TaskEntity> recentTasks = Collections.emptyList();
@@ -116,7 +116,7 @@ public class ManagerService {
 
             ManagerConfigEntity config = ManagerConfigEntity.<ManagerConfigEntity>findAll()
                     .firstResult();
-            return new EvalContext(actionTypes, actors, project, recentTasks, config);
+            return new EvalContext(actionTypes, agents, project, recentTasks, config);
         });
 
         // Build prompts from detached context (no transaction needed)
@@ -132,12 +132,13 @@ public class ManagerService {
         }
 
         String userPrompt = ManagerPromptBuilder.buildUserPrompt(
-                promptTemplate, event, ctx.actionTypes(), ctx.actors(),
+                promptTemplate, event, ctx.actionTypes(), ctx.agents(),
                 ctx.project(), ctx.recentTasks());
         String jsonSchema = ManagerPromptBuilder.getResponseJsonSchema();
 
-        // Build engine-agnostic config
-        AiEngineConfig engineConfig = AiEngineConfig.builder()
+        // Build agent request (prompt is part of the request object)
+        AgentRequest agentRequest = AgentRequest.builder()
+                .prompt(userPrompt)
                 .systemPrompt(systemPrompt)
                 .allowedTools(List.of("StructuredOutput"))
                 .timeoutSeconds(timeoutSeconds)
@@ -146,7 +147,7 @@ public class ManagerService {
                 .build();
 
         try {
-            AiEngineResult result = aiEngine.promptWithSchema(engineConfig, userPrompt, jsonSchema).join();
+            AgentResult result = agentRegistry.getDefaultAgent().executeWithSchema(agentRequest, jsonSchema).join();
             String executionLog = result.executionLog();
 
             // Record AI usage for this Manager evaluation
@@ -158,15 +159,15 @@ public class ManagerService {
             }
 
             if (!result.success()) {
-                LOG.errorf("Manager AI engine failed: %s", result.result());
+                LOG.errorf("Manager AI engine failed: %s", result.output());
                 logManagerActivity(event.id, "manager-error",
-                        "Manager failed to evaluate event: " + result.result(),
+                        "Manager failed to evaluate event: " + result.output(),
                         executionLog);
                 completeEvalNode(evalNodeId, "failed", null);
                 return Collections.emptyList();
             }
 
-            List<ManagerDecision> decisions = parseDecisions(result.result());
+            List<ManagerDecision> decisions = parseDecisions(result.output());
 
             // Build summary of decisions for the activity log
             StringBuilder summary = new StringBuilder();
@@ -227,7 +228,7 @@ public class ManagerService {
      */
     private record EvalContext(
             List<ActionTypeEntity> actionTypes,
-            List<ActorEntity> actors,
+            List<AgentEntity> agents,
             ProjectEntity project,
             List<TaskEntity> recentTasks,
             ManagerConfigEntity config
@@ -292,7 +293,7 @@ public class ManagerService {
                 ManagerDecision decision = new ManagerDecision(
                         node.path("decision").asText("ignore"),
                         node.path("actionType").asText(null),
-                        node.path("actorHint").asText(null),
+                        node.path("agentHint").asText(null),
                         node.path("inputContext").asText(null),
                         node.path("confidence").asDouble(0.5),
                         node.path("reasoning").asText(""),

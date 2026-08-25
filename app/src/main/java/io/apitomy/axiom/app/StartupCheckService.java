@@ -1,7 +1,7 @@
 package io.apitomy.axiom.app;
 
-import io.apitomy.axiom.engine.spi.AiEngine;
-import io.apitomy.axiom.engine.spi.AiEngineCheckResult;
+import io.apitomy.axiom.agents.spi.AgentCheckResult;
+import io.apitomy.axiom.agents.spi.AgentRegistry;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -23,7 +23,7 @@ public class StartupCheckService {
     private static final Logger LOG = Logger.getLogger(StartupCheckService.class);
 
     @Inject
-    AiEngine aiEngine;
+    AgentRegistry agentRegistry;
 
     private final List<CheckResult> results = new ArrayList<>();
 
@@ -117,9 +117,9 @@ public class StartupCheckService {
     }
 
     private void checkAiEngine() {
-        LOG.infof("Checking AI engine: %s", aiEngine.getType());
-        List<AiEngineCheckResult> engineResults = aiEngine.healthCheck();
-        for (AiEngineCheckResult engineResult : engineResults) {
+        LOG.infof("Checking AI engine: %s", agentRegistry.getDefaultAgent().getType());
+        List<AgentCheckResult> engineResults = agentRegistry.getDefaultAgent().healthCheck();
+        for (AgentCheckResult engineResult : engineResults) {
             results.add(new CheckResult(engineResult.name(), engineResult.status(),
                     engineResult.message()));
             if ("ok".equals(engineResult.status())) {

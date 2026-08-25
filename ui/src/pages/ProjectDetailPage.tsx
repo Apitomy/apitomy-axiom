@@ -57,7 +57,7 @@ import {
     type Task,
     type ThreadEntry,
     fetchActionTypes,
-    fetchActors,
+    fetchAgents,
     fetchProject,
     fetchProjectEvents,
     fetchProjectMetrics,
@@ -95,7 +95,7 @@ export function ProjectDetailPage() {
     const [thread, setThread] = useState<ThreadEntry[]>([]);
     const [events, setEvents] = useState<AxiomEvent[]>([]);
     const [metrics, setMetrics] = useState<ProjectMetrics | null>(null);
-    const [actorNames, setActorNames] = useState<Record<number, string>>({});
+    const [agentNames, setAgentNames] = useState<Record<number, string>>({});
     const [activeTab, setActiveTab] = useState(0);
     const [loading, setLoading] = useState(true);
 
@@ -126,17 +126,17 @@ export function ProjectDetailPage() {
             fetchThreadEntries(id),
             fetchProjectEvents(id),
             fetchProjectMetrics(id),
-            fetchActors(),
+            fetchAgents(),
         ])
-            .then(([p, t, th, ev, m, actors]) => {
+            .then(([p, t, th, ev, m, agents]) => {
                 setProject(p);
                 setTasks(t);
                 setThread(th);
                 setEvents(ev);
                 setMetrics(m);
                 const names: Record<number, string> = {};
-                actors.forEach((a) => { names[a.id] = a.name; });
-                setActorNames(names);
+                agents.forEach((a) => { names[a.id] = a.name; });
+                setAgentNames(names);
             })
             .catch(console.error)
             .finally(() => setLoading(false));
@@ -402,7 +402,7 @@ export function ProjectDetailPage() {
                 <Tabs activeKey={activeTab} onSelect={(_e, k) => setActiveTab(k as number)}>
                     <Tab eventKey={0} title={<TabTitleText>Tasks ({tasks.length})</TabTitleText>}>
                         <TabContent id="tasks-tab" eventKey={0} activeKey={activeTab} style={{ marginTop: "16px" }}>
-                            <TasksTab tasks={tasks} projectId={id} actorNames={actorNames} onRefresh={loadData} />
+                            <TasksTab tasks={tasks} projectId={id} agentNames={agentNames} onRefresh={loadData} />
                         </TabContent>
                     </Tab>
                     <Tab eventKey={1} title={<TabTitleText>Thread ({thread.length})</TabTitleText>}>
@@ -462,7 +462,7 @@ export function ProjectDetailPage() {
                             <FormGroup label="Instructions (optional)" fieldId="input">
                                 <TextArea
                                     id="input"
-                                    placeholder="Additional context or instructions for the actor..."
+                                    placeholder="Additional context or instructions for the agent..."
                                     value={actionInput}
                                     onChange={(_e, v) => setActionInput(v)}
                                     rows={4}
@@ -524,10 +524,10 @@ export function ProjectDetailPage() {
     );
 }
 
-function TasksTab({ tasks, projectId, actorNames, onRefresh }: {
+function TasksTab({ tasks, projectId, agentNames, onRefresh }: {
     tasks: Task[];
     projectId: number;
-    actorNames: Record<number, string>;
+    agentNames: Record<number, string>;
     onRefresh: () => void;
 }) {
     const navigate = useNavigate();
@@ -570,7 +570,7 @@ function TasksTab({ tasks, projectId, actorNames, onRefresh }: {
                 <Thead>
                     <Tr>
                         <Th>Action</Th>
-                        <Th>Actor</Th>
+                        <Th>Agent</Th>
                         <Th>Status</Th>
                         <Th>Created By</Th>
                         <Th>Created</Th>
@@ -584,8 +584,8 @@ function TasksTab({ tasks, projectId, actorNames, onRefresh }: {
                         <Tr key={task.id}>
                             <Td>{task.actionType}</Td>
                             <Td>
-                                {task.assignedActor
-                                    ? actorNames[task.assignedActor] || `Actor #${task.assignedActor}`
+                                {task.assignedAgent
+                                    ? agentNames[task.assignedAgent] || `Agent #${task.assignedAgent}`
                                     : "—"}
                             </Td>
                             <Td>
@@ -693,7 +693,7 @@ function ThreadTab({ entries }: { entries: ThreadEntry[] }) {
 
     const AUTHOR_COLORS: Record<string, "blue" | "green" | "orange" | "grey"> = {
         manager: "blue",
-        actor: "green",
+        agent: "green",
         user: "orange",
         system: "grey",
     };

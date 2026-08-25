@@ -28,7 +28,7 @@ export const SDK_TOOLS: SdkToolEntry[] = [
     { value: PREFIX + "axiom_list_reports", label: "axiom_list_reports", description: "List generated reports with optional filtering" },
     { value: PREFIX + "axiom_get_project_thread", label: "axiom_get_project_thread", description: "Read the conversation thread for a project" },
     { value: PREFIX + "axiom_list_action_types", label: "axiom_list_action_types", description: "List all action types configured in Axiom" },
-    { value: PREFIX + "axiom_list_actors", label: "axiom_list_actors", description: "List all actors configured in Axiom" },
+    { value: PREFIX + "axiom_list_agents", label: "axiom_list_agents", description: "List all agents configured in Axiom" },
     { value: PREFIX + "axiom_update_project", label: "axiom_update_project", description: "Update an Axiom project's metadata" },
     { value: PREFIX + "axiom_list_events", label: "axiom_list_events", description: "List events related to an Axiom project" },
     { value: PREFIX + "axiom_respond_to_task", label: "axiom_respond_to_task", description: "Submit a response to a task awaiting human input" },

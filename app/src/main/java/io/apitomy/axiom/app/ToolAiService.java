@@ -7,9 +7,9 @@ import io.apitomy.axiom.api.beans.ToolAiEditRequest;
 import io.apitomy.axiom.api.beans.ToolAiEditResponse;
 import io.apitomy.axiom.api.beans.ToolParameter;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
-import io.apitomy.axiom.engine.spi.AiEngine;
-import io.apitomy.axiom.engine.spi.AiEngineConfig;
-import io.apitomy.axiom.engine.spi.AiEngineResult;
+import io.apitomy.axiom.agents.spi.AgentRegistry;
+import io.apitomy.axiom.agents.spi.AgentRequest;
+import io.apitomy.axiom.agents.spi.AgentResult;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -34,7 +34,7 @@ public class ToolAiService {
     ObjectMapper objectMapper;
 
     @Inject
-    AiEngine aiEngine;
+    AgentRegistry agentRegistry;
 
     @ConfigProperty(name = "axiom.manager.model")
     Optional<String> model;
@@ -117,9 +117,9 @@ public class ToolAiService {
         userPrompt.append(request.getMessage()).append("\n\n");
         userPrompt.append("Generate the complete tool definition as structured JSON output.");
 
-        // Build engine-agnostic config
-        AiEngineConfig engineConfig = AiEngineConfig.builder()
+        AgentRequest agentRequest = AgentRequest.builder()
                 .systemPrompt(SYSTEM_PROMPT)
+                .prompt(userPrompt.toString())
                 .allowedTools(List.of("StructuredOutput"))
                 .timeoutSeconds(assistantTimeoutSeconds)
                 .maxSteps(3)
@@ -127,20 +127,20 @@ public class ToolAiService {
                 .build();
 
         try {
-            AiEngineResult result = aiEngine.promptWithSchema(engineConfig, userPrompt.toString(),
+            AgentResult result = agentRegistry.getDefaultAgent().executeWithSchema(agentRequest,
                     RESPONSE_SCHEMA).join();
 
             // Record AI usage
             recordAiUsage(result.costUsd(), result.inputTokens(), result.outputTokens());
 
             if (!result.success()) {
-                LOG.errorf("Tool AI edit failed: %s", result.result());
+                LOG.errorf("Tool AI edit failed: %s", result.output());
                 ToolAiEditResponse response = new ToolAiEditResponse();
-                response.setExplanation("Sorry, I encountered an error: " + result.result());
+                response.setExplanation("Sorry, I encountered an error: " + result.output());
                 return response;
             }
 
-            return parseResponse(result.result());
+            return parseResponse(result.output());
 
         } catch (Exception e) {
             LOG.errorf(e, "Tool AI edit failed");

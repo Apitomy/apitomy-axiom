@@ -7,7 +7,7 @@ import jakarta.persistence.Table;
 
 /**
  * Stores an encrypted secret (environment variable) that is injected
- * into actor subprocess environments at execution time.
+ * into agent subprocess environments at execution time.
  */
 @Entity
 @Table(name = "secret")

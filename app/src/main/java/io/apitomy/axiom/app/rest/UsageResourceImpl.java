@@ -210,7 +210,7 @@ public class UsageResourceImpl implements UsageResource {
         usage.setTaskId(entity.taskId);
         usage.setEventId(entity.eventId);
         usage.setProjectId(entity.projectId);
-        usage.setActorId(entity.actorId);
+        usage.setAgentId(entity.agentId);
         usage.setActionType(entity.actionType);
         usage.setModel(entity.model);
         usage.setCostUsd(entity.costUsd);

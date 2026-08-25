@@ -41,7 +41,7 @@ export function ScheduledJobsPage() {
     const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
     const [newName, setNewName] = useState("");
     const [newSchedule, setNewSchedule] = useState("daily");
-    const [newExecutionMode, setNewExecutionMode] = useState("actor");
+    const [newExecutionMode, setNewExecutionMode] = useState("agent");
     const [createError, setCreateError] = useState("");
 
     const loadData = useCallback(() => {
@@ -93,7 +93,7 @@ export function ScheduledJobsPage() {
                 </FlexItem>
                 <FlexItem>
                     <Button variant="primary" icon={<PlusCircleIcon />}
-                        onClick={() => { setNewName(""); setNewSchedule("daily"); setNewExecutionMode("actor"); setCreateError(""); setIsModalOpen(true); }}>
+                        onClick={() => { setNewName(""); setNewSchedule("daily"); setNewExecutionMode("agent"); setCreateError(""); setIsModalOpen(true); }}>
                         Create Scheduled Job
                     </Button>
                 </FlexItem>
@@ -133,7 +133,7 @@ export function ScheduledJobsPage() {
                                         )}
                                     </Td>
                                     <Td>
-                                        <Label isCompact color={job.executionMode === "actor" ? "blue" : "purple"}>
+                                        <Label isCompact color={job.executionMode === "agent" ? "blue" : "purple"}>
                                             {job.executionMode}
                                         </Label>
                                     </Td>
@@ -195,7 +195,7 @@ export function ScheduledJobsPage() {
                         <FormGroup label="Execution Mode" isRequired fieldId="executionMode">
                             <FormSelect id="executionMode" value={newExecutionMode}
                                 onChange={(_e, v) => setNewExecutionMode(v)}>
-                                <FormSelectOption value="actor" label="Actor" />
+                                <FormSelectOption value="agent" label="Agent" />
                                 <FormSelectOption value="script" label="Script" />
                             </FormSelect>
                         </FormGroup>

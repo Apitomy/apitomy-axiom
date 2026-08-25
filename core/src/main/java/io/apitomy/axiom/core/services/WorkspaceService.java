@@ -11,7 +11,7 @@ import java.nio.file.Path;
 
 /**
  * Manages work directories for projects. Each project gets an independent
- * directory where actors can perform their work (clone repos, generate
+ * directory where agents can perform their work (clone repos, generate
  * files, etc.).
  */
 @ApplicationScoped

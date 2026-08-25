@@ -37,7 +37,7 @@ import java.util.Set;
  *
  * <p>This is the heart of Axiom — the end-to-end flow:</p>
  * <pre>
- * Event Queue → Manager → Decisions → Project auto-creation → Task creation → Actor execution
+ * Event Queue → Manager → Decisions → Project auto-creation → Task creation → Agent execution
  * </pre>
  */
 @ApplicationScoped

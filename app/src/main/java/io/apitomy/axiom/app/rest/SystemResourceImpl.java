@@ -13,8 +13,7 @@ import io.apitomy.axiom.api.SystemResource;
 import io.apitomy.axiom.app.ImportExportService;
 import io.apitomy.axiom.app.StartupCheckService;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
-import io.apitomy.axiom.engine.spi.AiEngine;
-import io.apitomy.axiom.engine.spi.AiEngineRegistry;
+import io.apitomy.axiom.agents.spi.AgentRegistry;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -39,23 +38,20 @@ public class SystemResourceImpl implements SystemResource {
     @ConfigProperty(name = "quarkus.application.version", defaultValue = "1.0.0-SNAPSHOT")
     String applicationVersion;
 
-    @ConfigProperty(name = "axiom.claude-code.available-models",
+    @ConfigProperty(name = "axiom.agent.claude-code.available-models",
             defaultValue = "claude-opus-4-7,claude-sonnet-4-6,claude-opus-4-6,claude-haiku-4-5-20251001,opus,sonnet,haiku")
     String claudeAvailableModels;
 
-    @ConfigProperty(name = "axiom.opencode.available-models",
+    @ConfigProperty(name = "axiom.agent.opencode.available-models",
             defaultValue = "anthropic/claude-sonnet-4-6,anthropic/claude-opus-4-6,anthropic/claude-haiku-4-5-20251001,openai/gpt-4o,openai/o3-mini")
     String openCodeAvailableModels;
 
-    @ConfigProperty(name = "axiom.copilot.available-models",
+    @ConfigProperty(name = "axiom.agent.copilot.available-models",
             defaultValue = "claude-sonnet-5,claude-opus-5,claude-haiku-4.5,gpt-5.4,gpt-5-mini,auto")
     String copilotAvailableModels;
 
     @Inject
-    AiEngine aiEngine;
-
-    @Inject
-    AiEngineRegistry engineRegistry;
+    AgentRegistry agentRegistry;
 
     @Inject
     StartupCheckService startupCheckService;
@@ -85,7 +81,7 @@ public class SystemResourceImpl implements SystemResource {
     public SystemConfig getSystemConfig() {
         SystemConfig config = new SystemConfig();
         config.setVersion(applicationVersion);
-        config.setEngine(aiEngine.getType());
+        config.setEngine(agentRegistry.getDefaultAgent().getType());
         config.setFeatures(new Features());
         config.setChecks(startupCheckService.getResults().stream()
                 .map(r -> {
@@ -104,7 +100,7 @@ public class SystemResourceImpl implements SystemResource {
      */
     @Override
     public List<String> listEngines() {
-        return engineRegistry.getAvailableEngineTypes();
+        return agentRegistry.getAvailableTypes();
     }
 
     /**
@@ -116,7 +112,7 @@ public class SystemResourceImpl implements SystemResource {
      */
     @Override
     public List<String> listModels(String engine) {
-        String engineType = (engine != null && !engine.isBlank()) ? engine : aiEngine.getType();
+        String engineType = (engine != null && !engine.isBlank()) ? engine : agentRegistry.getDefaultAgent().getType();
         String models = switch (engineType) {
             case "opencode" -> openCodeAvailableModels;
             case "copilot" -> copilotAvailableModels;

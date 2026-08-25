@@ -31,7 +31,7 @@ export function ActionTypeDetailModal({ isOpen, onClose, name, content, errors }
     const [activeTab, setActiveTab] = useState(0);
 
     const description = (content.description as string) || "";
-    const executionMode = (content.executionMode as string) || "actor";
+    const executionMode = (content.executionMode as string) || "agent";
     const userTriggerable = content.userTriggerable as boolean ?? false;
     const managerTriggerable = content.managerTriggerable as boolean ?? false;
     const emitsEvent = content.emitsEvent as boolean ?? false;
@@ -49,10 +49,10 @@ export function ActionTypeDetailModal({ isOpen, onClose, name, content, errors }
             ? rawAllowedTools.split(",").map((t) => t.trim()).filter(Boolean)
             : [];
 
-    const isActorMode = executionMode === "actor";
-    const templateContent = isActorMode ? promptTemplate : scriptTemplate;
-    const templateLabel = isActorMode ? "Prompt Template" : "Script Template";
-    const templateLanguage = isActorMode ? Language.markdown : Language.shell;
+    const isAgentMode = executionMode === "agent";
+    const templateContent = isAgentMode ? promptTemplate : scriptTemplate;
+    const templateLabel = isAgentMode ? "Prompt Template" : "Script Template";
+    const templateLanguage = isAgentMode ? Language.markdown : Language.shell;
 
     return (
         <Modal
@@ -80,7 +80,7 @@ export function ActionTypeDetailModal({ isOpen, onClose, name, content, errors }
                                 <DescriptionListGroup>
                                     <DescriptionListTerm style={{ whiteSpace: "nowrap" }}>Execution Mode</DescriptionListTerm>
                                     <DescriptionListDescription>
-                                        <Label isCompact color={isActorMode ? "blue" : "orange"}>
+                                        <Label isCompact color={isAgentMode ? "blue" : "orange"}>
                                             {executionMode}
                                         </Label>
                                     </DescriptionListDescription>
@@ -146,7 +146,7 @@ export function ActionTypeDetailModal({ isOpen, onClose, name, content, errors }
                                     height="100%"
                                     isReadOnly
                                     isLineNumbersVisible
-                                    options={isActorMode ? { wordWrap: "on" } : undefined}
+                                    options={isAgentMode ? { wordWrap: "on" } : undefined}
                                 />
                             </div>
                         </Tab>
