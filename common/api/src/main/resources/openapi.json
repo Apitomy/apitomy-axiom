@@ -620,22 +620,22 @@
         }
       ]
     },
-    "/actors": {
+    "/agents": {
       "get": {
         "tags": [
-          "Actors"
+          "Agents"
         ],
-        "summary": "List all actors",
-        "operationId": "listActors",
+        "summary": "List all agents",
+        "operationId": "listAgents",
         "responses": {
           "200": {
-            "description": "List of actors",
+            "description": "List of agents",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/Actor"
+                    "$ref": "#/components/schemas/Agent"
                   }
                 }
               }
@@ -645,15 +645,15 @@
       },
       "post": {
         "tags": [
-          "Actors"
+          "Agents"
         ],
-        "summary": "Create a new actor",
-        "operationId": "createActor",
+        "summary": "Create a new agent",
+        "operationId": "createAgent",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NewActor"
+                "$ref": "#/components/schemas/NewAgent"
               }
             }
           },
@@ -661,11 +661,11 @@
         },
         "responses": {
           "201": {
-            "description": "Actor created",
+            "description": "Agent created",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Actor"
+                  "$ref": "#/components/schemas/Agent"
                 }
               }
             }
@@ -673,20 +673,20 @@
         }
       }
     },
-    "/actors/{actorId}": {
+    "/agents/{agentId}": {
       "get": {
         "tags": [
-          "Actors"
+          "Agents"
         ],
-        "summary": "Get an actor by ID",
-        "operationId": "getActor",
+        "summary": "Get an agent by ID",
+        "operationId": "getAgent",
         "responses": {
           "200": {
-            "description": "The actor",
+            "description": "The agent",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Actor"
+                  "$ref": "#/components/schemas/Agent"
                 }
               }
             }
@@ -698,15 +698,15 @@
       },
       "put": {
         "tags": [
-          "Actors"
+          "Agents"
         ],
-        "summary": "Update an actor",
-        "operationId": "updateActor",
+        "summary": "Update an agent",
+        "operationId": "updateAgent",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NewActor"
+                "$ref": "#/components/schemas/NewAgent"
               }
             }
           },
@@ -714,11 +714,11 @@
         },
         "responses": {
           "200": {
-            "description": "Actor updated",
+            "description": "Agent updated",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Actor"
+                  "$ref": "#/components/schemas/Agent"
                 }
               }
             }
@@ -730,13 +730,13 @@
       },
       "delete": {
         "tags": [
-          "Actors"
+          "Agents"
         ],
-        "summary": "Delete an actor",
-        "operationId": "deleteActor",
+        "summary": "Delete an agent",
+        "operationId": "deleteAgent",
         "responses": {
           "204": {
-            "description": "Actor deleted"
+            "description": "Agent deleted"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -745,17 +745,17 @@
       },
       "parameters": [
         {
-          "$ref": "#/components/parameters/ActorId"
+          "$ref": "#/components/parameters/AgentId"
         }
       ]
     },
-    "/actors/{actorId}/tasks": {
+    "/agents/{agentId}/tasks": {
       "get": {
         "tags": [
-          "Actors"
+          "Agents"
         ],
-        "summary": "List tasks assigned to an actor (paginated)",
-        "operationId": "listActorTasks",
+        "summary": "List tasks assigned to an agent (paginated)",
+        "operationId": "listAgentTasks",
         "parameters": [
           {
             "name": "page",
@@ -794,7 +794,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Paginated list of tasks assigned to this actor",
+            "description": "Paginated list of tasks assigned to this agent",
             "content": {
               "application/json": {
                 "schema": {
@@ -810,7 +810,7 @@
       },
       "parameters": [
         {
-          "$ref": "#/components/parameters/ActorId"
+          "$ref": "#/components/parameters/AgentId"
         }
       ]
     },
@@ -852,7 +852,7 @@
           {
             "name": "filterMode",
             "in": "query",
-            "description": "Filter by execution mode (actor or script)",
+            "description": "Filter by execution mode (agent or script)",
             "required": false,
             "schema": {
               "type": "string"
@@ -1659,7 +1659,7 @@
             }
           },
           {
-            "name": "filterActorId",
+            "name": "filterAgentId",
             "in": "query",
             "schema": {
               "type": "integer"
@@ -2594,7 +2594,7 @@
           "ActionTypes"
         ],
         "summary": "AI-assisted prompt template and tools editing",
-        "description": "Invokes Claude Code to generate or update the prompt template and allowed tools for an actor-mode action type.",
+        "description": "Invokes Claude Code to generate or update the prompt template and allowed tools for an agent-mode action type.",
         "operationId": "aiEditActionPrompt",
         "requestBody": {
           "content": {
@@ -5593,7 +5593,7 @@
             ],
             "type": "string"
           },
-          "assignedActor": {
+          "assignedAgent": {
             "format": "int64",
             "type": "integer"
           },
@@ -5654,7 +5654,7 @@
           "actionType": {
             "type": "string"
           },
-          "assignedActor": {
+          "assignedAgent": {
             "format": "int64",
             "type": "integer"
           },
@@ -5663,11 +5663,11 @@
           }
         }
       },
-      "Actor": {
+      "Agent": {
         "required": [
           "id",
           "name",
-          "type"
+          "agentType"
         ],
         "type": "object",
         "properties": {
@@ -5681,12 +5681,11 @@
           "description": {
             "type": "string"
           },
-          "type": {
-            "enum": [
-              "human",
-              "ai-agent"
-            ],
+          "agentType": {
             "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
           },
           "capabilities": {
             "type": "array",
@@ -5694,20 +5693,16 @@
               "type": "string"
             }
           },
-          "permissions": {
-            "type": "object",
-            "additionalProperties": {}
-          },
           "configuration": {
             "type": "object",
             "additionalProperties": {}
           }
         }
       },
-      "NewActor": {
+      "NewAgent": {
         "required": [
           "name",
-          "type"
+          "agentType"
         ],
         "type": "object",
         "properties": {
@@ -5717,22 +5712,17 @@
           "description": {
             "type": "string"
           },
-          "type": {
-            "enum": [
-              "human",
-              "ai-agent"
-            ],
+          "agentType": {
             "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
           },
           "capabilities": {
             "type": "array",
             "items": {
               "type": "string"
             }
-          },
-          "permissions": {
-            "type": "object",
-            "additionalProperties": {}
           },
           "configuration": {
             "type": "object",
@@ -5762,7 +5752,7 @@
           },
           "executionMode": {
             "enum": [
-              "actor",
+              "agent",
               "script"
             ],
             "type": "string"
@@ -5780,7 +5770,7 @@
             "type": "boolean"
           },
           "allowedTools": {
-            "description": "Tools the actor is allowed to use when performing this action",
+            "description": "Tools the agent is allowed to use when performing this action",
             "type": "array",
             "items": {
               "type": "string"
@@ -5843,7 +5833,7 @@
           },
           "executionMode": {
             "enum": [
-              "actor",
+              "agent",
               "script"
             ],
             "type": "string"
@@ -5861,7 +5851,7 @@
             "type": "boolean"
           },
           "allowedTools": {
-            "description": "Tools the actor is allowed to use when performing this action",
+            "description": "Tools the agent is allowed to use when performing this action",
             "type": "array",
             "items": {
               "type": "string"
@@ -6203,6 +6193,10 @@
           "name": {
             "type": "string"
           },
+          "slug": {
+            "type": "string",
+            "description": "Stable identifier used for agent capability matching. Auto-generated from name if not set."
+          },
           "description": {
             "type": "string"
           },
@@ -6281,6 +6275,10 @@
         "properties": {
           "name": {
             "type": "string"
+          },
+          "slug": {
+            "type": "string",
+            "description": "Stable identifier used for agent capability matching. Auto-generated from name if not set."
           },
           "description": {
             "type": "string"
@@ -6511,7 +6509,7 @@
             "format": "int64",
             "type": "integer"
           },
-          "actorId": {
+          "agentId": {
             "format": "int64",
             "type": "integer"
           },
@@ -6643,7 +6641,7 @@
           "authorType": {
             "enum": [
               "manager",
-              "actor",
+              "agent",
               "user",
               "system"
             ],
@@ -6692,7 +6690,7 @@
           "actionType": {
             "type": "string"
           },
-          "actorHint": {
+          "agentHint": {
             "type": "string"
           },
           "inputContext": {
@@ -8671,6 +8669,10 @@
           "name": {
             "type": "string"
           },
+          "slug": {
+            "type": "string",
+            "description": "Stable identifier used for agent capability matching. Auto-generated from name if not set."
+          },
           "description": {
             "type": "string"
           },
@@ -8704,11 +8706,11 @@
             "type": "string"
           },
           "executionMode": {
-            "description": "Execution mode: actor or script",
+            "description": "Execution mode: agent or script",
             "type": "string"
           },
           "promptTemplate": {
-            "description": "Prompt template for actor mode",
+            "description": "Prompt template for agent mode",
             "type": "string"
           },
           "scriptTemplate": {
@@ -8766,6 +8768,10 @@
           "name": {
             "type": "string"
           },
+          "slug": {
+            "type": "string",
+            "description": "Stable identifier used for agent capability matching. Auto-generated from name if not set."
+          },
           "description": {
             "type": "string"
           },
@@ -8791,11 +8797,11 @@
             "type": "string"
           },
           "executionMode": {
-            "description": "Execution mode: actor or script",
+            "description": "Execution mode: agent or script",
             "type": "string"
           },
           "promptTemplate": {
-            "description": "Prompt template for actor mode",
+            "description": "Prompt template for agent mode",
             "type": "string"
           },
           "scriptTemplate": {
@@ -9098,10 +9104,10 @@
           "type": "integer"
         }
       },
-      "ActorId": {
-        "name": "actorId",
+      "AgentId": {
+        "name": "agentId",
         "in": "path",
-        "description": "Actor ID",
+        "description": "Agent ID",
         "required": true,
         "schema": {
           "format": "int64",
@@ -9158,8 +9164,8 @@
       "description": "Conversation threads within projects"
     },
     {
-      "name": "Actors",
-      "description": "Actor configuration and management"
+      "name": "Agents",
+      "description": "Agent configuration and management"
     },
     {
       "name": "ActionTypes",
