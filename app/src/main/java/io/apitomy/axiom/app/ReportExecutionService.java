@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.tracing.TraceContext;
 import io.apitomy.axiom.core.tracing.TraceService;
+import io.apitomy.axiom.core.util.SlugUtil;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.events.SseEvent;
@@ -14,9 +15,12 @@ import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.services.EncryptionService;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.ToolsetResolver;
-import io.apitomy.axiom.engine.spi.AiEngine;
-import io.apitomy.axiom.engine.spi.AiEngineConfig;
-import io.apitomy.axiom.engine.spi.AiEngineResult;
+import io.apitomy.axiom.agents.spi.Agent;
+import io.apitomy.axiom.agents.spi.AgentRegistry;
+import io.apitomy.axiom.agents.spi.AgentRequest;
+import io.apitomy.axiom.agents.spi.AgentResult;
+import io.apitomy.axiom.app.AgentLease;
+import io.apitomy.axiom.app.AgentPool;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
@@ -52,10 +56,10 @@ public class ReportExecutionService {
     ObjectMapper objectMapper;
 
     @Inject
-    AiEngine aiEngine;
+    AgentPool agentPool;
 
     @Inject
-    io.apitomy.axiom.engine.spi.AiEngineMcpManager aiEngineMcpManager;
+    AgentRegistry agentRegistry;
 
     @Inject
     McpConfigGenerator mcpConfigGenerator;
@@ -72,10 +76,10 @@ public class ReportExecutionService {
     @Inject
     TraceService traceService;
 
-    @ConfigProperty(name = "axiom.claude-code.model")
+    @ConfigProperty(name = "axiom.agent.claude-code.model")
     Optional<String> model;
 
-    @ConfigProperty(name = "axiom.claude-code.timeout-seconds", defaultValue = "600")
+    @ConfigProperty(name = "axiom.agent.claude-code.timeout-seconds", defaultValue = "600")
     int timeoutSeconds;
 
     private static final String SYSTEM_PROMPT = """
@@ -167,22 +171,23 @@ public class ReportExecutionService {
 
         // Generate MCP config with report-related tools and trace env vars
         Path mcpConfig = mcpConfigGenerator.generateMcpConfig(reportId, env, allowedTools);
-        // Ask the active AI engine's MCP manager to configure its MCP servers
-        // for this task too. For file-config engines (Claude Code, Copilot)
+        // Ask the active agent's MCP manager to configure its MCP servers
+        // for this task too. For file-config agents (Claude Code, Copilot)
         // this is a no-op re-generation; for OpenCode this is REQUIRED since
         // it registers MCP servers dynamically via HTTP rather than a config
         // file, and generateMcpConfig() above only produces a file that
         // OpenCode ignores.
         try {
-            aiEngineMcpManager.configureMcpServers(reportId, env, allowedTools);
+            agentRegistry.getMcpManager(null).configureMcpServers(reportId, env, allowedTools);
         } catch (Exception e) {
-            LOG.warnf(e, "Failed to configure engine MCP servers for report %d", reportId);
+            LOG.warnf(e, "Failed to configure agent MCP servers for report %d", reportId);
         }
 
-        // Build engine-agnostic config
+        // Build agent request
         int effectiveTimeout = definition.timeoutSeconds != null
                 ? definition.timeoutSeconds : timeoutSeconds;
-        AiEngineConfig engineConfig = AiEngineConfig.builder()
+        AgentRequest agentRequest = AgentRequest.builder()
+                .prompt(prompt)
                 .systemPrompt(SYSTEM_PROMPT)
                 .allowedTools(allowedTools)
                 .timeoutSeconds(effectiveTimeout)
@@ -191,6 +196,15 @@ public class ReportExecutionService {
                 .environment(env)
                 .mcpConfigFile(mcpConfig)
                 .build();
+
+        // Acquire an agent lease from the pool
+        String slug = definition.slug != null ? definition.slug : SlugUtil.slugify(definition.name);
+        String capability = "report:" + slug;
+        AgentLease lease = agentPool.tryLease(capability, null, null);
+        if (lease == null) {
+            LOG.warnf("All agents busy, report %d stays pending", reportId);
+            return;
+        }
 
         // Mark as generating (stores trace ID on the report entity)
         UUID traceId = traceCtx != null ? traceCtx.traceId() : null;
@@ -204,14 +218,16 @@ public class ReportExecutionService {
         final TraceContext finalTraceCtx = traceCtx;
         final Long finalAiNodeId = aiNodeId;
 
-        aiEngine.prompt(engineConfig, prompt)
+        lease.agent().execute(agentRequest)
                 .thenAccept(result -> {
                     Thread.currentThread().setContextClassLoader(contextCl);
+                    agentPool.release(lease);
                     onReportCompleted(reportId, definition.id, result,
                             finalTraceCtx, finalAiNodeId);
                 })
                 .exceptionally(throwable -> {
                     Thread.currentThread().setContextClassLoader(contextCl);
+                    agentPool.release(lease);
                     LOG.errorf(throwable, "Report %d generation failed unexpectedly", reportId);
                     failReport(reportId, "Unexpected error: " + throwable.getMessage(),
                             finalTraceCtx, finalAiNodeId);
@@ -250,7 +266,7 @@ public class ReportExecutionService {
     }
 
     @Transactional
-    void onReportCompleted(Long reportId, Long definitionId, AiEngineResult result,
+    void onReportCompleted(Long reportId, Long definitionId, AgentResult result,
             TraceContext traceCtx, Long aiNodeId) {
         ReportEntity report = ReportEntity.findById(reportId);
         if (report == null) return;
@@ -259,15 +275,15 @@ public class ReportExecutionService {
 
         if (result.success()) {
             report.status = "Completed";
-            report.content = result.result();
+            report.content = result.output();
             if (def != null && def.titleTemplate != null && !def.titleTemplate.isBlank()) {
                 report.title = resolveTitleTemplate(def.titleTemplate, def);
             } else {
-                report.title = extractTitle(result.result());
+                report.title = extractTitle(result.output());
             }
         } else {
             report.status = "Failed";
-            report.content = "Report generation failed: " + result.result();
+            report.content = "Report generation failed: " + result.output();
         }
         report.executionLog = result.executionLog();
         report.costUsd = result.costUsd();

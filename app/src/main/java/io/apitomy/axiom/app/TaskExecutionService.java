@@ -1,14 +1,14 @@
 package io.apitomy.axiom.app;
 
-import io.apitomy.axiom.actors.spi.Actor;
-import io.apitomy.axiom.actors.spi.ActorContext;
-import io.apitomy.axiom.actors.spi.TaskResult;
+import io.apitomy.axiom.agents.spi.AgentRegistry;
+import io.apitomy.axiom.agents.spi.AgentRequest;
+import io.apitomy.axiom.agents.spi.AgentResult;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.tracing.TraceService;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
+import io.apitomy.axiom.core.entities.AgentEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
-import io.apitomy.axiom.core.entities.ActorEntity;
 import io.apitomy.axiom.core.entities.EventEntity;
 import io.apitomy.axiom.core.entities.EventQueueEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
@@ -20,14 +20,10 @@ import io.apitomy.axiom.core.services.EncryptionService;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.ToolsetResolver;
 import io.apitomy.axiom.core.services.WorkspaceService;
-import io.apitomy.axiom.engine.spi.AiEngineMcpManager;
-import io.apitomy.axiom.engine.spi.AiEngineRegistry;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
-import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.nio.file.Path;
@@ -35,12 +31,11 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
- * Orchestrates task execution. Resolves the appropriate Actor implementation,
- * enforces project-level task serialization, manages the task lifecycle, and
- * records results.
+ * Orchestrates task execution. Resolves the appropriate Agent implementation
+ * via the AgentPool, enforces project-level task serialization, manages the
+ * task lifecycle, and records results.
  */
 @ApplicationScoped
 public class TaskExecutionService {
@@ -48,10 +43,10 @@ public class TaskExecutionService {
     private static final Logger LOG = Logger.getLogger(TaskExecutionService.class);
 
     @Inject
-    Instance<Actor> actors;
+    AgentPool agentPool;
 
     @Inject
-    AiEngineRegistry engineRegistry;
+    AgentRegistry agentRegistry;
 
     @Inject
     WorkspaceService workspaceService;
@@ -64,9 +59,6 @@ public class TaskExecutionService {
 
     @Inject
     McpConfigGenerator mcpConfigGenerator;
-
-    @Inject
-    AiEngineMcpManager aiEngineMcpManager;
 
     @Inject
     ScriptExecutionService scriptExecutionService;
@@ -120,38 +112,30 @@ public class TaskExecutionService {
             return;
         }
 
-        // Resolve the engine for this action type (may differ from global default)
-        String engineType = actionTypeEntity != null ? actionTypeEntity.engine : null;
+        // Resolve the agent type for this action type (may differ from global default)
+        String agentType = actionTypeEntity != null ? actionTypeEntity.engine : null;
 
-        // Resolve the actor entity and implementation
-        ActorEntity actorEntity = resolveActorEntity(task);
-        if (actorEntity == null) {
-            // No actor configured at all — check if it's because they're all busy
-            boolean anyExist = ActorEntity.count("type", "ai-agent") > 0;
+        // Acquire an agent lease from the pool
+        String capability = "action:" + task.actionType;
+        AgentLease lease = agentPool.tryLease(capability, task.assignedAgent, agentType);
+        if (lease == null) {
+            // No agent available — check if it's because they're all busy
+            boolean anyExist = AgentEntity.count("enabled", true) > 0;
             if (anyExist) {
-                LOG.debugf("All actors busy, task %d stays pending", task.id);
+                LOG.debugf("All agents busy, task %d stays pending", task.id);
                 return;
             }
-            failTask(task.id, "No actor available for task type: " + task.actionType);
+            failTask(task.id, "No agent available for task type: " + task.actionType);
             return;
         }
 
-        Actor actor = findActorByType(actorEntity.type, engineType);
-        if (actor == null) {
-            failTask(task.id, "No actor implementation found for type: " + actorEntity.type);
-            return;
-        }
-        String actorName = actorEntity != null ? actorEntity.name : "Unknown Actor";
-        Long actorEntityId = actorEntity != null ? actorEntity.id : null;
+        String agentName = lease.agentEntityName();
+        Long agentEntityId = lease.agentEntityId();
 
-        // Mark task status based on actor type
-        if ("human".equals(actor.getType())) {
-            markTaskAwaitingInput(task.id, actorEntityId, actorName);
-        } else {
-            markTaskInProgress(task.id, actorEntityId, actorName);
-        }
+        // Mark task as in progress
+        markTaskInProgress(task.id, agentEntityId, agentName);
 
-        // Build the actor context
+        // Build the agent request
         ProjectEntity project = ProjectEntity.findById(task.projectId);
         Path workspace = workspaceService.getWorkspacePath(project);
         Map<String, String> env = buildEnvironment(
@@ -175,93 +159,41 @@ public class TaskExecutionService {
         // Generate MCP config filtered to only the tools allowed by this action type
         List<String> allowedTools = getToolsFromActionType(task.actionType);
         Path mcpConfig = mcpConfigGenerator.generateMcpConfig(task.id, env, allowedTools);
-        // Also let the active engine's MCP manager configure its own MCP
-        // servers (required for OpenCode, which registers servers dynamically
+        // Also let the agent's MCP manager configure its own MCP servers
+        // (required for OpenCode, which registers servers dynamically
         // via HTTP rather than consuming the config file above).
         try {
-            aiEngineMcpManager.configureMcpServers(task.id, env, allowedTools);
+            agentRegistry.getMcpManager(agentType).configureMcpServers(task.id, env, allowedTools);
         } catch (Exception e) {
-            LOG.warnf(e, "Failed to configure engine MCP servers for task %d", task.id);
+            LOG.warnf(e, "Failed to configure agent MCP servers for task %d", task.id);
         }
 
-        ActorContext context = ActorContext.builder()
+        String prompt = resolvePromptTemplate(actionTypeEntity, task, project, workspace);
+        AgentRequest request = AgentRequest.builder()
+                .prompt(prompt != null ? prompt : task.input)
                 .workingDirectory(workspace)
                 .systemPrompt(buildSystemPrompt(task, project))
-                .promptTemplate(resolvePromptTemplate(actionTypeEntity, task, project, workspace))
                 .allowedTools(allowedTools)
                 .mcpConfigFile(mcpConfig)
                 .environment(env)
                 .model(actionTypeEntity != null ? actionTypeEntity.model : null)
-                .maxSteps(actionTypeEntity != null ? actionTypeEntity.maxSteps : null)
+                .maxSteps(actionTypeEntity != null && actionTypeEntity.maxSteps != null
+                        ? actionTypeEntity.maxSteps : 50)
                 .maxBudgetUsd(actionTypeEntity != null ? actionTypeEntity.maxBudgetUsd : null)
                 .build();
 
         // Execute asynchronously
-        actor.execute(task, context)
-                .thenAccept(result -> onTaskCompleted(task.id, result))
+        lease.agent().execute(request)
+                .thenAccept(result -> {
+                    agentPool.release(lease);
+                    onTaskCompleted(task.id, result);
+                })
                 .exceptionally(throwable -> {
+                    agentPool.release(lease);
                     LOG.errorf(throwable, "Task %d execution failed unexpectedly", task.id);
                     failTask(task.id, "Unexpected error: " + throwable.getMessage());
                     return null;
                 });
-    }
-
-    /**
-     * Resolves the ActorEntity for a task. Priority:
-     * 1. Explicitly assigned actor (if set on the task)
-     * 2. First actor whose capabilities include the task's action type
-     * 3. First AI agent actor (fallback when no capabilities match)
-     */
-    private ActorEntity resolveActorEntity(TaskEntity task) {
-        if (task.assignedActor != null) {
-            ActorEntity actorEntity = ActorEntity.findById(task.assignedActor);
-            if (actorEntity != null) {
-                return actorEntity;
-            }
-        }
-
-        // Find an actor whose capabilities include this action type and is not busy
-        List<ActorEntity> allActors = ActorEntity.listAll();
-        for (ActorEntity actor : allActors) {
-            if (actor.capabilities != null && !actor.capabilities.isBlank()) {
-                List<String> caps = java.util.Arrays.stream(actor.capabilities.split(","))
-                        .map(String::trim)
-                        .toList();
-                if ((caps.contains("*") || caps.contains(task.actionType)) && !isActorBusy(actor.id)) {
-                    return actor;
-                }
-            }
-        }
-
-        // Fallback: first available AI agent actor regardless of capabilities
-        List<ActorEntity> aiAgents = ActorEntity.<ActorEntity>list("type", "ai-agent");
-        for (ActorEntity actor : aiAgents) {
-            if (!isActorBusy(actor.id)) {
-                LOG.warnf("No available actor with capability '%s' found, falling back to actor '%s'",
-                        task.actionType, actor.name);
-                return actor;
-            }
-        }
-        LOG.warnf("All actors are busy, cannot execute task %d (%s)", task.id, task.actionType);
-        return null;
-    }
-
-    private boolean isActorBusy(Long actorId) {
-        return TaskEntity.count(
-                "assignedActor = ?1 and status = 'InProgress'", actorId) > 0;
-    }
-
-    private Actor findActorByType(String type, String engineType) {
-        // Map entity types to actor implementation types using the resolved AI engine
-        String implType = "ai-agent".equals(type)
-                ? engineRegistry.getActorType(engineType)
-                : type;
-        for (Actor actor : actors) {
-            if (actor.getType().equals(implType)) {
-                return actor;
-            }
-        }
-        return null;
     }
 
     /**
@@ -346,11 +278,11 @@ public class TaskExecutionService {
     }
 
     @Transactional
-    void markTaskInProgress(Long taskId, Long actorEntityId, String actorName) {
+    void markTaskInProgress(Long taskId, Long agentEntityId, String agentName) {
         TaskEntity task = TaskEntity.findById(taskId);
         if (task != null) {
             task.status = "InProgress";
-            task.assignedActor = actorEntityId;
+            task.assignedAgent = agentEntityId;
 
             // Update project status (don't overwrite Completed)
             ProjectEntity project = ProjectEntity.findById(task.projectId);
@@ -361,11 +293,11 @@ public class TaskExecutionService {
 
             // Log to activity
             logActivity(task.projectId, taskId, task.eventId, "task-started",
-                    "Task started: " + task.actionType + " (actor: " + actorName + ")");
+                    "Task started: " + task.actionType + " (agent: " + agentName + ")");
 
             // Log to thread
             addThreadEntry(task.projectId, "system", "update",
-                    "Task started: " + task.actionType + "\nAssigned to: " + actorName);
+                    "Task started: " + task.actionType + "\nAssigned to: " + agentName);
 
             // Fire SSE events
             sseEvents.fire(SseEvent.taskUpdated(task.projectId, taskId, "InProgress"));
@@ -374,12 +306,17 @@ public class TaskExecutionService {
         }
     }
 
+    /**
+     * Marks a task as awaiting human input. Used for direct human tasks
+     * created via the inbox.
+     *
+     * @param taskId the task ID
+     */
     @Transactional
-    void markTaskAwaitingInput(Long taskId, Long actorEntityId, String actorName) {
+    public void markTaskAwaitingInput(Long taskId) {
         TaskEntity task = TaskEntity.findById(taskId);
         if (task != null) {
             task.status = "AwaitingInput";
-            task.assignedActor = actorEntityId;
 
             // Update project status (don't overwrite Completed)
             ProjectEntity project = ProjectEntity.findById(task.projectId);
@@ -390,12 +327,11 @@ public class TaskExecutionService {
 
             // Log to activity
             logActivity(task.projectId, taskId, task.eventId, "task-awaiting-input",
-                    "Task awaiting human input: " + task.actionType + " (actor: " + actorName + ")");
+                    "Task awaiting human input: " + task.actionType);
 
             // Log to thread
             addThreadEntry(task.projectId, "system", "update",
                     "Task awaiting human input: " + task.actionType
-                            + "\nAssigned to: " + actorName
                             + (task.input != null ? "\n\n" + task.input : ""));
 
             // Fire SSE events
@@ -410,74 +346,40 @@ public class TaskExecutionService {
     }
 
     /**
-     * Registers a directly-created human task. Sets the task to AwaitingInput,
-     * registers it with the HumanActor, and wires the completion callback.
-     *
-     * @param taskId the persisted task ID
-     */
-    public void registerDirectHumanTask(Long taskId) {
-        TaskEntity task = TaskEntity.findById(taskId);
-        if (task == null) {
-            return;
-        }
-
-        // Find the human actor entity and implementation
-        ActorEntity actorEntity = ActorEntity.find("type", "human").firstResult();
-        Long actorEntityId = actorEntity != null ? actorEntity.id : null;
-        String actorName = actorEntity != null ? actorEntity.name : "Human";
-
-        // Mark the task as awaiting input (sets status, logs activity, fires SSE)
-        markTaskAwaitingInput(taskId, actorEntityId, actorName);
-
-        // Register with the HumanActor and wire completion
-        Actor humanActor = findActorByType("human", null);
-        if (humanActor != null) {
-            humanActor.execute(task, null)
-                    .thenAccept(result -> onTaskCompleted(taskId, result))
-                    .exceptionally(throwable -> {
-                        LOG.errorf(throwable, "Direct human task %d failed unexpectedly", taskId);
-                        failTask(taskId, "Unexpected error: " + throwable.getMessage());
-                        return null;
-                    });
-        }
-    }
-
-    /**
      * Completes a task and records its result. The database is the source of
      * truth for task state, so this can be called directly (e.g. from
-     * {@code InboxResourceImpl}) even when no in-memory {@code Actor} future
-     * is tracking the task — this happens for human tasks left in
-     * {@code AwaitingInput} across an application restart, since
-     * {@code HumanActor}'s pending-future map does not survive restarts.
+     * {@code InboxResourceImpl}) even when no in-memory future is tracking the
+     * task — this happens for human tasks left in {@code AwaitingInput} across
+     * an application restart.
      *
      * @param taskId the task ID
-     * @param result the task result
+     * @param result the agent result
      */
     @Transactional
-    public void onTaskCompleted(Long taskId, TaskResult result) {
+    public void onTaskCompleted(Long taskId, AgentResult result) {
         TaskEntity task = TaskEntity.findById(taskId);
         if (task == null) {
             return;
         }
 
         String previousStatus = task.status;
-        task.status = result.isSuccess() ? "Completed" : "Failed";
-        task.output = result.getOutput();
+        task.status = result.success() ? "Completed" : "Failed";
+        task.output = result.output();
         task.completedOn = Instant.now();
-        task.sessionId = result.getSessionId();
-        task.executionLog = result.getExecutionLog();
+        task.sessionId = result.sessionId();
+        task.executionLog = result.executionLog();
 
-        String statusText = result.isSuccess() ? "completed" : "failed";
+        String statusText = result.success() ? "completed" : "failed";
         LOG.infof("Task %d %s (cost: $%s, tokens: %d/%d)",
                 taskId, statusText,
-                result.getCostUsd() != null ? String.format("%.4f", result.getCostUsd()) : "n/a",
-                result.getInputTokens() != null ? result.getInputTokens() : 0,
-                result.getOutputTokens() != null ? result.getOutputTokens() : 0);
+                result.costUsd() != null ? String.format("%.4f", result.costUsd()) : "n/a",
+                result.inputTokens() != null ? result.inputTokens() : 0,
+                result.outputTokens() != null ? result.outputTokens() : 0);
 
         // Record AI usage
         recordAiUsage("task", taskId, task.eventId, task.projectId,
-                task.assignedActor, task.actionType,
-                result.getCostUsd(), result.getInputTokens(), result.getOutputTokens());
+                task.assignedAgent, task.actionType,
+                result.costUsd(), result.inputTokens(), result.outputTokens());
 
         // Log to activity
         logActivity(task.projectId, taskId, task.eventId, "task-" + statusText,
@@ -485,11 +387,11 @@ public class TaskExecutionService {
 
         // Log to thread
         String threadContent = "Task " + statusText + ": " + task.actionType;
-        if (result.getOutput() != null && !result.getOutput().isEmpty()) {
-            threadContent += "\n\nResult:\n" + result.getOutput();
+        if (result.output() != null && !result.output().isEmpty()) {
+            threadContent += "\n\nResult:\n" + result.output();
         }
-        if (result.getErrorMessage() != null) {
-            threadContent += "\n\nError: " + result.getErrorMessage();
+        if (result.errorMessage() != null) {
+            threadContent += "\n\nError: " + result.errorMessage();
         }
         addThreadEntry(task.projectId, "system", "result", threadContent);
 
@@ -498,7 +400,7 @@ public class TaskExecutionService {
         sseEvents.fire(SseEvent.threadEntry(task.projectId));
         sseEvents.fire(SseEvent.activity("task-" + statusText,
                 "Task " + statusText + ": " + task.actionType));
-        if (!result.isSuccess()) {
+        if (!result.success()) {
             sseEvents.fire(SseEvent.notification(
                     "Task failed: " + task.actionType, "error"));
         }
@@ -520,7 +422,7 @@ public class TaskExecutionService {
                     traceService.completeNode(taskNode.id, statusText);
                 }
 
-                traceService.completeTrace(task.traceId, result.isSuccess() ? "completed" : "failed");
+                traceService.completeTrace(task.traceId, result.success() ? "completed" : "failed");
             } catch (Exception e) {
                 LOG.warnf(e, "Failed to complete trace for task %d", task.id);
             }
@@ -628,14 +530,14 @@ public class TaskExecutionService {
     }
 
     private void recordAiUsage(String invocationType, Long taskId, Long eventId,
-                                Long projectId, Long actorId, String actionType,
+                                Long projectId, Long agentId, String actionType,
                                 Double costUsd, Long inputTokens, Long outputTokens) {
         AiUsageEntity usage = new AiUsageEntity();
         usage.invocationType = invocationType;
         usage.taskId = taskId;
         usage.eventId = eventId;
         usage.projectId = projectId;
-        usage.actorId = actorId;
+        usage.agentId = agentId;
         usage.actionType = actionType;
         usage.costUsd = costUsd;
         usage.inputTokens = inputTokens;

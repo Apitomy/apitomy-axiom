@@ -4,7 +4,9 @@ import io.apitomy.axiom.core.SdkToolNames;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 
 import java.time.Instant;
-import io.apitomy.axiom.core.entities.ActorEntity;
+import java.util.List;
+import io.apitomy.axiom.core.entities.AgentCapabilityEntity;
+import io.apitomy.axiom.core.entities.AgentEntity;
 import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.ManagerConfigEntity;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
@@ -50,7 +52,7 @@ public class SeedDataInitializer {
                 "Determine and apply appropriate labels/tags to a GitHub issue. Use this "
                         + "when a new issue is created and needs categorization (e.g. bug, "
                         + "feature, documentation, question, good-first-issue).",
-                "actor", false, true,
+                "agent", false, true,
                 "@Read-Only Tools,"
                         + "mcp__axiom-tools__list_github_labels,"
                         + "mcp__axiom-tools__apply_github_labels",
@@ -90,7 +92,7 @@ public class SeedDataInitializer {
         seedTools();
         seedToolsets();
         ensureAxiomSdkToolset();
-        seedActors();
+        seedAgents();
         seedManagerConfig();
         seedRetentionConfig();
         seedEventSource();
@@ -205,27 +207,29 @@ public class SeedDataInitializer {
         entity.persist();
     }
 
-    private void seedActors() {
-        if (ActorEntity.count() > 0) {
-            LOG.info("Actors already exist, skipping actor seed data");
+    private void seedAgents() {
+        if (AgentEntity.count() > 0) {
+            LOG.info("Agents already exist, skipping agent seed data");
             return;
         }
 
-        ActorEntity actor = new ActorEntity();
-        actor.name = "Blinky";
-        actor.description = "AI agent powered by Claude Code CLI";
-        actor.type = "ai-agent";
-        actor.capabilities = "auto-tag";
-        actor.persist();
-        LOG.infof("Seeded actor: %s (%s)", actor.name, actor.type);
+        AgentEntity agent = new AgentEntity();
+        agent.name = "Blinky";
+        agent.description = "AI agent powered by Claude Code CLI";
+        agent.agentType = "claude-code";
+        agent.enabled = true;
+        agent.persist();
+        AgentCapabilityEntity.setCapabilities(agent.id, List.of("*"));
+        LOG.infof("Seeded agent: %s (%s)", agent.name, agent.agentType);
 
-        actor = new ActorEntity();
-        actor.name = "Clyde";
-        actor.description = "AI agent powered by Claude Code CLI";
-        actor.type = "ai-agent";
-        actor.capabilities = "auto-tag";
-        actor.persist();
-        LOG.infof("Seeded actor: %s (%s)", actor.name, actor.type);
+        agent = new AgentEntity();
+        agent.name = "Clyde";
+        agent.description = "AI agent powered by Claude Code CLI";
+        agent.agentType = "claude-code";
+        agent.enabled = true;
+        agent.persist();
+        AgentCapabilityEntity.setCapabilities(agent.id, List.of("*"));
+        LOG.infof("Seeded agent: %s (%s)", agent.name, agent.agentType);
     }
 
     private void seedManagerConfig() {
