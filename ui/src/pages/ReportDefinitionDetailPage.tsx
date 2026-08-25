@@ -22,6 +22,7 @@ import {
     TextArea,
     TextInput,
     Title, Alert,
+    HelperText, HelperTextItem,
 } from "@patternfly/react-core";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { registerPlaceholderCompletions, REPORT_PLACEHOLDERS } from "../components/PlaceholderCompletionProvider";

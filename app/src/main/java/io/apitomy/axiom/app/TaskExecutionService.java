@@ -117,7 +117,8 @@ public class TaskExecutionService {
 
         // Acquire an agent lease from the pool
         String capability = "action:" + task.actionType;
-        AgentLease lease = agentPool.tryLease(capability, task.assignedAgent, agentType);
+        AgentLease lease = agentPool.tryLease(capability, task.assignedAgent, "task", task.id)
+                .orElse(null);
         if (lease == null) {
             // No agent available — check if it's because they're all busy
             boolean anyExist = AgentEntity.count("enabled", true) > 0;

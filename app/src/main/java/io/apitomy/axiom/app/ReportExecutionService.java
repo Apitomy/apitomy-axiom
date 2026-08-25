@@ -200,7 +200,8 @@ public class ReportExecutionService {
         // Acquire an agent lease from the pool
         String slug = definition.slug != null ? definition.slug : SlugUtil.slugify(definition.name);
         String capability = "report:" + slug;
-        AgentLease lease = agentPool.tryLease(capability, null, null);
+        AgentLease lease = agentPool.tryLease(capability, null, "report", reportId)
+                .orElse(null);
         if (lease == null) {
             LOG.warnf("All agents busy, report %d stays pending", reportId);
             return;

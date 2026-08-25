@@ -156,7 +156,8 @@ public class ScheduledJobExecutionService {
         // Acquire an agent lease from the pool
         String slug = job.slug != null ? job.slug : SlugUtil.slugify(job.name);
         String capability = "job:" + slug;
-        AgentLease lease = agentPool.tryLease(capability, null, null);
+        AgentLease lease = agentPool.tryLease(capability, null, "scheduled-job", runId)
+                .orElse(null);
         if (lease == null) {
             LOG.warnf("All agents busy, scheduled job run %d cannot start", runId);
             failRun(runId, "No agent available — all agents are busy",
