@@ -181,6 +181,8 @@ public class TaskExecutionService {
                 .maxSteps(actionTypeEntity != null && actionTypeEntity.maxSteps != null
                         ? actionTypeEntity.maxSteps : 50)
                 .maxBudgetUsd(actionTypeEntity != null ? actionTypeEntity.maxBudgetUsd : null)
+                .timeoutSeconds(actionTypeEntity != null && actionTypeEntity.timeoutSeconds != null
+                        ? actionTypeEntity.timeoutSeconds : 120)
                 .build();
 
         // Execute asynchronously

@@ -76,6 +76,13 @@ public class ActionTypeEntity extends PanacheEntity {
     @Column(name = "max_budget_usd")
     public Double maxBudgetUsd;
 
+    /**
+     * Optional timeout override in seconds for agent execution.
+     * When null, the global default (120s) is used.
+     */
+    @Column(name = "timeout_seconds")
+    public Integer timeoutSeconds;
+
     @Column(name = "manager_triggerable", nullable = false)
     public boolean managerTriggerable;
 

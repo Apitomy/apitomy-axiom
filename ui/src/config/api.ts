@@ -351,6 +351,7 @@ export interface ActionType {
     engine?: string;
     maxSteps?: number;
     maxBudgetUsd?: number;
+    timeoutSeconds?: number;
     emitsEvent: boolean;
     environment?: Record<string, string>;
     labels?: string[];

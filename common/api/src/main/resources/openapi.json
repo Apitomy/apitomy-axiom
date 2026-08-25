@@ -5809,6 +5809,11 @@
             "description": "Maximum budget in USD for this action type. When empty, the global default is used.",
             "type": "number"
           },
+          "timeoutSeconds": {
+            "format": "int32",
+            "description": "Timeout in seconds for agent execution. When empty, the global default (120s) is used.",
+            "type": "integer"
+          },
           "labels": {
             "description": "Free-form labels for categorization",
             "type": "array",
@@ -5889,6 +5894,11 @@
             "format": "double",
             "description": "Maximum budget in USD for this action type. When empty, the global default is used.",
             "type": "number"
+          },
+          "timeoutSeconds": {
+            "format": "int32",
+            "description": "Timeout in seconds for agent execution. When empty, the global default (120s) is used.",
+            "type": "integer"
           },
           "labels": {
             "description": "Free-form labels for categorization",

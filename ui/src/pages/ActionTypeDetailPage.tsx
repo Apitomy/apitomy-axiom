@@ -111,6 +111,7 @@ export function ActionTypeDetailPage() {
                     engine: at.engine,
                     maxSteps: at.maxSteps,
                     maxBudgetUsd: at.maxBudgetUsd,
+                    timeoutSeconds: at.timeoutSeconds,
                     labels: at.labels || [],
                 });
                 setTools(at.allowedTools || []);
@@ -439,6 +440,20 @@ function InfoTab({ form, updateForm, availableModels, availableEngines, onEditLa
                         value={form.maxBudgetUsd ?? ""}
                         onChange={(_e, v) => updateForm({ maxBudgetUsd: v === "" ? undefined : Number(v) })}
                         placeholder="Global default"
+                    />
+                </FormGroup>
+            )}
+            {form.executionMode === "agent" && (
+                <FormGroup label="Timeout (seconds)" fieldId="timeoutSeconds">
+                    <HelperText>
+                        <HelperTextItem>Timeout in seconds for agent execution. Leave empty to use the global default (120s).</HelperTextItem>
+                    </HelperText>
+                    <TextInput
+                        id="timeoutSeconds"
+                        type="number"
+                        value={form.timeoutSeconds ?? ""}
+                        onChange={(_e, v) => updateForm({ timeoutSeconds: v === "" ? undefined : Number(v) })}
+                        placeholder="120 (default)"
                     />
                 </FormGroup>
             )}
