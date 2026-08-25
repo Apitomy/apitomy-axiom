@@ -72,7 +72,7 @@ public class AgentPool {
         }
 
         // Tier 2: capability match via glob patterns
-        List<AgentEntity> agents = AgentEntity.list("enabled = true ORDER BY priority ASC");
+        List<AgentEntity> agents = AgentEntity.list("enabled = true ORDER BY id ASC");
         for (AgentEntity agent : agents) {
             if (!isLeased(agent.id)) {
                 List<String> capabilities = AgentCapabilityEntity.findCapabilities(agent.id);
