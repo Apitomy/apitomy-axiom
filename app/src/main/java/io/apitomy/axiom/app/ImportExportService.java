@@ -333,6 +333,7 @@ public class ImportExportService {
             entity.engine = textOrNull(item, "engine");
             entity.maxSteps = item.has("maxSteps") ? item.path("maxSteps").asInt() : null;
             entity.maxBudgetUsd = item.has("maxBudgetUsd") ? item.path("maxBudgetUsd").asDouble() : null;
+            entity.timeoutSeconds = item.has("timeoutSeconds") ? item.path("timeoutSeconds").asInt() : null;
             entity.environment = jsonOrNull(item, "environment");
             JsonNode labelsNode = item.path("labels");
             if (labelsNode.isArray()) {
@@ -468,6 +469,7 @@ public class ImportExportService {
             entity.engine = textOrNull(item, "engine");
             entity.maxSteps = item.has("maxSteps") ? item.path("maxSteps").asInt() : null;
             entity.maxBudgetUsd = item.has("maxBudgetUsd") ? item.path("maxBudgetUsd").asDouble() : null;
+            entity.timeoutSeconds = item.has("timeoutSeconds") ? item.path("timeoutSeconds").asInt() : null;
             entity.environment = jsonOrNull(item, "environment");
             entity.labels.clear();
             JsonNode labelsNode = item.path("labels");
@@ -673,6 +675,7 @@ public class ImportExportService {
         putIfNotNull(n, "engine", e.engine);
         if (e.maxSteps != null) n.put("maxSteps", e.maxSteps);
         if (e.maxBudgetUsd != null) n.put("maxBudgetUsd", e.maxBudgetUsd);
+        if (e.timeoutSeconds != null) n.put("timeoutSeconds", e.timeoutSeconds);
         putIfNotNull(n, "environment", e.environment);
         if (e.labels != null && !e.labels.isEmpty()) {
             var labelsArr = n.putArray("labels");

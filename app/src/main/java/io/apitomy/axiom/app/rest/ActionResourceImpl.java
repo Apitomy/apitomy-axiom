@@ -212,6 +212,7 @@ public class ActionResourceImpl implements ActionResource {
         entity.engine = data.getEngine();
         entity.maxSteps = data.getMaxSteps();
         entity.maxBudgetUsd = data.getMaxBudgetUsd();
+        entity.timeoutSeconds = data.getTimeoutSeconds();
         entity.emitsEvent = data.getEmitsEvent() != null ? data.getEmitsEvent() : false;
         entity.environment = environmentToJson(data.getEnvironment());
         entity.labels.clear();
@@ -247,6 +248,7 @@ public class ActionResourceImpl implements ActionResource {
         actionType.setEngine(entity.engine);
         actionType.setMaxSteps(entity.maxSteps);
         actionType.setMaxBudgetUsd(entity.maxBudgetUsd);
+        actionType.setTimeoutSeconds(entity.timeoutSeconds);
         actionType.setEmitsEvent(entity.emitsEvent);
         actionType.setEnvironment(jsonToEnvironment(entity.environment));
         actionType.setLabels(entity.labels);
