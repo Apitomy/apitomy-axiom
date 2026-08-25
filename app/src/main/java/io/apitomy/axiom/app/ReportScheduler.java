@@ -4,6 +4,7 @@ import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
 import io.apitomy.axiom.core.entities.ReportEntity;
 import io.apitomy.axiom.core.events.SseEvent;
 import io.quarkus.scheduler.Scheduled;
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
@@ -35,6 +36,13 @@ public class ReportScheduler {
     @Inject
     Event<SseEvent> sseEvents;
 
+    private volatile boolean shuttingDown = false;
+
+    @PreDestroy
+    void onShutdown() {
+        shuttingDown = true;
+    }
+
     /**
      * Checks for report definitions that are due and triggers generation.
      * The transactional work (creating reports, advancing nextRunAt) is
@@ -43,6 +51,9 @@ public class ReportScheduler {
     @Scheduled(every = "${axiom.reports.poll-interval:60s}",
             concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     void checkDueReports() {
+        if (shuttingDown) {
+            return;
+        }
         // Step 1: create reports and advance schedules (transactional)
         List<Long> reportIds = createPendingReports();
 

@@ -9,6 +9,7 @@ import io.apitomy.axiom.core.entities.ToolExecutionEntity;
 import io.apitomy.axiom.core.entities.TraceEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.quarkus.scheduler.Scheduled;
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import org.jboss.logging.Logger;
@@ -28,12 +29,22 @@ public class TraceCleanup {
 
     private static final Logger LOG = Logger.getLogger(TraceCleanup.class);
 
+    private volatile boolean shuttingDown = false;
+
+    @PreDestroy
+    void onShutdown() {
+        shuttingDown = true;
+    }
+
     /**
      * Finds and deletes traces older than the retention period.
      */
     @Scheduled(every = "1h", concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     @Transactional
     void cleanup() {
+        if (shuttingDown) {
+            return;
+        }
         RetentionConfigEntity config = RetentionConfigEntity.<RetentionConfigEntity>findAll()
                 .firstResult();
         if (config == null) {

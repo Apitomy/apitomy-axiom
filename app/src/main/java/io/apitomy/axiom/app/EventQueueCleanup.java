@@ -2,6 +2,7 @@ package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.core.entities.EventQueueEntity;
 import io.quarkus.scheduler.Scheduled;
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import org.jboss.logging.Logger;
@@ -19,12 +20,22 @@ public class EventQueueCleanup {
 
     private static final Logger LOG = Logger.getLogger(EventQueueCleanup.class);
 
+    private volatile boolean shuttingDown = false;
+
+    @PreDestroy
+    void onShutdown() {
+        shuttingDown = true;
+    }
+
     /**
      * Deletes processed event queue entries older than one day.
      */
     @Scheduled(every = "1h", concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     @Transactional
     void cleanup() {
+        if (shuttingDown) {
+            return;
+        }
         Instant cutoff = Instant.now().minus(1, ChronoUnit.DAYS);
         long deleted = EventQueueEntity.delete(
                 "processedAt is not null and processedAt < ?1", cutoff);

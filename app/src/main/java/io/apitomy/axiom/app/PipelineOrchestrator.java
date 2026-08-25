@@ -20,6 +20,7 @@ import io.apitomy.axiom.core.services.WorkspaceService;
 import io.apitomy.axiom.manager.ManagerDecision;
 import io.apitomy.axiom.manager.ManagerService;
 import io.quarkus.scheduler.Scheduled;
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
@@ -66,6 +67,13 @@ public class PipelineOrchestrator {
     @Inject
     TraceService traceService;
 
+    private volatile boolean shuttingDown = false;
+
+    @PreDestroy
+    void onShutdown() {
+        shuttingDown = true;
+    }
+
     /**
      * Polls the event queue every 5 seconds and processes one pending event at a time.
      * Events are processed sequentially to avoid race conditions in the Manager.
@@ -81,6 +89,9 @@ public class PipelineOrchestrator {
     @Scheduled(every = "${axiom.pipeline.poll-interval:5s}",
                concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     void processNextEvent() {
+        if (shuttingDown) {
+            return;
+        }
         EventQueueEntity queueEntry = findNextPendingEvent();
         if (queueEntry == null) {
             return;
