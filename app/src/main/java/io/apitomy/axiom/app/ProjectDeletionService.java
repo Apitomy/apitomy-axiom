@@ -9,6 +9,8 @@ import io.apitomy.axiom.core.entities.ThreadEntryEntity;
 import io.apitomy.axiom.core.services.WorkspaceService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
+import jakarta.transaction.Transactional.TxType;
 
 /**
  * Handles the full cascade deletion of a project and all its associated data.
@@ -26,6 +28,7 @@ public class ProjectDeletionService {
      *
      * @param project the project to delete (must already be in Completed status)
      */
+    @Transactional(TxType.REQUIRES_NEW)
     public void deleteProject(ProjectEntity project) {
         long projectId = project.id;
         ThreadEntryEntity.delete("projectId", projectId);
