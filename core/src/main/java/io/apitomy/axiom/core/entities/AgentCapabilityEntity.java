@@ -1,6 +1,7 @@
 package io.apitomy.axiom.core.entities;
 
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.IdClass;
@@ -16,6 +17,7 @@ import java.util.Objects;
 public class AgentCapabilityEntity extends PanacheEntityBase {
 
     @Id
+    @Column(name = "agent_id")
     public Long agentId;
 
     @Id
