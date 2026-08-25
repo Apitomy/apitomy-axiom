@@ -7,6 +7,7 @@ import io.apitomy.axiom.core.entities.EventQueueEntity;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
 import io.apitomy.axiom.core.entities.TraceEntity;
 import io.quarkus.scheduler.Scheduled;
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import org.jboss.logging.Logger;
@@ -25,12 +26,22 @@ public class EventCleanup {
 
     private static final Logger LOG = Logger.getLogger(EventCleanup.class);
 
+    private volatile boolean shuttingDown = false;
+
+    @PreDestroy
+    void onShutdown() {
+        shuttingDown = true;
+    }
+
     /**
      * Finds and deletes events older than the retention period.
      */
     @Scheduled(every = "1h", concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     @Transactional
     void cleanup() {
+        if (shuttingDown) {
+            return;
+        }
         RetentionConfigEntity config = RetentionConfigEntity.<RetentionConfigEntity>findAll()
                 .firstResult();
         if (config == null) {

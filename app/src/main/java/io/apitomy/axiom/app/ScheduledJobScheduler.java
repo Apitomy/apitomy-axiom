@@ -4,6 +4,7 @@ import io.apitomy.axiom.core.entities.ScheduledJobEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
 import io.apitomy.axiom.core.events.SseEvent;
 import io.quarkus.scheduler.Scheduled;
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
@@ -34,6 +35,13 @@ public class ScheduledJobScheduler {
     @Inject
     Event<SseEvent> sseEvents;
 
+    private volatile boolean shuttingDown = false;
+
+    @PreDestroy
+    void onShutdown() {
+        shuttingDown = true;
+    }
+
     /**
      * Checks for scheduled jobs that are due and triggers execution.
      * The transactional work (creating runs, advancing nextRunAt) is
@@ -42,6 +50,9 @@ public class ScheduledJobScheduler {
     @Scheduled(every = "${axiom.scheduled-jobs.poll-interval:60s}",
             concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     void checkDueJobs() {
+        if (shuttingDown) {
+            return;
+        }
         List<Long> runIds = createPendingRuns();
 
         for (Long runId : runIds) {
