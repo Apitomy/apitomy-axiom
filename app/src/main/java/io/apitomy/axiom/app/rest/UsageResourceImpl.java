@@ -45,7 +45,7 @@ public class UsageResourceImpl implements UsageResource {
     public AiUsageSearchResults listAiUsage(BigInteger page, BigInteger limit,
                                            String filterInvocationType,
                                            BigInteger filterProjectId,
-                                           BigInteger filterActorId,
+                                           BigInteger filterAgentId,
                                            String filterActionType,
                                            String filterDateFrom,
                                            String filterDateTo,
@@ -64,9 +64,9 @@ public class UsageResourceImpl implements UsageResource {
             hql.append(" and projectId = :projectId");
             params.put("projectId", filterProjectId.longValue());
         }
-        if (filterActorId != null) {
-            hql.append(" and actorId = :actorId");
-            params.put("actorId", filterActorId.longValue());
+        if (filterAgentId != null) {
+            hql.append(" and agentId = :agentId");
+            params.put("agentId", filterAgentId.longValue());
         }
         if (filterActionType != null && !filterActionType.isBlank()) {
             hql.append(" and lower(actionType) like :actionType");
