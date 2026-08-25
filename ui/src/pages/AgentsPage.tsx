@@ -42,7 +42,6 @@ export function AgentsPage() {
     const [form, setForm] = useState<NewAgent>({
         name: "", agentType: "claude-code", capabilities: [],
     });
-    const [capabilitiesText, setCapabilitiesText] = useState("");
 
     const load = useCallback(() => {
         setLoading(true);
@@ -53,15 +52,12 @@ export function AgentsPage() {
 
     const openCreate = () => {
         setEditing(null);
-        setForm({ name: "", agentType: "claude-code", capabilities: [] });
-        setCapabilitiesText("");
+        setForm({ name: "", agentType: "claude-code", capabilities: ["*"] });
         setIsModalOpen(true);
     };
 
     const handleSave = () => {
-        const caps = capabilitiesText.split(",").map((s) => s.trim()).filter(Boolean);
-        const data = { ...form, capabilities: caps };
-        const action = editing ? updateAgent(editing.id, data) : createAgent(data);
+        const action = editing ? updateAgent(editing.id, form) : createAgent(form);
         action.then(() => { setIsModalOpen(false); load(); }).catch(console.error);
     };
 
@@ -131,9 +127,6 @@ export function AgentsPage() {
                                 <FormSelectOption value="opencode" label="OpenCode" />
                                 <FormSelectOption value="copilot" label="Copilot" />
                             </FormSelect>
-                        </FormGroup>
-                        <FormGroup label="Capabilities" fieldId="capabilities">
-                            <TextInput id="capabilities" value={capabilitiesText} onChange={(_e, v) => setCapabilitiesText(v)} placeholder="analyze, implement, review (comma-separated)" />
                         </FormGroup>
                     </Form>
                 </ModalBody>
