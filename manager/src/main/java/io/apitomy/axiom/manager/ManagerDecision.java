@@ -17,12 +17,12 @@ public record ManagerDecision(
         String actionType,
 
         /**
-         * Optional hint for which actor should be assigned the task.
+         * Optional hint for which agent should be assigned the task.
          */
-        String actorHint,
+        String agentHint,
 
         /**
-         * Context or instructions to pass to the actor as task input.
+         * Context or instructions to pass to the agent as task input.
          */
         String inputContext,
 

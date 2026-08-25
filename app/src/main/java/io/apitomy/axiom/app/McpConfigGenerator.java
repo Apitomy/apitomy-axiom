@@ -2,12 +2,12 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.apitomy.axiom.actors.claudecode.ClaudeCodeMcpManager;
+import io.apitomy.axiom.agents.claudecode.ClaudeCodeMcpManager;
 import io.apitomy.axiom.core.entities.McpServerEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
-import io.apitomy.axiom.engine.copilot.CopilotMcpManager;
-import io.apitomy.axiom.engine.opencode.OpenCodeMcpManager;
-import io.apitomy.axiom.engine.opencode.OpenCodeMcpManager.McpServerConfig;
+import io.apitomy.axiom.agents.copilot.CopilotMcpManager;
+import io.apitomy.axiom.agents.opencode.OpenCodeMcpManager;
+import io.apitomy.axiom.agents.opencode.OpenCodeMcpManager.McpServerConfig;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -40,9 +40,9 @@ import java.util.Map;
  * {@code ~/.axiom/mcp-server/} and {@code npm install} is run once to resolve
  * dependencies. Subsequent invocations reuse the installed project.</p>
  *
- * <p>This class also implements {@link io.apitomy.axiom.engine.spi.AiEngineMcpManager}
- * for the Claude Code and Copilot engines, via the {@link io.apitomy.axiom.actors.claudecode.ClaudeCodeMcpManager}
- * / {@link io.apitomy.axiom.engine.copilot.CopilotMcpManager} delegate pattern. On
+ * <p>This class also implements {@link io.apitomy.axiom.agents.spi.AgentMcpManager}
+ * for the Claude Code and Copilot engines, via the {@link io.apitomy.axiom.agents.claudecode.ClaudeCodeMcpManager}
+ * / {@link io.apitomy.axiom.agents.copilot.CopilotMcpManager} delegate pattern. On
  * initialization, it registers itself as the MCP config delegate for both engines
  * (both consume the same {@code mcpServers} JSON config format).</p>
  */

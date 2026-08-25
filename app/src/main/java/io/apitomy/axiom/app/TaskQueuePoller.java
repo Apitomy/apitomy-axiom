@@ -9,7 +9,7 @@ import org.jboss.logging.Logger;
 import java.util.List;
 
 /**
- * Polls for pending tasks and dispatches them to actors via the TaskExecutionService.
+ * Polls for pending tasks and dispatches them to agents via the TaskExecutionService.
  * Respects project-level task serialization — only one active task per project.
  */
 @ApplicationScoped

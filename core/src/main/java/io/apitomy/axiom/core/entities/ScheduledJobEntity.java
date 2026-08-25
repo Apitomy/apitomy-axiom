@@ -16,7 +16,7 @@ import java.util.List;
 /**
  * Defines a scheduled job that runs on a configurable CRON-style schedule.
  * Each definition produces {@link ScheduledJobRunEntity} instances when executed.
- * Jobs are global (not project-scoped) and support both AI actor and script execution modes.
+ * Jobs are global (not project-scoped) and support both AI agent and script execution modes.
  */
 @Entity
 @Table(name = "scheduled_job")
@@ -24,6 +24,8 @@ public class ScheduledJobEntity extends PanacheEntity {
 
     @Column(nullable = false, unique = true)
     public String name;
+
+    public String slug;
 
     @Column(columnDefinition = "TEXT")
     public String description;
@@ -56,13 +58,13 @@ public class ScheduledJobEntity extends PanacheEntity {
     public Instant lastRunAt;
 
     /**
-     * Execution mode: "actor" for AI agent execution, "script" for bash script execution.
+     * Execution mode: "agent" for AI agent execution, "script" for bash script execution.
      */
     @Column(name = "execution_mode", nullable = false)
     public String executionMode;
 
     /**
-     * Prompt template for actor mode. Supports placeholders: {{jobName}}, {{apiBaseUrl}}.
+     * Prompt template for agent mode. Supports placeholders: {{jobName}}, {{apiBaseUrl}}.
      */
     @Column(name = "prompt_template", columnDefinition = "TEXT")
     public String promptTemplate;
@@ -75,12 +77,12 @@ public class ScheduledJobEntity extends PanacheEntity {
     public String scriptTemplate;
 
     /**
-     * Optional AI model override for actor mode (e.g. "claude-sonnet-4-6").
+     * Optional AI model override for agent mode (e.g. "claude-sonnet-4-6").
      */
     public String model;
 
     /**
-     * Optional AI engine override for actor mode (e.g. "claude-code", "opencode").
+     * Optional AI engine override for agent mode (e.g. "claude-code", "opencode").
      */
     public String engine;
 

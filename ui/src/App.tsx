@@ -6,8 +6,8 @@ import { Page } from "@patternfly/react-core";
 import { DashboardsPage } from "./pages/DashboardsPage";
 import { DashboardViewPage } from "./pages/DashboardViewPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
-import { ActorsPage } from "./pages/ActorsPage";
-import { ActorDetailPage } from "./pages/ActorDetailPage";
+import { AgentsPage } from "./pages/AgentsPage";
+import { AgentDetailPage } from "./pages/AgentDetailPage";
 import { ManagerConfigPage } from "./pages/ManagerConfigPage";
 import { ActionTypesPage } from "./pages/ActionTypesPage";
 import { ActivityLogPage } from "./pages/ActivityLogPage";
@@ -113,8 +113,8 @@ export function App() {
                         <Route path="/projects" element={<ProjectsPage />} />
                         <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
                         <Route path="/engine" element={<EngineSettingsPage />} />
-                        <Route path="/actors" element={<ActorsPage />} />
-                        <Route path="/actors/:actorId" element={<ActorDetailPage />} />
+                        <Route path="/agents" element={<AgentsPage />} />
+                        <Route path="/agents/:agentId" element={<AgentDetailPage />} />
                         <Route path="/manager" element={<ManagerConfigPage />} />
                         <Route path="/action-types" element={<ActionTypesPage />} />
                         <Route path="/action-types/:actionTypeId" element={<ActionTypeDetailPage />} />

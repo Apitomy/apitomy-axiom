@@ -1,7 +1,7 @@
 package io.apitomy.axiom.manager;
 
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
-import io.apitomy.axiom.core.entities.ActorEntity;
+import io.apitomy.axiom.core.entities.AgentEntity;
 import io.apitomy.axiom.core.entities.EventEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
@@ -32,14 +32,14 @@ class ManagerPromptBuilderTest {
     void testFormatActionTypes() {
         ActionTypeEntity at = new ActionTypeEntity();
         at.name = "analyze";
-        at.executionMode = "actor";
+        at.executionMode = "agent";
         at.description = "Analyze an issue";
 
         String formatted = ManagerPromptBuilder.formatActionTypes(List.of(at));
 
         assertTrue(formatted.contains("Available Action Types"));
         assertTrue(formatted.contains("analyze"));
-        assertTrue(formatted.contains("actor"));
+        assertTrue(formatted.contains("agent"));
         assertTrue(formatted.contains("Analyze an issue"));
     }
 
@@ -51,19 +51,18 @@ class ManagerPromptBuilderTest {
     }
 
     @Test
-    void testFormatActors() {
-        ActorEntity actor = new ActorEntity();
-        actor.name = "Claude Agent";
-        actor.type = "ai-agent";
-        actor.description = "AI agent powered by Claude";
-        actor.capabilities = "analyze,implement";
+    void testFormatAgents() {
+        AgentEntity agent = new AgentEntity();
+        agent.name = "Claude Agent";
+        agent.agentType = "ai-agent";
+        agent.description = "AI agent powered by Claude";
 
-        String formatted = ManagerPromptBuilder.formatActors(List.of(actor));
+        String formatted = ManagerPromptBuilder.formatAgents(List.of(agent));
 
-        assertTrue(formatted.contains("Available Actors"));
+        assertTrue(formatted.contains("Available Agents"));
         assertTrue(formatted.contains("Claude Agent"));
         assertTrue(formatted.contains("ai-agent"));
-        assertTrue(formatted.contains("analyze,implement"));
+        assertTrue(formatted.contains("AI agent powered by Claude"));
     }
 
     @Test
@@ -77,16 +76,16 @@ class ManagerPromptBuilderTest {
 
         ActionTypeEntity at = new ActionTypeEntity();
         at.name = "analyze";
-        at.executionMode = "actor";
+        at.executionMode = "agent";
         at.description = "Analyze an issue";
 
-        ActorEntity actor = new ActorEntity();
-        actor.name = "Blinky";
-        actor.type = "ai-agent";
+        AgentEntity agent = new AgentEntity();
+        agent.name = "Blinky";
+        agent.agentType = "ai-agent";
 
         String prompt = ManagerPromptBuilder.buildUserPrompt(
                 ManagerPromptBuilder.DEFAULT_PROMPT_TEMPLATE,
-                event, List.of(at), List.of(actor), null, Collections.emptyList());
+                event, List.of(at), List.of(agent), null, Collections.emptyList());
 
         assertTrue(prompt.contains("github"));
         assertTrue(prompt.contains("issue-created"));

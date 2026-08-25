@@ -24,6 +24,8 @@ public class ReportDefinitionEntity extends PanacheEntity {
     @Column(nullable = false)
     public String name;
 
+    public String slug;
+
     @Column(columnDefinition = "TEXT")
     public String description;
 

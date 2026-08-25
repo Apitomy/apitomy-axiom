@@ -1,7 +1,8 @@
 package io.apitomy.axiom.app.rest;
 
-import io.apitomy.axiom.actors.human.HumanActor;
+import io.apitomy.axiom.agents.spi.AgentResult;
 import io.apitomy.axiom.app.ProjectDeletionService;
+import io.apitomy.axiom.app.TaskExecutionService;
 import io.apitomy.axiom.api.ProjectsResource;
 import io.apitomy.axiom.api.beans.Event;
 import io.apitomy.axiom.api.beans.Trace;
@@ -61,9 +62,6 @@ public class ProjectsResourceImpl implements ProjectsResource {
     private static final Logger LOG = Logger.getLogger(ProjectsResourceImpl.class);
 
     @Inject
-    HumanActor humanActor;
-
-    @Inject
     EntityManager entityManager;
 
     @Inject
@@ -74,6 +72,9 @@ public class ProjectsResourceImpl implements ProjectsResource {
 
     @Inject
     ProjectDeletionService projectDeletionService;
+
+    @Inject
+    TaskExecutionService taskExecutionService;
 
     // ── Projects ──────────────────────────────────────────────────────
 
@@ -279,7 +280,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
         entity.projectId = projectId;
         entity.actionType = data.getActionType();
         entity.createdBy = "user";
-        entity.assignedActor = data.getAssignedActor();
+        entity.assignedAgent = data.getAssignedAgent();
         entity.status = "Pending";
         entity.input = data.getInput();
         entity.createdOn = Instant.now();
@@ -336,7 +337,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
         findProjectOrThrow(projectId);
         ThreadEntryEntity entry = new ThreadEntryEntity();
         entry.projectId = projectId;
-        entry.authorType = "actor";
+        entry.authorType = "agent";
         entry.entryType = "message";
         entry.content = data.getContent();
         entry.createdOn = Instant.now();
@@ -456,10 +457,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
                     "Task is not awaiting input (status: " + task.status + ")", 409);
         }
 
-        boolean accepted = humanActor.submitResponse(tid, data.getResponse());
-        if (!accepted) {
-            throw new WebApplicationException("Task is not pending a human response", 409);
-        }
+        taskExecutionService.onTaskCompleted(tid, AgentResult.success(data.getResponse()));
     }
 
     // ── Task Execution Log ─────────────────────────────────────────────
@@ -530,7 +528,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
         task.setEventId(entity.eventId);
         task.setActionType(entity.actionType);
         task.setCreatedBy(Task.CreatedBy.fromValue(entity.createdBy));
-        task.setAssignedActor(entity.assignedActor);
+        task.setAssignedAgent(entity.assignedAgent);
         task.setStatus(Task.Status.fromValue(entity.status));
         task.setInput(entity.input);
         task.setOutput(entity.output);

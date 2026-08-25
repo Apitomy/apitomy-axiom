@@ -54,10 +54,10 @@ public class AssistantSessionManager {
     @ConfigProperty(name = "axiom.assistant.max-sessions", defaultValue = "3")
     int maxSessions;
 
-    @ConfigProperty(name = "axiom.ai-engine", defaultValue = "claude-code")
+    @ConfigProperty(name = "axiom.agent.default-type", defaultValue = "claude-code")
     String aiEngine;
 
-    @ConfigProperty(name = "axiom.claude-code.executable", defaultValue = "claude")
+    @ConfigProperty(name = "axiom.agent.claude-code.executable", defaultValue = "claude")
     String claudeExecutable;
 
     @ConfigProperty(name = "quarkus.http.port", defaultValue = "9090")

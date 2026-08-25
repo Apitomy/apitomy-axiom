@@ -321,7 +321,7 @@ public class ImportExportService {
             ActionTypeEntity entity = new ActionTypeEntity();
             entity.name = item.path("name").asText();
             entity.description = textOrNull(item, "description");
-            entity.executionMode = item.path("executionMode").asText("actor");
+            entity.executionMode = item.path("executionMode").asText("agent");
             entity.userTriggerable = item.path("userTriggerable").asBoolean(false);
             entity.managerTriggerable = item.path("managerTriggerable").asBoolean(false);
             entity.emitsEvent = item.path("emitsEvent").asBoolean(false);
@@ -456,7 +456,7 @@ public class ImportExportService {
                 entity.name = name;
             }
             entity.description = textOrNull(item, "description");
-            entity.executionMode = item.path("executionMode").asText("actor");
+            entity.executionMode = item.path("executionMode").asText("agent");
             entity.userTriggerable = item.path("userTriggerable").asBoolean(false);
             entity.managerTriggerable = item.path("managerTriggerable").asBoolean(false);
             entity.emitsEvent = item.path("emitsEvent").asBoolean(false);
@@ -730,7 +730,7 @@ public class ImportExportService {
             entity.schedule = item.path("schedule").asText("none");
             entity.scheduleTime = textOrNull(item, "scheduleTime");
             entity.scheduleDayOfWeek = textOrNull(item, "scheduleDayOfWeek");
-            entity.executionMode = item.path("executionMode").asText("actor");
+            entity.executionMode = item.path("executionMode").asText("agent");
             entity.promptTemplate = textOrNull(item, "promptTemplate");
             entity.scriptTemplate = textOrNull(item, "scriptTemplate");
             entity.model = textOrNull(item, "model");
@@ -769,7 +769,7 @@ public class ImportExportService {
             entity.schedule = item.path("schedule").asText("none");
             entity.scheduleTime = textOrNull(item, "scheduleTime");
             entity.scheduleDayOfWeek = textOrNull(item, "scheduleDayOfWeek");
-            entity.executionMode = item.path("executionMode").asText("actor");
+            entity.executionMode = item.path("executionMode").asText("agent");
             entity.promptTemplate = textOrNull(item, "promptTemplate");
             entity.scriptTemplate = textOrNull(item, "scriptTemplate");
             entity.model = textOrNull(item, "model");

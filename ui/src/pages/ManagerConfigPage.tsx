@@ -103,7 +103,7 @@ export function ManagerConfigPage() {
                             The prompt template is sent as the user message for each event evaluation.
                             Placeholders are substituted at runtime:{" "}
                             <code>{"{{actionTypes}}"}</code> (list of configured action types),{" "}
-                            <code>{"{{actors}}"}</code> (list of configured actors),{" "}
+                            <code>{"{{agents}}"}</code> (list of configured agents),{" "}
                             <code>{"{{source}}"}</code>,{" "}
                             <code>{"{{eventType}}"}</code>,{" "}
                             <code>{"{{issueRef}}"}</code>,{" "}

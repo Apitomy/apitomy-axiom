@@ -166,7 +166,7 @@ class AssistantItemValidatorTest {
                 {
                   "name": "my-action",
                   "description": "A test action",
-                  "executionMode": "actor",
+                  "executionMode": "agent",
                   "userTriggerable": true,
                   "managerTriggerable": false,
                   "promptTemplate": "Do the thing: {{input}}"
@@ -226,8 +226,8 @@ class AssistantItemValidatorTest {
         Path file = writeJson(tempDir, "action-types/no-prompt.json", """
                 {
                   "name": "no-prompt",
-                  "description": "Actor action without prompt",
-                  "executionMode": "actor"
+                  "description": "Agent action without prompt",
+                  "executionMode": "agent"
                 }
                 """);
 

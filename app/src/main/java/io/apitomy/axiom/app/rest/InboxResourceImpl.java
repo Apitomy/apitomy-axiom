@@ -2,8 +2,7 @@ package io.apitomy.axiom.app.rest;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.apitomy.axiom.actors.human.HumanActor;
-import io.apitomy.axiom.actors.spi.TaskResult;
+import io.apitomy.axiom.agents.spi.AgentResult;
 import io.apitomy.axiom.api.InboxResource;
 import io.apitomy.axiom.api.beans.HumanContext;
 import io.apitomy.axiom.api.beans.HumanContextReference;
@@ -47,9 +46,6 @@ public class InboxResourceImpl implements InboxResource {
 
     private static final Logger LOG = Logger.getLogger(InboxResourceImpl.class);
     private static final ObjectMapper objectMapper = new ObjectMapper();
-
-    @Inject
-    HumanActor humanActor;
 
     @Inject
     InboxResponseValidator responseValidator;
@@ -166,8 +162,8 @@ public class InboxResourceImpl implements InboxResource {
         LOG.infof("Created direct human task %d (%s) for project %d",
                 task.id, task.actionType, projectId);
 
-        // Register with HumanActor and wire completion callback
-        taskExecutionService.registerDirectHumanTask(task.id);
+        // Mark the task as awaiting human input
+        taskExecutionService.markTaskAwaitingInput(task.id);
 
         return toInboxItem(task, project.name);
     }
@@ -213,16 +209,7 @@ public class InboxResourceImpl implements InboxResource {
         // Serialize response to JSON and submit
         try {
             String responseJson = objectMapper.writeValueAsString(responseMap);
-            boolean accepted = humanActor.submitResponse(tid, responseJson);
-            if (!accepted) {
-                // The in-memory pending-future used by HumanActor does not survive an
-                // application restart. The database status (AwaitingInput, checked above)
-                // is the real source of truth, so complete the task directly rather than
-                // failing just because no in-memory future is tracking it.
-                LOG.infof("No in-memory pending future for task %d (likely due to a restart); "
-                        + "completing directly from database state", tid);
-                taskExecutionService.onTaskCompleted(tid, TaskResult.success(responseJson).build());
-            }
+            taskExecutionService.onTaskCompleted(tid, AgentResult.success(responseJson));
 
             LOG.infof("Inbox item %d completed with structured response", tid);
         } catch (WebApplicationException e) {

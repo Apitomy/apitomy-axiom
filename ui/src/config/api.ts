@@ -73,7 +73,7 @@ export interface Task {
     eventId?: number;
     actionType: string;
     createdBy: string;
-    assignedActor?: number;
+    assignedAgent?: number;
     status: string;
     input?: string;
     output?: string;
@@ -293,7 +293,7 @@ export async function fetchProjectTasks(projectId: number): Promise<Task[]> {
 
 export interface NewTask {
     actionType: string;
-    assignedActor?: number;
+    assignedAgent?: number;
     input?: string;
 }
 
@@ -445,57 +445,58 @@ export async function deleteActionType(id: number): Promise<void> {
     if (!response.ok) throw new Error(`Failed to delete action type: ${response.status}`);
 }
 
-// ── Actors ────────────────────────────────────────────────────────
+// ── Agents ────────────────────────────────────────────────────────
 
-export interface Actor {
+export interface Agent {
     id: number;
     name: string;
     description?: string;
-    type: string;
+    agentType: string;
+    enabled?: boolean;
     capabilities?: string[];
 }
 
-export type NewActor = Omit<Actor, "id">;
+export type NewAgent = Omit<Agent, "id">;
 
-export async function fetchActors(): Promise<Actor[]> {
-    const response = await fetch(`${API}/actors`);
-    if (!response.ok) throw new Error(`Failed to fetch actors: ${response.status}`);
+export async function fetchAgents(): Promise<Agent[]> {
+    const response = await fetch(`${API}/agents`);
+    if (!response.ok) throw new Error(`Failed to fetch agents: ${response.status}`);
     return response.json();
 }
 
-export async function createActor(actor: NewActor): Promise<Actor> {
-    const response = await fetch(`${API}/actors`, {
+export async function createAgent(agent: NewAgent): Promise<Agent> {
+    const response = await fetch(`${API}/agents`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(actor),
+        body: JSON.stringify(agent),
     });
-    if (!response.ok) throw new Error(`Failed to create actor: ${response.status}`);
+    if (!response.ok) throw new Error(`Failed to create agent: ${response.status}`);
     return response.json();
 }
 
-export async function updateActor(id: number, actor: NewActor): Promise<Actor> {
-    const response = await fetch(`${API}/actors/${id}`, {
+export async function updateAgent(id: number, agent: NewAgent): Promise<Agent> {
+    const response = await fetch(`${API}/agents/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(actor),
+        body: JSON.stringify(agent),
     });
-    if (!response.ok) throw new Error(`Failed to update actor: ${response.status}`);
+    if (!response.ok) throw new Error(`Failed to update agent: ${response.status}`);
     return response.json();
 }
 
-export async function deleteActor(id: number): Promise<void> {
-    const response = await fetch(`${API}/actors/${id}`, { method: "DELETE" });
-    if (!response.ok) throw new Error(`Failed to delete actor: ${response.status}`);
+export async function deleteAgent(id: number): Promise<void> {
+    const response = await fetch(`${API}/agents/${id}`, { method: "DELETE" });
+    if (!response.ok) throw new Error(`Failed to delete agent: ${response.status}`);
 }
 
-export async function fetchActor(id: number): Promise<Actor> {
-    const response = await fetch(`${API}/actors/${id}`);
-    if (!response.ok) throw new Error(`Failed to fetch actor: ${response.status}`);
+export async function fetchAgent(id: number): Promise<Agent> {
+    const response = await fetch(`${API}/agents/${id}`);
+    if (!response.ok) throw new Error(`Failed to fetch agent: ${response.status}`);
     return response.json();
 }
 
-export async function fetchActorTasks(
-    actorId: number, page = 1, limit = 20,
+export async function fetchAgentTasks(
+    agentId: number, page = 1, limit = 20,
     filterActionType?: string, filterStatus?: string
 ): Promise<SearchResults<Task>> {
     const params = new URLSearchParams();
@@ -503,8 +504,8 @@ export async function fetchActorTasks(
     params.set("limit", String(limit));
     if (filterActionType) params.set("filterActionType", filterActionType);
     if (filterStatus) params.set("filterStatus", filterStatus);
-    const response = await fetch(`${API}/actors/${actorId}/tasks?${params}`);
-    if (!response.ok) throw new Error(`Failed to fetch actor tasks: ${response.status}`);
+    const response = await fetch(`${API}/agents/${agentId}/tasks?${params}`);
+    if (!response.ok) throw new Error(`Failed to fetch agent tasks: ${response.status}`);
     return response.json();
 }
 
@@ -973,6 +974,7 @@ export interface ReportDefinition {
     id: number;
     name: string;
     description?: string;
+    slug?: string;
     schedule: string;
     scheduleTime?: string;
     scheduleDayOfWeek?: string;
@@ -1164,7 +1166,7 @@ export interface AiUsage {
     taskId?: number;
     eventId?: number;
     projectId?: number;
-    actorId?: number;
+    agentId?: number;
     actionType?: string;
     model?: string;
     costUsd?: number;
@@ -1183,7 +1185,7 @@ export interface AiUsageSearchResults extends SearchResults<AiUsage> {
 export async function fetchUsage(
     page = 1, limit = 20,
     filterInvocationType?: string, filterProjectId?: number,
-    filterActorId?: number, filterActionType?: string,
+    filterAgentId?: number, filterActionType?: string,
     filterDateFrom?: string, filterDateTo?: string,
     filterLabels?: string
 ): Promise<AiUsageSearchResults> {
@@ -1192,7 +1194,7 @@ export async function fetchUsage(
     params.set("limit", String(limit));
     if (filterInvocationType) params.set("filterInvocationType", filterInvocationType);
     if (filterProjectId != null) params.set("filterProjectId", String(filterProjectId));
-    if (filterActorId != null) params.set("filterActorId", String(filterActorId));
+    if (filterAgentId != null) params.set("filterAgentId", String(filterAgentId));
     if (filterActionType) params.set("filterActionType", filterActionType);
     if (filterDateFrom) params.set("filterDateFrom", filterDateFrom);
     if (filterDateTo) params.set("filterDateTo", filterDateTo);
@@ -1901,6 +1903,7 @@ export interface ScheduledJob {
     id: number;
     name: string;
     description?: string;
+    slug?: string;
     labels?: string[];
     enabled: boolean;
     schedule: string;

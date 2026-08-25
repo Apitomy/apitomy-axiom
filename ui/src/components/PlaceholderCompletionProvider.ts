@@ -90,7 +90,7 @@ export function registerPlaceholderCompletions(
  */
 export const MANAGER_PLACEHOLDERS: PlaceholderItem[] = [
     { name: "actionTypes", description: "Formatted list of all configured action types with names and descriptions" },
-    { name: "actors", description: "Formatted list of all configured actors with names, types, and capabilities" },
+    { name: "agents", description: "Formatted list of all configured agents with names, types, and capabilities" },
     { name: "source", description: "Event source (e.g. 'github')" },
     { name: "eventType", description: "Event type (e.g. 'issue-created', 'comment-added')" },
     { name: "issueRef", description: "Issue reference (e.g. 'owner/repo#42')" },

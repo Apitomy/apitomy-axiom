@@ -54,7 +54,7 @@ export function ActionTypeDetailPage() {
 
     const [actionType, setActionType] = useState<ActionType | null>(null);
     const [form, setForm] = useState<NewActionType>({
-        name: "", executionMode: "actor", userTriggerable: false, managerTriggerable: true, emitsEvent: true,
+        name: "", executionMode: "agent", userTriggerable: false, managerTriggerable: true, emitsEvent: true,
     });
     const [tools, setTools] = useState<string[]>([]);
     const [envVars, setEnvVars] = useState<Record<string, string>>({});
@@ -240,7 +240,7 @@ export function ActionTypeDetailPage() {
                         <InfoTab form={form} updateForm={updateForm} availableModels={availableModels} availableEngines={availableEngines} onEditLabels={() => setIsLabelsOpen(true)} />
                     </TabContent>
                 </Tab>
-                {form.executionMode === "actor" && (
+                {form.executionMode === "agent" && (
                     <Tab eventKey={1} title={<TabTitleText>Allowed Tools ({tools.length})</TabTitleText>}>
                         <TabContent id="tools-tab" eventKey={1} activeKey={activeTab} style={{ marginTop: "24px" }}>
                             <ToolListEditor
@@ -258,7 +258,7 @@ export function ActionTypeDetailPage() {
                                 emptyContent={
                                     <EmptyState>
                                         <EmptyStateBody>
-                                            No tools configured. The actor will use minimal read-only defaults.
+                                            No tools configured. The agent will use minimal read-only defaults.
                                         </EmptyStateBody>
                                     </EmptyState>
                                 }
@@ -280,7 +280,7 @@ export function ActionTypeDetailPage() {
                         />
                     </TabContent>
                 </Tab>
-                {form.executionMode === "actor" && (
+                {form.executionMode === "agent" && (
                     <Tab eventKey={3} title={<TabTitleText>Prompt Template</TabTitleText>}>
                         <TabContent id="prompt-tab" eventKey={3} activeKey={activeTab} style={{ marginTop: "24px" }}>
                             <PromptTemplateTab
@@ -329,7 +329,7 @@ export function ActionTypeDetailPage() {
                     onClose={() => setAiModalOpen(false)}
                 />
             )}
-            {form.executionMode === "actor" && (
+            {form.executionMode === "agent" && (
                 <ActionTypeAiModal
                     isOpen={aiModalOpen}
                     promptTemplate={form.promptTemplate || ""}
@@ -393,11 +393,11 @@ function InfoTab({ form, updateForm, availableModels, availableEngines, onEditLa
                     value={form.executionMode}
                     onChange={(_e, v) => updateForm({ executionMode: v })}
                 >
-                    <FormSelectOption value="actor" label="Actor — executed by an AI agent or human" />
+                    <FormSelectOption value="agent" label="Agent — executed by an AI agent" />
                     <FormSelectOption value="script" label="Script — executes a bash script" />
                 </FormSelect>
             </FormGroup>
-            {form.executionMode === "actor" && availableEngines.length > 1 && (
+            {form.executionMode === "agent" && availableEngines.length > 1 && (
                 <FormGroup label="AI Engine" fieldId="engine">
                     <HelperText>
                         <HelperTextItem>AI engine to use for this action type. Select 'Global default' to use the system-wide setting.</HelperTextItem>
@@ -414,7 +414,7 @@ function InfoTab({ form, updateForm, availableModels, availableEngines, onEditLa
                     </FormSelect>
                 </FormGroup>
             )}
-            {form.executionMode === "actor" && (
+            {form.executionMode === "agent" && (
                 <FormGroup label="Max Steps" fieldId="maxSteps">
                     <HelperText>
                         <HelperTextItem>Maximum number of agent steps/turns. Leave empty to use the global default.</HelperTextItem>
@@ -428,7 +428,7 @@ function InfoTab({ form, updateForm, availableModels, availableEngines, onEditLa
                     />
                 </FormGroup>
             )}
-            {form.executionMode === "actor" && (
+            {form.executionMode === "agent" && (
                 <FormGroup label="Max Budget (USD)" fieldId="maxBudgetUsd">
                     <HelperText>
                         <HelperTextItem>Maximum budget in USD for this action type. Leave empty to use the global default.</HelperTextItem>
@@ -442,7 +442,7 @@ function InfoTab({ form, updateForm, availableModels, availableEngines, onEditLa
                     />
                 </FormGroup>
             )}
-            {form.executionMode === "actor" && (
+            {form.executionMode === "agent" && (
                 <FormGroup label="Model" fieldId="model">
                     <HelperText>
                         <HelperTextItem>AI model to use for this action type. Select 'Global default' to use the system-wide setting.</HelperTextItem>

@@ -317,12 +317,12 @@ export function ConfigurationPacksPage() {
                                             <Flex alignItems={{ default: "alignItemsCenter" }} style={{ gap: "8px" }}>
                                                 <FlexItem><span style={{ fontWeight: 600 }}>{item.name}</span></FlexItem>
                                                 <FlexItem>
-                                                    <Label isCompact color={at?.executionMode === "actor" ? "blue" : "orange"}>
+                                                    <Label isCompact color={at?.executionMode === "agent" ? "blue" : "orange"}>
                                                         {at?.executionMode || "—"}
                                                     </Label>
                                                 </FlexItem>
                                                 <FlexItem className="axiom-text-subtle" style={{ fontSize: "12px" }}>
-                                                    {at?.executionMode === "actor" ? `${at?.allowedTools?.length || 0} tools` : ""}
+                                                    {at?.executionMode === "agent" ? `${at?.allowedTools?.length || 0} tools` : ""}
                                                 </FlexItem>
                                             </Flex>
                                         );
@@ -825,12 +825,12 @@ function ActionTypePickerModal({ isOpen, onClose, availableItems, modalSelected,
                                     </Td>
                                     <Td>{at.name}</Td>
                                     <Td>
-                                        <Label isCompact color={at.executionMode === "actor" ? "blue" : "orange"}>
+                                        <Label isCompact color={at.executionMode === "agent" ? "blue" : "orange"}>
                                             {at.executionMode}
                                         </Label>
                                     </Td>
                                     <Td>
-                                        {at.executionMode === "actor"
+                                        {at.executionMode === "agent"
                                             ? `${at.allowedTools?.length || 0} tools`
                                             : "—"}
                                     </Td>

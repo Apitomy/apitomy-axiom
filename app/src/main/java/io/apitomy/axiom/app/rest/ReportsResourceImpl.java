@@ -21,6 +21,7 @@ import io.apitomy.axiom.core.entities.ReportEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
+import io.apitomy.axiom.core.util.SlugUtil;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -337,6 +338,9 @@ public class ReportsResourceImpl implements ReportsResource {
 
     private void applyDefinitionFields(ReportDefinitionEntity entity, NewReportDefinition data) {
         entity.name = data.getName();
+        entity.slug = (data.getSlug() != null && !data.getSlug().isBlank())
+                ? data.getSlug()
+                : SlugUtil.slugify(data.getName());
         entity.description = data.getDescription();
         entity.schedule = data.getSchedule();
         entity.scheduleTime = data.getScheduleTime();
@@ -367,6 +371,7 @@ public class ReportsResourceImpl implements ReportsResource {
         ReportDefinition def = new ReportDefinition();
         def.setId(entity.id);
         def.setName(entity.name);
+        def.setSlug(entity.slug);
         def.setDescription(entity.description);
         def.setSchedule(entity.schedule);
         def.setScheduleTime(entity.scheduleTime);

@@ -216,7 +216,7 @@ class ScheduledJobValidatorTest {
         assertFalse(result.errors().stream().anyMatch(m -> m.field().equals("executionMode")));
     }
 
-    // ── Prompt template validation (actor mode) ─────────────────────
+    // ── Prompt template validation (agent mode) ─────────────────────
 
     @Test
     void actorMissingPromptTemplateIsErrorWhenEnabled() {
@@ -387,7 +387,7 @@ class ScheduledJobValidatorTest {
                 m -> m.message().contains("Duplicate label")));
     }
 
-    // ── Allowed tools validation (actor mode) ───────────────────────
+    // ── Allowed tools validation (agent mode) ───────────────────────
 
     @Test
     void validToolRefsPass() {
@@ -511,7 +511,7 @@ class ScheduledJobValidatorTest {
         job.setName(name);
         job.setDescription(description);
         job.setSchedule(schedule);
-        job.setExecutionMode("actor");
+        job.setExecutionMode("agent");
         job.setPromptTemplate(promptTemplate);
         return job;
     }

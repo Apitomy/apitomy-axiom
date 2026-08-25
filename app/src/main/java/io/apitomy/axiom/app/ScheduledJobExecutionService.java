@@ -2,6 +2,7 @@ package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.core.tracing.TraceContext;
 import io.apitomy.axiom.core.tracing.TraceService;
+import io.apitomy.axiom.core.util.SlugUtil;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobEntity;
@@ -11,9 +12,11 @@ import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.axiom.core.services.EncryptionService;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.ToolsetResolver;
-import io.apitomy.axiom.engine.spi.AiEngine;
-import io.apitomy.axiom.engine.spi.AiEngineConfig;
-import io.apitomy.axiom.engine.spi.AiEngineResult;
+import io.apitomy.axiom.agents.spi.AgentRegistry;
+import io.apitomy.axiom.agents.spi.AgentRequest;
+import io.apitomy.axiom.agents.spi.AgentResult;
+import io.apitomy.axiom.app.AgentLease;
+import io.apitomy.axiom.app.AgentPool;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
@@ -33,7 +36,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Executes scheduled job runs. Supports both AI actor mode (via AiEngine)
+ * Executes scheduled job runs. Supports both AI agent mode (via AgentPool)
  * and script mode (via ProcessBuilder). Scheduled jobs run without project
  * context — they are global and self-contained.
  */
@@ -51,7 +54,10 @@ public class ScheduledJobExecutionService {
     Event<SseEvent> sseEvents;
 
     @Inject
-    AiEngine aiEngine;
+    AgentPool agentPool;
+
+    @Inject
+    AgentRegistry agentRegistry;
 
     @Inject
     McpConfigGenerator mcpConfigGenerator;
@@ -68,10 +74,10 @@ public class ScheduledJobExecutionService {
     @Inject
     TraceService traceService;
 
-    @ConfigProperty(name = "axiom.claude-code.model")
+    @ConfigProperty(name = "axiom.agent.claude-code.model")
     Optional<String> defaultModel;
 
-    @ConfigProperty(name = "axiom.claude-code.timeout-seconds", defaultValue = "600")
+    @ConfigProperty(name = "axiom.agent.claude-code.timeout-seconds", defaultValue = "600")
     int defaultTimeoutSeconds;
 
     @ConfigProperty(name = "quarkus.http.port", defaultValue = "9090")
@@ -81,7 +87,7 @@ public class ScheduledJobExecutionService {
     int scriptTimeoutSeconds;
 
     /**
-     * Executes a scheduled job run. Dispatches to actor or script mode
+     * Executes a scheduled job run. Dispatches to agent or script mode
      * based on the job's execution mode.
      *
      * @param job   the scheduled job definition
@@ -91,15 +97,15 @@ public class ScheduledJobExecutionService {
         if ("script".equals(job.executionMode)) {
             executeScript(job, runId);
         } else {
-            executeActor(job, runId);
+            executeAgent(job, runId);
         }
     }
 
     /**
-     * Executes a job run in actor mode via the AI engine.
+     * Executes a job run in agent mode via the agent pool.
      */
-    private void executeActor(ScheduledJobEntity job, Long runId) {
-        LOG.infof("Executing scheduled job '%s' in actor mode (run ID: %d)", job.name, runId);
+    private void executeAgent(ScheduledJobEntity job, Long runId) {
+        LOG.infof("Executing scheduled job '%s' in agent mode (run ID: %d)", job.name, runId);
 
         TraceContext traceCtx = null;
         Long aiNodeId = null;
@@ -135,7 +141,8 @@ public class ScheduledJobExecutionService {
         int effectiveMaxSteps = job.maxSteps != null ? job.maxSteps : 30;
         Double effectiveMaxBudget = job.maxBudgetUsd;
 
-        AiEngineConfig engineConfig = AiEngineConfig.builder()
+        AgentRequest agentRequest = AgentRequest.builder()
+                .prompt(prompt)
                 .systemPrompt(SYSTEM_PROMPT)
                 .allowedTools(allowedTools)
                 .timeoutSeconds(defaultTimeoutSeconds)
@@ -146,6 +153,18 @@ public class ScheduledJobExecutionService {
                 .mcpConfigFile(mcpConfig)
                 .build();
 
+        // Acquire an agent lease from the pool
+        String slug = job.slug != null ? job.slug : SlugUtil.slugify(job.name);
+        String capability = "job:" + slug;
+        AgentLease lease = agentPool.tryLease(capability, null, "scheduled-job", runId)
+                .orElse(null);
+        if (lease == null) {
+            LOG.warnf("All agents busy, scheduled job run %d cannot start", runId);
+            failRun(runId, "No agent available — all agents are busy",
+                    traceCtx, aiNodeId);
+            return;
+        }
+
         UUID traceId = traceCtx != null ? traceCtx.traceId() : null;
         markRunning(runId, traceId);
 
@@ -153,13 +172,15 @@ public class ScheduledJobExecutionService {
         final TraceContext finalTraceCtx = traceCtx;
         final Long finalAiNodeId = aiNodeId;
 
-        aiEngine.prompt(engineConfig, prompt)
+        lease.agent().execute(agentRequest)
                 .thenAccept(result -> {
                     Thread.currentThread().setContextClassLoader(contextCl);
-                    onActorCompleted(runId, job.id, result, finalTraceCtx, finalAiNodeId);
+                    agentPool.release(lease);
+                    onAgentCompleted(runId, job.id, result, finalTraceCtx, finalAiNodeId);
                 })
                 .exceptionally(throwable -> {
                     Thread.currentThread().setContextClassLoader(contextCl);
+                    agentPool.release(lease);
                     LOG.errorf(throwable, "Scheduled job run %d failed unexpectedly", runId);
                     failRun(runId, "Unexpected error: " + throwable.getMessage(),
                             finalTraceCtx, finalAiNodeId);
@@ -264,7 +285,7 @@ public class ScheduledJobExecutionService {
     }
 
     @Transactional
-    void onActorCompleted(Long runId, Long jobId, AiEngineResult result,
+    void onAgentCompleted(Long runId, Long jobId, AgentResult result,
                           TraceContext traceCtx, Long aiNodeId) {
         ScheduledJobRunEntity run = ScheduledJobRunEntity.findById(runId);
         if (run == null) return;
@@ -273,10 +294,10 @@ public class ScheduledJobExecutionService {
 
         if (result.success()) {
             run.status = "Completed";
-            run.output = result.result();
+            run.output = result.output();
         } else {
             run.status = "Failed";
-            run.error = result.result();
+            run.error = result.output();
         }
         run.executionLog = result.executionLog();
         run.costUsd = result.costUsd();

@@ -27,8 +27,8 @@ public class TaskEntity extends PanacheEntity {
     @Column(name = "event_id")
     public Long eventId;
 
-    @Column(name = "assigned_actor")
-    public Long assignedActor;
+    @Column(name = "assigned_agent")
+    public Long assignedAgent;
 
     @Column(nullable = false)
     public String status;

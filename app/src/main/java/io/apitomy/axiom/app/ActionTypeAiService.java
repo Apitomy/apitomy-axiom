@@ -5,9 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.beans.ReportAiEditRequest;
 import io.apitomy.axiom.api.beans.ReportAiEditResponse;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
-import io.apitomy.axiom.engine.spi.AiEngine;
-import io.apitomy.axiom.engine.spi.AiEngineConfig;
-import io.apitomy.axiom.engine.spi.AiEngineResult;
+import io.apitomy.axiom.agents.spi.AgentRegistry;
+import io.apitomy.axiom.agents.spi.AgentRequest;
+import io.apitomy.axiom.agents.spi.AgentResult;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -20,7 +20,7 @@ import java.util.List;
 
 /**
  * Service that invokes the AI engine to generate or update prompt templates
- * and allowed tools for actor-mode action types.
+ * and allowed tools for agent-mode action types.
  */
 @ApplicationScoped
 public class ActionTypeAiService {
@@ -31,7 +31,7 @@ public class ActionTypeAiService {
     ObjectMapper objectMapper;
 
     @Inject
-    AiEngine aiEngine;
+    AgentRegistry agentRegistry;
 
     @ConfigProperty(name = "axiom.ai-assistant.timeout-seconds", defaultValue = "300")
     int assistantTimeoutSeconds;
@@ -122,27 +122,28 @@ public class ActionTypeAiService {
         userPrompt.append(request.getMessage()).append("\n\n");
         userPrompt.append("Generate the prompt template and allowed tools as structured JSON output.");
 
-        AiEngineConfig config = AiEngineConfig.builder()
+        AgentRequest agentRequest = AgentRequest.builder()
                 .systemPrompt(SYSTEM_PROMPT)
+                .prompt(userPrompt.toString())
                 .allowedTools(List.of("StructuredOutput"))
                 .maxSteps(3)
                 .timeoutSeconds(assistantTimeoutSeconds)
                 .build();
 
         try {
-            AiEngineResult result = aiEngine.promptWithSchema(config, userPrompt.toString(),
+            AgentResult result = agentRegistry.getDefaultAgent().executeWithSchema(agentRequest,
                     RESPONSE_SCHEMA).join();
 
             recordAiUsage(result.costUsd(), result.inputTokens(), result.outputTokens());
 
             if (!result.success()) {
-                LOG.errorf("Action type AI edit failed: %s", result.result());
+                LOG.errorf("Action type AI edit failed: %s", result.output());
                 ReportAiEditResponse response = new ReportAiEditResponse();
-                response.setExplanation("Sorry, I encountered an error: " + result.result());
+                response.setExplanation("Sorry, I encountered an error: " + result.output());
                 return response;
             }
 
-            return parseResponse(result.result());
+            return parseResponse(result.output());
 
         } catch (Exception e) {
             LOG.errorf(e, "Action type AI edit failed");

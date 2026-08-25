@@ -12,7 +12,7 @@ import {
 import { fetchInboxCount } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 
-const COMPONENT_PATHS = ["/action-types", "/actors", "/session-templates", "/event-sources", "/mcp-servers", "/report-definitions", "/scheduled-jobs", "/secrets", "/tools", "/toolsets", "/components/workflows"];
+const COMPONENT_PATHS = ["/action-types", "/agents", "/session-templates", "/event-sources", "/mcp-servers", "/report-definitions", "/scheduled-jobs", "/secrets", "/tools", "/toolsets", "/components/workflows"];
 const SETTINGS_PATHS = ["/engine", "/manager", "/data-retention", "/configuration-packs"];
 
 export function AppSidebar() {
@@ -96,8 +96,8 @@ export function AppSidebar() {
                             <NavItem isActive={location.pathname.startsWith("/action-types")} onClick={() => navigate("/action-types")}>
                                 Action Types
                             </NavItem>
-                            <NavItem isActive={location.pathname.startsWith("/actors")} onClick={() => navigate("/actors")}>
-                                Actors
+                            <NavItem isActive={location.pathname.startsWith("/agents")} onClick={() => navigate("/agents")}>
+                                Agents
                             </NavItem>
                             <NavItem isActive={location.pathname.startsWith("/session-templates")} onClick={() => navigate("/session-templates")}>
                                 AI Assistant

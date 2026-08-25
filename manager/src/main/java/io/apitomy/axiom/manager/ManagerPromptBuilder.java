@@ -1,7 +1,7 @@
 package io.apitomy.axiom.manager;
 
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
-import io.apitomy.axiom.core.entities.ActorEntity;
+import io.apitomy.axiom.core.entities.AgentEntity;
 import io.apitomy.axiom.core.entities.EventEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
@@ -12,12 +12,12 @@ import java.util.List;
  * Builds the system prompt and user prompt for the AI Manager.
  * The system prompt is user-configurable. The user prompt is built from a
  * configurable template with placeholder substitution for action types,
- * actors, event details, and project context.
+ * agents, event details, and project context.
  *
  * <p>Supported placeholders in the prompt template:</p>
  * <ul>
  *   <li>{@code {{actionTypes}}} — formatted list of available action types</li>
- *   <li>{@code {{actors}}} — formatted list of available actors</li>
+ *   <li>{@code {{agents}}} — formatted list of available agents</li>
  *   <li>{@code {{source}}} — event source (e.g. "github")</li>
  *   <li>{@code {{eventType}}} — event type (e.g. "issue-created")</li>
  *   <li>{@code {{issueRef}}} — issue reference (e.g. "owner/repo#42")</li>
@@ -55,24 +55,21 @@ public final class ManagerPromptBuilder {
     }
 
     /**
-     * Formats the list of actors for inclusion in a prompt.
+     * Formats the list of agents for inclusion in a prompt.
      *
-     * @param actors the configured actors
+     * @param agents the configured agents
      * @return a formatted markdown list
      */
-    public static String formatActors(List<ActorEntity> actors) {
+    public static String formatAgents(List<AgentEntity> agents) {
         StringBuilder sb = new StringBuilder();
-        sb.append("## Available Actors\n\n");
-        if (actors.isEmpty()) {
-            sb.append("No actors configured.\n");
+        sb.append("## Available Agents\n\n");
+        if (agents.isEmpty()) {
+            sb.append("No agents configured.\n");
         } else {
-            for (ActorEntity actor : actors) {
-                sb.append("- **").append(actor.name).append("** (").append(actor.type).append(")");
-                if (actor.description != null) {
-                    sb.append(": ").append(actor.description);
-                }
-                if (actor.capabilities != null) {
-                    sb.append(" [capabilities: ").append(actor.capabilities).append("]");
+            for (AgentEntity agent : agents) {
+                sb.append("- **").append(agent.name).append("** (").append(agent.agentType).append(")");
+                if (agent.description != null) {
+                    sb.append(": ").append(agent.description);
                 }
                 sb.append("\n");
             }
@@ -124,19 +121,19 @@ public final class ManagerPromptBuilder {
      * @param promptTemplate the configurable prompt template with placeholders
      * @param event the event to evaluate
      * @param actionTypes the registered action types
-     * @param actors the configured actors
+     * @param agents the configured agents
      * @param project the existing project (may be null)
      * @param recentTasks recent tasks for the project
      * @return the resolved user prompt
      */
     public static String buildUserPrompt(String promptTemplate, EventEntity event,
                                           List<ActionTypeEntity> actionTypes,
-                                          List<ActorEntity> actors,
+                                          List<AgentEntity> agents,
                                           ProjectEntity project,
                                           List<TaskEntity> recentTasks) {
         String resolved = promptTemplate;
         resolved = resolved.replace("{{actionTypes}}", formatActionTypes(actionTypes));
-        resolved = resolved.replace("{{actors}}", formatActors(actors));
+        resolved = resolved.replace("{{agents}}", formatAgents(agents));
         resolved = resolved.replace("{{source}}", event.source != null ? event.source : "");
         resolved = resolved.replace("{{eventType}}", event.eventType != null ? event.eventType : "");
         resolved = resolved.replace("{{issueRef}}", event.issueRef != null ? event.issueRef : "");
@@ -156,7 +153,7 @@ public final class ManagerPromptBuilder {
                 {"type":"array","items":{"type":"object","required":["decision",\
                 "confidence","reasoning"],"properties":{"decision":{"type":"string",\
                 "enum":["create_task","ignore","script_action","escalate"]},\
-                "actionType":{"type":"string"},"actorHint":{"type":"string"},\
+                "actionType":{"type":"string"},"agentHint":{"type":"string"},\
                 "inputContext":{"type":"string"},"confidence":{"type":"number",\
                 "minimum":0,"maximum":1},"reasoning":{"type":"string"},\
                 "humanContext":{"type":"object","properties":{"title":{"type":"string"},\
@@ -184,12 +181,12 @@ public final class ManagerPromptBuilder {
             For each decision, specify:
             - **decision**: One of: create_task, ignore, script_action, escalate
             - **actionType**: The action to perform (required for create_task and script_action)
-            - **actorHint**: (Optional) preferred actor name
-            - **inputContext**: Instructions or context for the actor performing the task
+            - **agentHint**: (Optional) preferred agent name
+            - **inputContext**: Instructions or context for the agent performing the task
             - **confidence**: 0.0 to 1.0 indicating your confidence
             - **reasoning**: Brief explanation of why you made this decision
 
-            When creating a task for a human actor (actorHint is "human" or the action \
+            When creating a task for a human agent (agentHint is "human" or the action \
             type is designated for humans), you should also provide:
             - **humanContext**: An object with:
               - **title**: A short, clear title of what you need from the human
@@ -239,7 +236,7 @@ public final class ManagerPromptBuilder {
 
             Analyze this event and return ONLY a JSON object (no other text, no \
             markdown, no explanation) with a "decisions" array. Each element must \
-            have: decision, actionType, actorHint, inputContext, confidence, reasoning. \
+            have: decision, actionType, agentHint, inputContext, confidence, reasoning. \
             Your entire response must be valid JSON and nothing else.
             """;
 }

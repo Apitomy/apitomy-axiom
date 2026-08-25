@@ -22,6 +22,7 @@ import {
     TextArea,
     TextInput,
     Title, Alert,
+    HelperText, HelperTextItem,
 } from "@patternfly/react-core";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { registerPlaceholderCompletions, REPORT_PLACEHOLDERS } from "../components/PlaceholderCompletionProvider";
@@ -47,6 +48,11 @@ import {
 } from "../config/api";
 import ExclamationTriangleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-triangle-icon";
 import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
+
+function slugify(name: string | undefined): string {
+    if (!name) return "";
+    return name.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "").replace(/-{2,}/g, "-");
+}
 
 export function ReportDefinitionDetailPage() {
     const { definitionId } = useParams<{ definitionId: string }>();
@@ -90,6 +96,7 @@ export function ReportDefinitionDetailPage() {
                 setDefinition(def);
                 setForm({
                     name: def.name, description: def.description,
+                    slug: def.slug,
                     schedule: def.schedule, scheduleTime: def.scheduleTime,
                     scheduleDayOfWeek: def.scheduleDayOfWeek,
                     timeWindow: def.timeWindow,
@@ -340,6 +347,17 @@ function InfoTab({ form, updateForm, initialLabels, onLabelsChange }: {
             <FormGroup label="Name" isRequired fieldId="name">
                 <TextInput id="name" isRequired value={form.name}
                     onChange={(_e, v) => updateForm({ name: v })} />
+            </FormGroup>
+            <FormGroup label="Slug" fieldId="slug">
+                <TextInput id="slug" value={form.slug || ""}
+                    onChange={(_e, v) => updateForm({ slug: v })}
+                    placeholder={slugify(form.name)} />
+                <HelperText>
+                    <HelperTextItem>
+                        Stable identifier used for agent capability matching.
+                        Auto-generated from name if empty.
+                    </HelperTextItem>
+                </HelperText>
             </FormGroup>
             <FormGroup label="Title Template" fieldId="titleTemplate">
                 <TextInput id="titleTemplate" value={form.titleTemplate || ""}

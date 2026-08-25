@@ -15,7 +15,7 @@ import java.util.List;
 
 /**
  * Implementation of the Secrets REST API. Provides CRUD operations
- * for encrypted secrets that are injected into actor subprocess
+ * for encrypted secrets that are injected into agent subprocess
  * environments. Secret values are never returned in API responses.
  */
 @ApplicationScoped

@@ -42,7 +42,7 @@ class ActionResourceTest {
             .then()
                 .statusCode(200)
                 .body("name", equalTo("auto-tag"))
-                .body("executionMode", equalTo("actor"))
+                .body("executionMode", equalTo("agent"))
                 .body("userTriggerable", equalTo(false))
                 .body("emitsEvent", equalTo(true));
     }
@@ -75,7 +75,7 @@ class ActionResourceTest {
                 {
                     "name": "custom-action",
                     "description": "A custom action for testing",
-                    "executionMode": "actor",
+                    "executionMode": "agent",
                     "promptTemplate": "Do the thing: {{input}}",
                     "userTriggerable": true,
                     "emitsEvent": false
@@ -86,7 +86,7 @@ class ActionResourceTest {
             .then()
                 .statusCode(200)
                 .body("name", equalTo("custom-action"))
-                .body("executionMode", equalTo("actor"))
+                .body("executionMode", equalTo("agent"))
                 .body("userTriggerable", equalTo(true))
                 .body("emitsEvent", equalTo(false))
                 .extract().path("id");
@@ -156,7 +156,7 @@ class ActionResourceTest {
             .body(String.format("""
                 {
                     "name": "%s",
-                    "executionMode": "actor",
+                    "executionMode": "agent",
                     "promptTemplate": "Do: {{input}}"
                 }
                 """, name))

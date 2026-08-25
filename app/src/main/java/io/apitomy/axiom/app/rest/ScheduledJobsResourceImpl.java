@@ -17,6 +17,7 @@ import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
 import io.apitomy.axiom.core.services.ScheduledJobValidator;
+import io.apitomy.axiom.core.util.SlugUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.panache.common.Page;
@@ -312,6 +313,9 @@ public class ScheduledJobsResourceImpl implements ScheduledResource {
 
     private void applyFields(ScheduledJobEntity entity, NewScheduledJob data) {
         entity.name = data.getName();
+        entity.slug = (data.getSlug() != null && !data.getSlug().isBlank())
+                ? data.getSlug()
+                : SlugUtil.slugify(data.getName());
         entity.description = data.getDescription();
         entity.schedule = data.getSchedule();
         entity.scheduleTime = data.getScheduleTime();
@@ -344,6 +348,7 @@ public class ScheduledJobsResourceImpl implements ScheduledResource {
         ScheduledJob bean = new ScheduledJob();
         bean.setId(entity.id);
         bean.setName(entity.name);
+        bean.setSlug(entity.slug);
         bean.setDescription(entity.description);
         bean.setLabels(entity.labels);
         bean.setEnabled(entity.enabled);

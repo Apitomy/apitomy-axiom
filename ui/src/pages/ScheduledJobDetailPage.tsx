@@ -75,6 +75,11 @@ function formatTimestamp(iso?: string): string {
     return d.toLocaleString();
 }
 
+function slugify(name: string | undefined): string {
+    if (!name) return "";
+    return name.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "").replace(/-{2,}/g, "-");
+}
+
 export function ScheduledJobDetailPage() {
     const { jobId } = useParams<{ jobId: string }>();
     const navigate = useNavigate();
@@ -86,7 +91,7 @@ export function ScheduledJobDetailPage() {
         description: "",
         enabled: false,
         schedule: "none",
-        executionMode: "actor",
+        executionMode: "agent",
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -116,6 +121,7 @@ export function ScheduledJobDetailPage() {
                 setForm({
                     name: jobData.name,
                     description: jobData.description,
+                    slug: jobData.slug,
                     enabled: jobData.enabled,
                     schedule: jobData.schedule,
                     scheduleTime: jobData.scheduleTime,
@@ -270,7 +276,7 @@ export function ScheduledJobDetailPage() {
                 <Tab eventKey={1} title={<TabTitleText>Allowed Tools ({tools.length})</TabTitleText>}>
                     <TabContent id="tools-tab" eventKey={1} activeKey={activeTab}
                         style={{ marginTop: "24px" }}>
-                        {form.executionMode === "actor" ? (
+                        {form.executionMode === "agent" ? (
                             <ToolListEditor
                                 tools={tools}
                                 onAdd={addTool}
@@ -293,7 +299,7 @@ export function ScheduledJobDetailPage() {
                         ) : (
                             <EmptyState>
                                 <EmptyStateBody>
-                                    Tool configuration is only available for Actor execution mode.
+                                    Tool configuration is only available for Agent execution mode.
                                 </EmptyStateBody>
                             </EmptyState>
                         )}
@@ -319,7 +325,7 @@ export function ScheduledJobDetailPage() {
                 </TabTitleText>}>
                     <TabContent id="template-tab" eventKey={3} activeKey={activeTab}
                         style={{ marginTop: "24px" }}>
-                        {form.executionMode === "actor" ? (
+                        {form.executionMode === "agent" ? (
                             <PromptTemplateTab
                                 value={form.promptTemplate || ""}
                                 onChange={(v) => updateForm({ promptTemplate: v })}
@@ -367,6 +373,17 @@ function InfoTab({ form, updateForm, labels, onLabelsChange, availableModels, av
                 <TextInput id="name" isRequired value={form.name}
                     onChange={(_e, v) => updateForm({ name: v })} />
             </FormGroup>
+            <FormGroup label="Slug" fieldId="slug">
+                <TextInput id="slug" value={form.slug || ""}
+                    onChange={(_e, v) => updateForm({ slug: v })}
+                    placeholder={slugify(form.name)} />
+                <HelperText>
+                    <HelperTextItem>
+                        Stable identifier used for agent capability matching.
+                        Auto-generated from name if empty.
+                    </HelperTextItem>
+                </HelperText>
+            </FormGroup>
             <FormGroup label="Description" fieldId="description">
                 <TextArea id="description" value={form.description || ""}
                     onChange={(_e, v) => updateForm({ description: v })} rows={3} />
@@ -407,11 +424,11 @@ function InfoTab({ form, updateForm, labels, onLabelsChange, availableModels, av
             <FormGroup label="Execution Mode" isRequired fieldId="executionMode">
                 <FormSelect id="executionMode" value={form.executionMode}
                     onChange={(_e, v) => updateForm({ executionMode: v })}>
-                    <FormSelectOption value="actor" label="Actor — executed by an AI agent" />
+                    <FormSelectOption value="agent" label="Agent — executed by an AI agent" />
                     <FormSelectOption value="script" label="Script — executes a bash script" />
                 </FormSelect>
             </FormGroup>
-            {form.executionMode === "actor" && availableEngines.length > 1 && (
+            {form.executionMode === "agent" && availableEngines.length > 1 && (
                 <FormGroup label="AI Engine" fieldId="engine">
                     <HelperText>
                         <HelperTextItem>
@@ -431,7 +448,7 @@ function InfoTab({ form, updateForm, labels, onLabelsChange, availableModels, av
                     </FormSelect>
                 </FormGroup>
             )}
-            {form.executionMode === "actor" && (
+            {form.executionMode === "agent" && (
                 <FormGroup label="Model" fieldId="model">
                     <HelperText>
                         <HelperTextItem>
@@ -474,7 +491,7 @@ function InfoTab({ form, updateForm, labels, onLabelsChange, availableModels, av
                     </FormSelect>
                 </FormGroup>
             )}
-            {form.executionMode === "actor" && (
+            {form.executionMode === "agent" && (
                 <FormGroup label="Max Steps" fieldId="maxSteps">
                     <HelperText>
                         <HelperTextItem>
@@ -490,7 +507,7 @@ function InfoTab({ form, updateForm, labels, onLabelsChange, availableModels, av
                         placeholder="Global default" />
                 </FormGroup>
             )}
-            {form.executionMode === "actor" && (
+            {form.executionMode === "agent" && (
                 <FormGroup label="Max Budget (USD)" fieldId="maxBudgetUsd">
                     <HelperText>
                         <HelperTextItem>

@@ -156,14 +156,14 @@ public final class ScheduledJobValidator {
         String mode = def.getExecutionMode();
         if (mode == null || mode.isBlank()) {
             messages.add(error("executionMode", "Execution mode is required."));
-        } else if (!"actor".equals(mode) && !"script".equals(mode)) {
+        } else if (!"agent".equals(mode) && !"script".equals(mode)) {
             messages.add(error("executionMode",
-                    "Invalid execution mode '" + mode + "'. Must be 'actor' or 'script'."));
+                    "Invalid execution mode '" + mode + "'. Must be 'agent' or 'script'."));
         }
     }
 
     private static void validatePromptTemplate(NewScheduledJob def, List<ValidationMessage> messages) {
-        if (!"actor".equals(def.getExecutionMode())) {
+        if (!"agent".equals(def.getExecutionMode())) {
             return;
         }
         String prompt = def.getPromptTemplate();
@@ -171,10 +171,10 @@ public final class ScheduledJobValidator {
             boolean enabled = def.getEnabled() != null && def.getEnabled();
             if (enabled) {
                 messages.add(error("promptTemplate",
-                        "Prompt template is required for actor-mode scheduled jobs."));
+                        "Prompt template is required for agent-mode scheduled jobs."));
             } else {
                 messages.add(warning("promptTemplate",
-                        "Prompt template is recommended for actor-mode scheduled jobs."));
+                        "Prompt template is recommended for agent-mode scheduled jobs."));
             }
             return;
         }
@@ -243,7 +243,7 @@ public final class ScheduledJobValidator {
 
     private static void validateAllowedTools(NewScheduledJob def, KnownNames known,
                                               List<ValidationMessage> messages) {
-        if (!"actor".equals(def.getExecutionMode())) {
+        if (!"agent".equals(def.getExecutionMode())) {
             return;
         }
         List<String> tools = def.getAllowedTools();
