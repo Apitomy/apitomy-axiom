@@ -549,7 +549,8 @@ public class ProjectsResourceImpl implements ProjectsResource {
         ThreadEntry entry = new ThreadEntry();
         entry.setId(entity.id);
         entry.setProjectId(entity.projectId);
-        entry.setAuthorType(ThreadEntry.AuthorType.fromValue(entity.authorType));
+        String authorType = "actor".equals(entity.authorType) ? "agent" : entity.authorType;
+        entry.setAuthorType(ThreadEntry.AuthorType.fromValue(authorType));
         entry.setAuthorId(entity.authorId);
         entry.setEntryType(ThreadEntry.EntryType.fromValue(entity.entryType));
         entry.setContent(entity.content);
