@@ -31,6 +31,15 @@ const TYPE_COLORS: Record<string, "blue" | "green"> = {
     manager: "blue",
 };
 
+const MODEL_COLORS = ["blue", "teal", "green", "orange", "purple", "red", "yellow"] as const;
+function modelColor(name: string): (typeof MODEL_COLORS)[number] {
+    let h = 0;
+    for (let i = 0; i < name.length; i++) {
+        h = (h * 31 + name.charCodeAt(i)) | 0;
+    }
+    return MODEL_COLORS[Math.abs(h) % MODEL_COLORS.length];
+}
+
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "invocationType", label: "Type", testId: "usage-filter-type" },
     { value: "actionType", label: "Action Type", testId: "usage-filter-action" },
@@ -278,7 +287,7 @@ export function AiUsagePage() {
                                     </Td>
                                     <Td>
                                         {r.model ? (
-                                            <Label isCompact color="teal"
+                                            <Label isCompact color={modelColor(r.model)}
                                                 style={{ cursor: "pointer" }}
                                                 onClick={() => {
                                                     const modelFilter = FILTER_TYPES.find(
