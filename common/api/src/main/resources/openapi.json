@@ -620,6 +620,91 @@
         }
       ]
     },
+    "/projects/{projectId}/workflow": {
+      "get": {
+        "tags": [
+          "WorkflowInstances"
+        ],
+        "summary": "Get the workflow instance for a project",
+        "operationId": "getProjectWorkflowInstance",
+        "responses": {
+          "200": {
+            "description": "The workflow instance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowInstance"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "WorkflowInstances"
+        ],
+        "summary": "Trigger a workflow on a project",
+        "operationId": "triggerProjectWorkflow",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriggerWorkflow"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Workflow triggered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowInstance"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Workflow definition not published or contains unsupported node types"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "Project already has a workflow instance"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "WorkflowInstances"
+        ],
+        "summary": "Cancel a running workflow instance",
+        "operationId": "cancelProjectWorkflow",
+        "responses": {
+          "204": {
+            "description": "Workflow cancelled"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "Workflow instance is already in a terminal state"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ProjectId"
+        }
+      ]
+    },
     "/agents": {
       "get": {
         "tags": [
@@ -5556,6 +5641,9 @@
           },
           "ref": {
             "type": "string"
+          },
+          "hasWorkflowInstance": {
+            "type": "boolean"
           }
         }
       },
@@ -9192,6 +9280,104 @@
             "type": "integer"
           }
         }
+      },
+      "HistoryEntry": {
+        "type": "object",
+        "properties": {
+          "nodeId": {
+            "type": "string"
+          },
+          "nodeName": {
+            "type": "string"
+          },
+          "enteredOn": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "completedOn": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "output": {
+            "type": "object"
+          }
+        }
+      },
+      "WorkflowInstance": {
+        "required": [
+          "id",
+          "projectId",
+          "definitionId",
+          "definitionVersion",
+          "status",
+          "startedOn"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "projectId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "definitionId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "definitionVersion": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "definitionName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "currentNodeId": {
+            "type": "string"
+          },
+          "currentNodeName": {
+            "type": "string"
+          },
+          "failureReason": {
+            "type": "string"
+          },
+          "workflowContent": {
+            "type": "object"
+          },
+          "context": {
+            "type": "object"
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HistoryEntry"
+            }
+          },
+          "startedOn": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "completedOn": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      },
+      "TriggerWorkflow": {
+        "required": [
+          "workflowDefinitionId"
+        ],
+        "type": "object",
+        "properties": {
+          "workflowDefinitionId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
       }
     },
     "responses": {
@@ -9337,6 +9523,10 @@
     {
       "name": "WorkflowDefinitions",
       "description": "Workflow definition management with versioning"
+    },
+    {
+      "name": "WorkflowInstances",
+      "description": "Workflow instance execution and monitoring"
     }
   ]
 }
