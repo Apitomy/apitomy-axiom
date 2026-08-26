@@ -129,7 +129,8 @@ public class ScriptAiService {
             AgentResult result = agentRegistry.getAgent(helperEngine.orElse(null))
                     .executeWithSchema(agentRequest, RESPONSE_SCHEMA).join();
 
-            recordAiUsage(result.costUsd(), result.inputTokens(), result.outputTokens());
+            recordAiUsage(result.costUsd(), result.inputTokens(), result.outputTokens(),
+                    result.engine(), result.model());
 
             if (!result.success()) {
                 LOG.errorf("Script AI edit failed: %s", result.output());
@@ -168,12 +169,15 @@ public class ScriptAiService {
     }
 
     @Transactional
-    void recordAiUsage(Double costUsd, Long inputTokens, Long outputTokens) {
+    void recordAiUsage(Double costUsd, Long inputTokens, Long outputTokens,
+                        String resultEngine, String resultModel) {
         AiUsageEntity usage = new AiUsageEntity();
         usage.invocationType = "script-edit";
         usage.actionType = "script-ai-edit";
-        usage.engine = helperEngine.orElse(agentRegistry.getDefaultAgentType());
-        usage.model = model.orElse(null);
+        usage.engine = resultEngine != null && !resultEngine.isBlank()
+                ? resultEngine : helperEngine.orElse(agentRegistry.getDefaultAgentType());
+        usage.model = resultModel != null && !resultModel.isBlank()
+                ? resultModel : model.orElse(null);
         usage.costUsd = costUsd;
         usage.inputTokens = inputTokens;
         usage.outputTokens = outputTokens;

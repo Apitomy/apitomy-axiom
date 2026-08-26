@@ -310,13 +310,18 @@ public class ScheduledJobExecutionService {
                 runId, run.status,
                 result.costUsd() != null ? String.format("%.4f", result.costUsd()) : "n/a");
 
+        // Record AI usage (prefer engine/model from the agent result, fall back to job config)
         AiUsageEntity usage = new AiUsageEntity();
         usage.invocationType = "scheduled-job";
         usage.actionType = job != null ? job.name : "unknown";
-        String jobEngine = job != null ? job.engine : null;
+        String jobEngine = result.engine();
+        if (jobEngine == null || jobEngine.isBlank()) {
+            jobEngine = job != null ? job.engine : null;
+        }
         usage.engine = jobEngine != null && !jobEngine.isBlank()
                 ? jobEngine : agentRegistry.getDefaultAgentType();
-        usage.model = job != null ? job.model : null;
+        usage.model = result.model() != null && !result.model().isBlank()
+                ? result.model() : (job != null ? job.model : null);
         usage.costUsd = result.costUsd();
         usage.inputTokens = result.inputTokens();
         usage.outputTokens = result.outputTokens();

@@ -295,14 +295,18 @@ public class ReportExecutionService {
                 reportId, report.status,
                 result.costUsd() != null ? String.format("%.4f", result.costUsd()) : "n/a");
 
-        // Record AI usage
+        // Record AI usage (prefer engine/model from the agent result, fall back to definition config)
         AiUsageEntity usage = new AiUsageEntity();
         usage.invocationType = "report";
         usage.actionType = "generate-report";
-        String reportEngine = def != null ? def.engine : null;
+        String reportEngine = result.engine();
+        if (reportEngine == null || reportEngine.isBlank()) {
+            reportEngine = def != null ? def.engine : null;
+        }
         usage.engine = reportEngine != null && !reportEngine.isBlank()
                 ? reportEngine : agentRegistry.getDefaultAgentType();
-        usage.model = def != null ? def.model : null;
+        usage.model = result.model() != null && !result.model().isBlank()
+                ? result.model() : (def != null ? def.model : null);
         usage.costUsd = result.costUsd();
         usage.inputTokens = result.inputTokens();
         usage.outputTokens = result.outputTokens();

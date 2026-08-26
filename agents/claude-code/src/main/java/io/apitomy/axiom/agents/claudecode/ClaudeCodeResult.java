@@ -20,7 +20,8 @@ public record ClaudeCodeResult(
         Long inputTokens,
         Long outputTokens,
         int exitCode,
-        String executionLog
+        String executionLog,
+        String model
 ) {
 
     /**
@@ -31,7 +32,7 @@ public record ClaudeCodeResult(
      * @return a failed result
      */
     public static ClaudeCodeResult failed(String errorMessage, int exitCode) {
-        return new ClaudeCodeResult(errorMessage, null, null, null, null, exitCode, null);
+        return new ClaudeCodeResult(errorMessage, null, null, null, null, exitCode, null, null);
     }
 
     /**

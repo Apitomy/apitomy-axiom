@@ -138,7 +138,8 @@ public class ActionTypeAiService {
             AgentResult result = agentRegistry.getAgent(helperEngine.orElse(null))
                     .executeWithSchema(agentRequest, RESPONSE_SCHEMA).join();
 
-            recordAiUsage(result.costUsd(), result.inputTokens(), result.outputTokens());
+            recordAiUsage(result.costUsd(), result.inputTokens(), result.outputTokens(),
+                    result.engine(), result.model());
 
             if (!result.success()) {
                 LOG.errorf("Action type AI edit failed: %s", result.output());
@@ -193,11 +194,15 @@ public class ActionTypeAiService {
     }
 
     @Transactional
-    void recordAiUsage(Double costUsd, Long inputTokens, Long outputTokens) {
+    void recordAiUsage(Double costUsd, Long inputTokens, Long outputTokens,
+                        String resultEngine, String resultModel) {
         AiUsageEntity usage = new AiUsageEntity();
         usage.invocationType = "action-type-edit";
         usage.actionType = "action-type-ai-edit";
-        usage.engine = helperEngine.orElse(agentRegistry.getDefaultAgentType());
+        usage.engine = resultEngine != null && !resultEngine.isBlank()
+                ? resultEngine : helperEngine.orElse(agentRegistry.getDefaultAgentType());
+        usage.model = resultModel != null && !resultModel.isBlank()
+                ? resultModel : null;
         usage.costUsd = costUsd;
         usage.inputTokens = inputTokens;
         usage.outputTokens = outputTokens;

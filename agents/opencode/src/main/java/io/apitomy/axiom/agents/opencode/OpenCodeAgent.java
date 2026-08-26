@@ -237,7 +237,7 @@ public class OpenCodeAgent implements Agent {
                 }
 
                 // Parse response
-                return parseResponse(response, sessionId);
+                return parseResponse(response, sessionId, model);
 
             } catch (Exception e) {
                 if (request.getExecutionId() != null) {
@@ -273,7 +273,8 @@ public class OpenCodeAgent implements Agent {
      * }
      * </pre>
      */
-    private AgentResult parseResponse(JsonNode response, String sessionId) {
+    private AgentResult parseResponse(JsonNode response, String sessionId,
+                                      String resolvedModel) {
         try {
             // Extract text from parts
             StringBuilder resultText = new StringBuilder();
@@ -321,13 +322,18 @@ public class OpenCodeAgent implements Agent {
                 }
             }
 
+            String actualModel = info.path("modelID").asText(null);
+            if (actualModel == null || actualModel.isBlank()) {
+                actualModel = resolvedModel;
+            }
+
             return new AgentResult(true, result, null, null, sessionId,
-                    costUsd, inputTokens, outputTokens);
+                    costUsd, inputTokens, outputTokens, getType(), actualModel);
 
         } catch (Exception e) {
             LOG.warnf(e, "Failed to parse OpenCode response");
             return new AgentResult(true, response.toString(), null, null, sessionId,
-                    null, null, null);
+                    null, null, null, getType(), resolvedModel);
         }
     }
 

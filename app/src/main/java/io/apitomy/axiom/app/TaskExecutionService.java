@@ -379,12 +379,18 @@ public class TaskExecutionService {
                 result.inputTokens() != null ? result.inputTokens() : 0,
                 result.outputTokens() != null ? result.outputTokens() : 0);
 
-        // Record AI usage (resolve engine/model from the action type definition)
+        // Record AI usage (prefer engine/model from the agent result, fall back to action type config)
         ActionTypeEntity actionTypeEntity = ActionTypeEntity.find("name", task.actionType).firstResult();
-        String engine = actionTypeEntity != null ? actionTypeEntity.engine : null;
-        String model = actionTypeEntity != null ? actionTypeEntity.model : null;
+        String engine = result.engine();
+        if (engine == null || engine.isBlank()) {
+            engine = actionTypeEntity != null ? actionTypeEntity.engine : null;
+        }
         if (engine == null || engine.isBlank()) {
             engine = agentRegistry.getDefaultAgentType();
+        }
+        String model = result.model();
+        if (model == null || model.isBlank()) {
+            model = actionTypeEntity != null ? actionTypeEntity.model : null;
         }
         recordAiUsage("task", taskId, task.eventId, task.projectId,
                 task.assignedAgent, task.actionType, engine, model,

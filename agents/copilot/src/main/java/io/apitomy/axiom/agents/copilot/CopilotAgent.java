@@ -218,9 +218,12 @@ public class CopilotAgent implements Agent {
                 .executable(executable);
 
         // Per-request model takes priority over the global default
+        String resolvedModel;
         if (request.getModel() != null && !request.getModel().isBlank()) {
-            cmdBuilder.model(request.getModel());
+            resolvedModel = request.getModel();
+            cmdBuilder.model(resolvedModel);
         } else {
+            resolvedModel = model.orElse(null);
             model.ifPresent(cmdBuilder::model);
         }
 
@@ -254,7 +257,7 @@ public class CopilotAgent implements Agent {
                     if (executionId != null) {
                         runningProcesses.remove(executionId);
                     }
-                    return toAgentResult(result);
+                    return toAgentResult(result, resolvedModel);
                 })
                 .exceptionally(throwable -> {
                     if (executionId != null) {
@@ -269,7 +272,8 @@ public class CopilotAgent implements Agent {
     /**
      * Converts a Copilot-specific result into the unified {@link AgentResult}.
      */
-    private static AgentResult toAgentResult(CopilotResult result) {
+    private AgentResult toAgentResult(CopilotResult result, String resolvedModel) {
+        String actualModel = result.model() != null ? result.model() : resolvedModel;
         return new AgentResult(
                 result.isSuccess(),
                 result.result(),
@@ -278,7 +282,9 @@ public class CopilotAgent implements Agent {
                 result.sessionId(),
                 result.costUsd(),
                 result.inputTokens(),
-                result.outputTokens()
+                result.outputTokens(),
+                getType(),
+                actualModel
         );
     }
 }
