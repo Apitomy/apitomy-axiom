@@ -165,6 +165,14 @@ public record SseEvent(
     }
 
     /**
+     * Fires when a workflow instance changes state.
+     */
+    public static SseEvent workflowUpdated(long projectId) {
+        return new SseEvent("workflow-updated",
+                "{\"projectId\":" + projectId + "}");
+    }
+
+    /**
      * Creates a heartbeat event to keep SSE connections alive through proxies.
      *
      * @return a new heartbeat SSE event
