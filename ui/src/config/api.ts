@@ -67,6 +67,7 @@ export interface Project {
     updatedOn: string;
     metadata?: Record<string, string>;
     labels?: string[];
+    hasWorkflowInstance?: boolean;
 }
 
 export interface NewProject {
@@ -2174,4 +2175,75 @@ export async function getWorkflowDefinitionVersion(
     const response = await fetch(`${API}/workflow-definitions/${id}/versions/${version}`);
     if (!response.ok) throw new Error(`Failed to get version: ${response.status}`);
     return response.json();
+}
+
+export interface WorkflowInstanceInfo {
+    id: number;
+    projectId: number;
+    definitionId: number;
+    definitionVersion: number;
+    definitionName: string;
+    status: string;
+    currentNodeId?: string;
+    currentNodeName?: string;
+    failureReason?: string;
+    workflowContent: any;
+    context: Record<string, any>;
+    history: HistoryEntryInfo[];
+    startedOn: string;
+    completedOn?: string;
+}
+
+export interface HistoryEntryInfo {
+    nodeId: string;
+    nodeName: string;
+    enteredOn: string;
+    completedOn?: string;
+    output?: any;
+}
+
+export interface TriggerWorkflowRequest {
+    workflowDefinitionId: number;
+}
+
+export async function triggerWorkflow(
+    projectId: number, data: TriggerWorkflowRequest
+): Promise<WorkflowInstanceInfo> {
+    const response = await fetch(
+        `${API}/projects/${projectId}/workflow`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+        });
+    if (!response.ok) {
+        throw new Error(
+            `Failed to trigger workflow: ${response.status}`);
+    }
+    return response.json();
+}
+
+export async function getWorkflowInstance(
+    projectId: number
+): Promise<WorkflowInstanceInfo> {
+    const response = await fetch(
+        `${API}/projects/${projectId}/workflow`);
+    if (!response.ok) {
+        if (response.status === 404) return null as any;
+        throw new Error(
+            `Failed to get workflow instance: ${response.status}`);
+    }
+    return response.json();
+}
+
+export async function cancelWorkflow(
+    projectId: number
+): Promise<void> {
+    const response = await fetch(
+        `${API}/projects/${projectId}/workflow`, {
+            method: "DELETE",
+        });
+    if (!response.ok) {
+        throw new Error(
+            `Failed to cancel workflow: ${response.status}`);
+    }
 }

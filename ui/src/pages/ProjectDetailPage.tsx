@@ -76,6 +76,7 @@ import { LabelDisplay } from "../components/LabelDisplay";
 import { ExecutionLogModal } from "../components/ExecutionLogModal";
 import { CreateSessionModal } from "../components/assistant/CreateSessionModal";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
+import { WorkflowTab } from "../components/WorkflowTab";
 
 const STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
     Created: "blue",
@@ -420,6 +421,17 @@ export function ProjectDetailPage() {
                     <Tab eventKey={3} title={<TabTitleText>Metrics</TabTitleText>}>
                         <TabContent id="metrics-tab" eventKey={3} activeKey={activeTab} style={{ marginTop: "16px" }}>
                             <MetricsTab metrics={metrics} />
+                        </TabContent>
+                    </Tab>
+                    <Tab eventKey={4} title={<TabTitleText>Workflow{project?.hasWorkflowInstance ? " ●" : ""}</TabTitleText>}>
+                        <TabContent id="workflow-tab" eventKey={4} activeKey={activeTab} style={{ marginTop: "16px" }}>
+                            {project && (
+                                <WorkflowTab
+                                    projectId={project.id}
+                                    hasWorkflowInstance={project.hasWorkflowInstance ?? false}
+                                    onRefresh={loadData}
+                                />
+                            )}
                         </TabContent>
                     </Tab>
                 </Tabs>
