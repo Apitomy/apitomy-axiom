@@ -249,7 +249,7 @@ export function WorkflowTab({
                         </FlexItem>
                         {instance.currentNodeName && isActive && (
                             <FlexItem>
-                                <Label color="cyan">
+                                <Label color="teal">
                                     {instance.currentNodeName}
                                 </Label>
                             </FlexItem>
