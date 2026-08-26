@@ -1695,6 +1695,22 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "filterEngine",
+            "in": "query",
+            "description": "Filter by AI engine (e.g. claude-code, opencode, copilot)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filterModel",
+            "in": "query",
+            "description": "Filter by AI model (e.g. claude-sonnet-4-6)",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -6609,6 +6625,10 @@
             "type": "integer"
           },
           "actionType": {
+            "type": "string"
+          },
+          "engine": {
+            "description": "The AI engine used (e.g. claude-code, opencode, copilot)",
             "type": "string"
           },
           "model": {

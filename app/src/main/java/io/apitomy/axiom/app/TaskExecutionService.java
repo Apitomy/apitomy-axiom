@@ -379,9 +379,15 @@ public class TaskExecutionService {
                 result.inputTokens() != null ? result.inputTokens() : 0,
                 result.outputTokens() != null ? result.outputTokens() : 0);
 
-        // Record AI usage
+        // Record AI usage (resolve engine/model from the action type definition)
+        ActionTypeEntity actionTypeEntity = ActionTypeEntity.find("name", task.actionType).firstResult();
+        String engine = actionTypeEntity != null ? actionTypeEntity.engine : null;
+        String model = actionTypeEntity != null ? actionTypeEntity.model : null;
+        if (engine == null || engine.isBlank()) {
+            engine = agentRegistry.getDefaultAgentType();
+        }
         recordAiUsage("task", taskId, task.eventId, task.projectId,
-                task.assignedAgent, task.actionType,
+                task.assignedAgent, task.actionType, engine, model,
                 result.costUsd(), result.inputTokens(), result.outputTokens());
 
         // Log to activity
@@ -534,6 +540,7 @@ public class TaskExecutionService {
 
     private void recordAiUsage(String invocationType, Long taskId, Long eventId,
                                 Long projectId, Long agentId, String actionType,
+                                String engine, String model,
                                 Double costUsd, Long inputTokens, Long outputTokens) {
         AiUsageEntity usage = new AiUsageEntity();
         usage.invocationType = invocationType;
@@ -542,6 +549,8 @@ public class TaskExecutionService {
         usage.projectId = projectId;
         usage.agentId = agentId;
         usage.actionType = actionType;
+        usage.engine = engine;
+        usage.model = model;
         usage.costUsd = costUsd;
         usage.inputTokens = inputTokens;
         usage.outputTokens = outputTokens;

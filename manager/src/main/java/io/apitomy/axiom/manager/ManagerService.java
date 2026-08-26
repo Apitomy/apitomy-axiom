@@ -342,12 +342,16 @@ public class ManagerService {
 
     void recordAiUsage(Long eventId, Long projectId,
                         Double costUsd, Long inputTokens, Long outputTokens) {
+        String resolvedEngine = managerEngine.orElse(agentRegistry.getDefaultAgentType());
+        String resolvedModel = model.orElse(null);
         QuarkusTransaction.requiringNew().run(() -> {
             AiUsageEntity usage = new AiUsageEntity();
             usage.invocationType = "manager";
             usage.eventId = eventId;
             usage.projectId = projectId;
             usage.actionType = "manager-evaluate";
+            usage.engine = resolvedEngine;
+            usage.model = resolvedModel;
             usage.costUsd = costUsd;
             usage.inputTokens = inputTokens;
             usage.outputTokens = outputTokens;

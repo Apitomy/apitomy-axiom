@@ -34,6 +34,8 @@ const TYPE_COLORS: Record<string, "blue" | "green"> = {
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "invocationType", label: "Type", testId: "usage-filter-type" },
     { value: "actionType", label: "Action Type", testId: "usage-filter-action" },
+    { value: "engine", label: "Engine", testId: "usage-filter-engine" },
+    { value: "model", label: "Model", testId: "usage-filter-model" },
 ];
 
 export function AiUsagePage() {
@@ -54,6 +56,8 @@ export function AiUsagePage() {
 
     const filterInvocationType = filters.find((f) => f.filterBy.value === "invocationType")?.filterValue;
     const filterActionType = filters.find((f) => f.filterBy.value === "actionType")?.filterValue;
+    const filterEngine = filters.find((f) => f.filterBy.value === "engine")?.filterValue;
+    const filterModel = filters.find((f) => f.filterBy.value === "model")?.filterValue;
     const isFiltered = filters.length > 0 || !!filterDateFrom || !!filterDateTo;
 
     const loadData = useCallback(() => {
@@ -64,7 +68,10 @@ export function AiUsagePage() {
             undefined, undefined,
             filterActionType || undefined,
             filterDateFrom || undefined,
-            filterDateTo || undefined
+            filterDateTo || undefined,
+            undefined,
+            filterEngine || undefined,
+            filterModel || undefined
         )
             .then((results) => {
                 setRecords(results.items);
@@ -75,7 +82,8 @@ export function AiUsagePage() {
             })
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [page, perPage, filterInvocationType, filterActionType, filterDateFrom, filterDateTo]);
+    }, [page, perPage, filterInvocationType, filterActionType, filterDateFrom, filterDateTo,
+        filterEngine, filterModel]);
 
     useEffect(() => { loadData(); }, [loadData]);
 
@@ -226,6 +234,8 @@ export function AiUsagePage() {
                                 <Th>Time</Th>
                                 <Th>Type</Th>
                                 <Th>Action</Th>
+                                <Th>Engine</Th>
+                                <Th>Model</Th>
                                 <Th>Project</Th>
                                 <Th>Cost</Th>
                                 <Th>Input Tokens</Th>
@@ -250,6 +260,23 @@ export function AiUsagePage() {
                                         </Label>
                                     </Td>
                                     <Td>{r.actionType || "—"}</Td>
+                                    <Td>
+                                        {r.engine ? (
+                                            <Label isCompact color="purple"
+                                                style={{ cursor: "pointer" }}
+                                                onClick={() => {
+                                                    const engineFilter = FILTER_TYPES.find(
+                                                        (t) => t.value === "engine")!;
+                                                    onAddFilterCriteria({
+                                                        filterBy: engineFilter,
+                                                        filterValue: r.engine!,
+                                                    });
+                                                }}>
+                                                {r.engine}
+                                            </Label>
+                                        ) : "—"}
+                                    </Td>
+                                    <Td>{r.model || "—"}</Td>
                                     <Td>
                                         {r.projectId ? `Project #${r.projectId}` : "—"}
                                     </Td>

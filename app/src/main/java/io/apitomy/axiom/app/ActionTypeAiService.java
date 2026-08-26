@@ -197,6 +197,7 @@ public class ActionTypeAiService {
         AiUsageEntity usage = new AiUsageEntity();
         usage.invocationType = "action-type-edit";
         usage.actionType = "action-type-ai-edit";
+        usage.engine = helperEngine.orElse(agentRegistry.getDefaultAgentType());
         usage.costUsd = costUsd;
         usage.inputTokens = inputTokens;
         usage.outputTokens = outputTokens;

@@ -313,6 +313,10 @@ public class ScheduledJobExecutionService {
         AiUsageEntity usage = new AiUsageEntity();
         usage.invocationType = "scheduled-job";
         usage.actionType = job != null ? job.name : "unknown";
+        String jobEngine = job != null ? job.engine : null;
+        usage.engine = jobEngine != null && !jobEngine.isBlank()
+                ? jobEngine : agentRegistry.getDefaultAgentType();
+        usage.model = job != null ? job.model : null;
         usage.costUsd = result.costUsd();
         usage.inputTokens = result.inputTokens();
         usage.outputTokens = result.outputTokens();
