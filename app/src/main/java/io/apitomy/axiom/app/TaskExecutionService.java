@@ -72,6 +72,9 @@ public class TaskExecutionService {
     @Inject
     TraceService traceService;
 
+    @Inject
+    WorkflowExecutionService workflowExecutionService;
+
     /**
      * Attempts to execute the next pending task for the given project.
      * Does nothing if there is already an active task for the project.
@@ -451,6 +454,11 @@ public class TaskExecutionService {
 
         // Emit internal event if configured
         emitInternalEventIfNeeded(task);
+
+        // Advance workflow if this task is part of one
+        if (task.workflowInstanceId != null) {
+            workflowExecutionService.onTaskCompleted(task.id);
+        }
     }
 
     @Transactional
@@ -468,6 +476,11 @@ public class TaskExecutionService {
 
             mcpConfigGenerator.cleanupTempFiles(taskId);
             updateProjectStatusAfterTask(task.projectId);
+
+            // Advance workflow if this task is part of one
+            if (task.workflowInstanceId != null) {
+                workflowExecutionService.onTaskCompleted(task.id);
+            }
         }
     }
 

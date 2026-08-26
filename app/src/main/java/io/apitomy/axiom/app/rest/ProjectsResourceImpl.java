@@ -25,6 +25,7 @@ import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
+import io.apitomy.axiom.core.entities.WorkflowInstanceEntity;
 import io.apitomy.axiom.core.lifecycle.ProjectLifecycle;
 import io.apitomy.axiom.core.lifecycle.ProjectStatus;
 import io.apitomy.axiom.core.services.WorkspaceService;
@@ -518,6 +519,8 @@ public class ProjectsResourceImpl implements ProjectsResource {
         project.setCreatedOn(Date.from(entity.createdOn));
         project.setUpdatedOn(Date.from(entity.updatedOn));
         project.setLabels(entity.labels);
+        project.setHasWorkflowInstance(
+                WorkflowInstanceEntity.count("projectId", entity.id) > 0);
         return project;
     }
 
