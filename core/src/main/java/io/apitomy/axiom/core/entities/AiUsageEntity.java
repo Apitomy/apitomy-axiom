@@ -57,6 +57,11 @@ public class AiUsageEntity extends PanacheEntity {
     public String actionType;
 
     /**
+     * The AI engine used (e.g. "claude-code", "opencode", "copilot").
+     */
+    public String engine;
+
+    /**
      * The AI model used (e.g. "claude-sonnet-4-6").
      */
     public String model;

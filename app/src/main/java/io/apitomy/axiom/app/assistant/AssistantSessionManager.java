@@ -370,6 +370,7 @@ public class AssistantSessionManager {
         AiUsageEntity usage = new AiUsageEntity();
         usage.invocationType = "assistant-session";
         usage.actionType = "assistant-session";
+        usage.engine = agentRegistry.getDefaultAgentType();
         usage.costUsd = session.getTotalCostUsd();
         usage.inputTokens = session.getTotalInputTokens();
         usage.outputTokens = session.getTotalOutputTokens();

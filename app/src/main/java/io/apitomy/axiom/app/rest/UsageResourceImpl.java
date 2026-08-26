@@ -49,7 +49,9 @@ public class UsageResourceImpl implements UsageResource {
                                            String filterActionType,
                                            String filterDateFrom,
                                            String filterDateTo,
-                                           String filterLabels) {
+                                           String filterLabels,
+                                           String filterEngine,
+                                           String filterModel) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
@@ -93,6 +95,14 @@ public class UsageResourceImpl implements UsageResource {
                     + " GROUP BY p.id HAVING COUNT(DISTINCT pl) = :labelCount)");
             params.put("labels", labels);
             params.put("labelCount", (long) labels.size());
+        }
+        if (filterEngine != null && !filterEngine.isBlank()) {
+            hql.append(" and engine = :engine");
+            params.put("engine", filterEngine);
+        }
+        if (filterModel != null && !filterModel.isBlank()) {
+            hql.append(" and model = :model");
+            params.put("model", filterModel);
         }
 
         long totalCount = AiUsageEntity.count(hql.toString(), params);
@@ -212,6 +222,7 @@ public class UsageResourceImpl implements UsageResource {
         usage.setProjectId(entity.projectId);
         usage.setAgentId(entity.agentId);
         usage.setActionType(entity.actionType);
+        usage.setEngine(entity.engine);
         usage.setModel(entity.model);
         usage.setCostUsd(entity.costUsd);
         usage.setInputTokens(entity.inputTokens);

@@ -172,6 +172,8 @@ public class ScriptAiService {
         AiUsageEntity usage = new AiUsageEntity();
         usage.invocationType = "script-edit";
         usage.actionType = "script-ai-edit";
+        usage.engine = helperEngine.orElse(agentRegistry.getDefaultAgentType());
+        usage.model = model.orElse(null);
         usage.costUsd = costUsd;
         usage.inputTokens = inputTokens;
         usage.outputTokens = outputTokens;

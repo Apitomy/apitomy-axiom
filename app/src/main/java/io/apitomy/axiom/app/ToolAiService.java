@@ -202,6 +202,8 @@ public class ToolAiService {
         AiUsageEntity usage = new AiUsageEntity();
         usage.invocationType = "tool-edit";
         usage.actionType = "tool-ai-edit";
+        usage.engine = helperEngine.orElse(agentRegistry.getDefaultAgentType());
+        usage.model = model.orElse(null);
         usage.costUsd = costUsd;
         usage.inputTokens = inputTokens;
         usage.outputTokens = outputTokens;
