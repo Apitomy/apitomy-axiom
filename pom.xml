@@ -47,7 +47,7 @@
         <!-- Quarkus -->
         <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
         <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
-        <quarkus.platform.version>3.38.3</quarkus.platform.version>
+        <quarkus.platform.version>3.39.1</quarkus.platform.version>
 
         <!-- Plugins -->
         <compiler-plugin.version>3.15.0</compiler-plugin.version>
