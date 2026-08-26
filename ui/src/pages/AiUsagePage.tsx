@@ -276,7 +276,22 @@ export function AiUsagePage() {
                                             </Label>
                                         ) : "—"}
                                     </Td>
-                                    <Td>{r.model || "—"}</Td>
+                                    <Td>
+                                        {r.model ? (
+                                            <Label isCompact color="cyan"
+                                                style={{ cursor: "pointer" }}
+                                                onClick={() => {
+                                                    const modelFilter = FILTER_TYPES.find(
+                                                        (t) => t.value === "model")!;
+                                                    onAddFilterCriteria({
+                                                        filterBy: modelFilter,
+                                                        filterValue: r.model!,
+                                                    });
+                                                }}>
+                                                {r.model}
+                                            </Label>
+                                        ) : "—"}
+                                    </Td>
                                     <Td>
                                         {r.projectId ? `Project #${r.projectId}` : "—"}
                                     </Td>
