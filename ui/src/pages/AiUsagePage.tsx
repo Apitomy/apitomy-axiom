@@ -278,7 +278,7 @@ export function AiUsagePage() {
                                     </Td>
                                     <Td>
                                         {r.model ? (
-                                            <Label isCompact color="cyan"
+                                            <Label isCompact color="teal"
                                                 style={{ cursor: "pointer" }}
                                                 onClick={() => {
                                                     const modelFilter = FILTER_TYPES.find(
