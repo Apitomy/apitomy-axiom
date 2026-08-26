@@ -12,6 +12,7 @@ import org.jboss.logging.Logger;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -44,6 +45,9 @@ public class ClaudeCodeAgent implements Agent {
     @ConfigProperty(name = "axiom.agent.claude-code.timeout-seconds", defaultValue = "600")
     int defaultTimeoutSeconds;
 
+    @ConfigProperty(name = "axiom.agent.claude-code.available-models", defaultValue = "")
+    String availableModels;
+
     @Inject
     ClaudeCodeMcpManager mcpManager;
 
@@ -53,6 +57,30 @@ public class ClaudeCodeAgent implements Agent {
     @Override
     public String getType() {
         return "claude-code";
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String getLabel() {
+        return "Claude Code";
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public List<String> getAvailableModels() {
+        if (availableModels == null || availableModels.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(availableModels.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean supportsInteractiveSessions() {
+        return true;
     }
 
     /** {@inheritDoc} */

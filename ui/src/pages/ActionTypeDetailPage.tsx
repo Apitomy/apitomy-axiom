@@ -14,7 +14,6 @@ import {
     FormGroup,
     FormSelect,
     FormSelectOption,
-    FormSelectOptionGroup,
     PageSection,
     Tab,
     TabContent,
@@ -22,11 +21,12 @@ import {
     Tabs,
     TextArea,
     TextInput,
-    Title, HelperText, HelperTextItem,
+    Title,
 } from "@patternfly/react-core";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { registerPlaceholderCompletions, ACTION_TYPE_PLACEHOLDERS } from "../components/PlaceholderCompletionProvider";
 import { EditLabelsModal } from "../components/EditLabelsModal";
+import { AiConfigTab } from "../components/AiConfigTab";
 import { EnvironmentTab } from "../components/EnvironmentTab";
 import { LabelDisplay } from "../components/LabelDisplay";
 import { ToolListEditor } from "../components/ToolListEditor";
@@ -238,7 +238,7 @@ export function ActionTypeDetailPage() {
             <Tabs activeKey={activeTab} onSelect={(_e, k) => setActiveTab(k as number)}>
                 <Tab eventKey={0} title={<TabTitleText>Info</TabTitleText>}>
                     <TabContent id="info-tab" eventKey={0} activeKey={activeTab} style={{ marginTop: "24px" }}>
-                        <InfoTab form={form} updateForm={updateForm} availableModels={availableModels} availableEngines={availableEngines} onEditLabels={() => setIsLabelsOpen(true)} />
+                        <InfoTab form={form} updateForm={updateForm} onEditLabels={() => setIsLabelsOpen(true)} />
                     </TabContent>
                 </Tab>
                 {form.executionMode === "agent" && (
@@ -288,6 +288,20 @@ export function ActionTypeDetailPage() {
                                 value={form.promptTemplate || ""}
                                 onChange={(v) => updateForm({ promptTemplate: v })}
                             />
+                        </TabContent>
+                    </Tab>
+                )}
+                {form.executionMode === "agent" && (
+                    <Tab eventKey={10} title={<TabTitleText>AI Config</TabTitleText>}>
+                        <TabContent id="ai-config-tab" eventKey={10} activeKey={activeTab} style={{ marginTop: "24px" }}>
+                            <Form style={{ maxWidth: "600px" }}>
+                                <AiConfigTab
+                                    values={form}
+                                    onChange={updateForm}
+                                    availableEngines={availableEngines}
+                                    availableModels={availableModels}
+                                />
+                            </Form>
                         </TabContent>
                     </Tab>
                 )}
@@ -360,11 +374,9 @@ export function ActionTypeDetailPage() {
     );
 }
 
-function InfoTab({ form, updateForm, availableModels, availableEngines, onEditLabels }: {
+function InfoTab({ form, updateForm, onEditLabels }: {
     form: NewActionType;
     updateForm: (updates: Partial<NewActionType>) => void;
-    availableModels: string[];
-    availableEngines: string[];
     onEditLabels: () => void;
 }) {
     return (
@@ -398,107 +410,6 @@ function InfoTab({ form, updateForm, availableModels, availableEngines, onEditLa
                     <FormSelectOption value="script" label="Script — executes a bash script" />
                 </FormSelect>
             </FormGroup>
-            {form.executionMode === "agent" && availableEngines.length > 1 && (
-                <FormGroup label="AI Engine" fieldId="engine">
-                    <HelperText>
-                        <HelperTextItem>AI engine to use for this action type. Select 'Global default' to use the system-wide setting.</HelperTextItem>
-                    </HelperText>
-                    <FormSelect
-                        id="engine"
-                        value={form.engine || ""}
-                        onChange={(_e, v) => updateForm({ engine: v || undefined })}
-                    >
-                        <FormSelectOption value="" label="Global default" />
-                        {availableEngines.map((e) => (
-                            <FormSelectOption key={e} value={e} label={e === "opencode" ? "OpenCode" : e === "claude-code" ? "Claude Code" : e === "copilot" ? "GitHub Copilot CLI" : e} />
-                        ))}
-                    </FormSelect>
-                </FormGroup>
-            )}
-            {form.executionMode === "agent" && (
-                <FormGroup label="Max Steps" fieldId="maxSteps">
-                    <HelperText>
-                        <HelperTextItem>Maximum number of agent steps/turns. Leave empty to use the global default.</HelperTextItem>
-                    </HelperText>
-                    <TextInput
-                        id="maxSteps"
-                        type="number"
-                        value={form.maxSteps ?? ""}
-                        onChange={(_e, v) => updateForm({ maxSteps: v === "" ? undefined : Number(v) })}
-                        placeholder="Global default"
-                    />
-                </FormGroup>
-            )}
-            {form.executionMode === "agent" && (
-                <FormGroup label="Max Budget (USD)" fieldId="maxBudgetUsd">
-                    <HelperText>
-                        <HelperTextItem>Maximum budget in USD for this action type. Leave empty to use the global default.</HelperTextItem>
-                    </HelperText>
-                    <TextInput
-                        id="maxBudgetUsd"
-                        type="number"
-                        value={form.maxBudgetUsd ?? ""}
-                        onChange={(_e, v) => updateForm({ maxBudgetUsd: v === "" ? undefined : Number(v) })}
-                        placeholder="Global default"
-                    />
-                </FormGroup>
-            )}
-            {form.executionMode === "agent" && (
-                <FormGroup label="Timeout (seconds)" fieldId="timeoutSeconds">
-                    <HelperText>
-                        <HelperTextItem>Timeout in seconds for agent execution. Leave empty to use the global default (120s).</HelperTextItem>
-                    </HelperText>
-                    <TextInput
-                        id="timeoutSeconds"
-                        type="number"
-                        value={form.timeoutSeconds ?? ""}
-                        onChange={(_e, v) => updateForm({ timeoutSeconds: v === "" ? undefined : Number(v) })}
-                        placeholder="120 (default)"
-                    />
-                </FormGroup>
-            )}
-            {form.executionMode === "agent" && (
-                <FormGroup label="Model" fieldId="model">
-                    <HelperText>
-                        <HelperTextItem>AI model to use for this action type. Select 'Global default' to use the system-wide setting.</HelperTextItem>
-                    </HelperText>
-                    <FormSelect
-                        id="model"
-                        value={form.model || ""}
-                        onChange={(_e, v) => updateForm({ model: v || undefined })}
-                    >
-                        <FormSelectOption value="" label="Global default" />
-                        {(() => {
-                            // Group models by provider if they use provider/model format
-                            const hasProviders = availableModels.some((m) => m.includes("/"));
-                            if (hasProviders) {
-                                const groups: Record<string, string[]> = {};
-                                for (const m of availableModels) {
-                                    if (m.includes("/")) {
-                                        const [provider] = m.split("/", 2);
-                                        const key = provider.charAt(0).toUpperCase() + provider.slice(1);
-                                        if (!groups[key]) groups[key] = [];
-                                        groups[key].push(m);
-                                    } else {
-                                        if (!groups["Other"]) groups["Other"] = [];
-                                        groups["Other"].push(m);
-                                    }
-                                }
-                                return Object.entries(groups).map(([provider, models]) => (
-                                    <FormSelectOptionGroup key={provider} label={provider}>
-                                        {models.map((m) => (
-                                            <FormSelectOption key={m} value={m} label={m.split("/").pop() || m} />
-                                        ))}
-                                    </FormSelectOptionGroup>
-                                ));
-                            }
-                            return availableModels.map((m) => (
-                                <FormSelectOption key={m} value={m} label={m} />
-                            ));
-                        })()}
-                    </FormSelect>
-                </FormGroup>
-            )}
             <FormGroup fieldId="flags">
                 <Checkbox
                     id="userTriggerable"

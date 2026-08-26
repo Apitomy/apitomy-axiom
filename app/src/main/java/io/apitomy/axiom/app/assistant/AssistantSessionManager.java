@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.apitomy.axiom.agents.spi.Agent;
+import io.apitomy.axiom.agents.spi.AgentRegistry;
 import io.apitomy.axiom.app.ImportExportService;
 import io.apitomy.axiom.app.McpConfigGenerator;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
@@ -55,13 +57,16 @@ public class AssistantSessionManager {
     int maxSessions;
 
     @ConfigProperty(name = "axiom.agent.default-type", defaultValue = "claude-code")
-    String aiEngine;
+    String defaultEngineType;
 
     @ConfigProperty(name = "axiom.agent.claude-code.executable", defaultValue = "claude")
     String claudeExecutable;
 
     @ConfigProperty(name = "quarkus.http.port", defaultValue = "9090")
     int httpPort;
+
+    @Inject
+    AgentRegistry agentRegistry;
 
     @Inject
     SessionTemplateService templateService;
@@ -108,10 +113,12 @@ public class AssistantSessionManager {
      */
     public AssistantSession createSession(String name, String templateId,
                                           Long projectId) throws IOException {
-        if (!"claude-code".equals(aiEngine)) {
+        Agent agent = agentRegistry.getDefaultAgent();
+        if (!agent.supportsInteractiveSessions()) {
             throw new IllegalStateException(
-                    "The AI Assistant requires Claude Code as the active AI engine. "
-                            + "Current engine: " + aiEngine);
+                    "The AI Assistant requires an engine that supports interactive sessions. "
+                            + "Current engine (" + agent.getLabel()
+                            + ") does not support this feature.");
         }
 
         // Atomically reserve a session slot before doing any setup work.
@@ -463,12 +470,13 @@ public class AssistantSessionManager {
     }
 
     /**
-     * Returns whether the AI engine supports the assistant feature.
+     * Returns whether any registered engine supports interactive sessions.
      *
-     * @return true if Claude Code is the active engine
+     * @return true if at least one engine supports interactive sessions
      */
     public boolean isAvailable() {
-        return "claude-code".equals(aiEngine);
+        return agentRegistry.getAllAgents().stream()
+                .anyMatch(Agent::supportsInteractiveSessions);
     }
 
     /**

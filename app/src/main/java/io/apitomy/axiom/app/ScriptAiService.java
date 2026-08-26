@@ -33,6 +33,9 @@ public class ScriptAiService {
     @Inject
     AgentRegistry agentRegistry;
 
+    @ConfigProperty(name = "axiom.helper-services.engine")
+    Optional<String> helperEngine;
+
     @ConfigProperty(name = "axiom.manager.model")
     Optional<String> model;
 
@@ -123,8 +126,8 @@ public class ScriptAiService {
                 .build();
 
         try {
-            AgentResult result = agentRegistry.getDefaultAgent().executeWithSchema(agentRequest,
-                    RESPONSE_SCHEMA).join();
+            AgentResult result = agentRegistry.getAgent(helperEngine.orElse(null))
+                    .executeWithSchema(agentRequest, RESPONSE_SCHEMA).join();
 
             recordAiUsage(result.costUsd(), result.inputTokens(), result.outputTokens());
 

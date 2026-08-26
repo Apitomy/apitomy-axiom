@@ -361,6 +361,10 @@ public class ImportExportService {
             entity.promptTemplate = item.path("promptTemplate").asText("");
             entity.allowedTools = csvOrNull(item, "allowedTools");
             entity.environment = jsonOrNull(item, "environment");
+            entity.engine = textOrNull(item, "engine");
+            entity.model = textOrNull(item, "model");
+            if (item.has("maxSteps")) entity.maxSteps = item.path("maxSteps").asInt();
+            if (item.has("maxBudgetUsd")) entity.maxBudgetUsd = item.path("maxBudgetUsd").asDouble();
             entity.timeoutSeconds = item.has("timeoutSeconds")
                     ? item.path("timeoutSeconds").asInt() : null;
             entity.enabled = false;
@@ -506,6 +510,10 @@ public class ImportExportService {
             entity.promptTemplate = item.path("promptTemplate").asText("");
             entity.allowedTools = csvOrNull(item, "allowedTools");
             entity.environment = jsonOrNull(item, "environment");
+            entity.engine = textOrNull(item, "engine");
+            entity.model = textOrNull(item, "model");
+            if (item.has("maxSteps")) entity.maxSteps = item.path("maxSteps").asInt();
+            if (item.has("maxBudgetUsd")) entity.maxBudgetUsd = item.path("maxBudgetUsd").asDouble();
             entity.timeoutSeconds = item.has("timeoutSeconds")
                     ? item.path("timeoutSeconds").asInt() : null;
             entity.updatedOn = Instant.now();
@@ -695,6 +703,10 @@ public class ImportExportService {
         putIfNotNull(n, "promptTemplate", e.promptTemplate);
         putIfNotNull(n, "allowedTools", e.allowedTools);
         putIfNotNull(n, "environment", e.environment);
+        putIfNotNull(n, "engine", e.engine);
+        putIfNotNull(n, "model", e.model);
+        if (e.maxSteps != null) n.put("maxSteps", e.maxSteps);
+        if (e.maxBudgetUsd != null) n.put("maxBudgetUsd", e.maxBudgetUsd);
         if (e.timeoutSeconds != null) n.put("timeoutSeconds", e.timeoutSeconds);
         return n;
     }
@@ -741,6 +753,7 @@ public class ImportExportService {
             entity.allowedTools = csvOrNull(item, "allowedTools");
             if (item.has("maxSteps")) entity.maxSteps = item.path("maxSteps").asInt();
             if (item.has("maxBudgetUsd")) entity.maxBudgetUsd = item.path("maxBudgetUsd").asDouble();
+            if (item.has("timeoutSeconds")) entity.timeoutSeconds = item.path("timeoutSeconds").asInt();
             entity.environment = jsonOrNull(item, "environment");
             entity.enabled = false;
             entity.createdOn = Instant.now();
@@ -780,6 +793,7 @@ public class ImportExportService {
             entity.allowedTools = csvOrNull(item, "allowedTools");
             if (item.has("maxSteps")) entity.maxSteps = item.path("maxSteps").asInt();
             if (item.has("maxBudgetUsd")) entity.maxBudgetUsd = item.path("maxBudgetUsd").asDouble();
+            if (item.has("timeoutSeconds")) entity.timeoutSeconds = item.path("timeoutSeconds").asInt();
             entity.environment = jsonOrNull(item, "environment");
             entity.labels.clear();
             JsonNode labelsNode = item.path("labels");
@@ -809,6 +823,7 @@ public class ImportExportService {
         putIfNotNull(n, "allowedTools", e.allowedTools);
         if (e.maxSteps != null) n.put("maxSteps", e.maxSteps);
         if (e.maxBudgetUsd != null) n.put("maxBudgetUsd", e.maxBudgetUsd);
+        if (e.timeoutSeconds != null) n.put("timeoutSeconds", e.timeoutSeconds);
         putIfNotNull(n, "environment", e.environment);
         if (e.labels != null && !e.labels.isEmpty()) {
             ArrayNode arr = n.putArray("labels");

@@ -11,6 +11,7 @@ import org.jboss.logging.Logger;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -42,6 +43,9 @@ public class CopilotAgent implements Agent {
     @ConfigProperty(name = "axiom.agent.copilot.timeout-seconds", defaultValue = "600")
     int defaultTimeoutSeconds;
 
+    @ConfigProperty(name = "axiom.agent.copilot.available-models", defaultValue = "")
+    String availableModels;
+
     @Inject
     CopilotMcpManager mcpManager;
 
@@ -55,6 +59,24 @@ public class CopilotAgent implements Agent {
     @Override
     public String getType() {
         return "copilot";
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String getLabel() {
+        return "GitHub Copilot CLI";
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public List<String> getAvailableModels() {
+        if (availableModels == null || availableModels.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(availableModels.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
     }
 
     /**

@@ -56,7 +56,8 @@ export function App() {
     const location = useLocation();
     const { mode: themeMode, effectiveTheme, setMode: setThemeMode } = useTheme();
     const [startupChecks, setStartupChecks] = useState<StartupCheck[] | null>(null);
-    const [engineName, setEngineName] = useState<string | undefined>(undefined);
+    const [engineLabel, setEngineLabel] = useState<string | undefined>(undefined);
+    const [assistantAvailable, setAssistantAvailable] = useState(false);
     const [appVersion, setAppVersion] = useState<string>("");
     const themeProps = useMemo(() => ({ themeMode, setThemeMode }), [themeMode, setThemeMode]);
 
@@ -70,12 +71,21 @@ export function App() {
                 if (config.checks) {
                     setStartupChecks(config.checks);
                 }
-                if (config.engine) {
-                    setEngineName(config.engine);
-                }
                 if (config.version) {
                     setAppVersion(config.version);
                 }
+                // Resolve default engine label from engines array
+                const defaultType = config.defaultEngine || config.engine;
+                const defaultInfo = (config.engines || []).find(
+                    (e) => e.type === defaultType
+                );
+                setEngineLabel(defaultInfo?.label || defaultType);
+                // Assistant is available if any engine supports interactive sessions
+                setAssistantAvailable(
+                    (config.engines || []).some(
+                        (e) => e.supportsInteractiveSessions && e.available
+                    )
+                );
             })
             .catch(console.error);
 
@@ -93,7 +103,7 @@ export function App() {
     return (
         <EffectiveThemeContext.Provider value={effectiveTheme}>
             <Page
-                masthead={isBreakout ? undefined : <AppMasthead engineName={engineName} appVersion={appVersion} {...themeProps} />}
+                masthead={isBreakout ? undefined : <AppMasthead engineLabel={engineLabel} assistantAvailable={assistantAvailable} appVersion={appVersion} {...themeProps} />}
                 sidebar={hasCheckErrors || isAssistantPage || isBreakout ? undefined : <AppSidebar />}
                 isContentFilled
                 style={isBreakout ? {

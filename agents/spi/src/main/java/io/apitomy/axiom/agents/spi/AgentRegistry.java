@@ -119,4 +119,13 @@ public class AgentRegistry {
     public List<String> getAvailableTypes() {
         return List.copyOf(agentMap.keySet());
     }
+
+    /**
+     * Returns all registered agent implementations.
+     *
+     * @return an unmodifiable list of all registered agents
+     */
+    public List<Agent> getAllAgents() {
+        return List.copyOf(agentMap.values());
+    }
 }

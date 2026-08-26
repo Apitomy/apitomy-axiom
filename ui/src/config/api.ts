@@ -29,9 +29,20 @@ export interface StartupCheck {
     message: string;
 }
 
+export interface EngineInfo {
+    type: string;
+    label: string;
+    available: boolean;
+    supportsInteractiveSessions?: boolean;
+    checks?: StartupCheck[];
+    models?: string[];
+}
+
 export interface SystemConfig {
     version: string;
     engine?: string;
+    defaultEngine?: string;
+    engines?: EngineInfo[];
     features: Record<string, boolean>;
     checks?: StartupCheck[];
 }
@@ -984,6 +995,10 @@ export interface ReportDefinition {
     titleTemplate?: string;
     allowedTools?: string[];
     enabled: boolean;
+    engine?: string;
+    model?: string;
+    maxSteps?: number;
+    maxBudgetUsd?: number;
     timeoutSeconds?: number;
     environment?: Record<string, string>;
     initialLabels?: string[];
@@ -1920,6 +1935,7 @@ export interface ScheduledJob {
     allowedTools?: string[];
     maxSteps?: number;
     maxBudgetUsd?: number;
+    timeoutSeconds?: number;
     environment?: Record<string, string>;
     createdOn: string;
     updatedOn: string;

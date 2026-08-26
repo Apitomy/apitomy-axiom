@@ -352,6 +352,10 @@ public class ReportsResourceImpl implements ReportsResource {
                 ? String.join(",", data.getAllowedTools()) : null;
         entity.enabled = "none".equals(data.getSchedule()) ? false
                 : (data.getEnabled() != null ? data.getEnabled() : false);
+        entity.engine = data.getEngine();
+        entity.model = data.getModel();
+        entity.maxSteps = data.getMaxSteps();
+        entity.maxBudgetUsd = data.getMaxBudgetUsd();
         entity.timeoutSeconds = data.getTimeoutSeconds();
         entity.environment = environmentToJson(data.getEnvironment());
         entity.initialLabels.clear();
@@ -384,6 +388,10 @@ public class ReportsResourceImpl implements ReportsResource {
                     .map(String::trim).filter(s -> !s.isEmpty()).toList());
         }
         def.setEnabled(entity.enabled);
+        def.setEngine(entity.engine);
+        def.setModel(entity.model);
+        def.setMaxSteps(entity.maxSteps);
+        def.setMaxBudgetUsd(entity.maxBudgetUsd);
         def.setTimeoutSeconds(entity.timeoutSeconds);
         def.setEnvironment(jsonToEnvironment(entity.environment));
         if (entity.nextRunAt != null) def.setNextRunAt(Date.from(entity.nextRunAt));

@@ -37,7 +37,6 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Executes report generation by invoking the AI engine with a prompt template,
@@ -76,11 +75,8 @@ public class ReportExecutionService {
     @Inject
     TraceService traceService;
 
-    @ConfigProperty(name = "axiom.agent.claude-code.model")
-    Optional<String> model;
-
     @ConfigProperty(name = "axiom.agent.claude-code.timeout-seconds", defaultValue = "600")
-    int timeoutSeconds;
+    int defaultTimeoutSeconds;
 
     private static final String SYSTEM_PROMPT = """
             You are a report generator for Apicurio Axiom. Your job is to gather \
@@ -177,22 +173,26 @@ public class ReportExecutionService {
         // it registers MCP servers dynamically via HTTP rather than a config
         // file, and generateMcpConfig() above only produces a file that
         // OpenCode ignores.
+        String agentType = definition.engine;
         try {
-            agentRegistry.getMcpManager(null).configureMcpServers(reportId, env, allowedTools);
+            agentRegistry.getMcpManager(agentType).configureMcpServers(reportId, env, allowedTools);
         } catch (Exception e) {
             LOG.warnf(e, "Failed to configure agent MCP servers for report %d", reportId);
         }
 
-        // Build agent request
+        // Build agent request using per-definition overrides
         int effectiveTimeout = definition.timeoutSeconds != null
-                ? definition.timeoutSeconds : timeoutSeconds;
+                ? definition.timeoutSeconds : defaultTimeoutSeconds;
+        int effectiveMaxSteps = definition.maxSteps != null
+                ? definition.maxSteps : 30;
         AgentRequest agentRequest = AgentRequest.builder()
                 .prompt(prompt)
                 .systemPrompt(SYSTEM_PROMPT)
                 .allowedTools(allowedTools)
                 .timeoutSeconds(effectiveTimeout)
-                .maxSteps(30)
-                .model(model.orElse(null))
+                .maxSteps(effectiveMaxSteps)
+                .maxBudgetUsd(definition.maxBudgetUsd)
+                .model(definition.model)
                 .environment(env)
                 .mcpConfigFile(mcpConfig)
                 .build();
