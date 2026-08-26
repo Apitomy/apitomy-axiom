@@ -44,6 +44,7 @@ public class CopilotSubprocess {
     private volatile String resultSessionId;
     private volatile int resultExitCode = -1;
     private volatile boolean sawResultEvent;
+    private volatile String streamModel;
 
     private final StringBuilder log = new StringBuilder();
 
@@ -145,7 +146,7 @@ public class CopilotSubprocess {
             destroyProcessTree();
             log.append("\n=== Timed Out ===\n");
             return new CopilotResult("Process timed out after " + timeout,
-                    null, null, null, null, 124, log.toString());
+                    null, null, null, null, 124, log.toString(), streamModel);
         }
 
         destroyProcessTree();
@@ -166,7 +167,7 @@ public class CopilotSubprocess {
             }
             log.append("\n=== Failed (exit ").append(exitCode).append(") ===\n");
             return new CopilotResult(error, resultSessionId, null, null, lastOutputTokens,
-                    exitCode, log.toString());
+                    exitCode, log.toString(), streamModel);
         }
 
         String result = lastAssistantMessage != null ? lastAssistantMessage : "";
@@ -179,7 +180,7 @@ public class CopilotSubprocess {
                 .append("\nDuration: ").append(duration.toSeconds()).append("s\n");
 
         return new CopilotResult(result, resultSessionId, null, null, lastOutputTokens,
-                finalExitCode, log.toString());
+                finalExitCode, log.toString(), streamModel);
     }
 
     /**
@@ -230,6 +231,14 @@ public class CopilotSubprocess {
                     String message = node.path("data").path("message").asText(null);
                     if (message != null) {
                         LOG.tracef("  [copilot] Info: %s", message);
+                    }
+                }
+                case "assistant.usage" -> {
+                    JsonNode data = node.path("data");
+                    String model = data.path("model").asText(null);
+                    if (model != null && !model.isBlank()) {
+                        streamModel = model;
+                        LOG.tracef("  [copilot] Model: %s", model);
                     }
                 }
                 default -> LOG.tracef("  [copilot] Stream event type: %s", type);

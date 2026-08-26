@@ -157,7 +157,8 @@ public class ManagerService {
             // Record AI usage for this Manager evaluation
             try {
                 recordAiUsage(event.id, ctx.project() != null ? ctx.project().id : null,
-                        result.costUsd(), result.inputTokens(), result.outputTokens());
+                        result.costUsd(), result.inputTokens(), result.outputTokens(),
+                        result.engine(), result.model());
             } catch (Exception e) {
                 LOG.warnf(e, "Failed to record AI usage for event %d", event.id);
             }
@@ -341,9 +342,12 @@ public class ManagerService {
     }
 
     void recordAiUsage(Long eventId, Long projectId,
-                        Double costUsd, Long inputTokens, Long outputTokens) {
-        String resolvedEngine = managerEngine.orElse(agentRegistry.getDefaultAgentType());
-        String resolvedModel = model.orElse(null);
+                        Double costUsd, Long inputTokens, Long outputTokens,
+                        String resultEngine, String resultModel) {
+        String resolvedEngine = resultEngine != null && !resultEngine.isBlank()
+                ? resultEngine : managerEngine.orElse(agentRegistry.getDefaultAgentType());
+        String resolvedModel = resultModel != null && !resultModel.isBlank()
+                ? resultModel : model.orElse(null);
         QuarkusTransaction.requiringNew().run(() -> {
             AiUsageEntity usage = new AiUsageEntity();
             usage.invocationType = "manager";

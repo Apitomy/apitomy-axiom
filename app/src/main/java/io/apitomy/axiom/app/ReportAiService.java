@@ -151,7 +151,8 @@ public class ReportAiService {
         try {
             ClaudeCodeResult result = subprocess.execute().join();
 
-            recordAiUsage(result.totalCostUsd(), result.inputTokens(), result.outputTokens());
+            recordAiUsage(result.totalCostUsd(), result.inputTokens(), result.outputTokens(),
+                    result.model());
 
             if (!result.isSuccess()) {
                 LOG.errorf("Report AI edit failed (exit %d): %s",
@@ -207,10 +208,13 @@ public class ReportAiService {
     }
 
     @Transactional
-    void recordAiUsage(Double costUsd, Long inputTokens, Long outputTokens) {
+    void recordAiUsage(Double costUsd, Long inputTokens, Long outputTokens,
+                        String streamModel) {
         AiUsageEntity usage = new AiUsageEntity();
         usage.invocationType = "report-edit";
         usage.actionType = "report-ai-edit";
+        usage.engine = "claude-code";
+        usage.model = streamModel != null ? streamModel : model.orElse(null);
         usage.costUsd = costUsd;
         usage.inputTokens = inputTokens;
         usage.outputTokens = outputTokens;

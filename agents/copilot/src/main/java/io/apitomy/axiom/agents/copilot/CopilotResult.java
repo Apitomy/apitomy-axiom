@@ -19,7 +19,8 @@ public record CopilotResult(
         Long inputTokens,
         Long outputTokens,
         int exitCode,
-        String executionLog
+        String executionLog,
+        String model
 ) {
 
     /**
@@ -30,7 +31,7 @@ public record CopilotResult(
      * @return a failed result
      */
     public static CopilotResult failed(String errorMessage, int exitCode) {
-        return new CopilotResult(errorMessage, null, null, null, null, exitCode, null);
+        return new CopilotResult(errorMessage, null, null, null, null, exitCode, null, null);
     }
 
     /**

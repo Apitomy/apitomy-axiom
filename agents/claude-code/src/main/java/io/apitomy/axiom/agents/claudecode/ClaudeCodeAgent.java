@@ -189,9 +189,12 @@ public class ClaudeCodeAgent implements Agent {
                 .maxTurns(maxSteps)
                 .maxBudgetUsd(maxBudget);
 
+        String resolvedModel;
         if (request.getModel() != null && !request.getModel().isBlank()) {
-            cmdBuilder.model(request.getModel());
+            resolvedModel = request.getModel();
+            cmdBuilder.model(resolvedModel);
         } else {
+            resolvedModel = defaultModel.orElse(null);
             defaultModel.ifPresent(cmdBuilder::model);
         }
 
@@ -225,7 +228,7 @@ public class ClaudeCodeAgent implements Agent {
                     if (request.getExecutionId() != null) {
                         runningProcesses.remove(request.getExecutionId());
                     }
-                    return toAgentResult(result);
+                    return toAgentResult(result, resolvedModel);
                 })
                 .exceptionally(throwable -> {
                     if (request.getExecutionId() != null) {
@@ -236,7 +239,8 @@ public class ClaudeCodeAgent implements Agent {
                 });
     }
 
-    private static AgentResult toAgentResult(ClaudeCodeResult result) {
+    private AgentResult toAgentResult(ClaudeCodeResult result, String resolvedModel) {
+        String actualModel = result.model() != null ? result.model() : resolvedModel;
         return new AgentResult(
                 result.isSuccess(),
                 result.result(),
@@ -245,7 +249,9 @@ public class ClaudeCodeAgent implements Agent {
                 result.sessionId(),
                 result.totalCostUsd(),
                 result.inputTokens(),
-                result.outputTokens()
+                result.outputTokens(),
+                getType(),
+                actualModel
         );
     }
 }

@@ -41,6 +41,7 @@ public class ClaudeCodeSubprocess {
     private volatile Long streamInputTokens;
     private volatile Long streamOutputTokens;
     private volatile String streamSessionId;
+    private volatile String streamModel;
 
     /**
      * Creates a new subprocess wrapper.
@@ -162,7 +163,7 @@ public class ClaudeCodeSubprocess {
             logBuilder.footer("Timed Out", null, null, null,
                     Duration.between(startTime, Instant.now()));
             return new ClaudeCodeResult("Process timed out after " + timeout,
-                    null, null, null, null, 124, logBuilder.build());
+                    null, null, null, null, 124, logBuilder.build(), streamModel);
         }
 
         destroyProcessTree();
@@ -181,7 +182,7 @@ public class ClaudeCodeSubprocess {
             logBuilder.footer("Failed (exit " + exitCode + ")", null, null, null,
                     Duration.between(startTime, Instant.now()));
             return new ClaudeCodeResult(error, null, null, null, null,
-                    exitCode, logBuilder.build());
+                    exitCode, logBuilder.build(), streamModel);
         }
 
         ClaudeCodeResult result = parseResult(lastResultLine.toString(), exitCode);
@@ -197,7 +198,7 @@ public class ClaudeCodeSubprocess {
                 Duration.between(startTime, Instant.now()));
         return new ClaudeCodeResult(finalResult, finalSessionId,
                 finalCostUsd, finalInputTokens, finalOutputTokens,
-                result.exitCode(), logBuilder.build());
+                result.exitCode(), logBuilder.build(), streamModel);
     }
 
     private ClaudeCodeResult parseResult(String jsonLine, int exitCode) {
@@ -235,11 +236,11 @@ public class ClaudeCodeSubprocess {
             }
 
             return new ClaudeCodeResult(result, sessionId, costUsd, inputTokens,
-                    outputTokens, exitCode, null);
+                    outputTokens, exitCode, null, null);
         } catch (Exception e) {
             LOG.warnf(e, "Failed to parse Claude Code output as JSON: %s",
                     jsonLine.substring(0, Math.min(jsonLine.length(), 200)));
-            return new ClaudeCodeResult(jsonLine, null, null, null, null, exitCode, null);
+            return new ClaudeCodeResult(jsonLine, null, null, null, null, exitCode, null, null);
         }
     }
 
@@ -347,6 +348,16 @@ public class ClaudeCodeSubprocess {
                     } else {
                         LOG.tracef("  [claude] Tool completed: %s", toolName);
                         logBuilder.toolResult(toolName, false, null);
+                    }
+                }
+                case "system" -> {
+                    String subtype = node.path("subtype").asText("");
+                    if ("init".equals(subtype)) {
+                        String model = node.path("model").asText(null);
+                        if (model != null && !model.isBlank()) {
+                            streamModel = model;
+                            LOG.tracef("  [claude] Model: %s", model);
+                        }
                     }
                 }
                 default -> LOG.tracef("  [claude] Stream event type: %s", type);

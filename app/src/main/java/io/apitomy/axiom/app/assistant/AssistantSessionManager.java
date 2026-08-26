@@ -371,6 +371,11 @@ public class AssistantSessionManager {
         usage.invocationType = "assistant-session";
         usage.actionType = "assistant-session";
         usage.engine = agentRegistry.getDefaultAgentType();
+        SessionTemplateService.SessionTemplate template =
+                templateService.getTemplate(session.getTemplateId());
+        if (template != null && template.model() != null && !template.model().isBlank()) {
+            usage.model = template.model();
+        }
         usage.costUsd = session.getTotalCostUsd();
         usage.inputTokens = session.getTotalInputTokens();
         usage.outputTokens = session.getTotalOutputTokens();

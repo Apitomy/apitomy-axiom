@@ -13,6 +13,8 @@ package io.apitomy.axiom.agents.spi;
  * @param costUsd      cost in USD, or null if not tracked
  * @param inputTokens  number of input tokens consumed, or null if not tracked
  * @param outputTokens number of output tokens produced, or null if not tracked
+ * @param engine       the agent engine type that handled the invocation (e.g. "claude-code"), or null
+ * @param model        the AI model that was actually used (e.g. "claude-sonnet-4-6"), or null
  */
 public record AgentResult(
         boolean success,
@@ -22,7 +24,9 @@ public record AgentResult(
         String sessionId,
         Double costUsd,
         Long inputTokens,
-        Long outputTokens
+        Long outputTokens,
+        String engine,
+        String model
 ) {
 
     /**
@@ -32,7 +36,7 @@ public record AgentResult(
      * @return a successful AgentResult
      */
     public static AgentResult success(String output) {
-        return new AgentResult(true, output, null, null, null, null, null, null);
+        return new AgentResult(true, output, null, null, null, null, null, null, null, null);
     }
 
     /**
@@ -42,6 +46,6 @@ public record AgentResult(
      * @return a failed AgentResult
      */
     public static AgentResult failure(String errorMessage) {
-        return new AgentResult(false, null, errorMessage, null, null, null, null, null);
+        return new AgentResult(false, null, errorMessage, null, null, null, null, null, null, null);
     }
 }

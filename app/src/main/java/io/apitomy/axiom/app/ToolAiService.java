@@ -134,7 +134,8 @@ public class ToolAiService {
                     .executeWithSchema(agentRequest, RESPONSE_SCHEMA).join();
 
             // Record AI usage
-            recordAiUsage(result.costUsd(), result.inputTokens(), result.outputTokens());
+            recordAiUsage(result.costUsd(), result.inputTokens(), result.outputTokens(),
+                    result.engine(), result.model());
 
             if (!result.success()) {
                 LOG.errorf("Tool AI edit failed: %s", result.output());
@@ -198,12 +199,15 @@ public class ToolAiService {
     }
 
     @Transactional
-    void recordAiUsage(Double costUsd, Long inputTokens, Long outputTokens) {
+    void recordAiUsage(Double costUsd, Long inputTokens, Long outputTokens,
+                        String resultEngine, String resultModel) {
         AiUsageEntity usage = new AiUsageEntity();
         usage.invocationType = "tool-edit";
         usage.actionType = "tool-ai-edit";
-        usage.engine = helperEngine.orElse(agentRegistry.getDefaultAgentType());
-        usage.model = model.orElse(null);
+        usage.engine = resultEngine != null && !resultEngine.isBlank()
+                ? resultEngine : helperEngine.orElse(agentRegistry.getDefaultAgentType());
+        usage.model = resultModel != null && !resultModel.isBlank()
+                ? resultModel : model.orElse(null);
         usage.costUsd = costUsd;
         usage.inputTokens = inputTokens;
         usage.outputTokens = outputTokens;
