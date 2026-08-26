@@ -13,6 +13,7 @@ import { useEffectiveTheme } from "../../hooks/useTheme";
 import { markdownMermaidComponents } from "../MermaidBlock";
 import { AssistantToolUseBlock } from "./AssistantToolUseBlock";
 import { AssistantPermissionPrompt } from "./AssistantPermissionPrompt";
+import "../../axiom-markdown.css";
 import "./AssistantMessageList.css";
 
 SyntaxHighlighter.registerLanguage("json", json);
@@ -113,7 +114,7 @@ const MessageItem = memo(function MessageItem({
         case "assistant":
             return (
                 <div className="axiom-message-list__assistant-row">
-                    <div className="assistant-markdown axiom-message-list__assistant-bubble">
+                    <div className="axiom-markdown axiom-message-list__assistant-bubble">
                         <div className="axiom-message-list__copy-btn">
                             <Tooltip content={isCopied ? "Copied!" : "Copy markdown"}>
                                 <Button

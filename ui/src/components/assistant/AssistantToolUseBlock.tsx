@@ -22,6 +22,7 @@ import { stackoverflowDark } from "react-syntax-highlighter/dist/esm/styles/hljs
 import { useEffectiveTheme } from "../../hooks/useTheme";
 import { markdownMermaidComponents } from "../MermaidBlock";
 import { AssistantAskUserQuestion } from "./AssistantAskUserQuestion";
+import "../../axiom-markdown.css";
 import "./AssistantToolUseBlock.css";
 
 SyntaxHighlighter.registerLanguage("json", json);
@@ -186,7 +187,7 @@ export const AssistantToolUseBlock = memo(function AssistantToolUseBlock({
                                 )}
                             </Flex>
                             {!!input?.plan && (
-                                <div className="assistant-markdown axiom-tool-use__plan-content">
+                                <div className="axiom-markdown axiom-tool-use__plan-content">
                                     <Content>
                                         <Markdown remarkPlugins={[remarkGfm]} components={markdownMermaidComponents}>
                                             {input.plan as string}
@@ -241,7 +242,7 @@ export const AssistantToolUseBlock = memo(function AssistantToolUseBlock({
                             <ModalHeader title="Plan" />
                             <ModalBody>
                                 <Content>
-                                    <div className="assistant-markdown">
+                                    <div className="axiom-markdown">
                                         <Markdown remarkPlugins={[remarkGfm]} components={markdownMermaidComponents}>
                                             {input.plan as string}
                                         </Markdown>

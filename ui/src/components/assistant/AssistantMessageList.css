@@ -112,31 +112,3 @@
     color: var(--pf-t--global--text--color--subtle, #6a6e73);
 }
 
-/* Markdown table styles */
-.assistant-markdown table {
-    border-collapse: collapse;
-    width: 100%;
-    margin: 8px 0;
-    font-size: 13px;
-}
-
-.assistant-markdown th {
-    text-align: left;
-    padding: 6px 10px;
-    border-bottom: 2px solid var(--pf-t--global--border--color--default, #d2d2d2);
-    background-color: var(--pf-t--global--background--color--secondary--default, #f0f0f0);
-    font-weight: 600;
-}
-
-.assistant-markdown td {
-    padding: 6px 10px;
-    border-bottom: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
-}
-
-.assistant-markdown tr:nth-child(even) {
-    background-color: var(--pf-t--global--background--color--secondary--default, #fafafa);
-}
-
-.assistant-markdown tr:hover {
-    background-color: var(--pf-t--global--background--color--secondary--hover, #f0f5fa);
-}

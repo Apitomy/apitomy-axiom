@@ -1,0 +1,28 @@
+/* Shared markdown styles for consistent rendering across the app */
+.axiom-markdown table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 8px 0;
+    font-size: 13px;
+}
+
+.axiom-markdown th {
+    text-align: left;
+    padding: 6px 10px;
+    border-bottom: 2px solid var(--pf-t--global--border--color--default, #d2d2d2);
+    background-color: var(--pf-t--global--background--color--secondary--default, #f0f0f0);
+    font-weight: 600;
+}
+
+.axiom-markdown td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+}
+
+.axiom-markdown tr:nth-child(even) {
+    background-color: var(--pf-t--global--background--color--secondary--default, #fafafa);
+}
+
+.axiom-markdown tr:hover {
+    background-color: var(--pf-t--global--background--color--secondary--hover, #f0f5fa);
+}

@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { markdownMermaidComponents } from "../components/MermaidBlock";
+import "../axiom-markdown.css";
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -384,11 +385,13 @@ export function ProjectDetailPage() {
                             style={{ fontFamily: "var(--pf-t--global--font--family--mono)" }}
                         />
                     ) : project.body ? (
-                        <Content>
-                            <Markdown remarkPlugins={[remarkGfm]} components={markdownMermaidComponents}>
-                                {project.body}
-                            </Markdown>
-                        </Content>
+                        <div className="axiom-markdown">
+                            <Content>
+                                <Markdown remarkPlugins={[remarkGfm]} components={markdownMermaidComponents}>
+                                    {project.body}
+                                </Markdown>
+                            </Content>
+                        </div>
                     ) : (
                         <p className="axiom-text-subtle" style={{ fontStyle: "italic" }}>
                             No body content. Click the edit button to add markdown content.
@@ -725,9 +728,11 @@ function ThreadTab({ entries }: { entries: ThreadEntry[] }) {
                                 </span>
                             </FlexItem>
                         </Flex>
-                        <Content>
-                            <Markdown remarkPlugins={[remarkGfm]} components={markdownMermaidComponents}>{entry.content}</Markdown>
-                        </Content>
+                        <div className="axiom-markdown">
+                            <Content>
+                                <Markdown remarkPlugins={[remarkGfm]} components={markdownMermaidComponents}>{entry.content}</Markdown>
+                            </Content>
+                        </div>
                     </CardBody>
                 </Card>
             ))}
