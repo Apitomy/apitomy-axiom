@@ -83,6 +83,28 @@ public class ReportDefinitionEntity extends PanacheEntity {
     public String environment;
 
     /**
+     * Optional AI engine override (e.g. "claude-code", "opencode").
+     */
+    public String engine;
+
+    /**
+     * Optional AI model override (e.g. "claude-sonnet-4-6").
+     */
+    public String model;
+
+    /**
+     * Optional maximum number of agent steps/turns.
+     */
+    @Column(name = "max_steps")
+    public Integer maxSteps;
+
+    /**
+     * Optional maximum budget in USD for AI execution.
+     */
+    @Column(name = "max_budget_usd")
+    public Double maxBudgetUsd;
+
+    /**
      * Optional per-report timeout in seconds. Overrides the global default when set.
      */
     @Column(name = "timeout_seconds")

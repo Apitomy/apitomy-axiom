@@ -58,6 +58,9 @@ public class ManagerService {
     @ConfigProperty(name = "axiom.manager.max-turns", defaultValue = "5")
     int maxTurns;
 
+    @ConfigProperty(name = "axiom.manager.engine")
+    Optional<String> managerEngine;
+
     @ConfigProperty(name = "axiom.manager.model")
     Optional<String> model;
 
@@ -147,7 +150,8 @@ public class ManagerService {
                 .build();
 
         try {
-            AgentResult result = agentRegistry.getDefaultAgent().executeWithSchema(agentRequest, jsonSchema).join();
+            AgentResult result = agentRegistry.getAgent(managerEngine.orElse(null))
+                    .executeWithSchema(agentRequest, jsonSchema).join();
             String executionLog = result.executionLog();
 
             // Record AI usage for this Manager evaluation

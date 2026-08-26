@@ -17,6 +17,7 @@ import org.jboss.logging.Logger;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Service that invokes the AI engine to generate or update prompt templates
@@ -32,6 +33,9 @@ public class ActionTypeAiService {
 
     @Inject
     AgentRegistry agentRegistry;
+
+    @ConfigProperty(name = "axiom.helper-services.engine")
+    Optional<String> helperEngine;
 
     @ConfigProperty(name = "axiom.ai-assistant.timeout-seconds", defaultValue = "300")
     int assistantTimeoutSeconds;
@@ -131,8 +135,8 @@ public class ActionTypeAiService {
                 .build();
 
         try {
-            AgentResult result = agentRegistry.getDefaultAgent().executeWithSchema(agentRequest,
-                    RESPONSE_SCHEMA).join();
+            AgentResult result = agentRegistry.getAgent(helperEngine.orElse(null))
+                    .executeWithSchema(agentRequest, RESPONSE_SCHEMA).join();
 
             recordAiUsage(result.costUsd(), result.inputTokens(), result.outputTokens());
 

@@ -22,22 +22,15 @@ import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclam
 import ExclamationTriangleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-triangle-icon";
 import CogIcon from "@patternfly/react-icons/dist/esm/icons/cog-icon";
 
-import { type SystemConfig, fetchSystemConfig, fetchModels } from "../config/api";
+import { type EngineInfo, type SystemConfig, fetchSystemConfig } from "../config/api";
 
 export function EngineSettingsPage() {
     const [config, setConfig] = useState<SystemConfig | null>(null);
-    const [models, setModels] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        Promise.all([
-            fetchSystemConfig(),
-            fetchModels(),
-        ])
-            .then(([cfg, mdls]) => {
-                setConfig(cfg);
-                setModels(mdls);
-            })
+        fetchSystemConfig()
+            .then(setConfig)
             .catch(console.error)
             .finally(() => setLoading(false));
     }, []);
@@ -53,24 +46,78 @@ export function EngineSettingsPage() {
     if (!config) {
         return (
             <PageSection>
-                <Title headingLevel="h1">AI Engine</Title>
+                <Title headingLevel="h1">AI Engines</Title>
                 <p>Failed to load engine configuration.</p>
             </PageSection>
         );
     }
 
-    const engineName = config.engine || "unknown";
-    const engineLabel = engineName === "opencode" ? "OpenCode" : engineName === "claude-code" ? "Claude Code" : engineName === "copilot" ? "GitHub Copilot CLI" : engineName;
-    const engineChecks = (config.checks || []).filter(
-        (c) => !["GitHub API Token", "Node.js"].includes(c.name)
-    );
-    const allHealthy = engineChecks.every((c) => c.status === "ok");
+    const engines = config.engines || [];
+    const defaultEngine = config.defaultEngine || config.engine;
+    const nodeJsCheck = (config.checks || []).find((c) => c.name === "Node.js");
 
-    // Group models by provider for OpenCode
-    const isOpenCode = engineName === "opencode";
+    return (
+        <PageSection>
+            <Title headingLevel="h1" style={{ marginBottom: 24 }}>
+                <CogIcon style={{ marginRight: 8 }} />
+                AI Engines
+            </Title>
+
+            <Flex direction={{ default: "column" }} gap={{ default: "gapMd" }}>
+                {/* Node.js check (shared prerequisite) */}
+                {nodeJsCheck && (
+                    <FlexItem>
+                        <Card>
+                            <CardTitle>Prerequisites</CardTitle>
+                            <CardBody>
+                                <DescriptionList isHorizontal>
+                                    <DescriptionListGroup>
+                                        <DescriptionListTerm>
+                                            <StatusIcon status={nodeJsCheck.status} />{" "}
+                                            {nodeJsCheck.name}
+                                        </DescriptionListTerm>
+                                        <DescriptionListDescription>
+                                            {nodeJsCheck.message}
+                                        </DescriptionListDescription>
+                                    </DescriptionListGroup>
+                                </DescriptionList>
+                            </CardBody>
+                        </Card>
+                    </FlexItem>
+                )}
+
+                {/* One card per engine */}
+                {engines.map((engine) => (
+                    <FlexItem key={engine.type}>
+                        <EngineCard
+                            engine={engine}
+                            isDefault={engine.type === defaultEngine}
+                        />
+                    </FlexItem>
+                ))}
+
+                {engines.length === 0 && (
+                    <FlexItem>
+                        <Card>
+                            <CardBody>
+                                <p>No AI engines registered.</p>
+                            </CardBody>
+                        </Card>
+                    </FlexItem>
+                )}
+            </Flex>
+        </PageSection>
+    );
+}
+
+function EngineCard({ engine, isDefault }: { engine: EngineInfo; isDefault: boolean }) {
+    const checks = engine.checks || [];
+    const models = engine.models || [];
+
+    // Group models by provider (for engines that use provider/model format)
     const groupedModels: Record<string, string[]> = {};
     for (const m of models) {
-        if (isOpenCode && m.includes("/")) {
+        if (m.includes("/")) {
             const [provider, ...rest] = m.split("/");
             const key = provider.charAt(0).toUpperCase() + provider.slice(1);
             if (!groupedModels[key]) groupedModels[key] = [];
@@ -82,62 +129,57 @@ export function EngineSettingsPage() {
     }
 
     return (
-        <PageSection>
-            <Title headingLevel="h1" style={{ marginBottom: 24 }}>
-                <CogIcon style={{ marginRight: 8 }} />
-                AI Engine
-            </Title>
-
-            <Flex direction={{ default: "column" }} gap={{ default: "gapMd" }}>
-                {/* Engine Info Card */}
-                <FlexItem>
-                    <Card>
-                        <CardTitle>
-                            <Split hasGutter>
-                                <SplitItem>Active Engine</SplitItem>
-                                <SplitItem isFilled />
-                                <SplitItem>
-                                    <Label
-                                        color={allHealthy ? "green" : "red"}
-                                        icon={allHealthy ? <CheckCircleIcon /> : <ExclamationCircleIcon />}
-                                    >
-                                        {allHealthy ? "Healthy" : "Issues detected"}
-                                    </Label>
-                                </SplitItem>
-                            </Split>
-                        </CardTitle>
-                        <CardBody>
+        <Card>
+            <CardTitle>
+                <Split hasGutter>
+                    <SplitItem>
+                        {engine.label}
+                        {isDefault && (
+                            <Label
+                                color="blue"
+                                style={{ marginLeft: 8 }}
+                                isCompact
+                            >
+                                Default
+                            </Label>
+                        )}
+                    </SplitItem>
+                    <SplitItem isFilled />
+                    <SplitItem>
+                        <Label
+                            color={engine.available ? "green" : "red"}
+                            icon={
+                                engine.available ? (
+                                    <CheckCircleIcon />
+                                ) : (
+                                    <ExclamationCircleIcon />
+                                )
+                            }
+                        >
+                            {engine.available ? "Available" : "Unavailable"}
+                        </Label>
+                        {engine.supportsInteractiveSessions && (
+                            <Label
+                                color="purple"
+                                style={{ marginLeft: 8 }}
+                                isCompact
+                            >
+                                Interactive
+                            </Label>
+                        )}
+                    </SplitItem>
+                </Split>
+            </CardTitle>
+            <CardBody>
+                <Flex direction={{ default: "column" }} gap={{ default: "gapMd" }}>
+                    {/* Health Checks */}
+                    {checks.length > 0 && (
+                        <FlexItem>
+                            <Title headingLevel="h4" size="md" style={{ marginBottom: 8 }}>
+                                Health Checks
+                            </Title>
                             <DescriptionList isHorizontal>
-                                <DescriptionListGroup>
-                                    <DescriptionListTerm>Engine</DescriptionListTerm>
-                                    <DescriptionListDescription>
-                                        <Label variant="outline" color="blue">{engineLabel}</Label>
-                                    </DescriptionListDescription>
-                                </DescriptionListGroup>
-                                <DescriptionListGroup>
-                                    <DescriptionListTerm>Configuration</DescriptionListTerm>
-                                    <DescriptionListDescription>
-                                        <code>axiom.ai-engine={engineName}</code>
-                                    </DescriptionListDescription>
-                                </DescriptionListGroup>
-                                <DescriptionListGroup>
-                                    <DescriptionListTerm>Version</DescriptionListTerm>
-                                    <DescriptionListDescription>
-                                        {config.version}
-                                    </DescriptionListDescription>
-                                </DescriptionListGroup>
-                            </DescriptionList>
-                        </CardBody>
-                    </Card>
-                </FlexItem>
-
-                {/* Health Checks Card */}
-                <FlexItem>
-                    <Card>
-                        <CardTitle>Health Checks</CardTitle>
-                        <CardBody>
-                            <DescriptionList isHorizontal>
-                                {(config.checks || []).map((check) => (
+                                {checks.map((check) => (
                                     <DescriptionListGroup key={check.name}>
                                         <DescriptionListTerm>
                                             <StatusIcon status={check.status} />{" "}
@@ -149,59 +191,71 @@ export function EngineSettingsPage() {
                                     </DescriptionListGroup>
                                 ))}
                             </DescriptionList>
-                        </CardBody>
-                    </Card>
-                </FlexItem>
+                        </FlexItem>
+                    )}
 
-                {/* Available Models Card */}
-                <FlexItem>
-                    <Card>
-                        <CardTitle>Available Models</CardTitle>
-                        <CardBody>
-                            {Object.entries(groupedModels).map(([provider, providerModels]) => (
-                                <div key={provider} style={{ marginBottom: 16 }}>
-                                    {Object.keys(groupedModels).length > 1 && (
-                                        <Title headingLevel="h4" size="md" style={{ marginBottom: 8 }}>
-                                            {provider}
-                                        </Title>
-                                    )}
-                                    <Flex gap={{ default: "gapSm" }} flexWrap={{ default: "wrap" }}>
-                                        {providerModels.map((m) => (
-                                            <FlexItem key={m}>
-                                                <Label variant="outline">{m}</Label>
-                                            </FlexItem>
-                                        ))}
-                                    </Flex>
-                                </div>
-                            ))}
-                            {models.length === 0 && (
-                                <p className="axiom-text-subtle">No models configured.</p>
+                    {/* Available Models */}
+                    {models.length > 0 && (
+                        <FlexItem>
+                            <Title headingLevel="h4" size="md" style={{ marginBottom: 8 }}>
+                                Available Models
+                            </Title>
+                            {Object.entries(groupedModels).map(
+                                ([provider, providerModels]) => (
+                                    <div key={provider} style={{ marginBottom: 8 }}>
+                                        {Object.keys(groupedModels).length > 1 && (
+                                            <Title
+                                                headingLevel="h5"
+                                                size="md"
+                                                style={{ marginBottom: 4 }}
+                                            >
+                                                {provider}
+                                            </Title>
+                                        )}
+                                        <Flex
+                                            gap={{ default: "gapSm" }}
+                                            flexWrap={{ default: "wrap" }}
+                                        >
+                                            {providerModels.map((m) => (
+                                                <FlexItem key={m}>
+                                                    <Label variant="outline">{m}</Label>
+                                                </FlexItem>
+                                            ))}
+                                        </Flex>
+                                    </div>
+                                )
                             )}
-                        </CardBody>
-                    </Card>
-                </FlexItem>
-            </Flex>
-        </PageSection>
+                        </FlexItem>
+                    )}
+
+                    {models.length === 0 && (
+                        <FlexItem>
+                            <p className="axiom-text-subtle">No models configured.</p>
+                        </FlexItem>
+                    )}
+                </Flex>
+            </CardBody>
+        </Card>
     );
 }
 
 function StatusIcon({ status }: { status: string }) {
     if (status === "ok") {
         return (
-            <Icon status="success" size="sm">
+            <Icon status="success">
                 <CheckCircleIcon />
             </Icon>
         );
     }
     if (status === "warning") {
         return (
-            <Icon status="warning" size="sm">
+            <Icon status="warning">
                 <ExclamationTriangleIcon />
             </Icon>
         );
     }
     return (
-        <Icon status="danger" size="sm">
+        <Icon status="danger">
             <ExclamationCircleIcon />
         </Icon>
     );

@@ -1,5 +1,6 @@
 package io.apitomy.axiom.app;
 
+import io.apitomy.axiom.agents.spi.Agent;
 import io.apitomy.axiom.agents.spi.AgentCheckResult;
 import io.apitomy.axiom.agents.spi.AgentRegistry;
 import io.quarkus.runtime.StartupEvent;
@@ -9,7 +10,9 @@ import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -26,6 +29,7 @@ public class StartupCheckService {
     AgentRegistry agentRegistry;
 
     private final List<CheckResult> results = new ArrayList<>();
+    private final Map<String, List<CheckResult>> engineResults = new LinkedHashMap<>();
 
     /**
      * Runs all startup checks when the application starts.
@@ -35,7 +39,7 @@ public class StartupCheckService {
     void onStart(@Observes StartupEvent event) {
         LOG.info("Running startup configuration checks...");
         checkNodeJs();
-        checkAiEngine();
+        checkAllEngines();
 
         long errors = results.stream().filter(r -> "error".equals(r.status())).count();
         long warnings = results.stream().filter(r -> "warning".equals(r.status())).count();
@@ -53,6 +57,16 @@ public class StartupCheckService {
      */
     public List<CheckResult> getResults() {
         return List.copyOf(results);
+    }
+
+    /**
+     * Returns the health check results for a specific engine type.
+     *
+     * @param engineType the engine type identifier
+     * @return the list of check results for that engine (may be empty)
+     */
+    public List<CheckResult> getResultsForEngine(String engineType) {
+        return engineResults.getOrDefault(engineType, List.of());
     }
 
     /**
@@ -116,19 +130,56 @@ public class StartupCheckService {
         }
     }
 
-    private void checkAiEngine() {
-        LOG.infof("Checking AI engine: %s", agentRegistry.getDefaultAgent().getType());
-        List<AgentCheckResult> engineResults = agentRegistry.getDefaultAgent().healthCheck();
-        for (AgentCheckResult engineResult : engineResults) {
-            results.add(new CheckResult(engineResult.name(), engineResult.status(),
-                    engineResult.message()));
-            if ("ok".equals(engineResult.status())) {
-                LOG.infof("Startup check OK: %s", engineResult.name());
-            } else {
-                LOG.warnf("Startup check %s: %s — %s",
-                        engineResult.status().toUpperCase(), engineResult.name(),
-                        engineResult.message());
+    private void checkAllEngines() {
+        // First pass: collect per-engine results with their true status
+        Map<String, List<AgentCheckResult>> rawResults = new LinkedHashMap<>();
+        for (Agent agent : agentRegistry.getAllAgents()) {
+            LOG.infof("Checking AI engine: %s", agent.getType());
+            rawResults.put(agent.getType(), agent.healthCheck());
+        }
+
+        // Determine if at least one engine is fully healthy (no errors)
+        boolean anyEngineHealthy = rawResults.values().stream()
+                .anyMatch(checks -> checks.stream()
+                        .noneMatch(c -> "error".equals(c.status())));
+
+        // Second pass: store per-engine results as-is, but downgrade errors
+        // to warnings in the system-level list when another engine is healthy
+        for (var entry : rawResults.entrySet()) {
+            String engineType = entry.getKey();
+            List<AgentCheckResult> agentChecks = entry.getValue();
+            boolean thisEngineHealthy = agentChecks.stream()
+                    .noneMatch(c -> "error".equals(c.status()));
+
+            List<CheckResult> perEngine = new ArrayList<>();
+            for (AgentCheckResult engineResult : agentChecks) {
+                // Per-engine results always reflect the true status
+                CheckResult perEngineResult = new CheckResult(engineResult.name(),
+                        engineResult.status(), engineResult.message());
+                perEngine.add(perEngineResult);
+
+                // System-level: downgrade to warning if this engine failed
+                // but at least one other engine is healthy
+                String systemStatus = engineResult.status();
+                if ("error".equals(systemStatus) && anyEngineHealthy && !thisEngineHealthy) {
+                    systemStatus = "warning";
+                }
+                results.add(new CheckResult(engineResult.name(),
+                        systemStatus, engineResult.message()));
+
+                if ("ok".equals(engineResult.status())) {
+                    LOG.infof("Startup check OK: %s", engineResult.name());
+                } else {
+                    LOG.warnf("Startup check %s: %s — %s",
+                            engineResult.status().toUpperCase(), engineResult.name(),
+                            engineResult.message());
+                }
             }
+            engineResults.put(engineType, List.copyOf(perEngine));
+        }
+
+        if (!anyEngineHealthy) {
+            LOG.error("No AI engines are available — at least one engine must be configured");
         }
     }
 

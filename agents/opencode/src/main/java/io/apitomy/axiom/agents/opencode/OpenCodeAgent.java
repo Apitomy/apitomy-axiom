@@ -14,6 +14,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -50,6 +51,9 @@ public class OpenCodeAgent implements Agent {
     @ConfigProperty(name = "axiom.agent.opencode.timeout-seconds", defaultValue = "600")
     int defaultTimeoutSeconds;
 
+    @ConfigProperty(name = "axiom.agent.opencode.available-models", defaultValue = "")
+    String availableModels;
+
     @Inject
     OpenCodeMcpManager mcpManager;
 
@@ -62,6 +66,24 @@ public class OpenCodeAgent implements Agent {
     @Override
     public String getType() {
         return "opencode";
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String getLabel() {
+        return "OpenCode";
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public List<String> getAvailableModels() {
+        if (availableModels == null || availableModels.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(availableModels.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
     }
 
     /** {@inheritDoc} */

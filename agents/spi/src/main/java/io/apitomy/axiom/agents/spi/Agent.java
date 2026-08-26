@@ -21,6 +21,31 @@ public interface Agent {
     String getType();
 
     /**
+     * Returns a human-readable display label for this agent type
+     * (e.g. "Claude Code", "OpenCode", "GitHub Copilot CLI").
+     *
+     * @return the display label
+     */
+    String getLabel();
+
+    /**
+     * Returns the list of available model identifiers for this agent.
+     *
+     * @return model names (may be empty, never null)
+     */
+    List<String> getAvailableModels();
+
+    /**
+     * Returns whether this agent supports interactive (streaming) sessions.
+     * Agents that return {@code true} can be used with the AI Assistant feature.
+     *
+     * @return true if interactive sessions are supported
+     */
+    default boolean supportsInteractiveSessions() {
+        return false;
+    }
+
+    /**
      * Executes a prompt and returns the result asynchronously.
      *
      * @param request the agent request containing prompt, config, and environment

@@ -140,12 +140,14 @@ public class ScheduledJobExecutionService {
         String effectiveModel = job.model != null ? job.model : defaultModel.orElse(null);
         int effectiveMaxSteps = job.maxSteps != null ? job.maxSteps : 30;
         Double effectiveMaxBudget = job.maxBudgetUsd;
+        int effectiveTimeout = job.timeoutSeconds != null
+                ? job.timeoutSeconds : defaultTimeoutSeconds;
 
         AgentRequest agentRequest = AgentRequest.builder()
                 .prompt(prompt)
                 .systemPrompt(SYSTEM_PROMPT)
                 .allowedTools(allowedTools)
-                .timeoutSeconds(defaultTimeoutSeconds)
+                .timeoutSeconds(effectiveTimeout)
                 .maxSteps(effectiveMaxSteps)
                 .maxBudgetUsd(effectiveMaxBudget)
                 .model(effectiveModel)

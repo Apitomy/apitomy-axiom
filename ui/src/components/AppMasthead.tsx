@@ -22,7 +22,8 @@ import DesktopIcon from "@patternfly/react-icons/dist/esm/icons/desktop-icon";
 import { type ThemeMode } from "../hooks/useTheme";
 
 interface AppMastheadProps {
-    engineName?: string;
+    engineLabel?: string;
+    assistantAvailable: boolean;
     appVersion: string;
     themeMode: ThemeMode;
     setThemeMode: (mode: ThemeMode) => void;
@@ -44,7 +45,7 @@ function themeDisplay(mode: ThemeMode) {
     }
 }
 
-export function AppMasthead({ engineName, appVersion, themeMode, setThemeMode }: AppMastheadProps) {
+export function AppMasthead({ engineLabel, assistantAvailable, appVersion, themeMode, setThemeMode }: AppMastheadProps) {
     const navigate = useNavigate();
     const [isAboutOpen, setIsAboutOpen] = useState(false);
     const { icon: themeIcon, label: themeLabel } = themeDisplay(themeMode);
@@ -69,7 +70,7 @@ export function AppMasthead({ engineName, appVersion, themeMode, setThemeMode }:
                     <Toolbar>
                         <ToolbarContent>
                             <ToolbarItem align={{ default: "alignEnd" }}>
-                                {engineName === "claude-code" && (
+                                {assistantAvailable && (
                                     <Tooltip content="AI Assistant">
                                         <Button variant="plain" aria-label="AI Assistant"
                                             onClick={() => {
@@ -120,10 +121,7 @@ export function AppMasthead({ engineName, appVersion, themeMode, setThemeMode }:
                     <dd>{appVersion || "—"}</dd>
                     <dt>AI Engine</dt>
                     <dd>
-                        {engineName === "opencode" ? "OpenCode"
-                            : engineName === "claude-code" ? "Claude Code"
-                            : engineName === "copilot" ? "GitHub Copilot CLI"
-                            : engineName || "—"}
+                        {engineLabel || "—"}
                     </dd>
                     <dt>License</dt>
                     <dd>Apache License 2.0</dd>

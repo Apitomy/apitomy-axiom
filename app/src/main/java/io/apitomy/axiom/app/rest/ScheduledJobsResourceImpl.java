@@ -329,6 +329,7 @@ public class ScheduledJobsResourceImpl implements ScheduledResource {
                 ? String.join(",", data.getAllowedTools()) : null;
         entity.maxSteps = data.getMaxSteps();
         entity.maxBudgetUsd = data.getMaxBudgetUsd();
+        entity.timeoutSeconds = data.getTimeoutSeconds();
         entity.enabled = "none".equals(data.getSchedule()) ? false
                 : (data.getEnabled() != null ? data.getEnabled() : false);
         entity.environment = environmentToJson(data.getEnvironment());
@@ -368,6 +369,7 @@ public class ScheduledJobsResourceImpl implements ScheduledResource {
         }
         bean.setMaxSteps(entity.maxSteps);
         bean.setMaxBudgetUsd(entity.maxBudgetUsd);
+        bean.setTimeoutSeconds(entity.timeoutSeconds);
         bean.setEnvironment(jsonToEnvironment(entity.environment));
         bean.setCreatedOn(Date.from(entity.createdOn));
         bean.setUpdatedOn(Date.from(entity.updatedOn));

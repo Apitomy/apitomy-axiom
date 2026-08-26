@@ -5404,8 +5404,19 @@
             "type": "string"
           },
           "engine": {
-            "description": "The active AI engine type (e.g. claude-code, opencode, copilot)",
+            "description": "The default AI engine type (deprecated — use defaultEngine instead)",
             "type": "string"
+          },
+          "defaultEngine": {
+            "description": "The default AI engine type identifier",
+            "type": "string"
+          },
+          "engines": {
+            "description": "All registered AI engines with per-engine health checks, models, and capabilities",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EngineInfo"
+            }
           },
           "features": {
             "$ref": "#/components/schemas/Features"
@@ -5415,6 +5426,46 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/StartupCheck"
+            }
+          }
+        }
+      },
+      "EngineInfo": {
+        "required": [
+          "type",
+          "label",
+          "available"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "Engine type identifier (e.g. claude-code, opencode, copilot)",
+            "type": "string"
+          },
+          "label": {
+            "description": "Human-readable display name for this engine",
+            "type": "string"
+          },
+          "available": {
+            "description": "Whether this engine passed all health checks without errors",
+            "type": "boolean"
+          },
+          "supportsInteractiveSessions": {
+            "description": "Whether this engine supports interactive assistant sessions",
+            "type": "boolean"
+          },
+          "checks": {
+            "description": "Health check results for this engine",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StartupCheck"
+            }
+          },
+          "models": {
+            "description": "Available model identifiers for this engine",
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           }
         }
@@ -6258,6 +6309,23 @@
             "description": "Day of week for weekly schedules (e.g. monday, tuesday)",
             "type": "string"
           },
+          "engine": {
+            "description": "Optional AI engine override",
+            "type": "string"
+          },
+          "model": {
+            "description": "Optional AI model override",
+            "type": "string"
+          },
+          "maxSteps": {
+            "description": "Max agent steps",
+            "type": "integer"
+          },
+          "maxBudgetUsd": {
+            "format": "double",
+            "description": "Max budget in USD",
+            "type": "number"
+          },
           "timeoutSeconds": {
             "description": "Optional timeout in seconds for report generation. Overrides the global default when set.",
             "type": "integer"
@@ -6324,6 +6392,23 @@
           "scheduleDayOfWeek": {
             "description": "Day of week for weekly schedules (e.g. monday, tuesday)",
             "type": "string"
+          },
+          "engine": {
+            "description": "Optional AI engine override",
+            "type": "string"
+          },
+          "model": {
+            "description": "Optional AI model override",
+            "type": "string"
+          },
+          "maxSteps": {
+            "description": "Max agent steps",
+            "type": "integer"
+          },
+          "maxBudgetUsd": {
+            "format": "double",
+            "description": "Max budget in USD",
+            "type": "number"
           },
           "timeoutSeconds": {
             "description": "Optional timeout in seconds for report generation. Overrides the global default when set.",
@@ -8750,6 +8835,10 @@
             "description": "Max budget in USD",
             "type": "number"
           },
+          "timeoutSeconds": {
+            "description": "Optional timeout in seconds. Overrides the global default when set.",
+            "type": "integer"
+          },
           "environment": {
             "description": "Custom environment variables. Values can reference secrets using ${secret:NAME} syntax.",
             "type": "object",
@@ -8840,6 +8929,10 @@
             "format": "double",
             "description": "Max budget in USD",
             "type": "number"
+          },
+          "timeoutSeconds": {
+            "description": "Optional timeout in seconds. Overrides the global default when set.",
+            "type": "integer"
           },
           "environment": {
             "description": "Custom environment variables. Values can reference secrets using ${secret:NAME} syntax.",

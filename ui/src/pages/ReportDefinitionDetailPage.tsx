@@ -26,6 +26,7 @@ import {
 } from "@patternfly/react-core";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { registerPlaceholderCompletions, REPORT_PLACEHOLDERS } from "../components/PlaceholderCompletionProvider";
+import { AiConfigTab } from "../components/AiConfigTab";
 import { EnvironmentTab } from "../components/EnvironmentTab";
 import { ToolListEditor } from "../components/ToolListEditor";
 import { LabelInput } from "../components/LabelInput";
@@ -45,6 +46,8 @@ import {
     runReportDefinition,
     deleteReportDefinition,
     validateReportDefinition,
+    fetchEngines,
+    fetchModels,
 } from "../config/api";
 import ExclamationTriangleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-triangle-icon";
 import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
@@ -74,6 +77,8 @@ export function ReportDefinitionDetailPage() {
     const [initialLabels, setInitialLabels] = useState<string[]>([]);
     const [envVars, setEnvVars] = useState<Record<string, string>>({});
     const [validationMessages, setValidationMessages] = useState<ToolValidationMessage[]>([]);
+    const [availableEngines, setAvailableEngines] = useState<string[]>([]);
+    const [availableModels, setAvailableModels] = useState<string[]>([]);
 
     const validationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -101,6 +106,10 @@ export function ReportDefinitionDetailPage() {
                     scheduleDayOfWeek: def.scheduleDayOfWeek,
                     timeWindow: def.timeWindow,
                     promptTemplate: def.promptTemplate, enabled: def.enabled,
+                    engine: def.engine,
+                    model: def.model,
+                    maxSteps: def.maxSteps,
+                    maxBudgetUsd: def.maxBudgetUsd,
                     timeoutSeconds: def.timeoutSeconds,
                     titleTemplate: def.titleTemplate,
                 });
@@ -119,6 +128,14 @@ export function ReportDefinitionDetailPage() {
 
     useEffect(() => { loadData(); }, [loadData]);
 
+    useEffect(() => {
+        fetchEngines().then(setAvailableEngines).catch(console.error);
+    }, []);
+
+    useEffect(() => {
+        fetchModels(form.engine || undefined).then(setAvailableModels).catch(console.error);
+    }, [form.engine]);
+
     const buildValidationData = (
         formData: NewReportDefinition,
         toolsList: string[],
@@ -132,6 +149,9 @@ export function ReportDefinitionDetailPage() {
     });
 
     const updateForm = (updates: Partial<NewReportDefinition>) => {
+        if (updates.engine !== undefined && updates.engine !== form.engine) {
+            updates = { ...updates, model: undefined };
+        }
         setForm((prev) => {
             const updated = { ...prev, ...updates };
             runValidation(buildValidationData(updated, tools, initialLabels, envVars));
@@ -310,6 +330,19 @@ export function ReportDefinitionDetailPage() {
                         />
                     </TabContent>
                 </Tab>
+                <Tab eventKey={10} title={<TabTitleText>AI Config</TabTitleText>}>
+                    <TabContent id="ai-config-tab" eventKey={10} activeKey={activeTab}
+                        style={{ marginTop: "24px" }}>
+                        <Form style={{ maxWidth: "600px" }}>
+                            <AiConfigTab
+                                values={form}
+                                onChange={updateForm}
+                                availableEngines={availableEngines}
+                                availableModels={availableModels}
+                            />
+                        </Form>
+                    </TabContent>
+                </Tab>
                 {validationMessages.length > 0 && (
                     <Tab eventKey={4} title={
                         <TabTitleText>
@@ -417,12 +450,6 @@ function InfoTab({ form, updateForm, initialLabels, onLabelsChange }: {
                     <FormSelectOption value="last-7d" label="Last 7 Days" />
                     <FormSelectOption value="last-30d" label="Last 30 Days" />
                 </FormSelect>
-            </FormGroup>
-            <FormGroup label="Timeout (seconds)" fieldId="timeoutSeconds">
-                <TextInput id="timeoutSeconds" type="number"
-                    value={form.timeoutSeconds?.toString() || ""}
-                    onChange={(_e, v) => updateForm({ timeoutSeconds: v ? parseInt(v) : undefined })}
-                    placeholder="Global default (600)" />
             </FormGroup>
             <FormGroup label="Labels" fieldId="initialLabels">
                 <LabelInput labels={initialLabels}

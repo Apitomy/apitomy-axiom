@@ -2,6 +2,7 @@ package io.apitomy.axiom.app.rest;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.api.beans.EngineInfo;
 import io.apitomy.axiom.api.beans.Features;
 import io.apitomy.axiom.api.beans.ImportResult;
 import io.apitomy.axiom.api.beans.PackExportRequest;
@@ -10,6 +11,7 @@ import io.apitomy.axiom.api.beans.StartupCheck;
 import io.apitomy.axiom.api.beans.SystemConfig;
 import io.apitomy.axiom.api.beans.SystemHealth;
 import io.apitomy.axiom.api.SystemResource;
+import io.apitomy.axiom.agents.spi.Agent;
 import io.apitomy.axiom.app.ImportExportService;
 import io.apitomy.axiom.app.StartupCheckService;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
@@ -23,10 +25,9 @@ import jakarta.transaction.Transactional;
 import java.io.InputStream;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Implementation of the System API endpoints.
@@ -37,18 +38,6 @@ public class SystemResourceImpl implements SystemResource {
 
     @ConfigProperty(name = "quarkus.application.version", defaultValue = "1.0.0-SNAPSHOT")
     String applicationVersion;
-
-    @ConfigProperty(name = "axiom.agent.claude-code.available-models",
-            defaultValue = "claude-opus-4-7,claude-sonnet-4-6,claude-opus-4-6,claude-haiku-4-5-20251001,opus,sonnet,haiku")
-    String claudeAvailableModels;
-
-    @ConfigProperty(name = "axiom.agent.opencode.available-models",
-            defaultValue = "anthropic/claude-sonnet-4-6,anthropic/claude-opus-4-6,anthropic/claude-haiku-4-5-20251001,openai/gpt-4o,openai/o3-mini")
-    String openCodeAvailableModels;
-
-    @ConfigProperty(name = "axiom.agent.copilot.available-models",
-            defaultValue = "claude-sonnet-5,claude-opus-5,claude-haiku-4.5,gpt-5.4,gpt-5-mini,auto")
-    String copilotAvailableModels;
 
     @Inject
     AgentRegistry agentRegistry;
@@ -81,8 +70,41 @@ public class SystemResourceImpl implements SystemResource {
     public SystemConfig getSystemConfig() {
         SystemConfig config = new SystemConfig();
         config.setVersion(applicationVersion);
-        config.setEngine(agentRegistry.getDefaultAgent().getType());
+
+        String defaultType = agentRegistry.getDefaultAgent().getType();
+        config.setEngine(defaultType);
+        config.setDefaultEngine(defaultType);
         config.setFeatures(new Features());
+
+        // Build per-engine info
+        List<EngineInfo> engineInfos = new ArrayList<>();
+        for (Agent agent : agentRegistry.getAllAgents()) {
+            EngineInfo info = new EngineInfo();
+            info.setType(agent.getType());
+            info.setLabel(agent.getLabel());
+            info.setSupportsInteractiveSessions(agent.supportsInteractiveSessions());
+            info.setModels(agent.getAvailableModels());
+
+            List<StartupCheckService.CheckResult> engineChecks =
+                    startupCheckService.getResultsForEngine(agent.getType());
+            List<StartupCheck> checks = engineChecks.stream()
+                    .map(r -> {
+                        StartupCheck check = new StartupCheck();
+                        check.setName(r.name());
+                        check.setStatus(StartupCheck.Status.fromValue(r.status()));
+                        check.setMessage(r.message());
+                        return check;
+                    })
+                    .toList();
+            info.setChecks(checks);
+            info.setAvailable(checks.stream().noneMatch(
+                    c -> c.getStatus() == StartupCheck.Status.ERROR));
+
+            engineInfos.add(info);
+        }
+        config.setEngines(engineInfos);
+
+        // Flat checks list (backwards compat)
         config.setChecks(startupCheckService.getResults().stream()
                 .map(r -> {
                     StartupCheck check = new StartupCheck();
@@ -107,22 +129,15 @@ public class SystemResourceImpl implements SystemResource {
      * {@inheritDoc}
      *
      * Returns the available models for the specified engine, or the default
-     * engine if not specified. Claude Code returns short model names;
-     * OpenCode returns provider/model format.
+     * engine if not specified. Delegates to the Agent SPI's
+     * {@code getAvailableModels()} method.
      */
     @Override
     public List<String> listModels(String engine) {
-        String engineType = (engine != null && !engine.isBlank()) ? engine : agentRegistry.getDefaultAgent().getType();
-        String models = switch (engineType) {
-            case "opencode" -> openCodeAvailableModels;
-            case "copilot" -> copilotAvailableModels;
-            default -> claudeAvailableModels;
-        };
-
-        return Arrays.stream(models.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .toList();
+        Agent agent = (engine != null && !engine.isBlank())
+                ? agentRegistry.getAgent(engine)
+                : agentRegistry.getDefaultAgent();
+        return agent.getAvailableModels();
     }
 
     /**

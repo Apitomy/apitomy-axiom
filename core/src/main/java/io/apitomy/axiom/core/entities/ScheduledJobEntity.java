@@ -106,6 +106,12 @@ public class ScheduledJobEntity extends PanacheEntity {
     public Double maxBudgetUsd;
 
     /**
+     * Optional timeout in seconds for agent execution.
+     */
+    @Column(name = "timeout_seconds")
+    public Integer timeoutSeconds;
+
+    /**
      * Optional JSON object of environment variables for the subprocess.
      * Values can reference secrets using ${secret:NAME} syntax.
      */
