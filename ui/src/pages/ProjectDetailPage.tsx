@@ -336,7 +336,6 @@ export function ProjectDetailPage() {
                         alignItems={{ default: "alignItemsCenter" }}
                         style={{ marginBottom: "8px" }}>
                         <FlexItem>
-                            <Title headingLevel="h3" size="md">Body</Title>
                         </FlexItem>
                         <FlexItem>
                             {isEditingBody ? (
