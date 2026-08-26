@@ -16,7 +16,10 @@ import io.apitomy.axiom.api.beans.ProjectSearchResults;
 import io.apitomy.axiom.api.beans.Task;
 import io.apitomy.axiom.api.beans.TaskResponse;
 import io.apitomy.axiom.api.beans.ThreadEntry;
+import io.apitomy.axiom.api.beans.TriggerWorkflow;
 import io.apitomy.axiom.api.beans.UpdateProject;
+import io.apitomy.axiom.api.beans.WorkflowContent;
+import io.apitomy.axiom.app.WorkflowExecutionService;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.EventEntity;
@@ -25,15 +28,21 @@ import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
+import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
+import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.WorkflowInstanceEntity;
 import io.apitomy.axiom.core.lifecycle.ProjectLifecycle;
 import io.apitomy.axiom.core.lifecycle.ProjectStatus;
 import io.apitomy.axiom.core.services.WorkspaceService;
 import io.apitomy.axiom.core.tracing.TraceContext;
 import io.apitomy.axiom.core.tracing.TraceService;
+import io.apitomy.flow.model.Workflow;
+import io.apitomy.flow.model.WorkflowInstance;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
@@ -67,6 +76,12 @@ public class ProjectsResourceImpl implements ProjectsResource {
 
     @Inject
     WorkspaceService workspaceService;
+
+    @Inject
+    ObjectMapper objectMapper;
+
+    @Inject
+    WorkflowExecutionService workflowExecutionService;
 
     @Inject
     TraceService traceService;
@@ -496,6 +511,114 @@ public class ProjectsResourceImpl implements ProjectsResource {
                 .stream()
                 .map(TraceMapper::toTraceBean)
                 .toList();
+    }
+
+    @Override
+    public io.apitomy.axiom.api.beans.WorkflowInstance triggerProjectWorkflow(
+            long projectId, TriggerWorkflow data) {
+        WorkflowInstanceEntity entity = workflowExecutionService
+                .triggerWorkflow(projectId, data.getWorkflowDefinitionId());
+        return toWorkflowInstanceBean(entity);
+    }
+
+    @Override
+    public io.apitomy.axiom.api.beans.WorkflowInstance getProjectWorkflowInstance(
+            long projectId) {
+        WorkflowInstanceEntity entity = WorkflowInstanceEntity
+                .find("projectId", projectId).firstResult();
+        if (entity == null) {
+            throw new WebApplicationException(404);
+        }
+        return toWorkflowInstanceBean(entity);
+    }
+
+    @Override
+    public void cancelProjectWorkflow(long projectId) {
+        workflowExecutionService.cancelWorkflow(projectId);
+    }
+
+    private io.apitomy.axiom.api.beans.WorkflowInstance toWorkflowInstanceBean(
+            WorkflowInstanceEntity entity) {
+        io.apitomy.axiom.api.beans.WorkflowInstance bean =
+                new io.apitomy.axiom.api.beans.WorkflowInstance();
+
+        bean.setId(entity.id);
+        bean.setProjectId(entity.projectId);
+        bean.setDefinitionId(entity.definitionId);
+        bean.setDefinitionVersion(entity.definitionVersion);
+        bean.setStatus(entity.status);
+        bean.setCurrentNodeId(entity.currentNodeId);
+        bean.setFailureReason(entity.failureReason);
+        bean.setStartedOn(Date.from(entity.startedOn));
+        if (entity.completedOn != null) {
+            bean.setCompletedOn(Date.from(entity.completedOn));
+        }
+
+        WorkflowDefinitionEntity definition =
+                WorkflowDefinitionEntity.findById(entity.definitionId);
+        if (definition != null) {
+            bean.setDefinitionName(definition.name);
+        }
+
+        WorkflowDefinitionVersionEntity version =
+                WorkflowDefinitionVersionEntity
+                        .find("definitionId = ?1 and version = ?2",
+                                entity.definitionId,
+                                entity.definitionVersion)
+                        .firstResult();
+        if (version != null) {
+            try {
+                bean.setWorkflowContent(objectMapper.readValue(
+                        version.content, WorkflowContent.class));
+            } catch (JsonProcessingException e) {
+                bean.setWorkflowContent(null);
+            }
+
+            if (entity.currentNodeId != null) {
+                try {
+                    Workflow workflow = objectMapper.readValue(
+                            version.content, Workflow.class);
+                    workflow.findNodeById(entity.currentNodeId)
+                            .ifPresent(node ->
+                                    bean.setCurrentNodeName(node.name()));
+                } catch (JsonProcessingException ignored) {
+                }
+            }
+        }
+
+        try {
+            WorkflowInstance flowInstance = objectMapper.readValue(
+                    entity.instanceState, WorkflowInstance.class);
+            bean.setContext(objectMapper.convertValue(
+                    flowInstance.context(),
+                    io.apitomy.axiom.api.beans.Context.class));
+            bean.setHistory(flowInstance.history().stream()
+                    .map(this::toHistoryEntryBean).toList());
+        } catch (JsonProcessingException e) {
+            bean.setHistory(List.of());
+        }
+
+        return bean;
+    }
+
+    private io.apitomy.axiom.api.beans.HistoryEntry toHistoryEntryBean(
+            io.apitomy.flow.model.HistoryEntry entry) {
+        io.apitomy.axiom.api.beans.HistoryEntry bean =
+                new io.apitomy.axiom.api.beans.HistoryEntry();
+        bean.setNodeId(entry.nodeId());
+        bean.setNodeName(entry.nodeName());
+        if (entry.enteredOn() != null) {
+            bean.setEnteredOn(Date.from(entry.enteredOn()));
+        }
+        if (entry.completedOn() != null) {
+            bean.setCompletedOn(Date.from(entry.completedOn()));
+        }
+        if (entry.output() != null && !entry.output().isEmpty()) {
+            bean.setOutput(objectMapper.convertValue(
+                    entry.output(),
+                    io.apitomy.axiom.api.beans.Output.class));
+        }
+        return bean;
     }
 
     private ProjectEntity findProjectOrThrow(long id) {

@@ -15,7 +15,7 @@ import io.apitomy.flow.model.NodeType;
 import io.apitomy.flow.model.Workflow;
 import io.apitomy.flow.model.WorkflowInstance;
 import io.apitomy.flow.model.WorkflowNode;
-import io.apitomy.flow.spi.ActionInfo;
+import io.apitomy.flow.model.ActionInfo;
 import io.apitomy.flow.spi.NodeExecutionContext;
 import io.apitomy.flow.spi.NodeExecutor;
 import io.apitomy.flow.spi.NodeExecutorProvider;
@@ -111,8 +111,12 @@ public class WorkflowExecutionService {
         Map<String, Object> context = new HashMap<>();
         context.put("projectId", project.id);
         context.put("projectName", project.name);
-        context.put("repository", project.repository);
-        context.put("ref", project.ref);
+        if (project.repository != null) {
+            context.put("repository", project.repository);
+        }
+        if (project.ref != null) {
+            context.put("ref", project.ref);
+        }
 
         WorkflowInstance instance = workflowEngine.startWorkflow(
                 workflow, context);

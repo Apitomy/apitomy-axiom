@@ -9299,7 +9299,8 @@
             "type": "string"
           },
           "output": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": {}
           }
         }
       },
@@ -9346,10 +9347,12 @@
             "type": "string"
           },
           "workflowContent": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": {}
           },
           "context": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": {}
           },
           "history": {
             "type": "array",

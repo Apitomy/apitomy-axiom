@@ -276,7 +276,7 @@ class WorkflowInstanceResourceTest {
                 .when()
                     .post(PROJECTS_PATH)
                 .then()
-                    .statusCode(201)
+                    .statusCode(200)
                     .extract().path("id");
     }
 
