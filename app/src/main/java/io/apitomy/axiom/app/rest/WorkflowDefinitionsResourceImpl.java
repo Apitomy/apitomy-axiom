@@ -432,12 +432,11 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
 
     /**
      * {@inheritDoc}
-     * <p>
-     * Stub - to be implemented in Task 14.
      */
     @Override
     public io.apitomy.axiom.api.beans.WorkflowRunSearchResults listWorkflowDefinitionRuns(
             long workflowDefinitionId, String status, java.math.BigInteger page, java.math.BigInteger limit) {
-        throw new WebApplicationException("Not yet implemented", Response.Status.NOT_IMPLEMENTED);
+        findOrThrow(workflowDefinitionId);
+        return runBeanMapper.search(null, workflowDefinitionId, status, page, limit);
     }
 }

@@ -463,4 +463,30 @@ class WorkflowRunsResourceTest {
                 .when().get("/api/v1/workflow/runs/999999")
                 .then().statusCode(404);
     }
+
+    @Test
+    void listRunsForDefinition() {
+        int projectId = createProject("WF DefRuns Project");
+        int definitionId = createAndPublishActionWorkflow("DefRuns WF");
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
+                .when().post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .then().statusCode(200);
+
+        given()
+                .when().get(WORKFLOWS_PATH + "/" + definitionId + "/runs")
+                .then()
+                    .statusCode(200)
+                    .body("totalCount", equalTo(1))
+                    .body("items[0].definitionId", equalTo(definitionId));
+    }
+
+    @Test
+    void listRunsForMissingDefinitionReturns404() {
+        given()
+                .when().get(WORKFLOWS_PATH + "/999999/runs")
+                .then().statusCode(404);
+    }
 }
