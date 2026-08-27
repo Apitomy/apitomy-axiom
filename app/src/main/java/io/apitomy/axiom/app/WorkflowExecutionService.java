@@ -10,6 +10,7 @@ import io.apitomy.axiom.core.entities.WorkflowInstanceEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.flow.engine.WorkflowEngine;
+import io.apitomy.flow.engine.WorkflowValidationException;
 import io.apitomy.flow.model.InstanceStatus;
 import io.apitomy.flow.model.NodeType;
 import io.apitomy.flow.model.Workflow;
@@ -27,6 +28,7 @@ import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
 
 import java.time.Instant;
@@ -118,8 +120,15 @@ public class WorkflowExecutionService {
             context.put("ref", project.ref);
         }
 
-        WorkflowInstance instance = workflowEngine.startWorkflow(
-                workflow, context);
+        WorkflowInstance instance;
+        try {
+            instance = workflowEngine.startWorkflow(workflow, context);
+        } catch (IllegalArgumentException | WorkflowValidationException e) {
+            throw new WebApplicationException(
+                    Response.status(400)
+                            .entity(Map.of("message", e.getMessage()))
+                            .build());
+        }
 
         WorkflowInstanceEntity entity = new WorkflowInstanceEntity();
         entity.projectId = projectId;
