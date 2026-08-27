@@ -431,4 +431,36 @@ class WorkflowRunsResourceTest {
 
         return id;
     }
+
+    @Test
+    void listAndGetWorkflowRuns() {
+        int projectId = createProject("WF Runs List Project");
+        int definitionId = createAndPublishActionWorkflow("Runs List WF");
+
+        Integer runId = given()
+                .contentType(ContentType.JSON)
+                .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
+                .when().post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .then().statusCode(200).extract().path("runId");
+
+        given()
+                .when().get("/api/v1/workflow/runs?projectId=" + projectId)
+                .then()
+                    .statusCode(200)
+                    .body("totalCount", equalTo(1))
+                    .body("items[0].runId", equalTo(runId))
+                    .body("items[0].projectName", equalTo("WF Runs List Project"))
+                    .body("items[0].definitionName", equalTo("Runs List WF"));
+
+        given()
+                .when().get("/api/v1/workflow/runs/" + runId)
+                .then()
+                    .statusCode(200)
+                    .body("runId", equalTo(runId))
+                    .body("projectId", equalTo(projectId));
+
+        given()
+                .when().get("/api/v1/workflow/runs/999999")
+                .then().statusCode(404);
+    }
 }

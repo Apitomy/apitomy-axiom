@@ -18,8 +18,8 @@ import io.apitomy.axiom.api.beans.TaskResponse;
 import io.apitomy.axiom.api.beans.ThreadEntry;
 import io.apitomy.axiom.api.beans.TriggerWorkflow;
 import io.apitomy.axiom.api.beans.UpdateProject;
-import io.apitomy.axiom.api.beans.WorkflowContent;
 import io.apitomy.axiom.app.WorkflowExecutionService;
+import io.apitomy.axiom.app.WorkflowRunBeanMapper;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.EventEntity;
@@ -29,15 +29,12 @@ import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
-import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.lifecycle.ProjectLifecycle;
 import io.apitomy.axiom.core.lifecycle.ProjectStatus;
 import io.apitomy.axiom.core.services.WorkspaceService;
 import io.apitomy.axiom.core.tracing.TraceContext;
 import io.apitomy.axiom.core.tracing.TraceService;
-import io.apitomy.flow.model.Workflow;
-import io.apitomy.flow.model.WorkflowInstance;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -91,6 +88,9 @@ public class ProjectsResourceImpl implements ProjectsResource {
 
     @Inject
     TaskExecutionService taskExecutionService;
+
+    @Inject
+    WorkflowRunBeanMapper runBeanMapper;
 
     // ── Projects ──────────────────────────────────────────────────────
 
@@ -541,104 +541,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
 
     private io.apitomy.axiom.api.beans.WorkflowInstance toWorkflowInstanceBean(
             WorkflowRunEntity entity) {
-        io.apitomy.axiom.api.beans.WorkflowInstance bean =
-                new io.apitomy.axiom.api.beans.WorkflowInstance();
-
-        bean.setId(entity.id);
-        bean.setRunId(entity.id);
-        if (entity.traceId != null) {
-            bean.setTraceId(entity.traceId);
-        }
-        bean.setProjectId(entity.projectId);
-        bean.setDefinitionId(entity.definitionId);
-        bean.setDefinitionVersion(entity.definitionVersion);
-        bean.setStatus(entity.status);
-        bean.setCurrentNodeId(entity.currentNodeId);
-        bean.setFailureReason(entity.failureReason);
-        bean.setStartedOn(Date.from(entity.startedOn));
-        if (entity.completedOn != null) {
-            bean.setCompletedOn(Date.from(entity.completedOn));
-        }
-
-        WorkflowDefinitionEntity definition =
-                WorkflowDefinitionEntity.findById(entity.definitionId);
-        if (definition != null) {
-            bean.setDefinitionName(definition.name);
-        }
-
-        WorkflowDefinitionVersionEntity version =
-                WorkflowDefinitionVersionEntity
-                        .find("definitionId = ?1 and version = ?2",
-                                entity.definitionId,
-                                entity.definitionVersion)
-                        .firstResult();
-        if (version != null) {
-            try {
-                bean.setWorkflowContent(objectMapper.readValue(
-                        version.content, WorkflowContent.class));
-            } catch (JsonProcessingException e) {
-                bean.setWorkflowContent(null);
-            }
-
-            if (entity.currentNodeId != null) {
-                try {
-                    Workflow workflow = objectMapper.readValue(
-                            version.content, Workflow.class);
-                    workflow.findNodeById(entity.currentNodeId)
-                            .ifPresent(node ->
-                                    bean.setCurrentNodeName(node.name()));
-                } catch (JsonProcessingException ignored) {
-                }
-            }
-        }
-
-        try {
-            WorkflowInstance flowInstance = objectMapper.readValue(
-                    entity.instanceState, WorkflowInstance.class);
-            bean.setContext(objectMapper.convertValue(
-                    flowInstance.context(),
-                    io.apitomy.axiom.api.beans.Context.class));
-            List<TaskEntity> runTasks = TaskEntity
-                    .<TaskEntity>find("workflowRunId", entity.id).list();
-            Map<String, TaskEntity> tasksByNode = runTasks.stream()
-                    .filter(t -> t.nodeId != null)
-                    .collect(java.util.stream.Collectors.toMap(
-                            t -> t.nodeId, t -> t, (a, b) -> b));
-            bean.setHistory(flowInstance.history().stream()
-                    .map(h -> toHistoryEntryBean(h, tasksByNode))
-                    .toList());
-        } catch (JsonProcessingException e) {
-            bean.setHistory(List.of());
-        }
-
-        return bean;
-    }
-
-    private io.apitomy.axiom.api.beans.HistoryEntry toHistoryEntryBean(
-            io.apitomy.flow.model.HistoryEntry entry,
-            Map<String, TaskEntity> tasksByNode) {
-        io.apitomy.axiom.api.beans.HistoryEntry bean =
-                new io.apitomy.axiom.api.beans.HistoryEntry();
-        bean.setNodeId(entry.nodeId());
-        bean.setNodeName(entry.nodeName());
-        if (entry.enteredOn() != null) {
-            bean.setEnteredOn(Date.from(entry.enteredOn()));
-        }
-        if (entry.completedOn() != null) {
-            bean.setCompletedOn(Date.from(entry.completedOn()));
-        }
-        if (entry.output() != null && !entry.output().isEmpty()) {
-            bean.setOutput(objectMapper.convertValue(
-                    entry.output(),
-                    io.apitomy.axiom.api.beans.Output.class));
-        }
-        TaskEntity task = entry.nodeId() != null
-                ? tasksByNode.get(entry.nodeId()) : null;
-        if (task != null) {
-            bean.setTaskId(task.id);
-            bean.setTaskStatus(task.status);
-        }
-        return bean;
+        return runBeanMapper.toBean(entity);
     }
 
     private ProjectEntity findProjectOrThrow(long id) {
