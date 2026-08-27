@@ -358,11 +358,24 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
      * Creates an empty workflow JSON with start and end nodes.
      */
     private String createEmptyWorkflowContent(String name) {
+        List<Map<String, Object>> startInputs = List.of(
+                Map.of("name", "projectId", "type", "number",
+                        "required", true,
+                        "description", "The Axiom project id"),
+                Map.of("name", "projectName", "type", "string",
+                        "required", true,
+                        "description", "The Axiom project name"),
+                Map.of("name", "repository", "type", "string",
+                        "required", false,
+                        "description", "The project git repository, if any"),
+                Map.of("name", "ref", "type", "string",
+                        "required", false,
+                        "description", "The project git ref, if any"));
         Map<String, Object> startNode = Map.of(
                 "id", "start-1",
                 "type", "start",
                 "name", "Start",
-                "config", Map.of(),
+                "config", Map.of("inputs", startInputs),
                 "position", Map.of("x", 250, "y", 100));
         Map<String, Object> endNode = Map.of(
                 "id", "end-1",

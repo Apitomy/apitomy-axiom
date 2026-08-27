@@ -403,6 +403,22 @@ class WorkflowDefinitionsResourceTest {
                     .body("version", equalTo(1));
     }
 
+    @Test
+    void testNewDefinitionSeedsCanonicalInputs() {
+        int id = createDefinition("Seeded Inputs WF");
+
+        given()
+                .when()
+                    .get(BASE_PATH + "/" + id)
+                .then()
+                    .statusCode(200)
+                    .body("content.nodes[0].type", equalTo("start"))
+                    .body("content.nodes[0].config.inputs.size()", equalTo(4))
+                    .body("content.nodes[0].config.inputs.name",
+                            hasItems("projectId", "projectName",
+                                     "repository", "ref"));
+    }
+
     // -- Helpers --
 
     private int createDefinition(String name) {
