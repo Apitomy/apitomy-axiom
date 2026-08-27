@@ -165,11 +165,22 @@ public record SseEvent(
     }
 
     /**
-     * Fires when a workflow instance changes state.
+     * Fires when a workflow run changes state.
+     *
+     * @param projectId the project the run belongs to
+     * @param runId the workflow run that changed (nullable)
+     * @param status the run status (nullable)
      */
-    public static SseEvent workflowUpdated(long projectId) {
-        return new SseEvent("workflow-updated",
-                "{\"projectId\":" + projectId + "}");
+    public static SseEvent workflowUpdated(long projectId, Long runId, String status) {
+        StringBuilder json = new StringBuilder("{\"projectId\":").append(projectId);
+        if (runId != null) {
+            json.append(",\"runId\":").append(runId);
+        }
+        if (status != null) {
+            json.append(",\"status\":\"").append(escapeJson(status)).append("\"");
+        }
+        json.append("}");
+        return new SseEvent("workflow-updated", json.toString());
     }
 
     /**

@@ -164,7 +164,8 @@ public class WorkflowExecutionService {
 
         logActivity(projectId, "workflow-started",
                 "Workflow started: " + definition.name);
-        sseEvents.fire(SseEvent.workflowUpdated(projectId));
+        sseEvents.fire(SseEvent.workflowUpdated(
+                entity.projectId, entity.id, entity.status));
 
         return entity;
     }
@@ -220,7 +221,8 @@ public class WorkflowExecutionService {
                     "Workflow failed for project", "error"));
         }
 
-        sseEvents.fire(SseEvent.workflowUpdated(entity.projectId));
+        sseEvents.fire(SseEvent.workflowUpdated(
+                entity.projectId, entity.id, entity.status));
     }
 
     /**
@@ -264,7 +266,8 @@ public class WorkflowExecutionService {
         }
 
         logActivity(projectId, "workflow-cancelled", "Workflow cancelled");
-        sseEvents.fire(SseEvent.workflowUpdated(projectId));
+        sseEvents.fire(SseEvent.workflowUpdated(
+                entity.projectId, entity.id, entity.status));
     }
 
     // -- Private helpers --
