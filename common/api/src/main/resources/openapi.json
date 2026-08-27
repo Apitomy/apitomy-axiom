@@ -5459,6 +5459,95 @@
           }
         }
       ]
+    },
+    "/workflow-runs": {
+      "get": {
+        "tags": [
+          "WorkflowRuns"
+        ],
+        "summary": "List workflow runs across all projects",
+        "operationId": "listWorkflowRuns",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter by status (comma-separated)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of workflow runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunSearchResults"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow-runs/{runId}": {
+      "get": {
+        "tags": [
+          "WorkflowRuns"
+        ],
+        "summary": "Get a single workflow run by ID",
+        "operationId": "getWorkflowRun",
+        "responses": {
+          "200": {
+            "description": "The workflow run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowInstance"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "runId",
+          "in": "path",
+          "description": "Workflow run ID",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
     }
   },
   "components": {
@@ -9404,6 +9493,72 @@
             "type": "integer"
           }
         }
+      },
+      "WorkflowRunSummary": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "projectId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "projectName": {
+            "type": "string"
+          },
+          "definitionId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "definitionName": {
+            "type": "string"
+          },
+          "definitionVersion": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          },
+          "currentNodeName": {
+            "type": "string"
+          },
+          "traceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "startedOn": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "completedOn": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      },
+      "WorkflowRunSearchResults": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowRunSummary"
+            }
+          },
+          "totalCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        }
       }
     },
     "responses": {
@@ -9553,6 +9708,10 @@
     {
       "name": "WorkflowInstances",
       "description": "Workflow instance execution and monitoring"
+    },
+    {
+      "name": "WorkflowRuns",
+      "description": "Workflow run history and execution observability"
     }
   ]
 }
