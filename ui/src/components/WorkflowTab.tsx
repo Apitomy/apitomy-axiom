@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { Link } from "react-router-dom";
 import {
     Alert,
     Button, EmptyState, EmptyStateBody,
@@ -281,6 +282,11 @@ export function WorkflowTab({
                         </Button>
                     </FlexItem>
                 )}
+                <FlexItem>
+                    <Link to={`/logs/workflow-runs/${instance.id}`}>
+                        View run details →
+                    </Link>
+                </FlexItem>
             </Flex>
 
             {instance.failureReason && (
