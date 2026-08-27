@@ -9,6 +9,8 @@ import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.events.SseEvent;
+import io.apitomy.axiom.core.tracing.TraceService;
+import io.apitomy.axiom.core.tracing.TraceContext;
 import io.apitomy.flow.engine.WorkflowEngine;
 import io.apitomy.flow.engine.WorkflowValidationException;
 import io.apitomy.flow.model.InstanceStatus;
@@ -50,6 +52,9 @@ public class WorkflowExecutionService {
     @Inject
     Event<SseEvent> sseEvents;
 
+    @Inject
+    TraceService traceService;
+
     private WorkflowEngine workflowEngine;
 
     @PostConstruct
@@ -78,11 +83,13 @@ public class WorkflowExecutionService {
             throw new WebApplicationException("Project not found", 404);
         }
 
-        WorkflowRunEntity existing = WorkflowRunEntity
-                .find("projectId", projectId).firstResult();
-        if (existing != null) {
+        WorkflowRunEntity activeRun = WorkflowRunEntity
+                .find("projectId = ?1 and status in ?2",
+                        projectId, List.of("running", "waiting"))
+                .firstResult();
+        if (activeRun != null) {
             throw new WebApplicationException(
-                    "Project already has a workflow instance", 409);
+                    "Project already has an active workflow run", 409);
         }
 
         WorkflowDefinitionEntity definition =
@@ -138,6 +145,18 @@ public class WorkflowExecutionService {
         entity.startedOn = Instant.now();
         persistInstanceState(entity, instance);
         entity.persist();
+
+        try {
+            TraceContext traceCtx = traceService.createTrace(
+                    "workflow",
+                    "Workflow: " + definition.name,
+                    null, project.id, null,
+                    "workflow", "Workflow: " + definition.name,
+                    "workflow-run", entity.id);
+            entity.traceId = traceCtx.traceId();
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to create trace for workflow run %d", entity.id);
+        }
 
         if (instance.status() == InstanceStatus.WAITING) {
             createTaskForCurrentNode(entity, workflow, instance);

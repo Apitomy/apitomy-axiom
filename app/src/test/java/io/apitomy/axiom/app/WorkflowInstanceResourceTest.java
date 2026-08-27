@@ -53,7 +53,7 @@ class WorkflowInstanceResourceTest {
     @Test
     void testTriggerDuplicateReturns409() {
         int projectId = createProject("WF Dup Test Project");
-        int definitionId = createAndPublishDefinition(
+        int definitionId = createAndPublishActionWorkflow(
                 "Dup Test WF");
 
         given()
@@ -66,7 +66,8 @@ class WorkflowInstanceResourceTest {
                 .when()
                     .post(PROJECTS_PATH + "/" + projectId + "/workflow")
                 .then()
-                    .statusCode(200);
+                    .statusCode(200)
+                    .body("status", equalTo("waiting"));
 
         given()
                 .contentType(ContentType.JSON)
