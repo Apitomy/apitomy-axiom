@@ -286,6 +286,123 @@ class WorkflowDefinitionsResourceTest {
                     .statusCode(409);
     }
 
+    @Test
+    void testPublishRejectsNonCanonicalStartInput() {
+        int id = createDefinition("Non-Canonical Input WF");
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "id": "wf-nc",
+                        "name": "Non-Canonical",
+                        "nodes": [
+                            {"id": "s1", "type": "start", "name": "Start",
+                             "config": {"inputs": [
+                                 {"name": "issueNumber", "type": "string",
+                                  "required": true}
+                             ]},
+                             "position": {"x": 100, "y": 100}},
+                            {"id": "e1", "type": "end", "name": "End",
+                             "config": {}, "position": {"x": 100, "y": 300}}
+                        ],
+                        "edges": [
+                            {"id": "edge1", "source": "s1", "target": "e1",
+                             "priority": 0, "isDefault": true}
+                        ]
+                    }
+                    """)
+                .when()
+                    .put(BASE_PATH + "/" + id + "/content")
+                .then()
+                    .statusCode(204);
+
+        given()
+                .when()
+                    .post(BASE_PATH + "/" + id + "/publish")
+                .then()
+                    .statusCode(400);
+    }
+
+    @Test
+    void testPublishRejectsRequiredOptionalInput() {
+        int id = createDefinition("Required Optional Input WF");
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "id": "wf-ro",
+                        "name": "Required Optional",
+                        "nodes": [
+                            {"id": "s1", "type": "start", "name": "Start",
+                             "config": {"inputs": [
+                                 {"name": "repository", "type": "string",
+                                  "required": true}
+                             ]},
+                             "position": {"x": 100, "y": 100}},
+                            {"id": "e1", "type": "end", "name": "End",
+                             "config": {}, "position": {"x": 100, "y": 300}}
+                        ],
+                        "edges": [
+                            {"id": "edge1", "source": "s1", "target": "e1",
+                             "priority": 0, "isDefault": true}
+                        ]
+                    }
+                    """)
+                .when()
+                    .put(BASE_PATH + "/" + id + "/content")
+                .then()
+                    .statusCode(204);
+
+        given()
+                .when()
+                    .post(BASE_PATH + "/" + id + "/publish")
+                .then()
+                    .statusCode(400);
+    }
+
+    @Test
+    void testPublishAcceptsCanonicalStartInputs() {
+        int id = createDefinition("Canonical Input WF");
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "id": "wf-can",
+                        "name": "Canonical",
+                        "nodes": [
+                            {"id": "s1", "type": "start", "name": "Start",
+                             "config": {"inputs": [
+                                 {"name": "projectId", "type": "number",
+                                  "required": true},
+                                 {"name": "repository", "type": "string",
+                                  "required": false}
+                             ]},
+                             "position": {"x": 100, "y": 100}},
+                            {"id": "e1", "type": "end", "name": "End",
+                             "config": {}, "position": {"x": 100, "y": 300}}
+                        ],
+                        "edges": [
+                            {"id": "edge1", "source": "s1", "target": "e1",
+                             "priority": 0, "isDefault": true}
+                        ]
+                    }
+                    """)
+                .when()
+                    .put(BASE_PATH + "/" + id + "/content")
+                .then()
+                    .statusCode(204);
+
+        given()
+                .when()
+                    .post(BASE_PATH + "/" + id + "/publish")
+                .then()
+                    .statusCode(200)
+                    .body("version", equalTo(1));
+    }
+
     // -- Helpers --
 
     private int createDefinition(String name) {
