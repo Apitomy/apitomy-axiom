@@ -141,7 +141,18 @@ public class TaskExecutionService {
 
         // Build the agent request
         ProjectEntity project = ProjectEntity.findById(task.projectId);
-        Path workspace = workspaceService.getWorkspacePath(project);
+
+        // Ensure the workspace directory exists before launching the agent workload;
+        // otherwise the subprocess fails to start with "No such file or directory".
+        Path workspace;
+        try {
+            workspace = workspaceService.ensureWorkspace(project);
+        } catch (WorkspaceService.WorkspaceException e) {
+            agentPool.release(lease);
+            LOG.errorf(e, "Failed to prepare workspace for task %d", task.id);
+            failTask(task.id, "Failed to prepare workspace: " + e.getMessage());
+            return;
+        }
         Map<String, String> env = buildEnvironment(
                 actionTypeEntity != null ? actionTypeEntity.environment : null);
 
