@@ -5548,6 +5548,56 @@
           }
         }
       }
+    },
+    "/workflow/definitions/{workflowDefinitionId}/runs": {
+      "get": {
+        "tags": [
+          "WorkflowDefinitions"
+        ],
+        "summary": "List runs for a specific workflow definition (all versions)",
+        "operationId": "listWorkflowDefinitionRuns",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter by status (comma-separated)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of runs for the definition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunSearchResults"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/WorkflowDefinitionId"
+        }
+      ]
     }
   },
   "components": {
