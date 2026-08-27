@@ -208,10 +208,12 @@ public class WorkflowExecutionService {
             createTaskForCurrentNode(entity, workflow, advanced);
         } else if (advanced.status() == InstanceStatus.COMPLETED) {
             entity.completedOn = Instant.now();
+            completeRunTrace(entity, "completed");
             logActivity(entity.projectId, "workflow-completed",
                     "Workflow completed");
         } else if (advanced.status() == InstanceStatus.FAILED) {
             entity.completedOn = Instant.now();
+            completeRunTrace(entity, "failed");
             logActivity(entity.projectId, "workflow-failed",
                     "Workflow failed: " + advanced.failureReason());
             sseEvents.fire(SseEvent.notification(
@@ -248,6 +250,7 @@ public class WorkflowExecutionService {
 
         persistInstanceState(entity, cancelled);
         entity.completedOn = Instant.now();
+        completeRunTrace(entity, "cancelled");
 
         TaskEntity activeTask = TaskEntity
                 .find("workflowRunId = ?1 and status in ?2",
@@ -282,6 +285,18 @@ public class WorkflowExecutionService {
             return null;
         }
         return new TraceContext(run.traceId, root.id);
+    }
+
+    /** Best-effort completion of a run's execution trace. */
+    private void completeRunTrace(WorkflowRunEntity run, String status) {
+        if (run.traceId == null) {
+            return;
+        }
+        try {
+            traceService.completeTrace(run.traceId, status);
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to complete trace for workflow run %d", run.id);
+        }
     }
 
     private void createTaskForCurrentNode(WorkflowRunEntity entity,
