@@ -50,6 +50,7 @@ import { ScheduledJobRunsPage } from "./pages/ScheduledJobRunsPage";
 import { WorkflowDefinitionsPage } from "./pages/WorkflowDefinitionsPage";
 import { WorkflowDefinitionDetailPage } from "./pages/WorkflowDefinitionDetailPage";
 import { WorkflowRunsPage } from "./pages/WorkflowRunsPage";
+import { WorkflowRunDetailPage } from "./pages/WorkflowRunDetailPage";
 import { type StartupCheck, fetchSystemHealth, fetchSystemConfig } from "./config/api";
 import { sseClient } from "./config/sse";
 
@@ -143,6 +144,7 @@ export function App() {
                         <Route path="/logs/traces" element={<TracesPage />} />
                         <Route path="/logs/traces/:traceId" element={<TraceDetailPage />} />
                         <Route path="/logs/workflow-runs" element={<WorkflowRunsPage />} />
+                        <Route path="/logs/workflow-runs/:runId" element={<WorkflowRunDetailPage />} />
                         <Route path="/reports" element={<ReportsPage />} />
                         <Route path="/reports/:reportId" element={<ReportDetailPage />} />
                         <Route path="/report-definitions" element={<ReportDefinitionsPage />} />
