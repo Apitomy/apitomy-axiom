@@ -2243,8 +2243,19 @@ export async function triggerWorkflow(
             body: JSON.stringify(data),
         });
     if (!response.ok) {
-        throw new Error(
-            `Failed to trigger workflow: ${response.status}`);
+        let message = `Failed to trigger workflow: ${response.status}`;
+        try {
+            const body = await response.json();
+            if (body && typeof body === "object"
+                    && typeof body.message === "string" && body.message) {
+                message = body.message;
+            } else if (typeof body === "string" && body) {
+                message = body;
+            }
+        } catch {
+            // No JSON body; keep the status-based message.
+        }
+        throw new Error(message);
     }
     return response.json();
 }

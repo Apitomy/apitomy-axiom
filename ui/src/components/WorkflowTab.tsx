@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
+    Alert,
     Button, EmptyState, EmptyStateBody,
     Flex, FlexItem, Label, Modal, ModalBody,
     ModalFooter, ModalHeader, Form, FormGroup,
@@ -34,6 +35,7 @@ export function WorkflowTab({
         useState<WorkflowDefinition[]>([]);
     const [selectedDefId, setSelectedDefId] = useState("");
     const [submitting, setSubmitting] = useState(false);
+    const [triggerError, setTriggerError] = useState<string | null>(null);
 
     const loadInstance = useCallback(() => {
         if (!hasWorkflowInstance) {
@@ -83,6 +85,7 @@ export function WorkflowTab({
                 if (published.length > 0) {
                     setSelectedDefId(String(published[0].id));
                 }
+                setTriggerError(null);
                 setIsTriggerOpen(true);
             })
             .catch(console.error);
@@ -91,6 +94,7 @@ export function WorkflowTab({
     const handleTrigger = useCallback(() => {
         if (!selectedDefId) return;
         setSubmitting(true);
+        setTriggerError(null);
         triggerWorkflow(projectId, {
             workflowDefinitionId: Number(selectedDefId),
         })
@@ -99,7 +103,10 @@ export function WorkflowTab({
                 onRefresh();
                 loadInstance();
             })
-            .catch(console.error)
+            .catch((err) => setTriggerError(
+                err instanceof Error
+                    ? err.message
+                    : "Failed to run workflow"))
             .finally(() => setSubmitting(false));
     }, [projectId, selectedDefId, onRefresh, loadInstance]);
 
@@ -161,10 +168,17 @@ export function WorkflowTab({
                 </EmptyState>
 
                 <Modal isOpen={isTriggerOpen}
-                    onClose={() => setIsTriggerOpen(false)}
+                    onClose={() => { setIsTriggerOpen(false); setTriggerError(null); }}
                     variant="medium">
                     <ModalHeader title="Run Workflow" />
                     <ModalBody>
+                        {triggerError && (
+                            <Alert variant="danger" isInline
+                                title="Failed to run workflow"
+                                style={{ marginBottom: "16px" }}>
+                                {triggerError}
+                            </Alert>
+                        )}
                         {definitions.length === 0 ? (
                             <EmptyState>
                                 <EmptyStateBody>
@@ -204,7 +218,7 @@ export function WorkflowTab({
                         </Button>
                         <Button variant="link"
                             onClick={
-                                () => setIsTriggerOpen(false)}>
+                                () => { setIsTriggerOpen(false); setTriggerError(null); }}>
                             Cancel
                         </Button>
                     </ModalFooter>
