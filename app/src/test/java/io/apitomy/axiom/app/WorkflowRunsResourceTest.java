@@ -1,5 +1,7 @@
 package io.apitomy.axiom.app;
 
+import io.apitomy.axiom.core.entities.TaskEntity;
+import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
@@ -109,6 +111,46 @@ class WorkflowRunsResourceTest {
                     .post(PROJECTS_PATH + "/" + projectId + "/workflow")
                 .then()
                     .statusCode(409);
+    }
+
+    /**
+     * Verifies that the workflow node task is stamped with workflowRunId,
+     * nodeId, and traceId, and that a matching "task" trace node exists.
+     */
+    @Test
+    void nodeTaskCarriesRunNodeAndTrace() {
+        int projectId = createProject("WF Node Task Project");
+        int definitionId = createAndPublishActionWorkflow("Node Task WF");
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
+                .when()
+                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .then()
+                    .statusCode(200)
+                    .body("status", equalTo("waiting"));
+
+        // Query the spawned task entity directly
+        TaskEntity task = QuarkusTransaction.requiringNew().call(() ->
+                TaskEntity.find("projectId", (long) projectId).firstResult());
+        assertNotNull(task, "Task should exist");
+        assertNotNull(task.workflowRunId, "Task should have workflowRunId");
+        assertNotNull(task.nodeId, "Task should have nodeId");
+        assertNotNull(task.traceId, "Task should have traceId");
+
+        // Query the run to get its traceId
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                WorkflowRunEntity.findById(task.workflowRunId));
+        assertNotNull(run, "Run should exist");
+
+        // Verify a matching "task" trace node exists
+        TraceNodeEntity traceNode = QuarkusTransaction.requiringNew().call(() ->
+                TraceNodeEntity.find("traceId = ?1 and nodeType = ?2", run.traceId, "task")
+                        .firstResult());
+        assertNotNull(traceNode, "Task trace node should exist");
+        assertEquals(task.id, traceNode.entityId,
+                "Trace node entityId should match task id");
     }
 
     // -- Helpers copied from WorkflowInstanceResourceTest --

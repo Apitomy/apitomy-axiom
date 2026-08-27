@@ -266,6 +266,24 @@ public class WorkflowExecutionService {
 
     // -- Private helpers --
 
+    /**
+     * Rebuilds a {@link TraceContext} rooted at a run's trace root node, or
+     * null if the run has no trace or the root cannot be found.
+     */
+    private TraceContext traceContextFor(WorkflowRunEntity run) {
+        if (run.traceId == null) {
+            return null;
+        }
+        io.apitomy.axiom.core.entities.TraceNodeEntity root =
+                io.apitomy.axiom.core.entities.TraceNodeEntity.find(
+                        "traceId = ?1 and parentNodeId is null", run.traceId)
+                        .firstResult();
+        if (root == null) {
+            return null;
+        }
+        return new TraceContext(run.traceId, root.id);
+    }
+
     private void createTaskForCurrentNode(WorkflowRunEntity entity,
             Workflow workflow, WorkflowInstance instance) {
         ActionInfo actionInfo = workflowEngine.getActionInfo(
@@ -283,8 +301,20 @@ public class WorkflowExecutionService {
         task.status = "Pending";
         task.input = serializeInputs(actionInfo);
         task.workflowRunId = entity.id;
+        task.nodeId = instance.currentNodeId();
+        task.traceId = entity.traceId;
         task.createdOn = Instant.now();
         task.persist();
+
+        TraceContext traceCtx = traceContextFor(entity);
+        if (traceCtx != null) {
+            try {
+                traceService.addNode(traceCtx, "task", "in-progress",
+                        "Node: " + actionInfo.actionType(), "task", task.id);
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to add workflow task trace node");
+            }
+        }
 
         LOG.infof("Created task %d for workflow instance %d (action: %s)",
                 task.id, entity.id, actionInfo.actionType());
