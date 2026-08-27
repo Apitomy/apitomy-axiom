@@ -107,6 +107,7 @@ All scoped under projects since instances are one-per-project.
 **Error responses:**
 - 404 — project not found
 - 400 — definition not published, or workflow contains unsupported node types
+- 400 — the workflow's Start node requires an input Axiom does not provide (input contract violation)
 - 409 — project already has a workflow instance
 
 ### Get instance
