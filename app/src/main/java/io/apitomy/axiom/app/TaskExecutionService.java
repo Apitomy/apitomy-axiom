@@ -451,7 +451,11 @@ public class TaskExecutionService {
                     traceService.completeNode(taskNode.id, statusText);
                 }
 
-                traceService.completeTrace(task.traceId, result.success() ? "completed" : "failed");
+                // Workflow runs own their trace lifecycle: WorkflowExecutionService
+                // completes the trace when the run reaches a terminal state.
+                if (task.workflowRunId == null) {
+                    traceService.completeTrace(task.traceId, result.success() ? "completed" : "failed");
+                }
             } catch (Exception e) {
                 LOG.warnf(e, "Failed to complete trace for task %d", task.id);
             }

@@ -1,17 +1,21 @@
 package io.apitomy.axiom.app;
 
+import io.apitomy.axiom.agents.spi.AgentResult;
 import io.apitomy.axiom.core.entities.TaskEntity;
+import io.apitomy.axiom.core.entities.TraceEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
+import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
@@ -22,6 +26,9 @@ class WorkflowRunsResourceTest {
 
     private static final String PROJECTS_PATH = "/api/v1/projects";
     private static final String WORKFLOWS_PATH = "/api/v1/workflow-definitions";
+
+    @Inject
+    TaskExecutionService taskExecutionService;
 
     /**
      * Verifies that triggering an ACTION workflow creates a trace root.
@@ -153,6 +160,60 @@ class WorkflowRunsResourceTest {
                 "Trace node entityId should match task id");
     }
 
+    /**
+     * Verifies that completing the first node of a multi-node workflow does
+     * NOT complete the run's trace. The trace must remain open until the
+     * entire run reaches a terminal state.
+     */
+    @Test
+    void runTraceStaysOpenUntilRunCompletes() {
+        int projectId = createProject("WF Trace Lifecycle Project");
+        int definitionId = createAndPublishTwoActionWorkflow("Trace Lifecycle WF");
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
+                .when()
+                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .then()
+                    .statusCode(200)
+                    .body("status", equalTo("waiting"));
+
+        // Query the run and the first action node's task
+        Object[] runAndTask = QuarkusTransaction.requiringNew().call(() -> {
+            WorkflowRunEntity run = WorkflowRunEntity.find("projectId", (long) projectId)
+                    .firstResult();
+            assertNotNull(run, "Run should exist");
+            assertNotNull(run.traceId, "Run should have traceId");
+
+            TaskEntity a1Task = TaskEntity.find(
+                    "workflowRunId = ?1 and nodeId = ?2", run.id, "a1")
+                    .firstResult();
+            assertNotNull(a1Task, "Action a1 task should exist");
+
+            return new Object[] { run.traceId, a1Task.id };
+        });
+
+        java.util.UUID runTraceId = (java.util.UUID) runAndTask[0];
+        Long a1TaskId = (Long) runAndTask[1];
+
+        // Simulate the first action node completing successfully
+        AgentResult successResult = AgentResult.success("Test action completed");
+        QuarkusTransaction.requiringNew().run(() ->
+                taskExecutionService.onTaskCompleted(a1TaskId, successResult));
+
+        // After node a1 completes, the run should have advanced to a2 and
+        // still be active (non-terminal). The trace must remain open because
+        // WorkflowExecutionService owns the trace lifecycle and only completes
+        // it when the run reaches a terminal state.
+        TraceEntity trace = QuarkusTransaction.requiringNew().call(() ->
+                TraceEntity.findById(runTraceId));
+        assertNotNull(trace, "Trace should exist");
+        assertNotEquals("completed", trace.status,
+                "Trace should NOT be completed after first node finishes "
+                        + "(workflow trace lifecycle is owned by WorkflowExecutionService)");
+    }
+
     // -- Helpers copied from WorkflowInstanceResourceTest --
 
     private int createProject(String name) {
@@ -266,6 +327,68 @@ class WorkflowRunsResourceTest {
                              "target": "a1",
                              "priority": 0, "isDefault": true},
                             {"id": "edge2", "source": "a1",
+                             "target": "e1",
+                             "priority": 0, "isDefault": true}
+                        ]
+                    }
+                    """)
+                .when()
+                    .put(WORKFLOWS_PATH + "/" + id + "/content")
+                .then()
+                    .statusCode(204);
+
+        given()
+                .when()
+                    .post(WORKFLOWS_PATH + "/" + id + "/publish")
+                .then()
+                    .statusCode(200);
+
+        return id;
+    }
+
+    /**
+     * Creates and publishes a start→action→action→end workflow with two
+     * action nodes (a1, a2) in series. Stops at the first action node.
+     */
+    private int createAndPublishTwoActionWorkflow(String name) {
+        int id = createDefinition(name);
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "id": "wf-two-action",
+                        "name": "Two Action Test",
+                        "nodes": [
+                            {"id": "s1", "type": "start",
+                             "name": "Start",
+                             "config": {},
+                             "position": {"x": 100, "y": 100}},
+                            {"id": "a1", "type": "action",
+                             "name": "Action 1",
+                             "config": {
+                                 "actionType": "test-action"
+                             },
+                             "position": {"x": 100, "y": 200}},
+                            {"id": "a2", "type": "action",
+                             "name": "Action 2",
+                             "config": {
+                                 "actionType": "test-action"
+                             },
+                             "position": {"x": 100, "y": 300}},
+                            {"id": "e1", "type": "end",
+                             "name": "End",
+                             "config": {},
+                             "position": {"x": 100, "y": 400}}
+                        ],
+                        "edges": [
+                            {"id": "edge1", "source": "s1",
+                             "target": "a1",
+                             "priority": 0, "isDefault": true},
+                            {"id": "edge2", "source": "a1",
+                             "target": "a2",
+                             "priority": 0, "isDefault": true},
+                            {"id": "edge3", "source": "a2",
                              "target": "e1",
                              "priority": 0, "isDefault": true}
                         ]
