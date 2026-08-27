@@ -116,6 +116,8 @@ export interface Task {
     completedOn?: string;
     sessionId?: string;
     traceId?: string;
+    workflowRunId?: number;
+    nodeId?: string;
 }
 
 export interface ThreadEntry {
@@ -2219,6 +2221,8 @@ export interface WorkflowInstanceInfo {
     history: HistoryEntryInfo[];
     startedOn: string;
     completedOn?: string;
+    runId?: number;
+    traceId?: string;
 }
 
 export interface HistoryEntryInfo {
@@ -2227,6 +2231,8 @@ export interface HistoryEntryInfo {
     enteredOn: string;
     completedOn?: string;
     output?: any;
+    taskId?: number;
+    taskStatus?: string;
 }
 
 export interface TriggerWorkflowRequest {
@@ -2284,4 +2290,50 @@ export async function cancelWorkflow(
         throw new Error(
             `Failed to cancel workflow: ${response.status}`);
     }
+}
+
+export interface WorkflowRunSummary {
+    runId: number;
+    projectId: number;
+    projectName?: string;
+    definitionId: number;
+    definitionName?: string;
+    definitionVersion: number;
+    status: string;
+    currentNodeName?: string;
+    traceId?: string;
+    startedOn: string;
+    completedOn?: string;
+}
+
+export async function fetchWorkflowRuns(
+    page = 1, limit = 20, projectId?: number, status?: string
+): Promise<SearchResults<WorkflowRunSummary>> {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(limit));
+    if (projectId != null) params.set("projectId", String(projectId));
+    if (status) params.set("status", status);
+    const response = await fetch(`${API}/workflow/runs?${params}`);
+    if (!response.ok) throw new Error(`Failed to fetch workflow runs: ${response.status}`);
+    return response.json();
+}
+
+export async function getWorkflowRun(runId: number): Promise<WorkflowInstanceInfo> {
+    const response = await fetch(`${API}/workflow/runs/${runId}`);
+    if (!response.ok) throw new Error(`Failed to fetch workflow run: ${response.status}`);
+    return response.json();
+}
+
+export async function fetchWorkflowDefinitionRuns(
+    definitionId: number, page = 1, limit = 20, status?: string
+): Promise<SearchResults<WorkflowRunSummary>> {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(limit));
+    if (status) params.set("status", status);
+    const response = await fetch(
+        `${API}/workflow/definitions/${definitionId}/runs?${params}`);
+    if (!response.ok) throw new Error(`Failed to fetch definition runs: ${response.status}`);
+    return response.json();
 }
