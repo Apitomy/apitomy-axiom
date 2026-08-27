@@ -4,7 +4,6 @@ import { Link } from "react-router-dom";
 import type { HistoryEntryInfo } from "../config/api";
 
 interface WorkflowStepTimelineProps {
-    projectId: number;
     history: HistoryEntryInfo[];
     traceId?: string;
     onViewLog: (taskId: number) => void;

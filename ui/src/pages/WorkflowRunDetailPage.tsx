@@ -52,14 +52,18 @@ export function WorkflowRunDetailPage() {
     const viewerInstance = useMemo<FlowInstance | undefined>(() => {
         if (!run) return undefined;
         return {
+            id: String(run.id),
+            workflowId: String(run.definitionId),
             currentNodeId: run.currentNodeId ?? "",
-            status: run.status,
+            status: run.status as any,
+            context: run.context || {},
             history: (run.history ?? []).map((h) => ({
                 nodeId: h.nodeId, nodeName: h.nodeName,
                 edgeId: "", edgeCondition: "",
                 enteredOn: h.enteredOn, completedOn: h.completedOn ?? "",
                 output: h.output ?? {},
             })),
+            failureReason: run.failureReason,
             createdOn: run.startedOn,
             updatedOn: run.completedOn ?? run.startedOn,
         } as FlowInstance;
@@ -148,7 +152,6 @@ export function WorkflowRunDetailPage() {
 
                 {activeTab === 2 && (
                     <WorkflowStepTimeline
-                        projectId={run.projectId}
                         history={run.history ?? []}
                         traceId={run.traceId}
                         onViewLog={openLog}
