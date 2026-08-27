@@ -72,6 +72,9 @@ public class TaskExecutionService {
     @Inject
     TraceService traceService;
 
+    @Inject
+    WorkflowExecutionService workflowExecutionService;
+
     /**
      * Attempts to execute the next pending task for the given project.
      * Does nothing if there is already an active task for the project.
@@ -138,7 +141,18 @@ public class TaskExecutionService {
 
         // Build the agent request
         ProjectEntity project = ProjectEntity.findById(task.projectId);
-        Path workspace = workspaceService.getWorkspacePath(project);
+
+        // Ensure the workspace directory exists before launching the agent workload;
+        // otherwise the subprocess fails to start with "No such file or directory".
+        Path workspace;
+        try {
+            workspace = workspaceService.ensureWorkspace(project);
+        } catch (WorkspaceService.WorkspaceException e) {
+            agentPool.release(lease);
+            LOG.errorf(e, "Failed to prepare workspace for task %d", task.id);
+            failTask(task.id, "Failed to prepare workspace: " + e.getMessage());
+            return;
+        }
         Map<String, String> env = buildEnvironment(
                 actionTypeEntity != null ? actionTypeEntity.environment : null);
 
@@ -451,6 +465,11 @@ public class TaskExecutionService {
 
         // Emit internal event if configured
         emitInternalEventIfNeeded(task);
+
+        // Advance workflow if this task is part of one
+        if (task.workflowInstanceId != null) {
+            workflowExecutionService.onTaskCompleted(task.id);
+        }
     }
 
     @Transactional
@@ -468,6 +487,11 @@ public class TaskExecutionService {
 
             mcpConfigGenerator.cleanupTempFiles(taskId);
             updateProjectStatusAfterTask(task.projectId);
+
+            // Advance workflow if this task is part of one
+            if (task.workflowInstanceId != null) {
+                workflowExecutionService.onTaskCompleted(task.id);
+            }
         }
     }
 

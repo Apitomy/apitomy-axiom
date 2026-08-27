@@ -15,6 +15,29 @@ export function getApiBaseUrl(): string {
 
 const API = `${getApiBaseUrl()}/api/v1`;
 
+/**
+ * Extracts a human-readable error message from a failed response.
+ *
+ * Prefers the `message` field of a JSON error body (e.g. the validation error
+ * envelope returned with a 422), falling back to the provided default plus the
+ * HTTP status code when no message is available.
+ *
+ * @param response the failed fetch response
+ * @param fallback the default message prefix to use when no body message exists
+ * @returns a message suitable for display to the user
+ */
+async function extractErrorMessage(response: Response, fallback: string): Promise<string> {
+    try {
+        const body = await response.clone().json();
+        if (body && typeof body.message === "string" && body.message.trim()) {
+            return body.message;
+        }
+    } catch {
+        // Body was not JSON or could not be read; fall through to the default.
+    }
+    return `${fallback}: ${response.status}`;
+}
+
 // ── Types ─────────────────────────────────────────────────────────
 
 export interface SystemHealth {
@@ -67,6 +90,7 @@ export interface Project {
     updatedOn: string;
     metadata?: Record<string, string>;
     labels?: string[];
+    hasWorkflowInstance?: boolean;
 }
 
 export interface NewProject {
@@ -406,7 +430,9 @@ export async function createActionType(at: NewActionType): Promise<ActionType> {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(at),
     });
-    if (!response.ok) throw new Error(`Failed to create action type: ${response.status}`);
+    if (!response.ok) {
+        throw new Error(await extractErrorMessage(response, "Failed to create action type"));
+    }
     return response.json();
 }
 
@@ -416,7 +442,9 @@ export async function updateActionType(id: number, at: NewActionType): Promise<A
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(at),
     });
-    if (!response.ok) throw new Error(`Failed to update action type: ${response.status}`);
+    if (!response.ok) {
+        throw new Error(await extractErrorMessage(response, "Failed to update action type"));
+    }
     return response.json();
 }
 
@@ -2174,4 +2202,86 @@ export async function getWorkflowDefinitionVersion(
     const response = await fetch(`${API}/workflow-definitions/${id}/versions/${version}`);
     if (!response.ok) throw new Error(`Failed to get version: ${response.status}`);
     return response.json();
+}
+
+export interface WorkflowInstanceInfo {
+    id: number;
+    projectId: number;
+    definitionId: number;
+    definitionVersion: number;
+    definitionName: string;
+    status: string;
+    currentNodeId?: string;
+    currentNodeName?: string;
+    failureReason?: string;
+    workflowContent: any;
+    context: Record<string, any>;
+    history: HistoryEntryInfo[];
+    startedOn: string;
+    completedOn?: string;
+}
+
+export interface HistoryEntryInfo {
+    nodeId: string;
+    nodeName: string;
+    enteredOn: string;
+    completedOn?: string;
+    output?: any;
+}
+
+export interface TriggerWorkflowRequest {
+    workflowDefinitionId: number;
+}
+
+export async function triggerWorkflow(
+    projectId: number, data: TriggerWorkflowRequest
+): Promise<WorkflowInstanceInfo> {
+    const response = await fetch(
+        `${API}/projects/${projectId}/workflow`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+        });
+    if (!response.ok) {
+        let message = `Failed to trigger workflow: ${response.status}`;
+        try {
+            const body = await response.json();
+            if (body && typeof body === "object"
+                    && typeof body.message === "string" && body.message) {
+                message = body.message;
+            } else if (typeof body === "string" && body) {
+                message = body;
+            }
+        } catch {
+            // No JSON body; keep the status-based message.
+        }
+        throw new Error(message);
+    }
+    return response.json();
+}
+
+export async function getWorkflowInstance(
+    projectId: number
+): Promise<WorkflowInstanceInfo> {
+    const response = await fetch(
+        `${API}/projects/${projectId}/workflow`);
+    if (!response.ok) {
+        if (response.status === 404) return null as any;
+        throw new Error(
+            `Failed to get workflow instance: ${response.status}`);
+    }
+    return response.json();
+}
+
+export async function cancelWorkflow(
+    projectId: number
+): Promise<void> {
+    const response = await fetch(
+        `${API}/projects/${projectId}/workflow`, {
+            method: "DELETE",
+        });
+    if (!response.ok) {
+        throw new Error(
+            `Failed to cancel workflow: ${response.status}`);
+    }
 }

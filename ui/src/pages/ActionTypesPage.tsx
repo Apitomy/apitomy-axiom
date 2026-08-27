@@ -44,6 +44,13 @@ import { BooleanStatusIcon } from "../components/BooleanStatusIcon";
 import { ColoredLabel } from "../components/ColoredLabel";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
+// Default templates sent when creating an action type so the POST is complete and
+// passes server-side validation. Users refine these on the detail page afterward.
+// Placeholders must be ones the server's ActionTypeValidator recognizes.
+const DEFAULT_PROMPT_TEMPLATE = "Complete the following task:\n\n{{input}}\n";
+const DEFAULT_SCRIPT_TEMPLATE =
+    "#!/usr/bin/env bash\nset -euo pipefail\n\n# TODO: implement this action\necho \"Running action for {{projectName}}\"\n";
+
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "name", label: "Name", testId: "action-type-filter-name" },
     { value: "mode", label: "Mode", testId: "action-type-filter-mode" },
@@ -135,6 +142,8 @@ export function ActionTypesPage() {
             userTriggerable: false,
             managerTriggerable: false,
             emitsEvent: false,
+            promptTemplate: newMode === "agent" ? DEFAULT_PROMPT_TEMPLATE : undefined,
+            scriptTemplate: newMode === "script" ? DEFAULT_SCRIPT_TEMPLATE : undefined,
         };
         createActionType(data)
             .then((created) => {

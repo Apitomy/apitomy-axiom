@@ -32,7 +32,20 @@ public record ClaudeCodeResult(
      * @return a failed result
      */
     public static ClaudeCodeResult failed(String errorMessage, int exitCode) {
-        return new ClaudeCodeResult(errorMessage, null, null, null, null, exitCode, null, null);
+        return failed(errorMessage, exitCode, null);
+    }
+
+    /**
+     * Creates a result representing a failed execution, preserving any partial
+     * execution log that was accumulated before the failure.
+     *
+     * @param errorMessage the error description
+     * @param exitCode the process exit code
+     * @param executionLog the partial execution log, or {@code null} if none
+     * @return a failed result
+     */
+    public static ClaudeCodeResult failed(String errorMessage, int exitCode, String executionLog) {
+        return new ClaudeCodeResult(errorMessage, null, null, null, null, exitCode, executionLog, null);
     }
 
     /**

@@ -76,7 +76,10 @@ public class ClaudeCodeSubprocess {
                 return doExecute();
             } catch (Exception e) {
                 LOG.errorf(e, "Claude Code subprocess failed");
-                return ClaudeCodeResult.failed("Subprocess error: " + e.getMessage(), -1);
+                logBuilder.stderr("Subprocess error: " + e.getMessage());
+                logBuilder.footer("Failed", null, null, null, null);
+                return ClaudeCodeResult.failed(
+                        "Subprocess error: " + e.getMessage(), -1, logBuilder.build());
             }
         });
     }

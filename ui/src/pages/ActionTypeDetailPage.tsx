@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import { useParams, Link } from "react-router-dom";
 import {
+    Alert,
+    AlertActionCloseButton,
     Breadcrumb,
     BreadcrumbItem,
     Button,
@@ -60,6 +62,7 @@ export function ActionTypeDetailPage() {
     const [envVars, setEnvVars] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
     const [dirty, setDirty] = useState(false);
     const [activeTab, setActiveTab] = useState(0);
     const [aiModalOpen, setAiModalOpen] = useState(false);
@@ -169,6 +172,7 @@ export function ActionTypeDetailPage() {
 
     const handleSave = () => {
         setSaving(true);
+        setSaveError(null);
         const envToSend = Object.keys(envVars).length > 0 ? envVars : undefined;
         const data = { ...form, allowedTools: tools, environment: envToSend };
         updateActionType(id, data)
@@ -176,7 +180,10 @@ export function ActionTypeDetailPage() {
                 setActionType(updated);
                 setDirty(false);
             })
-            .catch(console.error)
+            .catch((err) => {
+                console.error(err);
+                setSaveError(err instanceof Error ? err.message : "Failed to save action type.");
+            })
             .finally(() => setSaving(false));
     };
 
@@ -234,6 +241,18 @@ export function ActionTypeDetailPage() {
                     </Button>
                 </FlexItem>
             </Flex>
+
+            {saveError && (
+                <Alert
+                    variant="danger"
+                    isInline
+                    title="Could not save action type"
+                    actionClose={<AlertActionCloseButton onClose={() => setSaveError(null)} />}
+                    style={{ marginBottom: "16px" }}
+                >
+                    {saveError}
+                </Alert>
+            )}
 
             <Tabs activeKey={activeTab} onSelect={(_e, k) => setActiveTab(k as number)}>
                 <Tab eventKey={0} title={<TabTitleText>Info</TabTitleText>}>
