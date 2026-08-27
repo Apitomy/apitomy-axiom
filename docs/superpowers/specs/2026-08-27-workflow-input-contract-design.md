@@ -62,7 +62,8 @@ existing `WorkflowValidator.validate()` block (`:181-189`) and before the new ve
 Add a `validateStartInputs(Workflow)` check that enforces the two contract rules above. On violation, throw a
 `400 WebApplicationException` whose entity names the offending input(s) and the reason (e.g. `"Start node
 input 'issueNumber' is not part of the workflow input contract"` or `"Start node input 'repository' cannot be
-marked required"`). This mirrors the existing 400 shape used for `WorkflowValidator` errors.
+marked required"`). Contract violations return a `{"message": ...}` JSON body (the same shape the run-time
+guard uses), which differs from the array-of-problems body that `WorkflowValidator` failures return.
 
 The Start node inputs are read from `startNode.config().get("inputs")` as a `List<Map>` of
 `{name, type, required, description}` — the same shape the engine's `validateInputs` reads

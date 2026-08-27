@@ -124,9 +124,10 @@ public class WorkflowExecutionService {
         try {
             instance = workflowEngine.startWorkflow(workflow, context);
         } catch (IllegalArgumentException | WorkflowValidationException e) {
+            String message = e.getMessage() != null ? e.getMessage() : "Workflow could not be started.";
             throw new WebApplicationException(
                     Response.status(400)
-                            .entity(Map.of("message", e.getMessage()))
+                            .entity(Map.of("message", message))
                             .build());
         }
 
