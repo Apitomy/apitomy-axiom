@@ -5798,6 +5798,13 @@
           "outputSchema": {
             "description": "Schema defining form fields for human response (JSON string)",
             "type": "string"
+          },
+          "workflowRunId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "nodeId": {
+            "type": "string"
           }
         }
       },
@@ -9302,6 +9309,13 @@
           "output": {
             "type": "object",
             "additionalProperties": {}
+          },
+          "taskId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "taskStatus": {
+            "type": "string"
           }
         }
       },
@@ -9367,6 +9381,14 @@
           },
           "completedOn": {
             "format": "date-time",
+            "type": "string"
+          },
+          "runId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "traceId": {
+            "format": "uuid",
             "type": "string"
           }
         }
