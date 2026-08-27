@@ -525,7 +525,9 @@ public class ProjectsResourceImpl implements ProjectsResource {
     public io.apitomy.axiom.api.beans.WorkflowInstance getProjectWorkflowInstance(
             long projectId) {
         WorkflowRunEntity entity = WorkflowRunEntity
-                .find("projectId", projectId).firstResult();
+                .find("projectId", io.quarkus.panache.common.Sort.descending("startedOn"),
+                        projectId)
+                .firstResult();
         if (entity == null) {
             throw new WebApplicationException(404);
         }
@@ -543,6 +545,10 @@ public class ProjectsResourceImpl implements ProjectsResource {
                 new io.apitomy.axiom.api.beans.WorkflowInstance();
 
         bean.setId(entity.id);
+        bean.setRunId(entity.id);
+        if (entity.traceId != null) {
+            bean.setTraceId(entity.traceId);
+        }
         bean.setProjectId(entity.projectId);
         bean.setDefinitionId(entity.definitionId);
         bean.setDefinitionVersion(entity.definitionVersion);
@@ -592,8 +598,15 @@ public class ProjectsResourceImpl implements ProjectsResource {
             bean.setContext(objectMapper.convertValue(
                     flowInstance.context(),
                     io.apitomy.axiom.api.beans.Context.class));
+            List<TaskEntity> runTasks = TaskEntity
+                    .<TaskEntity>find("workflowRunId", entity.id).list();
+            Map<String, TaskEntity> tasksByNode = runTasks.stream()
+                    .filter(t -> t.nodeId != null)
+                    .collect(java.util.stream.Collectors.toMap(
+                            t -> t.nodeId, t -> t, (a, b) -> b));
             bean.setHistory(flowInstance.history().stream()
-                    .map(this::toHistoryEntryBean).toList());
+                    .map(h -> toHistoryEntryBean(h, tasksByNode))
+                    .toList());
         } catch (JsonProcessingException e) {
             bean.setHistory(List.of());
         }
@@ -602,7 +615,8 @@ public class ProjectsResourceImpl implements ProjectsResource {
     }
 
     private io.apitomy.axiom.api.beans.HistoryEntry toHistoryEntryBean(
-            io.apitomy.flow.model.HistoryEntry entry) {
+            io.apitomy.flow.model.HistoryEntry entry,
+            Map<String, TaskEntity> tasksByNode) {
         io.apitomy.axiom.api.beans.HistoryEntry bean =
                 new io.apitomy.axiom.api.beans.HistoryEntry();
         bean.setNodeId(entry.nodeId());
@@ -617,6 +631,12 @@ public class ProjectsResourceImpl implements ProjectsResource {
             bean.setOutput(objectMapper.convertValue(
                     entry.output(),
                     io.apitomy.axiom.api.beans.Output.class));
+        }
+        TaskEntity task = entry.nodeId() != null
+                ? tasksByNode.get(entry.nodeId()) : null;
+        if (task != null) {
+            bean.setTaskId(task.id);
+            bean.setTaskStatus(task.status);
         }
         return bean;
     }
@@ -668,6 +688,8 @@ public class ProjectsResourceImpl implements ProjectsResource {
         }
         task.setHumanContext(entity.humanContext);
         task.setOutputSchema(entity.outputSchema);
+        task.setWorkflowRunId(entity.workflowRunId);
+        task.setNodeId(entity.nodeId);
         return task;
     }
 

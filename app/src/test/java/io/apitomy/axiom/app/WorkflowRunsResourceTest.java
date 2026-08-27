@@ -161,6 +161,30 @@ class WorkflowRunsResourceTest {
     }
 
     /**
+     * Verifies that the project workflow instance returns the latest run and
+     * includes runId and traceId fields.
+     */
+    @Test
+    void projectWorkflowReturnsLatestRunWithRunIdAndTrace() {
+        int projectId = createProject("WF Latest Run Project");
+        int definitionId = createAndPublishActionWorkflow("Latest Run WF");
+
+        Integer firstRunId = given()
+                .contentType(ContentType.JSON)
+                .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
+                .when().post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .then().statusCode(200).extract().path("runId");
+
+        given()
+                .when()
+                    .get(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .then()
+                    .statusCode(200)
+                    .body("runId", equalTo(firstRunId))
+                    .body("traceId", notNullValue());
+    }
+
+    /**
      * Verifies that completing the first node of a multi-node workflow does
      * NOT complete the run's trace. The trace must remain open until the
      * entire run reaches a terminal state.
