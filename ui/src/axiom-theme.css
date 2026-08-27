@@ -76,3 +76,78 @@
     flex: 1 1 0;
     min-height: 0;
 }
+
+/* Project detail page: let the tab area fill the remaining vertical space
+   so the active tab's content can scroll (or fill, e.g. the Workflow tab). */
+.project-detail > .pf-v6-c-page__main-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+/* Collapsible project metadata summary bar. */
+.project-detail__metadata-toggle {
+    margin-top: 16px;
+    padding: 6px 8px;
+    border-radius: var(--pf-t--global--border--radius--small, 4px);
+    cursor: pointer;
+}
+
+.project-detail__metadata-toggle:hover {
+    background-color: var(--pf-t--global--background--color--secondary--default);
+}
+
+.project-detail__metadata-toggle:focus-visible {
+    outline: 2px solid var(--pf-t--global--color--brand--default);
+    outline-offset: -2px;
+}
+
+/* Term labels ("Type:", "Source:") in the collapsed metadata bar. */
+.project-detail__metadata-term {
+    color: var(--pf-t--global--text--color--subtle, #6a6e73);
+}
+
+.project-detail__tabs {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+    margin-top: 24px;
+}
+
+/* Keep the tab bar at its natural height; only the content region flexes. */
+.project-detail__tabs > .pf-v6-c-tabs {
+    flex: 0 0 auto;
+}
+
+.project-detail__tab-content {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: auto;
+    padding-top: 16px;
+}
+
+/* Body edit controls: pinned to the top-right, overlaying the scrolling
+   body so they stay in view without taking up any vertical flow. */
+.project-detail__body-actions {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    height: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    pointer-events: none;
+}
+
+/* While editing, offset the Save/Cancel controls from the code editor's
+   top-right corner so they clear the padding and scrollbar. */
+.project-detail__body-actions--offset {
+    top: 10px;
+    padding-right: 10px;
+}
+
+.project-detail__body-actions > * {
+    pointer-events: auto;
+}

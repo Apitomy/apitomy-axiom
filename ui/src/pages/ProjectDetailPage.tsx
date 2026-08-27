@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -32,13 +32,14 @@ import {
     ModalHeader,
     PageSection,
     Tab,
-    TabContent,
     TabTitleText,
     Tabs,
     TextArea,
     Title,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
+import { CodeEditor, Language } from "@patternfly/react-code-editor";
+import { useEffectiveTheme } from "../hooks/useTheme";
 import ChatIcon from "@patternfly/react-icons/dist/esm/icons/chat-icon";
 import PlayIcon from "@patternfly/react-icons/dist/esm/icons/play-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
@@ -50,6 +51,8 @@ import CodeBranchIcon from "@patternfly/react-icons/dist/esm/icons/code-branch-i
 import BugIcon from "@patternfly/react-icons/dist/esm/icons/bug-icon";
 import GithubIcon from "@patternfly/react-icons/dist/esm/icons/github-icon";
 import JiraIcon from "@patternfly/react-icons/dist/esm/icons/jira-icon";
+import AngleRightIcon from "@patternfly/react-icons/dist/esm/icons/angle-right-icon";
+import AngleDownIcon from "@patternfly/react-icons/dist/esm/icons/angle-down-icon";
 import {
     type ActionType,
     type AxiomEvent,
@@ -92,6 +95,7 @@ const STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"
 export function ProjectDetailPage() {
     const { projectId } = useParams<{ projectId: string }>();
     const navigate = useNavigate();
+    const effectiveTheme = useEffectiveTheme();
     const [project, setProject] = useState<Project | null>(null);
     const [tasks, setTasks] = useState<Task[]>([]);
     const [thread, setThread] = useState<ThreadEntry[]>([]);
@@ -100,13 +104,18 @@ export function ProjectDetailPage() {
     const [agentNames, setAgentNames] = useState<Record<number, string>>({});
     const [activeTab, setActiveTab] = useState(0);
     const [loading, setLoading] = useState(true);
+    const [isMetadataExpanded, setIsMetadataExpanded] = useState(true);
 
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
     const [isLabelsOpen, setIsLabelsOpen] = useState(false);
 
-    // Body edit state
+    // Body edit state. `editBody` holds the initial value passed to the code
+    // editor (kept stable while editing so PatternFly's CodeEditor does not
+    // re-apply it to Monaco and jump the cursor). The live, in-progress value
+    // lives in a ref and is read only when saving.
     const [isEditingBody, setIsEditingBody] = useState(false);
     const [editBody, setEditBody] = useState("");
+    const editBodyRef = useRef("");
     const [bodySaveError, setBodySaveError] = useState("");
 
     // Trigger Action state
@@ -118,6 +127,11 @@ export function ProjectDetailPage() {
     const [submitting, setSubmitting] = useState(false);
 
     const id = Number(projectId);
+
+    const cancelBodyEdit = useCallback(() => {
+        setIsEditingBody(false);
+        setBodySaveError("");
+    }, []);
 
     const loadData = useCallback(() => {
         if (!id) return;
@@ -204,7 +218,7 @@ export function ProjectDetailPage() {
     )?.description;
 
     return (
-        <PageSection>
+        <PageSection isFilled className="project-detail">
             <Breadcrumb style={{ marginBottom: "16px" }}>
                 <BreadcrumbItem><Link to="/">Dashboard</Link></BreadcrumbItem>
                 <BreadcrumbItem><Link to="/projects">Projects</Link></BreadcrumbItem>
@@ -263,15 +277,60 @@ export function ProjectDetailPage() {
                 </FlexItem>
             </Flex>
 
-            {/* Project metadata */}
-            <DescriptionList isHorizontal isCompact columnModifier={{ default: "3Col" }}
-                style={{ marginTop: "16px" }}>
-                <DescriptionListGroup>
-                    <DescriptionListTerm>Type</DescriptionListTerm>
-                    <DescriptionListDescription>
+            {/* Project metadata — collapsible. Collapsed shows a compact
+                summary bar (type, source, labels); expanded shows the full
+                description list. Clicking the bar toggles between the two. */}
+            <div
+                className="project-detail__metadata-toggle"
+                role="button"
+                tabIndex={0}
+                aria-expanded={isMetadataExpanded}
+                aria-label={isMetadataExpanded ? "Collapse project details" : "Expand project details"}
+                onClick={() => setIsMetadataExpanded((v) => !v)}
+                onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setIsMetadataExpanded((v) => !v);
+                    }
+                }}
+            >
+                <Flex
+                    alignItems={{ default: "alignItemsCenter" }}
+                    spaceItems={{ default: "spaceItemsSm" }}
+                    flexWrap={{ default: "nowrap" }}
+                >
+                    <FlexItem>
+                        {isMetadataExpanded ? <AngleDownIcon /> : <AngleRightIcon />}
+                    </FlexItem>
+                    <FlexItem className="project-detail__metadata-term">
+                        Type:
+                    </FlexItem>
+                    <FlexItem>
                         <Label isCompact>{project.type}</Label>
-                    </DescriptionListDescription>
-                </DescriptionListGroup>
+                    </FlexItem>
+                    {project.refSource && (
+                        <>
+                            <FlexItem className="project-detail__metadata-term">
+                                Source:
+                            </FlexItem>
+                            <FlexItem>
+                                <Label isCompact>{project.refSource}</Label>
+                            </FlexItem>
+                        </>
+                    )}
+                    <FlexItem
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ marginLeft: "auto" }}
+                    >
+                        <LabelDisplay labels={project.labels || []}
+                            onEdit={() => setIsLabelsOpen(true)} />
+                    </FlexItem>
+                </Flex>
+            </div>
+
+            {isMetadataExpanded && (
+            <DescriptionList isHorizontal isCompact columnModifier={{ default: "3Col" }}
+                style={{ marginTop: "8px", marginLeft: "32px" }}>
                 <DescriptionListGroup>
                     <DescriptionListTerm>Reference</DescriptionListTerm>
                     <DescriptionListDescription>
@@ -290,14 +349,6 @@ export function ProjectDetailPage() {
                         <DescriptionListTerm>Repository</DescriptionListTerm>
                         <DescriptionListDescription>
                             {project.repository}
-                        </DescriptionListDescription>
-                    </DescriptionListGroup>
-                )}
-                {project.refSource && (
-                    <DescriptionListGroup>
-                        <DescriptionListTerm>Source</DescriptionListTerm>
-                        <DescriptionListDescription>
-                            {project.refSource}
                         </DescriptionListDescription>
                     </DescriptionListGroup>
                 )}
@@ -321,120 +372,125 @@ export function ProjectDetailPage() {
                         </code>
                     </DescriptionListDescription>
                 </DescriptionListGroup>
-                <DescriptionListGroup>
-                    <DescriptionListTerm>Labels</DescriptionListTerm>
-                    <DescriptionListDescription>
-                        <LabelDisplay labels={project.labels || []}
-                            onEdit={() => setIsLabelsOpen(true)} />
-                    </DescriptionListDescription>
-                </DescriptionListGroup>
             </DescriptionList>
+            )}
 
-            {/* Body */}
-            <Card isCompact style={{ marginTop: "16px" }}>
-                <CardBody>
-                    <Flex justifyContent={{ default: "justifyContentSpaceBetween" }}
-                        alignItems={{ default: "alignItemsCenter" }}
-                        style={{ marginBottom: "8px" }}>
-                        <FlexItem>
-                        </FlexItem>
-                        <FlexItem>
-                            {isEditingBody ? (
-                                <>
-                                    <Button variant="plain" aria-label="Save body"
-                                        onClick={() => {
-                                            setBodySaveError("");
-                                            updateProjectBody(id, editBody)
-                                                .then(() => {
-                                                    setProject({ ...project, body: editBody });
-                                                    setIsEditingBody(false);
-                                                })
-                                                .catch((err) => {
-                                                    setBodySaveError(err.message || "Failed to save body");
-                                                });
-                                        }}>
-                                        <CheckIcon />
-                                    </Button>
-                                    <Button variant="plain" aria-label="Cancel edit"
-                                        onClick={() => { setIsEditingBody(false); setBodySaveError(""); }}>
-                                        <TimesIcon />
-                                    </Button>
-                                </>
-                            ) : (
-                                <Button variant="plain" aria-label="Edit body"
-                                    onClick={() => {
-                                        setEditBody(project.body || "");
-                                        setIsEditingBody(true);
-                                    }}>
-                                    <PencilAltIcon />
-                                </Button>
-                            )}
-                        </FlexItem>
-                    </Flex>
-                    {bodySaveError && (
-                        <p style={{ color: "var(--pf-t--global--color--status--danger--default)", marginBottom: "8px" }}>
-                            {bodySaveError}
-                        </p>
-                    )}
-                    {isEditingBody ? (
-                        <TextArea
-                            id="project-body-edit"
-                            value={editBody}
-                            onChange={(_e, v) => setEditBody(v)}
-                            rows={12}
-                            style={{ fontFamily: "var(--pf-t--global--font--family--mono)" }}
-                        />
-                    ) : project.body ? (
-                        <div className="axiom-markdown">
-                            <Content>
-                                <Markdown remarkPlugins={[remarkGfm]} components={markdownMermaidComponents}>
-                                    {project.body}
-                                </Markdown>
-                            </Content>
-                        </div>
-                    ) : (
-                        <p className="axiom-text-subtle" style={{ fontStyle: "italic" }}>
-                            No body content. Click the edit button to add markdown content.
-                        </p>
-                    )}
-                </CardBody>
-            </Card>
-
-            {/* Tabs */}
-            <div style={{ marginTop: "24px" }}>
+            {/* Tabs fill the remaining vertical space; the active tab's
+                content scrolls when it exceeds the available height. */}
+            <div className="project-detail__tabs">
                 <Tabs activeKey={activeTab} onSelect={(_e, k) => setActiveTab(k as number)}>
-                    <Tab eventKey={0} title={<TabTitleText>Tasks ({tasks.length})</TabTitleText>}>
-                        <TabContent id="tasks-tab" eventKey={0} activeKey={activeTab} style={{ marginTop: "16px" }}>
-                            <TasksTab tasks={tasks} projectId={id} agentNames={agentNames} onRefresh={loadData} />
-                        </TabContent>
-                    </Tab>
-                    <Tab eventKey={1} title={<TabTitleText>Thread ({thread.length})</TabTitleText>}>
-                        <TabContent id="thread-tab" eventKey={1} activeKey={activeTab} style={{ marginTop: "16px" }}>
-                            <ThreadTab entries={thread} />
-                        </TabContent>
-                    </Tab>
-                    <Tab eventKey={2} title={<TabTitleText>Events ({events.length})</TabTitleText>}>
-                        <TabContent id="events-tab" eventKey={2} activeKey={activeTab} style={{ marginTop: "16px" }}>
-                            <EventsTab events={events} />
-                        </TabContent>
-                    </Tab>
-                    <Tab eventKey={3} title={<TabTitleText>Metrics</TabTitleText>}>
-                        <TabContent id="metrics-tab" eventKey={3} activeKey={activeTab} style={{ marginTop: "16px" }}>
-                            <MetricsTab metrics={metrics} />
-                        </TabContent>
-                    </Tab>
-                    <Tab eventKey={4} title={<TabTitleText>Workflow{project?.hasWorkflowInstance ? " ●" : ""}</TabTitleText>}>
-                        <TabContent id="workflow-tab" eventKey={4} activeKey={activeTab} style={{ marginTop: "16px" }}>
-                            {project && (
-                                <WorkflowTab
-                                    projectId={project.id}
-                                    hasWorkflowInstance={project.hasWorkflowInstance ?? false}
-                                    onRefresh={loadData}
-                                />
-                            )}
-                        </TabContent>
-                    </Tab>
+                    <Tab eventKey={0} title={<TabTitleText>Body</TabTitleText>} />
+                    <Tab eventKey={1} title={<TabTitleText>Tasks ({tasks.length})</TabTitleText>} />
+                    <Tab eventKey={2} title={<TabTitleText>Thread ({thread.length})</TabTitleText>} />
+                    <Tab eventKey={3} title={<TabTitleText>Events ({events.length})</TabTitleText>} />
+                    <Tab eventKey={4} title={<TabTitleText>Metrics</TabTitleText>} />
+                    <Tab eventKey={5} title={<TabTitleText>Workflow{project?.hasWorkflowInstance ? " ●" : ""}</TabTitleText>} />
                 </Tabs>
+                <div className="project-detail__tab-content">
+                    {activeTab === 0 && (
+                        <div style={{
+                            padding: "0 14px",
+                            position: "relative",
+                            ...(isEditingBody
+                                ? { height: "100%", display: "flex", flexDirection: "column" }
+                                : {}),
+                        }}>
+                            <div className={`project-detail__body-actions${isEditingBody ? " project-detail__body-actions--offset" : ""}`}>
+                                {isEditingBody ? (
+                                    <>
+                                        <Button variant="plain" aria-label="Save body"
+                                            onClick={() => {
+                                                setBodySaveError("");
+                                                const newBody = editBodyRef.current;
+                                                updateProjectBody(id, newBody)
+                                                    .then(() => {
+                                                        setProject({ ...project, body: newBody });
+                                                        setIsEditingBody(false);
+                                                    })
+                                                    .catch((err) => {
+                                                        setBodySaveError(err.message || "Failed to save body");
+                                                    });
+                                            }}>
+                                            <CheckIcon />
+                                        </Button>
+                                        <Button variant="plain" aria-label="Cancel edit"
+                                            onClick={cancelBodyEdit}>
+                                            <TimesIcon />
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <Button variant="plain" aria-label="Edit body"
+                                        onClick={() => {
+                                            const initial = project.body || "";
+                                            setEditBody(initial);
+                                            editBodyRef.current = initial;
+                                            setIsEditingBody(true);
+                                        }}>
+                                        <PencilAltIcon />
+                                    </Button>
+                                )}
+                            </div>
+                            {bodySaveError && (
+                                <p style={{ color: "var(--pf-t--global--color--status--danger--default)", marginBottom: "8px" }}>
+                                    {bodySaveError}
+                                </p>
+                            )}
+                            {isEditingBody ? (
+                                <div style={{ flex: "1 1 auto", minHeight: 0 }}>
+                                    <CodeEditor
+                                        code={editBody}
+                                        onCodeChange={(v) => { editBodyRef.current = v; }}
+                                        language={Language.markdown}
+                                        isFullHeight
+                                        height="100%"
+                                        isDarkTheme={effectiveTheme === "dark"}
+                                        isLineNumbersVisible
+                                        // Run Monaco uncontrolled: PatternFly otherwise feeds a
+                                        // lagging `value` back into the editor while typing, which
+                                        // replaces the whole document and jumps the cursor to the
+                                        // end. Seeding `defaultValue` and clearing `value` keeps the
+                                        // editor authoritative over its own content.
+                                        editorProps={{ value: undefined, defaultValue: editBody }}
+                                        onEditorDidMount={(editor, monaco) => {
+                                            editor.onKeyDown((e) => {
+                                                if (e.keyCode === monaco.KeyCode.Escape) {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    cancelBodyEdit();
+                                                }
+                                            });
+                                        }}
+                                    />
+                                </div>
+                            ) : project.body ? (
+                                <div className="axiom-markdown">
+                                    <Content>
+                                        <Markdown remarkPlugins={[remarkGfm]} components={markdownMermaidComponents}>
+                                            {project.body}
+                                        </Markdown>
+                                    </Content>
+                                </div>
+                            ) : (
+                                <p className="axiom-text-subtle" style={{ fontStyle: "italic" }}>
+                                    No body content. Click the edit button to add markdown content.
+                                </p>
+                            )}
+                        </div>
+                    )}
+                    {activeTab === 1 && (
+                        <TasksTab tasks={tasks} projectId={id} agentNames={agentNames} onRefresh={loadData} />
+                    )}
+                    {activeTab === 2 && <ThreadTab entries={thread} />}
+                    {activeTab === 3 && <EventsTab events={events} />}
+                    {activeTab === 4 && <MetricsTab metrics={metrics} />}
+                    {activeTab === 5 && project && (
+                        <WorkflowTab
+                            projectId={project.id}
+                            hasWorkflowInstance={project.hasWorkflowInstance ?? false}
+                            onRefresh={loadData}
+                        />
+                    )}
+                </div>
             </div>
 
             {/* Trigger Action Modal */}

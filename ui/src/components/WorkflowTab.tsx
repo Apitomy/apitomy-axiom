@@ -217,7 +217,10 @@ export function WorkflowTab({
         || instance.status === "waiting";
 
     return (
-        <>
+        <div style={{
+            display: "flex",
+            flexDirection: "column",
+            height: "100%" }}>
             <Flex justifyContent={{
                 default: "justifyContentSpaceBetween" }}
                 alignItems={{
@@ -279,7 +282,9 @@ export function WorkflowTab({
             )}
 
             {workflowContent && viewerInstance && (
-                <div style={{ height: "500px" }}>
+                <div style={{
+                    flex: "1 1 auto",
+                    minHeight: "500px" }}>
                     <WorkflowViewer
                         workflow={workflowContent}
                         instance={viewerInstance}
@@ -298,6 +303,6 @@ export function WorkflowTab({
                 Are you sure you want to cancel this workflow?
                 Any in-progress tasks will be stopped.
             </ConfirmDeleteModal>
-        </>
+        </div>
     );
 }

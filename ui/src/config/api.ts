@@ -15,6 +15,29 @@ export function getApiBaseUrl(): string {
 
 const API = `${getApiBaseUrl()}/api/v1`;
 
+/**
+ * Extracts a human-readable error message from a failed response.
+ *
+ * Prefers the `message` field of a JSON error body (e.g. the validation error
+ * envelope returned with a 422), falling back to the provided default plus the
+ * HTTP status code when no message is available.
+ *
+ * @param response the failed fetch response
+ * @param fallback the default message prefix to use when no body message exists
+ * @returns a message suitable for display to the user
+ */
+async function extractErrorMessage(response: Response, fallback: string): Promise<string> {
+    try {
+        const body = await response.clone().json();
+        if (body && typeof body.message === "string" && body.message.trim()) {
+            return body.message;
+        }
+    } catch {
+        // Body was not JSON or could not be read; fall through to the default.
+    }
+    return `${fallback}: ${response.status}`;
+}
+
 // ── Types ─────────────────────────────────────────────────────────
 
 export interface SystemHealth {
@@ -407,7 +430,9 @@ export async function createActionType(at: NewActionType): Promise<ActionType> {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(at),
     });
-    if (!response.ok) throw new Error(`Failed to create action type: ${response.status}`);
+    if (!response.ok) {
+        throw new Error(await extractErrorMessage(response, "Failed to create action type"));
+    }
     return response.json();
 }
 
@@ -417,7 +442,9 @@ export async function updateActionType(id: number, at: NewActionType): Promise<A
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(at),
     });
-    if (!response.ok) throw new Error(`Failed to update action type: ${response.status}`);
+    if (!response.ok) {
+        throw new Error(await extractErrorMessage(response, "Failed to update action type"));
+    }
     return response.json();
 }
 

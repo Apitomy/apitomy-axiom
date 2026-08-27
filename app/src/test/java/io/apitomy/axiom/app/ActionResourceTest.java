@@ -100,6 +100,47 @@ class ActionResourceTest {
     }
 
     @Test
+    void testCreateIncompleteActionTypeRejected() {
+        // An agent-mode action type without a prompt template is a validation error
+        // and must be rejected with 422. The Create Action Type modal avoids this by
+        // sending default templates for any required field the form omits.
+        given()
+            .contentType(ContentType.JSON)
+            .body("""
+                {
+                    "name": "incomplete-action",
+                    "executionMode": "agent"
+                }
+                """)
+            .when()
+                .post(ACTION_TYPES_PATH)
+            .then()
+                .statusCode(422)
+                .body("errors.field", hasItem("promptTemplate"));
+    }
+
+    @Test
+    void testUpdateIncompleteActionTypeRejected() {
+        int id = createActionType("update-validation-action");
+
+        // Updating an agent-mode action type without a prompt template is a
+        // validation error and must be rejected with 422.
+        given()
+            .contentType(ContentType.JSON)
+            .body("""
+                {
+                    "name": "update-validation-action",
+                    "executionMode": "agent"
+                }
+                """)
+            .when()
+                .put(ACTION_TYPES_PATH + "/" + id)
+            .then()
+                .statusCode(422)
+                .body("errors.field", hasItem("promptTemplate"));
+    }
+
+    @Test
     void testUpdateActionType() {
         int id = createActionType("update-test-action");
 
