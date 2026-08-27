@@ -11,7 +11,7 @@ import static org.hamcrest.Matchers.*;
 class WorkflowInstanceResourceTest {
 
     private static final String PROJECTS_PATH = "/api/v1/projects";
-    private static final String WORKFLOWS_PATH = "/api/v1/workflow-definitions";
+    private static final String WORKFLOWS_PATH = "/api/v1/workflow/definitions";
 
     @Test
     void testTriggerAndGetWorkflow() {

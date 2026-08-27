@@ -400,4 +400,23 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
             return "{}";
         }
     }
+
+    // ── Workflow Runs (Stub - to be implemented in Task 11) ──────────
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public io.apitomy.axiom.api.beans.WorkflowRunSearchResults listWorkflowRuns(
+            Long projectId, String status, java.math.BigInteger page, java.math.BigInteger limit) {
+        throw new WebApplicationException("Not yet implemented", Response.Status.NOT_IMPLEMENTED);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public io.apitomy.axiom.api.beans.WorkflowInstance getWorkflowRun(long runId) {
+        throw new WebApplicationException("Not yet implemented", Response.Status.NOT_IMPLEMENTED);
+    }
 }

@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 class WorkflowRunsResourceTest {
 
     private static final String PROJECTS_PATH = "/api/v1/projects";
-    private static final String WORKFLOWS_PATH = "/api/v1/workflow-definitions";
+    private static final String WORKFLOWS_PATH = "/api/v1/workflow/definitions";
 
     @Inject
     TaskExecutionService taskExecutionService;

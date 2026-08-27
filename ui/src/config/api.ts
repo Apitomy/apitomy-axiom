@@ -2125,7 +2125,7 @@ export async function fetchWorkflowDefinitions(
     params.set("page", String(page));
     params.set("limit", String(limit));
     if (filterName) params.set("filterName", filterName);
-    const response = await fetch(`${API}/workflow-definitions?${params}`);
+    const response = await fetch(`${API}/workflow/definitions?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch workflow definitions: ${response.status}`);
     return response.json();
 }
@@ -2133,7 +2133,7 @@ export async function fetchWorkflowDefinitions(
 export async function createWorkflowDefinition(
     data: NewWorkflowDefinition
 ): Promise<WorkflowDefinition> {
-    const response = await fetch(`${API}/workflow-definitions`, {
+    const response = await fetch(`${API}/workflow/definitions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -2143,7 +2143,7 @@ export async function createWorkflowDefinition(
 }
 
 export async function getWorkflowDefinition(id: number): Promise<WorkflowDefinition> {
-    const response = await fetch(`${API}/workflow-definitions/${id}`);
+    const response = await fetch(`${API}/workflow/definitions/${id}`);
     if (!response.ok) throw new Error(`Failed to get workflow definition: ${response.status}`);
     return response.json();
 }
@@ -2151,7 +2151,7 @@ export async function getWorkflowDefinition(id: number): Promise<WorkflowDefinit
 export async function updateWorkflowDefinition(
     id: number, data: UpdateWorkflowDefinition
 ): Promise<WorkflowDefinition> {
-    const response = await fetch(`${API}/workflow-definitions/${id}`, {
+    const response = await fetch(`${API}/workflow/definitions/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -2163,7 +2163,7 @@ export async function updateWorkflowDefinition(
 export async function updateWorkflowDefinitionContent(
     id: number, content: any
 ): Promise<void> {
-    const response = await fetch(`${API}/workflow-definitions/${id}/content`, {
+    const response = await fetch(`${API}/workflow/definitions/${id}/content`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(content),
@@ -2174,7 +2174,7 @@ export async function updateWorkflowDefinitionContent(
 export async function publishWorkflowDefinition(
     id: number
 ): Promise<WorkflowDefinitionVersion> {
-    const response = await fetch(`${API}/workflow-definitions/${id}/publish`, {
+    const response = await fetch(`${API}/workflow/definitions/${id}/publish`, {
         method: "POST",
     });
     if (!response.ok) throw new Error(`Failed to publish workflow definition: ${response.status}`);
@@ -2182,7 +2182,7 @@ export async function publishWorkflowDefinition(
 }
 
 export async function deleteWorkflowDefinition(id: number): Promise<void> {
-    const response = await fetch(`${API}/workflow-definitions/${id}`, {
+    const response = await fetch(`${API}/workflow/definitions/${id}`, {
         method: "DELETE",
     });
     if (!response.ok) throw new Error(`Failed to delete workflow definition: ${response.status}`);
@@ -2191,7 +2191,7 @@ export async function deleteWorkflowDefinition(id: number): Promise<void> {
 export async function listWorkflowDefinitionVersions(
     id: number
 ): Promise<WorkflowDefinitionVersion[]> {
-    const response = await fetch(`${API}/workflow-definitions/${id}/versions`);
+    const response = await fetch(`${API}/workflow/definitions/${id}/versions`);
     if (!response.ok) throw new Error(`Failed to list versions: ${response.status}`);
     return response.json();
 }
@@ -2199,7 +2199,7 @@ export async function listWorkflowDefinitionVersions(
 export async function getWorkflowDefinitionVersion(
     id: number, version: number
 ): Promise<WorkflowDefinitionVersion> {
-    const response = await fetch(`${API}/workflow-definitions/${id}/versions/${version}`);
+    const response = await fetch(`${API}/workflow/definitions/${id}/versions/${version}`);
     if (!response.ok) throw new Error(`Failed to get version: ${response.status}`);
     return response.json();
 }
