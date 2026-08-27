@@ -467,7 +467,7 @@ public class TaskExecutionService {
         emitInternalEventIfNeeded(task);
 
         // Advance workflow if this task is part of one
-        if (task.workflowInstanceId != null) {
+        if (task.workflowRunId != null) {
             workflowExecutionService.onTaskCompleted(task.id);
         }
     }
@@ -489,7 +489,7 @@ public class TaskExecutionService {
             updateProjectStatusAfterTask(task.projectId);
 
             // Advance workflow if this task is part of one
-            if (task.workflowInstanceId != null) {
+            if (task.workflowRunId != null) {
                 workflowExecutionService.onTaskCompleted(task.id);
             }
         }

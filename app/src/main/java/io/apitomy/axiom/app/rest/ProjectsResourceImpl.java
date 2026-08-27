@@ -30,7 +30,7 @@ import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
-import io.apitomy.axiom.core.entities.WorkflowInstanceEntity;
+import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.lifecycle.ProjectLifecycle;
 import io.apitomy.axiom.core.lifecycle.ProjectStatus;
 import io.apitomy.axiom.core.services.WorkspaceService;
@@ -516,7 +516,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
     @Override
     public io.apitomy.axiom.api.beans.WorkflowInstance triggerProjectWorkflow(
             long projectId, TriggerWorkflow data) {
-        WorkflowInstanceEntity entity = workflowExecutionService
+        WorkflowRunEntity entity = workflowExecutionService
                 .triggerWorkflow(projectId, data.getWorkflowDefinitionId());
         return toWorkflowInstanceBean(entity);
     }
@@ -524,7 +524,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
     @Override
     public io.apitomy.axiom.api.beans.WorkflowInstance getProjectWorkflowInstance(
             long projectId) {
-        WorkflowInstanceEntity entity = WorkflowInstanceEntity
+        WorkflowRunEntity entity = WorkflowRunEntity
                 .find("projectId", projectId).firstResult();
         if (entity == null) {
             throw new WebApplicationException(404);
@@ -538,7 +538,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
     }
 
     private io.apitomy.axiom.api.beans.WorkflowInstance toWorkflowInstanceBean(
-            WorkflowInstanceEntity entity) {
+            WorkflowRunEntity entity) {
         io.apitomy.axiom.api.beans.WorkflowInstance bean =
                 new io.apitomy.axiom.api.beans.WorkflowInstance();
 
@@ -643,7 +643,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
         project.setUpdatedOn(Date.from(entity.updatedOn));
         project.setLabels(entity.labels);
         project.setHasWorkflowInstance(
-                WorkflowInstanceEntity.count("projectId", entity.id) > 0);
+                WorkflowRunEntity.count("projectId", entity.id) > 0);
         return project;
     }
 

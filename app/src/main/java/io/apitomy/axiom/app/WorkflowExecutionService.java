@@ -6,7 +6,7 @@ import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
-import io.apitomy.axiom.core.entities.WorkflowInstanceEntity;
+import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.flow.engine.WorkflowEngine;
@@ -72,13 +72,13 @@ public class WorkflowExecutionService {
      * Triggers a workflow on a project.
      */
     @Transactional
-    public WorkflowInstanceEntity triggerWorkflow(long projectId, long definitionId) {
+    public WorkflowRunEntity triggerWorkflow(long projectId, long definitionId) {
         ProjectEntity project = ProjectEntity.findById(projectId);
         if (project == null) {
             throw new WebApplicationException("Project not found", 404);
         }
 
-        WorkflowInstanceEntity existing = WorkflowInstanceEntity
+        WorkflowRunEntity existing = WorkflowRunEntity
                 .find("projectId", projectId).firstResult();
         if (existing != null) {
             throw new WebApplicationException(
@@ -131,7 +131,7 @@ public class WorkflowExecutionService {
                             .build());
         }
 
-        WorkflowInstanceEntity entity = new WorkflowInstanceEntity();
+        WorkflowRunEntity entity = new WorkflowRunEntity();
         entity.projectId = projectId;
         entity.definitionId = definitionId;
         entity.definitionVersion = definition.currentVersion;
@@ -156,15 +156,15 @@ public class WorkflowExecutionService {
     @Transactional
     public void onTaskCompleted(long taskId) {
         TaskEntity task = TaskEntity.findById(taskId);
-        if (task == null || task.workflowInstanceId == null) {
+        if (task == null || task.workflowRunId == null) {
             return;
         }
 
-        WorkflowInstanceEntity entity =
-                WorkflowInstanceEntity.findById(task.workflowInstanceId);
+        WorkflowRunEntity entity =
+                WorkflowRunEntity.findById(task.workflowRunId);
         if (entity == null) {
             LOG.warnf("Workflow instance %d not found for task %d",
-                    task.workflowInstanceId, taskId);
+                    task.workflowRunId, taskId);
             return;
         }
 
@@ -207,7 +207,7 @@ public class WorkflowExecutionService {
      */
     @Transactional
     public void cancelWorkflow(long projectId) {
-        WorkflowInstanceEntity entity = WorkflowInstanceEntity
+        WorkflowRunEntity entity = WorkflowRunEntity
                 .find("projectId", projectId).firstResult();
         if (entity == null) {
             throw new WebApplicationException("No workflow instance found", 404);
@@ -231,7 +231,7 @@ public class WorkflowExecutionService {
         entity.completedOn = Instant.now();
 
         TaskEntity activeTask = TaskEntity
-                .find("workflowInstanceId = ?1 and status in ?2",
+                .find("workflowRunId = ?1 and status in ?2",
                         entity.id,
                         List.of("Pending", "InProgress"))
                 .firstResult();
@@ -247,7 +247,7 @@ public class WorkflowExecutionService {
 
     // -- Private helpers --
 
-    private void createTaskForCurrentNode(WorkflowInstanceEntity entity,
+    private void createTaskForCurrentNode(WorkflowRunEntity entity,
             Workflow workflow, WorkflowInstance instance) {
         ActionInfo actionInfo = workflowEngine.getActionInfo(
                 workflow, instance);
@@ -263,7 +263,7 @@ public class WorkflowExecutionService {
         task.createdBy = "workflow";
         task.status = "Pending";
         task.input = serializeInputs(actionInfo);
-        task.workflowInstanceId = entity.id;
+        task.workflowRunId = entity.id;
         task.createdOn = Instant.now();
         task.persist();
 
@@ -274,7 +274,7 @@ public class WorkflowExecutionService {
                 entity.projectId, task.id, task.status));
     }
 
-    private void persistInstanceState(WorkflowInstanceEntity entity,
+    private void persistInstanceState(WorkflowRunEntity entity,
             WorkflowInstance instance) {
         try {
             entity.instanceState = objectMapper.writeValueAsString(instance);

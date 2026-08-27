@@ -52,8 +52,12 @@ public class TaskEntity extends PanacheEntity {
     @Column(name = "session_id")
     public String sessionId;
 
-    @Column(name = "workflow_instance_id")
-    public Long workflowInstanceId;
+    @Column(name = "workflow_run_id")
+    public Long workflowRunId;
+
+    /** The workflow node id this task represents (null for non-workflow tasks). */
+    @Column(name = "node_id")
+    public String nodeId;
 
     /**
      * Structured context for human tasks: title, description, reference links.
