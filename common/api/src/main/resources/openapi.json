@@ -5744,7 +5744,8 @@
           "createdBy": {
             "enum": [
               "manager",
-              "user"
+              "user",
+              "workflow"
             ],
             "type": "string"
           },
@@ -6359,8 +6360,8 @@
             "type": "string"
           },
           "slug": {
-            "type": "string",
-            "description": "Stable identifier used for agent capability matching. Auto-generated from name if not set."
+            "description": "Stable identifier used for agent capability matching. Auto-generated from name if not set.",
+            "type": "string"
           },
           "description": {
             "type": "string"
@@ -6459,8 +6460,8 @@
             "type": "string"
           },
           "slug": {
-            "type": "string",
-            "description": "Stable identifier used for agent capability matching. Auto-generated from name if not set."
+            "description": "Stable identifier used for agent capability matching. Auto-generated from name if not set.",
+            "type": "string"
           },
           "description": {
             "type": "string"
@@ -8873,8 +8874,8 @@
             "type": "string"
           },
           "slug": {
-            "type": "string",
-            "description": "Stable identifier used for agent capability matching. Auto-generated from name if not set."
+            "description": "Stable identifier used for agent capability matching. Auto-generated from name if not set.",
+            "type": "string"
           },
           "description": {
             "type": "string"
@@ -8976,8 +8977,8 @@
             "type": "string"
           },
           "slug": {
-            "type": "string",
-            "description": "Stable identifier used for agent capability matching. Auto-generated from name if not set."
+            "description": "Stable identifier used for agent capability matching. Auto-generated from name if not set.",
+            "type": "string"
           },
           "description": {
             "type": "string"
