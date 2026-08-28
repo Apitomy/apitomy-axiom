@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
     Alert,
     Button, EmptyState, EmptyStateBody,
@@ -8,9 +8,12 @@ import {
     FormSelect, FormSelectOption,
 } from "@patternfly/react-core";
 import { WorkflowViewer } from "@apitomy/flow-ui";
-import type { Workflow, WorkflowInstance } from "@apitomy/flow-ui";
+import type {
+    Workflow, WorkflowInstance, WorkflowViewerNodeMenuItem,
+} from "@apitomy/flow-ui";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
+import { ExecutionLogModal } from "./ExecutionLogModal";
 import {
     type WorkflowDefinition, type WorkflowInstanceInfo,
     fetchWorkflowDefinitions, triggerWorkflow,
@@ -27,11 +30,14 @@ export function WorkflowTab({
     projectId, hasWorkflowInstance, onRefresh,
 }: WorkflowTabProps) {
     const effectiveTheme = useEffectiveTheme();
+    const navigate = useNavigate();
     const [instance, setInstance] =
         useState<WorkflowInstanceInfo | null>(null);
     const [loading, setLoading] = useState(true);
     const [isTriggerOpen, setIsTriggerOpen] = useState(false);
     const [isCancelOpen, setIsCancelOpen] = useState(false);
+    const [isLogOpen, setIsLogOpen] = useState(false);
+    const [logTaskId, setLogTaskId] = useState<number | null>(null);
     const [definitions, setDefinitions] =
         useState<WorkflowDefinition[]>([]);
     const [selectedDefId, setSelectedDefId] = useState("");
@@ -148,6 +154,34 @@ export function WorkflowTab({
             updatedOn: instance.completedOn || instance.startedOn,
         } as WorkflowInstance;
     }, [instance]);
+
+    // Host-contributed right-click actions for a viewer node: open that node's
+    // task execution log, and jump to the full run detail page.
+    const nodeMenuItems = useCallback(
+        (nodeId: string): WorkflowViewerNodeMenuItem[] => {
+            if (!instance) return [];
+            const items: WorkflowViewerNodeMenuItem[] = [];
+            const entry = (instance.history || []).find(
+                (h) => h.nodeId === nodeId);
+            if (entry?.taskId != null) {
+                const taskId = entry.taskId;
+                items.push({
+                    id: "open-log",
+                    label: "Open execution log",
+                    onSelect: () => {
+                        setLogTaskId(taskId);
+                        setIsLogOpen(true);
+                    },
+                });
+            }
+            items.push({
+                id: "view-run",
+                label: "View run details",
+                onSelect: () => navigate(
+                    `/logs/workflow-runs/${instance.id}`),
+            });
+            return items;
+        }, [instance, navigate]);
 
     if (loading) {
         return <EmptyState><EmptyStateBody>
@@ -310,6 +344,7 @@ export function WorkflowTab({
                         instance={viewerInstance}
                         theme={effectiveTheme === "dark"
                             ? "dark" : "light"}
+                        nodeContextMenuItems={nodeMenuItems}
                     />
                 </div>
             )}
@@ -323,6 +358,13 @@ export function WorkflowTab({
                 Are you sure you want to cancel this workflow?
                 Any in-progress tasks will be stopped.
             </ConfirmDeleteModal>
+
+            <ExecutionLogModal
+                isOpen={isLogOpen}
+                projectId={projectId}
+                taskId={logTaskId}
+                onClose={() => setIsLogOpen(false)}
+            />
         </div>
     );
 }

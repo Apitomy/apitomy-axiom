@@ -6,7 +6,9 @@ import {
 } from "@patternfly/react-core";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import { WorkflowViewer } from "@apitomy/flow-ui";
-import type { Workflow, WorkflowInstance as FlowInstance } from "@apitomy/flow-ui";
+import type {
+    Workflow, WorkflowInstance as FlowInstance, WorkflowViewerNodeMenuItem,
+} from "@apitomy/flow-ui";
 import { TraceGraph } from "../components/TraceGraph";
 import { WorkflowStepTimeline } from "../components/WorkflowStepTimeline";
 import { ExecutionLogModal } from "../components/ExecutionLogModal";
@@ -74,6 +76,29 @@ export function WorkflowRunDetailPage() {
     }
 
     const openLog = (taskId: number) => { setLogTaskId(taskId); setIsLogOpen(true); };
+
+    // Host-contributed right-click actions for a viewer node: open that node's
+    // task execution log, and jump to the run's execution trace tab.
+    const nodeMenuItems = (nodeId: string): WorkflowViewerNodeMenuItem[] => {
+        const items: WorkflowViewerNodeMenuItem[] = [];
+        const entry = (run.history ?? []).find((h) => h.nodeId === nodeId);
+        if (entry?.taskId != null) {
+            const taskId = entry.taskId;
+            items.push({
+                id: "open-log",
+                label: "Open execution log",
+                onSelect: () => openLog(taskId),
+            });
+        }
+        if (run.traceId) {
+            items.push({
+                id: "view-trace",
+                label: "View in execution trace",
+                onSelect: () => setActiveTab(3),
+            });
+        }
+        return items;
+    };
 
     return (
         <PageSection>
@@ -146,6 +171,7 @@ export function WorkflowRunDetailPage() {
                             workflow={workflowContent}
                             instance={viewerInstance}
                             theme={effectiveTheme === "dark" ? "dark" : "light"}
+                            nodeContextMenuItems={nodeMenuItems}
                         />
                     </div>
                 )}
