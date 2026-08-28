@@ -6,9 +6,11 @@ import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
-import io.apitomy.axiom.core.entities.WorkflowInstanceEntity;
+import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.events.SseEvent;
+import io.apitomy.axiom.core.tracing.TraceService;
+import io.apitomy.axiom.core.tracing.TraceContext;
 import io.apitomy.flow.engine.WorkflowEngine;
 import io.apitomy.flow.engine.WorkflowValidationException;
 import io.apitomy.flow.model.InstanceStatus;
@@ -50,6 +52,9 @@ public class WorkflowExecutionService {
     @Inject
     Event<SseEvent> sseEvents;
 
+    @Inject
+    TraceService traceService;
+
     private WorkflowEngine workflowEngine;
 
     @PostConstruct
@@ -72,17 +77,19 @@ public class WorkflowExecutionService {
      * Triggers a workflow on a project.
      */
     @Transactional
-    public WorkflowInstanceEntity triggerWorkflow(long projectId, long definitionId) {
+    public WorkflowRunEntity triggerWorkflow(long projectId, long definitionId) {
         ProjectEntity project = ProjectEntity.findById(projectId);
         if (project == null) {
             throw new WebApplicationException("Project not found", 404);
         }
 
-        WorkflowInstanceEntity existing = WorkflowInstanceEntity
-                .find("projectId", projectId).firstResult();
-        if (existing != null) {
+        WorkflowRunEntity activeRun = WorkflowRunEntity
+                .find("projectId = ?1 and status in ?2",
+                        projectId, List.of("running", "waiting"))
+                .firstResult();
+        if (activeRun != null) {
             throw new WebApplicationException(
-                    "Project already has a workflow instance", 409);
+                    "Project already has an active workflow run", 409);
         }
 
         WorkflowDefinitionEntity definition =
@@ -131,7 +138,7 @@ public class WorkflowExecutionService {
                             .build());
         }
 
-        WorkflowInstanceEntity entity = new WorkflowInstanceEntity();
+        WorkflowRunEntity entity = new WorkflowRunEntity();
         entity.projectId = projectId;
         entity.definitionId = definitionId;
         entity.definitionVersion = definition.currentVersion;
@@ -139,13 +146,26 @@ public class WorkflowExecutionService {
         persistInstanceState(entity, instance);
         entity.persist();
 
+        try {
+            TraceContext traceCtx = traceService.createTrace(
+                    "workflow",
+                    "Workflow: " + definition.name,
+                    null, project.id, null,
+                    "workflow", "Workflow: " + definition.name,
+                    "workflow-run", entity.id);
+            entity.traceId = traceCtx.traceId();
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to create trace for workflow run %d", entity.id);
+        }
+
         if (instance.status() == InstanceStatus.WAITING) {
             createTaskForCurrentNode(entity, workflow, instance);
         }
 
         logActivity(projectId, "workflow-started",
                 "Workflow started: " + definition.name);
-        sseEvents.fire(SseEvent.workflowUpdated(projectId));
+        sseEvents.fire(SseEvent.workflowUpdated(
+                entity.projectId, entity.id, entity.status));
 
         return entity;
     }
@@ -156,15 +176,15 @@ public class WorkflowExecutionService {
     @Transactional
     public void onTaskCompleted(long taskId) {
         TaskEntity task = TaskEntity.findById(taskId);
-        if (task == null || task.workflowInstanceId == null) {
+        if (task == null || task.workflowRunId == null) {
             return;
         }
 
-        WorkflowInstanceEntity entity =
-                WorkflowInstanceEntity.findById(task.workflowInstanceId);
+        WorkflowRunEntity entity =
+                WorkflowRunEntity.findById(task.workflowRunId);
         if (entity == null) {
             LOG.warnf("Workflow instance %d not found for task %d",
-                    task.workflowInstanceId, taskId);
+                    task.workflowRunId, taskId);
             return;
         }
 
@@ -189,17 +209,20 @@ public class WorkflowExecutionService {
             createTaskForCurrentNode(entity, workflow, advanced);
         } else if (advanced.status() == InstanceStatus.COMPLETED) {
             entity.completedOn = Instant.now();
+            completeRunTrace(entity, "completed");
             logActivity(entity.projectId, "workflow-completed",
                     "Workflow completed");
         } else if (advanced.status() == InstanceStatus.FAILED) {
             entity.completedOn = Instant.now();
+            completeRunTrace(entity, "failed");
             logActivity(entity.projectId, "workflow-failed",
                     "Workflow failed: " + advanced.failureReason());
             sseEvents.fire(SseEvent.notification(
                     "Workflow failed for project", "error"));
         }
 
-        sseEvents.fire(SseEvent.workflowUpdated(entity.projectId));
+        sseEvents.fire(SseEvent.workflowUpdated(
+                entity.projectId, entity.id, entity.status));
     }
 
     /**
@@ -207,15 +230,15 @@ public class WorkflowExecutionService {
      */
     @Transactional
     public void cancelWorkflow(long projectId) {
-        WorkflowInstanceEntity entity = WorkflowInstanceEntity
-                .find("projectId", projectId).firstResult();
+        WorkflowRunEntity entity = WorkflowRunEntity
+                .find("projectId = ?1 and status in ?2", projectId,
+                        List.of("running", "waiting"))
+                .firstResult();
         if (entity == null) {
-            throw new WebApplicationException("No workflow instance found", 404);
-        }
-
-        if ("completed".equals(entity.status)
-                || "failed".equals(entity.status)
-                || "cancelled".equals(entity.status)) {
+            long runCount = WorkflowRunEntity.count("projectId", projectId);
+            if (runCount == 0) {
+                throw new WebApplicationException("No workflow instance found", 404);
+            }
             throw new WebApplicationException(
                     "Workflow instance is already in a terminal state", 409);
         }
@@ -229,9 +252,10 @@ public class WorkflowExecutionService {
 
         persistInstanceState(entity, cancelled);
         entity.completedOn = Instant.now();
+        completeRunTrace(entity, "cancelled");
 
         TaskEntity activeTask = TaskEntity
-                .find("workflowInstanceId = ?1 and status in ?2",
+                .find("workflowRunId = ?1 and status in ?2",
                         entity.id,
                         List.of("Pending", "InProgress"))
                 .firstResult();
@@ -242,12 +266,43 @@ public class WorkflowExecutionService {
         }
 
         logActivity(projectId, "workflow-cancelled", "Workflow cancelled");
-        sseEvents.fire(SseEvent.workflowUpdated(projectId));
+        sseEvents.fire(SseEvent.workflowUpdated(
+                entity.projectId, entity.id, entity.status));
     }
 
     // -- Private helpers --
 
-    private void createTaskForCurrentNode(WorkflowInstanceEntity entity,
+    /**
+     * Rebuilds a {@link TraceContext} rooted at a run's trace root node, or
+     * null if the run has no trace or the root cannot be found.
+     */
+    private TraceContext traceContextFor(WorkflowRunEntity run) {
+        if (run.traceId == null) {
+            return null;
+        }
+        io.apitomy.axiom.core.entities.TraceNodeEntity root =
+                io.apitomy.axiom.core.entities.TraceNodeEntity.find(
+                        "traceId = ?1 and parentNodeId is null", run.traceId)
+                        .firstResult();
+        if (root == null) {
+            return null;
+        }
+        return new TraceContext(run.traceId, root.id);
+    }
+
+    /** Best-effort completion of a run's execution trace. */
+    private void completeRunTrace(WorkflowRunEntity run, String status) {
+        if (run.traceId == null) {
+            return;
+        }
+        try {
+            traceService.completeTrace(run.traceId, status);
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to complete trace for workflow run %d", run.id);
+        }
+    }
+
+    private void createTaskForCurrentNode(WorkflowRunEntity entity,
             Workflow workflow, WorkflowInstance instance) {
         ActionInfo actionInfo = workflowEngine.getActionInfo(
                 workflow, instance);
@@ -263,9 +318,21 @@ public class WorkflowExecutionService {
         task.createdBy = "workflow";
         task.status = "Pending";
         task.input = serializeInputs(actionInfo);
-        task.workflowInstanceId = entity.id;
+        task.workflowRunId = entity.id;
+        task.nodeId = instance.currentNodeId();
+        task.traceId = entity.traceId;
         task.createdOn = Instant.now();
         task.persist();
+
+        TraceContext traceCtx = traceContextFor(entity);
+        if (traceCtx != null) {
+            try {
+                traceService.addNode(traceCtx, "task", "in-progress",
+                        "Node: " + actionInfo.actionType(), "task", task.id);
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to add workflow task trace node");
+            }
+        }
 
         LOG.infof("Created task %d for workflow instance %d (action: %s)",
                 task.id, entity.id, actionInfo.actionType());
@@ -274,7 +341,7 @@ public class WorkflowExecutionService {
                 entity.projectId, task.id, task.status));
     }
 
-    private void persistInstanceState(WorkflowInstanceEntity entity,
+    private void persistInstanceState(WorkflowRunEntity entity,
             WorkflowInstance instance) {
         try {
             entity.instanceState = objectMapper.writeValueAsString(instance);

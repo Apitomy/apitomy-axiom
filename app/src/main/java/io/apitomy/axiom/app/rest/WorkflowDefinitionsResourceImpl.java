@@ -9,8 +9,10 @@ import io.apitomy.axiom.api.beans.UpdateWorkflowDefinition;
 import io.apitomy.axiom.api.beans.WorkflowDefinition;
 import io.apitomy.axiom.api.beans.WorkflowDefinitionSearchResults;
 import io.apitomy.axiom.api.beans.WorkflowDefinitionVersion;
+import io.apitomy.axiom.app.WorkflowRunBeanMapper;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
+import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.flow.model.Workflow;
 import io.apitomy.flow.model.WorkflowNode;
 import io.apitomy.flow.validation.ValidationProblem;
@@ -44,6 +46,9 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
 
     @Inject
     ObjectMapper objectMapper;
+
+    @Inject
+    WorkflowRunBeanMapper runBeanMapper;
 
     /** Inputs Axiom always injects when starting a workflow (may be marked required). */
     private static final Set<String> ALWAYS_PRESENT_INPUTS =
@@ -399,5 +404,39 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
         } catch (JsonProcessingException e) {
             return "{}";
         }
+    }
+
+    // ── Workflow Runs ─────────────────────────────────────────────────
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public io.apitomy.axiom.api.beans.WorkflowRunSearchResults listWorkflowRuns(
+            Long projectId, String status, java.math.BigInteger page, java.math.BigInteger limit) {
+        return runBeanMapper.search(projectId, null, status, page, limit);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public io.apitomy.axiom.api.beans.WorkflowInstance getWorkflowRun(long runId) {
+        WorkflowRunEntity run = WorkflowRunEntity.findById(runId);
+        if (run == null) {
+            throw new WebApplicationException("Workflow run not found: " + runId,
+                    Response.Status.NOT_FOUND);
+        }
+        return runBeanMapper.toBean(run);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public io.apitomy.axiom.api.beans.WorkflowRunSearchResults listWorkflowDefinitionRuns(
+            long workflowDefinitionId, String status, java.math.BigInteger page, java.math.BigInteger limit) {
+        findOrThrow(workflowDefinitionId);
+        return runBeanMapper.search(null, workflowDefinitionId, status, page, limit);
     }
 }

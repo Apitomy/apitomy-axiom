@@ -10,7 +10,7 @@ import static org.hamcrest.Matchers.*;
 @QuarkusTest
 class WorkflowDefinitionsResourceTest {
 
-    private static final String BASE_PATH = "/api/v1/workflow-definitions";
+    private static final String BASE_PATH = "/api/v1/workflow/definitions";
 
     @Test
     void testCreateAndGetWorkflowDefinition() {

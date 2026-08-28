@@ -11,7 +11,7 @@ import static org.hamcrest.Matchers.*;
 class WorkflowInstanceResourceTest {
 
     private static final String PROJECTS_PATH = "/api/v1/projects";
-    private static final String WORKFLOWS_PATH = "/api/v1/workflow-definitions";
+    private static final String WORKFLOWS_PATH = "/api/v1/workflow/definitions";
 
     @Test
     void testTriggerAndGetWorkflow() {
@@ -53,7 +53,7 @@ class WorkflowInstanceResourceTest {
     @Test
     void testTriggerDuplicateReturns409() {
         int projectId = createProject("WF Dup Test Project");
-        int definitionId = createAndPublishDefinition(
+        int definitionId = createAndPublishActionWorkflow(
                 "Dup Test WF");
 
         given()
@@ -66,7 +66,8 @@ class WorkflowInstanceResourceTest {
                 .when()
                     .post(PROJECTS_PATH + "/" + projectId + "/workflow")
                 .then()
-                    .statusCode(200);
+                    .statusCode(200)
+                    .body("status", equalTo("waiting"));
 
         given()
                 .contentType(ContentType.JSON)
@@ -212,6 +213,58 @@ class WorkflowInstanceResourceTest {
                     .delete(PROJECTS_PATH + "/" + projectId + "/workflow")
                 .then()
                     .statusCode(409);
+    }
+
+    @Test
+    void testCancelActiveRunCancelsLatestNotPriorTerminal() {
+        int projectId = createProject("WF Cancel Active Run Project");
+        int definitionId = createAndPublishActionWorkflow(
+                "Cancel Active Run WF");
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "workflowDefinitionId": %d
+                    }
+                    """.formatted(definitionId))
+                .when()
+                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .then()
+                    .statusCode(200)
+                    .body("status", equalTo("waiting"));
+
+        given()
+                .when()
+                    .delete(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .then()
+                    .statusCode(204);
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "workflowDefinitionId": %d
+                    }
+                    """.formatted(definitionId))
+                .when()
+                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .then()
+                    .statusCode(200)
+                    .body("status", equalTo("waiting"));
+
+        given()
+                .when()
+                    .delete(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .then()
+                    .statusCode(204);
+
+        given()
+                .when()
+                    .get(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .then()
+                    .statusCode(200)
+                    .body("status", equalTo("cancelled"));
     }
 
     @Test

@@ -5161,7 +5161,225 @@
         }
       ]
     },
-    "/workflow-definitions": {
+    "/workflow/definitions/{workflowDefinitionId}/versions/{version}": {
+      "get": {
+        "tags": [
+          "WorkflowDefinitions"
+        ],
+        "summary": "Get a specific version",
+        "operationId": "getWorkflowDefinitionVersion",
+        "responses": {
+          "200": {
+            "description": "The workflow definition version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowDefinitionVersion"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/WorkflowDefinitionId"
+        },
+        {
+          "name": "version",
+          "in": "path",
+          "description": "Version number",
+          "required": true,
+          "schema": {
+            "format": "int32",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/workflow/definitions/{workflowDefinitionId}/versions": {
+      "get": {
+        "tags": [
+          "WorkflowDefinitions"
+        ],
+        "summary": "List all published versions",
+        "operationId": "listWorkflowDefinitionVersions",
+        "responses": {
+          "200": {
+            "description": "List of published versions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowDefinitionVersion"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/WorkflowDefinitionId"
+        }
+      ]
+    },
+    "/workflow/definitions/{workflowDefinitionId}/publish": {
+      "post": {
+        "tags": [
+          "WorkflowDefinitions"
+        ],
+        "summary": "Publish current draft as a new version",
+        "operationId": "publishWorkflowDefinition",
+        "responses": {
+          "200": {
+            "description": "New version published",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowDefinitionVersion"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/WorkflowDefinitionId"
+        }
+      ]
+    },
+    "/workflow/definitions/{workflowDefinitionId}/content": {
+      "put": {
+        "tags": [
+          "WorkflowDefinitions"
+        ],
+        "summary": "Update draft workflow content",
+        "operationId": "updateWorkflowDefinitionContent",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Content updated"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/WorkflowDefinitionId"
+        }
+      ]
+    },
+    "/workflow/definitions/{workflowDefinitionId}": {
+      "get": {
+        "tags": [
+          "WorkflowDefinitions"
+        ],
+        "summary": "Get a workflow definition",
+        "operationId": "getWorkflowDefinition",
+        "responses": {
+          "200": {
+            "description": "The workflow definition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowDefinition"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "WorkflowDefinitions"
+        ],
+        "summary": "Update workflow definition metadata",
+        "operationId": "updateWorkflowDefinition",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkflowDefinition"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Workflow definition updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowDefinition"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "WorkflowDefinitions"
+        ],
+        "summary": "Delete a workflow definition",
+        "operationId": "deleteWorkflowDefinition",
+        "responses": {
+          "204": {
+            "description": "Workflow definition deleted"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/WorkflowDefinitionId"
+        }
+      ]
+    },
+    "/workflow/definitions": {
       "get": {
         "tags": [
           "WorkflowDefinitions"
@@ -5242,141 +5460,20 @@
         }
       }
     },
-    "/workflow-definitions/{workflowDefinitionId}": {
+    "/workflow/runs/{runId}": {
       "get": {
         "tags": [
-          "WorkflowDefinitions"
+          "WorkflowRuns"
         ],
-        "summary": "Get a workflow definition",
-        "operationId": "getWorkflowDefinition",
+        "summary": "Get a single workflow run by ID",
+        "operationId": "getWorkflowRun",
         "responses": {
           "200": {
-            "description": "The workflow definition",
+            "description": "The workflow run",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WorkflowDefinition"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "WorkflowDefinitions"
-        ],
-        "summary": "Update workflow definition metadata",
-        "operationId": "updateWorkflowDefinition",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateWorkflowDefinition"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Workflow definition updated",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorkflowDefinition"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "WorkflowDefinitions"
-        ],
-        "summary": "Delete a workflow definition",
-        "operationId": "deleteWorkflowDefinition",
-        "responses": {
-          "204": {
-            "description": "Workflow definition deleted"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/WorkflowDefinitionId"
-        }
-      ]
-    },
-    "/workflow-definitions/{workflowDefinitionId}/content": {
-      "put": {
-        "tags": [
-          "WorkflowDefinitions"
-        ],
-        "summary": "Update draft workflow content",
-        "operationId": "updateWorkflowDefinitionContent",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Content updated"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/WorkflowDefinitionId"
-        }
-      ]
-    },
-    "/workflow-definitions/{workflowDefinitionId}/publish": {
-      "post": {
-        "tags": [
-          "WorkflowDefinitions"
-        ],
-        "summary": "Publish current draft as a new version",
-        "operationId": "publishWorkflowDefinition",
-        "responses": {
-          "200": {
-            "description": "New version published",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorkflowDefinitionVersion"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object"
-                  }
+                  "$ref": "#/components/schemas/WorkflowInstance"
                 }
               }
             }
@@ -5388,75 +5485,117 @@
       },
       "parameters": [
         {
-          "$ref": "#/components/parameters/WorkflowDefinitionId"
-        }
-      ]
-    },
-    "/workflow-definitions/{workflowDefinitionId}/versions": {
-      "get": {
-        "tags": [
-          "WorkflowDefinitions"
-        ],
-        "summary": "List all published versions",
-        "operationId": "listWorkflowDefinitionVersions",
-        "responses": {
-          "200": {
-            "description": "List of published versions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/WorkflowDefinitionVersion"
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/WorkflowDefinitionId"
-        }
-      ]
-    },
-    "/workflow-definitions/{workflowDefinitionId}/versions/{version}": {
-      "get": {
-        "tags": [
-          "WorkflowDefinitions"
-        ],
-        "summary": "Get a specific version",
-        "operationId": "getWorkflowDefinitionVersion",
-        "responses": {
-          "200": {
-            "description": "The workflow definition version",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorkflowDefinitionVersion"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/WorkflowDefinitionId"
-        },
-        {
-          "name": "version",
+          "name": "runId",
           "in": "path",
-          "description": "Version number",
+          "description": "Workflow run ID",
           "required": true,
           "schema": {
-            "format": "int32",
+            "format": "int64",
             "type": "integer"
           }
+        }
+      ]
+    },
+    "/workflow/runs": {
+      "get": {
+        "tags": [
+          "WorkflowRuns"
+        ],
+        "summary": "List workflow runs across all projects",
+        "operationId": "listWorkflowRuns",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter by status (comma-separated)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of workflow runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunSearchResults"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow/definitions/{workflowDefinitionId}/runs": {
+      "get": {
+        "tags": [
+          "WorkflowDefinitions"
+        ],
+        "summary": "List runs for a specific workflow definition (all versions)",
+        "operationId": "listWorkflowDefinitionRuns",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter by status (comma-separated)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of runs for the definition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunSearchResults"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/WorkflowDefinitionId"
         }
       ]
     }
@@ -5797,6 +5936,13 @@
           },
           "outputSchema": {
             "description": "Schema defining form fields for human response (JSON string)",
+            "type": "string"
+          },
+          "workflowRunId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "nodeId": {
             "type": "string"
           }
         }
@@ -9302,6 +9448,19 @@
           "output": {
             "type": "object",
             "additionalProperties": {}
+          },
+          "taskId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "taskStatus": {
+            "type": "string"
+          },
+          "edgeId": {
+            "type": "string"
+          },
+          "edgeCondition": {
+            "type": "string"
           }
         }
       },
@@ -9368,6 +9527,14 @@
           "completedOn": {
             "format": "date-time",
             "type": "string"
+          },
+          "runId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "traceId": {
+            "format": "uuid",
+            "type": "string"
           }
         }
       },
@@ -9379,6 +9546,72 @@
         "properties": {
           "workflowDefinitionId": {
             "format": "int64",
+            "type": "integer"
+          }
+        }
+      },
+      "WorkflowRunSummary": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "projectId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "projectName": {
+            "type": "string"
+          },
+          "definitionId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "definitionName": {
+            "type": "string"
+          },
+          "definitionVersion": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          },
+          "currentNodeName": {
+            "type": "string"
+          },
+          "traceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "startedOn": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "completedOn": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      },
+      "WorkflowRunSearchResults": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowRunSummary"
+            }
+          },
+          "totalCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "limit": {
             "type": "integer"
           }
         }
@@ -9531,6 +9764,10 @@
     {
       "name": "WorkflowInstances",
       "description": "Workflow instance execution and monitoring"
+    },
+    {
+      "name": "WorkflowRuns",
+      "description": "Workflow run history and execution observability"
     }
   ]
 }
