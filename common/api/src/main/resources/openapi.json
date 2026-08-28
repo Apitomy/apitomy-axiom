@@ -9455,6 +9455,12 @@
           },
           "taskStatus": {
             "type": "string"
+          },
+          "edgeId": {
+            "type": "string"
+          },
+          "edgeCondition": {
+            "type": "string"
           }
         }
       },

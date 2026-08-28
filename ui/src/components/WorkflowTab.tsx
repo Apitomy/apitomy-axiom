@@ -137,8 +137,8 @@ export function WorkflowTab({
             history: (instance.history || []).map((h) => ({
                 nodeId: h.nodeId,
                 nodeName: h.nodeName,
-                edgeId: "",
-                edgeCondition: "",
+                edgeId: h.edgeId ?? "",
+                edgeCondition: h.edgeCondition ?? "",
                 enteredOn: h.enteredOn,
                 completedOn: h.completedOn || "",
                 output: h.output || {},

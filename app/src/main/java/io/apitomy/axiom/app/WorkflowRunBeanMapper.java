@@ -122,6 +122,12 @@ public class WorkflowRunBeanMapper {
                 new io.apitomy.axiom.api.beans.HistoryEntry();
         bean.setNodeId(entry.nodeId());
         bean.setNodeName(entry.nodeName());
+        if (entry.edgeId() != null) {
+            bean.setEdgeId(entry.edgeId());
+        }
+        if (entry.edgeCondition() != null) {
+            bean.setEdgeCondition(entry.edgeCondition());
+        }
         if (entry.enteredOn() != null) {
             bean.setEnteredOn(Date.from(entry.enteredOn()));
         }

@@ -2233,6 +2233,8 @@ export interface HistoryEntryInfo {
     output?: any;
     taskId?: number;
     taskStatus?: string;
+    edgeId?: string;
+    edgeCondition?: string;
 }
 
 export interface TriggerWorkflowRequest {

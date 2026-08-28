@@ -59,9 +59,7 @@ export function WorkflowRunDetailPage() {
             context: run.context || {},
             history: (run.history ?? []).map((h) => ({
                 nodeId: h.nodeId, nodeName: h.nodeName,
-                // edgeId/edgeCondition are empty because the engine history does not
-                // retain traversed edges yet — see Apitomy/apitomy-flow#41.
-                edgeId: "", edgeCondition: "",
+                edgeId: h.edgeId ?? "", edgeCondition: h.edgeCondition ?? "",
                 enteredOn: h.enteredOn, completedOn: h.completedOn ?? "",
                 output: h.output ?? {},
             })),
