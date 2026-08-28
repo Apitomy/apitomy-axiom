@@ -216,6 +216,58 @@ class WorkflowInstanceResourceTest {
     }
 
     @Test
+    void testCancelActiveRunCancelsLatestNotPriorTerminal() {
+        int projectId = createProject("WF Cancel Active Run Project");
+        int definitionId = createAndPublishActionWorkflow(
+                "Cancel Active Run WF");
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "workflowDefinitionId": %d
+                    }
+                    """.formatted(definitionId))
+                .when()
+                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .then()
+                    .statusCode(200)
+                    .body("status", equalTo("waiting"));
+
+        given()
+                .when()
+                    .delete(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .then()
+                    .statusCode(204);
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "workflowDefinitionId": %d
+                    }
+                    """.formatted(definitionId))
+                .when()
+                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .then()
+                    .statusCode(200)
+                    .body("status", equalTo("waiting"));
+
+        given()
+                .when()
+                    .delete(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .then()
+                    .statusCode(204);
+
+        given()
+                .when()
+                    .get(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .then()
+                    .statusCode(200)
+                    .body("status", equalTo("cancelled"));
+    }
+
+    @Test
     void testGetNoInstanceReturns404() {
         int projectId = createProject("WF No Instance Project");
 

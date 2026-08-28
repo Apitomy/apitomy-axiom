@@ -231,14 +231,14 @@ public class WorkflowExecutionService {
     @Transactional
     public void cancelWorkflow(long projectId) {
         WorkflowRunEntity entity = WorkflowRunEntity
-                .find("projectId", projectId).firstResult();
+                .find("projectId = ?1 and status in ?2", projectId,
+                        List.of("running", "waiting"))
+                .firstResult();
         if (entity == null) {
-            throw new WebApplicationException("No workflow instance found", 404);
-        }
-
-        if ("completed".equals(entity.status)
-                || "failed".equals(entity.status)
-                || "cancelled".equals(entity.status)) {
+            long runCount = WorkflowRunEntity.count("projectId", projectId);
+            if (runCount == 0) {
+                throw new WebApplicationException("No workflow instance found", 404);
+            }
             throw new WebApplicationException(
                     "Workflow instance is already in a terminal state", 409);
         }
