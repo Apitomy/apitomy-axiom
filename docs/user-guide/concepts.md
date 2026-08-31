@@ -261,6 +261,20 @@ placeholders plus additional ones:
 | `{{eventId}}` | The triggering event ID |
 | `{{taskId}}` | The task ID |
 | `{{apiBaseUrl}}` | Axiom's own API base URL (for callbacks) |
+| `{{inputs.NAME}}` | A named workflow input (workflow tasks only) |
+
+> **Placeholder values are treated as literal data.** In script mode each
+> placeholder is not inlined into the script text. Instead its value is passed to
+> the script as an environment variable and the placeholder expands to a quoted
+> reference — for example `{{managerInput}}` becomes `"$AXIOM_MANAGER_INPUT"`.
+> This means a value containing shell metacharacters (`$(...)`, backticks, `;`,
+> `&&`, newlines, etc.) is never executed as code. As an author you can use a
+> placeholder wherever you'd use a shell variable; you do **not** need to add
+> your own quotes around it (existing templates that already quote placeholders
+> continue to work). The matching environment variables — `AXIOM_PROJECT_ID`,
+> `AXIOM_EVENT_ID`, `AXIOM_TASK_ID`, `AXIOM_REF`, `AXIOM_REPOSITORY`,
+> `AXIOM_PROJECT_NAME`, `AXIOM_MANAGER_INPUT`, `AXIOM_API_URL`, `AXIOM_WORK_DIR`,
+> and `AXIOM_INPUT_<NAME>` for workflow inputs — are also available directly.
 
 ### Tasks
 

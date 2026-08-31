@@ -25,9 +25,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 /**
  * Executes script-mode action types by running a user-defined bash script.
@@ -38,6 +40,13 @@ import java.util.concurrent.TimeUnit;
 public class ScriptExecutionService {
 
     private static final Logger LOG = Logger.getLogger(ScriptExecutionService.class);
+
+    /**
+     * Workflow input names that can be safely bound as shell environment
+     * variables. Mirrors the identifier rule enforced by ActionTypeValidator.
+     */
+    private static final Pattern VALID_INPUT_NAME =
+            Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
     @Inject
     Event<SseEvent> sseEvents;
@@ -113,7 +122,9 @@ public class ScriptExecutionService {
         if (project == null) {
             project = ProjectEntity.findById(task.projectId);
         }
-        String script = substitutePlaceholders(actionType.scriptTemplate, task, project);
+        Map<String, String> placeholderEnv = new LinkedHashMap<>();
+        String script = substitutePlaceholders(actionType.scriptTemplate, task, project,
+                placeholderEnv);
         Instant startTime = Instant.now();
 
         Path scriptFile = Files.createTempFile("axiom-script-", ".sh");
@@ -142,6 +153,13 @@ public class ScriptExecutionService {
                     }
                 }
             }
+
+            // Inject substituted placeholder values as environment variables. The
+            // script references them via quoted shell expansions ("$AXIOM_*"), so
+            // values that contain shell metacharacters are treated as literal data
+            // rather than being executed (see substitutePlaceholders / issue #267).
+            // Applied last so the reserved AXIOM_* names are authoritative.
+            pb.environment().putAll(placeholderEnv);
 
             Process process = pb.start();
             String output = new String(process.getInputStream().readAllBytes());
@@ -200,23 +218,46 @@ public class ScriptExecutionService {
         return log.toString();
     }
 
-    private String substitutePlaceholders(String template, TaskEntity task,
-                                           ProjectEntity project) {
+    /**
+     * Resolves {@code {{...}}} placeholders in a script template.
+     *
+     * <p>To guard against shell injection, placeholder <em>values</em> are never
+     * inlined into the script text. Instead each value is exported as an
+     * environment variable (collected into {@code env}) and the placeholder is
+     * replaced with a quoted shell expansion — e.g. {@code {{managerInput}}}
+     * becomes {@code "$AXIOM_MANAGER_INPUT"}. Because bash does not re-parse the
+     * contents of a variable expansion for command substitution, a value
+     * containing {@code $(...)}, backticks, {@code ;}, {@code &&}, newlines, etc.
+     * is treated as literal data rather than being executed (issue #267).
+     *
+     * @param template the raw script template
+     * @param task     the task providing context values
+     * @param project  the project providing context values, may be {@code null}
+     * @param env      output map that receives the environment variables the
+     *                 resolved script references; the caller must inject these
+     *                 into the script's process environment
+     * @return the resolved script with placeholders replaced by shell references
+     */
+    String substitutePlaceholders(String template, TaskEntity task,
+                                           ProjectEntity project, Map<String, String> env) {
         String apiBaseUrl = "http://localhost:" + httpPort + "/api/v1";
+        String workDir = System.getProperty("user.home")
+                + "/.axiom/workspaces/project-" + task.projectId;
+
         String resolved = template;
-        resolved = resolved.replace("{{projectId}}", str(task.projectId));
-        resolved = resolved.replace("{{eventId}}", str(task.eventId));
-        resolved = resolved.replace("{{taskId}}", str(task.id));
-        resolved = resolved.replace("{{ref}}", project != null && project.ref != null
-                ? project.ref : "");
-        resolved = resolved.replace("{{repository}}", project != null && project.repository != null
-                ? project.repository : "");
-        resolved = resolved.replace("{{projectName}}", project != null && project.name != null
-                ? project.name : "");
-        resolved = resolved.replace("{{managerInput}}", task.input != null ? task.input : "");
-        resolved = resolved.replace("{{apiBaseUrl}}", apiBaseUrl);
-        String workDir = System.getProperty("user.home") + "/.axiom/workspaces/project-" + task.projectId;
-        resolved = resolved.replace("{{workDir}}", workDir);
+        resolved = bind(resolved, env, "{{projectId}}", "AXIOM_PROJECT_ID", str(task.projectId));
+        resolved = bind(resolved, env, "{{eventId}}", "AXIOM_EVENT_ID", str(task.eventId));
+        resolved = bind(resolved, env, "{{taskId}}", "AXIOM_TASK_ID", str(task.id));
+        resolved = bind(resolved, env, "{{ref}}", "AXIOM_REF",
+                project != null && project.ref != null ? project.ref : "");
+        resolved = bind(resolved, env, "{{repository}}", "AXIOM_REPOSITORY",
+                project != null && project.repository != null ? project.repository : "");
+        resolved = bind(resolved, env, "{{projectName}}", "AXIOM_PROJECT_NAME",
+                project != null && project.name != null ? project.name : "");
+        resolved = bind(resolved, env, "{{managerInput}}", "AXIOM_MANAGER_INPUT",
+                task.input != null ? task.input : "");
+        resolved = bind(resolved, env, "{{apiBaseUrl}}", "AXIOM_API_URL", apiBaseUrl);
+        resolved = bind(resolved, env, "{{workDir}}", "AXIOM_WORK_DIR", workDir);
 
         // Bind named workflow inputs as {{inputs.NAME}} (workflow tasks only).
         if (task.workflowRunId != null && task.input != null && !task.input.isBlank()) {
@@ -224,6 +265,12 @@ public class ScriptExecutionService {
                 Map<String, Object> inputs = objectMapper.readValue(
                         task.input, new TypeReference<Map<String, Object>>() {});
                 for (Map.Entry<String, Object> e : inputs.entrySet()) {
+                    String key = e.getKey();
+                    if (!VALID_INPUT_NAME.matcher(key).matches()) {
+                        // Not a valid shell identifier — cannot bind as an env var
+                        // safely; leave the placeholder untouched.
+                        continue;
+                    }
                     Object v = e.getValue();
                     String rendered;
                     if (v == null) {
@@ -234,11 +281,12 @@ public class ScriptExecutionService {
                         try {
                             rendered = objectMapper.writeValueAsString(v);
                         } catch (Exception ex) {
-                            LOG.debugf("Failed to serialize input '%s' to JSON, using toString()", e.getKey());
+                            LOG.debugf("Failed to serialize input '%s' to JSON, using toString()", key);
                             rendered = String.valueOf(v);
                         }
                     }
-                    resolved = resolved.replace("{{inputs." + e.getKey() + "}}", rendered);
+                    resolved = bind(resolved, env, "{{inputs." + key + "}}",
+                            "AXIOM_INPUT_" + key, rendered);
                 }
             } catch (Exception ignored) {
                 // Non-object input — leave {{inputs.*}} placeholders untouched.
@@ -246,6 +294,21 @@ public class ScriptExecutionService {
         }
 
         return resolved;
+    }
+
+    /**
+     * Replaces {@code placeholder} in {@code resolved} with a quoted reference to
+     * the environment variable {@code envName}, and records {@code value} under
+     * {@code envName} in {@code env}. The value is only exported when the
+     * placeholder actually appears in the template.
+     */
+    private String bind(String resolved, Map<String, String> env, String placeholder,
+                        String envName, String value) {
+        if (!resolved.contains(placeholder)) {
+            return resolved;
+        }
+        env.put(envName, value != null ? value : "");
+        return resolved.replace(placeholder, "\"$" + envName + "\"");
     }
 
     private String str(Object value) {

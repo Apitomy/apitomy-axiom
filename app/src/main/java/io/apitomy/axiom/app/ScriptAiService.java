@@ -59,10 +59,22 @@ public class ScriptAiService {
             - {{managerInput}} — context/instructions from the Manager
             - {{apiBaseUrl}} — the Axiom REST API base URL (e.g. "http://localhost:9090/api/v1")
 
-            Environment variables are also available:
+            Placeholder values are treated as literal data: each {{...}} is passed to the \
+            script as an environment variable and expands to a quoted shell reference (e.g. \
+            {{managerInput}} becomes "$AXIOM_MANAGER_INPUT"), so values containing shell \
+            metacharacters are never executed. Use a placeholder wherever you would use a \
+            shell variable — do NOT wrap it in extra quotes.
+
+            Environment variables are also available directly:
             - AXIOM_API_URL — same as {{apiBaseUrl}}
             - AXIOM_PROJECT_ID — same as {{projectId}}
+            - AXIOM_EVENT_ID — same as {{eventId}}
             - AXIOM_TASK_ID — same as {{taskId}}
+            - AXIOM_REF — same as {{ref}}
+            - AXIOM_REPOSITORY — same as {{repository}}
+            - AXIOM_PROJECT_NAME — same as {{projectName}}
+            - AXIOM_MANAGER_INPUT — same as {{managerInput}}
+            - AXIOM_WORK_DIR — same as {{workDir}}
 
             Common Axiom REST API endpoints the script can call:
             - GET {{apiBaseUrl}}/projects/{{projectId}} — get project details
