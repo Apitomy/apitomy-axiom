@@ -154,6 +154,10 @@ public class ProjectsResourceImpl implements ProjectsResource {
     @Override
     @Transactional
     public Project createProject(NewProject data) {
+        validateRequired(data.getName(), "name");
+        validateRequired(data.getType(), "type");
+        validateRequired(data.getRef(), "ref");
+
         ProjectEntity entity = new ProjectEntity();
         entity.name = data.getName();
         entity.body = data.getBody();
@@ -542,6 +546,12 @@ public class ProjectsResourceImpl implements ProjectsResource {
     private io.apitomy.axiom.api.beans.WorkflowInstance toWorkflowInstanceBean(
             WorkflowRunEntity entity) {
         return runBeanMapper.toBean(entity);
+    }
+
+    private void validateRequired(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new WebApplicationException("Missing required '" + fieldName + "' field", 400);
+        }
     }
 
     private ProjectEntity findProjectOrThrow(long id) {
