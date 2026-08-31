@@ -373,6 +373,13 @@ export async function fetchTaskExecutionLog(
 
 // ── Action Types ──────────────────────────────────────────────────
 
+export interface ActionTypeField {
+    name: string;
+    type: "string" | "number" | "boolean" | "object";
+    required?: boolean;
+    description?: string;
+}
+
 export interface ActionType {
     id: number;
     name: string;
@@ -380,7 +387,6 @@ export interface ActionType {
     executionMode: string;
     userTriggerable: boolean;
     managerTriggerable: boolean;
-    inputSchema?: string;
     allowedTools?: string[];
     promptTemplate?: string;
     scriptTemplate?: string;
@@ -392,12 +398,16 @@ export interface ActionType {
     emitsEvent: boolean;
     environment?: Record<string, string>;
     labels?: string[];
+    workflowEnabled?: boolean;
+    inputs?: ActionTypeField[];
+    outputs?: ActionTypeField[];
 }
 
 export type NewActionType = Omit<ActionType, "id">;
 
 export async function fetchActionTypes(
-    page = 1, limit = 20, filterName?: string, filterMode?: string, filterLabels?: string
+    page = 1, limit = 20, filterName?: string, filterMode?: string,
+    filterLabels?: string, filterWorkflowEnabled?: boolean
 ): Promise<SearchResults<ActionType>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
@@ -405,6 +415,7 @@ export async function fetchActionTypes(
     if (filterName) params.set("filterName", filterName);
     if (filterMode) params.set("filterMode", filterMode);
     if (filterLabels) params.set("filterLabels", filterLabels);
+    if (filterWorkflowEnabled) params.set("filterWorkflowEnabled", "true");
     const response = await fetch(`${API}/action-types?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch action types: ${response.status}`);
     return response.json();

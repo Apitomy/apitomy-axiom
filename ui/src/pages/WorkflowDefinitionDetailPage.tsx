@@ -69,11 +69,13 @@ export function WorkflowDefinitionDetailPage() {
     // EditorSpi for action types — memoized to avoid re-renders
     const spi: EditorSpi = useMemo(() => ({
         actionTypes: async () => {
-            const results = await fetchActionTypes(1, 1000);
+            const results = await fetchActionTypes(1, 1000, undefined, undefined, undefined, true);
             return results.items.map((at): ActionTypeDescriptor => ({
                 value: at.name,
                 label: at.name,
                 description: at.description,
+                inputs: at.inputs,
+                outputs: at.outputs,
             }));
         },
     }), []);
