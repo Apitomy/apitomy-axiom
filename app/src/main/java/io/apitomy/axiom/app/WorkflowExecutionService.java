@@ -2,12 +2,14 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
+import io.apitomy.axiom.core.services.ActionTypeIoValidator;
 import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.axiom.core.tracing.TraceService;
 import io.apitomy.axiom.core.tracing.TraceContext;
@@ -194,8 +196,20 @@ public class WorkflowExecutionService {
 
         NodeResult result;
         if ("Completed".equals(task.status)) {
-            Map<String, Object> output = parseOutputMap(task.output);
-            result = new NodeResult(NodeResultStatus.COMPLETED, output);
+            Map<String, Object> outputMap = parseOutputMap(task.output);
+            ActionTypeEntity at = ActionTypeEntity.find("name", task.actionType).firstResult();
+            if (at != null && at.outputs != null && !at.outputs.isEmpty()) {
+                List<String> outputErrors = ActionTypeIoValidator.validate(at.outputs, outputMap);
+                if (!outputErrors.isEmpty()) {
+                    LOG.warnf("Workflow task %d output validation failed: %s",
+                            task.id, String.join("; ", outputErrors));
+                    result = new NodeResult(NodeResultStatus.FAILED, Map.of());
+                } else {
+                    result = new NodeResult(NodeResultStatus.COMPLETED, outputMap);
+                }
+            } else {
+                result = new NodeResult(NodeResultStatus.COMPLETED, outputMap);
+            }
         } else {
             result = new NodeResult(NodeResultStatus.FAILED, Map.of());
         }
