@@ -85,7 +85,7 @@ public class SeedDataInitializer {
                 """
                 #!/bin/bash
                 curl -s -X POST "{{apiBaseUrl}}/projects/{{projectId}}/close"
-                """);
+                """, true);
 
         LOG.infof("Seeded %d built-in action types", ActionTypeEntity.count());
 
@@ -364,12 +364,12 @@ public class SeedDataInitializer {
                                 boolean userTriggerable, boolean emitsEvent, String allowedTools,
                                 String promptTemplate) {
         seedActionType(name, description, executionMode, userTriggerable, emitsEvent,
-                allowedTools, promptTemplate, null);
+                allowedTools, promptTemplate, null, false);
     }
 
     private void seedActionType(String name, String description, String executionMode,
                                 boolean userTriggerable, boolean emitsEvent, String allowedTools,
-                                String promptTemplate, String scriptTemplate) {
+                                String promptTemplate, String scriptTemplate, boolean workflowEnabled) {
         ActionTypeEntity entity = new ActionTypeEntity();
         entity.name = name;
         entity.description = description;
@@ -380,6 +380,7 @@ public class SeedDataInitializer {
         entity.allowedTools = allowedTools;
         entity.promptTemplate = promptTemplate;
         entity.scriptTemplate = scriptTemplate;
+        entity.workflowEnabled = workflowEnabled;
         entity.persist();
     }
 }
