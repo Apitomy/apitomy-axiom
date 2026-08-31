@@ -951,6 +951,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "filterWorkflowEnabled",
+            "in": "query",
+            "description": "Filter to only action types enabled for workflows",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
