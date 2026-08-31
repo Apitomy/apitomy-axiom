@@ -150,6 +150,14 @@ class ActionTypeValidatorTest {
     }
 
     @Test
+    void actorPromptWithInputsDottedPlaceholderIsValid() {
+        NewActionType at = makeActor("test", "desc",
+                "Process {{inputs.repository}} and {{inputs.branch}}");
+
+        assertFalse(ActionTypeValidator.validate(at).hasErrors());
+    }
+
+    @Test
     void scriptModeDoesNotRequirePrompt() {
         NewActionType at = makeScript("test", "desc", "echo hi");
 
