@@ -951,6 +951,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "filterWorkflowEnabled",
+            "in": "query",
+            "description": "Filter to only action types enabled for workflows",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -6065,9 +6074,6 @@
           "managerTriggerable": {
             "type": "boolean"
           },
-          "inputSchema": {
-            "type": "string"
-          },
           "emitsEvent": {
             "type": "boolean"
           },
@@ -6121,6 +6127,24 @@
             "type": "array",
             "items": {
               "type": "string"
+            }
+          },
+          "workflowEnabled": {
+            "description": "When true, this action type is offered as a building block in the Flow workflow editor palette.",
+            "type": "boolean"
+          },
+          "inputs": {
+            "description": "Typed inputs this action declares when used as a Flow workflow action node.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActionTypeField"
+            }
+          },
+          "outputs": {
+            "description": "Typed outputs this action produces when used as a Flow workflow action node.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActionTypeField"
             }
           }
         }
@@ -6151,9 +6175,6 @@
           "managerTriggerable": {
             "type": "boolean"
           },
-          "inputSchema": {
-            "type": "string"
-          },
           "emitsEvent": {
             "type": "boolean"
           },
@@ -6207,6 +6228,24 @@
             "type": "array",
             "items": {
               "type": "string"
+            }
+          },
+          "workflowEnabled": {
+            "description": "When true, this action type is offered as a building block in the Flow workflow editor palette.",
+            "type": "boolean"
+          },
+          "inputs": {
+            "description": "Typed inputs this action declares when used as a Flow workflow action node.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActionTypeField"
+            }
+          },
+          "outputs": {
+            "description": "Typed outputs this action produces when used as a Flow workflow action node.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActionTypeField"
             }
           }
         }
@@ -9613,6 +9652,35 @@
           },
           "limit": {
             "type": "integer"
+          }
+        }
+      },
+      "ActionTypeField": {
+        "required": [
+          "name",
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "Field name; must be a valid identifier usable as a template key.",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "string",
+              "number",
+              "boolean",
+              "object"
+            ],
+            "type": "string"
+          },
+          "required": {
+            "description": "Whether this field must be present. Defaults to false.",
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
           }
         }
       }

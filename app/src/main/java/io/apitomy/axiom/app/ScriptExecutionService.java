@@ -11,6 +11,8 @@ import io.apitomy.axiom.core.entities.ThreadEntryEntity;
 import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.axiom.core.services.EncryptionService;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.arc.Arc;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
@@ -23,6 +25,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -47,6 +50,12 @@ public class ScriptExecutionService {
 
     @Inject
     TraceService traceService;
+
+    @Inject
+    ObjectMapper objectMapper;
+
+    @Inject
+    WorkflowExecutionService workflowExecutionService;
 
     @ConfigProperty(name = "quarkus.http.port", defaultValue = "9090")
     int httpPort;
@@ -208,6 +217,34 @@ public class ScriptExecutionService {
         resolved = resolved.replace("{{apiBaseUrl}}", apiBaseUrl);
         String workDir = System.getProperty("user.home") + "/.axiom/workspaces/project-" + task.projectId;
         resolved = resolved.replace("{{workDir}}", workDir);
+
+        // Bind named workflow inputs as {{inputs.NAME}} (workflow tasks only).
+        if (task.workflowRunId != null && task.input != null && !task.input.isBlank()) {
+            try {
+                Map<String, Object> inputs = objectMapper.readValue(
+                        task.input, new TypeReference<Map<String, Object>>() {});
+                for (Map.Entry<String, Object> e : inputs.entrySet()) {
+                    Object v = e.getValue();
+                    String rendered;
+                    if (v == null) {
+                        rendered = "";
+                    } else if (v instanceof String s) {
+                        rendered = s;
+                    } else {
+                        try {
+                            rendered = objectMapper.writeValueAsString(v);
+                        } catch (Exception ex) {
+                            LOG.debugf("Failed to serialize input '%s' to JSON, using toString()", e.getKey());
+                            rendered = String.valueOf(v);
+                        }
+                    }
+                    resolved = resolved.replace("{{inputs." + e.getKey() + "}}", rendered);
+                }
+            } catch (Exception ignored) {
+                // Non-object input — leave {{inputs.*}} placeholders untouched.
+            }
+        }
+
         return resolved;
     }
 
@@ -277,13 +314,22 @@ public class ScriptExecutionService {
                     traceService.completeNode(taskNode.id, statusText);
                 }
 
-                traceService.completeTrace(task.traceId, success ? "completed" : "failed");
+                // Workflow runs own their trace lifecycle: WorkflowExecutionService
+                // completes the trace when the run reaches a terminal state.
+                if (task.workflowRunId == null) {
+                    traceService.completeTrace(task.traceId, success ? "completed" : "failed");
+                }
             } catch (Exception e) {
                 LOG.warnf(e, "Failed to complete trace for script task %d", taskId);
             }
         }
 
         updateProjectStatusAfterTask(task.projectId);
+
+        // Advance workflow if this task is part of one
+        if (task.workflowRunId != null) {
+            workflowExecutionService.onTaskCompleted(task.id);
+        }
     }
 
     @Transactional

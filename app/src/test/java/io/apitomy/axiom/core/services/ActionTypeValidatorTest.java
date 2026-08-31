@@ -1,5 +1,6 @@
 package io.apitomy.axiom.core.services;
 
+import io.apitomy.axiom.api.beans.ActionTypeField;
 import io.apitomy.axiom.api.beans.NewActionType;
 import io.apitomy.axiom.core.services.ActionTypeValidator.Severity;
 import io.apitomy.axiom.core.services.ActionTypeValidator.ValidationResult;
@@ -144,6 +145,14 @@ class ActionTypeValidatorTest {
     void actorPromptWithRecognizedPlaceholdersIsValid() {
         NewActionType at = makeActor("test", "desc",
                 "{{input}} for {{repository}} ref {{ref}} project {{projectName}}");
+
+        assertFalse(ActionTypeValidator.validate(at).hasErrors());
+    }
+
+    @Test
+    void actorPromptWithInputsDottedPlaceholderIsValid() {
+        NewActionType at = makeActor("test", "desc",
+                "Process {{inputs.repository}} and {{inputs.branch}}");
 
         assertFalse(ActionTypeValidator.validate(at).hasErrors());
     }
@@ -316,6 +325,53 @@ class ActionTypeValidatorTest {
         assertFalse(ActionTypeValidator.validate(at, known).hasErrors());
     }
 
+    // ── Input/output field validation ───────────────────────────────
+
+    @Test
+    void rejectsDuplicateInputNames() {
+        NewActionType def = makeActor("dup-inputs", "desc", "do {{managerInput}}");
+        def.setInputs(List.of(
+            field("repo", ActionTypeField.Type.STRING),
+            field("repo", ActionTypeField.Type.NUMBER)));
+
+        ValidationResult result = ActionTypeValidator.validate(def);
+
+        assertTrue(result.errors().stream()
+            .anyMatch(e -> e.field().startsWith("inputs[") && e.message().contains("duplicate")));
+    }
+
+    @Test
+    void rejectsInvalidInputIdentifier() {
+        NewActionType def = makeActor("bad-input-name", "desc", "do {{managerInput}}");
+        def.setInputs(List.of(field("has space", ActionTypeField.Type.STRING)));
+
+        ValidationResult result = ActionTypeValidator.validate(def);
+
+        assertTrue(result.errors().stream().anyMatch(e -> e.field().startsWith("inputs[")));
+    }
+
+    @Test
+    void rejectsBlankOutputName() {
+        NewActionType def = makeActor("blank-output", "desc", "do {{managerInput}}");
+        def.setOutputs(List.of(field("", ActionTypeField.Type.STRING)));
+
+        ValidationResult result = ActionTypeValidator.validate(def);
+
+        assertTrue(result.errors().stream().anyMatch(e -> e.field().startsWith("outputs[")));
+    }
+
+    @Test
+    void acceptsValidInputsAndOutputs() {
+        NewActionType def = makeActor("good-io", "desc", "do {{managerInput}}");
+        def.setInputs(List.of(field("repository", ActionTypeField.Type.STRING)));
+        def.setOutputs(List.of(field("prNumber", ActionTypeField.Type.NUMBER)));
+
+        ValidationResult result = ActionTypeValidator.validate(def);
+
+        assertFalse(result.errors().stream()
+            .anyMatch(e -> e.field().startsWith("inputs[") || e.field().startsWith("outputs[")));
+    }
+
     // ── Result helpers ──────────────────────────────────────────────
 
     @Test
@@ -356,5 +412,12 @@ class ActionTypeValidatorTest {
         at.setManagerTriggerable(false);
         at.setEmitsEvent(false);
         return at;
+    }
+
+    private static ActionTypeField field(String name, ActionTypeField.Type type) {
+        ActionTypeField f = new ActionTypeField();
+        f.setName(name);
+        f.setType(type);
+        return f;
     }
 }

@@ -237,6 +237,72 @@ public class ImportExportService {
 
     // ── Conflict detection ───────────────────────────────────────────
 
+    private static final java.util.Set<String> VALID_FIELD_TYPES =
+            java.util.Set.of("string", "number", "boolean", "object");
+
+    private static final java.util.regex.Pattern VALID_FIELD_NAME_PATTERN =
+            java.util.regex.Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
+
+    /**
+     * Reads and validates the {@code inputs}/{@code outputs} field list from an
+     * imported action type. Field names must be present, valid identifiers, and
+     * unique within the list — the same rules the REST create/update path enforces
+     * via {@code ActionTypeValidator}. Invalid names abort the whole import with a
+     * 400 rather than surfacing later as a NOT NULL constraint violation or a
+     * silently-broken {@code {{inputs.NAME}}} binding at runtime. An unrecognized
+     * type is defaulted to {@code string} (non-fatal, matching the prior behavior).
+     *
+     * @param item the action type JSON node
+     * @param key  either {@code "inputs"} or {@code "outputs"}
+     * @return the parsed, validated field list
+     */
+    private List<io.apitomy.axiom.core.entities.ActionTypeField> importFields(JsonNode item, String key) {
+        List<io.apitomy.axiom.core.entities.ActionTypeField> out = new java.util.ArrayList<>();
+        JsonNode arr = item.path(key);
+        if (arr.isArray()) {
+            java.util.Set<String> seen = new java.util.HashSet<>();
+            for (JsonNode f : arr) {
+                String name = f.path("name").asText(null);
+                if (name == null || name.isBlank()) {
+                    throw badImport("A " + key + " field is missing a name.");
+                }
+                if (!VALID_FIELD_NAME_PATTERN.matcher(name).matches()) {
+                    throw badImport("Invalid " + key + " field name '" + name
+                            + "'. Use letters, digits, and underscores; must not start with a digit.");
+                }
+                if (!seen.add(name)) {
+                    throw badImport("Duplicate " + key + " field name '" + name + "'.");
+                }
+                String type = f.path("type").asText("string");
+                if (!VALID_FIELD_TYPES.contains(type)) {
+                    LOG.warnf("Invalid field type '%s' for field '%s', defaulting to 'string'",
+                            type, name);
+                    type = "string";
+                }
+                out.add(new io.apitomy.axiom.core.entities.ActionTypeField(
+                        name,
+                        type,
+                        f.path("required").asBoolean(false),
+                        f.path("description").asText(null)));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Builds a 400 response for an invalid import payload, mirroring the JSON
+     * error shape used elsewhere in this service.
+     *
+     * @param message the human-readable reason
+     * @return a {@link WebApplicationException} carrying a 400 response
+     */
+    private WebApplicationException badImport(String message) {
+        ObjectNode error = objectMapper.createObjectNode();
+        error.put("message", message);
+        return new WebApplicationException(
+                jakarta.ws.rs.core.Response.status(400).entity(error).build());
+    }
+
     private void checkConflicts(JsonNode pack, String section, String nameField,
                                  String type, List<String> conflicts) {
         JsonNode items = pack.path(section);
@@ -325,7 +391,9 @@ public class ImportExportService {
             entity.userTriggerable = item.path("userTriggerable").asBoolean(false);
             entity.managerTriggerable = item.path("managerTriggerable").asBoolean(false);
             entity.emitsEvent = item.path("emitsEvent").asBoolean(false);
-            entity.inputSchema = jsonOrNull(item, "inputSchema");
+            entity.workflowEnabled = item.path("workflowEnabled").asBoolean(false);
+            entity.inputs.addAll(importFields(item, "inputs"));
+            entity.outputs.addAll(importFields(item, "outputs"));
             entity.allowedTools = csvOrNull(item, "allowedTools");
             entity.promptTemplate = textOrNull(item, "promptTemplate");
             entity.scriptTemplate = textOrNull(item, "scriptTemplate");
@@ -465,7 +533,11 @@ public class ImportExportService {
             entity.userTriggerable = item.path("userTriggerable").asBoolean(false);
             entity.managerTriggerable = item.path("managerTriggerable").asBoolean(false);
             entity.emitsEvent = item.path("emitsEvent").asBoolean(false);
-            entity.inputSchema = jsonOrNull(item, "inputSchema");
+            entity.workflowEnabled = item.path("workflowEnabled").asBoolean(false);
+            entity.inputs.clear();
+            entity.inputs.addAll(importFields(item, "inputs"));
+            entity.outputs.clear();
+            entity.outputs.addAll(importFields(item, "outputs"));
             entity.allowedTools = csvOrNull(item, "allowedTools");
             entity.promptTemplate = textOrNull(item, "promptTemplate");
             entity.scriptTemplate = textOrNull(item, "scriptTemplate");
@@ -675,7 +747,15 @@ public class ImportExportService {
         n.put("userTriggerable", e.userTriggerable);
         n.put("managerTriggerable", e.managerTriggerable);
         n.put("emitsEvent", e.emitsEvent);
-        putIfNotNull(n, "inputSchema", e.inputSchema);
+        n.put("workflowEnabled", e.workflowEnabled);
+        if (e.inputs != null && !e.inputs.isEmpty()) {
+            var inputsArr = n.putArray("inputs");
+            e.inputs.forEach(f -> serializeField(inputsArr.addObject(), f));
+        }
+        if (e.outputs != null && !e.outputs.isEmpty()) {
+            var outputsArr = n.putArray("outputs");
+            e.outputs.forEach(f -> serializeField(outputsArr.addObject(), f));
+        }
         putIfNotNull(n, "allowedTools", e.allowedTools);
         putIfNotNull(n, "promptTemplate", e.promptTemplate);
         putIfNotNull(n, "scriptTemplate", e.scriptTemplate);
@@ -690,6 +770,13 @@ public class ImportExportService {
             e.labels.forEach(labelsArr::add);
         }
         return n;
+    }
+
+    private void serializeField(ObjectNode n, io.apitomy.axiom.core.entities.ActionTypeField f) {
+        n.put("name", f.name);
+        n.put("type", f.type);
+        n.put("required", f.required);
+        putIfNotNull(n, "description", f.description);
     }
 
     private ObjectNode serializeReportDefinition(ReportDefinitionEntity e) {

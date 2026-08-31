@@ -59,7 +59,7 @@ public class ActionResourceImpl implements ActionResource {
     @Override
     public ActionTypeSearchResults listActionTypes(BigInteger page, BigInteger limit,
                                                    String filterName, String filterMode,
-                                                   String filterLabels) {
+                                                   String filterLabels, Boolean filterWorkflowEnabled) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
@@ -84,6 +84,10 @@ public class ActionResourceImpl implements ActionResource {
                     + " GROUP BY a.id HAVING COUNT(DISTINCT al) = :labelCount)");
             params.put("labels", labels);
             params.put("labelCount", (long) labels.size());
+        }
+
+        if (filterWorkflowEnabled != null && filterWorkflowEnabled) {
+            hql.append(" and workflowEnabled = true");
         }
 
         long totalCount = ActionTypeEntity.count(hql.toString(), params);
@@ -197,13 +201,49 @@ public class ActionResourceImpl implements ActionResource {
         return new ActionTypeValidator.KnownNames(secrets, tools, toolsets, sdkTools);
     }
 
+    private static List<io.apitomy.axiom.core.entities.ActionTypeField> toEntityFields(
+            List<io.apitomy.axiom.api.beans.ActionTypeField> beans) {
+        List<io.apitomy.axiom.core.entities.ActionTypeField> out = new java.util.ArrayList<>();
+        if (beans != null) {
+            for (io.apitomy.axiom.api.beans.ActionTypeField b : beans) {
+                out.add(new io.apitomy.axiom.core.entities.ActionTypeField(
+                        b.getName(),
+                        b.getType() != null ? b.getType().value() : null,
+                        b.getRequired() != null ? b.getRequired() : false,
+                        b.getDescription()));
+            }
+        }
+        return out;
+    }
+
+    private static List<io.apitomy.axiom.api.beans.ActionTypeField> toBeanFields(
+            List<io.apitomy.axiom.core.entities.ActionTypeField> entities) {
+        List<io.apitomy.axiom.api.beans.ActionTypeField> out = new java.util.ArrayList<>();
+        if (entities != null) {
+            for (io.apitomy.axiom.core.entities.ActionTypeField e : entities) {
+                io.apitomy.axiom.api.beans.ActionTypeField b = new io.apitomy.axiom.api.beans.ActionTypeField();
+                b.setName(e.name);
+                b.setType(e.type != null
+                        ? io.apitomy.axiom.api.beans.ActionTypeField.Type.fromValue(e.type) : null);
+                b.setRequired(e.required);
+                b.setDescription(e.description);
+                out.add(b);
+            }
+        }
+        return out;
+    }
+
     private void applyFields(ActionTypeEntity entity, NewActionType data) {
         entity.name = data.getName();
         entity.description = data.getDescription();
         entity.executionMode = data.getExecutionMode().value();
         entity.userTriggerable = data.getUserTriggerable() != null ? data.getUserTriggerable() : false;
         entity.managerTriggerable = data.getManagerTriggerable() != null ? data.getManagerTriggerable() : true;
-        entity.inputSchema = data.getInputSchema();
+        entity.workflowEnabled = data.getWorkflowEnabled() != null ? data.getWorkflowEnabled() : false;
+        entity.inputs.clear();
+        entity.inputs.addAll(toEntityFields(data.getInputs()));
+        entity.outputs.clear();
+        entity.outputs.addAll(toEntityFields(data.getOutputs()));
         entity.allowedTools = data.getAllowedTools() != null
                 ? String.join(", ", data.getAllowedTools()) : null;
         entity.promptTemplate = data.getPromptTemplate();
@@ -237,7 +277,9 @@ public class ActionResourceImpl implements ActionResource {
         actionType.setExecutionMode(ActionType.ExecutionMode.fromValue(entity.executionMode));
         actionType.setUserTriggerable(entity.userTriggerable);
         actionType.setManagerTriggerable(entity.managerTriggerable);
-        actionType.setInputSchema(entity.inputSchema);
+        actionType.setWorkflowEnabled(entity.workflowEnabled);
+        actionType.setInputs(toBeanFields(entity.inputs));
+        actionType.setOutputs(toBeanFields(entity.outputs));
         if (entity.allowedTools != null && !entity.allowedTools.isBlank()) {
             actionType.setAllowedTools(java.util.Arrays.stream(entity.allowedTools.split(","))
                     .map(String::trim).filter(s -> !s.isEmpty()).toList());

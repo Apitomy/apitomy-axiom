@@ -2,12 +2,14 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
+import io.apitomy.axiom.core.services.ActionTypeIoValidator;
 import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.axiom.core.tracing.TraceService;
 import io.apitomy.axiom.core.tracing.TraceContext;
@@ -194,8 +196,30 @@ public class WorkflowExecutionService {
 
         NodeResult result;
         if ("Completed".equals(task.status)) {
-            Map<String, Object> output = parseOutputMap(task.output);
-            result = new NodeResult(NodeResultStatus.COMPLETED, output);
+            Map<String, Object> outputMap = parseOutputMap(task.output);
+            ActionTypeEntity at = ActionTypeEntity.find("name", task.actionType).firstResult();
+            if (at != null && at.outputs != null && !at.outputs.isEmpty()) {
+                List<String> outputErrors = ActionTypeIoValidator.validate(at.outputs, outputMap);
+                if (!outputErrors.isEmpty()) {
+                    String reason = "Output validation failed: " + String.join("; ", outputErrors);
+                    LOG.warnf("Workflow task %d %s", task.id, reason);
+                    // The task path (TaskExecutionService/ScriptExecutionService) has already
+                    // marked this task Completed, fired a "Completed" SSE, and completed its
+                    // trace node. Flip it to Failed while PRESERVING the original output (the
+                    // reason is appended to the execution log, not written over the output),
+                    // then emit a corrective SSE and reconcile the trace node so clients and
+                    // the trace do not disagree with the run's FAILED outcome.
+                    task.status = "Failed";
+                    task.executionLog = appendReason(task.executionLog, reason);
+                    reconcileTaskTraceNodeFailed(task);
+                    sseEvents.fire(SseEvent.taskUpdated(task.projectId, task.id, "Failed"));
+                    result = new NodeResult(NodeResultStatus.FAILED, Map.of());
+                } else {
+                    result = new NodeResult(NodeResultStatus.COMPLETED, outputMap);
+                }
+            } else {
+                result = new NodeResult(NodeResultStatus.COMPLETED, outputMap);
+            }
         } else {
             result = new NodeResult(NodeResultStatus.FAILED, Map.of());
         }
@@ -406,13 +430,74 @@ public class WorkflowExecutionService {
         if (output == null || output.isBlank()) {
             return Map.of();
         }
+        String candidate = extractJsonObject(output);
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> map = objectMapper.readValue(
-                    output, Map.class);
+                    candidate, Map.class);
             return map;
         } catch (JsonProcessingException e) {
             return Map.of("rawOutput", output);
+        }
+    }
+
+    /**
+     * Best-effort extraction of a single JSON object from agent output that may be
+     * wrapped in Markdown code fences or surrounded by prose. Agents are instructed
+     * to emit only a JSON object, but in practice frequently wrap it (```json … ```)
+     * or add commentary; without this, valid output fails required-output validation.
+     * Returns the original string unchanged when no object-like span is found.
+     *
+     * @param output the raw task output
+     * @return the substring most likely to be the JSON object, or {@code output}
+     */
+    private String extractJsonObject(String output) {
+        String trimmed = output.strip();
+        int firstBrace = trimmed.indexOf('{');
+        int lastBrace = trimmed.lastIndexOf('}');
+        if (firstBrace >= 0 && lastBrace > firstBrace) {
+            return trimmed.substring(firstBrace, lastBrace + 1);
+        }
+        return output;
+    }
+
+    /**
+     * Appends an output-validation failure reason to a task's execution log,
+     * preserving whatever was already there (including the original output).
+     *
+     * @param existingLog the current execution log, may be null
+     * @param reason      the failure reason to append
+     * @return the combined log text
+     */
+    private String appendReason(String existingLog, String reason) {
+        if (existingLog == null || existingLog.isBlank()) {
+            return reason;
+        }
+        return existingLog + "\n\n" + reason;
+    }
+
+    /**
+     * Re-completes the task's trace node as {@code failed}. The task path completes
+     * it as {@code completed} before output validation runs here, so this corrects
+     * the node to match the run's FAILED outcome. Best-effort — trace bookkeeping
+     * never blocks workflow advancement.
+     *
+     * @param task the task whose trace node should be marked failed
+     */
+    private void reconcileTaskTraceNodeFailed(TaskEntity task) {
+        if (task.traceId == null) {
+            return;
+        }
+        try {
+            io.apitomy.axiom.core.entities.TraceNodeEntity taskNode =
+                    io.apitomy.axiom.core.entities.TraceNodeEntity.find(
+                            "traceId = ?1 and nodeType = 'task' and entityType = 'task' and entityId = ?2",
+                            task.traceId, task.id).firstResult();
+            if (taskNode != null) {
+                traceService.completeNode(taskNode.id, "failed");
+            }
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to reconcile trace node for workflow task %d", task.id);
         }
     }
 
