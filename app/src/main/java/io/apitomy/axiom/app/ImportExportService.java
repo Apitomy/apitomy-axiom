@@ -237,6 +237,21 @@ public class ImportExportService {
 
     // ── Conflict detection ───────────────────────────────────────────
 
+    private List<io.apitomy.axiom.core.entities.ActionTypeField> importFields(JsonNode item, String key) {
+        List<io.apitomy.axiom.core.entities.ActionTypeField> out = new java.util.ArrayList<>();
+        JsonNode arr = item.path(key);
+        if (arr.isArray()) {
+            for (JsonNode f : arr) {
+                out.add(new io.apitomy.axiom.core.entities.ActionTypeField(
+                        f.path("name").asText(null),
+                        f.path("type").asText("string"),
+                        f.path("required").asBoolean(false),
+                        f.path("description").asText(null)));
+            }
+        }
+        return out;
+    }
+
     private void checkConflicts(JsonNode pack, String section, String nameField,
                                  String type, List<String> conflicts) {
         JsonNode items = pack.path(section);
@@ -325,7 +340,9 @@ public class ImportExportService {
             entity.userTriggerable = item.path("userTriggerable").asBoolean(false);
             entity.managerTriggerable = item.path("managerTriggerable").asBoolean(false);
             entity.emitsEvent = item.path("emitsEvent").asBoolean(false);
-            entity.inputSchema = jsonOrNull(item, "inputSchema");
+            entity.workflowEnabled = item.path("workflowEnabled").asBoolean(false);
+            entity.inputs.addAll(importFields(item, "inputs"));
+            entity.outputs.addAll(importFields(item, "outputs"));
             entity.allowedTools = csvOrNull(item, "allowedTools");
             entity.promptTemplate = textOrNull(item, "promptTemplate");
             entity.scriptTemplate = textOrNull(item, "scriptTemplate");
@@ -465,7 +482,11 @@ public class ImportExportService {
             entity.userTriggerable = item.path("userTriggerable").asBoolean(false);
             entity.managerTriggerable = item.path("managerTriggerable").asBoolean(false);
             entity.emitsEvent = item.path("emitsEvent").asBoolean(false);
-            entity.inputSchema = jsonOrNull(item, "inputSchema");
+            entity.workflowEnabled = item.path("workflowEnabled").asBoolean(false);
+            entity.inputs.clear();
+            entity.inputs.addAll(importFields(item, "inputs"));
+            entity.outputs.clear();
+            entity.outputs.addAll(importFields(item, "outputs"));
             entity.allowedTools = csvOrNull(item, "allowedTools");
             entity.promptTemplate = textOrNull(item, "promptTemplate");
             entity.scriptTemplate = textOrNull(item, "scriptTemplate");
@@ -675,7 +696,15 @@ public class ImportExportService {
         n.put("userTriggerable", e.userTriggerable);
         n.put("managerTriggerable", e.managerTriggerable);
         n.put("emitsEvent", e.emitsEvent);
-        putIfNotNull(n, "inputSchema", e.inputSchema);
+        n.put("workflowEnabled", e.workflowEnabled);
+        if (e.inputs != null && !e.inputs.isEmpty()) {
+            var inputsArr = n.putArray("inputs");
+            e.inputs.forEach(f -> serializeField(inputsArr.addObject(), f));
+        }
+        if (e.outputs != null && !e.outputs.isEmpty()) {
+            var outputsArr = n.putArray("outputs");
+            e.outputs.forEach(f -> serializeField(outputsArr.addObject(), f));
+        }
         putIfNotNull(n, "allowedTools", e.allowedTools);
         putIfNotNull(n, "promptTemplate", e.promptTemplate);
         putIfNotNull(n, "scriptTemplate", e.scriptTemplate);
@@ -690,6 +719,13 @@ public class ImportExportService {
             e.labels.forEach(labelsArr::add);
         }
         return n;
+    }
+
+    private void serializeField(ObjectNode n, io.apitomy.axiom.core.entities.ActionTypeField f) {
+        n.put("name", f.name);
+        n.put("type", f.type);
+        n.put("required", f.required);
+        putIfNotNull(n, "description", f.description);
     }
 
     private ObjectNode serializeReportDefinition(ReportDefinitionEntity e) {
