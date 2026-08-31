@@ -35,6 +35,8 @@ public final class ActionTypeValidator {
             Pattern.compile("\\$\\{secret:\\}|\\$\\{secret:[^}]*$|\\$\\{secret\\}");
     private static final Pattern VALID_ENV_KEY_PATTERN =
             Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
+    private static final Pattern VALID_FIELD_NAME_PATTERN =
+            Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
     /**
      * Known configuration state for cross-referencing. Any field may be null
@@ -77,6 +79,8 @@ public final class ActionTypeValidator {
         validateScriptTemplate(def, messages);
         validateAllowedTools(def, known, messages);
         validateEnvironment(def, known, messages);
+        validateFields(def.getInputs(), "inputs", messages);
+        validateFields(def.getOutputs(), "outputs", messages);
 
         return new ValidationResult(messages);
     }
@@ -246,6 +250,34 @@ public final class ActionTypeValidator {
                                     + "}' but no secret named '" + secretName
                                     + "' exists in Axiom."));
                 }
+            }
+        }
+    }
+
+    private static void validateFields(java.util.List<io.apitomy.axiom.api.beans.ActionTypeField> fields,
+                                       String prefix, List<ValidationMessage> messages) {
+        if (fields == null || fields.isEmpty()) {
+            return;
+        }
+        Set<String> seen = new HashSet<>();
+        for (int i = 0; i < fields.size(); i++) {
+            io.apitomy.axiom.api.beans.ActionTypeField f = fields.get(i);
+            String field = prefix + "[" + i + "]";
+            String name = f.getName();
+            if (name == null || name.isBlank()) {
+                messages.add(error(field, "Field name is required."));
+                continue;
+            }
+            if (!VALID_FIELD_NAME_PATTERN.matcher(name).matches()) {
+                messages.add(error(field,
+                        "Field name '" + name + "' is not a valid identifier. "
+                                + "Use letters, digits, and underscores; must not start with a digit."));
+            }
+            if (!seen.add(name)) {
+                messages.add(error(field, "Field name '" + name + "' is a duplicate within " + prefix + "."));
+            }
+            if (f.getType() == null) {
+                messages.add(error(field, "Field type is required."));
             }
         }
     }
