@@ -203,7 +203,18 @@ public class ActionResourceImpl implements ActionResource {
         entity.executionMode = data.getExecutionMode().value();
         entity.userTriggerable = data.getUserTriggerable() != null ? data.getUserTriggerable() : false;
         entity.managerTriggerable = data.getManagerTriggerable() != null ? data.getManagerTriggerable() : true;
-        entity.inputSchema = data.getInputSchema();
+        entity.inputs = data.getInputs() != null
+                ? data.getInputs().stream()
+                        .map(f -> new io.apitomy.axiom.core.entities.ActionTypeField(
+                                f.getName(), f.getType().value(), f.getRequired(), f.getDescription()))
+                        .toList()
+                : List.of();
+        entity.outputs = data.getOutputs() != null
+                ? data.getOutputs().stream()
+                        .map(f -> new io.apitomy.axiom.core.entities.ActionTypeField(
+                                f.getName(), f.getType().value(), f.getRequired(), f.getDescription()))
+                        .toList()
+                : List.of();
         entity.allowedTools = data.getAllowedTools() != null
                 ? String.join(", ", data.getAllowedTools()) : null;
         entity.promptTemplate = data.getPromptTemplate();
@@ -237,7 +248,24 @@ public class ActionResourceImpl implements ActionResource {
         actionType.setExecutionMode(ActionType.ExecutionMode.fromValue(entity.executionMode));
         actionType.setUserTriggerable(entity.userTriggerable);
         actionType.setManagerTriggerable(entity.managerTriggerable);
-        actionType.setInputSchema(entity.inputSchema);
+        actionType.setInputs(entity.inputs.stream()
+                .map(f -> {
+                    io.apitomy.axiom.api.beans.ActionTypeField field = new io.apitomy.axiom.api.beans.ActionTypeField();
+                    field.setName(f.name);
+                    field.setType(io.apitomy.axiom.api.beans.ActionTypeField.Type.fromValue(f.type));
+                    field.setRequired(f.required);
+                    field.setDescription(f.description);
+                    return field;
+                }).toList());
+        actionType.setOutputs(entity.outputs.stream()
+                .map(f -> {
+                    io.apitomy.axiom.api.beans.ActionTypeField field = new io.apitomy.axiom.api.beans.ActionTypeField();
+                    field.setName(f.name);
+                    field.setType(io.apitomy.axiom.api.beans.ActionTypeField.Type.fromValue(f.type));
+                    field.setRequired(f.required);
+                    field.setDescription(f.description);
+                    return field;
+                }).toList());
         if (entity.allowedTools != null && !entity.allowedTools.isBlank()) {
             actionType.setAllowedTools(java.util.Arrays.stream(entity.allowedTools.split(","))
                     .map(String::trim).filter(s -> !s.isEmpty()).toList());

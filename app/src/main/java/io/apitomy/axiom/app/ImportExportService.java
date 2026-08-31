@@ -325,7 +325,8 @@ public class ImportExportService {
             entity.userTriggerable = item.path("userTriggerable").asBoolean(false);
             entity.managerTriggerable = item.path("managerTriggerable").asBoolean(false);
             entity.emitsEvent = item.path("emitsEvent").asBoolean(false);
-            entity.inputSchema = jsonOrNull(item, "inputSchema");
+            entity.inputs = parseFields(item.path("inputs"));
+            entity.outputs = parseFields(item.path("outputs"));
             entity.allowedTools = csvOrNull(item, "allowedTools");
             entity.promptTemplate = textOrNull(item, "promptTemplate");
             entity.scriptTemplate = textOrNull(item, "scriptTemplate");
@@ -465,7 +466,8 @@ public class ImportExportService {
             entity.userTriggerable = item.path("userTriggerable").asBoolean(false);
             entity.managerTriggerable = item.path("managerTriggerable").asBoolean(false);
             entity.emitsEvent = item.path("emitsEvent").asBoolean(false);
-            entity.inputSchema = jsonOrNull(item, "inputSchema");
+            entity.inputs = parseFields(item.path("inputs"));
+            entity.outputs = parseFields(item.path("outputs"));
             entity.allowedTools = csvOrNull(item, "allowedTools");
             entity.promptTemplate = textOrNull(item, "promptTemplate");
             entity.scriptTemplate = textOrNull(item, "scriptTemplate");
@@ -675,7 +677,28 @@ public class ImportExportService {
         n.put("userTriggerable", e.userTriggerable);
         n.put("managerTriggerable", e.managerTriggerable);
         n.put("emitsEvent", e.emitsEvent);
-        putIfNotNull(n, "inputSchema", e.inputSchema);
+        if (e.inputs != null && !e.inputs.isEmpty()) {
+            var inputsArr = n.putArray("inputs");
+            for (var f : e.inputs) {
+                var fieldNode = objectMapper.createObjectNode();
+                fieldNode.put("name", f.name);
+                fieldNode.put("type", f.type);
+                fieldNode.put("required", f.required);
+                putIfNotNull(fieldNode, "description", f.description);
+                inputsArr.add(fieldNode);
+            }
+        }
+        if (e.outputs != null && !e.outputs.isEmpty()) {
+            var outputsArr = n.putArray("outputs");
+            for (var f : e.outputs) {
+                var fieldNode = objectMapper.createObjectNode();
+                fieldNode.put("name", f.name);
+                fieldNode.put("type", f.type);
+                fieldNode.put("required", f.required);
+                putIfNotNull(fieldNode, "description", f.description);
+                outputsArr.add(fieldNode);
+            }
+        }
         putIfNotNull(n, "allowedTools", e.allowedTools);
         putIfNotNull(n, "promptTemplate", e.promptTemplate);
         putIfNotNull(n, "scriptTemplate", e.scriptTemplate);
@@ -866,5 +889,28 @@ public class ImportExportService {
             return items.isEmpty() ? null : String.join(",", items);
         }
         return value.asText();
+    }
+
+    /**
+     * Parses a JSON array of field definitions into a list of ActionTypeField entities.
+     *
+     * @param node the JSON node containing the field array
+     * @return a list of field entities, or an empty list if the node is missing or not an array
+     */
+    private List<io.apitomy.axiom.core.entities.ActionTypeField> parseFields(JsonNode node) {
+        if (node.isMissingNode() || node.isNull() || !node.isArray()) {
+            return List.of();
+        }
+        List<io.apitomy.axiom.core.entities.ActionTypeField> fields = new ArrayList<>();
+        for (JsonNode item : node) {
+            String name = item.path("name").asText(null);
+            String type = item.path("type").asText(null);
+            boolean required = item.path("required").asBoolean(false);
+            String description = textOrNull(item, "description");
+            if (name != null && type != null) {
+                fields.add(new io.apitomy.axiom.core.entities.ActionTypeField(name, type, required, description));
+            }
+        }
+        return fields;
     }
 }
