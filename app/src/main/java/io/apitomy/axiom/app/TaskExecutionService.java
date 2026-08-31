@@ -19,9 +19,9 @@ import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.axiom.core.services.ActionTypeIoValidator;
 import io.apitomy.axiom.core.services.EncryptionService;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
+import io.apitomy.axiom.core.services.InputBindingResolver;
 import io.apitomy.axiom.core.services.ToolsetResolver;
 import io.apitomy.axiom.core.services.WorkspaceService;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
@@ -300,28 +300,11 @@ public class TaskExecutionService {
         resolved = resolved.replace("{{workDir}}", workspace != null ? workspace.toAbsolutePath().toString() : "");
 
         // Bind named workflow inputs as {{inputs.NAME}}.
-        Map<String, Object> resolvedInputs = parseResolvedInputs(task);
-        for (Map.Entry<String, Object> e : resolvedInputs.entrySet()) {
-            Object v = e.getValue();
-            String rendered;
-            if (v == null) {
-                rendered = "";
-            } else if (v instanceof String s) {
-                rendered = s;
-            } else {
-                try {
-                    rendered = objectMapper.writeValueAsString(v);
-                } catch (Exception ex) {
-                    LOG.debugf("Failed to serialize input '%s' to JSON, using toString()", e.getKey());
-                    rendered = String.valueOf(v);
-                }
-            }
-            resolved = resolved.replace("{{inputs." + e.getKey() + "}}", rendered);
-        }
+        resolved = InputBindingResolver.bindInputs(resolved, parseResolvedInputs(task), objectMapper);
 
         // Auto-append the output contract for workflow tasks that declare outputs.
         if (task.workflowRunId != null && actionType.outputs != null && !actionType.outputs.isEmpty()) {
-            resolved = resolved + "\n\n" + buildOutputContract(actionType.outputs);
+            resolved = resolved + "\n\n" + InputBindingResolver.buildOutputContract(actionType.outputs);
         }
         return resolved;
     }
@@ -331,36 +314,10 @@ public class TaskExecutionService {
      * Returns an empty map for non-workflow tasks or unparseable input.
      */
     private Map<String, Object> parseResolvedInputs(TaskEntity task) {
-        if (task.workflowRunId == null || task.input == null || task.input.isBlank()) {
+        if (task.workflowRunId == null) {
             return Map.of();
         }
-        try {
-            return objectMapper.readValue(task.input, new TypeReference<Map<String, Object>>() {});
-        } catch (Exception e) {
-            return Map.of();
-        }
-    }
-
-    /**
-     * Builds the instruction block appended to an agent prompt telling it to emit a
-     * JSON object keyed by the declared output names as its final result.
-     */
-    private String buildOutputContract(List<io.apitomy.axiom.core.entities.ActionTypeField> outputs) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("## Required output\n");
-        sb.append("When finished, output ONLY a single JSON object (no prose, no code fences) ");
-        sb.append("with exactly these keys:\n");
-        for (io.apitomy.axiom.core.entities.ActionTypeField f : outputs) {
-            sb.append("- \"").append(f.name).append("\" (").append(f.type).append(")");
-            if (f.required) {
-                sb.append(" [required]");
-            }
-            if (f.description != null && !f.description.isBlank()) {
-                sb.append(" — ").append(f.description);
-            }
-            sb.append("\n");
-        }
-        return sb.toString();
+        return InputBindingResolver.parseInputs(task.input, objectMapper);
     }
 
     private String buildSystemPrompt(TaskEntity task, ProjectEntity project) {
