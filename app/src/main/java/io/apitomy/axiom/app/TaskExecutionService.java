@@ -547,13 +547,19 @@ public class TaskExecutionService {
         // Update project status back to Idle if no more active tasks
         updateProjectStatusAfterTask(task.projectId);
 
-        // Emit internal event if configured
-        emitInternalEventIfNeeded(task);
-
-        // Advance workflow if this task is part of one
+        // Advance workflow if this task is part of one. This runs output-contract
+        // validation and may transition the task to Failed. It shares this
+        // transaction's persistence context, so any status change is reflected in
+        // the managed `task` entity below.
         if (task.workflowRunId != null) {
             workflowExecutionService.onTaskCompleted(task.id);
         }
+
+        // Emit internal event if configured. Deferred until after workflow
+        // output-contract validation so consumers never observe a "completed"
+        // task that the workflow layer immediately fails (the emitted event type
+        // reflects the final, post-validation task status).
+        emitInternalEventIfNeeded(task);
     }
 
     @Transactional
