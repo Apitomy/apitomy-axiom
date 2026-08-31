@@ -30,6 +30,7 @@ import { registerPlaceholderCompletions, ACTION_TYPE_PLACEHOLDERS } from "../com
 import { EditLabelsModal } from "../components/EditLabelsModal";
 import { AiConfigTab } from "../components/AiConfigTab";
 import { EnvironmentTab } from "../components/EnvironmentTab";
+import { ActionTypeFieldsTab } from "../components/ActionTypeFieldsTab";
 import { LabelDisplay } from "../components/LabelDisplay";
 import { ToolListEditor } from "../components/ToolListEditor";
 import { ScriptAiModal } from "../components/ScriptAiModal";
@@ -57,6 +58,7 @@ export function ActionTypeDetailPage() {
     const [actionType, setActionType] = useState<ActionType | null>(null);
     const [form, setForm] = useState<NewActionType>({
         name: "", executionMode: "agent", userTriggerable: false, managerTriggerable: true, emitsEvent: true,
+        workflowEnabled: false, inputs: [], outputs: [],
     });
     const [tools, setTools] = useState<string[]>([]);
     const [envVars, setEnvVars] = useState<Record<string, string>>({});
@@ -106,7 +108,9 @@ export function ActionTypeDetailPage() {
                     userTriggerable: at.userTriggerable,
                     managerTriggerable: at.managerTriggerable,
                     emitsEvent: at.emitsEvent,
-                    inputSchema: at.inputSchema,
+                    workflowEnabled: at.workflowEnabled || false,
+                    inputs: at.inputs || [],
+                    outputs: at.outputs || [],
                     allowedTools: at.allowedTools,
                     promptTemplate: at.promptTemplate,
                     scriptTemplate: at.scriptTemplate,
@@ -300,6 +304,28 @@ export function ActionTypeDetailPage() {
                         />
                     </TabContent>
                 </Tab>
+                {form.workflowEnabled && (
+                    <Tab eventKey={6} title={<TabTitleText>Inputs ({(form.inputs || []).length})</TabTitleText>}>
+                        <TabContent id="inputs-tab" eventKey={6} activeKey={activeTab} style={{ marginTop: "24px" }}>
+                            <ActionTypeFieldsTab
+                                kind="input"
+                                fields={form.inputs || []}
+                                onChange={(updated) => updateForm({ inputs: updated })}
+                            />
+                        </TabContent>
+                    </Tab>
+                )}
+                {form.workflowEnabled && (
+                    <Tab eventKey={7} title={<TabTitleText>Outputs ({(form.outputs || []).length})</TabTitleText>}>
+                        <TabContent id="outputs-tab" eventKey={7} activeKey={activeTab} style={{ marginTop: "24px" }}>
+                            <ActionTypeFieldsTab
+                                kind="output"
+                                fields={form.outputs || []}
+                                onChange={(updated) => updateForm({ outputs: updated })}
+                            />
+                        </TabContent>
+                    </Tab>
+                )}
                 {form.executionMode === "agent" && (
                     <Tab eventKey={3} title={<TabTitleText>Prompt Template</TabTitleText>}>
                         <TabContent id="prompt-tab" eventKey={3} activeKey={activeTab} style={{ marginTop: "24px" }}>
@@ -447,6 +473,12 @@ function InfoTab({ form, updateForm, onEditLabels }: {
                     label="Emits internal event on completion — allows the Manager to chain follow-up actions"
                     isChecked={form.emitsEvent}
                     onChange={(_e, v) => updateForm({ emitsEvent: v })}
+                />
+                <Checkbox
+                    id="workflowEnabled"
+                    label="Workflow enabled — offered as a building block in the Flow workflow editor"
+                    isChecked={form.workflowEnabled}
+                    onChange={(_e, v) => updateForm({ workflowEnabled: v })}
                 />
             </FormGroup>
         </Form>
