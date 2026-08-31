@@ -140,6 +140,32 @@ export function ActionTypeDetailPage() {
         fetchModels(form.engine || undefined).then(setAvailableModels).catch(console.error);
     }, [form.engine]);
 
+    // Keep the active tab valid: conditional tabs (Inputs/Outputs, agent/script,
+    // Problems) unmount when their condition turns off. If the active tab is no
+    // longer rendered — e.g. unchecking "Workflow enabled" while on Inputs/Outputs —
+    // fall back to the Info tab so the panel does not go blank.
+    useEffect(() => {
+        const visible = new Set<number>([0, 2]);
+        if (form.executionMode === "agent") {
+            visible.add(1);
+            visible.add(3);
+            visible.add(10);
+        }
+        if (form.executionMode === "script") {
+            visible.add(4);
+        }
+        if (form.workflowEnabled) {
+            visible.add(6);
+            visible.add(7);
+        }
+        if (validationMessages.length > 0) {
+            visible.add(5);
+        }
+        if (!visible.has(activeTab)) {
+            setActiveTab(0);
+        }
+    }, [form.executionMode, form.workflowEnabled, validationMessages.length, activeTab]);
+
     const updateForm = (updates: Partial<NewActionType>) => {
         if (updates.engine !== undefined && updates.engine !== form.engine) {
             updates = { ...updates, model: undefined };
