@@ -54,6 +54,9 @@ public class ScriptExecutionService {
     @Inject
     ObjectMapper objectMapper;
 
+    @Inject
+    WorkflowExecutionService workflowExecutionService;
+
     @ConfigProperty(name = "quarkus.http.port", defaultValue = "9090")
     int httpPort;
 
@@ -221,8 +224,21 @@ public class ScriptExecutionService {
                 Map<String, Object> inputs = objectMapper.readValue(
                         task.input, new TypeReference<Map<String, Object>>() {});
                 for (Map.Entry<String, Object> e : inputs.entrySet()) {
-                    resolved = resolved.replace("{{inputs." + e.getKey() + "}}",
-                            e.getValue() != null ? e.getValue().toString() : "");
+                    Object v = e.getValue();
+                    String rendered;
+                    if (v == null) {
+                        rendered = "";
+                    } else if (v instanceof String s) {
+                        rendered = s;
+                    } else {
+                        try {
+                            rendered = objectMapper.writeValueAsString(v);
+                        } catch (Exception ex) {
+                            LOG.debugf("Failed to serialize input '%s' to JSON, using toString()", e.getKey());
+                            rendered = String.valueOf(v);
+                        }
+                    }
+                    resolved = resolved.replace("{{inputs." + e.getKey() + "}}", rendered);
                 }
             } catch (Exception ignored) {
                 // Non-object input — leave {{inputs.*}} placeholders untouched.
@@ -298,13 +314,22 @@ public class ScriptExecutionService {
                     traceService.completeNode(taskNode.id, statusText);
                 }
 
-                traceService.completeTrace(task.traceId, success ? "completed" : "failed");
+                // Workflow runs own their trace lifecycle: WorkflowExecutionService
+                // completes the trace when the run reaches a terminal state.
+                if (task.workflowRunId == null) {
+                    traceService.completeTrace(task.traceId, success ? "completed" : "failed");
+                }
             } catch (Exception e) {
                 LOG.warnf(e, "Failed to complete trace for script task %d", taskId);
             }
         }
 
         updateProjectStatusAfterTask(task.projectId);
+
+        // Advance workflow if this task is part of one
+        if (task.workflowRunId != null) {
+            workflowExecutionService.onTaskCompleted(task.id);
+        }
     }
 
     @Transactional

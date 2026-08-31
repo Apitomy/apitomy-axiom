@@ -237,14 +237,23 @@ public class ImportExportService {
 
     // ── Conflict detection ───────────────────────────────────────────
 
+    private static final java.util.Set<String> VALID_FIELD_TYPES =
+            java.util.Set.of("string", "number", "boolean", "object");
+
     private List<io.apitomy.axiom.core.entities.ActionTypeField> importFields(JsonNode item, String key) {
         List<io.apitomy.axiom.core.entities.ActionTypeField> out = new java.util.ArrayList<>();
         JsonNode arr = item.path(key);
         if (arr.isArray()) {
             for (JsonNode f : arr) {
+                String type = f.path("type").asText("string");
+                if (!VALID_FIELD_TYPES.contains(type)) {
+                    LOG.warnf("Invalid field type '%s' for field '%s', defaulting to 'string'",
+                            type, f.path("name").asText("(unnamed)"));
+                    type = "string";
+                }
                 out.add(new io.apitomy.axiom.core.entities.ActionTypeField(
                         f.path("name").asText(null),
-                        f.path("type").asText("string"),
+                        type,
                         f.path("required").asBoolean(false),
                         f.path("description").asText(null)));
             }

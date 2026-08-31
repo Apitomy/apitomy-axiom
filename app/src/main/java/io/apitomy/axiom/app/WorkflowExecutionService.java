@@ -201,8 +201,10 @@ public class WorkflowExecutionService {
             if (at != null && at.outputs != null && !at.outputs.isEmpty()) {
                 List<String> outputErrors = ActionTypeIoValidator.validate(at.outputs, outputMap);
                 if (!outputErrors.isEmpty()) {
-                    LOG.warnf("Workflow task %d output validation failed: %s",
-                            task.id, String.join("; ", outputErrors));
+                    String reason = "Output validation failed: " + String.join("; ", outputErrors);
+                    LOG.warnf("Workflow task %d %s", task.id, reason);
+                    task.status = "Failed";
+                    task.output = reason;
                     result = new NodeResult(NodeResultStatus.FAILED, Map.of());
                 } else {
                     result = new NodeResult(NodeResultStatus.COMPLETED, outputMap);

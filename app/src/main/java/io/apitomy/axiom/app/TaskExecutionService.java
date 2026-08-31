@@ -302,8 +302,21 @@ public class TaskExecutionService {
         // Bind named workflow inputs as {{inputs.NAME}}.
         Map<String, Object> resolvedInputs = parseResolvedInputs(task);
         for (Map.Entry<String, Object> e : resolvedInputs.entrySet()) {
-            resolved = resolved.replace("{{inputs." + e.getKey() + "}}",
-                    e.getValue() != null ? e.getValue().toString() : "");
+            Object v = e.getValue();
+            String rendered;
+            if (v == null) {
+                rendered = "";
+            } else if (v instanceof String s) {
+                rendered = s;
+            } else {
+                try {
+                    rendered = objectMapper.writeValueAsString(v);
+                } catch (Exception ex) {
+                    LOG.debugf("Failed to serialize input '%s' to JSON, using toString()", e.getKey());
+                    rendered = String.valueOf(v);
+                }
+            }
+            resolved = resolved.replace("{{inputs." + e.getKey() + "}}", rendered);
         }
 
         // Auto-append the output contract for workflow tasks that declare outputs.
