@@ -7,6 +7,7 @@ import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 
 import java.util.ArrayList;
@@ -31,8 +32,8 @@ public class ActionTypeEntity extends PanacheEntity {
     @Column(name = "user_triggerable", nullable = false)
     public boolean userTriggerable;
 
-    @Column(name = "input_schema", columnDefinition = "TEXT")
-    public String inputSchema;
+    @Column(name = "workflow_enabled", nullable = false)
+    public boolean workflowEnabled;
 
     @Column(name = "allowed_tools", columnDefinition = "TEXT")
     public String allowedTools;
@@ -101,4 +102,14 @@ public class ActionTypeEntity extends PanacheEntity {
     @CollectionTable(name = "action_type_label", joinColumns = @JoinColumn(name = "action_type_id"))
     @Column(name = "label")
     public List<String> labels = new ArrayList<>();
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "action_type_input", joinColumns = @JoinColumn(name = "action_type_id"))
+    @OrderColumn(name = "ordinal")
+    public List<ActionTypeField> inputs = new ArrayList<>();
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "action_type_output", joinColumns = @JoinColumn(name = "action_type_id"))
+    @OrderColumn(name = "ordinal")
+    public List<ActionTypeField> outputs = new ArrayList<>();
 }
