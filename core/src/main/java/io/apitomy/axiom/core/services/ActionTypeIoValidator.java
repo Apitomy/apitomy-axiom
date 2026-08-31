@@ -1,5 +1,6 @@
 package io.apitomy.axiom.core.services;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.entities.ActionTypeField;
 
 import java.util.ArrayList;
@@ -11,9 +12,12 @@ import java.util.Map;
  *
  * <p>Used at execution time to enforce an action type's declared inputs (before the
  * action runs) and outputs (after it completes). Required fields must be present and
- * non-null; present values are best-effort type-checked; extra keys are permitted.</p>
+ * non-null; present values are best-effort coerced to their declared type before being
+ * validated; extra keys are permitted.</p>
  */
 public final class ActionTypeIoValidator {
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private ActionTypeIoValidator() {
     }
@@ -48,16 +52,74 @@ public final class ActionTypeIoValidator {
         return errors;
     }
 
+    /**
+     * Determines whether the given value satisfies the declared type, applying best-effort
+     * coercion per the workflow I/O validation design. A value is accepted when it is already
+     * of the declared type <em>or</em> can be losslessly coerced into it.
+     */
     private static boolean matchesType(String type, Object value) {
         if (type == null) {
             return true;
         }
         return switch (type) {
-            case "string" -> value instanceof String;
-            case "number" -> value instanceof Number;
-            case "boolean" -> value instanceof Boolean;
-            case "object" -> value instanceof Map;
+            case "string" -> matchesString(value);
+            case "number" -> matchesNumber(value);
+            case "boolean" -> matchesBoolean(value);
+            case "object" -> matchesObject(value);
             default -> true;
         };
+    }
+
+    private static boolean matchesString(Object value) {
+        // Any scalar value can be losslessly rendered as a string via toString().
+        return value instanceof String || value instanceof Number || value instanceof Boolean;
+    }
+
+    private static boolean matchesNumber(Object value) {
+        if (value instanceof Number) {
+            return true;
+        }
+        if (value instanceof String s) {
+            String trimmed = s.trim();
+            if (trimmed.isEmpty()) {
+                return false;
+            }
+            try {
+                Double.parseDouble(trimmed);
+                return true;
+            } catch (NumberFormatException e) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private static boolean matchesBoolean(Object value) {
+        if (value instanceof Boolean) {
+            return true;
+        }
+        if (value instanceof String s) {
+            String trimmed = s.trim();
+            return "true".equalsIgnoreCase(trimmed) || "false".equalsIgnoreCase(trimmed);
+        }
+        return false;
+    }
+
+    private static boolean matchesObject(Object value) {
+        if (value instanceof Map) {
+            return true;
+        }
+        if (value instanceof String s) {
+            String trimmed = s.trim();
+            if (trimmed.isEmpty()) {
+                return false;
+            }
+            try {
+                return OBJECT_MAPPER.readValue(trimmed, Map.class) != null;
+            } catch (Exception e) {
+                return false;
+            }
+        }
+        return false;
     }
 }
