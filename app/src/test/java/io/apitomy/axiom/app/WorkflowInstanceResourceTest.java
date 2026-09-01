@@ -115,18 +115,18 @@ class WorkflowInstanceResourceTest {
                         "nodes": [
                             {"id": "s1", "type": "start", "name": "Start",
                              "config": {}, "position": {"x": 100, "y": 100}},
-                            {"id": "ht1", "type": "human-task",
-                             "name": "Human Task",
-                             "config": {"description": "Do something"},
+                            {"id": "re1", "type": "receive-event",
+                             "name": "Receive Event",
+                             "config": {"eventType": "something"},
                              "position": {"x": 100, "y": 200}},
                             {"id": "e1", "type": "end", "name": "End",
                              "config": {}, "position": {"x": 100, "y": 300}}
                         ],
                         "edges": [
                             {"id": "edge1", "source": "s1",
-                             "target": "ht1",
+                             "target": "re1",
                              "priority": 0, "isDefault": true},
-                            {"id": "edge2", "source": "ht1",
+                            {"id": "edge2", "source": "re1",
                              "target": "e1",
                              "priority": 0, "isDefault": true}
                         ]
@@ -154,6 +154,86 @@ class WorkflowInstanceResourceTest {
                     .post(PROJECTS_PATH + "/" + projectId + "/workflow")
                 .then()
                     .statusCode(400);
+    }
+
+    @Test
+    void testHumanTaskWorkflowSurfacesInboxItemAndAdvancesOnCompletion() {
+        int projectId = createProject("WF Human Task Project");
+        int definitionId = createDefinition("Human Task WF");
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "id": "wf-human",
+                        "name": "Human",
+                        "nodes": [
+                            {"id": "s1", "type": "start", "name": "Start",
+                             "config": {}, "position": {"x": 100, "y": 100}},
+                            {"id": "ht1", "type": "human-task", "name": "Approve",
+                             "config": {"description": "Approve the request",
+                                        "outputs": [{"name": "approved", "type": "boolean",
+                                                     "required": true, "label": "Approve?"}]},
+                             "position": {"x": 100, "y": 200}},
+                            {"id": "e1", "type": "end", "name": "End",
+                             "config": {}, "position": {"x": 100, "y": 300}}
+                        ],
+                        "edges": [
+                            {"id": "edge1", "source": "s1", "target": "ht1",
+                             "priority": 0, "isDefault": true},
+                            {"id": "edge2", "source": "ht1", "target": "e1",
+                             "priority": 0, "isDefault": true}
+                        ]
+                    }
+                    """)
+                .when()
+                    .put(WORKFLOWS_PATH + "/" + definitionId + "/content")
+                .then()
+                    .statusCode(204);
+
+        given()
+                .when()
+                    .post(WORKFLOWS_PATH + "/" + definitionId + "/publish")
+                .then()
+                    .statusCode(200);
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {"workflowDefinitionId": %d}
+                    """.formatted(definitionId))
+                .when()
+                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .then()
+                    .statusCode(200)
+                    .body("status", equalTo("waiting"));
+
+        Integer taskId = given()
+                .when()
+                    .get("/api/v1/inbox")
+                .then()
+                    .statusCode(200)
+                    .body("items.find { it.projectId == " + projectId + " }.actionType",
+                            equalTo("Approve"))
+                    .extract()
+                    .path("items.find { it.projectId == " + projectId + " }.id");
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {"approved": true}
+                    """)
+                .when()
+                    .post("/api/v1/inbox/" + taskId + "/complete")
+                .then()
+                    .statusCode(204);
+
+        given()
+                .when()
+                    .get(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .then()
+                    .statusCode(200)
+                    .body("status", equalTo("completed"));
     }
 
     @Test
