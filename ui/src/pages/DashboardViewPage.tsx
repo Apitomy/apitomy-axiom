@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { Responsive, WidthProvider } from "react-grid-layout";
-import type { Layout } from "react-grid-layout";
+import { Responsive, WidthProvider } from "react-grid-layout/legacy";
+import type { Layout, LayoutItem } from "react-grid-layout/legacy";
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -207,7 +207,7 @@ export function DashboardViewPage() {
         ));
     };
 
-    const onGridLayoutChange = (layout: Layout[]) => {
+    const onGridLayoutChange = (layout: Layout) => {
         setEditTabs(prev => prev.map(t => {
             if (t.id !== activeTabId) return t;
             return {
@@ -273,7 +273,7 @@ export function DashboardViewPage() {
         setRenamingTabId(null);
     };
 
-    const gridItems: Layout[] = activeWidgets.map(w => {
+    const gridItems: LayoutItem[] = activeWidgets.map(w => {
         const entry = getWidget(w.type);
         return {
             i: w.id,
