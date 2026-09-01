@@ -142,8 +142,9 @@ class ScriptExecutionServiceTest {
                 task(1L, 2L, "hello world"), project("r", "repo", "n"), env);
 
         // Single quotes suppress expansion, so the reference closes the region,
-        // expands within double quotes, then reopens it.
-        assertEquals("echo '\"${AXIOM_MANAGER_INPUT}\"'", resolved);
+        // expands within double quotes, then reopens it. The template's own
+        // quotes remain, yielding empty-string + expansion + empty-string.
+        assertEquals("echo ''\"${AXIOM_MANAGER_INPUT}\"''", resolved);
         assertEquals("hello world", env.get("AXIOM_MANAGER_INPUT"));
     }
 
