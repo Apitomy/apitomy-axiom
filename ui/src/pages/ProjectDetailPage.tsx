@@ -56,6 +56,7 @@ import AngleDownIcon from "@patternfly/react-icons/dist/esm/icons/angle-down-ico
 import {
     type ActionType,
     type AxiomEvent,
+    type InboxItem,
     type Project,
     type ProjectMetrics,
     type Task,
@@ -72,7 +73,8 @@ import {
     updateProject,
     updateProjectBody,
     formatBytes,
-    respondToTask,
+    fetchInboxItem,
+    completeInboxItem,
 } from "../config/api";
 import { EditLabelsModal } from "../components/EditLabelsModal";
 import { LabelDisplay } from "../components/LabelDisplay";
@@ -80,6 +82,7 @@ import { ExecutionLogModal } from "../components/ExecutionLogModal";
 import { CreateSessionModal } from "../components/assistant/CreateSessionModal";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { WorkflowTab } from "../components/WorkflowTab";
+import { DynamicFormRenderer } from "../components/DynamicFormRenderer";
 
 const STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
     Created: "blue",
@@ -602,7 +605,8 @@ function TasksTab({ tasks, projectId, agentNames, onRefresh }: {
 }) {
     const navigate = useNavigate();
     const [respondingTo, setRespondingTo] = useState<number | null>(null);
-    const [responseText, setResponseText] = useState("");
+    const [respondItem, setRespondItem] = useState<InboxItem | null>(null);
+    const [formValues, setFormValues] = useState<Record<string, unknown>>({});
     const [submitting, setSubmitting] = useState(false);
 
     // Execution log modal state
@@ -616,10 +620,11 @@ function TasksTab({ tasks, projectId, agentNames, onRefresh }: {
 
     const handleSubmitResponse = (taskId: number) => {
         setSubmitting(true);
-        respondToTask(projectId, taskId, responseText)
+        completeInboxItem(taskId, formValues)
             .then(() => {
                 setRespondingTo(null);
-                setResponseText("");
+                setRespondItem(null);
+                setFormValues({});
                 onRefresh();
             })
             .catch(console.error)
@@ -694,7 +699,10 @@ function TasksTab({ tasks, projectId, agentNames, onRefresh }: {
                                         size="sm"
                                         onClick={() => {
                                             setRespondingTo(task.id);
-                                            setResponseText("");
+                                            setFormValues({});
+                                            fetchInboxItem(task.id)
+                                                .then(setRespondItem)
+                                                .catch(console.error);
                                         }}
                                     >
                                         Respond
@@ -713,19 +721,23 @@ function TasksTab({ tasks, projectId, agentNames, onRefresh }: {
                         <Title headingLevel="h4" size="md">
                             Respond to Task #{respondingTo}
                         </Title>
-                        <TextArea
-                            id="task-response"
-                            placeholder="Enter your response..."
-                            value={responseText}
-                            onChange={(_e, v) => setResponseText(v)}
-                            rows={4}
-                            style={{ marginTop: "8px" }}
-                        />
+                        {respondItem?.humanContext?.details?.map((d) => (
+                            <div key={d.label} style={{ marginTop: "8px" }}>
+                                <strong>{d.label}:</strong> {d.value}
+                            </div>
+                        ))}
+                        <div style={{ marginTop: "8px" }}>
+                            <DynamicFormRenderer
+                                schema={respondItem?.outputSchema}
+                                values={formValues}
+                                onChange={setFormValues}
+                            />
+                        </div>
                         <div style={{ marginTop: "8px" }}>
                             <Button
                                 variant="primary"
                                 onClick={() => handleSubmitResponse(respondingTo)}
-                                isDisabled={!responseText.trim() || submitting}
+                                isDisabled={submitting}
                                 isLoading={submitting}
                                 style={{ marginRight: "8px" }}
                             >

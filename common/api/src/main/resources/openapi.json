@@ -2298,53 +2298,6 @@
         }
       ]
     },
-    "/projects/{projectId}/tasks/{taskId}/respond": {
-      "post": {
-        "tags": [
-          "Tasks"
-        ],
-        "summary": "Submit a human response to a task",
-        "description": "Submits a user response for a task that is awaiting human input.",
-        "operationId": "respondToTask",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TaskResponse"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Response accepted"
-          },
-          "404": {
-            "description": "Task not found or not awaiting input"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "name": "projectId",
-          "in": "path",
-          "description": "Project ID",
-          "required": true,
-          "schema": {
-            "type": "integer"
-          }
-        },
-        {
-          "name": "taskId",
-          "in": "path",
-          "description": "Task ID",
-          "required": true,
-          "schema": {
-            "type": "integer"
-          }
-        }
-      ]
-    },
     "/projects/{projectId}/tasks/{taskId}/log": {
       "get": {
         "tags": [
@@ -7093,18 +7046,6 @@
           }
         }
       },
-      "TaskResponse": {
-        "required": [
-          "response"
-        ],
-        "type": "object",
-        "properties": {
-          "response": {
-            "description": "The human's response text",
-            "type": "string"
-          }
-        }
-      },
       "StartupCheck": {
         "required": [
           "name",
@@ -8318,6 +8259,13 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/HumanContextReference"
+            }
+          },
+          "details": {
+            "description": "Display-only context values resolved from the workflow node's inputs.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HumanContextDetail"
             }
           }
         }
@@ -9680,6 +9628,21 @@
             "type": "boolean"
           },
           "description": {
+            "type": "string"
+          }
+        }
+      },
+      "HumanContextDetail": {
+        "required": [
+          "label",
+          "value"
+        ],
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "value": {
             "type": "string"
           }
         }
