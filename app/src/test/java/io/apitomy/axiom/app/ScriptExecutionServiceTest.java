@@ -60,9 +60,9 @@ class ScriptExecutionServiceTest {
                 project("owner/repo#42", "owner/repo", "My Project"), env);
 
         // No raw values are inlined; each placeholder is a quoted env reference.
-        assertEquals("echo \"$AXIOM_PROJECT_ID\" \"$AXIOM_TASK_ID\" \"$AXIOM_REF\" "
-                + "\"$AXIOM_REPOSITORY\" \"$AXIOM_PROJECT_NAME\" \"$AXIOM_API_URL\" "
-                + "\"$AXIOM_WORK_DIR\" \"$AXIOM_MANAGER_INPUT\"", resolved);
+        assertEquals("echo \"${AXIOM_PROJECT_ID}\" \"${AXIOM_TASK_ID}\" \"${AXIOM_REF}\" "
+                + "\"${AXIOM_REPOSITORY}\" \"${AXIOM_PROJECT_NAME}\" \"${AXIOM_API_URL}\" "
+                + "\"${AXIOM_WORK_DIR}\" \"${AXIOM_MANAGER_INPUT}\"", resolved);
 
         assertEquals("42", env.get("AXIOM_PROJECT_ID"));
         assertEquals("7", env.get("AXIOM_TASK_ID"));
@@ -96,7 +96,7 @@ class ScriptExecutionServiceTest {
                 task(1L, 2L, payload), project("r", "repo", "n"), env);
 
         // The dangerous characters live only in the env value, not the script.
-        assertEquals("echo \"$AXIOM_MANAGER_INPUT\"", resolved);
+        assertEquals("echo \"${AXIOM_MANAGER_INPUT}\"", resolved);
         assertEquals(payload, env.get("AXIOM_MANAGER_INPUT"));
         assertFalse(resolved.contains("touch"));
         assertFalse(resolved.contains("rm -rf"));
@@ -113,9 +113,85 @@ class ScriptExecutionServiceTest {
                 "echo {{inputs.title}} {{inputs.count}}", task,
                 project("r", "repo", "n"), env);
 
-        assertEquals("echo \"$AXIOM_INPUT_title\" \"$AXIOM_INPUT_count\"", resolved);
+        assertEquals("echo \"${AXIOM_INPUT_title}\" \"${AXIOM_INPUT_count}\"", resolved);
         assertEquals("$(evil)", env.get("AXIOM_INPUT_title"));
         assertEquals("3", env.get("AXIOM_INPUT_count"));
+    }
+
+    @Test
+    void placeholderInsideDoubleQuotesIsNotReQuoted() {
+        ScriptExecutionService svc = newService();
+        Map<String, String> env = new LinkedHashMap<>();
+
+        String resolved = svc.substitutePlaceholders(
+                "git commit -m \"Automated fix: {{managerInput}}\"",
+                task(1L, 2L, "fix login bug"), project("r", "repo", "n"), env);
+
+        // Inside an existing double-quoted string the reference must NOT add its
+        // own quotes, otherwise the value would word-split (issue: PR #280 review).
+        assertEquals("git commit -m \"Automated fix: ${AXIOM_MANAGER_INPUT}\"", resolved);
+        assertEquals("fix login bug", env.get("AXIOM_MANAGER_INPUT"));
+    }
+
+    @Test
+    void placeholderInsideSingleQuotesBreaksOutToExpand() {
+        ScriptExecutionService svc = newService();
+        Map<String, String> env = new LinkedHashMap<>();
+
+        String resolved = svc.substitutePlaceholders("echo '{{managerInput}}'",
+                task(1L, 2L, "hello world"), project("r", "repo", "n"), env);
+
+        // Single quotes suppress expansion, so the reference closes the region,
+        // expands within double quotes, then reopens it.
+        assertEquals("echo '\"${AXIOM_MANAGER_INPUT}\"'", resolved);
+        assertEquals("hello world", env.get("AXIOM_MANAGER_INPUT"));
+    }
+
+    @Test
+    void whitespaceValueInDoubleQuotesStaysSingleArgument()
+            throws IOException, InterruptedException {
+        ScriptExecutionService svc = newService();
+        Map<String, String> env = new LinkedHashMap<>();
+
+        // Print the argument count and the first argument so we can confirm the
+        // whitespace-bearing value was passed as exactly one argument.
+        String resolved = svc.substitutePlaceholders(
+                "set -- \"Automated fix: {{managerInput}}\"\nprintf '%s|%s' \"$#\" \"$1\"",
+                task(1L, 2L, "fix login bug"), project("r", "repo", "n"), env);
+
+        String output = runScript(resolved, env);
+        assertEquals("1|Automated fix: fix login bug", output);
+    }
+
+    @Test
+    void whitespaceValueInSingleQuotesExpandsAsSingleArgument()
+            throws IOException, InterruptedException {
+        ScriptExecutionService svc = newService();
+        Map<String, String> env = new LinkedHashMap<>();
+
+        String resolved = svc.substitutePlaceholders(
+                "set -- '{{managerInput}}'\nprintf '%s|%s' \"$#\" \"$1\"",
+                task(1L, 2L, "fix login bug"), project("r", "repo", "n"), env);
+
+        String output = runScript(resolved, env);
+        assertEquals("1|fix login bug", output);
+    }
+
+    private String runScript(String script, Map<String, String> env)
+            throws IOException, InterruptedException {
+        Path scriptFile = Files.createTempFile("axiom-script-", ".sh");
+        try {
+            Files.writeString(scriptFile, script);
+            ProcessBuilder pb = new ProcessBuilder("/bin/bash", scriptFile.toString())
+                    .redirectErrorStream(true);
+            pb.environment().putAll(env);
+            Process process = pb.start();
+            String output = new String(process.getInputStream().readAllBytes());
+            process.waitFor(30, TimeUnit.SECONDS);
+            return output;
+        } finally {
+            Files.deleteIfExists(scriptFile);
+        }
     }
 
     @Test
