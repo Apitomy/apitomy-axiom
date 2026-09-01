@@ -275,6 +275,18 @@ public class InboxResourceImpl implements InboxResource {
             }
             ctx.setReferences(refs);
         }
+        if (node.has("details") && node.get("details").isArray()) {
+            java.util.List<io.apitomy.axiom.api.beans.HumanContextDetail> details =
+                    new java.util.ArrayList<>();
+            for (JsonNode detailNode : node.get("details")) {
+                io.apitomy.axiom.api.beans.HumanContextDetail detail =
+                        new io.apitomy.axiom.api.beans.HumanContextDetail();
+                detail.setLabel(detailNode.path("label").asText(""));
+                detail.setValue(detailNode.path("value").asText(""));
+                details.add(detail);
+            }
+            ctx.setDetails(details);
+        }
         return ctx;
     }
 
@@ -294,6 +306,10 @@ public class InboxResourceImpl implements InboxResource {
                     field.setDescription(fieldNode.get("description").asText());
                 }
                 field.setRequired(fieldNode.path("required").asBoolean(false));
+                if (fieldNode.has("defaultValue") && !fieldNode.get("defaultValue").isNull()) {
+                    field.setDefaultValue(
+                            objectMapper.convertValue(fieldNode.get("defaultValue"), Object.class));
+                }
 
                 if (fieldNode.has("options") && fieldNode.get("options").isArray()) {
                     List<OutputSchemaFieldOption> options = new ArrayList<>();

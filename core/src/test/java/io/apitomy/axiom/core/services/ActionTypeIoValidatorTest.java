@@ -34,6 +34,44 @@ class ActionTypeIoValidatorTest {
     }
 
     @Test
+    void numericStringCoercedToNumber() {
+        List<ActionTypeField> declared = List.of(new ActionTypeField("count", "number", true, null));
+        assertEquals(List.of(), ActionTypeIoValidator.validate(declared, Map.of("count", "42")));
+        assertEquals(List.of(), ActionTypeIoValidator.validate(declared, Map.of("count", "3.14")));
+    }
+
+    @Test
+    void booleanStringCoercedToBoolean() {
+        List<ActionTypeField> declared = List.of(new ActionTypeField("flag", "boolean", true, null));
+        assertEquals(List.of(), ActionTypeIoValidator.validate(declared, Map.of("flag", "true")));
+        assertEquals(List.of(), ActionTypeIoValidator.validate(declared, Map.of("flag", "FALSE")));
+    }
+
+    @Test
+    void nonBooleanStringReportsError() {
+        List<ActionTypeField> declared = List.of(new ActionTypeField("flag", "boolean", true, null));
+        assertFalse(ActionTypeIoValidator.validate(declared, Map.of("flag", "yes")).isEmpty());
+    }
+
+    @Test
+    void numberCoercedToString() {
+        List<ActionTypeField> declared = List.of(new ActionTypeField("id", "string", true, null));
+        assertEquals(List.of(), ActionTypeIoValidator.validate(declared, Map.of("id", 42)));
+    }
+
+    @Test
+    void jsonStringCoercedToObject() {
+        List<ActionTypeField> declared = List.of(new ActionTypeField("cfg", "object", true, null));
+        assertEquals(List.of(), ActionTypeIoValidator.validate(declared, Map.of("cfg", "{\"a\":1}")));
+    }
+
+    @Test
+    void nonObjectStringReportsError() {
+        List<ActionTypeField> declared = List.of(new ActionTypeField("cfg", "object", true, null));
+        assertFalse(ActionTypeIoValidator.validate(declared, Map.of("cfg", "not-json")).isEmpty());
+    }
+
+    @Test
     void optionalMissingFieldIsOk() {
         List<ActionTypeField> declared = List.of(new ActionTypeField("note", "string", false, null));
         assertEquals(List.of(), ActionTypeIoValidator.validate(declared, Map.of()));

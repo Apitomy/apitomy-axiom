@@ -11,7 +11,7 @@ import io.apitomy.axiom.core.entities.ThreadEntryEntity;
 import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.axiom.core.services.EncryptionService;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
-import com.fasterxml.jackson.core.type.TypeReference;
+import io.apitomy.axiom.core.services.InputBindingResolver;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.arc.Arc;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -282,36 +282,23 @@ public class ScriptExecutionService {
         addBinding(bindings, values, "{{workDir}}", "AXIOM_WORK_DIR", workDir);
 
         // Bind named workflow inputs as {{inputs.NAME}} (workflow tasks only).
-        if (task.workflowRunId != null && task.input != null && !task.input.isBlank()) {
-            try {
-                Map<String, Object> inputs = objectMapper.readValue(
-                        task.input, new TypeReference<Map<String, Object>>() {});
-                for (Map.Entry<String, Object> e : inputs.entrySet()) {
-                    String key = e.getKey();
-                    if (!VALID_INPUT_NAME.matcher(key).matches()) {
-                        // Not a valid shell identifier — cannot bind as an env var
-                        // safely; leave the placeholder untouched.
-                        continue;
-                    }
-                    Object v = e.getValue();
-                    String rendered;
-                    if (v == null) {
-                        rendered = "";
-                    } else if (v instanceof String s) {
-                        rendered = s;
-                    } else {
-                        try {
-                            rendered = objectMapper.writeValueAsString(v);
-                        } catch (Exception ex) {
-                            LOG.debugf("Failed to serialize input '%s' to JSON, using toString()", key);
-                            rendered = String.valueOf(v);
-                        }
-                    }
-                    addBinding(bindings, values, "{{inputs." + key + "}}",
-                            "AXIOM_INPUT_" + key, rendered);
+        // Input parsing and value rendering are shared with the agent-prompt path
+        // via InputBindingResolver; the script path additionally routes each value
+        // through an environment variable (rather than inlining it, as the prompt
+        // path safely does) so shell metacharacters cannot execute (issue #267).
+        if (task.workflowRunId != null) {
+            Map<String, Object> inputs =
+                    InputBindingResolver.parseInputs(task.input, objectMapper);
+            for (Map.Entry<String, Object> e : inputs.entrySet()) {
+                String key = e.getKey();
+                if (!VALID_INPUT_NAME.matcher(key).matches()) {
+                    // Not a valid shell identifier — cannot bind as an env var
+                    // safely; leave the placeholder untouched.
+                    continue;
                 }
-            } catch (Exception ignored) {
-                // Non-object input — leave {{inputs.*}} placeholders untouched.
+                addBinding(bindings, values, "{{inputs." + key + "}}",
+                        "AXIOM_INPUT_" + key,
+                        InputBindingResolver.renderValue(e.getValue(), objectMapper));
             }
         }
 

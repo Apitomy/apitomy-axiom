@@ -14,7 +14,6 @@ import io.apitomy.axiom.api.beans.NewTask;
 import io.apitomy.axiom.api.beans.Project;
 import io.apitomy.axiom.api.beans.ProjectSearchResults;
 import io.apitomy.axiom.api.beans.Task;
-import io.apitomy.axiom.api.beans.TaskResponse;
 import io.apitomy.axiom.api.beans.ThreadEntry;
 import io.apitomy.axiom.api.beans.TriggerWorkflow;
 import io.apitomy.axiom.api.beans.UpdateProject;
@@ -154,6 +153,10 @@ public class ProjectsResourceImpl implements ProjectsResource {
     @Override
     @Transactional
     public Project createProject(NewProject data) {
+        validateRequired(data.getName(), "name");
+        validateRequired(data.getType(), "type");
+        validateRequired(data.getRef(), "ref");
+
         ProjectEntity entity = new ProjectEntity();
         entity.name = data.getName();
         entity.body = data.getBody();
@@ -454,28 +457,6 @@ public class ProjectsResourceImpl implements ProjectsResource {
         return toTaskBean(task);
     }
 
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public void respondToTask(BigInteger projectId, BigInteger taskId, TaskResponse data) {
-        long pid = projectId.longValue();
-        long tid = taskId.longValue();
-
-        findProjectOrThrow(pid);
-
-        TaskEntity task = TaskEntity.findById(tid);
-        if (task == null || task.projectId != pid) {
-            throw new WebApplicationException("Task not found: " + tid, 404);
-        }
-        if (!"AwaitingInput".equals(task.status)) {
-            throw new WebApplicationException(
-                    "Task is not awaiting input (status: " + task.status + ")", 409);
-        }
-
-        taskExecutionService.onTaskCompleted(tid, AgentResult.success(data.getResponse()));
-    }
-
     // ── Task Execution Log ─────────────────────────────────────────────
 
     /**
@@ -542,6 +523,12 @@ public class ProjectsResourceImpl implements ProjectsResource {
     private io.apitomy.axiom.api.beans.WorkflowInstance toWorkflowInstanceBean(
             WorkflowRunEntity entity) {
         return runBeanMapper.toBean(entity);
+    }
+
+    private void validateRequired(String value, String fieldName) {
+        if (value == null || value.isBlank()) {
+            throw new WebApplicationException("Missing required '" + fieldName + "' field", 400);
+        }
     }
 
     private ProjectEntity findProjectOrThrow(long id) {

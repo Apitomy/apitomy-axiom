@@ -13,6 +13,7 @@ import io.apitomy.axiom.core.services.ActionTypeIoValidator;
 import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.axiom.core.tracing.TraceService;
 import io.apitomy.axiom.core.tracing.TraceContext;
+import io.apitomy.axiom.api.beans.OutputSchema;
 import io.apitomy.flow.engine.WorkflowEngine;
 import io.apitomy.flow.engine.WorkflowValidationException;
 import io.apitomy.flow.model.InstanceStatus;
@@ -21,6 +22,7 @@ import io.apitomy.flow.model.Workflow;
 import io.apitomy.flow.model.WorkflowInstance;
 import io.apitomy.flow.model.WorkflowNode;
 import io.apitomy.flow.model.ActionInfo;
+import io.apitomy.flow.model.HumanTaskInfo;
 import io.apitomy.flow.spi.NodeExecutionContext;
 import io.apitomy.flow.spi.NodeExecutor;
 import io.apitomy.flow.spi.NodeExecutorProvider;
@@ -46,7 +48,7 @@ public class WorkflowExecutionService {
 
     private static final Logger LOG = Logger.getLogger(WorkflowExecutionService.class);
     private static final Set<NodeType> SUPPORTED_NODE_TYPES =
-            Set.of(NodeType.START, NodeType.END, NodeType.ACTION);
+            Set.of(NodeType.START, NodeType.END, NodeType.ACTION, NodeType.HUMAN_TASK);
 
     @Inject
     ObjectMapper objectMapper;
@@ -56,6 +58,9 @@ public class WorkflowExecutionService {
 
     @Inject
     TraceService traceService;
+
+    @Inject
+    TaskExecutionService taskExecutionService;
 
     private WorkflowEngine workflowEngine;
 
@@ -195,7 +200,16 @@ public class WorkflowExecutionService {
         WorkflowInstance instance = deserializeInstance(entity.instanceState);
 
         NodeResult result;
-        if ("Completed".equals(task.status)) {
+        HumanTaskInfo humanTaskInfo = workflowEngine.getHumanTaskInfo(workflow, instance);
+        if (humanTaskInfo != null) {
+            if ("Completed".equals(task.status)) {
+                Map<String, Object> answers = WorkflowHumanTaskMapper.coerceAnswers(
+                        humanTaskInfo.outputs(), parseOutputMap(task.output));
+                result = new NodeResult(NodeResultStatus.COMPLETED, answers);
+            } else {
+                result = new NodeResult(NodeResultStatus.FAILED, Map.of());
+            }
+        } else if ("Completed".equals(task.status)) {
             Map<String, Object> outputMap = parseOutputMap(task.output);
             ActionTypeEntity at = ActionTypeEntity.find("name", task.actionType).firstResult();
             if (at != null && at.outputs != null && !at.outputs.isEmpty()) {
@@ -203,12 +217,6 @@ public class WorkflowExecutionService {
                 if (!outputErrors.isEmpty()) {
                     String reason = "Output validation failed: " + String.join("; ", outputErrors);
                     LOG.warnf("Workflow task %d %s", task.id, reason);
-                    // The task path (TaskExecutionService/ScriptExecutionService) has already
-                    // marked this task Completed, fired a "Completed" SSE, and completed its
-                    // trace node. Flip it to Failed while PRESERVING the original output (the
-                    // reason is appended to the execution log, not written over the output),
-                    // then emit a corrective SSE and reconcile the trace node so clients and
-                    // the trace do not disagree with the run's FAILED outcome.
                     task.status = "Failed";
                     task.executionLog = appendReason(task.executionLog, reason);
                     reconcileTaskTraceNodeFailed(task);
@@ -328,11 +336,15 @@ public class WorkflowExecutionService {
 
     private void createTaskForCurrentNode(WorkflowRunEntity entity,
             Workflow workflow, WorkflowInstance instance) {
-        ActionInfo actionInfo = workflowEngine.getActionInfo(
-                workflow, instance);
+        HumanTaskInfo humanTaskInfo = workflowEngine.getHumanTaskInfo(workflow, instance);
+        if (humanTaskInfo != null) {
+            createHumanTaskForNode(entity, instance, humanTaskInfo);
+            return;
+        }
+
+        ActionInfo actionInfo = workflowEngine.getActionInfo(workflow, instance);
         if (actionInfo == null) {
-            LOG.warnf("No action info for current node in instance %d",
-                    entity.id);
+            LOG.warnf("No action info for current node in instance %d", entity.id);
             return;
         }
 
@@ -361,8 +373,55 @@ public class WorkflowExecutionService {
         LOG.infof("Created task %d for workflow instance %d (action: %s)",
                 task.id, entity.id, actionInfo.actionType());
 
-        sseEvents.fire(SseEvent.taskUpdated(
-                entity.projectId, task.id, task.status));
+        sseEvents.fire(SseEvent.taskUpdated(entity.projectId, task.id, task.status));
+    }
+
+    /**
+     * Creates an inbox task ({@code AwaitingInput}) for a workflow that has parked on a human-task
+     * node, mapping the node's Flow config into human-facing context and a completion form.
+     *
+     * @param entity        the owning workflow run
+     * @param instance      the parked (WAITING) engine instance
+     * @param humanTaskInfo the engine's human-task introspection for the current node
+     */
+    private void createHumanTaskForNode(WorkflowRunEntity entity,
+            WorkflowInstance instance, HumanTaskInfo humanTaskInfo) {
+        TaskEntity task = new TaskEntity();
+        task.projectId = entity.projectId;
+        String nodeName = humanTaskInfo.nodeName();
+        task.actionType = nodeName != null && !nodeName.isBlank() ? nodeName : "Human Task";
+        task.createdBy = "workflow";
+        task.status = "Pending";
+        task.workflowRunId = entity.id;
+        task.nodeId = instance.currentNodeId();
+        task.traceId = entity.traceId;
+        task.createdOn = Instant.now();
+
+        try {
+            task.humanContext = objectMapper.writeValueAsString(
+                    WorkflowHumanTaskMapper.toHumanContext(humanTaskInfo));
+            OutputSchema schema = WorkflowHumanTaskMapper.toOutputSchema(humanTaskInfo.outputs());
+            task.outputSchema = schema != null ? objectMapper.writeValueAsString(schema) : null;
+        } catch (JsonProcessingException e) {
+            throw new WebApplicationException(
+                    "Failed to serialize human task context", 500);
+        }
+        task.persist();
+
+        TraceContext traceCtx = traceContextFor(entity);
+        if (traceCtx != null) {
+            try {
+                traceService.addNode(traceCtx, "task", "in-progress",
+                        "Human task: " + task.actionType, "task", task.id);
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to add workflow human-task trace node");
+            }
+        }
+
+        LOG.infof("Created human task %d for workflow instance %d (node: %s)",
+                task.id, entity.id, task.nodeId);
+
+        taskExecutionService.markTaskAwaitingInput(task.id);
     }
 
     private void persistInstanceState(WorkflowRunEntity entity,
@@ -389,7 +448,7 @@ public class WorkflowExecutionService {
             throw new WebApplicationException(
                     "Workflow contains unsupported node types: "
                             + String.join(", ", unsupported)
-                            + ". Phase 2 supports only: start, end, action.",
+                            + ". Supported: start, end, action, human-task.",
                     400);
         }
     }

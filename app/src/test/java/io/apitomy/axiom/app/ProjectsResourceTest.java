@@ -113,6 +113,54 @@ class ProjectsResourceTest {
     }
 
     @Test
+    void testCreateProjectMissingType() {
+        given()
+            .contentType(ContentType.JSON)
+            .body("""
+                {
+                    "name": "No Type Project",
+                    "ref": "owner/repo#missing-type"
+                }
+                """)
+            .when()
+                .post(PROJECTS_PATH)
+            .then()
+                .statusCode(400);
+    }
+
+    @Test
+    void testCreateProjectMissingName() {
+        given()
+            .contentType(ContentType.JSON)
+            .body("""
+                {
+                    "type": "bug-fix",
+                    "ref": "owner/repo#missing-name"
+                }
+                """)
+            .when()
+                .post(PROJECTS_PATH)
+            .then()
+                .statusCode(400);
+    }
+
+    @Test
+    void testCreateProjectMissingRef() {
+        given()
+            .contentType(ContentType.JSON)
+            .body("""
+                {
+                    "name": "No Ref Project",
+                    "type": "bug-fix"
+                }
+                """)
+            .when()
+                .post(PROJECTS_PATH)
+            .then()
+                .statusCode(400);
+    }
+
+    @Test
     void testGetProjectNotFound() {
         given()
             .when()
