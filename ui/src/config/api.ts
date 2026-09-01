@@ -344,22 +344,6 @@ export async function createTask(projectId: number, task: NewTask): Promise<Task
     return response.json();
 }
 
-export async function respondToTask(
-    projectId: number,
-    taskId: number,
-    response: string
-): Promise<void> {
-    const res = await fetch(
-        `${API}/projects/${projectId}/tasks/${taskId}/respond`,
-        {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ response }),
-        }
-    );
-    if (!res.ok) throw new Error(`Failed to respond to task: ${res.status}`);
-}
-
 export async function fetchTaskExecutionLog(
     projectId: number,
     taskId: number
@@ -1790,6 +1774,7 @@ export interface HumanContext {
     title: string;
     description?: string;
     references?: HumanContextReference[];
+    details?: { label: string; value: string }[];
 }
 
 export interface OutputSchemaFieldOption {

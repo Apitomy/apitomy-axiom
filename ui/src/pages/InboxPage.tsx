@@ -269,6 +269,18 @@ export function InboxPage() {
                             </div>
                         )}
 
+                        {/* Details */}
+                        {selectedItem.humanContext?.details &&
+                            selectedItem.humanContext.details.length > 0 && (
+                            <div style={{ marginBottom: "16px" }}>
+                                {selectedItem.humanContext.details.map((d) => (
+                                    <div key={d.label} style={{ marginBottom: "4px" }}>
+                                        <strong>{d.label}:</strong> {d.value}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
                         {/* Project info */}
                         <div style={{ marginBottom: "16px" }}>
                             <Split hasGutter>
