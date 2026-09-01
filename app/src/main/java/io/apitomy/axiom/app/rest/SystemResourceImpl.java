@@ -145,6 +145,10 @@ public class SystemResourceImpl implements SystemResource {
      */
     @Override
     public Response exportPack(PackExportRequest data) {
+        if (data == null || data.getName() == null || data.getName().isBlank()) {
+            throw new jakarta.ws.rs.WebApplicationException(
+                    "Missing required 'name' field", 400);
+        }
         JsonNode pack = importExportService.exportPack(data);
         String filename = data.getName().replaceAll("[^a-zA-Z0-9_-]", "_") + ".json";
         return Response.ok(pack)
