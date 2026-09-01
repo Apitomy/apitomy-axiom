@@ -25,8 +25,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 /**
  * Executes script-mode action types by running a user-defined bash script.
@@ -37,6 +40,13 @@ import java.util.concurrent.TimeUnit;
 public class ScriptExecutionService {
 
     private static final Logger LOG = Logger.getLogger(ScriptExecutionService.class);
+
+    /**
+     * Workflow input names that can be safely bound as shell environment
+     * variables. Mirrors the identifier rule enforced by ActionTypeValidator.
+     */
+    private static final Pattern VALID_INPUT_NAME =
+            Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
     @Inject
     Event<SseEvent> sseEvents;
@@ -112,7 +122,9 @@ public class ScriptExecutionService {
         if (project == null) {
             project = ProjectEntity.findById(task.projectId);
         }
-        String script = substitutePlaceholders(actionType.scriptTemplate, task, project);
+        Map<String, String> placeholderEnv = new LinkedHashMap<>();
+        String script = substitutePlaceholders(actionType.scriptTemplate, task, project,
+                placeholderEnv);
         Instant startTime = Instant.now();
 
         Path scriptFile = Files.createTempFile("axiom-script-", ".sh");
@@ -141,6 +153,13 @@ public class ScriptExecutionService {
                     }
                 }
             }
+
+            // Inject substituted placeholder values as environment variables. The
+            // script references them via quoted shell expansions ("$AXIOM_*"), so
+            // values that contain shell metacharacters are treated as literal data
+            // rather than being executed (see substitutePlaceholders / issue #267).
+            // Applied last so the reserved AXIOM_* names are authoritative.
+            pb.environment().putAll(placeholderEnv);
 
             Process process = pb.start();
             String output = new String(process.getInputStream().readAllBytes());
@@ -199,31 +218,190 @@ public class ScriptExecutionService {
         return log.toString();
     }
 
-    private String substitutePlaceholders(String template, TaskEntity task,
-                                           ProjectEntity project) {
+    /**
+     * Resolves {@code {{...}}} placeholders in a script template.
+     *
+     * <p>To guard against shell injection, placeholder <em>values</em> are never
+     * inlined into the script text. Instead each value is exported as an
+     * environment variable (collected into {@code env}) and the placeholder is
+     * replaced with a shell expansion of that variable — e.g.
+     * {@code {{managerInput}}} becomes a reference to {@code AXIOM_MANAGER_INPUT}.
+     * Because bash does not re-parse the contents of a variable expansion for
+     * command substitution, a value containing {@code $(...)}, backticks,
+     * {@code ;}, {@code &&}, newlines, etc. is treated as literal data rather
+     * than being executed (issue #267).
+     *
+     * <p>The exact form of the injected reference is chosen based on the shell
+     * quoting context in which the placeholder appears, so that values containing
+     * whitespace survive as a single argument regardless of how the template
+     * quotes the placeholder:
+     * <ul>
+     *   <li><b>Unquoted</b> ({@code echo {{x}}}) &rarr; {@code "${AXIOM_X}"} —
+     *       the reference is quoted so whitespace does not word-split it.</li>
+     *   <li><b>Inside double quotes</b> ({@code echo "a: {{x}}"}) &rarr;
+     *       {@code ${AXIOM_X}} — the surrounding quotes already prevent
+     *       word-splitting, so no extra quotes are added (adding them would
+     *       break the enclosing string and re-introduce word-splitting).</li>
+     *   <li><b>Inside single quotes</b> ({@code echo '{{x}}'}) &rarr;
+     *       {@code '"${AXIOM_X}"'} — single quotes suppress expansion, so the
+     *       reference temporarily closes the single-quoted region, expands the
+     *       value inside double quotes, then reopens it.</li>
+     * </ul>
+     *
+     * @param template the raw script template
+     * @param task     the task providing context values
+     * @param project  the project providing context values, may be {@code null}
+     * @param env      output map that receives the environment variables the
+     *                 resolved script references; the caller must inject these
+     *                 into the script's process environment
+     * @return the resolved script with placeholders replaced by shell references
+     */
+    String substitutePlaceholders(String template, TaskEntity task,
+                                           ProjectEntity project, Map<String, String> env) {
         String apiBaseUrl = "http://localhost:" + httpPort + "/api/v1";
-        String resolved = template;
-        resolved = resolved.replace("{{projectId}}", str(task.projectId));
-        resolved = resolved.replace("{{eventId}}", str(task.eventId));
-        resolved = resolved.replace("{{taskId}}", str(task.id));
-        resolved = resolved.replace("{{ref}}", project != null && project.ref != null
-                ? project.ref : "");
-        resolved = resolved.replace("{{repository}}", project != null && project.repository != null
-                ? project.repository : "");
-        resolved = resolved.replace("{{projectName}}", project != null && project.name != null
-                ? project.name : "");
-        resolved = resolved.replace("{{managerInput}}", task.input != null ? task.input : "");
-        resolved = resolved.replace("{{apiBaseUrl}}", apiBaseUrl);
-        String workDir = System.getProperty("user.home") + "/.axiom/workspaces/project-" + task.projectId;
-        resolved = resolved.replace("{{workDir}}", workDir);
+        String workDir = System.getProperty("user.home")
+                + "/.axiom/workspaces/project-" + task.projectId;
+
+        // Collect every candidate placeholder and its target environment
+        // variable. Longer placeholders are matched first during rendering so
+        // that e.g. {{inputs.title}} wins over any shorter prefix match.
+        Map<String, String> bindings = new LinkedHashMap<>();
+        Map<String, String> values = new LinkedHashMap<>();
+        addBinding(bindings, values, "{{projectId}}", "AXIOM_PROJECT_ID", str(task.projectId));
+        addBinding(bindings, values, "{{eventId}}", "AXIOM_EVENT_ID", str(task.eventId));
+        addBinding(bindings, values, "{{taskId}}", "AXIOM_TASK_ID", str(task.id));
+        addBinding(bindings, values, "{{ref}}", "AXIOM_REF",
+                project != null && project.ref != null ? project.ref : "");
+        addBinding(bindings, values, "{{repository}}", "AXIOM_REPOSITORY",
+                project != null && project.repository != null ? project.repository : "");
+        addBinding(bindings, values, "{{projectName}}", "AXIOM_PROJECT_NAME",
+                project != null && project.name != null ? project.name : "");
+        addBinding(bindings, values, "{{managerInput}}", "AXIOM_MANAGER_INPUT",
+                task.input != null ? task.input : "");
+        addBinding(bindings, values, "{{apiBaseUrl}}", "AXIOM_API_URL", apiBaseUrl);
+        addBinding(bindings, values, "{{workDir}}", "AXIOM_WORK_DIR", workDir);
 
         // Bind named workflow inputs as {{inputs.NAME}} (workflow tasks only).
+        // Input parsing and value rendering are shared with the agent-prompt path
+        // via InputBindingResolver; the script path additionally routes each value
+        // through an environment variable (rather than inlining it, as the prompt
+        // path safely does) so shell metacharacters cannot execute (issue #267).
         if (task.workflowRunId != null) {
-            resolved = InputBindingResolver.bindInputs(
-                    resolved, InputBindingResolver.parseInputs(task.input, objectMapper), objectMapper);
+            Map<String, Object> inputs =
+                    InputBindingResolver.parseInputs(task.input, objectMapper);
+            for (Map.Entry<String, Object> e : inputs.entrySet()) {
+                String key = e.getKey();
+                if (!VALID_INPUT_NAME.matcher(key).matches()) {
+                    // Not a valid shell identifier — cannot bind as an env var
+                    // safely; leave the placeholder untouched.
+                    continue;
+                }
+                addBinding(bindings, values, "{{inputs." + key + "}}",
+                        "AXIOM_INPUT_" + key,
+                        InputBindingResolver.renderValue(e.getValue(), objectMapper));
+            }
         }
 
-        return resolved;
+        return render(template, bindings, values, env);
+    }
+
+    /**
+     * Records a candidate placeholder-to-environment-variable binding. The value
+     * is only exported (and the env var only referenced) if the placeholder is
+     * actually encountered while rendering the template.
+     */
+    private void addBinding(Map<String, String> bindings, Map<String, String> values,
+                            String placeholder, String envName, String value) {
+        bindings.put(placeholder, envName);
+        values.put(placeholder, value != null ? value : "");
+    }
+
+    /**
+     * Renders {@code template} in a single pass, tracking bash quoting context so
+     * each placeholder is replaced with a shell reference appropriate to where it
+     * appears (see {@link #substitutePlaceholders}). Environment variables are
+     * added to {@code env} only for placeholders that are actually present.
+     */
+    private String render(String template, Map<String, String> bindings,
+                          Map<String, String> values, Map<String, String> env) {
+        StringBuilder out = new StringBuilder(template.length() + 32);
+        int i = 0;
+        int n = template.length();
+        // Current quoting context: 0 = unquoted, '\'' = single, '"' = double.
+        char quote = 0;
+        while (i < n) {
+            char c = template.charAt(i);
+
+            // Attempt to match a placeholder at this position (longest wins).
+            if (c == '{' && i + 1 < n && template.charAt(i + 1) == '{') {
+                String match = null;
+                for (String placeholder : bindings.keySet()) {
+                    if (template.startsWith(placeholder, i)
+                            && (match == null || placeholder.length() > match.length())) {
+                        match = placeholder;
+                    }
+                }
+                if (match != null) {
+                    String envName = bindings.get(match);
+                    env.put(envName, values.get(match));
+                    out.append(reference(envName, quote));
+                    i += match.length();
+                    continue;
+                }
+            }
+
+            // Not a placeholder — advance the quoting state machine. Injected
+            // references are always quote-balanced, so tracking only the
+            // original template characters keeps the context accurate.
+            if (quote == 0) {
+                if (c == '\'') {
+                    quote = '\'';
+                } else if (c == '"') {
+                    quote = '"';
+                } else if (c == '\\' && i + 1 < n) {
+                    // Backslash escapes the next character outside single quotes.
+                    out.append(c).append(template.charAt(i + 1));
+                    i += 2;
+                    continue;
+                }
+            } else if (quote == '"') {
+                if (c == '"') {
+                    quote = 0;
+                } else if (c == '\\' && i + 1 < n) {
+                    out.append(c).append(template.charAt(i + 1));
+                    i += 2;
+                    continue;
+                }
+            } else { // single quotes: no escapes, only a closing quote ends it
+                if (c == '\'') {
+                    quote = 0;
+                }
+            }
+
+            out.append(c);
+            i++;
+        }
+        return out.toString();
+    }
+
+    /**
+     * Builds the shell reference for {@code envName} appropriate to the current
+     * quoting context {@code quote} (0 = unquoted, {@code '} = single-quoted,
+     * {@code "} = double-quoted). See {@link #substitutePlaceholders} for the
+     * rationale behind each form.
+     */
+    private String reference(String envName, char quote) {
+        if (quote == '"') {
+            // Already inside double quotes: expansion is safe as-is.
+            return "${" + envName + "}";
+        }
+        if (quote == '\'') {
+            // Inside single quotes bash does not expand; break out, expand within
+            // double quotes, then reopen the single-quoted region.
+            return "'\"${" + envName + "}\"'";
+        }
+        // Unquoted: quote the expansion so whitespace does not word-split it.
+        return "\"${" + envName + "}\"";
     }
 
     private String str(Object value) {
