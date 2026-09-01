@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { Responsive, WidthProvider } from "react-grid-layout/legacy";
-import type { Layout, LayoutItem } from "react-grid-layout/legacy";
+import { Responsive, useContainerWidth } from "react-grid-layout";
+import type { Layout, LayoutItem } from "react-grid-layout";
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -50,11 +50,14 @@ import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import "./DashboardViewPage.css";
 
-const ResponsiveGridLayout = WidthProvider(Responsive);
-
 export function DashboardViewPage() {
     const { dashboardId } = useParams<{ dashboardId: string }>();
     const navigate = useNavigate();
+
+    // v2 react-grid-layout: WidthProvider is replaced by the useContainerWidth
+    // hook, which measures the container via ResizeObserver and supplies the
+    // `width` prop the Responsive grid now requires.
+    const { width, containerRef, mounted } = useContainerWidth();
 
     const [dashboard, setDashboard] = useState<Dashboard | null>(null);
     const [loading, setLoading] = useState(true);
@@ -504,34 +507,41 @@ export function DashboardViewPage() {
                     </EmptyStateBody>
                 </EmptyState>
             ) : (
-                <ResponsiveGridLayout
-                    key={activeTabId}
-                    className="layout"
-                    layouts={{ lg: gridItems }}
-                    breakpoints={{ lg: 1200, md: 996, sm: 768 }}
-                    cols={{ lg: 12, md: 8, sm: 4 }}
-                    rowHeight={80}
-                    isDraggable={isEditing}
-                    isResizable={isEditing}
-                    onLayoutChange={isEditing ? onGridLayoutChange : undefined}
-                    draggableHandle=".pf-v6-c-card__header"
-                    draggableCancel=".pf-v6-c-button"
-                >
-                    {activeWidgets.map(w => (
-                        <div key={w.id}>
-                            <WidgetCard
-                                key={refreshKey}
-                                widgetType={w.type}
-                                config={w.config}
-                                labels={activeLabels}
-                                isEditing={isEditing}
-                                onConfigChange={(config) =>
-                                    handleWidgetConfigChange(w.id, config)}
-                                onRemove={() => handleRemoveWidget(w.id)}
-                            />
-                        </div>
-                    ))}
-                </ResponsiveGridLayout>
+                <div ref={containerRef}>
+                    {mounted && (
+                        <Responsive
+                            key={activeTabId}
+                            className="layout"
+                            width={width}
+                            layouts={{ lg: gridItems }}
+                            breakpoints={{ lg: 1200, md: 996, sm: 768 }}
+                            cols={{ lg: 12, md: 8, sm: 4 }}
+                            rowHeight={80}
+                            dragConfig={{
+                                enabled: isEditing,
+                                handle: ".pf-v6-c-card__header",
+                                cancel: ".pf-v6-c-button",
+                            }}
+                            resizeConfig={{ enabled: isEditing }}
+                            onLayoutChange={isEditing ? onGridLayoutChange : undefined}
+                        >
+                            {activeWidgets.map(w => (
+                                <div key={w.id}>
+                                    <WidgetCard
+                                        key={refreshKey}
+                                        widgetType={w.type}
+                                        config={w.config}
+                                        labels={activeLabels}
+                                        isEditing={isEditing}
+                                        onConfigChange={(config) =>
+                                            handleWidgetConfigChange(w.id, config)}
+                                        onRemove={() => handleRemoveWidget(w.id)}
+                                    />
+                                </div>
+                            ))}
+                        </Responsive>
+                    )}
+                </div>
             )}
 
             <AddWidgetModal
