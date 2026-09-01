@@ -44,7 +44,7 @@ Axiom supports **optional rich metadata** on each output:
 
 | property       | purpose                                                  | default if omitted           |
 |----------------|----------------------------------------------------------|------------------------------|
-| `label`        | Human-readable field label                               | Derived from `name` (title-cased) |
+| `label`        | Human-readable field label                               | The output's `name` verbatim |
 | `description`  | Help text shown below the field                          | Empty                        |
 | `widget`       | UI control hint (text/textarea/number/checkbox/select)   | Inferred from semantic `type` |
 | `defaultValue` | Pre-filled value when the form loads                     | Empty                        |
@@ -74,8 +74,8 @@ Example (in Flow authoring UI):
 
 When metadata is omitted, Axiom derives sensible defaults:
 
-- `label` is generated from the output's `name` (e.g., `approvedByManager` becomes "Approved By
-  Manager").
+- `label` defaults to the output's `name` verbatim (e.g., an output named `approvedByManager` shows the
+  label `approvedByManager`).
 - `widget` is inferred from the semantic `type`: `boolean` defaults to `checkbox`, `number` to `number`,
   `string` to `text`.
 
@@ -99,15 +99,16 @@ When a running workflow reaches a human-task node:
 
 A user completes the task through the unified completion endpoint:
 
+The request body is a flat JSON object whose keys are the output names declared by the node (there is no
+`answers` wrapper):
+
 ```
 POST /api/v1/inbox/{taskId}/complete
 Content-Type: application/json
 
 {
-  "answers": {
-    "approved": true,
-    "comments": "Looks good to me"
-  }
+  "approved": true,
+  "comments": "Looks good to me"
 }
 ```
 
@@ -118,10 +119,12 @@ This endpoint is used by:
 
 On completion, Axiom:
 
-1. **Coerces** the submitted answers to match the node's declared semantic types (`string`, `number`,
-   `boolean`, `object`). Type mismatches are rejected with HTTP 400.
-2. **Merges** the coerced answers into the workflow's context (top-level keys).
-3. **Resumes** the workflow by calling the Flow engine's `completeCurrentNode` with the answers.
+1. **Validates** the submission against the task's `outputSchema` before completion — missing required
+   fields or wrong-typed values are rejected with HTTP 400.
+2. **Coerces** the accepted answers to the node's declared semantic types (`string`, `number`,
+   `boolean`, `object`) so downstream edge conditions compare correctly.
+3. **Merges** the coerced answers into the workflow's context (top-level keys).
+4. **Resumes** the workflow by calling the Flow engine's `completeCurrentNode` with the answers.
 
 Downstream nodes and edge conditions can reference the answers via their keys (e.g., `approved`,
 `comments`).
