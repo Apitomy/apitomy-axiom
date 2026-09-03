@@ -141,6 +141,29 @@ class ActionResourceTest {
     }
 
     @Test
+    void testCreateActionTypeInvalidFieldTypeRejected() {
+        // A field whose type is outside the allowed enum must be rejected with a
+        // 400 that explains the problem, rather than an empty-bodied 400.
+        given()
+            .contentType(ContentType.JSON)
+            .body("""
+                {
+                    "name": "invalid-field-type-action",
+                    "executionMode": "agent",
+                    "promptTemplate": "Do: {{input}}",
+                    "workflowEnabled": true,
+                    "inputs": [{ "name": "issueNumber", "type": "integer", "required": true }]
+                }
+                """)
+            .when()
+                .post(ACTION_TYPES_PATH)
+            .then()
+                .statusCode(400)
+                .body("message", containsString("integer"))
+                .body("message", containsString("string"));
+    }
+
+    @Test
     void testUpdateActionType() {
         int id = createActionType("update-test-action");
 
