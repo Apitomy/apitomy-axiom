@@ -11,7 +11,6 @@ import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.transaction.Transactional;
 import org.jboss.logging.Logger;
 
 import java.time.Instant;
@@ -39,12 +38,16 @@ public class TraceCleanup {
     /**
      * Finds and deletes traces older than the retention period.
      */
-    @Scheduled(every = "1h", concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
-    @Transactional
+    @Scheduled(every = "1h", delayed = "3m",
+            concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     void cleanup() {
         if (shuttingDown) {
             return;
         }
+        CleanupRetry.runWithRetry(LOG, "Trace cleanup", this::doCleanup);
+    }
+
+    void doCleanup() {
         RetentionConfigEntity config = RetentionConfigEntity.<RetentionConfigEntity>findAll()
                 .firstResult();
         if (config == null) {
