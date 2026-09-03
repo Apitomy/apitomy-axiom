@@ -51,6 +51,37 @@ class WorkflowInstanceResourceTest {
     }
 
     @Test
+    void testTriggerWithMissingRequiredFieldReturns400() {
+        int projectId = createProject("WF Missing Field Project");
+
+        // Body present but missing the required workflowDefinitionId field.
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "definitionId": 1
+                    }
+                    """)
+                .when()
+                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .then()
+                    .statusCode(400);
+    }
+
+    @Test
+    void testTriggerWithEmptyBodyReturns400() {
+        int projectId = createProject("WF Empty Body Project");
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("{}")
+                .when()
+                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .then()
+                    .statusCode(400);
+    }
+
+    @Test
     void testTriggerDuplicateReturns409() {
         int projectId = createProject("WF Dup Test Project");
         int definitionId = createAndPublishActionWorkflow(

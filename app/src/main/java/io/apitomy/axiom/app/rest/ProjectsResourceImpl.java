@@ -497,6 +497,10 @@ public class ProjectsResourceImpl implements ProjectsResource {
     @Override
     public io.apitomy.axiom.api.beans.WorkflowInstance triggerProjectWorkflow(
             long projectId, TriggerWorkflow data) {
+        if (data == null || data.getWorkflowDefinitionId() == null) {
+            throw new WebApplicationException(
+                    "Missing required 'workflowDefinitionId' field", 400);
+        }
         WorkflowRunEntity entity = workflowExecutionService
                 .triggerWorkflow(projectId, data.getWorkflowDefinitionId());
         return toWorkflowInstanceBean(entity);
