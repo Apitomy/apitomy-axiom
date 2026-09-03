@@ -10,6 +10,7 @@ import io.apitomy.axiom.api.beans.WorkflowDefinition;
 import io.apitomy.axiom.api.beans.WorkflowDefinitionSearchResults;
 import io.apitomy.axiom.api.beans.WorkflowDefinitionVersion;
 import io.apitomy.axiom.app.WorkflowRunBeanMapper;
+import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
@@ -154,6 +155,27 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
     @Transactional
     public void deleteWorkflowDefinition(long workflowDefinitionId) {
         WorkflowDefinitionEntity entity = findOrThrow(workflowDefinitionId);
+
+        // Cascade delete everything that references this workflow definition. Deletes are
+        // performed explicitly (rather than relying on database ON DELETE CASCADE) so the
+        // behavior is deterministic across database engines.
+        List<Long> runIds = WorkflowRunEntity
+                .<WorkflowRunEntity>list("definitionId", workflowDefinitionId)
+                .stream()
+                .map(run -> run.id)
+                .toList();
+
+        if (!runIds.isEmpty()) {
+            // Delete human tasks belonging to the runs first (task.workflow_run_id FK).
+            TaskEntity.delete("workflowRunId in ?1", runIds);
+            // Then delete the runs themselves.
+            WorkflowRunEntity.delete("definitionId", workflowDefinitionId);
+        }
+
+        // Delete the published versions of the definition.
+        WorkflowDefinitionVersionEntity.delete("definitionId", workflowDefinitionId);
+
+        // Finally delete the definition itself.
         entity.delete();
     }
 
