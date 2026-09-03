@@ -21,10 +21,25 @@ import java.util.stream.Collectors;
  * the allowed set — for example an action type field {@code type} of
  * {@code "integer"} when only {@code string|number|boolean|object} are permitted.
  * Without this mapper the client receives a bare 400 with no explanation.</p>
+ *
+ * <p>Enum values in the generated beans are read through a {@code @JsonCreator}
+ * factory that throws {@link IllegalArgumentException}, which Jackson would otherwise
+ * wrap as a {@code ValueInstantiationException} — a type Quarkus REST converts into a
+ * bodyless 400 before any {@code ExceptionMapper} runs. {@link EnumDeserializationCustomizer}
+ * normalizes those failures into an {@link InvalidFormatException} so that this mapper
+ * can handle them uniformly.</p>
  */
 @Provider
 public class InvalidFormatExceptionMapper implements ExceptionMapper<InvalidFormatException> {
 
+    /**
+     * Builds a {@code 400 Bad Request} response whose JSON body carries a human-readable
+     * {@code message} describing the offending value, the field it was bound to, and (for
+     * enum targets) the set of allowed values.
+     *
+     * @param exception the format failure raised while reading the request body
+     * @return a {@code 400 Bad Request} response with an explanatory JSON body
+     */
     @Override
     public Response toResponse(InvalidFormatException exception) {
         String field = pathOf(exception);
@@ -52,6 +67,9 @@ public class InvalidFormatExceptionMapper implements ExceptionMapper<InvalidForm
     /**
      * Builds a dotted JSON path (e.g. {@code inputs[0].type}) from the exception's
      * path references, or {@code null} if none are available.
+     *
+     * @param exception the format failure
+     * @return the dotted path to the offending property, or {@code null}
      */
     private static String pathOf(InvalidFormatException exception) {
         List<JsonMappingException.Reference> path = exception.getPath();
@@ -73,9 +91,12 @@ public class InvalidFormatExceptionMapper implements ExceptionMapper<InvalidForm
     }
 
     /**
-     * Returns the JSON values allowed for an enum target type, using the generated
-     * {@code value()} accessor when present and falling back to the constant name.
+     * Returns the JSON values allowed for an enum target type, using the constant's
+     * {@code toString()} (which the generated enums override to return the JSON value).
      * Returns an empty list for non-enum types.
+     *
+     * @param targetType the type the value was being bound to
+     * @return the allowed JSON values, or an empty list when {@code targetType} is not an enum
      */
     private static List<String> allowedEnumValues(Class<?> targetType) {
         if (targetType == null || !targetType.isEnum()) {
@@ -83,21 +104,8 @@ public class InvalidFormatExceptionMapper implements ExceptionMapper<InvalidForm
         }
         List<String> values = new ArrayList<>();
         for (Object constant : targetType.getEnumConstants()) {
-            values.add(jsonValueOf(constant));
+            values.add(String.valueOf(constant));
         }
         return values.stream().filter(v -> v != null && !v.isBlank()).collect(Collectors.toList());
-    }
-
-    private static String jsonValueOf(Object constant) {
-        try {
-            var valueMethod = constant.getClass().getMethod("value");
-            Object result = valueMethod.invoke(constant);
-            if (result != null) {
-                return result.toString();
-            }
-        } catch (ReflectiveOperationException ignored) {
-            // Fall through to the enum constant name.
-        }
-        return constant.toString();
     }
 }
