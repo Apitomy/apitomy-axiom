@@ -1,6 +1,7 @@
 package io.apitomy.axiom.app;
 
 import io.quarkus.test.junit.QuarkusTest;
+import io.restassured.http.ContentType;
 import org.junit.jupiter.api.Test;
 
 import static io.restassured.RestAssured.given;
@@ -63,5 +64,16 @@ class SystemResourceTest {
             .then()
                 .statusCode(200)
                 .body("version", equalTo(healthVersion));
+    }
+
+    @Test
+    void testExportPackMissingNameReturnsBadRequest() {
+        given()
+                .contentType(ContentType.JSON)
+                .body("{}")
+            .when()
+                .post("/api/v1/system/packs/export")
+            .then()
+                .statusCode(400);
     }
 }
