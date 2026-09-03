@@ -35,7 +35,7 @@ public class EventQueueCleanup {
         if (shuttingDown) {
             return;
         }
-        CleanupRetry.runWithRetry(LOG, "Event queue cleanup", this::doCleanup);
+        CleanupRetry.runWithRetry(LOG, "Event queue cleanup", () -> shuttingDown, this::doCleanup);
     }
 
     void doCleanup() {

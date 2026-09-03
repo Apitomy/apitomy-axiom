@@ -44,7 +44,7 @@ public class TraceCleanup {
         if (shuttingDown) {
             return;
         }
-        CleanupRetry.runWithRetry(LOG, "Trace cleanup", this::doCleanup);
+        CleanupRetry.runWithRetry(LOG, "Trace cleanup", () -> shuttingDown, this::doCleanup);
     }
 
     void doCleanup() {
