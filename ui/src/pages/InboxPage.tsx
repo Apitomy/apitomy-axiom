@@ -275,7 +275,10 @@ export function InboxPage() {
                             <div style={{ marginBottom: "16px" }}>
                                 {selectedItem.humanContext.details.map((d) => (
                                     <div key={d.label} style={{ marginBottom: "4px" }}>
-                                        <strong>{d.label}:</strong> {d.value}
+                                        <strong>{d.label}:</strong>{" "}
+                                        {d.value?.trim()
+                                            ? d.value
+                                            : <span className="axiom-text-subtle">&mdash;</span>}
                                     </div>
                                 ))}
                             </div>

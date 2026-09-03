@@ -723,7 +723,10 @@ function TasksTab({ tasks, projectId, agentNames, onRefresh }: {
                         </Title>
                         {respondItem?.humanContext?.details?.map((d) => (
                             <div key={d.label} style={{ marginTop: "8px" }}>
-                                <strong>{d.label}:</strong> {d.value}
+                                <strong>{d.label}:</strong>{" "}
+                                {d.value?.trim()
+                                    ? d.value
+                                    : <span className="axiom-text-subtle">&mdash;</span>}
                             </div>
                         ))}
                         <div style={{ marginTop: "8px" }}>
