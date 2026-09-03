@@ -77,6 +77,40 @@
     min-height: 0;
 }
 
+/* Tab area fills the remaining vertical space below the header bar. */
+.workflow-definition-detail__tabs {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+/* Keep the tab bar at its natural height; only the content region flexes. */
+.workflow-definition-detail__tabs > .pf-v6-c-tabs {
+    flex: 0 0 auto;
+}
+
+.workflow-definition-detail__tab-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+/* Design tab: editor fills all available space (no scroll, no padding). */
+.workflow-definition-detail__design {
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+/* Versions / Runs tabs: scrolling content with padding. */
+.workflow-definition-detail__panel {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: auto;
+    padding: 16px 24px;
+}
+
 /* Project detail page: let the tab area fill the remaining vertical space
    so the active tab's content can scroll (or fill, e.g. the Workflow tab). */
 .project-detail > .pf-v6-c-page__main-body {
