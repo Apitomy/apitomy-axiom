@@ -4,6 +4,7 @@ import io.apitomy.axiom.agents.spi.AgentResult;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.TraceEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
+import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
@@ -488,5 +489,56 @@ class WorkflowRunsResourceTest {
         given()
                 .when().get(WORKFLOWS_PATH + "/999999/runs")
                 .then().statusCode(404);
+    }
+
+    /**
+     * Verifies that deleting a workflow definition cascades to its published
+     * versions, its runs, and the tasks belonging to those runs.
+     */
+    @Test
+    void deletingDefinitionCascadesVersionsRunsAndTasks() {
+        int projectId = createProject("WF Cascade Delete Project");
+        int definitionId = createAndPublishActionWorkflow("Cascade Delete WF");
+
+        // Trigger the action workflow so it stops at the action node, creating a
+        // run (and a task) that reference the definition.
+        Integer runId = given()
+                .contentType(ContentType.JSON)
+                .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
+                .when().post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .then().statusCode(200).body("status", equalTo("waiting"))
+                .extract().path("runId");
+
+        // Sanity check: the version, run, and task all exist before deletion.
+        long runId_ = runId.longValue();
+        long definitionId_ = definitionId;
+        long[] before = QuarkusTransaction.requiringNew().call(() -> new long[] {
+                WorkflowDefinitionVersionEntity.count("definitionId", definitionId_),
+                WorkflowRunEntity.count("definitionId", definitionId_),
+                TaskEntity.count("workflowRunId", runId_)
+        });
+        assertEquals(1, before[0], "Version should exist before delete");
+        assertEquals(1, before[1], "Run should exist before delete");
+        assertEquals(1, before[2], "Task should exist before delete");
+
+        // Delete the definition.
+        given()
+                .when().delete(WORKFLOWS_PATH + "/" + definitionId)
+                .then().statusCode(204);
+
+        // The definition is gone.
+        given()
+                .when().get(WORKFLOWS_PATH + "/" + definitionId)
+                .then().statusCode(404);
+
+        // Versions, runs, and tasks are all cascaded away.
+        long[] after = QuarkusTransaction.requiringNew().call(() -> new long[] {
+                WorkflowDefinitionVersionEntity.count("definitionId", definitionId_),
+                WorkflowRunEntity.count("definitionId", definitionId_),
+                TaskEntity.count("workflowRunId", runId_)
+        });
+        assertEquals(0, after[0], "Versions should be deleted");
+        assertEquals(0, after[1], "Runs should be deleted");
+        assertEquals(0, after[2], "Tasks should be deleted");
     }
 }

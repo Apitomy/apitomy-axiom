@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+    Alert,
+    AlertActionCloseButton,
     Button,
     EmptyState,
     EmptyStateBody,
@@ -52,6 +54,7 @@ export function WorkflowDefinitionsPage() {
     const [loading, setLoading] = useState(true);
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
     const [newName, setNewName] = useState("");
     const [newDescription, setNewDescription] = useState("");
 
@@ -118,14 +121,24 @@ export function WorkflowDefinitionsPage() {
 
     const handleDelete = (e: React.MouseEvent, id: number) => {
         e.stopPropagation();
+        setDeleteError(null);
         setDeleteTarget(id);
     };
 
     const confirmDelete = () => {
-        if (deleteTarget !== null) {
-            deleteWorkflowDefinition(deleteTarget).then(load).catch(console.error);
-            setDeleteTarget(null);
+        if (deleteTarget === null) {
+            return;
         }
+        setDeleteError(null);
+        deleteWorkflowDefinition(deleteTarget)
+            .then(() => {
+                setDeleteTarget(null);
+                load();
+            })
+            .catch((err) => {
+                console.error("Failed to delete workflow definition:", err);
+                setDeleteError("Failed to delete this workflow. Please try again.");
+            });
     };
 
     const formatDate = (dateString: string) => {
@@ -252,8 +265,20 @@ export function WorkflowDefinitionsPage() {
             </div>
 
             <ConfirmDeleteModal isOpen={deleteTarget !== null} title="Delete Workflow Definition"
-                onConfirm={confirmDelete} onCancel={() => setDeleteTarget(null)}>
-                Delete this workflow definition?
+                onConfirm={confirmDelete}
+                onCancel={() => { setDeleteTarget(null); setDeleteError(null); }}>
+                {deleteError && (
+                    <Alert
+                        variant="danger"
+                        isInline
+                        title={deleteError}
+                        actionClose={<AlertActionCloseButton onClose={() => setDeleteError(null)} />}
+                        style={{ marginBottom: "16px" }}
+                    />
+                )}
+                Delete this workflow definition? This will permanently delete the workflow,
+                all of its versions, and all of its runs and their tasks. This action cannot
+                be undone.
             </ConfirmDeleteModal>
 
             <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} variant="small">

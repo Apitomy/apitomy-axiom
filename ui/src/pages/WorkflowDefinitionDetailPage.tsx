@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
+    Alert,
+    AlertActionCloseButton,
     Breadcrumb,
     BreadcrumbItem,
     Button,
@@ -96,6 +98,7 @@ export function WorkflowDefinitionDetailPage() {
     const [editMetadataOpen, setEditMetadataOpen] = useState(false);
     const [metadataForm, setMetadataForm] = useState({ name: "", description: "" });
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
 
     // EditorSpi for action types — memoized to avoid re-renders
     const spi: EditorSpi = useMemo(() => ({
@@ -243,12 +246,15 @@ export function WorkflowDefinitionDetailPage() {
     };
 
     const handleDelete = () => {
+        setDeleteError(null);
         deleteWorkflowDefinition(id)
             .then(() => {
+                setDeleteConfirmOpen(false);
                 navigate("/components/workflows");
             })
             .catch((err) => {
                 console.error("Failed to delete workflow definition:", err);
+                setDeleteError("Failed to delete this workflow. Please try again.");
             });
     };
 
@@ -585,9 +591,20 @@ export function WorkflowDefinitionDetailPage() {
                 isOpen={deleteConfirmOpen}
                 title="Delete Workflow Definition"
                 onConfirm={handleDelete}
-                onCancel={() => setDeleteConfirmOpen(false)}
+                onCancel={() => { setDeleteConfirmOpen(false); setDeleteError(null); }}
             >
-                Delete workflow definition &quot;{definition.name}&quot;? This action cannot be undone.
+                {deleteError && (
+                    <Alert
+                        variant="danger"
+                        isInline
+                        title={deleteError}
+                        actionClose={<AlertActionCloseButton onClose={() => setDeleteError(null)} />}
+                        style={{ marginBottom: "16px" }}
+                    />
+                )}
+                Delete workflow definition &quot;{definition.name}&quot;? This will permanently
+                delete the workflow, all of its versions, and all of its runs and their
+                tasks. This action cannot be undone.
             </ConfirmDeleteModal>
         </PageSection>
     );
