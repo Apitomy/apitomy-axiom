@@ -183,6 +183,65 @@ export function WorkflowTab({
             return items;
         }, [instance, navigate]);
 
+    const triggerModal = (
+        <Modal isOpen={isTriggerOpen}
+            onClose={() => { setIsTriggerOpen(false); setTriggerError(null); }}
+            variant="medium">
+            <ModalHeader title="Run Workflow" />
+            <ModalBody>
+                {triggerError && (
+                    <Alert variant="danger" isInline
+                        title="Failed to run workflow"
+                        style={{ marginBottom: "16px" }}>
+                        {triggerError}
+                    </Alert>
+                )}
+                {definitions.length === 0 ? (
+                    <EmptyState>
+                        <EmptyStateBody>
+                            No published workflow definitions
+                            available.
+                        </EmptyStateBody>
+                    </EmptyState>
+                ) : (
+                    <Form>
+                        <FormGroup label="Workflow Definition"
+                            isRequired fieldId="wf-def">
+                            <FormSelect id="wf-def"
+                                value={selectedDefId}
+                                onChange={(_e, v) =>
+                                    setSelectedDefId(v)}>
+                                {definitions.map((d) => (
+                                    <FormSelectOption
+                                        key={d.id}
+                                        value={String(d.id)}
+                                        label={`${d.name} (v${d.currentVersion})`}
+                                    />
+                                ))}
+                            </FormSelect>
+                        </FormGroup>
+                    </Form>
+                )}
+            </ModalBody>
+            <ModalFooter>
+                <Button variant="primary"
+                    onClick={handleTrigger}
+                    isDisabled={
+                        !selectedDefId
+                        || definitions.length === 0
+                        || submitting}
+                    isLoading={submitting}>
+                    Run Workflow
+                </Button>
+                <Button variant="link"
+                    onClick={
+                        () => { setIsTriggerOpen(false); setTriggerError(null); }}>
+                    Cancel
+                </Button>
+            </ModalFooter>
+        </Modal>
+    );
+
     if (loading) {
         return <EmptyState><EmptyStateBody>
             Loading...
@@ -202,68 +261,16 @@ export function WorkflowTab({
                     </Button>
                 </EmptyState>
 
-                <Modal isOpen={isTriggerOpen}
-                    onClose={() => { setIsTriggerOpen(false); setTriggerError(null); }}
-                    variant="medium">
-                    <ModalHeader title="Run Workflow" />
-                    <ModalBody>
-                        {triggerError && (
-                            <Alert variant="danger" isInline
-                                title="Failed to run workflow"
-                                style={{ marginBottom: "16px" }}>
-                                {triggerError}
-                            </Alert>
-                        )}
-                        {definitions.length === 0 ? (
-                            <EmptyState>
-                                <EmptyStateBody>
-                                    No published workflow definitions
-                                    available.
-                                </EmptyStateBody>
-                            </EmptyState>
-                        ) : (
-                            <Form>
-                                <FormGroup label="Workflow Definition"
-                                    isRequired fieldId="wf-def">
-                                    <FormSelect id="wf-def"
-                                        value={selectedDefId}
-                                        onChange={(_e, v) =>
-                                            setSelectedDefId(v)}>
-                                        {definitions.map((d) => (
-                                            <FormSelectOption
-                                                key={d.id}
-                                                value={String(d.id)}
-                                                label={`${d.name} (v${d.currentVersion})`}
-                                            />
-                                        ))}
-                                    </FormSelect>
-                                </FormGroup>
-                            </Form>
-                        )}
-                    </ModalBody>
-                    <ModalFooter>
-                        <Button variant="primary"
-                            onClick={handleTrigger}
-                            isDisabled={
-                                !selectedDefId
-                                || definitions.length === 0
-                                || submitting}
-                            isLoading={submitting}>
-                            Run Workflow
-                        </Button>
-                        <Button variant="link"
-                            onClick={
-                                () => { setIsTriggerOpen(false); setTriggerError(null); }}>
-                            Cancel
-                        </Button>
-                    </ModalFooter>
-                </Modal>
+                {triggerModal}
             </>
         );
     }
 
     const isActive = instance.status === "running"
         || instance.status === "waiting";
+    const isTerminal = instance.status === "completed"
+        || instance.status === "failed"
+        || instance.status === "cancelled";
 
     return (
         <div style={{
@@ -316,6 +323,14 @@ export function WorkflowTab({
                         </Button>
                     </FlexItem>
                 )}
+                {isTerminal && (
+                    <FlexItem>
+                        <Button variant="primary"
+                            onClick={openTriggerModal}>
+                            Run Workflow
+                        </Button>
+                    </FlexItem>
+                )}
                 <FlexItem>
                     <Link to={`/logs/workflow-runs/${instance.id}`}>
                         View run details →
@@ -365,6 +380,8 @@ export function WorkflowTab({
                 taskId={logTaskId}
                 onClose={() => setIsLogOpen(false)}
             />
+
+            {triggerModal}
         </div>
     );
 }
