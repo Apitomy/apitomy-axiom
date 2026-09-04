@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { Responsive, useContainerWidth } from "react-grid-layout";
+import { Responsive } from "react-grid-layout";
 import type { Layout, LayoutItem } from "react-grid-layout";
 import {
     Breadcrumb,
@@ -50,14 +50,51 @@ import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import "./DashboardViewPage.css";
 
+/**
+ * Measures the width of a container element via a callback ref and a
+ * {@link ResizeObserver}, returning the ref to attach and the measured width
+ * (null until the element has been measured at least once).
+ *
+ * <p>This is used in place of react-grid-layout's {@code useContainerWidth}
+ * hook, whose measurement/observer setup runs in a one-shot mount effect and
+ * therefore requires the observed node to exist on the very first render. On
+ * this page the grid container only mounts <em>after</em> the dashboard has
+ * loaded asynchronously, so that effect bailed out (the ref was still null),
+ * never attached its observer, and left the grid pinned to the library's
+ * default 1280px width. A callback ref re-runs whenever the node mounts or
+ * unmounts, so it measures correctly regardless of render timing and keeps the
+ * grid reflowing on window/container resize.</p>
+ *
+ * @returns the callback ref to attach to the container and its measured width
+ */
+function useMeasuredContainerWidth(): {
+    containerRef: (node: HTMLDivElement | null) => void;
+    width: number | null;
+} {
+    const [width, setWidth] = useState<number | null>(null);
+    const observerRef = useRef<ResizeObserver | null>(null);
+    const containerRef = useCallback((node: HTMLDivElement | null): void => {
+        observerRef.current?.disconnect();
+        observerRef.current = null;
+        if (node) {
+            const measure = (): void => setWidth(node.getBoundingClientRect().width);
+            measure();
+            const observer = new ResizeObserver(() => measure());
+            observer.observe(node);
+            observerRef.current = observer;
+        }
+    }, []);
+    return { containerRef, width };
+}
+
 export function DashboardViewPage() {
     const { dashboardId } = useParams<{ dashboardId: string }>();
     const navigate = useNavigate();
 
-    // v2 react-grid-layout: WidthProvider is replaced by the useContainerWidth
-    // hook, which measures the container via ResizeObserver and supplies the
-    // `width` prop the Responsive grid now requires.
-    const { width, containerRef, mounted } = useContainerWidth();
+    // v2 react-grid-layout requires an explicit `width` prop. We measure the
+    // grid container ourselves (see useMeasuredContainerWidth) because the grid
+    // mounts only after the dashboard loads.
+    const { containerRef, width } = useMeasuredContainerWidth();
 
     const [dashboard, setDashboard] = useState<Dashboard | null>(null);
     const [loading, setLoading] = useState(true);
@@ -508,7 +545,7 @@ export function DashboardViewPage() {
                 </EmptyState>
             ) : (
                 <div ref={containerRef}>
-                    {mounted && (
+                    {width !== null && (
                         <Responsive
                             key={activeTabId}
                             className="layout"
