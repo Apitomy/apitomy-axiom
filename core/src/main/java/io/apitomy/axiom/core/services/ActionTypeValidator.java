@@ -21,6 +21,10 @@ public final class ActionTypeValidator {
 
     private static final Pattern PLACEHOLDER_PATTERN =
             Pattern.compile("\\{\\{([a-zA-Z_][a-zA-Z0-9_]*)\\}\\}");
+    private static final Pattern INPUT_PLACEHOLDER_PATTERN =
+            Pattern.compile("\\{\\{inputs\\.([a-zA-Z_][a-zA-Z0-9_]*)\\}\\}");
+    private static final Pattern VALID_SHELL_IDENTIFIER_PATTERN =
+            Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
     private static final Pattern MALFORMED_PLACEHOLDER_PATTERN =
             Pattern.compile("\\{\\{\\s+|\\s+\\}\\}|\\{\\{[^}]*$");
     private static final Set<String> RECOGNIZED_PROMPT_PLACEHOLDERS = Set.of(
@@ -131,6 +135,8 @@ public final class ActionTypeValidator {
                                 + RECOGNIZED_PROMPT_PLACEHOLDERS + "."));
             }
         }
+
+        checkInputPlaceholders(prompt, "promptTemplate", def, messages);
     }
 
     private static void validateScriptTemplate(NewActionType def, List<ValidationMessage> messages) {
@@ -153,6 +159,23 @@ public final class ActionTypeValidator {
                 messages.add(error("scriptTemplate",
                         "Unrecognized placeholder '{{" + name + "}}'. Supported: "
                                 + RECOGNIZED_SCRIPT_PLACEHOLDERS + "."));
+            }
+        }
+
+        checkInputPlaceholders(script, "scriptTemplate", def, messages);
+
+        // Script binding only substitutes inputs whose names are valid shell
+        // identifiers; any other declared input is silently skipped at runtime.
+        if (def.getInputs() != null) {
+            for (io.apitomy.axiom.api.beans.ActionTypeField f : def.getInputs()) {
+                String name = f.getName();
+                if (name != null && !name.isBlank()
+                        && !VALID_SHELL_IDENTIFIER_PATTERN.matcher(name).matches()) {
+                    messages.add(warning("scriptTemplate",
+                            "Declared input '" + name + "' is not a valid shell identifier "
+                                    + "and will be skipped by the script binding path. "
+                                    + "Use letters, digits, and underscores; must not start with a digit."));
+                }
             }
         }
     }
@@ -280,6 +303,33 @@ public final class ActionTypeValidator {
                 messages.add(error(field, "Field type is required."));
             }
         }
+    }
+
+    private static void checkInputPlaceholders(String text, String field, NewActionType def,
+                                               List<ValidationMessage> messages) {
+        Set<String> declared = declaredInputNames(def);
+        Matcher matcher = INPUT_PLACEHOLDER_PATTERN.matcher(text);
+        while (matcher.find()) {
+            String name = matcher.group(1);
+            if (!declared.contains(name)) {
+                messages.add(error(field,
+                        "References undeclared input '{{inputs." + name + "}}'. "
+                                + "Declare '" + name + "' in the action type's inputs "
+                                + "or fix the placeholder name."));
+            }
+        }
+    }
+
+    private static Set<String> declaredInputNames(NewActionType def) {
+        Set<String> names = new HashSet<>();
+        if (def.getInputs() != null) {
+            for (io.apitomy.axiom.api.beans.ActionTypeField f : def.getInputs()) {
+                if (f.getName() != null && !f.getName().isBlank()) {
+                    names.add(f.getName());
+                }
+            }
+        }
+        return names;
     }
 
     private static void checkMalformedPlaceholders(String text, String field,

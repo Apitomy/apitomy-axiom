@@ -150,11 +150,45 @@ class ActionTypeValidatorTest {
     }
 
     @Test
-    void actorPromptWithInputsDottedPlaceholderIsValid() {
+    void actorPromptWithDeclaredInputsDottedPlaceholderIsValid() {
         NewActionType at = makeActor("test", "desc",
                 "Process {{inputs.repository}} and {{inputs.branch}}");
+        at.setInputs(List.of(
+                field("repository", ActionTypeField.Type.STRING),
+                field("branch", ActionTypeField.Type.STRING)));
 
         assertFalse(ActionTypeValidator.validate(at).hasErrors());
+    }
+
+    @Test
+    void actorPromptWithUndeclaredInputPlaceholderIsError() {
+        NewActionType at = makeActor("test", "desc", "Process {{inputs.foo}}");
+
+        ValidationResult result = ActionTypeValidator.validate(at);
+
+        assertTrue(result.hasErrors());
+        assertTrue(result.errors().stream().anyMatch(
+                m -> m.field().equals("promptTemplate") && m.message().contains("{{inputs.foo}}")));
+    }
+
+    @Test
+    void scriptWithDeclaredInputsDottedPlaceholderIsValid() {
+        NewActionType at = makeScript("test", "desc",
+                "echo {{inputs.repository}} {{projectId}}");
+        at.setInputs(List.of(field("repository", ActionTypeField.Type.STRING)));
+
+        assertFalse(ActionTypeValidator.validate(at).hasErrors());
+    }
+
+    @Test
+    void scriptWithUndeclaredInputPlaceholderIsError() {
+        NewActionType at = makeScript("test", "desc", "echo {{inputs.foo}}");
+
+        ValidationResult result = ActionTypeValidator.validate(at);
+
+        assertTrue(result.hasErrors());
+        assertTrue(result.errors().stream().anyMatch(
+                m -> m.field().equals("scriptTemplate") && m.message().contains("{{inputs.foo}}")));
     }
 
     @Test
