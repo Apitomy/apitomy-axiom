@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
+    Alert,
+    AlertActionCloseButton,
     Breadcrumb,
     BreadcrumbItem,
     Button,
     EmptyState,
     EmptyStateBody,
-    ExpandableSection,
     Flex,
     FlexItem,
     Form,
@@ -18,14 +19,18 @@ import {
     ModalFooter,
     ModalHeader,
     PageSection,
+    Pagination,
+    Tab,
+    Tabs,
+    TabTitleText,
     TextArea,
     TextInput,
     Title,
-    DescriptionList,
-    DescriptionListGroup,
-    DescriptionListTerm,
-    DescriptionListDescription,
+    Toolbar,
+    ToolbarContent,
+    ToolbarItem,
 } from "@patternfly/react-core";
+import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { WorkflowEditor } from "@apitomy/flow-ui";
 import type { Workflow, ValidationProblem, EditorSpi, ActionTypeDescriptor } from "@apitomy/flow-ui";
 import {
@@ -38,13 +43,35 @@ import {
     publishWorkflowDefinition,
     deleteWorkflowDefinition,
     listWorkflowDefinitionVersions,
+    fetchWorkflowDefinitionRuns,
     fetchActionTypes,
+    type WorkflowRunSummary,
 } from "../config/api";
+import { sseClient, type AxiomSseEvent } from "../config/sse";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
 import RocketIcon from "@patternfly/react-icons/dist/esm/icons/rocket-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import EditIcon from "@patternfly/react-icons/dist/esm/icons/edit-icon";
+import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
+
+const RUN_STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
+    running: "blue",
+    waiting: "orange",
+    completed: "green",
+    failed: "red",
+    cancelled: "grey",
+};
+
+function formatDuration(startedOn: string, completedOn?: string): string {
+    if (!completedOn) return "—";
+    const ms = new Date(completedOn).getTime() - new Date(startedOn).getTime();
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+    const mins = Math.floor(ms / 60_000);
+    const secs = Math.round((ms % 60_000) / 1000);
+    return `${mins}m ${secs}s`;
+}
 
 export function WorkflowDefinitionDetailPage() {
     const { workflowDefinitionId } = useParams<{ workflowDefinitionId: string }>();
@@ -61,10 +88,17 @@ export function WorkflowDefinitionDetailPage() {
     const [loading, setLoading] = useState(true);
     const [validationErrors, setValidationErrors] = useState<ValidationProblem[]>([]);
     const [versions, setVersions] = useState<WorkflowDefinitionVersion[]>([]);
-    const [versionsExpanded, setVersionsExpanded] = useState(false);
+    const [activeTab, setActiveTab] = useState(0);
+    const [runs, setRuns] = useState<WorkflowRunSummary[]>([]);
+    const [runsTotalCount, setRunsTotalCount] = useState(0);
+    const [runsPage, setRunsPage] = useState(1);
+    const [runsPerPage, setRunsPerPage] = useState(20);
+    const [runsLoading, setRunsLoading] = useState(false);
+    const [runsLoaded, setRunsLoaded] = useState(false);
     const [editMetadataOpen, setEditMetadataOpen] = useState(false);
     const [metadataForm, setMetadataForm] = useState({ name: "", description: "" });
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
 
     // EditorSpi for action types — memoized to avoid re-renders
     const spi: EditorSpi = useMemo(() => ({
@@ -114,6 +148,42 @@ export function WorkflowDefinitionDetailPage() {
         window.addEventListener("beforeunload", handler);
         return () => window.removeEventListener("beforeunload", handler);
     }, [dirty]);
+
+    const loadRuns = useCallback(() => {
+        if (!id) return;
+        setRunsLoading(true);
+        fetchWorkflowDefinitionRuns(id, runsPage, runsPerPage)
+            .then((results) => {
+                setRuns(results.items);
+                setRunsTotalCount(results.totalCount);
+                setRunsLoaded(true);
+            })
+            .catch((err) => {
+                console.error("Failed to load workflow runs:", err);
+            })
+            .finally(() => setRunsLoading(false));
+    }, [id, runsPage, runsPerPage]);
+
+    // Lazy-load runs the first time the Runs tab is shown, and whenever
+    // its pagination changes while it is active.
+    useEffect(() => {
+        if (activeTab === 2) {
+            loadRuns();
+        }
+    }, [activeTab, loadRuns]);
+
+    // Keep the Runs tab in sync with workflow lifecycle events (debounced).
+    useEffect(() => {
+        if (activeTab !== 2) return;
+        let timeout: ReturnType<typeof setTimeout>;
+        const unsubscribe = sseClient.subscribe((event: AxiomSseEvent) => {
+            if (event.type === "workflow-updated") {
+                clearTimeout(timeout);
+                timeout = setTimeout(loadRuns, 300);
+            }
+        });
+        return () => { clearTimeout(timeout); unsubscribe(); };
+    }, [activeTab, loadRuns]);
 
     const handleEditorChange = useCallback((updated: Workflow) => {
         setEditorContent(updated);
@@ -176,12 +246,15 @@ export function WorkflowDefinitionDetailPage() {
     };
 
     const handleDelete = () => {
+        setDeleteError(null);
         deleteWorkflowDefinition(id)
             .then(() => {
+                setDeleteConfirmOpen(false);
                 navigate("/components/workflows");
             })
             .catch((err) => {
                 console.error("Failed to delete workflow definition:", err);
+                setDeleteError("Failed to delete this workflow. Please try again.");
             });
     };
 
@@ -296,46 +369,180 @@ export function WorkflowDefinitionDetailPage() {
                         {definition.description}
                     </p>
                 )}
-
-                {/* Version history */}
-                {versions.length > 0 && (
-                    <ExpandableSection
-                        toggleText={`Version History (${versions.length})`}
-                        isExpanded={versionsExpanded}
-                        onToggle={() => setVersionsExpanded(!versionsExpanded)}
-                        style={{ marginTop: "16px" }}
-                    >
-                        <DescriptionList isCompact isHorizontal>
-                            {versions.map((v) => (
-                                <DescriptionListGroup key={v.id}>
-                                    <DescriptionListTerm>Version {v.version}</DescriptionListTerm>
-                                    <DescriptionListDescription>
-                                        {new Date(v.createdOn).toLocaleString()}
-                                    </DescriptionListDescription>
-                                </DescriptionListGroup>
-                            ))}
-                        </DescriptionList>
-                    </ExpandableSection>
-                )}
             </div>
 
-            {/* Editor fills remaining space */}
-            <div style={{ flex: 1, minHeight: 0 }}>
-                {editorContent ? (
-                    <WorkflowEditor
-                        workflow={editorContent}
-                        onChange={handleEditorChange}
-                        onValidationChange={handleValidationChange}
-                        theme={effectiveTheme === "dark" ? "dark" : "light"}
-                        spi={spi}
+            {/* Tabbed content fills remaining space */}
+            <div className="workflow-definition-detail__tabs">
+                <Tabs activeKey={activeTab} onSelect={(_e, k) => setActiveTab(k as number)}>
+                    <Tab eventKey={0} title={<TabTitleText>Design</TabTitleText>} />
+                    <Tab
+                        eventKey={1}
+                        title={<TabTitleText>Versions ({versions.length})</TabTitleText>}
                     />
-                ) : (
-                    <EmptyState>
-                        <EmptyStateBody>
-                            No workflow content. Start by adding nodes to the editor.
-                        </EmptyStateBody>
-                    </EmptyState>
-                )}
+                    <Tab
+                        eventKey={2}
+                        title={
+                            <TabTitleText>
+                                Runs{runsLoaded ? ` (${runsTotalCount})` : ""}
+                            </TabTitleText>
+                        }
+                    />
+                </Tabs>
+
+                <div className="workflow-definition-detail__tab-content">
+                    {activeTab === 0 && (
+                        <div className="workflow-definition-detail__design">
+                            {editorContent ? (
+                                <WorkflowEditor
+                                    workflow={editorContent}
+                                    onChange={handleEditorChange}
+                                    onValidationChange={handleValidationChange}
+                                    theme={effectiveTheme === "dark" ? "dark" : "light"}
+                                    spi={spi}
+                                />
+                            ) : (
+                                <EmptyState>
+                                    <EmptyStateBody>
+                                        No workflow content. Start by adding nodes to the editor.
+                                    </EmptyStateBody>
+                                </EmptyState>
+                            )}
+                        </div>
+                    )}
+
+                    {activeTab === 1 && (
+                        <div className="workflow-definition-detail__panel">
+                            {versions.length === 0 ? (
+                                <EmptyState>
+                                    <EmptyStateBody>
+                                        No published versions yet. Publish the workflow to create
+                                        the first version.
+                                    </EmptyStateBody>
+                                </EmptyState>
+                            ) : (
+                                <Table aria-label="Workflow Versions" variant="compact">
+                                    <Thead>
+                                        <Tr>
+                                            <Th>Version</Th>
+                                            <Th>Created</Th>
+                                        </Tr>
+                                    </Thead>
+                                    <Tbody>
+                                        {versions.map((v) => (
+                                            <Tr key={v.id}>
+                                                <Td>
+                                                    v{v.version}
+                                                    {v.version === definition.currentVersion && (
+                                                        <Label
+                                                            isCompact
+                                                            color="blue"
+                                                            style={{ marginLeft: "8px" }}
+                                                        >
+                                                            Current
+                                                        </Label>
+                                                    )}
+                                                </Td>
+                                                <Td style={{ whiteSpace: "nowrap" }}>
+                                                    {new Date(v.createdOn).toLocaleString()}
+                                                </Td>
+                                            </Tr>
+                                        ))}
+                                    </Tbody>
+                                </Table>
+                            )}
+                        </div>
+                    )}
+
+                    {activeTab === 2 && (
+                        <div className="workflow-definition-detail__panel">
+                            <Toolbar>
+                                <ToolbarContent>
+                                    <ToolbarItem>
+                                        <Button
+                                            variant="control"
+                                            aria-label="Refresh"
+                                            onClick={loadRuns}
+                                        >
+                                            <SyncAltIcon />
+                                        </Button>
+                                    </ToolbarItem>
+                                    <ToolbarItem
+                                        variant="pagination"
+                                        align={{ default: "alignEnd" }}
+                                    >
+                                        <Pagination
+                                            itemCount={runsTotalCount}
+                                            page={runsPage}
+                                            perPage={runsPerPage}
+                                            onSetPage={(_e, p) => setRunsPage(p)}
+                                            onPerPageSelect={(_e, pp) => {
+                                                setRunsPerPage(pp);
+                                                setRunsPage(1);
+                                            }}
+                                            isCompact
+                                        />
+                                    </ToolbarItem>
+                                </ToolbarContent>
+                            </Toolbar>
+
+                            {runsLoading ? (
+                                <EmptyState>
+                                    <EmptyStateBody>Loading workflow runs...</EmptyStateBody>
+                                </EmptyState>
+                            ) : runs.length === 0 ? (
+                                <EmptyState>
+                                    <EmptyStateBody>
+                                        No runs recorded for this workflow yet.
+                                    </EmptyStateBody>
+                                </EmptyState>
+                            ) : (
+                                <Table aria-label="Workflow Runs" variant="compact">
+                                    <Thead>
+                                        <Tr>
+                                            <Th>Status</Th>
+                                            <Th>Project</Th>
+                                            <Th>Version</Th>
+                                            <Th>Started</Th>
+                                            <Th>Duration</Th>
+                                            <Th>Actions</Th>
+                                        </Tr>
+                                    </Thead>
+                                    <Tbody>
+                                        {runs.map((run) => (
+                                            <Tr key={run.runId}>
+                                                <Td>
+                                                    <Label
+                                                        isCompact
+                                                        color={RUN_STATUS_COLORS[run.status] || "grey"}
+                                                    >
+                                                        {run.status}
+                                                    </Label>
+                                                </Td>
+                                                <Td>
+                                                    <Link to={`/projects/${run.projectId}`}>
+                                                        {run.projectName || `Project #${run.projectId}`}
+                                                    </Link>
+                                                </Td>
+                                                <Td>v{run.definitionVersion}</Td>
+                                                <Td style={{ whiteSpace: "nowrap" }}>
+                                                    {new Date(run.startedOn).toLocaleString()}
+                                                </Td>
+                                                <Td style={{ whiteSpace: "nowrap" }}>
+                                                    {formatDuration(run.startedOn, run.completedOn)}
+                                                </Td>
+                                                <Td>
+                                                    <Link to={`/logs/workflow-runs/${run.runId}`}>
+                                                        View details
+                                                    </Link>
+                                                </Td>
+                                            </Tr>
+                                        ))}
+                                    </Tbody>
+                                </Table>
+                            )}
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Edit Metadata Modal */}
@@ -384,9 +591,20 @@ export function WorkflowDefinitionDetailPage() {
                 isOpen={deleteConfirmOpen}
                 title="Delete Workflow Definition"
                 onConfirm={handleDelete}
-                onCancel={() => setDeleteConfirmOpen(false)}
+                onCancel={() => { setDeleteConfirmOpen(false); setDeleteError(null); }}
             >
-                Delete workflow definition &quot;{definition.name}&quot;? This action cannot be undone.
+                {deleteError && (
+                    <Alert
+                        variant="danger"
+                        isInline
+                        title={deleteError}
+                        actionClose={<AlertActionCloseButton onClose={() => setDeleteError(null)} />}
+                        style={{ marginBottom: "16px" }}
+                    />
+                )}
+                Delete workflow definition &quot;{definition.name}&quot;? This will permanently
+                delete the workflow, all of its versions, and all of its runs and their
+                tasks. This action cannot be undone.
             </ConfirmDeleteModal>
         </PageSection>
     );
