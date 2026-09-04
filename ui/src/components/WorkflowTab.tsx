@@ -278,10 +278,10 @@ export function WorkflowTab({
             flexDirection: "column",
             height: "100%" }}>
             <Flex justifyContent={{
-                default: "justifyContentSpaceBetween" }}
+                default: "justifyContentFlexStart" }}
                 alignItems={{
                     default: "alignItemsCenter" }}
-                style={{ marginBottom: "16px" }}>
+                style={{ marginBottom: "12px" }}>
                 <FlexItem>
                     <Flex alignItems={{
                         default: "alignItemsCenter" }}
@@ -317,25 +317,25 @@ export function WorkflowTab({
                 </FlexItem>
                 {isActive && (
                     <FlexItem>
-                        <Button variant="danger"
+                        <Button variant="danger" size="sm"
                             onClick={() => setIsCancelOpen(true)}>
                             Cancel Workflow
                         </Button>
                     </FlexItem>
                 )}
-                {isTerminal && (
-                    <FlexItem>
-                        <Button variant="primary"
-                            onClick={openTriggerModal}>
-                            Run Workflow
-                        </Button>
-                    </FlexItem>
-                )}
-                <FlexItem>
+                <FlexItem style={{ paddingLeft: "24px" }}>
                     <Link to={`/logs/workflow-runs/${instance.id}`}>
                         View run details →
                     </Link>
                 </FlexItem>
+                {isTerminal && (
+                    <FlexItem style={{ paddingLeft: "24px" }}>
+                        <Button variant="primary" size="sm"
+                                onClick={openTriggerModal}>
+                            Run Another Workflow
+                        </Button>
+                    </FlexItem>
+                )}
             </Flex>
 
             {instance.failureReason && (
