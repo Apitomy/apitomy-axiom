@@ -147,7 +147,7 @@
     flex-direction: column;
     flex: 1 1 0;
     min-height: 0;
-    margin-top: 24px;
+    margin-top: 12px;
 }
 
 /* Keep the tab bar at its natural height; only the content region flexes. */

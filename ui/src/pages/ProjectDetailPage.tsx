@@ -107,7 +107,7 @@ export function ProjectDetailPage() {
     const [agentNames, setAgentNames] = useState<Record<number, string>>({});
     const [activeTab, setActiveTab] = useState(0);
     const [loading, setLoading] = useState(true);
-    const [isMetadataExpanded, setIsMetadataExpanded] = useState(true);
+    const [isMetadataExpanded, setIsMetadataExpanded] = useState(false);
 
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
     const [isLabelsOpen, setIsLabelsOpen] = useState(false);
