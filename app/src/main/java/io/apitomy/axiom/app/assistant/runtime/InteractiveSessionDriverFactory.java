@@ -5,6 +5,7 @@ import io.apitomy.axiom.app.assistant.runtime.opencode.OpenCodeCapabilityProbe;
 import io.apitomy.axiom.app.assistant.runtime.opencode.OpenCodeEventNormalizer;
 import io.apitomy.axiom.app.assistant.runtime.opencode.OpenCodeInteractiveSessionDriver;
 import io.apitomy.axiom.app.assistant.runtime.opencode.OpenCodeSessionServerProcess;
+import io.quarkus.arc.Unremovable;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
@@ -59,6 +60,7 @@ public interface InteractiveSessionDriverFactory {
     /**
      * Default factory implementation selecting Claude or OpenCode runtime drivers.
      */
+    @Unremovable
     @ApplicationScoped
     class DefaultInteractiveSessionDriverFactory implements InteractiveSessionDriverFactory {
 

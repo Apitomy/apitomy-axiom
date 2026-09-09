@@ -508,7 +508,7 @@ public class AssistantSession {
         return false;
     }
 
-    private void handleDriverEvent(SseEvent event) {
+    void handleDriverEvent(SseEvent event) {
         if ("subagent_started".equals(event.type())) {
             String taskId = event.data().path("taskId").asText("");
             String toolUseId = event.data().path("toolUseId").asText("");
@@ -535,7 +535,7 @@ public class AssistantSession {
         }
     }
 
-    private void handlePermissionEvent(SseEvent event) {
+    void handlePermissionEvent(SseEvent event) {
         if (handleAutoApproval(event)) {
             return;
         }
