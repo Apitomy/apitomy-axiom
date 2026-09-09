@@ -1,9 +1,19 @@
 package io.apitomy.axiom.app.assistant.runtime;
 
+import io.apitomy.axiom.app.assistant.AssistantEventParser;
+import io.apitomy.axiom.app.assistant.runtime.opencode.OpenCodeCapabilityProbe;
+import io.apitomy.axiom.app.assistant.runtime.opencode.OpenCodeEventNormalizer;
+import io.apitomy.axiom.app.assistant.runtime.opencode.OpenCodeInteractiveSessionDriver;
+import io.apitomy.axiom.app.assistant.runtime.opencode.OpenCodeSessionServerProcess;
+import jakarta.enterprise.context.ApplicationScoped;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.Consumer;
 
 /**
  * Factory for selecting and creating interactive session runtime drivers.
@@ -38,6 +48,72 @@ public interface InteractiveSessionDriverFactory {
                          List<String> command,
                          Map<String, String> environment,
                          Long projectId,
-                         String projectName) {
+                         String projectName,
+                         Consumer<AssistantEventParser.SseEvent> eventSink,
+                         Consumer<AssistantEventParser.SseEvent> autoApprovalSink,
+                         String model,
+                         com.fasterxml.jackson.databind.JsonNode tools,
+                         String sessionTitle) {
+    }
+
+    /**
+     * Default factory implementation selecting Claude or OpenCode runtime drivers.
+     */
+    @ApplicationScoped
+    class DefaultInteractiveSessionDriverFactory implements InteractiveSessionDriverFactory {
+
+        @ConfigProperty(name = "axiom.agent.claude-code.executable", defaultValue = "claude")
+        String claudeExecutable;
+
+        @ConfigProperty(name = "axiom.agent.opencode.executable", defaultValue = "opencode")
+        String openCodeExecutable;
+
+        @ConfigProperty(name = "axiom.agent.opencode.server.hostname", defaultValue = "127.0.0.1")
+        String openCodeServerHostname;
+
+        @ConfigProperty(name = "axiom.agent.opencode.server.port", defaultValue = "0")
+        int openCodeServerPort;
+
+        @ConfigProperty(name = "axiom.assistant.opencode.server.startup-timeout-seconds", defaultValue = "30")
+        int openCodeServerStartupTimeoutSeconds;
+
+        @Override
+        public InteractiveSessionDriver createDriver(DriverRequest request) throws IOException {
+            Objects.requireNonNull(request, "request");
+
+            String engineType = request.engineType();
+            if ("opencode".equalsIgnoreCase(engineType)) {
+                OpenCodeSessionServerProcess openCodeSessionServerProcess =
+                        new OpenCodeSessionServerProcess(openCodeExecutable,
+                                openCodeServerHostname,
+                                openCodeServerPort,
+                                openCodeServerStartupTimeoutSeconds);
+                OpenCodeCapabilityProbe capabilityProbe = new OpenCodeCapabilityProbe();
+                OpenCodeEventNormalizer normalizer = new OpenCodeEventNormalizer();
+                String sessionTitle = request.sessionTitle() != null && !request.sessionTitle().isBlank()
+                        ? request.sessionTitle()
+                        : "Axiom Assistant Session";
+                return new OpenCodeInteractiveSessionDriver(
+                        new OpenCodeInteractiveSessionDriver.ServerProcessAdapter(openCodeSessionServerProcess),
+                        capabilityProbe::probe,
+                        normalizer,
+                        request.eventSink(),
+                        request.autoApprovalSink(),
+                        sessionTitle,
+                        request.model(),
+                        request.tools()
+                );
+            }
+
+            return new ClaudeInteractiveSessionDriver(
+                    request.workingDirectory(),
+                    request.sessionDirectory(),
+                    request.command(),
+                    request.environment(),
+                    new AssistantEventParser(),
+                    request.eventSink(),
+                    request.autoApprovalSink()
+            );
+        }
     }
 }
