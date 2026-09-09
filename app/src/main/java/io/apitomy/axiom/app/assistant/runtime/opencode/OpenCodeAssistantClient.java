@@ -41,6 +41,15 @@ public final class OpenCodeAssistantClient {
     }
 
     /**
+     * Returns the configured OpenCode server base URL.
+     *
+     * @return OpenCode base URL
+     */
+    public String baseUrl() {
+        return baseUrl;
+    }
+
+    /**
      * Queries OpenCode global health status.
      *
      * @return health response wrapper

@@ -7,6 +7,13 @@ import java.util.Map;
  */
 public class SessionCompatibilityException extends RuntimeException {
 
+    public static final String RUNTIME_UNHEALTHY = "RUNTIME_UNHEALTHY";
+    public static final String SESSION_PROTOCOL_UNSUPPORTED = "SESSION_PROTOCOL_UNSUPPORTED";
+    public static final String EVENT_STREAM_UNRELIABLE = "EVENT_STREAM_UNRELIABLE";
+    public static final String PROMPT_PROTOCOL_UNSUPPORTED = "PROMPT_PROTOCOL_UNSUPPORTED";
+    public static final String PERMISSION_PROTOCOL_UNSUPPORTED = "PERMISSION_PROTOCOL_UNSUPPORTED";
+    public static final String INTERRUPT_PROTOCOL_UNSUPPORTED = "INTERRUPT_PROTOCOL_UNSUPPORTED";
+
     private final String code;
     private final Map<String, String> details;
 
