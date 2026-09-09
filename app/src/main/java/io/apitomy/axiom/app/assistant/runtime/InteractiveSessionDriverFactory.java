@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
@@ -70,13 +71,22 @@ public interface InteractiveSessionDriverFactory {
         @ConfigProperty(name = "axiom.agent.opencode.executable", defaultValue = "opencode")
         String openCodeExecutable;
 
+        @ConfigProperty(name = "axiom.assistant.opencode.executable")
+        Optional<String> assistantOpenCodeExecutable;
+
         @ConfigProperty(name = "axiom.agent.opencode.server.hostname", defaultValue = "127.0.0.1")
         String openCodeServerHostname;
 
         @ConfigProperty(name = "axiom.agent.opencode.server.port", defaultValue = "0")
         int openCodeServerPort;
 
-        @ConfigProperty(name = "axiom.assistant.opencode.server.startup-timeout-seconds", defaultValue = "30")
+        @ConfigProperty(name = "axiom.assistant.opencode.startup-timeout-seconds")
+        Optional<Integer> assistantOpenCodeStartupTimeoutSeconds;
+
+        @ConfigProperty(name = "axiom.assistant.opencode.server.startup-timeout-seconds")
+        Optional<Integer> legacyAssistantOpenCodeServerStartupTimeoutSeconds;
+
+        @ConfigProperty(name = "axiom.assistant.opencode.startup-timeout-seconds", defaultValue = "30")
         int openCodeServerStartupTimeoutSeconds;
 
         @Override
@@ -86,10 +96,10 @@ public interface InteractiveSessionDriverFactory {
             String engineType = request.engineType();
             if ("opencode".equalsIgnoreCase(engineType)) {
                 OpenCodeSessionServerProcess openCodeSessionServerProcess =
-                        new OpenCodeSessionServerProcess(openCodeExecutable,
+                        new OpenCodeSessionServerProcess(resolveOpenCodeExecutable(),
                                 openCodeServerHostname,
                                 openCodeServerPort,
-                                openCodeServerStartupTimeoutSeconds);
+                                resolveOpenCodeStartupTimeoutSeconds());
                 OpenCodeCapabilityProbe capabilityProbe = new OpenCodeCapabilityProbe();
                 OpenCodeEventNormalizer normalizer = new OpenCodeEventNormalizer();
                 String sessionTitle = request.sessionTitle() != null && !request.sessionTitle().isBlank()
@@ -116,6 +126,19 @@ public interface InteractiveSessionDriverFactory {
                     request.eventSink(),
                     request.autoApprovalSink()
             );
+        }
+
+        private String resolveOpenCodeExecutable() {
+            return assistantOpenCodeExecutable
+                    .map(String::trim)
+                    .filter(value -> !value.isEmpty())
+                    .orElse(openCodeExecutable);
+        }
+
+        private int resolveOpenCodeStartupTimeoutSeconds() {
+            return assistantOpenCodeStartupTimeoutSeconds
+                    .or(() -> legacyAssistantOpenCodeServerStartupTimeoutSeconds)
+                    .orElse(openCodeServerStartupTimeoutSeconds);
         }
     }
 }
