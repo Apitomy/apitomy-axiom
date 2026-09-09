@@ -1,5 +1,7 @@
 package io.apitomy.axiom.app.assistant.runtime.opencode;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.app.assistant.runtime.SessionCompatibilityException;
 
 import java.io.IOException;
@@ -16,6 +18,7 @@ import java.util.Objects;
  */
 public final class OpenCodeCapabilityProbe {
 
+    private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String PROBE_PERMISSION_ID = "probe-permission-id";
 
     private final HttpClient httpClient;
@@ -64,9 +67,14 @@ public final class OpenCodeCapabilityProbe {
         }
 
         String baseUrl = client.baseUrl();
-        boolean eventSupported = supportsSseEndpoint(baseUrl + "/event")
-                || supportsSseEndpoint(baseUrl + "/global/event");
-        if (!eventSupported) {
+        SseEndpointStatus eventEndpointStatus = checkSseEndpoint(baseUrl + "/event");
+        if (eventEndpointStatus == SseEndpointStatus.UNMAPPED) {
+            SseEndpointStatus globalEventEndpointStatus = checkSseEndpoint(baseUrl + "/global/event");
+            if (globalEventEndpointStatus != SseEndpointStatus.SUPPORTED) {
+                return Result.fail(SessionCompatibilityException.EVENT_STREAM_UNRELIABLE,
+                        "No supported SSE endpoint for assistant runtime");
+            }
+        } else if (eventEndpointStatus != SseEndpointStatus.SUPPORTED) {
             return Result.fail(SessionCompatibilityException.EVENT_STREAM_UNRELIABLE,
                     "No supported SSE endpoint for assistant runtime");
         }
@@ -79,12 +87,11 @@ public final class OpenCodeCapabilityProbe {
                     Map.of("sessionId", sessionId, "cause", e.getMessage()));
         }
 
-        try {
-            client.respondPermission(sessionId, PROBE_PERMISSION_ID, true);
-        } catch (RuntimeException e) {
+        PermissionEndpointStatus permissionEndpointStatus = checkPermissionEndpoint(baseUrl, sessionId);
+        if (permissionEndpointStatus != PermissionEndpointStatus.SUPPORTED) {
             return Result.fail(SessionCompatibilityException.PERMISSION_PROTOCOL_UNSUPPORTED,
                     "OpenCode permission endpoint is unavailable",
-                    Map.of("sessionId", sessionId, "cause", e.getMessage()));
+                    Map.of("sessionId", sessionId));
         }
 
         try {
@@ -98,7 +105,7 @@ public final class OpenCodeCapabilityProbe {
         return Result.pass();
     }
 
-    private boolean supportsSseEndpoint(String endpoint) {
+    private SseEndpointStatus checkSseEndpoint(String endpoint) {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(endpoint))
                 .header("Accept", "text/event-stream")
@@ -110,13 +117,95 @@ public final class OpenCodeCapabilityProbe {
             HttpResponse<java.io.InputStream> response =
                     httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
             response.body().close();
-            return response.statusCode() == 200;
+
+            int statusCode = response.statusCode();
+            if (statusCode == 404 || statusCode == 405) {
+                return SseEndpointStatus.UNMAPPED;
+            }
+            if (statusCode != 200) {
+                return SseEndpointStatus.UNRELIABLE;
+            }
+
+            String contentType = response.headers()
+                    .firstValue("Content-Type")
+                    .orElse("")
+                    .toLowerCase();
+            if (!contentType.startsWith("text/event-stream")) {
+                return SseEndpointStatus.UNRELIABLE;
+            }
+
+            return SseEndpointStatus.SUPPORTED;
         } catch (IOException e) {
-            return false;
+            return SseEndpointStatus.UNRELIABLE;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return false;
+            return SseEndpointStatus.UNRELIABLE;
         }
+    }
+
+    private PermissionEndpointStatus checkPermissionEndpoint(String baseUrl, String sessionId) {
+        String permissionEndpoint = baseUrl + "/session/" + sessionId + "/permissions/" + PROBE_PERMISSION_ID;
+        ObjectNode body = MAPPER.createObjectNode();
+        ObjectNode responseNode = body.putObject("response");
+        responseNode.put("behavior", "allow");
+
+        int postStatusCode = sendJsonPost(permissionEndpoint, body.toString());
+        if (postStatusCode == 200) {
+            return PermissionEndpointStatus.SUPPORTED;
+        }
+        if (postStatusCode != 404) {
+            return PermissionEndpointStatus.UNSUPPORTED;
+        }
+
+        int optionsStatusCode = sendOptions(permissionEndpoint);
+        if (optionsStatusCode == 200 || optionsStatusCode == 204 || optionsStatusCode == 405) {
+            return PermissionEndpointStatus.SUPPORTED;
+        }
+        return PermissionEndpointStatus.UNSUPPORTED;
+    }
+
+    private int sendJsonPost(String endpoint, String body) {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(endpoint))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .timeout(Duration.ofSeconds(3))
+                .build();
+        return sendStatusCode(request);
+    }
+
+    private int sendOptions(String endpoint) {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(endpoint))
+                .method("OPTIONS", HttpRequest.BodyPublishers.noBody())
+                .timeout(Duration.ofSeconds(3))
+                .build();
+        return sendStatusCode(request);
+    }
+
+    private int sendStatusCode(HttpRequest request) {
+        try {
+            HttpResponse<java.io.InputStream> response =
+                    httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            response.body().close();
+            return response.statusCode();
+        } catch (IOException e) {
+            return 0;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return 0;
+        }
+    }
+
+    private enum SseEndpointStatus {
+        SUPPORTED,
+        UNMAPPED,
+        UNRELIABLE
+    }
+
+    private enum PermissionEndpointStatus {
+        SUPPORTED,
+        UNSUPPORTED
     }
 
     /**
