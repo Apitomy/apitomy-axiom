@@ -4,17 +4,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
+import io.apitomy.axiom.app.assistant.runtime.ClaudeInteractiveSessionDriver;
 import io.apitomy.axiom.app.assistant.runtime.InteractiveSessionDriver;
 import org.jboss.logging.Logger;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
@@ -25,7 +19,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.DoubleAdder;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
@@ -54,15 +47,10 @@ public class AssistantSession {
     private final Path workingDirectory;
     private final List<String> command;
     private final Map<String, String> environment;
-    private final AssistantEventParser parser;
     private final InteractiveSessionDriver driver;
 
-    private volatile Process process;
-    private volatile OutputStream stdin;
-    private volatile Status status;
     private volatile Instant lastActivityAt;
     private final Instant createdAt;
-    private final AtomicReference<String> errorMessage = new AtomicReference<>();
 
     private final DoubleAdder totalCostUsd = new DoubleAdder();
     private final AtomicLong totalInputTokens = new AtomicLong();
@@ -77,7 +65,6 @@ public class AssistantSession {
     private volatile boolean allowAll;
     private final Set<String> subagentAllowAll = ConcurrentHashMap.newKeySet();
     private final Map<String, String> subagentTaskToToolUseId = new ConcurrentHashMap<>();
-    private volatile BufferedWriter rawEventsWriter;
     private final Long projectId;
     private final String projectName;
 
@@ -140,13 +127,22 @@ public class AssistantSession {
         this.workingDirectory = workingDirectory;
         this.command = command;
         this.environment = environment;
-        this.parser = new AssistantEventParser();
-        this.status = Status.STARTING;
         this.createdAt = Instant.now();
         this.lastActivityAt = this.createdAt;
         this.projectId = projectId;
         this.projectName = projectName;
-        this.driver = driver;
+        AssistantEventParser eventParser = new AssistantEventParser();
+        this.driver = driver != null
+                ? driver
+                : new ClaudeInteractiveSessionDriver(
+                        workingDirectory,
+                        sessionDirectory,
+                        command,
+                        environment,
+                        eventParser,
+                        this::handleDriverEvent,
+                        this::handlePermissionEvent
+                );
     }
 
     /**
@@ -155,44 +151,7 @@ public class AssistantSession {
      * @throws IOException if runtime startup fails
      */
     public void start() throws IOException {
-        if (driver != null) {
-            driver.start();
-            status = driver.getStatus();
-            errorMessage.set(driver.getErrorMessage());
-            lastActivityAt = Instant.now();
-            return;
-        }
-        LOG.infof("Starting assistant session %s in %s", id, workingDirectory);
-
-        ProcessBuilder pb = new ProcessBuilder(command);
-        pb.directory(workingDirectory.toFile());
-        pb.redirectErrorStream(false);
-        if (environment != null && !environment.isEmpty()) {
-            pb.environment().putAll(environment);
-        }
-
-        process = pb.start();
-        stdin = process.getOutputStream();
-
-        try {
-            rawEventsWriter = new BufferedWriter(new OutputStreamWriter(
-                    new FileOutputStream(sessionDirectory.resolve(RAW_EVENTS_FILE).toFile()),
-                    StandardCharsets.UTF_8));
-        } catch (IOException e) {
-            LOG.warnf(e, "Failed to open raw events log for session %s; raw logging disabled", id);
-            rawEventsWriter = null;
-        }
-
-        // Read stdout (NDJSON) on a virtual thread
-        Thread.ofVirtual().name("assistant-stdout-" + id).start(this::readStdout);
-
-        // Read stderr on a virtual thread (logging only)
-        Thread.ofVirtual().name("assistant-stderr-" + id).start(this::readStderr);
-
-        // Monitor process exit on a virtual thread
-        Thread.ofVirtual().name("assistant-monitor-" + id).start(this::monitorProcess);
-
-        status = Status.RUNNING;
+        driver.start();
         lastActivityAt = Instant.now();
     }
 
@@ -209,19 +168,7 @@ public class AssistantSession {
         userData.put("content", message);
         addEvent(new SseEvent("user_message", userData));
 
-        if (driver != null) {
-            driver.sendUserMessage(message);
-            lastActivityAt = Instant.now();
-            return;
-        }
-
-        ObjectNode root = MAPPER.createObjectNode();
-        root.put("type", "user");
-        ObjectNode msg = MAPPER.createObjectNode();
-        msg.put("role", "user");
-        msg.put("content", message);
-        root.set("message", msg);
-        writeLine(MAPPER.writeValueAsString(root));
+        driver.sendUserMessage(message);
         lastActivityAt = Instant.now();
     }
 
@@ -263,30 +210,7 @@ public class AssistantSession {
         resolvedData.put("allow", allow);
         addEvent(new SseEvent("permission_resolved", resolvedData));
 
-        if (driver != null) {
-            driver.respondToPermission(permissionId, allow, toolInput);
-            lastActivityAt = Instant.now();
-            return;
-        }
-
-        ObjectNode root = MAPPER.createObjectNode();
-        root.put("type", "control_response");
-        ObjectNode response = MAPPER.createObjectNode();
-        response.put("subtype", "success");
-        response.put("request_id", permissionId);
-        ObjectNode innerResponse = MAPPER.createObjectNode();
-        if (allow) {
-            innerResponse.put("behavior", "allow");
-            if (toolInput != null) {
-                innerResponse.set("updatedInput", toolInput);
-            }
-        } else {
-            innerResponse.put("behavior", "deny");
-            innerResponse.put("message", "User denied permission");
-        }
-        response.set("response", innerResponse);
-        root.set("response", response);
-        writeLine(MAPPER.writeValueAsString(root));
+        driver.respondToPermission(permissionId, allow, toolInput);
         lastActivityAt = Instant.now();
     }
 
@@ -359,39 +283,14 @@ public class AssistantSession {
      * Interrupts the current runtime turn while keeping the session alive for further interaction.
      */
     public void interrupt() {
-        if (driver != null) {
-            driver.interrupt();
-            return;
-        }
-        if (process != null && process.isAlive()) {
-            long pid = process.pid();
-            LOG.infof("Interrupting assistant session %s (SIGINT to pid %d)", id, pid);
-            try {
-                new ProcessBuilder("kill", "-INT", String.valueOf(pid))
-                        .start().waitFor();
-            } catch (Exception e) {
-                LOG.warnf(e, "Failed to send SIGINT to session %s", id);
-            }
-        }
+        driver.interrupt();
     }
 
     /**
      * Destroys the session runtime and marks the session as stopped.
      */
     public void destroy() {
-        if (driver != null) {
-            driver.destroy();
-            status = driver.getStatus();
-            errorMessage.set(driver.getErrorMessage());
-            return;
-        }
-        LOG.infof("Destroying assistant session %s", id);
-        status = Status.STOPPED;
-        closeQuietly(rawEventsWriter);
-        rawEventsWriter = null;
-        if (process != null && process.isAlive()) {
-            process.destroyForcibly();
-        }
+        driver.destroy();
     }
 
     /**
@@ -400,10 +299,7 @@ public class AssistantSession {
      * @return true if the runtime is running
      */
     public boolean isAlive() {
-        if (driver != null) {
-            return driver.isAlive();
-        }
-        return process != null && process.isAlive();
+        return driver.isAlive();
     }
 
     public String getId() {
@@ -456,10 +352,7 @@ public class AssistantSession {
     }
 
     public Status getStatus() {
-        if (driver != null) {
-            return driver.getStatus();
-        }
-        return status;
+        return driver.getStatus();
     }
 
     public Instant getCreatedAt() {
@@ -471,10 +364,7 @@ public class AssistantSession {
     }
 
     public String getErrorMessage() {
-        if (driver != null) {
-            return driver.getErrorMessage();
-        }
-        return errorMessage.get();
+        return driver.getErrorMessage();
     }
 
     /** Returns the accumulated cost in USD across all turns. */
@@ -618,92 +508,38 @@ public class AssistantSession {
         return false;
     }
 
-    private void writeLine(String json) throws IOException {
-        if (stdin == null) {
-            throw new IOException("Session stdin is not available");
+    private void handleDriverEvent(SseEvent event) {
+        if ("subagent_started".equals(event.type())) {
+            String taskId = event.data().path("taskId").asText("");
+            String toolUseId = event.data().path("toolUseId").asText("");
+            if (!taskId.isEmpty() && !toolUseId.isEmpty()) {
+                subagentTaskToToolUseId.put(taskId, toolUseId);
+            }
         }
-        synchronized (stdin) {
-            stdin.write((json + "\n").getBytes(StandardCharsets.UTF_8));
-            stdin.flush();
+        if ("turn_complete".equals(event.type())) {
+            accumulateCost(event);
+        }
+        synchronized (eventLock) {
+            if ("conversation_reset".equals(event.type())) {
+                eventHistory.clear();
+            }
+            eventHistory.add(event);
+            lastActivityAt = Instant.now();
+            for (Consumer<SseEvent> listener : listeners) {
+                try {
+                    listener.accept(event);
+                } catch (Exception e) {
+                    LOG.warnf(e, "SSE listener error in session %s", id);
+                }
+            }
         }
     }
 
-    private void writeRawEvent(String line) {
-        BufferedWriter writer = rawEventsWriter;
-        if (writer == null) {
+    private void handlePermissionEvent(SseEvent event) {
+        if (handleAutoApproval(event)) {
             return;
         }
-        try {
-            writer.write("{\"ts\":\"");
-            writer.write(Instant.now().toString());
-            writer.write("\",\"raw\":");
-            writer.write(line);
-            writer.write("}");
-            writer.newLine();
-            writer.flush();
-        } catch (IOException e) {
-            LOG.warnf(e, "Failed to write raw event for session %s; disabling raw logging", id);
-            rawEventsWriter = null;
-            closeQuietly(writer);
-        }
-    }
-
-    private static void closeQuietly(AutoCloseable closeable) {
-        if (closeable != null) {
-            try {
-                closeable.close();
-            } catch (Exception ignored) {
-            }
-        }
-    }
-
-    private void readStdout() {
-        try {
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    writeRawEvent(line);
-                    List<SseEvent> events = parser.parse(line);
-                    for (SseEvent event : events) {
-                        if ("subagent_started".equals(event.type())) {
-                            String taskId = event.data().path("taskId").asText("");
-                            String toolUseId = event.data().path("toolUseId").asText("");
-                            if (!taskId.isEmpty() && !toolUseId.isEmpty()) {
-                                subagentTaskToToolUseId.put(taskId, toolUseId);
-                            }
-                        }
-                        if (handleAutoApproval(event)) {
-                            continue;
-                        }
-                        if ("turn_complete".equals(event.type())) {
-                            accumulateCost(event);
-                        }
-                        synchronized (eventLock) {
-                            if ("conversation_reset".equals(event.type())) {
-                                eventHistory.clear();
-                            }
-                            eventHistory.add(event);
-                            lastActivityAt = Instant.now();
-                            for (Consumer<SseEvent> listener : listeners) {
-                                try {
-                                    listener.accept(event);
-                                } catch (Exception e) {
-                                    LOG.warnf(e, "SSE listener error in session %s", id);
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (IOException e) {
-                if (status == Status.RUNNING) {
-                    LOG.warnf("Error reading stdout for session %s: %s", id, e.getMessage());
-                }
-            }
-        } finally {
-            closeQuietly(rawEventsWriter);
-            rawEventsWriter = null;
-        }
+        handleDriverEvent(event);
     }
 
     private boolean handleAutoApproval(SseEvent event) {
@@ -772,42 +608,4 @@ public class AssistantSession {
         turnCount.incrementAndGet();
     }
 
-    private void readStderr() {
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                LOG.debugf("Session %s stderr: %s", id, line);
-            }
-        } catch (IOException e) {
-            if (status == Status.RUNNING) {
-                LOG.warnf("Error reading stderr for session %s: %s", id, e.getMessage());
-            }
-        }
-    }
-
-    private void monitorProcess() {
-        try {
-            int exitCode = process.waitFor();
-            if (status == Status.RUNNING) {
-                LOG.infof("Assistant session %s process exited with code %d", id, exitCode);
-                if (exitCode != 0) {
-                    status = Status.ERROR;
-                    errorMessage.set("Process exited with code " + exitCode);
-                } else {
-                    status = Status.STOPPED;
-                }
-
-                ObjectNode data = MAPPER.createObjectNode();
-                data.put("exitCode", exitCode);
-                data.put("status", status.name());
-                if (exitCode != 0) {
-                    data.put("message", "Process exited with code " + exitCode);
-                }
-                addEvent(new SseEvent("session_ended", data));
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
 }
