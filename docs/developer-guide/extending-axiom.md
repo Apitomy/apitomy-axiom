@@ -100,6 +100,15 @@ Register it via `AiEngineProvider.getMcpManager()`.
 - **GitHub Copilot CLI**: `engine/copilot/src/main/java/.../CopilotEngine.java` —
   subprocess-based, launches `copilot` CLI
 
+### Interactive Assistant Session Drivers
+
+The AI Assistant runtime uses `InteractiveSessionDriver` as an engine-neutral contract for
+session lifecycle, prompt submission, permission handling, and interrupt/teardown behavior.
+`InteractiveSessionDriverFactory.DefaultInteractiveSessionDriverFactory` selects the concrete
+driver per session (`ClaudeInteractiveSessionDriver` or
+`opencode/OpenCodeInteractiveSessionDriver`) and enforces fail-closed OpenCode compatibility
+checks before allowing session startup.
+
 ---
 
 ## Adding an Actor

@@ -96,6 +96,10 @@ conversation.
 | Property | Default | Description |
 |----------|---------|-------------|
 | `axiom.assistant.max-sessions` | `3` | Maximum concurrent assistant sessions |
+| `axiom.assistant.opencode.executable` | `opencode` | OpenCode CLI executable |
+| `axiom.assistant.opencode.startup-timeout-seconds` | `30` | Per-session server startup timeout |
+| `axiom.assistant.opencode.probe-timeout-seconds` | `20` | Capability probe timeout |
+| `axiom.assistant.opencode.port-range` | *(empty)* | Optional dedicated port range for per-session servers |
 
 ### Workspaces
 
