@@ -52,6 +52,10 @@ public class SessionTemplateEntity extends PanacheEntity {
     @Column(name = "model")
     public String model;
 
+    /** Optional interactive engine override (e.g. "opencode", "claude-code"). */
+    @Column(name = "engine")
+    public String engine;
+
     /** Optional init script to run in the working directory on session creation. */
     @Column(name = "init_script", columnDefinition = "TEXT")
     public String initScript;

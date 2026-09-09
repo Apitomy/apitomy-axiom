@@ -407,8 +407,9 @@ class OpenCodeAssistantProtocolHarnessTest {
         }
 
         private List<OpenCodeAssistantClient.OpenCodeRawEvent> eventsFromIndex(int startIndex) {
-            int safeStart = Math.max(0, Math.min(startIndex, events.size()));
-            return events.subList(safeStart, events.size());
+            int size = events.size();
+            int safeStart = Math.max(0, Math.min(startIndex, size));
+            return new ArrayList<>(events.subList(safeStart, size));
         }
 
         @Override

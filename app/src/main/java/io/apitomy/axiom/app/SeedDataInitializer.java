@@ -12,6 +12,7 @@ import io.apitomy.axiom.core.entities.ManagerConfigEntity;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
 import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
+import io.apitomy.axiom.core.entities.SystemConfigEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
 import io.apitomy.axiom.core.services.EncryptionService;
@@ -21,6 +22,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
@@ -33,6 +35,9 @@ public class SeedDataInitializer {
 
     @Inject
     EncryptionService encryptionService;
+
+    @ConfigProperty(name = "axiom.agent.default-type", defaultValue = "claude-code")
+    String defaultAgentType;
 
     /**
      * Called on application startup to seed built-in action types.
@@ -94,6 +99,7 @@ public class SeedDataInitializer {
         ensureAxiomSdkToolset();
         seedAgents();
         seedManagerConfig();
+        seedSystemConfig();
         seedRetentionConfig();
         seedEventSource();
         seedReportDefinitions();
@@ -260,6 +266,19 @@ public class SeedDataInitializer {
         config.persist();
 
         LOG.info("Seeded default retention configuration");
+    }
+
+    private void seedSystemConfig() {
+        if (SystemConfigEntity.count() > 0) {
+            LOG.info("System config already exists, skipping seed");
+            return;
+        }
+
+        SystemConfigEntity config = new SystemConfigEntity();
+        config.defaultEngine = defaultAgentType;
+        config.persist();
+
+        LOG.infof("Seeded system config with default engine: %s", defaultAgentType);
     }
 
     private void seedEventSource() {

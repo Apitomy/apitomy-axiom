@@ -10,11 +10,13 @@ import io.apitomy.axiom.api.beans.RetentionConfig;
 import io.apitomy.axiom.api.beans.StartupCheck;
 import io.apitomy.axiom.api.beans.SystemConfig;
 import io.apitomy.axiom.api.beans.SystemHealth;
+import io.apitomy.axiom.api.beans.UpdateSystemConfigRequest;
 import io.apitomy.axiom.api.SystemResource;
 import io.apitomy.axiom.agents.spi.Agent;
 import io.apitomy.axiom.app.ImportExportService;
 import io.apitomy.axiom.app.StartupCheckService;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
+import io.apitomy.axiom.core.entities.SystemConfigEntity;
 import io.apitomy.axiom.agents.spi.AgentRegistry;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -71,7 +73,7 @@ public class SystemResourceImpl implements SystemResource {
         SystemConfig config = new SystemConfig();
         config.setVersion(applicationVersion);
 
-        String defaultType = agentRegistry.getDefaultAgent().getType();
+        String defaultType = resolveDefaultEngineType();
         config.setEngine(defaultType);
         config.setDefaultEngine(defaultType);
         config.setFeatures(new Features());
@@ -121,6 +123,38 @@ public class SystemResourceImpl implements SystemResource {
      * {@inheritDoc}
      */
     @Override
+    @Transactional
+    public SystemConfig updateSystemConfig(UpdateSystemConfigRequest data) {
+        if (data == null || data.getDefaultEngine() == null
+                || data.getDefaultEngine().isBlank()) {
+            throw new jakarta.ws.rs.WebApplicationException(
+                    "Missing required 'defaultEngine' field", 400);
+        }
+
+        String defaultEngine = data.getDefaultEngine().trim();
+        Agent resolvedAgent = agentRegistry.getAllAgents().stream()
+                .filter(agent -> defaultEngine.equals(agent.getType()))
+                .findFirst()
+                .orElse(null);
+        if (resolvedAgent == null) {
+            throw new jakarta.ws.rs.WebApplicationException(
+                    "Unknown engine type: " + defaultEngine, 400);
+        }
+
+        SystemConfigEntity entity = SystemConfigEntity.<SystemConfigEntity>findAll().firstResult();
+        if (entity == null) {
+            entity = new SystemConfigEntity();
+        }
+        entity.defaultEngine = defaultEngine;
+        entity.persist();
+        agentRegistry.setDefaultAgentType(defaultEngine);
+        return getSystemConfig();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public List<String> listEngines() {
         return agentRegistry.getAvailableTypes();
     }
@@ -138,6 +172,14 @@ public class SystemResourceImpl implements SystemResource {
                 ? agentRegistry.getAgent(engine)
                 : agentRegistry.getDefaultAgent();
         return agent.getAvailableModels();
+    }
+
+    private String resolveDefaultEngineType() {
+        SystemConfigEntity entity = SystemConfigEntity.<SystemConfigEntity>findAll().firstResult();
+        if (entity != null && entity.defaultEngine != null && !entity.defaultEngine.isBlank()) {
+            return entity.defaultEngine;
+        }
+        return agentRegistry.getDefaultAgentType();
     }
 
     /**

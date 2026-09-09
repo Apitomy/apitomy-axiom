@@ -20,7 +20,7 @@ class AssistantSessionDriverDelegationTest {
         RecordingDriver driver = new RecordingDriver();
         AssistantSession session = new AssistantSession(
                 "test", "general-assistant", Path.of("/tmp/s"), Path.of("/tmp/w"),
-                List.of(), Map.of(), null, null, driver);
+                List.of(), Map.of(), "claude-code", null, null, driver);
 
         session.start();
         session.sendMessage("hello");

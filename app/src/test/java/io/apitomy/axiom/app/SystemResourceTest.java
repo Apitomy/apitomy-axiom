@@ -39,6 +39,39 @@ class SystemResourceTest {
     }
 
     @Test
+    void testUpdateSystemConfigDefaultEngine() {
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                        {"defaultEngine":"opencode"}
+                        """)
+            .when()
+                .put("/api/v1/system/config")
+            .then()
+                .statusCode(200)
+                .body("defaultEngine", equalTo("opencode"));
+
+        given()
+            .when()
+                .get("/api/v1/system/config")
+            .then()
+                .statusCode(200)
+                .body("defaultEngine", equalTo("opencode"))
+                .body("engine", equalTo("opencode"));
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                        {"defaultEngine":"claude-code"}
+                        """)
+            .when()
+                .put("/api/v1/system/config")
+            .then()
+                .statusCode(200)
+                .body("defaultEngine", equalTo("claude-code"));
+    }
+
+    @Test
     void testHealthStatusIsUp() {
         given()
             .when()

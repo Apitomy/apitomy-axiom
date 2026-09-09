@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
 import {
+    Alert,
+    AlertActionCloseButton,
+    Button,
     Card,
     CardBody,
     CardTitle,
@@ -16,21 +19,38 @@ import {
     Split,
     SplitItem,
     Title,
+    Form,
+    FormGroup,
+    FormSelect,
+    FormSelectOption,
 } from "@patternfly/react-core";
 import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
 import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
 import ExclamationTriangleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-triangle-icon";
 import CogIcon from "@patternfly/react-icons/dist/esm/icons/cog-icon";
 
-import { type EngineInfo, type SystemConfig, fetchSystemConfig } from "../config/api";
+import {
+    type EngineInfo,
+    type SystemConfig,
+    fetchSystemConfig,
+    updateSystemConfig,
+} from "../config/api";
 
 export function EngineSettingsPage() {
     const [config, setConfig] = useState<SystemConfig | null>(null);
     const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [selectedDefaultEngine, setSelectedDefaultEngine] = useState("");
+    const [saveError, setSaveError] = useState<string | null>(null);
 
     useEffect(() => {
         fetchSystemConfig()
-            .then(setConfig)
+            .then((loadedConfig) => {
+                setConfig(loadedConfig);
+                setSelectedDefaultEngine(
+                    loadedConfig.defaultEngine || loadedConfig.engine || ""
+                );
+            })
             .catch(console.error)
             .finally(() => setLoading(false));
     }, []);
@@ -55,6 +75,26 @@ export function EngineSettingsPage() {
     const engines = config.engines || [];
     const defaultEngine = config.defaultEngine || config.engine;
     const nodeJsCheck = (config.checks || []).find((c) => c.name === "Node.js");
+    const canSaveDefault =
+        selectedDefaultEngine.length > 0 && selectedDefaultEngine !== defaultEngine;
+
+    const handleSaveDefaultEngine = () => {
+        if (!selectedDefaultEngine) {
+            return;
+        }
+        setSaving(true);
+        setSaveError(null);
+        updateSystemConfig({ defaultEngine: selectedDefaultEngine })
+            .then((updated) => {
+                setConfig(updated);
+                setSelectedDefaultEngine(updated.defaultEngine || updated.engine || "");
+            })
+            .catch((error: unknown) => {
+                const message = error instanceof Error ? error.message : "Failed to update default engine.";
+                setSaveError(message);
+            })
+            .finally(() => setSaving(false));
+    };
 
     return (
         <PageSection>
@@ -64,6 +104,52 @@ export function EngineSettingsPage() {
             </Title>
 
             <Flex direction={{ default: "column" }} gap={{ default: "gapMd" }}>
+                <FlexItem>
+                    <Card>
+                        <CardTitle>Default AI Engine</CardTitle>
+                        <CardBody>
+                            {saveError && (
+                                <Alert
+                                    variant="danger"
+                                    isInline
+                                    title={saveError}
+                                    actionClose={<AlertActionCloseButton onClose={() => setSaveError(null)} />}
+                                    style={{ marginBottom: 12 }}
+                                />
+                            )}
+                            <Form>
+                                <FormGroup
+                                    label="Global default engine"
+                                    fieldId="default-engine"
+                                >
+                                    <FormSelect
+                                        id="default-engine"
+                                        value={selectedDefaultEngine}
+                                        onChange={(_event, value) => setSelectedDefaultEngine(value)}
+                                        isDisabled={saving || engines.length === 0}
+                                    >
+                                        {engines.map((engine) => (
+                                            <FormSelectOption
+                                                key={engine.type}
+                                                value={engine.type}
+                                                label={engine.label}
+                                            />
+                                        ))}
+                                    </FormSelect>
+                                </FormGroup>
+                            </Form>
+                            <Button
+                                variant="primary"
+                                onClick={handleSaveDefaultEngine}
+                                isDisabled={!canSaveDefault || saving}
+                                isLoading={saving}
+                            >
+                                Save Default Engine
+                            </Button>
+                        </CardBody>
+                    </Card>
+                </FlexItem>
+
                 {/* Node.js check (shared prerequisite) */}
                 {nodeJsCheck && (
                     <FlexItem>

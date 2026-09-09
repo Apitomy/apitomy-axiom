@@ -15,6 +15,7 @@ import io.apitomy.axiom.app.assistant.runtime.SessionCompatibilityException;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.McpServerEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SystemConfigEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
@@ -60,9 +61,6 @@ public class AssistantSessionManager {
 
     @ConfigProperty(name = "axiom.assistant.max-sessions", defaultValue = "3")
     int maxSessions;
-
-    @ConfigProperty(name = "axiom.agent.default-type", defaultValue = "claude-code")
-    String defaultEngineType;
 
     @ConfigProperty(name = "axiom.agent.claude-code.executable", defaultValue = "claude")
     String claudeExecutable;
@@ -121,7 +119,12 @@ public class AssistantSessionManager {
      */
     public AssistantSession createSession(String name, String templateId,
                                           Long projectId) throws IOException {
-        Agent agent = agentRegistry.getDefaultAgent();
+        SessionTemplateService.SessionTemplate template = templateService.getTemplate(templateId);
+        if (template == null) {
+            throw new IllegalArgumentException("Template not found: " + templateId);
+        }
+
+        Agent agent = resolveSessionAgent(template);
         if (!agent.supportsInteractiveSessions()) {
             throw new IllegalStateException(
                     "The AI Assistant requires an engine that supports interactive sessions. "
@@ -137,11 +140,6 @@ public class AssistantSessionManager {
         }
 
         try {
-            SessionTemplateService.SessionTemplate template = templateService.getTemplate(templateId);
-            if (template == null) {
-                throw new IllegalArgumentException("Template not found: " + templateId);
-            }
-
             // Look up project if scoped
             ProjectEntity project = null;
             if (projectId != null) {
@@ -259,7 +257,7 @@ public class AssistantSessionManager {
                             sessionName));
 
             AssistantSession session = new AssistantSession(sessionName, templateId, sessionDir,
-                    workDir, command, resolvedEnv, projectId, projectName, driver);
+                    workDir, command, resolvedEnv, agent.getType(), projectId, projectName, driver);
             sessionRef.set(session);
             session.start();
 
@@ -413,7 +411,7 @@ public class AssistantSessionManager {
         AiUsageEntity usage = new AiUsageEntity();
         usage.invocationType = "assistant-session";
         usage.actionType = "assistant-session";
-        usage.engine = agentRegistry.getDefaultAgentType();
+        usage.engine = session.getEngineType();
         SessionTemplateService.SessionTemplate template =
                 templateService.getTemplate(session.getTemplateId());
         if (template != null && template.model() != null && !template.model().isBlank()) {
@@ -526,6 +524,48 @@ public class AssistantSessionManager {
     public boolean isAvailable() {
         return agentRegistry.getAllAgents().stream()
                 .anyMatch(Agent::supportsInteractiveSessions);
+    }
+
+    private Agent resolveSessionAgent(SessionTemplateService.SessionTemplate template) {
+        String templateEngine = trimToNull(template.engine());
+        if (templateEngine != null) {
+            return resolveAgentByType(templateEngine, "template");
+        }
+        String globalDefaultEngine = trimToNull(resolveGlobalDefaultEngineType());
+        if (globalDefaultEngine != null) {
+            return resolveAgentByType(globalDefaultEngine, "global default");
+        }
+        return agentRegistry.getDefaultAgent();
+    }
+
+    private Agent resolveAgentByType(String engineType, String sourceLabel) {
+        Agent agent = agentRegistry.getAllAgents().stream()
+                .filter(candidate -> engineType.equals(candidate.getType()))
+                .findFirst()
+                .orElse(null);
+        if (agent == null) {
+            throw new IllegalArgumentException(
+                    "Unknown " + sourceLabel + " engine type: " + engineType);
+        }
+        return agent;
+    }
+
+    private String resolveGlobalDefaultEngineType() {
+        SystemConfigEntity systemConfig =
+                SystemConfigEntity.<SystemConfigEntity>findAll().firstResult();
+        if (systemConfig != null && systemConfig.defaultEngine != null
+                && !systemConfig.defaultEngine.isBlank()) {
+            return systemConfig.defaultEngine;
+        }
+        return agentRegistry.getDefaultAgentType();
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     /**

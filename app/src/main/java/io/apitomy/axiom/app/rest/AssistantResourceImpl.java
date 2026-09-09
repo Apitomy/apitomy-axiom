@@ -642,6 +642,7 @@ public class AssistantResourceImpl implements AssistantResource {
         bean.setInitialMessage(template.initialMessage());
         bean.setWorkingDirectory(template.workingDirectory());
         bean.setModel(template.model());
+        bean.setEngine(template.engine());
         bean.setInitScript(template.initScript());
         bean.setInitScriptType(template.initScriptType());
         bean.setEnvironment(jsonToEnvironment(template.environment()));
@@ -671,6 +672,7 @@ public class AssistantResourceImpl implements AssistantResource {
                 data.getInitialMessage(),
                 data.getWorkingDirectory(),
                 data.getModel(),
+                data.getEngine(),
                 data.getInitScript(),
                 data.getInitScriptType(),
                 environmentToJson(data.getEnvironment()),

@@ -47,6 +47,7 @@ public class AssistantSession {
     private final Path workingDirectory;
     private final List<String> command;
     private final Map<String, String> environment;
+    private final String engineType;
     private final InteractiveSessionDriver driver;
 
     private volatile Instant lastActivityAt;
@@ -92,15 +93,16 @@ public class AssistantSession {
      * @param workingDirectory the assistant runtime working directory
      * @param command the legacy command line for direct subprocess mode
      * @param environment resolved environment variables for direct subprocess mode
+     * @param engineType the interactive engine type resolved for this session
      * @param projectId optional project ID if session is scoped to a project
      * @param projectName optional project name if session is scoped to a project
      */
     public AssistantSession(String name, String templateId, Path sessionDirectory,
-                             Path workingDirectory, List<String> command,
-                             Map<String, String> environment, Long projectId,
-                             String projectName) {
+                              Path workingDirectory, List<String> command,
+                              Map<String, String> environment, String engineType, Long projectId,
+                              String projectName) {
         this(name, templateId, sessionDirectory, workingDirectory, command,
-                environment, projectId, projectName, null);
+                environment, engineType, projectId, projectName, null);
     }
 
     /**
@@ -112,14 +114,15 @@ public class AssistantSession {
      * @param workingDirectory the assistant working directory
      * @param command the legacy command line used by Claude runtime mode
      * @param environment resolved environment variables used by Claude runtime mode
+     * @param engineType the interactive engine type resolved for this session
      * @param projectId optional project ID if session is scoped to a project
      * @param projectName optional project name if session is scoped to a project
      * @param driver runtime driver used for interactive session I/O
      */
     public AssistantSession(String name, String templateId, Path sessionDirectory,
-                             Path workingDirectory, List<String> command,
-                             Map<String, String> environment, Long projectId,
-                             String projectName, InteractiveSessionDriver driver) {
+                              Path workingDirectory, List<String> command,
+                              Map<String, String> environment, String engineType, Long projectId,
+                              String projectName, InteractiveSessionDriver driver) {
         this.id = UUID.randomUUID().toString();
         this.name = name;
         this.templateId = templateId;
@@ -127,6 +130,7 @@ public class AssistantSession {
         this.workingDirectory = workingDirectory;
         this.command = command;
         this.environment = environment;
+        this.engineType = engineType;
         this.createdAt = Instant.now();
         this.lastActivityAt = this.createdAt;
         this.projectId = projectId;
@@ -365,6 +369,11 @@ public class AssistantSession {
 
     public String getErrorMessage() {
         return driver.getErrorMessage();
+    }
+
+    /** Returns the interactive engine type used by this session. */
+    public String getEngineType() {
+        return engineType;
     }
 
     /** Returns the accumulated cost in USD across all turns. */
