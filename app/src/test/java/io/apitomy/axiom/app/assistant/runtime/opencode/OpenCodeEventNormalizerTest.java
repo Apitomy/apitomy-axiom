@@ -107,4 +107,15 @@ class OpenCodeEventNormalizerTest {
 
         assertTrue(out.isEmpty());
     }
+
+    @Test
+    void ignoresNullEventName() throws Exception {
+        JsonNode payload = mapper.readTree("""
+                {"sessionID":"s1","part":{"type":"text","text":"hello"}}
+                """);
+
+        List<SseEvent> out = normalizer.normalize(null, payload);
+
+        assertTrue(out.isEmpty());
+    }
 }

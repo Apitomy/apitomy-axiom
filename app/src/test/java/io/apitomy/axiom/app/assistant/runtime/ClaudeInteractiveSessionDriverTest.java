@@ -17,6 +17,7 @@ class ClaudeInteractiveSessionDriverTest {
     void parsesAssistantAndPermissionEventsWithoutRenaming() {
         AssistantEventParser parser = new AssistantEventParser();
         List<SseEvent> emittedEvents = new ArrayList<>();
+        List<SseEvent> permissionEvents = new ArrayList<>();
         ClaudeInteractiveSessionDriver driver = new ClaudeInteractiveSessionDriver(
                 Path.of("/tmp"),
                 Path.of("/tmp"),
@@ -24,7 +25,7 @@ class ClaudeInteractiveSessionDriverTest {
                 Map.of(),
                 parser,
                 emittedEvents::add,
-                emittedEvents::add
+                permissionEvents::add
         );
 
         driver.handleStdoutLine("""
@@ -37,12 +38,14 @@ class ClaudeInteractiveSessionDriverTest {
                 {"type":"result","subtype":"success","session_id":"s-1","total_cost_usd":0.01,"duration_ms":12,"usage":{"input_tokens":10,"cache_creation_input_tokens":2,"cache_read_input_tokens":3,"output_tokens":4}}
                 """);
 
-        assertEquals(List.of("assistant_text", "tool_use", "permission_request", "turn_complete"),
+        assertEquals(List.of("assistant_text", "tool_use", "turn_complete"),
                 emittedEvents.stream().map(SseEvent::type).toList());
         assertEquals("hello", emittedEvents.get(0).data().path("text").asText());
         assertEquals("Write", emittedEvents.get(1).data().path("name").asText());
-        assertEquals("perm-1", emittedEvents.get(2).data().path("requestId").asText());
-        assertEquals("Write", emittedEvents.get(2).data().path("toolName").asText());
-        assertEquals(0.01, emittedEvents.get(3).data().path("costUsd").asDouble(), 0.0001);
+        assertEquals(0.01, emittedEvents.get(2).data().path("costUsd").asDouble(), 0.0001);
+
+        assertEquals(List.of("permission_request"), permissionEvents.stream().map(SseEvent::type).toList());
+        assertEquals("perm-1", permissionEvents.get(0).data().path("requestId").asText());
+        assertEquals("Write", permissionEvents.get(0).data().path("toolName").asText());
     }
 }

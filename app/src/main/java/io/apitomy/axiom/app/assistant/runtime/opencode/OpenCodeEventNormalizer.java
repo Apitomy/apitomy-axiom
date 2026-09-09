@@ -21,6 +21,9 @@ public class OpenCodeEventNormalizer {
      * @return normalized assistant events (empty when the event is ignored)
      */
     public List<SseEvent> normalize(String eventName, JsonNode payload) {
+        if (eventName == null || eventName.isBlank()) {
+            return Collections.emptyList();
+        }
         JsonNode safePayload = payload == null ? JsonNodeFactory.instance.objectNode() : payload;
         return switch (eventName) {
             case "session.message.part" -> mapMessagePart(safePayload);

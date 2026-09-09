@@ -11,6 +11,7 @@ import java.io.IOException;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasEntry;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -25,7 +26,8 @@ class OpenCodeAssistantResourceIntegrationTest {
         when(interactiveSessionDriverFactory.createDriver(any()))
                 .thenThrow(new SessionCompatibilityException(
                         SessionCompatibilityException.RUNTIME_UNHEALTHY,
-                        "OpenCode runtime health check failed"));
+                        "OpenCode runtime health check failed",
+                        java.util.Map.of("endpoint", "/global/health")));
 
         given()
                 .contentType(ContentType.JSON)
@@ -37,6 +39,8 @@ class OpenCodeAssistantResourceIntegrationTest {
                 .then()
                 .statusCode(422)
                 .body("code", equalTo(SessionCompatibilityException.RUNTIME_UNHEALTHY))
-                .body("message", equalTo("OpenCode runtime health check failed"));
+                .body("message", equalTo("OpenCode runtime health check failed"))
+                .body("details.endpoint", equalTo("/global/health"))
+                .body("details", hasEntry("endpoint", "/global/health"));
     }
 }

@@ -172,15 +172,8 @@ public final class OpenCodeAssistantClient {
     }
 
     private void streamEvents(Consumer<OpenCodeRawEvent> onEvent) {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/event"))
-                .header("Accept", "text/event-stream")
-                .GET()
-                .timeout(Duration.ofMinutes(30))
-                .build();
-
         try {
-            HttpResponse<java.io.InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            HttpResponse<java.io.InputStream> response = openEventStreamResponse();
             if (response.statusCode() != 200) {
                 throw new IllegalStateException("Failed to connect OpenCode events: HTTP " + response.statusCode());
             }
@@ -195,6 +188,32 @@ public final class OpenCodeAssistantClient {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while streaming OpenCode events", e);
         }
+    }
+
+    private HttpResponse<java.io.InputStream> openEventStreamResponse() throws IOException, InterruptedException {
+        HttpResponse<java.io.InputStream> primaryResponse = httpClient.send(
+                eventStreamRequest(baseUrl + "/event"),
+                HttpResponse.BodyHandlers.ofInputStream());
+
+        int primaryStatusCode = primaryResponse.statusCode();
+        if (primaryStatusCode != 404 && primaryStatusCode != 405) {
+            return primaryResponse;
+        }
+
+        primaryResponse.body().close();
+
+        return httpClient.send(
+                eventStreamRequest(baseUrl + "/global/event"),
+                HttpResponse.BodyHandlers.ofInputStream());
+    }
+
+    private HttpRequest eventStreamRequest(String endpoint) {
+        return HttpRequest.newBuilder()
+                .uri(URI.create(endpoint))
+                .header("Accept", "text/event-stream")
+                .GET()
+                .timeout(Duration.ofMinutes(30))
+                .build();
     }
 
     static void parseSseEvents(BufferedReader reader, Consumer<OpenCodeRawEvent> onEvent) throws IOException {
