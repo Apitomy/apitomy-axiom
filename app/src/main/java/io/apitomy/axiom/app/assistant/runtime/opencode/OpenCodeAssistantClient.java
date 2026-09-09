@@ -148,7 +148,27 @@ public final class OpenCodeAssistantClient {
      * @param onEvent callback invoked per event
      */
     public void connectEvents(Consumer<OpenCodeRawEvent> onEvent) {
-        Thread.ofVirtual().name("opencode-events").start(() -> streamEvents(onEvent));
+        connectEvents(onEvent, throwable -> {
+            throw new IllegalStateException("OpenCode event stream terminated", throwable);
+        });
+    }
+
+    /**
+     * Connects to OpenCode global event stream and emits parsed raw events.
+     *
+     * @param onEvent callback invoked per event
+     * @param onError callback invoked when stream setup or parsing fails
+     */
+    public void connectEvents(Consumer<OpenCodeRawEvent> onEvent, Consumer<Throwable> onError) {
+        Objects.requireNonNull(onEvent, "onEvent");
+        Objects.requireNonNull(onError, "onError");
+        Thread.ofVirtual().name("opencode-events").start(() -> {
+            try {
+                streamEvents(onEvent);
+            } catch (Throwable throwable) {
+                onError.accept(throwable);
+            }
+        });
     }
 
     private void streamEvents(Consumer<OpenCodeRawEvent> onEvent) {

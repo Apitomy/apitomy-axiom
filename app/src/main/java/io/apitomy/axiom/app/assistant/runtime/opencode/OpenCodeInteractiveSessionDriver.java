@@ -91,7 +91,10 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                 throw new IOException("OpenCode session creation did not return an id");
             }
 
-            client.connectEvents(raw -> handleRawEvent(raw.eventName(), raw.payload()));
+            client.connectEvents(
+                    raw -> handleRawEvent(raw.eventName(), raw.payload()),
+                    this::handleStreamFailure
+            );
             status = AssistantSession.Status.RUNNING;
         } catch (SessionCompatibilityException e) {
             safeStopServer();
@@ -205,9 +208,24 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
             eventSessionId = payload.path("session").path("id").asText("");
         }
         if (eventSessionId.isEmpty()) {
-            return true;
+            return false;
         }
         return currentSessionId.equals(eventSessionId);
+    }
+
+    private void handleStreamFailure(Throwable throwable) {
+        String message = throwable != null && throwable.getMessage() != null
+                ? throwable.getMessage()
+                : "OpenCode event stream failed";
+        status = AssistantSession.Status.ERROR;
+        errorMessage.set(message);
+        turnInFlight.set(false);
+
+        com.fasterxml.jackson.databind.node.ObjectNode terminalData =
+                com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
+        terminalData.put("status", AssistantSession.Status.ERROR.name());
+        terminalData.put("message", message);
+        eventSink.accept(new SseEvent("session_ended", terminalData));
     }
 
     private void ensureRunning() {
