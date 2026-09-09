@@ -32,15 +32,11 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 /**
- * Wraps an interactive Claude Code subprocess using stream-json I/O.
+ * Manages an interactive Assistant session runtime and replayable event history.
  *
- * <p>Unlike the one-shot {@code ClaudeCodeSubprocess}, this class maintains
- * a long-lived process with bidirectional stdin/stdout communication. User
- * messages and permission responses are written to stdin as JSON lines;
- * NDJSON events are read from stdout and dispatched to registered listeners.</p>
- *
- * <p>All emitted events are buffered so that reconnecting SSE clients can
- * replay the full session history.</p>
+ * <p>The session can run either with a direct runtime implementation (legacy Claude subprocess mode)
+ * or by delegating runtime operations to an injected {@link InteractiveSessionDriver}. All emitted
+ * events are buffered so reconnecting SSE clients can replay full history.</p>
  */
 public class AssistantSession {
 
@@ -106,9 +102,9 @@ public class AssistantSession {
      * @param name the user-visible session name
      * @param templateId the template this session was created from
      * @param sessionDirectory the Axiom-managed session directory (always deleted on end)
-     * @param workingDirectory the Claude Code working directory
-     * @param command the full command line for the Claude Code subprocess
-     * @param environment resolved environment variables to inject into the subprocess
+     * @param workingDirectory the assistant runtime working directory
+     * @param command the legacy command line for direct subprocess mode
+     * @param environment resolved environment variables for direct subprocess mode
      * @param projectId optional project ID if session is scoped to a project
      * @param projectName optional project name if session is scoped to a project
      */
@@ -154,9 +150,9 @@ public class AssistantSession {
     }
 
     /**
-     * Starts the Claude Code subprocess and begins reading its output.
+     * Starts the session runtime.
      *
-     * @throws IOException if the process cannot be started
+     * @throws IOException if runtime startup fails
      */
     public void start() throws IOException {
         if (driver != null) {
@@ -201,8 +197,8 @@ public class AssistantSession {
     }
 
     /**
-     * Sends a user message to the Claude Code subprocess via stdin. The message
-     * is also recorded in the event history so it can be replayed on reconnect.
+     * Sends a user message to the runtime. The message is recorded in event history so it can be
+     * replayed on reconnect.
      *
      * @param message the user's message text
      * @throws IOException if the message cannot be written
@@ -251,12 +247,11 @@ public class AssistantSession {
     }
 
     /**
-     * Responds to a permission prompt from Claude Code.
+     * Responds to a runtime permission prompt.
      *
      * @param permissionId the permission request ID
      * @param allow whether to allow (true) or deny (false) the tool call
-     * @param toolInput the original tool input to echo back as updatedInput
-     *                  (required by Claude Code when allowing)
+     * @param toolInput runtime tool input payload associated with the permission request
      * @throws IOException if the response cannot be written
      */
     public void respondToPermission(String permissionId, boolean allow,
@@ -361,9 +356,7 @@ public class AssistantSession {
     }
 
     /**
-     * Sends SIGINT to the Claude Code subprocess to interrupt the current
-     * turn, equivalent to pressing ESC in the CLI. The session remains
-     * alive for further interaction.
+     * Interrupts the current runtime turn while keeping the session alive for further interaction.
      */
     public void interrupt() {
         if (driver != null) {
@@ -383,7 +376,7 @@ public class AssistantSession {
     }
 
     /**
-     * Kills the subprocess and marks the session as stopped.
+     * Destroys the session runtime and marks the session as stopped.
      */
     public void destroy() {
         if (driver != null) {
@@ -402,9 +395,9 @@ public class AssistantSession {
     }
 
     /**
-     * Returns whether the subprocess is still alive.
+     * Returns whether the session runtime is still alive.
      *
-     * @return true if the subprocess is running
+     * @return true if the runtime is running
      */
     public boolean isAlive() {
         if (driver != null) {

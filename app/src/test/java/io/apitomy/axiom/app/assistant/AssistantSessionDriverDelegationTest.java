@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AssistantSessionDriverDelegationTest {
 
@@ -22,13 +24,22 @@ class AssistantSessionDriverDelegationTest {
 
         session.start();
         session.sendMessage("hello");
-        session.respondToPermission("p1", true, JsonNodeFactory.instance.objectNode());
+        JsonNode toolInput = JsonNodeFactory.instance.objectNode().put("field", "value");
+        session.respondToPermission("p1", true, toolInput);
+        boolean alive = session.isAlive();
+        AssistantSession.Status status = session.getStatus();
+        String errorMessage = session.getErrorMessage();
         session.interrupt();
         session.destroy();
 
         assertEquals(1, driver.startCalls);
         assertEquals("hello", driver.lastMessage);
         assertEquals("p1", driver.lastPermissionId);
+        assertTrue(driver.lastPermissionAllow);
+        assertSame(toolInput, driver.lastPermissionToolInput);
+        assertTrue(alive);
+        assertEquals(AssistantSession.Status.ERROR, status);
+        assertEquals("driver-error", errorMessage);
         assertEquals(1, driver.interruptCalls);
         assertEquals(1, driver.destroyCalls);
     }
@@ -39,6 +50,8 @@ class AssistantSessionDriverDelegationTest {
         int destroyCalls;
         String lastMessage;
         String lastPermissionId;
+        boolean lastPermissionAllow;
+        JsonNode lastPermissionToolInput;
 
         @Override
         public void start() {
@@ -53,6 +66,8 @@ class AssistantSessionDriverDelegationTest {
         @Override
         public void respondToPermission(String permissionId, boolean allow, JsonNode toolInput) {
             lastPermissionId = permissionId;
+            lastPermissionAllow = allow;
+            lastPermissionToolInput = toolInput;
         }
 
         @Override
@@ -72,12 +87,12 @@ class AssistantSessionDriverDelegationTest {
 
         @Override
         public AssistantSession.Status getStatus() {
-            return AssistantSession.Status.RUNNING;
+            return AssistantSession.Status.ERROR;
         }
 
         @Override
         public String getErrorMessage() {
-            return null;
+            return "driver-error";
         }
     }
 }
