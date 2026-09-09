@@ -62,7 +62,16 @@ class OpenCodeInteractiveSessionDriverTest {
 
     @Test
     void rejectsSecondPromptWhileTurnActive() throws Exception {
-        try (FakeOpenCodeServer server = FakeOpenCodeServer.start()) {
+        CountDownLatch promptSubmitted = new CountDownLatch(1);
+        EventResponder eventResponder = exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+            exchange.sendResponseHeaders(200, 0);
+            promptSubmitted.await(3, TimeUnit.SECONDS);
+            Thread.sleep(500);
+            exchange.getResponseBody().close();
+        };
+
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start(eventResponder, promptSubmitted)) {
             FakeServerProcess process = new FakeServerProcess(server.baseUrl());
 
             OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
@@ -205,6 +214,42 @@ class OpenCodeInteractiveSessionDriverTest {
             assertNotNull(driver.getErrorMessage());
             assertFalse(isTurnInFlight(driver));
             assertEquals(1, server.promptCallCount());
+            assertNotNull(terminal.get());
+
+            driver.destroy();
+        }
+    }
+
+    @Test
+    void startDoesNotOverwriteErrorWhenStreamFailsDuringConnect() throws Exception {
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start()) {
+            FakeServerProcess process = new FakeServerProcess(server.baseUrl());
+            AtomicReference<io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent> terminal =
+                    new AtomicReference<>();
+
+            OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
+                    process,
+                    client -> OpenCodeCapabilityProbe.Result.pass(),
+                    new OpenCodeEventNormalizer(),
+                    event -> {
+                        if ("session_ended".equals(event.type())) {
+                            terminal.set(event);
+                        }
+                    },
+                    event -> {
+                    },
+                    (openCodeAssistantClient, onEvent, onError) ->
+                            onError.accept(new IllegalStateException("synthetic stream failure")),
+                    "Axiom Session",
+                    "github-copilot/claude-sonnet-5",
+                    null
+            );
+
+            driver.start();
+
+            assertEquals(AssistantSession.Status.ERROR, driver.getStatus());
+            assertNotNull(driver.getErrorMessage());
+            assertTrue(driver.getErrorMessage().contains("synthetic stream failure"));
             assertNotNull(terminal.get());
 
             driver.destroy();

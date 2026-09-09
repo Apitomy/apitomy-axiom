@@ -26,16 +26,17 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
     private final OpenCodeEventNormalizer normalizer;
     private final Consumer<SseEvent> eventSink;
     private final Consumer<SseEvent> autoApprovalSink;
+    private final EventStreamConnector eventStreamConnector;
     private final String sessionTitle;
     private final String model;
     private final JsonNode tools;
 
     private final AtomicBoolean turnInFlight = new AtomicBoolean(false);
     private final AtomicReference<String> errorMessage = new AtomicReference<>();
+    private final AtomicReference<AssistantSession.Status> status;
 
     private volatile OpenCodeAssistantClient client;
     private volatile String openCodeSessionId;
-    private volatile AssistantSession.Status status;
 
     /**
      * Creates an OpenCode interactive session driver.
@@ -57,50 +58,74 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                                             String sessionTitle,
                                             String model,
                                             JsonNode tools) {
+        this(serverProcess,
+                capabilityProbe,
+                normalizer,
+                eventSink,
+                autoApprovalSink,
+                OpenCodeAssistantClient::connectEvents,
+                sessionTitle,
+                model,
+                tools);
+    }
+
+    OpenCodeInteractiveSessionDriver(ServerProcessHandle serverProcess,
+                                     CapabilityProbe capabilityProbe,
+                                     OpenCodeEventNormalizer normalizer,
+                                     Consumer<SseEvent> eventSink,
+                                     Consumer<SseEvent> autoApprovalSink,
+                                     EventStreamConnector eventStreamConnector,
+                                     String sessionTitle,
+                                     String model,
+                                     JsonNode tools) {
         this.serverProcess = Objects.requireNonNull(serverProcess, "serverProcess");
         this.capabilityProbe = Objects.requireNonNull(capabilityProbe, "capabilityProbe");
         this.normalizer = Objects.requireNonNull(normalizer, "normalizer");
         this.eventSink = Objects.requireNonNull(eventSink, "eventSink");
         this.autoApprovalSink = Objects.requireNonNull(autoApprovalSink, "autoApprovalSink");
+        this.eventStreamConnector = Objects.requireNonNull(eventStreamConnector, "eventStreamConnector");
         this.sessionTitle = sessionTitle;
         this.model = model;
         this.tools = tools;
-        this.status = AssistantSession.Status.STARTING;
+        this.status = new AtomicReference<>(AssistantSession.Status.STARTING);
     }
 
     @Override
     public synchronized void start() throws IOException {
-        if (status == AssistantSession.Status.RUNNING) {
+        if (status.get() == AssistantSession.Status.RUNNING) {
             return;
         }
+
+        status.set(AssistantSession.Status.STARTING);
 
         try {
             serverProcess.start();
             client = new OpenCodeAssistantClient(serverProcess.baseUrl());
             OpenCodeCapabilityProbe.Result result = capabilityProbe.probe(client);
             if (!result.compatible()) {
-                status = AssistantSession.Status.ERROR;
+                status.set(AssistantSession.Status.ERROR);
                 errorMessage.set(result.message());
                 throw new SessionCompatibilityException(result.code(), result.message(), result.details());
             }
 
             openCodeSessionId = client.createSession(sessionTitle);
             if (openCodeSessionId == null || openCodeSessionId.isBlank()) {
-                status = AssistantSession.Status.ERROR;
+                status.set(AssistantSession.Status.ERROR);
                 errorMessage.set("OpenCode session creation did not return an id");
                 throw new IOException("OpenCode session creation did not return an id");
             }
 
-            client.connectEvents(
+            eventStreamConnector.connect(
+                    client,
                     raw -> handleRawEvent(raw.eventName(), raw.payload()),
                     this::handleStreamFailure
             );
-            status = AssistantSession.Status.RUNNING;
+            status.compareAndSet(AssistantSession.Status.STARTING, AssistantSession.Status.RUNNING);
         } catch (SessionCompatibilityException e) {
             safeStopServer();
             throw e;
         } catch (RuntimeException e) {
-            status = AssistantSession.Status.ERROR;
+            status.set(AssistantSession.Status.ERROR);
             errorMessage.set(e.getMessage());
             safeStopServer();
             throw new IOException("Failed to start OpenCode interactive session", e);
@@ -143,7 +168,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
             localClient.abort(localSessionId);
             turnInFlight.set(false);
         } catch (RuntimeException e) {
-            status = AssistantSession.Status.ERROR;
+            status.set(AssistantSession.Status.ERROR);
             errorMessage.set(e.getMessage());
             LOG.warnf(e, "Failed to interrupt OpenCode session %s", localSessionId);
         }
@@ -154,9 +179,10 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
         turnInFlight.set(false);
         openCodeSessionId = null;
         safeStopServer();
-        if (status != AssistantSession.Status.ERROR) {
-            status = AssistantSession.Status.STOPPED;
-        }
+        status.updateAndGet(currentStatus ->
+                currentStatus == AssistantSession.Status.ERROR
+                        ? AssistantSession.Status.ERROR
+                        : AssistantSession.Status.STOPPED);
     }
 
     @Override
@@ -166,7 +192,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
 
     @Override
     public AssistantSession.Status getStatus() {
-        return status;
+        return status.get();
     }
 
     @Override
@@ -217,7 +243,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
         String message = throwable != null && throwable.getMessage() != null
                 ? throwable.getMessage()
                 : "OpenCode event stream failed";
-        status = AssistantSession.Status.ERROR;
+        status.set(AssistantSession.Status.ERROR);
         errorMessage.set(message);
         turnInFlight.set(false);
 
@@ -229,9 +255,17 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
     }
 
     private void ensureRunning() {
-        if (status != AssistantSession.Status.RUNNING || client == null || openCodeSessionId == null) {
+        if (status.get() != AssistantSession.Status.RUNNING || client == null || openCodeSessionId == null) {
             throw new IllegalStateException("OpenCode interactive session is not running");
         }
+    }
+
+    @FunctionalInterface
+    interface EventStreamConnector {
+
+        void connect(OpenCodeAssistantClient openCodeAssistantClient,
+                     Consumer<OpenCodeAssistantClient.OpenCodeRawEvent> onEvent,
+                     Consumer<Throwable> onError);
     }
 
     private void safeStopServer() {
