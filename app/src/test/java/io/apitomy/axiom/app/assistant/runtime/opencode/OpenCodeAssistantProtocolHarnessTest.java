@@ -17,7 +17,10 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -74,21 +77,21 @@ class OpenCodeAssistantProtocolHarnessTest {
         client.sendPromptAsync(sessionId, "Reply with exactly HARNESS-READY.", null, null);
 
         boolean sawAssistantEvent = eventTap.awaitFromIndex(startIndex,
-                OpenCodeAssistantProtocolHarnessTest::hasAssistantEvent,
+                events -> hasAssistantEvent(events, sessionId),
                 EVENT_TIMEOUT);
         assertTrue(sawAssistantEvent,
                 () -> "Prompt should emit assistant event. Events: "
                         + eventTap.describeFromIndex(startIndex));
 
         boolean sawStatusOrCompletionEvent = eventTap.awaitFromIndex(startIndex,
-                OpenCodeAssistantProtocolHarnessTest::hasStatusOrCompletionEvent,
+                events -> hasStatusOrCompletionEvent(events, sessionId),
                 EVENT_TIMEOUT);
         assertTrue(sawStatusOrCompletionEvent,
                 () -> "Prompt should emit status or completion event. Events: "
                         + eventTap.describeFromIndex(startIndex));
 
         boolean sawToolOrStatusOrCompletionEvent = eventTap.awaitFromIndex(startIndex,
-                OpenCodeAssistantProtocolHarnessTest::hasToolOrStatusOrCompletionEvent,
+                events -> hasToolOrStatusOrCompletionEvent(events, sessionId),
                 EVENT_TIMEOUT);
         assertTrue(sawToolOrStatusOrCompletionEvent,
                 () -> "Prompt should emit tool/status/completion event. Events: "
@@ -105,13 +108,14 @@ class OpenCodeAssistantProtocolHarnessTest {
                 null);
 
         boolean sawProgressSignal = eventTap.awaitFromIndex(startIndex,
-                OpenCodeAssistantProtocolHarnessTest::hasProgressSignal,
+                events -> hasProgressSignal(events, sessionId),
                 PROGRESS_TIMEOUT);
         assertTrue(sawProgressSignal,
                 "Expected permission, tool, or status event before aborting long-running turn");
 
         eventTap.firstEventFromIndex(startIndex,
-                        event -> "session.permission.requested".equals(eventType(event))
+                        event -> eventMatchesSession(event, sessionId)
+                                && "session.permission.requested".equals(eventType(event))
                                 && !event.payload().path("requestId").asText("").isBlank())
                 .ifPresent(permission -> {
                     String requestId = permission.payload().path("requestId").asText("");
@@ -120,26 +124,35 @@ class OpenCodeAssistantProtocolHarnessTest {
                     }
                 });
 
+        int abortIndex = eventTap.size();
         client.abort(sessionId);
 
-        boolean reachedTerminalState = eventTap.awaitFromIndex(startIndex,
-                OpenCodeAssistantProtocolHarnessTest::hasAbortTerminalSignal,
+        boolean reachedTerminalState = eventTap.awaitFromIndex(abortIndex,
+                events -> hasAbortTerminalSignal(events, sessionId),
                 ABORT_TIMEOUT);
         assertTrue(reachedTerminalState,
                 () -> "Abort should produce deterministic terminal signal. Events: "
-                        + eventTap.describeFromIndex(startIndex));
+                        + eventTap.describeFromIndex(abortIndex));
     }
 
-    private static boolean hasAssistantEvent(List<OpenCodeAssistantClient.OpenCodeRawEvent> events) {
+    private static boolean hasAssistantEvent(List<OpenCodeAssistantClient.OpenCodeRawEvent> events,
+                                             String sessionId) {
         return events.stream().anyMatch(event -> {
+            if (!eventMatchesSession(event, sessionId)) {
+                return false;
+            }
             String type = eventType(event);
             return "session.message.part".equals(event.eventName())
                     || type.startsWith("message.part.");
         });
     }
 
-    private static boolean hasStatusOrCompletionEvent(List<OpenCodeAssistantClient.OpenCodeRawEvent> events) {
+    private static boolean hasStatusOrCompletionEvent(List<OpenCodeAssistantClient.OpenCodeRawEvent> events,
+                                                      String sessionId) {
         return events.stream().anyMatch(event -> {
+            if (!eventMatchesSession(event, sessionId)) {
+                return false;
+            }
             String type = eventType(event);
             return "session.turn.completed".equals(event.eventName())
                     || type.startsWith("session.status")
@@ -147,8 +160,12 @@ class OpenCodeAssistantProtocolHarnessTest {
         });
     }
 
-    private static boolean hasToolOrStatusOrCompletionEvent(List<OpenCodeAssistantClient.OpenCodeRawEvent> events) {
+    private static boolean hasToolOrStatusOrCompletionEvent(List<OpenCodeAssistantClient.OpenCodeRawEvent> events,
+                                                            String sessionId) {
         return events.stream().anyMatch(event -> {
+            if (!eventMatchesSession(event, sessionId)) {
+                return false;
+            }
             String type = eventType(event);
             return type.contains("tool")
                     || type.startsWith("session.status")
@@ -157,8 +174,12 @@ class OpenCodeAssistantProtocolHarnessTest {
         });
     }
 
-    private static boolean hasProgressSignal(List<OpenCodeAssistantClient.OpenCodeRawEvent> events) {
+    private static boolean hasProgressSignal(List<OpenCodeAssistantClient.OpenCodeRawEvent> events,
+                                             String sessionId) {
         return events.stream().anyMatch(event -> {
+            if (!eventMatchesSession(event, sessionId)) {
+                return false;
+            }
             String type = eventType(event);
             return "session.permission.requested".equals(type)
                     || type.contains("tool")
@@ -167,8 +188,12 @@ class OpenCodeAssistantProtocolHarnessTest {
         });
     }
 
-    private static boolean hasAbortTerminalSignal(List<OpenCodeAssistantClient.OpenCodeRawEvent> events) {
+    private static boolean hasAbortTerminalSignal(List<OpenCodeAssistantClient.OpenCodeRawEvent> events,
+                                                  String sessionId) {
         return events.stream().anyMatch(event -> {
+            if (!eventMatchesSession(event, sessionId)) {
+                return false;
+            }
             String eventName = event.eventName();
             String type = eventType(event);
             if ("session.turn.completed".equals(eventName) || "session.turn.completed".equals(type)) {
@@ -177,14 +202,86 @@ class OpenCodeAssistantProtocolHarnessTest {
             if ("session.tool.completed".equals(eventName) || "session.tool.completed".equals(type)) {
                 return event.payload().path("interrupted").asBoolean(false);
             }
-            if (type.startsWith("session.status") || "session.idle".equals(type)) {
+            if (eventName.contains("abort") || type.contains("abort")) {
                 return true;
             }
-            if (eventName.contains("abort") || type.contains("abort")) {
+            if ("session.idle".equals(type)) {
                 return true;
             }
             return false;
         });
+    }
+
+    private static boolean eventMatchesSession(OpenCodeAssistantClient.OpenCodeRawEvent event,
+                                               String sessionId) {
+        Optional<String> maybeEventSessionId = extractSessionId(event.payload());
+        return maybeEventSessionId.isPresent() && sessionId.equals(maybeEventSessionId.get());
+    }
+
+    private static Optional<String> extractSessionId(JsonNode payload) {
+        if (payload == null || payload.isNull()) {
+            return Optional.empty();
+        }
+        return findSessionIdRecursive(payload);
+    }
+
+    private static Optional<String> findSessionIdRecursive(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return Optional.empty();
+        }
+
+        if (node.isObject()) {
+            String directSessionId = firstNonBlank(
+                    node.path("sessionID").asText(""),
+                    node.path("sessionId").asText(""),
+                    node.path("session_id").asText("")
+            );
+            if (!directSessionId.isBlank()) {
+                return Optional.of(directSessionId);
+            }
+
+            JsonNode sessionNode = node.path("session");
+            if (sessionNode.isObject()) {
+                String nestedSessionId = firstNonBlank(
+                        sessionNode.path("id").asText(""),
+                        sessionNode.path("sessionID").asText(""),
+                        sessionNode.path("sessionId").asText(""),
+                        sessionNode.path("session_id").asText("")
+                );
+                if (!nestedSessionId.isBlank()) {
+                    return Optional.of(nestedSessionId);
+                }
+            }
+
+            Iterator<Map.Entry<String, JsonNode>> fields = node.fields();
+            while (fields.hasNext()) {
+                Map.Entry<String, JsonNode> entry = fields.next();
+                Optional<String> nested = findSessionIdRecursive(entry.getValue());
+                if (nested.isPresent()) {
+                    return nested;
+                }
+            }
+        }
+
+        if (node.isArray()) {
+            for (JsonNode element : node) {
+                Optional<String> nested = findSessionIdRecursive(element);
+                if (nested.isPresent()) {
+                    return nested;
+                }
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    private static String firstNonBlank(String... candidates) {
+        for (String candidate : candidates) {
+            if (candidate != null && !candidate.isBlank()) {
+                return candidate;
+            }
+        }
+        return "";
     }
 
     private static String eventType(OpenCodeAssistantClient.OpenCodeRawEvent event) {
