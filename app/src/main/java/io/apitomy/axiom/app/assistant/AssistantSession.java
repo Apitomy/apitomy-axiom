@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
+import io.apitomy.axiom.app.assistant.runtime.InteractiveSessionDriver;
 import org.jboss.logging.Logger;
 
 import java.io.BufferedReader;
@@ -58,6 +59,7 @@ public class AssistantSession {
     private final List<String> command;
     private final Map<String, String> environment;
     private final AssistantEventParser parser;
+    private final InteractiveSessionDriver driver;
 
     private volatile Process process;
     private volatile OutputStream stdin;
@@ -114,6 +116,27 @@ public class AssistantSession {
                              Path workingDirectory, List<String> command,
                              Map<String, String> environment, Long projectId,
                              String projectName) {
+        this(name, templateId, sessionDirectory, workingDirectory, command,
+                environment, projectId, projectName, null);
+    }
+
+    /**
+     * Creates a new assistant session with an injected runtime driver.
+     *
+     * @param name the user-visible session name
+     * @param templateId the template this session was created from
+     * @param sessionDirectory the Axiom-managed session directory (always deleted on end)
+     * @param workingDirectory the assistant working directory
+     * @param command the legacy command line used by Claude runtime mode
+     * @param environment resolved environment variables used by Claude runtime mode
+     * @param projectId optional project ID if session is scoped to a project
+     * @param projectName optional project name if session is scoped to a project
+     * @param driver runtime driver used for interactive session I/O
+     */
+    public AssistantSession(String name, String templateId, Path sessionDirectory,
+                             Path workingDirectory, List<String> command,
+                             Map<String, String> environment, Long projectId,
+                             String projectName, InteractiveSessionDriver driver) {
         this.id = UUID.randomUUID().toString();
         this.name = name;
         this.templateId = templateId;
@@ -127,6 +150,7 @@ public class AssistantSession {
         this.lastActivityAt = this.createdAt;
         this.projectId = projectId;
         this.projectName = projectName;
+        this.driver = driver;
     }
 
     /**
@@ -135,6 +159,13 @@ public class AssistantSession {
      * @throws IOException if the process cannot be started
      */
     public void start() throws IOException {
+        if (driver != null) {
+            driver.start();
+            status = driver.getStatus();
+            errorMessage.set(driver.getErrorMessage());
+            lastActivityAt = Instant.now();
+            return;
+        }
         LOG.infof("Starting assistant session %s in %s", id, workingDirectory);
 
         ProcessBuilder pb = new ProcessBuilder(command);
@@ -182,6 +213,12 @@ public class AssistantSession {
         userData.put("content", message);
         addEvent(new SseEvent("user_message", userData));
 
+        if (driver != null) {
+            driver.sendUserMessage(message);
+            lastActivityAt = Instant.now();
+            return;
+        }
+
         ObjectNode root = MAPPER.createObjectNode();
         root.put("type", "user");
         ObjectNode msg = MAPPER.createObjectNode();
@@ -223,13 +260,19 @@ public class AssistantSession {
      * @throws IOException if the response cannot be written
      */
     public void respondToPermission(String permissionId, boolean allow,
-                                     com.fasterxml.jackson.databind.JsonNode toolInput)
+                                      com.fasterxml.jackson.databind.JsonNode toolInput)
             throws IOException {
         // Record the resolution in event history for replay
         ObjectNode resolvedData = MAPPER.createObjectNode();
         resolvedData.put("permissionId", permissionId);
         resolvedData.put("allow", allow);
         addEvent(new SseEvent("permission_resolved", resolvedData));
+
+        if (driver != null) {
+            driver.respondToPermission(permissionId, allow, toolInput);
+            lastActivityAt = Instant.now();
+            return;
+        }
 
         ObjectNode root = MAPPER.createObjectNode();
         root.put("type", "control_response");
@@ -323,6 +366,10 @@ public class AssistantSession {
      * alive for further interaction.
      */
     public void interrupt() {
+        if (driver != null) {
+            driver.interrupt();
+            return;
+        }
         if (process != null && process.isAlive()) {
             long pid = process.pid();
             LOG.infof("Interrupting assistant session %s (SIGINT to pid %d)", id, pid);
@@ -339,6 +386,12 @@ public class AssistantSession {
      * Kills the subprocess and marks the session as stopped.
      */
     public void destroy() {
+        if (driver != null) {
+            driver.destroy();
+            status = driver.getStatus();
+            errorMessage.set(driver.getErrorMessage());
+            return;
+        }
         LOG.infof("Destroying assistant session %s", id);
         status = Status.STOPPED;
         closeQuietly(rawEventsWriter);
@@ -354,6 +407,9 @@ public class AssistantSession {
      * @return true if the subprocess is running
      */
     public boolean isAlive() {
+        if (driver != null) {
+            return driver.isAlive();
+        }
         return process != null && process.isAlive();
     }
 
@@ -407,6 +463,9 @@ public class AssistantSession {
     }
 
     public Status getStatus() {
+        if (driver != null) {
+            return driver.getStatus();
+        }
         return status;
     }
 
@@ -419,6 +478,9 @@ public class AssistantSession {
     }
 
     public String getErrorMessage() {
+        if (driver != null) {
+            return driver.getErrorMessage();
+        }
         return errorMessage.get();
     }
 
