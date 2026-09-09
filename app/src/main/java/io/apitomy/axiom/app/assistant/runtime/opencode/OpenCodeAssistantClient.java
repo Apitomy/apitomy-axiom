@@ -158,30 +158,7 @@ public final class OpenCodeAssistantClient {
 
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
-                String eventName = null;
-                StringBuilder dataBuilder = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (line.isEmpty()) {
-                        if (eventName != null) {
-                            JsonNode payload = dataBuilder.length() == 0
-                                    ? MAPPER.createObjectNode()
-                                    : MAPPER.readTree(dataBuilder.toString());
-                            onEvent.accept(new OpenCodeRawEvent(eventName, payload));
-                        }
-                        eventName = null;
-                        dataBuilder.setLength(0);
-                        continue;
-                    }
-                    if (line.startsWith("event:")) {
-                        eventName = line.substring("event:".length()).trim();
-                    } else if (line.startsWith("data:")) {
-                        if (dataBuilder.length() > 0) {
-                            dataBuilder.append('\n');
-                        }
-                        dataBuilder.append(line.substring("data:".length()).trim());
-                    }
-                }
+                parseSseEvents(reader, onEvent);
             }
         } catch (IOException e) {
             throw new IllegalStateException("Failed to stream OpenCode events", e);
@@ -189,6 +166,51 @@ public final class OpenCodeAssistantClient {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while streaming OpenCode events", e);
         }
+    }
+
+    static void parseSseEvents(BufferedReader reader, Consumer<OpenCodeRawEvent> onEvent) throws IOException {
+        String eventName = null;
+        StringBuilder dataBuilder = new StringBuilder();
+        String line;
+        while ((line = reader.readLine()) != null) {
+            if (line.isEmpty()) {
+                emitBufferedEvent(eventName, dataBuilder, onEvent);
+                eventName = null;
+                dataBuilder.setLength(0);
+                continue;
+            }
+            if (line.startsWith("event:")) {
+                eventName = parseFieldValue(line, "event:");
+            } else if (line.startsWith("data:")) {
+                if (dataBuilder.length() > 0) {
+                    dataBuilder.append('\n');
+                }
+                dataBuilder.append(parseFieldValue(line, "data:"));
+            }
+        }
+        emitBufferedEvent(eventName, dataBuilder, onEvent);
+    }
+
+    private static void emitBufferedEvent(String eventName,
+                                          StringBuilder dataBuilder,
+                                          Consumer<OpenCodeRawEvent> onEvent) throws IOException {
+        if (dataBuilder.length() == 0 && eventName == null) {
+            return;
+        }
+
+        String resolvedEventName = (eventName == null || eventName.isBlank()) ? "message" : eventName;
+        JsonNode payload = dataBuilder.length() == 0
+                ? MAPPER.createObjectNode()
+                : MAPPER.readTree(dataBuilder.toString());
+        onEvent.accept(new OpenCodeRawEvent(resolvedEventName, payload));
+    }
+
+    private static String parseFieldValue(String line, String fieldPrefix) {
+        String value = line.substring(fieldPrefix.length());
+        if (!value.isEmpty() && value.charAt(0) == ' ') {
+            return value.substring(1);
+        }
+        return value;
     }
 
     private JsonNode postJson(String path, JsonNode body, int... okStatuses) {
