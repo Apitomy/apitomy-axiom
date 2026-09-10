@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -113,7 +114,7 @@ public final class OpenCodeAssistantClient {
             modelNode.put("modelID", split[1]);
         }
         if (tools != null && !tools.isNull()) {
-            body.set("tools", tools);
+            body.set("tools", normalizePromptTools(tools));
         }
 
         postJson("/session/" + sessionId + "/prompt_async", body, 204);
@@ -137,8 +138,7 @@ public final class OpenCodeAssistantClient {
      */
     public void respondPermission(String sessionId, String permissionId, boolean allow) {
         ObjectNode body = MAPPER.createObjectNode();
-        ObjectNode response = body.putObject("response");
-        response.put("behavior", allow ? "allow" : "deny");
+        body.put("response", allow ? "once" : "reject");
         postJson("/session/" + sessionId + "/permissions/" + permissionId, body, 200);
     }
 
@@ -259,6 +259,24 @@ public final class OpenCodeAssistantClient {
             return value.substring(1);
         }
         return value;
+    }
+
+    private JsonNode normalizePromptTools(JsonNode tools) {
+        JsonNode allowed = tools.path("allowed");
+        if (!allowed.isArray()) {
+            return tools;
+        }
+
+        ObjectNode normalized = MAPPER.createObjectNode();
+        for (JsonNode entry : allowed) {
+            if (entry instanceof TextNode textNode) {
+                String toolName = textNode.asText("").trim();
+                if (!toolName.isEmpty()) {
+                    normalized.put(toolName, true);
+                }
+            }
+        }
+        return normalized;
     }
 
     private JsonNode postJson(String path, JsonNode body, int... okStatuses) {

@@ -19,6 +19,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -168,6 +169,94 @@ class OpenCodeInteractiveSessionDriverTest {
     }
 
     @Test
+    void acceptsEnvelopeEventWhenSessionIdIsUnderProperties() throws Exception {
+        CountDownLatch eventWritten = new CountDownLatch(1);
+        String eventPayload = "event: message\n"
+                + "data: {\"type\":\"message.part.updated\",\"properties\":{\"sessionID\":\"session-1\",\"part\":{\"type\":\"text\",\"text\":\"hello\"}}}\n\n";
+        EventResponder eventResponder = exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+            exchange.sendResponseHeaders(200, 0);
+            try (OutputStream outputStream = exchange.getResponseBody()) {
+                outputStream.write(eventPayload.getBytes(StandardCharsets.UTF_8));
+                outputStream.flush();
+                eventWritten.countDown();
+            }
+        };
+
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start(eventResponder)) {
+            FakeServerProcess process = new FakeServerProcess(server.baseUrl());
+            List<io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent> events =
+                    new CopyOnWriteArrayList<>();
+
+            OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
+                    process,
+                    client -> OpenCodeCapabilityProbe.Result.pass(),
+                    new OpenCodeEventNormalizer(),
+                    events::add,
+                    events::add,
+                    "Axiom Session",
+                    "github-copilot/claude-sonnet-5",
+                    null
+            );
+
+            driver.start();
+
+            assertTrue(eventWritten.await(3, TimeUnit.SECONDS));
+            waitUntil(() -> !events.isEmpty(), Duration.ofSeconds(2));
+            assertEquals("assistant_text", events.getFirst().type());
+            assertEquals("hello", events.getFirst().data().path("text").asText());
+
+            driver.destroy();
+        }
+    }
+
+    @Test
+    void ignoresUserMessagePartUpdatedEventsFromEnvelopeStream() throws Exception {
+        CountDownLatch eventWritten = new CountDownLatch(1);
+        String eventPayload = "event: message\n"
+                + "data: {\"type\":\"message.updated\",\"properties\":{\"sessionID\":\"session-1\",\"info\":{\"id\":\"msg-user-1\",\"role\":\"user\"}}}\n\n"
+                + "event: message\n"
+                + "data: {\"type\":\"message.part.updated\",\"properties\":{\"sessionID\":\"session-1\",\"part\":{\"type\":\"text\",\"text\":\"What time is it?\",\"messageID\":\"msg-user-1\"}}}\n\n"
+                + "event: message\n"
+                + "data: {\"type\":\"session.idle\",\"properties\":{\"sessionID\":\"session-1\"}}\n\n";
+        EventResponder eventResponder = exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+            exchange.sendResponseHeaders(200, 0);
+            try (OutputStream outputStream = exchange.getResponseBody()) {
+                outputStream.write(eventPayload.getBytes(StandardCharsets.UTF_8));
+                outputStream.flush();
+                eventWritten.countDown();
+            }
+        };
+
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start(eventResponder)) {
+            FakeServerProcess process = new FakeServerProcess(server.baseUrl());
+            List<io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent> events =
+                    new CopyOnWriteArrayList<>();
+
+            OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
+                    process,
+                    client -> OpenCodeCapabilityProbe.Result.pass(),
+                    new OpenCodeEventNormalizer(),
+                    events::add,
+                    events::add,
+                    "Axiom Session",
+                    "github-copilot/claude-sonnet-5",
+                    null
+            );
+
+            driver.start();
+
+            assertTrue(eventWritten.await(3, TimeUnit.SECONDS));
+            waitUntil(() -> !events.isEmpty(), Duration.ofSeconds(2));
+            assertEquals(1, events.size());
+            assertEquals("turn_complete", events.getFirst().type());
+
+            driver.destroy();
+        }
+    }
+
+    @Test
     void streamFailureTransitionsToErrorAndClearsInFlightPrompt() throws Exception {
         CountDownLatch promptSubmitted = new CountDownLatch(1);
         EventResponder eventResponder = exchange -> {
@@ -215,6 +304,38 @@ class OpenCodeInteractiveSessionDriverTest {
             assertFalse(isTurnInFlight(driver));
             assertEquals(1, server.promptCallCount());
             assertNotNull(terminal.get());
+
+            driver.destroy();
+        }
+    }
+
+    @Test
+    void sendUserMessageAcceptsAllowedToolsArrayPayload() throws Exception {
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start()) {
+            FakeServerProcess process = new FakeServerProcess(server.baseUrl());
+
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.node.ObjectNode tools = mapper.createObjectNode();
+            com.fasterxml.jackson.databind.node.ArrayNode allowed = tools.putArray("allowed");
+            allowed.add("Read(*)");
+            allowed.add("Write(*)");
+
+            OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
+                    process,
+                    client -> OpenCodeCapabilityProbe.Result.pass(),
+                    new OpenCodeEventNormalizer(),
+                    event -> {
+                    },
+                    event -> {
+                    },
+                    "Axiom Session",
+                    "github-copilot/claude-sonnet-5",
+                    tools
+            );
+
+            driver.start();
+            assertDoesNotThrow(() -> driver.sendUserMessage("first"));
+            assertEquals(1, server.promptCallCount());
 
             driver.destroy();
         }
@@ -362,6 +483,16 @@ class OpenCodeInteractiveSessionDriverTest {
                 fakeOpenCodeServer.promptCalls.incrementAndGet();
                 if (promptSubmitted != null) {
                     promptSubmitted.countDown();
+                }
+                String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+                if (body.contains("\"tools\":{\"allowed\"")) {
+                    byte[] payload = "{\"name\":\"BadRequest\",\"data\":{\"message\":\"Expected boolean\",\"kind\":\"Payload\"}}"
+                            .getBytes(StandardCharsets.UTF_8);
+                    exchange.getResponseHeaders().add("Content-Type", "application/json");
+                    exchange.sendResponseHeaders(400, payload.length);
+                    exchange.getResponseBody().write(payload);
+                    exchange.close();
+                    return;
                 }
                 exchange.sendResponseHeaders(204, -1);
                 exchange.close();

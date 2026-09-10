@@ -119,6 +119,20 @@ class OpenCodeCapabilityProbeTest {
         }
     }
 
+    @Test
+    void passesWhenPermissionEndpointRejectsMalformedRequestButSupportsContractCompliantCalls() throws Exception {
+        ServerConfig config = ServerConfig.defaults().withPermissionMode(PermissionMode.STRICT_CONTRACT);
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start(config)) {
+            OpenCodeAssistantClient client = new OpenCodeAssistantClient(server.baseUrl());
+            OpenCodeCapabilityProbe probe = new OpenCodeCapabilityProbe();
+
+            OpenCodeCapabilityProbe.Result result = probe.probe(client);
+
+            assertTrue(result.compatible());
+            assertNull(result.code());
+        }
+    }
+
     private static final class FakeOpenCodeServer implements AutoCloseable {
 
         private static final String SESSION_ID = "session-1";
@@ -142,7 +156,7 @@ class OpenCodeCapabilityProbeTest {
             server.createContext("/session/" + SESSION_ID + "/prompt_async", new EmptyHandler(204));
             server.createContext("/session/" + SESSION_ID + "/abort", new EmptyHandler(200));
             if (config.permissionMode() != PermissionMode.MISSING) {
-                server.createContext("/session/" + SESSION_ID + "/permissions/probe-permission-id", exchange -> {
+                server.createContext("/session/" + SESSION_ID + "/permissions/", exchange -> {
                     String method = exchange.getRequestMethod();
                     if ("OPTIONS".equalsIgnoreCase(method)) {
                         exchange.getResponseHeaders().add("Allow", "POST,OPTIONS");
@@ -151,6 +165,12 @@ class OpenCodeCapabilityProbeTest {
                         return;
                     }
                     if ("POST".equalsIgnoreCase(method)) {
+                        if (config.permissionMode() == PermissionMode.STRICT_CONTRACT) {
+                            StrictPermissionResult strictResult = evaluateStrictPermissionRequest(exchange);
+                            exchange.sendResponseHeaders(strictResult.statusCode(), -1);
+                            exchange.close();
+                            return;
+                        }
                         int statusCode = config.permissionMode() == PermissionMode.SUPPORTED
                                 ? 200
                                 : 404;
@@ -166,6 +186,21 @@ class OpenCodeCapabilityProbeTest {
             return new FakeOpenCodeServer(server);
         }
 
+        private static StrictPermissionResult evaluateStrictPermissionRequest(HttpExchange exchange) throws IOException {
+            String path = exchange.getRequestURI().getPath();
+            String permissionId = path.substring(path.lastIndexOf('/') + 1);
+            String payload = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            String normalizedPayload = payload.replaceAll("\\s+", "");
+
+            if (!permissionId.startsWith("per")) {
+                return new StrictPermissionResult(400);
+            }
+            if (!"{\"response\":\"once\"}".equals(normalizedPayload)) {
+                return new StrictPermissionResult(400);
+            }
+            return new StrictPermissionResult(404);
+        }
+
         String baseUrl() {
             return "http://127.0.0.1:" + server.getAddress().getPort();
         }
@@ -179,7 +214,11 @@ class OpenCodeCapabilityProbeTest {
     private enum PermissionMode {
         SUPPORTED,
         MISSING,
-        BUSINESS_STATE_REJECTED
+        BUSINESS_STATE_REJECTED,
+        STRICT_CONTRACT
+    }
+
+    private record StrictPermissionResult(int statusCode) {
     }
 
     private record EndpointSpec(int statusCode, String contentType, String body) {

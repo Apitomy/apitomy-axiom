@@ -85,6 +85,42 @@ class InteractiveSessionDriverFactoryTest {
         assertEquals(29, getField(process, "startupTimeoutSeconds"));
     }
 
+    @Test
+    void createDriverUsesEphemeralPortWhenAssistantPortOverrideIsNotSet() throws Exception {
+        InteractiveSessionDriverFactory.DefaultInteractiveSessionDriverFactory factory =
+                new InteractiveSessionDriverFactory.DefaultInteractiveSessionDriverFactory();
+
+        setField(factory, "assistantOpenCodeExecutable", Optional.empty());
+        setField(factory, "openCodeExecutable", "legacy-opencode");
+        setField(factory, "assistantOpenCodeStartupTimeoutSeconds", Optional.empty());
+        setField(factory, "legacyAssistantOpenCodeServerStartupTimeoutSeconds", Optional.empty());
+        setField(factory, "openCodeServerStartupTimeoutSeconds", 13);
+        setField(factory, "assistantOpenCodeServerPort", Optional.empty());
+        setField(factory, "openCodeServerHostname", "127.0.0.1");
+        setField(factory, "openCodeServerPort", 4096);
+
+        InteractiveSessionDriver driver = factory.createDriver(new InteractiveSessionDriverFactory.DriverRequest(
+                "opencode",
+                "general-assistant",
+                Path.of("/tmp/session"),
+                Path.of("/tmp/work"),
+                List.of(),
+                Map.of(),
+                null,
+                null,
+                event -> {
+                },
+                event -> {
+                },
+                "github-copilot/claude-sonnet-5",
+                null,
+                "Session"
+        ));
+
+        Object process = extractProcess(driver);
+        assertEquals(0, getField(process, "configuredPort"));
+    }
+
     private static Object extractProcess(InteractiveSessionDriver driver) throws Exception {
         Field serverProcessField = driver.getClass().getDeclaredField("serverProcess");
         serverProcessField.setAccessible(true);

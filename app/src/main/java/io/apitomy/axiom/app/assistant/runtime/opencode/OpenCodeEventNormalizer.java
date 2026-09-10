@@ -25,14 +25,32 @@ public class OpenCodeEventNormalizer {
             return Collections.emptyList();
         }
         JsonNode safePayload = payload == null ? JsonNodeFactory.instance.objectNode() : payload;
-        return switch (eventName) {
-            case "session.message.part" -> mapMessagePart(safePayload);
-            case "session.tool.started" -> List.of(toolUse(safePayload));
-            case "session.tool.completed" -> List.of(toolResult(safePayload));
-            case "session.permission.requested" -> List.of(permission(safePayload));
-            case "session.turn.completed" -> List.of(turnComplete(safePayload));
+        JsonNode eventData = eventData(safePayload);
+        String resolvedType = resolvedEventType(eventName, safePayload);
+
+        return switch (resolvedType) {
+            case "session.message.part", "message.part.updated" -> mapMessagePart(eventData);
+            case "session.tool.started" -> List.of(toolUse(eventData));
+            case "session.tool.completed" -> List.of(toolResult(eventData));
+            case "session.permission.requested", "permission.asked", "permission.v2.asked" ->
+                    List.of(permission(eventData));
+            case "session.turn.completed", "session.idle" -> List.of(turnComplete(eventData));
+            case "session.error" -> List.of(sessionError(eventData));
             default -> Collections.emptyList();
         };
+    }
+
+    private JsonNode eventData(JsonNode payload) {
+        JsonNode properties = payload.path("properties");
+        return properties.isObject() ? properties : payload;
+    }
+
+    private String resolvedEventType(String eventName, JsonNode payload) {
+        String payloadType = payload.path("type").asText("");
+        if (!payloadType.isBlank()) {
+            return payloadType;
+        }
+        return eventName;
     }
 
     private List<SseEvent> mapMessagePart(JsonNode payload) {
@@ -64,7 +82,13 @@ public class OpenCodeEventNormalizer {
 
     private SseEvent permission(JsonNode payload) {
         ObjectNode data = JsonNodeFactory.instance.objectNode();
-        data.put("requestId", payload.path("requestId").asText(""));
+        String requestId = firstNonBlank(
+                payload.path("requestId").asText(""),
+                payload.path("requestID").asText(""),
+                payload.path("permissionId").asText(""),
+                payload.path("permissionID").asText("")
+        );
+        data.put("requestId", requestId);
         data.put("toolName", payload.path("toolName").asText(""));
         data.set("toolInput", payload.path("toolInput"));
         if (!payload.path("subagentToolUseId").asText("").isEmpty()) {
@@ -78,11 +102,37 @@ public class OpenCodeEventNormalizer {
 
     private SseEvent turnComplete(JsonNode payload) {
         ObjectNode data = JsonNodeFactory.instance.objectNode();
-        data.put("sessionId", payload.path("sessionID").asText(""));
+        data.put("sessionId", firstNonBlank(
+                payload.path("sessionID").asText(""),
+                payload.path("sessionId").asText(""),
+                payload.path("session_id").asText("")));
         data.put("costUsd", payload.path("costUsd").asDouble(0));
         data.put("inputTokens", payload.path("inputTokens").asLong(0));
         data.put("outputTokens", payload.path("outputTokens").asLong(0));
-        data.put("success", payload.path("success").asBoolean(false));
+        data.put("success", payload.path("success").asBoolean(true));
         return new SseEvent("turn_complete", data);
+    }
+
+    private SseEvent sessionError(JsonNode payload) {
+        ObjectNode data = JsonNodeFactory.instance.objectNode();
+        JsonNode error = payload.path("error");
+        String message = firstNonBlank(
+                error.path("data").path("message").asText(""),
+                error.path("message").asText(""),
+                payload.path("message").asText(""),
+                "Session error"
+        );
+        data.put("message", message);
+        data.put("name", firstNonBlank(error.path("name").asText(""), "UnknownError"));
+        return new SseEvent("session_error", data);
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return "";
     }
 }

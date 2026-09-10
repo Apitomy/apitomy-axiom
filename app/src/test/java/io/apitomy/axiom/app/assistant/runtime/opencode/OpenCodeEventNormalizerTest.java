@@ -118,4 +118,59 @@ class OpenCodeEventNormalizerTest {
 
         assertTrue(out.isEmpty());
     }
+
+    @Test
+    void mapsEnvelopeEventUsingPayloadTypeForAssistantText() throws Exception {
+        JsonNode payload = mapper.readTree("""
+                {"type":"message.part.updated","properties":{"sessionID":"s1","part":{"type":"text","text":"hello"}}}
+                """);
+
+        List<SseEvent> out = normalizer.normalize("message", payload);
+
+        assertEquals(1, out.size());
+        assertEquals("assistant_text", out.get(0).type());
+        assertEquals("hello", out.get(0).data().path("text").asText());
+    }
+
+    @Test
+    void mapsEnvelopePermissionAskedEvent() throws Exception {
+        JsonNode payload = mapper.readTree("""
+                {"type":"permission.asked","properties":{"requestID":"per_1","toolName":"Bash","toolInput":{"command":"ls"}}}
+                """);
+
+        List<SseEvent> out = normalizer.normalize("message", payload);
+
+        assertEquals(1, out.size());
+        assertEquals("permission_request", out.get(0).type());
+        assertEquals("per_1", out.get(0).data().path("requestId").asText());
+        assertEquals("Bash", out.get(0).data().path("toolName").asText());
+    }
+
+    @Test
+    void mapsSessionIdleToTurnComplete() throws Exception {
+        JsonNode payload = mapper.readTree("""
+                {"type":"session.idle","properties":{"sessionID":"s1"}}
+                """);
+
+        List<SseEvent> out = normalizer.normalize("message", payload);
+
+        assertEquals(1, out.size());
+        assertEquals("turn_complete", out.get(0).type());
+        assertEquals("s1", out.get(0).data().path("sessionId").asText());
+        assertTrue(out.get(0).data().path("success").asBoolean(false));
+    }
+
+    @Test
+    void mapsSessionErrorToSessionErrorEvent() throws Exception {
+        JsonNode payload = mapper.readTree("""
+                {"type":"session.error","properties":{"sessionID":"s1","error":{"name":"UnknownError","data":{"message":"Model not found"}}}}
+                """);
+
+        List<SseEvent> out = normalizer.normalize("message", payload);
+
+        assertEquals(1, out.size());
+        assertEquals("session_error", out.get(0).type());
+        assertEquals("Model not found", out.get(0).data().path("message").asText());
+        assertEquals("UnknownError", out.get(0).data().path("name").asText());
+    }
 }

@@ -1,8 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import {
     Alert,
     AlertActionCloseButton,
-    Button,
     Card,
     CardBody,
     CardTitle,
@@ -75,16 +74,21 @@ export function EngineSettingsPage() {
     const engines = config.engines || [];
     const defaultEngine = config.defaultEngine || config.engine;
     const nodeJsCheck = (config.checks || []).find((c) => c.name === "Node.js");
-    const canSaveDefault =
-        selectedDefaultEngine.length > 0 && selectedDefaultEngine !== defaultEngine;
 
-    const handleSaveDefaultEngine = () => {
-        if (!selectedDefaultEngine) {
+    const handleDefaultEngineChange = (_event: FormEvent<HTMLSelectElement>, value: string) => {
+        if (!value) {
             return;
         }
+
+        const previousValue = selectedDefaultEngine;
+        setSelectedDefaultEngine(value);
+        if (value === defaultEngine) {
+            return;
+        }
+
         setSaving(true);
         setSaveError(null);
-        updateSystemConfig({ defaultEngine: selectedDefaultEngine })
+        updateSystemConfig({ defaultEngine: value })
             .then((updated) => {
                 setConfig(updated);
                 setSelectedDefaultEngine(updated.defaultEngine || updated.engine || "");
@@ -92,6 +96,7 @@ export function EngineSettingsPage() {
             .catch((error: unknown) => {
                 const message = error instanceof Error ? error.message : "Failed to update default engine.";
                 setSaveError(message);
+                setSelectedDefaultEngine(previousValue);
             })
             .finally(() => setSaving(false));
     };
@@ -125,7 +130,7 @@ export function EngineSettingsPage() {
                                     <FormSelect
                                         id="default-engine"
                                         value={selectedDefaultEngine}
-                                        onChange={(_event, value) => setSelectedDefaultEngine(value)}
+                                        onChange={handleDefaultEngineChange}
                                         isDisabled={saving || engines.length === 0}
                                     >
                                         {engines.map((engine) => (
@@ -138,14 +143,6 @@ export function EngineSettingsPage() {
                                     </FormSelect>
                                 </FormGroup>
                             </Form>
-                            <Button
-                                variant="primary"
-                                onClick={handleSaveDefaultEngine}
-                                isDisabled={!canSaveDefault || saving}
-                                isLoading={saving}
-                            >
-                                Save Default Engine
-                            </Button>
                         </CardBody>
                     </Card>
                 </FlexItem>

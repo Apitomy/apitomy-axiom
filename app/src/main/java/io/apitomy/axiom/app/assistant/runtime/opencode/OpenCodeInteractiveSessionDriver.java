@@ -10,6 +10,8 @@ import org.jboss.logging.Logger;
 import java.io.IOException;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -34,6 +36,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
     private final AtomicBoolean turnInFlight = new AtomicBoolean(false);
     private final AtomicReference<String> errorMessage = new AtomicReference<>();
     private final AtomicReference<AssistantSession.Status> status;
+    private final Set<String> userMessageIds = ConcurrentHashMap.newKeySet();
 
     private volatile OpenCodeAssistantClient client;
     private volatile String openCodeSessionId;
@@ -177,6 +180,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
     @Override
     public synchronized void destroy() {
         turnInFlight.set(false);
+        userMessageIds.clear();
         openCodeSessionId = null;
         safeStopServer();
         status.updateAndGet(currentStatus ->
@@ -204,6 +208,12 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
         if (!isCurrentSessionEvent(payload)) {
             return;
         }
+
+        rememberUserMessageId(eventName, payload);
+        if (isEchoedUserMessagePart(eventName, payload)) {
+            return;
+        }
+
         List<SseEvent> normalizedEvents = normalizer.normalize(eventName, payload);
         for (SseEvent normalizedEvent : normalizedEvents) {
             if ("turn_complete".equals(normalizedEvent.type())) {
@@ -215,6 +225,41 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                 eventSink.accept(normalizedEvent);
             }
         }
+    }
+
+    private void rememberUserMessageId(String eventName, JsonNode payload) {
+        String payloadType = payload.path("type").asText(eventName == null ? "" : eventName);
+        if (!"message.updated".equals(payloadType)) {
+            return;
+        }
+
+        JsonNode info = payload.path("properties").path("info");
+        if (!info.isObject()) {
+            return;
+        }
+
+        String role = info.path("role").asText("");
+        String messageId = info.path("id").asText("");
+        if ("user".equals(role) && !messageId.isBlank()) {
+            userMessageIds.add(messageId);
+        }
+    }
+
+    private boolean isEchoedUserMessagePart(String eventName, JsonNode payload) {
+        String payloadType = payload.path("type").asText(eventName == null ? "" : eventName);
+        if (!"message.part.updated".equals(payloadType)) {
+            return false;
+        }
+
+        JsonNode part = payload.path("properties").path("part");
+        if (!part.isObject()) {
+            return false;
+        }
+        String messageId = part.path("messageID").asText("");
+        if (messageId.isBlank()) {
+            messageId = part.path("messageId").asText("");
+        }
+        return !messageId.isBlank() && userMessageIds.contains(messageId);
     }
 
     private boolean isCurrentSessionEvent(JsonNode payload) {
@@ -232,6 +277,24 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
         }
         if (eventSessionId.isEmpty()) {
             eventSessionId = payload.path("session").path("id").asText("");
+        }
+        if (eventSessionId.isEmpty()) {
+            JsonNode properties = payload.path("properties");
+            if (properties.isObject()) {
+                eventSessionId = properties.path("sessionID").asText("");
+                if (eventSessionId.isEmpty()) {
+                    eventSessionId = properties.path("sessionId").asText("");
+                }
+                if (eventSessionId.isEmpty()) {
+                    eventSessionId = properties.path("session").path("id").asText("");
+                }
+                if (eventSessionId.isEmpty()) {
+                    eventSessionId = properties.path("part").path("sessionID").asText("");
+                }
+                if (eventSessionId.isEmpty()) {
+                    eventSessionId = properties.path("part").path("sessionId").asText("");
+                }
+            }
         }
         if (eventSessionId.isEmpty()) {
             return false;

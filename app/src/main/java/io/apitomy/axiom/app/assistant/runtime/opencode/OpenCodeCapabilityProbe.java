@@ -19,7 +19,7 @@ import java.util.Objects;
 public final class OpenCodeCapabilityProbe {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final String PROBE_PERMISSION_ID = "probe-permission-id";
+    private static final String PROBE_PERMISSION_ID = "per_probe_permission_id";
 
     private final HttpClient httpClient;
 
@@ -146,8 +146,7 @@ public final class OpenCodeCapabilityProbe {
     private PermissionEndpointStatus checkPermissionEndpoint(String baseUrl, String sessionId) {
         String permissionEndpoint = baseUrl + "/session/" + sessionId + "/permissions/" + PROBE_PERMISSION_ID;
         ObjectNode body = MAPPER.createObjectNode();
-        ObjectNode responseNode = body.putObject("response");
-        responseNode.put("behavior", "allow");
+        body.put("response", "once");
 
         int postStatusCode = sendJsonPost(permissionEndpoint, body.toString());
         if (postStatusCode == 200) {

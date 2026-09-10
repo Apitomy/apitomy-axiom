@@ -40,6 +40,23 @@ import {
     type EngineInfo,
 } from "../config/api";
 
+/**
+ * Resolves the engine used to determine model options.
+ *
+ * @param templateEngine template-level engine override
+ * @param defaultEngine global default engine
+ * @returns engine identifier to use for model lookup, or undefined
+ */
+function resolveModelEngine(templateEngine?: string, defaultEngine?: string): string | undefined {
+    if (templateEngine && templateEngine.trim()) {
+        return templateEngine;
+    }
+    if (defaultEngine && defaultEngine.trim()) {
+        return defaultEngine;
+    }
+    return undefined;
+}
+
 export function SessionTemplateDetailPage() {
     const { templateId } = useParams<{ templateId: string }>();
     const effectiveTheme = useEffectiveTheme();
@@ -63,10 +80,9 @@ export function SessionTemplateDetailPage() {
         Promise.all([
             fetchAssistantTemplate(templateId),
             fetchMcpServers(),
-            fetchModels(),
             fetchSystemConfig(),
         ])
-            .then(([t, servers, models, systemConfig]) => {
+            .then(async ([t, servers, systemConfig]) => {
                 setTemplate(t);
                 setForm({
                     name: t.name,
@@ -84,13 +100,15 @@ export function SessionTemplateDetailPage() {
                 });
                 setEnvVars(t.environment || {});
                 setMcpServers(servers);
-                setAvailableModels(models);
                 const engines = (systemConfig.engines || [])
                     .filter((engine) => engine.supportsInteractiveSessions);
                 setInteractiveEngines(engines);
-                setGlobalDefaultEngine(
-                    systemConfig.defaultEngine || systemConfig.engine || ""
-                );
+                const defaultEngine = systemConfig.defaultEngine || systemConfig.engine || "";
+                setGlobalDefaultEngine(defaultEngine);
+
+                const modelEngine = resolveModelEngine(t.engine, defaultEngine);
+                const models = await fetchModels(modelEngine);
+                setAvailableModels(models);
                 setDirty(false);
             })
             .catch(console.error)
@@ -123,6 +141,19 @@ export function SessionTemplateDetailPage() {
             ? current.filter((n) => n !== serverName)
             : [...current, serverName];
         updateForm({ mcpServers: updated });
+    };
+
+    const handleEngineChange = async (value: string) => {
+        const nextEngine = value || undefined;
+        updateForm({ engine: nextEngine, model: undefined });
+        try {
+            const modelEngine = resolveModelEngine(nextEngine, globalDefaultEngine);
+            const models = await fetchModels(modelEngine);
+            setAvailableModels(models);
+        } catch (error) {
+            console.error(error);
+            setAvailableModels([]);
+        }
     };
 
     if (loading) {
@@ -239,6 +270,39 @@ export function SessionTemplateDetailPage() {
                                 readOnlyVariant={isReadOnly ? "default" : undefined} />
                         </FormGroup>
 
+                        <FormGroup label="Engine" fieldId="engine">
+                            <FormHelperText>
+                                <HelperText>
+                                    <HelperTextItem>
+                                        Optional interactive engine override for this template.
+                                        If not set, the global default engine is used.
+                                    </HelperTextItem>
+                                </HelperText>
+                            </FormHelperText>
+                            <FormSelect
+                                id="engine"
+                                value={form.engine || ""}
+                                onChange={(_e, value) => {
+                                    handleEngineChange(value);
+                                }}
+                                isDisabled={isReadOnly}
+                            >
+                                <FormSelectOption
+                                    value=""
+                                    label={globalDefaultEngine
+                                        ? `Use global default (${globalDefaultEngine})`
+                                        : "Use global default"}
+                                />
+                                {interactiveEngines.map((engine) => (
+                                    <FormSelectOption
+                                        key={engine.type}
+                                        value={engine.type}
+                                        label={engine.label}
+                                    />
+                                ))}
+                            </FormSelect>
+                        </FormGroup>
+
                         <FormGroup label="Model" fieldId="model">
                             <FormHelperText>
                                 <HelperText>
@@ -283,39 +347,6 @@ export function SessionTemplateDetailPage() {
                                         <FormSelectOption key={m} value={m} label={m} />
                                     ));
                                 })()}
-                            </FormSelect>
-                        </FormGroup>
-
-                        <FormGroup label="Engine" fieldId="engine">
-                            <FormHelperText>
-                                <HelperText>
-                                    <HelperTextItem>
-                                        Optional interactive engine override for this template.
-                                        If not set, the global default engine is used.
-                                    </HelperTextItem>
-                                </HelperText>
-                            </FormHelperText>
-                            <FormSelect
-                                id="engine"
-                                value={form.engine || ""}
-                                onChange={(_e, value) => {
-                                    updateForm({ engine: value || undefined });
-                                }}
-                                isDisabled={isReadOnly}
-                            >
-                                <FormSelectOption
-                                    value=""
-                                    label={globalDefaultEngine
-                                        ? `Use global default (${globalDefaultEngine})`
-                                        : "Use global default"}
-                                />
-                                {interactiveEngines.map((engine) => (
-                                    <FormSelectOption
-                                        key={engine.type}
-                                        value={engine.type}
-                                        label={engine.label}
-                                    />
-                                ))}
                             </FormSelect>
                         </FormGroup>
                     </Form>

@@ -80,6 +80,9 @@ public interface InteractiveSessionDriverFactory {
         @ConfigProperty(name = "axiom.agent.opencode.server.port", defaultValue = "0")
         int openCodeServerPort;
 
+        @ConfigProperty(name = "axiom.assistant.opencode.server.port")
+        Optional<Integer> assistantOpenCodeServerPort;
+
         @ConfigProperty(name = "axiom.assistant.opencode.startup-timeout-seconds")
         Optional<Integer> assistantOpenCodeStartupTimeoutSeconds;
 
@@ -98,7 +101,7 @@ public interface InteractiveSessionDriverFactory {
                 OpenCodeSessionServerProcess openCodeSessionServerProcess =
                         new OpenCodeSessionServerProcess(resolveOpenCodeExecutable(),
                                 openCodeServerHostname,
-                                openCodeServerPort,
+                                resolveOpenCodeServerPort(),
                                 resolveOpenCodeStartupTimeoutSeconds());
                 OpenCodeCapabilityProbe capabilityProbe = new OpenCodeCapabilityProbe();
                 OpenCodeEventNormalizer normalizer = new OpenCodeEventNormalizer();
@@ -139,6 +142,12 @@ public interface InteractiveSessionDriverFactory {
             return assistantOpenCodeStartupTimeoutSeconds
                     .or(() -> legacyAssistantOpenCodeServerStartupTimeoutSeconds)
                     .orElse(openCodeServerStartupTimeoutSeconds);
+        }
+
+        private int resolveOpenCodeServerPort() {
+            Optional<Integer> configuredAssistantPort =
+                    assistantOpenCodeServerPort != null ? assistantOpenCodeServerPort : Optional.empty();
+            return configuredAssistantPort.orElse(0);
         }
     }
 }
