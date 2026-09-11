@@ -70,6 +70,10 @@ export interface SystemConfig {
     checks?: StartupCheck[];
 }
 
+export interface UpdateSystemConfigRequest {
+    defaultEngine: string;
+}
+
 export interface SearchResults<T> {
     items: T[];
     totalCount: number;
@@ -152,6 +156,21 @@ export async function fetchSystemHealth(): Promise<SystemHealth> {
 export async function fetchSystemConfig(): Promise<SystemConfig> {
     const response = await fetch(`${API}/system/config`);
     if (!response.ok) throw new Error(`Failed to fetch config: ${response.status}`);
+    return response.json();
+}
+
+export async function updateSystemConfig(
+    data: UpdateSystemConfigRequest
+): Promise<SystemConfig> {
+    const response = await fetch(`${API}/system/config`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+        const message = await extractErrorMessage(response, "Failed to update system config");
+        throw new Error(message);
+    }
     return response.json();
 }
 
@@ -1366,6 +1385,7 @@ export interface SessionTemplate {
     initialMessage?: string;
     workingDirectory?: string;
     model?: string;
+    engine?: string;
     initScript?: string;
     initScriptType?: string;
     environment?: Record<string, string>;
@@ -1382,6 +1402,7 @@ export interface NewSessionTemplate {
     initialMessage?: string;
     workingDirectory?: string;
     model?: string;
+    engine?: string;
     initScript?: string;
     initScriptType?: string;
     environment?: Record<string, string>;

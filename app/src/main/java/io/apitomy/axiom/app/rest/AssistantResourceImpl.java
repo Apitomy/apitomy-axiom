@@ -27,6 +27,7 @@ import io.apitomy.axiom.app.assistant.AssistantSessionManager;
 import io.apitomy.axiom.app.assistant.AssistantSessionManager.SessionLimitReachedException;
 import io.apitomy.axiom.app.assistant.AssistantSessionManager.ValidationException;
 import io.apitomy.axiom.app.assistant.SessionTemplateService;
+import io.apitomy.axiom.app.assistant.runtime.SessionCompatibilityException;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -86,7 +87,8 @@ public class AssistantResourceImpl implements AssistantResource {
     public AssistantSessionInfo createAssistantSession(CreateAssistantSessionRequest data) {
         if (!sessionManager.isAvailable()) {
             throw new WebApplicationException(
-                    "The AI Assistant requires Claude Code as the active AI engine.", 400);
+                    "The AI Assistant requires an active engine that supports interactive sessions.",
+                    400);
         }
         if (data.getTemplateId() == null || data.getTemplateId().isBlank()) {
             throw new WebApplicationException("Missing required 'templateId' field", 400);
@@ -97,6 +99,13 @@ public class AssistantResourceImpl implements AssistantResource {
             return toSessionInfo(session);
         } catch (IllegalArgumentException e) {
             throw new WebApplicationException(e.getMessage(), 404);
+        } catch (SessionCompatibilityException e) {
+            throw new WebApplicationException(Response.status(422)
+                    .entity(Map.of(
+                            "code", e.getCode(),
+                            "message", e.getMessage(),
+                            "details", e.getDetails()))
+                    .build());
         } catch (SessionLimitReachedException e) {
             throw new WebApplicationException(e.getMessage(), 409);
         } catch (Exception e) {
@@ -633,6 +642,7 @@ public class AssistantResourceImpl implements AssistantResource {
         bean.setInitialMessage(template.initialMessage());
         bean.setWorkingDirectory(template.workingDirectory());
         bean.setModel(template.model());
+        bean.setEngine(template.engine());
         bean.setInitScript(template.initScript());
         bean.setInitScriptType(template.initScriptType());
         bean.setEnvironment(jsonToEnvironment(template.environment()));
@@ -662,6 +672,7 @@ public class AssistantResourceImpl implements AssistantResource {
                 data.getInitialMessage(),
                 data.getWorkingDirectory(),
                 data.getModel(),
+                data.getEngine(),
                 data.getInitScript(),
                 data.getInitScriptType(),
                 environmentToJson(data.getEnvironment()),

@@ -50,6 +50,7 @@ public class SessionTemplateService {
      * @param initialMessage message automatically sent to the AI on session start (nullable)
      * @param workingDirectory absolute path or null for auto-created
      * @param model AI model override, or null for default
+     * @param engine interactive engine override, or null for global default
      * @param initScript optional init script content
      * @param initScriptType script type: "bash" or "node"
      * @param environment JSON object of environment variables (nullable)
@@ -66,6 +67,7 @@ public class SessionTemplateService {
             String initialMessage,
             String workingDirectory,
             String model,
+            String engine,
             String initScript,
             String initScriptType,
             String environment,
@@ -161,6 +163,7 @@ public class SessionTemplateService {
         entity.initialMessage = template.initialMessage();
         entity.workingDirectory = template.workingDirectory();
         entity.model = template.model();
+        entity.engine = template.engine();
         entity.initScript = template.initScript();
         entity.initScriptType = template.initScriptType();
         entity.environment = template.environment();
@@ -198,6 +201,7 @@ public class SessionTemplateService {
         entity.initialMessage = template.initialMessage();
         entity.workingDirectory = template.workingDirectory();
         entity.model = template.model();
+        entity.engine = template.engine();
         entity.initScript = template.initScript();
         entity.initScriptType = template.initScriptType();
         entity.environment = template.environment();
@@ -237,6 +241,7 @@ public class SessionTemplateService {
                 entity.initialMessage,
                 entity.workingDirectory,
                 entity.model,
+                entity.engine,
                 entity.initScript,
                 entity.initScriptType,
                 entity.environment,
@@ -257,6 +262,7 @@ public class SessionTemplateService {
                 node.path("initialMessage").asText(null),
                 node.path("workingDirectory").asText(null),
                 node.path("model").asText(null),
+                node.path("engine").asText(null),
                 node.path("initScript").asText(null),
                 node.path("initScriptType").asText(null),
                 environment,

@@ -112,6 +112,23 @@ public class AgentRegistry {
     }
 
     /**
+     * Overrides the default agent type at runtime.
+     *
+     * @param agentType the new default agent type
+     * @throws IllegalArgumentException if the agent type is null, blank, or unknown
+     */
+    public void setDefaultAgentType(String agentType) {
+        if (agentType == null || agentType.isBlank()) {
+            throw new IllegalArgumentException("Default agent type cannot be blank");
+        }
+        if (!agentMap.containsKey(agentType)) {
+            throw new IllegalArgumentException("Unknown default agent type: " + agentType);
+        }
+        this.defaultAgentType = agentType;
+        LOG.infof("Default agent type set to: %s", agentType);
+    }
+
+    /**
      * Returns the list of available agent type identifiers.
      *
      * @return an unmodifiable list of agent type strings

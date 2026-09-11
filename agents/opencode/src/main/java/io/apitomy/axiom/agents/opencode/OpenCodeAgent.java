@@ -88,6 +88,12 @@ public class OpenCodeAgent implements Agent {
 
     /** {@inheritDoc} */
     @Override
+    public boolean supportsInteractiveSessions() {
+        return true;
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public CompletableFuture<AgentResult> execute(AgentRequest request) {
         return executeInternal(request, null);
     }

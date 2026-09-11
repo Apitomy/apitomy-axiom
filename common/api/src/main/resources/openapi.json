@@ -57,6 +57,35 @@
             }
           }
         }
+      },
+      "put": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Update UI bootstrap configuration",
+        "operationId": "updateSystemConfig",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSystemConfigRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated system configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemConfig"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/system/models": {
@@ -5632,6 +5661,18 @@
           }
         }
       },
+      "UpdateSystemConfigRequest": {
+        "required": [
+          "defaultEngine"
+        ],
+        "type": "object",
+        "properties": {
+          "defaultEngine": {
+            "description": "The default AI engine type identifier",
+            "type": "string"
+          }
+        }
+      },
       "EngineInfo": {
         "required": [
           "type",
@@ -8493,6 +8534,10 @@
             "description": "AI model override, or null for default",
             "type": "string"
           },
+          "engine": {
+            "description": "Interactive engine override for sessions using this template. If empty, uses the global default engine.",
+            "type": "string"
+          },
           "initScript": {
             "description": "Optional init script to run in the working directory on session creation",
             "type": "string"
@@ -8562,6 +8607,10 @@
           },
           "model": {
             "description": "AI model override, or null for default",
+            "type": "string"
+          },
+          "engine": {
+            "description": "Interactive engine override for sessions using this template. If empty, uses the global default engine.",
             "type": "string"
           },
           "initScript": {

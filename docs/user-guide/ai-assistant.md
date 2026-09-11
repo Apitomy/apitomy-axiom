@@ -1,6 +1,6 @@
 # AI Assistant
 
-The AI Assistant is a conversational interface powered by Claude Code that supports
+The AI Assistant is a conversational interface powered by interactive AI engines that supports
 arbitrary tasks through configurable **session templates**. Each template defines a
 persona, tools, MCP servers, and working directory — so you can create sessions
 tailored to specific workflows, from generating Axiom configuration to general-purpose
@@ -13,8 +13,9 @@ Assistant** for working within the context of a specific project. You can also c
 your own templates to define custom workflows.
 
 !!! note
-    The AI Assistant requires **Claude Code** as the AI engine. The `claude` CLI must
-    be installed and available on your PATH.
+    The AI Assistant requires an active AI engine that supports interactive sessions
+    (`claude-code` or `opencode`). If OpenCode capability checks fail at startup,
+    session creation is rejected with a compatibility error.
 
 ---
 
@@ -36,7 +37,7 @@ Each template specifies:
 | Field | Purpose |
 |-------|---------|
 | **Name / Description** | Display name and summary shown in the template picker. |
-| **System Prompt** | Markdown instructions passed to Claude Code via `--append-system-prompt`. |
+| **System Prompt** | Markdown instructions passed to the active interactive engine. |
 | **Welcome Message** | First message shown in the chat, attributed to the assistant. |
 | **Working Directory** | Absolute path for the session. If empty, Axiom creates a temporary directory under `~/.axiom/assistant/sessions/`. For project-scoped sessions, defaults to the project workspace. |
 | **Initial Message** | Optional message automatically sent to the AI when a session starts. Supports `{{projectName}}` placeholder. |
@@ -44,7 +45,7 @@ Each template specifies:
 | **MCP Servers** | Named MCP server configurations to include in the session. |
 | **Allowed Tools** | Tool patterns for `--allowedTools` (e.g., `Read(*)`, `Bash(ls *)`). Use `@ToolsetName` to include all tools from a toolset. |
 | **Init Script** | Optional startup script executed when the session is created (see [Init Scripts](#init-scripts) below). |
-| **Environment** | Optional key-value environment variables injected into the Claude process. Values support `${secret:NAME}` syntax. |
+| **Environment** | Optional key-value environment variables injected into the interactive engine process. Values support `${secret:NAME}` syntax. |
 
 ### Built-in Templates
 
@@ -71,7 +72,7 @@ assistant's persona and capabilities.
 
 ### Init Scripts
 
-Init scripts run once when a session is created, **before** Claude Code starts. They
+Init scripts run once when a session is created, **before** the interactive engine starts. They
 execute in the session's working directory and are useful for preparing the environment
 — cloning a repository, installing dependencies, fetching data, or writing config files
 that the assistant will need during the conversation.
@@ -93,7 +94,7 @@ assistant itself during the conversation.
 
 **Environment:** Init scripts do **not** inherit the template's environment variables.
 Template environment variables (including resolved `${secret:NAME}` references) are
-injected into the Claude Code process, which starts after the init script finishes. If
+injected into the interactive engine process, which starts after the init script finishes. If
 your init script needs credentials (e.g., for `git clone` or API calls), they must be
 available through the server's own environment or set up by other means.
 
@@ -195,7 +196,7 @@ The chat panel is a conversation interface where you interact with the assistant
 
 Type `/` in the chat input to see available slash commands. Use arrow keys to navigate
 the autocomplete list and Tab or Enter to select a command. The available commands are
-populated from the Claude Code session.
+populated from the active interactive session runtime.
 
 #### Permission Prompts
 
@@ -377,7 +378,7 @@ modal.
 - **Set up auto-approval rules early.** If you know the assistant will need to read
   files or run commands repeatedly, create auto-approval rules at the start of the
   session to avoid repeated permission prompts.
-- **Use slash commands.** Type `/` to discover available Claude Code commands. These
+- **Use slash commands.** Type `/` to discover available runtime commands. These
   give you direct control over the assistant's behavior without typing full
   instructions.
 - **Monitor costs.** Keep an eye on the running cost display in the toolbar, especially

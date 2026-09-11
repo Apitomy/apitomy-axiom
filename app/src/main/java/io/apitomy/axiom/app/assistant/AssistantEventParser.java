@@ -16,7 +16,9 @@ import java.util.List;
  *
  * <p>Raw Claude Code event types are transformed into semantic event types that
  * the frontend can handle consistently. This follows the same approach as the
- * claude-pilot POC's {@code ClaudeEventParser}.</p>
+ * claude-pilot POC's {@code ClaudeEventParser}. The parser contract is runtime-driver
+ * agnostic so normalized event behavior remains stable as interactive runtimes are
+ * extracted behind driver implementations.</p>
  *
  * <h3>Event type mapping</h3>
  * <ul>

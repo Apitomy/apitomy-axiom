@@ -33,9 +33,11 @@ import {
     updateAssistantTemplate,
     fetchMcpServers,
     fetchModels,
+    fetchSystemConfig,
     type SessionTemplate,
     type NewSessionTemplate,
     type McpServer,
+    type EngineInfo,
 } from "../config/api";
 
 export function SessionTemplateDetailPage() {
@@ -50,6 +52,8 @@ export function SessionTemplateDetailPage() {
     const [dirty, setDirty] = useState(false);
     const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
     const [availableModels, setAvailableModels] = useState<string[]>([]);
+    const [interactiveEngines, setInteractiveEngines] = useState<EngineInfo[]>([]);
+    const [globalDefaultEngine, setGlobalDefaultEngine] = useState<string>("");
     const [envVars, setEnvVars] = useState<Record<string, string>>({});
     const [activeTab, setActiveTab] = useState(0);
 
@@ -60,8 +64,9 @@ export function SessionTemplateDetailPage() {
             fetchAssistantTemplate(templateId),
             fetchMcpServers(),
             fetchModels(),
+            fetchSystemConfig(),
         ])
-            .then(([t, servers, models]) => {
+            .then(([t, servers, models, systemConfig]) => {
                 setTemplate(t);
                 setForm({
                     name: t.name,
@@ -71,6 +76,7 @@ export function SessionTemplateDetailPage() {
                     initialMessage: t.initialMessage,
                     workingDirectory: t.workingDirectory,
                     model: t.model,
+                    engine: t.engine,
                     initScript: t.initScript,
                     initScriptType: t.initScriptType,
                     mcpServers: t.mcpServers,
@@ -79,6 +85,12 @@ export function SessionTemplateDetailPage() {
                 setEnvVars(t.environment || {});
                 setMcpServers(servers);
                 setAvailableModels(models);
+                const engines = (systemConfig.engines || [])
+                    .filter((engine) => engine.supportsInteractiveSessions);
+                setInteractiveEngines(engines);
+                setGlobalDefaultEngine(
+                    systemConfig.defaultEngine || systemConfig.engine || ""
+                );
                 setDirty(false);
             })
             .catch(console.error)
@@ -273,6 +285,39 @@ export function SessionTemplateDetailPage() {
                                 })()}
                             </FormSelect>
                         </FormGroup>
+
+                        <FormGroup label="Engine" fieldId="engine">
+                            <FormHelperText>
+                                <HelperText>
+                                    <HelperTextItem>
+                                        Optional interactive engine override for this template.
+                                        If not set, the global default engine is used.
+                                    </HelperTextItem>
+                                </HelperText>
+                            </FormHelperText>
+                            <FormSelect
+                                id="engine"
+                                value={form.engine || ""}
+                                onChange={(_e, value) => {
+                                    updateForm({ engine: value || undefined });
+                                }}
+                                isDisabled={isReadOnly}
+                            >
+                                <FormSelectOption
+                                    value=""
+                                    label={globalDefaultEngine
+                                        ? `Use global default (${globalDefaultEngine})`
+                                        : "Use global default"}
+                                />
+                                {interactiveEngines.map((engine) => (
+                                    <FormSelectOption
+                                        key={engine.type}
+                                        value={engine.type}
+                                        label={engine.label}
+                                    />
+                                ))}
+                            </FormSelect>
+                        </FormGroup>
                     </Form>
                 </Tab>
 
@@ -281,8 +326,8 @@ export function SessionTemplateDetailPage() {
                         <FormHelperText style={{ marginBottom: 12 }}>
                             <HelperText>
                                 <HelperTextItem>
-                                    Markdown content appended to the Claude Code system prompt
-                                    for sessions using this template.
+                                    Markdown content appended to the active interactive engine
+                                    system prompt for sessions using this template.
                                 </HelperTextItem>
                             </HelperText>
                         </FormHelperText>

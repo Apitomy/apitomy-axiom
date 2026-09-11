@@ -464,6 +464,7 @@ public class ImportExportService {
             entity.welcomeMessage = textOrNull(item, "welcomeMessage");
             entity.workingDirectory = textOrNull(item, "workingDirectory");
             entity.model = textOrNull(item, "model");
+            entity.engine = textOrNull(item, "engine");
             entity.initScript = textOrNull(item, "initScript");
             entity.initScriptType = textOrNull(item, "initScriptType");
             entity.environment = jsonOrNull(item, "environment");
@@ -646,6 +647,7 @@ public class ImportExportService {
             entity.welcomeMessage = textOrNull(item, "welcomeMessage");
             entity.workingDirectory = textOrNull(item, "workingDirectory");
             entity.model = textOrNull(item, "model");
+            entity.engine = textOrNull(item, "engine");
             entity.initScript = textOrNull(item, "initScript");
             entity.initScriptType = textOrNull(item, "initScriptType");
             entity.environment = jsonOrNull(item, "environment");
@@ -807,6 +809,7 @@ public class ImportExportService {
         putIfNotNull(n, "welcomeMessage", e.welcomeMessage);
         putIfNotNull(n, "workingDirectory", e.workingDirectory);
         putIfNotNull(n, "model", e.model);
+        putIfNotNull(n, "engine", e.engine);
         putIfNotNull(n, "initScript", e.initScript);
         putIfNotNull(n, "initScriptType", e.initScriptType);
         putIfNotNull(n, "environment", e.environment);

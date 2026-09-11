@@ -9,9 +9,13 @@ import io.apitomy.axiom.agents.spi.AgentRegistry;
 import io.apitomy.axiom.app.ImportExportService;
 import io.apitomy.axiom.app.McpConfigGenerator;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
+import io.apitomy.axiom.app.assistant.runtime.InteractiveSessionDriver;
+import io.apitomy.axiom.app.assistant.runtime.InteractiveSessionDriverFactory;
+import io.apitomy.axiom.app.assistant.runtime.SessionCompatibilityException;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.McpServerEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SystemConfigEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
@@ -38,6 +42,8 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 /**
@@ -55,9 +61,6 @@ public class AssistantSessionManager {
 
     @ConfigProperty(name = "axiom.assistant.max-sessions", defaultValue = "3")
     int maxSessions;
-
-    @ConfigProperty(name = "axiom.agent.default-type", defaultValue = "claude-code")
-    String defaultEngineType;
 
     @ConfigProperty(name = "axiom.agent.claude-code.executable", defaultValue = "claude")
     String claudeExecutable;
@@ -95,6 +98,9 @@ public class AssistantSessionManager {
     @Inject
     Event<io.apitomy.axiom.core.events.SseEvent> sseEventEmitter;
 
+    @Inject
+    InteractiveSessionDriverFactory interactiveSessionDriverFactory;
+
     private final Map<String, AssistantSession> sessions = new ConcurrentHashMap<>();
     private final AtomicInteger sessionCount = new AtomicInteger();
 
@@ -113,7 +119,12 @@ public class AssistantSessionManager {
      */
     public AssistantSession createSession(String name, String templateId,
                                           Long projectId) throws IOException {
-        Agent agent = agentRegistry.getDefaultAgent();
+        SessionTemplateService.SessionTemplate template = templateService.getTemplate(templateId);
+        if (template == null) {
+            throw new IllegalArgumentException("Template not found: " + templateId);
+        }
+
+        Agent agent = resolveSessionAgent(template);
         if (!agent.supportsInteractiveSessions()) {
             throw new IllegalStateException(
                     "The AI Assistant requires an engine that supports interactive sessions. "
@@ -129,11 +140,6 @@ public class AssistantSessionManager {
         }
 
         try {
-            SessionTemplateService.SessionTemplate template = templateService.getTemplate(templateId);
-            if (template == null) {
-                throw new IllegalArgumentException("Template not found: " + templateId);
-            }
-
             // Look up project if scoped
             ProjectEntity project = null;
             if (projectId != null) {
@@ -214,13 +220,45 @@ public class AssistantSessionManager {
                 welcomeMessage = welcomeMessage.replace("{{projectName}}", project.name);
             }
 
-            List<String> command = buildCommand(workDir, sessionDir, systemPrompt,
-                    template.model(), resolvedAllowedTools, mcpConfig != null);
-
             String sessionName = name != null && !name.isBlank() ? name : "Assistant Session";
             String projectName = project != null ? project.name : null;
+
+            List<String> command = buildCommand(workDir, sessionDir, systemPrompt,
+                    template.model(), resolvedAllowedTools, mcpConfig != null);
+            JsonNode openCodeTools = buildOpenCodeTools(resolvedAllowedTools);
+
+            AtomicReference<AssistantSession> sessionRef = new AtomicReference<>();
+            Consumer<AssistantEventParser.SseEvent> eventSink = event -> {
+                AssistantSession current = sessionRef.get();
+                if (current != null) {
+                    current.handleDriverEvent(event);
+                }
+            };
+            Consumer<AssistantEventParser.SseEvent> autoApprovalSink = event -> {
+                AssistantSession current = sessionRef.get();
+                if (current != null) {
+                    current.handlePermissionEvent(event);
+                }
+            };
+            InteractiveSessionDriver driver = interactiveSessionDriverFactory.createDriver(
+                    new InteractiveSessionDriverFactory.DriverRequest(
+                            agent.getType(),
+                            templateId,
+                            sessionDir,
+                            workDir,
+                            command,
+                            resolvedEnv,
+                            projectId,
+                            projectName,
+                            eventSink,
+                            autoApprovalSink,
+                            template.model(),
+                            openCodeTools,
+                            sessionName));
+
             AssistantSession session = new AssistantSession(sessionName, templateId, sessionDir,
-                    workDir, command, resolvedEnv, projectId, projectName);
+                    workDir, command, resolvedEnv, agent.getType(), projectId, projectName, driver);
+            sessionRef.set(session);
             session.start();
 
             // Add welcome message to event history so it replays on reconnect
@@ -262,6 +300,9 @@ public class AssistantSessionManager {
             }
 
             return session;
+            } catch (SessionCompatibilityException e) {
+                contextBuilder.deleteSessionDirectory(sessionDir);
+                throw e;
             } catch (Exception e) {
                 // Clean up the session directory if setup fails after creation
                 contextBuilder.deleteSessionDirectory(sessionDir);
@@ -370,7 +411,7 @@ public class AssistantSessionManager {
         AiUsageEntity usage = new AiUsageEntity();
         usage.invocationType = "assistant-session";
         usage.actionType = "assistant-session";
-        usage.engine = agentRegistry.getDefaultAgentType();
+        usage.engine = session.getEngineType();
         SessionTemplateService.SessionTemplate template =
                 templateService.getTemplate(session.getTemplateId());
         if (template != null && template.model() != null && !template.model().isBlank()) {
@@ -483,6 +524,48 @@ public class AssistantSessionManager {
     public boolean isAvailable() {
         return agentRegistry.getAllAgents().stream()
                 .anyMatch(Agent::supportsInteractiveSessions);
+    }
+
+    private Agent resolveSessionAgent(SessionTemplateService.SessionTemplate template) {
+        String templateEngine = trimToNull(template.engine());
+        if (templateEngine != null) {
+            return resolveAgentByType(templateEngine, "template");
+        }
+        String globalDefaultEngine = trimToNull(resolveGlobalDefaultEngineType());
+        if (globalDefaultEngine != null) {
+            return resolveAgentByType(globalDefaultEngine, "global default");
+        }
+        return agentRegistry.getDefaultAgent();
+    }
+
+    private Agent resolveAgentByType(String engineType, String sourceLabel) {
+        Agent agent = agentRegistry.getAllAgents().stream()
+                .filter(candidate -> engineType.equals(candidate.getType()))
+                .findFirst()
+                .orElse(null);
+        if (agent == null) {
+            throw new IllegalArgumentException(
+                    "Unknown " + sourceLabel + " engine type: " + engineType);
+        }
+        return agent;
+    }
+
+    private String resolveGlobalDefaultEngineType() {
+        SystemConfigEntity systemConfig =
+                SystemConfigEntity.<SystemConfigEntity>findAll().firstResult();
+        if (systemConfig != null && systemConfig.defaultEngine != null
+                && !systemConfig.defaultEngine.isBlank()) {
+            return systemConfig.defaultEngine;
+        }
+        return agentRegistry.getDefaultAgentType();
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     /**
@@ -602,6 +685,25 @@ public class AssistantSessionManager {
         }
 
         return cmd;
+    }
+
+    private JsonNode buildOpenCodeTools(List<String> allowedTools) {
+        if (allowedTools == null || allowedTools.isEmpty()) {
+            return null;
+        }
+
+        ObjectNode tools = objectMapper.createObjectNode();
+        ArrayNode allowed = objectMapper.createArrayNode();
+        for (String tool : allowedTools) {
+            if (tool != null && !tool.isBlank()) {
+                allowed.add(tool.trim());
+            }
+        }
+        if (allowed.isEmpty()) {
+            return null;
+        }
+        tools.set("allowed", allowed);
+        return tools;
     }
 
     private java.util.function.Consumer<SseEvent> createValidationListener(
