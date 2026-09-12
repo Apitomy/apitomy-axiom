@@ -5710,6 +5710,14 @@
             "items": {
               "type": "string"
             }
+          },
+          "modelSource": {
+            "description": "Source of the model list for this engine",
+            "enum": [
+              "configured",
+              "dynamic"
+            ],
+            "type": "string"
           }
         }
       },

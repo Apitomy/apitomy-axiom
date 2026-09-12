@@ -196,6 +196,11 @@ export function EngineSettingsPage() {
 function EngineCard({ engine, isDefault }: { engine: EngineInfo; isDefault: boolean }) {
     const checks = engine.checks || [];
     const models = engine.models || [];
+    const modelSourceLabel = engine.modelSource === "dynamic"
+        ? "Dynamic"
+        : engine.modelSource === "configured"
+            ? "Configured"
+            : null;
 
     // Group models by provider (for engines that use provider/model format)
     const groupedModels: Record<string, string[]> = {};
@@ -280,9 +285,21 @@ function EngineCard({ engine, isDefault }: { engine: EngineInfo; isDefault: bool
                     {/* Available Models */}
                     {models.length > 0 && (
                         <FlexItem>
-                            <Title headingLevel="h4" size="md" style={{ marginBottom: 8 }}>
-                                Available Models
-                            </Title>
+                            <Split hasGutter style={{ marginBottom: 8 }}>
+                                <SplitItem>
+                                    <Title headingLevel="h4" size="md">
+                                        Available Models
+                                    </Title>
+                                </SplitItem>
+                                <SplitItem isFilled />
+                                {modelSourceLabel && (
+                                    <SplitItem>
+                                        <Label color="yellow" isCompact>
+                                            Source: {modelSourceLabel}
+                                        </Label>
+                                    </SplitItem>
+                                )}
+                            </Split>
                             {Object.entries(groupedModels).map(
                                 ([provider, providerModels]) => (
                                     <div key={provider} style={{ marginBottom: 8 }}>
@@ -313,7 +330,10 @@ function EngineCard({ engine, isDefault }: { engine: EngineInfo; isDefault: bool
 
                     {models.length === 0 && (
                         <FlexItem>
-                            <p className="axiom-text-subtle">No models configured.</p>
+                            <p className="axiom-text-subtle">
+                                No models configured.
+                                {modelSourceLabel && ` Model source: ${modelSourceLabel}.`}
+                            </p>
                         </FlexItem>
                     )}
                 </Flex>

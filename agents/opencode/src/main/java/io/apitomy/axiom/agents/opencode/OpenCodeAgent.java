@@ -42,6 +42,9 @@ public class OpenCodeAgent implements Agent {
     @ConfigProperty(name = "axiom.agent.opencode.server.port", defaultValue = "4096")
     int port;
 
+    @ConfigProperty(name = "axiom.agent.opencode.executable", defaultValue = "opencode")
+    String executable;
+
     @ConfigProperty(name = "axiom.agent.opencode.model")
     Optional<String> defaultModel;
 
@@ -54,6 +57,15 @@ public class OpenCodeAgent implements Agent {
     @ConfigProperty(name = "axiom.agent.opencode.available-models", defaultValue = "")
     String availableModels;
 
+    @ConfigProperty(name = "axiom.agent.opencode.model-discovery.enabled", defaultValue = "true")
+    boolean modelDiscoveryEnabled;
+
+    @ConfigProperty(name = "axiom.agent.opencode.model-discovery.timeout-seconds", defaultValue = "8")
+    int modelDiscoveryTimeoutSeconds;
+
+    @ConfigProperty(name = "axiom.agent.opencode.model-discovery.cache-seconds", defaultValue = "86400")
+    int modelDiscoveryCacheSeconds;
+
     @Inject
     OpenCodeMcpManager mcpManager;
 
@@ -61,6 +73,8 @@ public class OpenCodeAgent implements Agent {
 
     /** Tracks running sessions for cancellation support. */
     private final Map<String, String> runningSessions = new ConcurrentHashMap<>();
+    private volatile OpenCodeModelDiscovery modelDiscovery;
+    private volatile String modelSource = "configured";
 
     /** {@inheritDoc} */
     @Override
@@ -77,6 +91,12 @@ public class OpenCodeAgent implements Agent {
     /** {@inheritDoc} */
     @Override
     public List<String> getAvailableModels() {
+        List<String> discovered = getModelDiscovery().discoverModels();
+        if (!discovered.isEmpty()) {
+            modelSource = "dynamic";
+            return discovered;
+        }
+        modelSource = "configured";
         if (availableModels == null || availableModels.isBlank()) {
             return List.of();
         }
@@ -84,6 +104,36 @@ public class OpenCodeAgent implements Agent {
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .toList();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String getModelSource() {
+        getAvailableModels();
+        return modelSource;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void refreshAvailableModels() {
+        List<String> refreshed = getModelDiscovery().refreshModels();
+        modelSource = refreshed.isEmpty() ? "configured" : "dynamic";
+    }
+
+    private OpenCodeModelDiscovery getModelDiscovery() {
+        if (modelDiscovery == null) {
+            synchronized (this) {
+                if (modelDiscovery == null) {
+                    modelDiscovery = new OpenCodeModelDiscovery(
+                            executable,
+                            modelDiscoveryEnabled,
+                            modelDiscoveryTimeoutSeconds,
+                            modelDiscoveryCacheSeconds
+                    );
+                }
+            }
+        }
+        return modelDiscovery;
     }
 
     /** {@inheritDoc} */
