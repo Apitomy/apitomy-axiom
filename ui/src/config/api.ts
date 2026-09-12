@@ -59,6 +59,7 @@ export interface EngineInfo {
     supportsInteractiveSessions?: boolean;
     checks?: StartupCheck[];
     models?: string[];
+    modelSource?: "configured" | "dynamic";
 }
 
 export interface SystemConfig {

@@ -36,6 +36,28 @@ public interface Agent {
     List<String> getAvailableModels();
 
     /**
+     * Returns the source used to produce {@link #getAvailableModels()}.
+     *
+     * <p>Supported values are {@code "configured"} (static configuration)
+     * and {@code "dynamic"} (runtime discovery).</p>
+     *
+     * @return model source identifier
+     */
+    default String getModelSource() {
+        return "configured";
+    }
+
+    /**
+     * Refreshes the available model list, bypassing any cached value.
+     *
+     * <p>Default implementation is a no-op for agents that do not support
+     * model discovery caching.</p>
+     */
+    default void refreshAvailableModels() {
+        // no-op by default
+    }
+
+    /**
      * Returns whether this agent supports interactive (streaming) sessions.
      * Agents that return {@code true} can be used with the AI Assistant feature.
      *

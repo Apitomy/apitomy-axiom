@@ -39,6 +39,18 @@ class SystemResourceTest {
     }
 
     @Test
+    void testSystemConfigIncludesModelSourcePerEngine() {
+        given()
+            .when()
+                .get("/api/v1/system/config")
+            .then()
+                .statusCode(200)
+                .contentType("application/json")
+                .body("engines.size()", greaterThan(0))
+                .body("engines.modelSource", everyItem(notNullValue()));
+    }
+
+    @Test
     void testUpdateSystemConfigDefaultEngine() {
         given()
                 .contentType(ContentType.JSON)

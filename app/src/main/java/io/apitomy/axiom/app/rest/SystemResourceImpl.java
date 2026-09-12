@@ -86,6 +86,7 @@ public class SystemResourceImpl implements SystemResource {
             info.setLabel(agent.getLabel());
             info.setSupportsInteractiveSessions(agent.supportsInteractiveSessions());
             info.setModels(agent.getAvailableModels());
+            info.setModelSource(EngineInfo.ModelSource.fromValue(agent.getModelSource()));
 
             List<StartupCheckService.CheckResult> engineChecks =
                     startupCheckService.getResultsForEngine(agent.getType());
