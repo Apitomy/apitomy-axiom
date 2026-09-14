@@ -13,6 +13,8 @@ import {
     FlexItem,
     Form,
     FormGroup,
+    FormSelect,
+    FormSelectOption,
     Label,
     Modal,
     ModalBody,
@@ -31,7 +33,7 @@ import {
     ToolbarItem,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
-import { WorkflowEditor } from "@apitomy/flow-ui";
+import { WorkflowEditor, WorkflowDiffViewer } from "@apitomy/flow-ui";
 import type { Workflow, ValidationProblem, EditorSpi, ActionTypeDescriptor } from "@apitomy/flow-ui";
 import {
     type WorkflowDefinition,
@@ -43,6 +45,7 @@ import {
     publishWorkflowDefinition,
     deleteWorkflowDefinition,
     listWorkflowDefinitionVersions,
+    getWorkflowDefinitionVersion,
     fetchWorkflowDefinitionRuns,
     fetchActionTypes,
     type WorkflowRunSummary,
@@ -102,6 +105,13 @@ export function WorkflowDefinitionDetailPage() {
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [deleteError, setDeleteError] = useState<string | null>(null);
     const [simulateOpen, setSimulateOpen] = useState(false);
+    const [compareBaseVersion, setCompareBaseVersion] = useState<number | null>(null);
+    const [compareTargetVersion, setCompareTargetVersion] = useState<number | null>(null);
+    const [diffOpen, setDiffOpen] = useState(false);
+    const [diffLoading, setDiffLoading] = useState(false);
+    const [diffError, setDiffError] = useState<string | null>(null);
+    const [diffBaseWorkflow, setDiffBaseWorkflow] = useState<Workflow | null>(null);
+    const [diffCompareWorkflow, setDiffCompareWorkflow] = useState<Workflow | null>(null);
 
     // EditorSpi for action types — memoized to avoid re-renders
     const spi: EditorSpi = useMemo(() => ({
@@ -130,6 +140,11 @@ export function WorkflowDefinitionDetailPage() {
                 savedContentRef.current = JSON.stringify(def.content || null);
                 setVersions(vers);
                 setDirty(false);
+                if (vers.length >= 2) {
+                    const sorted = [...vers].sort((a, b) => b.version - a.version);
+                    setCompareBaseVersion(sorted[1].version);
+                    setCompareTargetVersion(sorted[0].version);
+                }
             })
             .catch((err) => {
                 console.error("Failed to load workflow definition:", err);
@@ -259,6 +274,42 @@ export function WorkflowDefinitionDetailPage() {
                 console.error("Failed to delete workflow definition:", err);
                 setDeleteError("Failed to delete this workflow. Please try again.");
             });
+    };
+
+    /**
+     * Resolves the full content for a given version, fetching it from the server
+     * when the already-loaded version summary does not include content.
+     */
+    const resolveVersionContent = useCallback(
+        async (version: number): Promise<Workflow> => {
+            const cached = versions.find((v) => v.version === version);
+            if (cached?.content) {
+                return cached.content as Workflow;
+            }
+            const fetched = await getWorkflowDefinitionVersion(id, version);
+            return fetched.content as Workflow;
+        },
+        [versions, id]
+    );
+
+    const handleShowDiff = () => {
+        if (compareBaseVersion === null || compareTargetVersion === null) return;
+        setDiffError(null);
+        setDiffLoading(true);
+        setDiffOpen(true);
+        Promise.all([
+            resolveVersionContent(compareBaseVersion),
+            resolveVersionContent(compareTargetVersion),
+        ])
+            .then(([base, compare]) => {
+                setDiffBaseWorkflow(base);
+                setDiffCompareWorkflow(compare);
+            })
+            .catch((err) => {
+                console.error("Failed to load versions for comparison:", err);
+                setDiffError("Failed to load one or both versions for comparison.");
+            })
+            .finally(() => setDiffLoading(false));
     };
 
     if (loading) {
@@ -440,35 +491,93 @@ export function WorkflowDefinitionDetailPage() {
                                     </EmptyStateBody>
                                 </EmptyState>
                             ) : (
-                                <Table aria-label="Workflow Versions" variant="compact">
-                                    <Thead>
-                                        <Tr>
-                                            <Th>Version</Th>
-                                            <Th>Created</Th>
-                                        </Tr>
-                                    </Thead>
-                                    <Tbody>
-                                        {versions.map((v) => (
-                                            <Tr key={v.id}>
-                                                <Td>
-                                                    v{v.version}
-                                                    {v.version === definition.currentVersion && (
-                                                        <Label
-                                                            isCompact
-                                                            color="blue"
-                                                            style={{ marginLeft: "8px" }}
-                                                        >
-                                                            Current
-                                                        </Label>
-                                                    )}
-                                                </Td>
-                                                <Td style={{ whiteSpace: "nowrap" }}>
-                                                    {new Date(v.createdOn).toLocaleString()}
-                                                </Td>
+                                <>
+                                    {versions.length < 2 ? (
+                                        <EmptyState variant="xs" style={{ marginBottom: "16px" }}>
+                                            <EmptyStateBody>
+                                                At least two versions are required to compare.
+                                            </EmptyStateBody>
+                                        </EmptyState>
+                                    ) : (
+                                        <Toolbar>
+                                            <ToolbarContent>
+                                                <ToolbarItem>
+                                                    <FormSelect
+                                                        aria-label="Base version"
+                                                        value={compareBaseVersion ?? ""}
+                                                        onChange={(_e, v) => setCompareBaseVersion(Number(v))}
+                                                    >
+                                                        {versions.map((v) => (
+                                                            <FormSelectOption
+                                                                key={v.id}
+                                                                value={v.version}
+                                                                label={`v${v.version}`}
+                                                            />
+                                                        ))}
+                                                    </FormSelect>
+                                                </ToolbarItem>
+                                                <ToolbarItem>vs</ToolbarItem>
+                                                <ToolbarItem>
+                                                    <FormSelect
+                                                        aria-label="Compare version"
+                                                        value={compareTargetVersion ?? ""}
+                                                        onChange={(_e, v) => setCompareTargetVersion(Number(v))}
+                                                    >
+                                                        {versions.map((v) => (
+                                                            <FormSelectOption
+                                                                key={v.id}
+                                                                value={v.version}
+                                                                label={`v${v.version}`}
+                                                            />
+                                                        ))}
+                                                    </FormSelect>
+                                                </ToolbarItem>
+                                                <ToolbarItem>
+                                                    <Button
+                                                        variant="secondary"
+                                                        onClick={handleShowDiff}
+                                                        isDisabled={
+                                                            compareBaseVersion === null ||
+                                                            compareTargetVersion === null ||
+                                                            compareBaseVersion === compareTargetVersion
+                                                        }
+                                                    >
+                                                        Show diff
+                                                    </Button>
+                                                </ToolbarItem>
+                                            </ToolbarContent>
+                                        </Toolbar>
+                                    )}
+                                    <Table aria-label="Workflow Versions" variant="compact">
+                                        <Thead>
+                                            <Tr>
+                                                <Th>Version</Th>
+                                                <Th>Created</Th>
                                             </Tr>
-                                        ))}
-                                    </Tbody>
-                                </Table>
+                                        </Thead>
+                                        <Tbody>
+                                            {versions.map((v) => (
+                                                <Tr key={v.id}>
+                                                    <Td>
+                                                        v{v.version}
+                                                        {v.version === definition.currentVersion && (
+                                                            <Label
+                                                                isCompact
+                                                                color="blue"
+                                                                style={{ marginLeft: "8px" }}
+                                                            >
+                                                                Current
+                                                            </Label>
+                                                        )}
+                                                    </Td>
+                                                    <Td style={{ whiteSpace: "nowrap" }}>
+                                                        {new Date(v.createdOn).toLocaleString()}
+                                                    </Td>
+                                                </Tr>
+                                            ))}
+                                        </Tbody>
+                                    </Table>
+                                </>
                             )}
                         </div>
                     )}
@@ -626,6 +735,41 @@ export function WorkflowDefinitionDetailPage() {
                 delete the workflow, all of its versions, and all of its runs and their
                 tasks. This action cannot be undone.
             </ConfirmDeleteModal>
+
+            {/* Version Diff Modal */}
+            <Modal
+                isOpen={diffOpen}
+                onClose={() => setDiffOpen(false)}
+                variant="large"
+            >
+                <ModalHeader
+                    title={
+                        compareBaseVersion !== null && compareTargetVersion !== null
+                            ? `Compare v${compareBaseVersion} vs v${compareTargetVersion}`
+                            : "Compare Versions"
+                    }
+                />
+                <ModalBody>
+                    {diffLoading ? (
+                        <EmptyState>
+                            <EmptyStateBody>Loading versions...</EmptyStateBody>
+                        </EmptyState>
+                    ) : diffError ? (
+                        <Alert variant="danger" isInline title={diffError} />
+                    ) : diffBaseWorkflow && diffCompareWorkflow ? (
+                        <WorkflowDiffViewer
+                            baseWorkflow={diffBaseWorkflow}
+                            compareWorkflow={diffCompareWorkflow}
+                            theme={effectiveTheme === "dark" ? "dark" : "light"}
+                        />
+                    ) : null}
+                </ModalBody>
+                <ModalFooter>
+                    <Button variant="link" onClick={() => setDiffOpen(false)}>
+                        Close
+                    </Button>
+                </ModalFooter>
+            </Modal>
         </PageSection>
     );
 }
