@@ -200,7 +200,7 @@ public class WorkflowExecutionService {
         WorkflowInstance instance = deserializeInstance(entity.instanceState);
 
         NodeResult result;
-        HumanTaskInfo humanTaskInfo = workflowEngine.getHumanTaskInfo(workflow, instance);
+        HumanTaskInfo humanTaskInfo = workflowEngine.getHumanTaskInfo(workflow, instance, task.nodeId);
         if (humanTaskInfo != null) {
             if ("Completed".equals(task.status)) {
                 Map<String, Object> answers = WorkflowHumanTaskMapper.coerceAnswers(
@@ -232,8 +232,8 @@ public class WorkflowExecutionService {
             result = new NodeResult(NodeResultStatus.FAILED, Map.of());
         }
 
-        WorkflowInstance advanced = workflowEngine.completeCurrentNode(
-                workflow, instance, result);
+        WorkflowInstance advanced = workflowEngine.completeNode(
+                workflow, instance, task.nodeId, result);
 
         persistInstanceState(entity, advanced);
 
@@ -336,13 +336,14 @@ public class WorkflowExecutionService {
 
     private void createTaskForCurrentNode(WorkflowRunEntity entity,
             Workflow workflow, WorkflowInstance instance) {
-        HumanTaskInfo humanTaskInfo = workflowEngine.getHumanTaskInfo(workflow, instance);
+        String nodeId = instance.currentNodeId();
+        HumanTaskInfo humanTaskInfo = workflowEngine.getHumanTaskInfo(workflow, instance, nodeId);
         if (humanTaskInfo != null) {
             createHumanTaskForNode(entity, instance, humanTaskInfo);
             return;
         }
 
-        ActionInfo actionInfo = workflowEngine.getActionInfo(workflow, instance);
+        ActionInfo actionInfo = workflowEngine.getActionInfo(workflow, instance, nodeId);
         if (actionInfo == null) {
             LOG.warnf("No action info for current node in instance %d", entity.id);
             return;
