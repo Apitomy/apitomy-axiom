@@ -334,9 +334,23 @@ public class WorkflowExecutionService {
         }
     }
 
+    /**
+     * Creates the appropriate task (human-task or action) for the current
+     * single-active-node of a WAITING instance. Only supports the
+     * single-branch case: if multiple branches are active (a fork),
+     * {@code instance.currentNodeId()} is {@code null} and this method logs a
+     * warning and returns without creating a task, since per-branch task
+     * creation is not yet implemented (see Task 6).
+     */
     private void createTaskForCurrentNode(WorkflowRunEntity entity,
             Workflow workflow, WorkflowInstance instance) {
         String nodeId = instance.currentNodeId();
+        if (nodeId == null) {
+            LOG.warnf("Cannot create task for instance %d: multiple branches are active; "
+                    + "per-branch task creation is not yet implemented (see Task 6)", entity.id);
+            return;
+        }
+
         HumanTaskInfo humanTaskInfo = workflowEngine.getHumanTaskInfo(workflow, instance, nodeId);
         if (humanTaskInfo != null) {
             createHumanTaskForNode(entity, instance, humanTaskInfo);
@@ -356,7 +370,7 @@ public class WorkflowExecutionService {
         task.status = "Pending";
         task.input = serializeInputs(actionInfo);
         task.workflowRunId = entity.id;
-        task.nodeId = instance.currentNodeId();
+        task.nodeId = nodeId;
         task.traceId = entity.traceId;
         task.createdOn = Instant.now();
         task.persist();
