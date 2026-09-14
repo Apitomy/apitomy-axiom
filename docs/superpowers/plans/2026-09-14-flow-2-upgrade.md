@@ -231,21 +231,32 @@ NodeType is unchanged (RECEIVE_EVENT/WAIT already existed in 1.0.4).
 
 ## Phase 3 — Optional new flow-ui features (independent; prioritize with user)
 
-### Task 9: Workflow simulation panel in the definition editor
-- Add flow-ui's `SimulationPanel` to `ui/src/pages/WorkflowDefinitionDetailPage.tsx` (e.g. a
-  "Simulate" toggle next to the editor) so authors can dry-run definitions and test EL conditions
-  before publishing. No backend changes.
+### Task 9: Workflow simulation panel in the definition editor — SUPERSEDED, do not implement
+- ~~Add flow-ui's `SimulationPanel` to `ui/src/pages/WorkflowDefinitionDetailPage.tsx`~~ **This
+  task was based on a wrong assumption and should be skipped entirely.** `WorkflowEditor` (the
+  component Axiom already renders bare on this page) has its own built-in canvas toolbar with a
+  "Simulate" switch that toggles the real `SimulationPanel`, with zero integration work required —
+  no opt-in prop, nothing to wire up. A custom page-level simulation panel was built during
+  execution (commit `ec74189`) and later identified as redundant duplicate UI, then removed
+  (commit `ad4af51`). Before touching this area again, confirm what `WorkflowEditor`'s toolbar
+  already provides by reading its source
+  (`~/git/apitomy/apitomy-flow/ui/src/components/WorkflowEditor.tsx`), not just the npm package's
+  public export list.
 
 ### Task 10: Visual diff between definition versions
 - Axiom already versions definitions (`WorkflowDefinitionVersionEntity`). Add a "Compare versions"
   view using `WorkflowDiffViewer` + `workflowDiff`, fed by two version-content payloads from the
   existing definition-version endpoints.
+- Confirmed genuinely additive: `WorkflowEditor` has no comparison/diff feature of its own.
+  Implemented as planned (commit `4072043`), unaffected by the Task 9/11 correction above.
 
-### Task 11: Import/export of definitions
-- Wire `downloadWorkflowJson`/`workflowFileName` for export and `parseWorkflow` for import on the
-  definition detail page; on import, PUT the parsed content through the existing draft-update
-  endpoint so Flow validation still gates publishing. Optionally add canvas PNG export via
-  flow-ui's `exportImage` utility.
+### Task 11: Import/export of definitions — SUPERSEDED, do not implement
+- ~~Wire `downloadWorkflowJson`/`workflowFileName` for export and `parseWorkflow` for import~~
+  **This task was also based on a wrong assumption and should be skipped entirely.**
+  `WorkflowEditor`'s built-in toolbar already has Import (JSON), Export (JSON), and Image (PNG)
+  buttons — more complete than what this task describes, since it already includes PNG export.
+  Page-level duplicate buttons were built during execution (commit `7c03bb2`) and later removed
+  (commit `ad4af51`) once this was discovered.
 
 ---
 
