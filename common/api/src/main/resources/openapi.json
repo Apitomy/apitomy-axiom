@@ -9505,6 +9505,23 @@
           },
           "edgeCondition": {
             "type": "string"
+          },
+          "branchId": {
+            "type": "string"
+          }
+        }
+      },
+      "ActiveBranch": {
+        "type": "object",
+        "properties": {
+          "branchId": {
+            "type": "string"
+          },
+          "nodeId": {
+            "type": "string"
+          },
+          "nodeName": {
+            "type": "string"
           }
         }
       },
@@ -9562,6 +9579,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/HistoryEntry"
+            }
+          },
+          "activeBranches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActiveBranch"
             }
           },
           "startedOn": {
