@@ -56,7 +56,9 @@ export function WorkflowRunDetailPage() {
         return {
             id: String(run.id),
             workflowId: String(run.definitionId),
-            currentNodeId: run.currentNodeId ?? "",
+            currentNodeId: run.currentNodeId ?? null,
+            activeBranches: [],
+            joinArrivals: {},
             status: run.status as any,
             context: run.context || {},
             history: (run.history ?? []).map((h) => ({

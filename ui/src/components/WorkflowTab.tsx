@@ -137,7 +137,9 @@ export function WorkflowTab({
         return {
             id: String(instance.id),
             workflowId: String(instance.definitionId),
-            currentNodeId: instance.currentNodeId || "",
+            currentNodeId: instance.currentNodeId ?? null,
+            activeBranches: [],
+            joinArrivals: {},
             status: instance.status as any,
             context: instance.context || {},
             history: (instance.history || []).map((h) => ({
