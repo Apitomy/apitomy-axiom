@@ -36,8 +36,6 @@ import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import {
     WorkflowEditor,
     WorkflowDiffViewer,
-    downloadWorkflowJson,
-    parseWorkflow,
 } from "@apitomy/flow-ui";
 import type { Workflow, ValidationProblem, EditorSpi, ActionTypeDescriptor } from "@apitomy/flow-ui";
 import {
@@ -57,15 +55,11 @@ import {
 } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
-import { WorkflowSimulationPanel } from "../components/WorkflowSimulationPanel";
 import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
 import RocketIcon from "@patternfly/react-icons/dist/esm/icons/rocket-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import EditIcon from "@patternfly/react-icons/dist/esm/icons/edit-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
-import PlayIcon from "@patternfly/react-icons/dist/esm/icons/play-icon";
-import DownloadIcon from "@patternfly/react-icons/dist/esm/icons/download-icon";
-import UploadIcon from "@patternfly/react-icons/dist/esm/icons/upload-icon";
 
 const RUN_STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
     running: "blue",
@@ -111,7 +105,6 @@ export function WorkflowDefinitionDetailPage() {
     const [metadataForm, setMetadataForm] = useState({ name: "", description: "" });
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [deleteError, setDeleteError] = useState<string | null>(null);
-    const [simulateOpen, setSimulateOpen] = useState(false);
     const [compareBaseVersion, setCompareBaseVersion] = useState<number | null>(null);
     const [compareTargetVersion, setCompareTargetVersion] = useState<number | null>(null);
     const [diffOpen, setDiffOpen] = useState(false);
@@ -119,9 +112,6 @@ export function WorkflowDefinitionDetailPage() {
     const [diffError, setDiffError] = useState<string | null>(null);
     const [diffBaseWorkflow, setDiffBaseWorkflow] = useState<Workflow | null>(null);
     const [diffCompareWorkflow, setDiffCompareWorkflow] = useState<Workflow | null>(null);
-    const [importError, setImportError] = useState<string | null>(null);
-    const [importWarnings, setImportWarnings] = useState<ValidationProblem[]>([]);
-    const importFileInputRef = useRef<HTMLInputElement>(null);
 
     // EditorSpi for action types — memoized to avoid re-renders
     const spi: EditorSpi = useMemo(() => ({
@@ -302,45 +292,6 @@ export function WorkflowDefinitionDetailPage() {
         [versions, id]
     );
 
-    const handleExport = () => {
-        if (!editorContent) return;
-        downloadWorkflowJson(editorContent);
-    };
-
-    const handleImportClick = () => {
-        setImportError(null);
-        setImportWarnings([]);
-        importFileInputRef.current?.click();
-    };
-
-    const handleImportFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        e.target.value = "";
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            const text = typeof reader.result === "string" ? reader.result : "";
-            const result = parseWorkflow(text);
-            if (result.error) {
-                setImportError(result.error);
-                setImportWarnings([]);
-                return;
-            }
-            if (!result.workflow) {
-                setImportError("The imported file contains validation errors and cannot be loaded.");
-                setImportWarnings(result.problems || []);
-                return;
-            }
-            setImportError(null);
-            setImportWarnings(result.problems || []);
-            handleEditorChange(result.workflow);
-        };
-        reader.onerror = () => {
-            setImportError("Failed to read the selected file.");
-        };
-        reader.readAsText(file);
-    };
-
     const handleShowDiff = () => {
         if (compareBaseVersion === null || compareTargetVersion === null) return;
         setDiffError(null);
@@ -445,42 +396,6 @@ export function WorkflowDefinitionDetailPage() {
                             </FlexItem>
                             <FlexItem>
                                 <Button
-                                    variant="secondary"
-                                    icon={<DownloadIcon />}
-                                    onClick={handleExport}
-                                    isDisabled={!editorContent}
-                                >
-                                    Export
-                                </Button>
-                            </FlexItem>
-                            <FlexItem>
-                                <Button
-                                    variant="secondary"
-                                    icon={<UploadIcon />}
-                                    onClick={handleImportClick}
-                                >
-                                    Import
-                                </Button>
-                                <input
-                                    ref={importFileInputRef}
-                                    type="file"
-                                    accept=".json,application/json"
-                                    style={{ display: "none" }}
-                                    onChange={handleImportFileSelected}
-                                />
-                            </FlexItem>
-                            <FlexItem>
-                                <Button
-                                    variant={simulateOpen ? "primary" : "secondary"}
-                                    icon={<PlayIcon />}
-                                    onClick={() => setSimulateOpen((v) => !v)}
-                                    isDisabled={!editorContent}
-                                >
-                                    Simulate
-                                </Button>
-                            </FlexItem>
-                            <FlexItem>
-                                <Button
                                     variant="primary"
                                     icon={<RocketIcon />}
                                     onClick={handlePublish}
@@ -531,53 +446,14 @@ export function WorkflowDefinitionDetailPage() {
                 <div className="workflow-definition-detail__tab-content">
                     {activeTab === 0 && (
                         <div className="workflow-definition-detail__design">
-                            {(importError || importWarnings.length > 0) && (
-                                <div style={{ padding: "16px 24px 0" }}>
-                                    {importError && (
-                                        <Alert
-                                            variant="danger"
-                                            isInline
-                                            title={importError}
-                                            actionClose={
-                                                <AlertActionCloseButton onClose={() => setImportError(null)} />
-                                            }
-                                            style={{ marginBottom: "8px" }}
-                                        />
-                                    )}
-                                    {importWarnings.length > 0 && (
-                                        <Alert
-                                            variant="warning"
-                                            isInline
-                                            title="Imported workflow has validation problems"
-                                            actionClose={
-                                                <AlertActionCloseButton onClose={() => setImportWarnings([])} />
-                                            }
-                                            style={{ marginBottom: "8px" }}
-                                        >
-                                            <ul>
-                                                {importWarnings.map((p, i) => (
-                                                    <li key={i}>{p.message}</li>
-                                                ))}
-                                            </ul>
-                                        </Alert>
-                                    )}
-                                </div>
-                            )}
                             {editorContent ? (
-                                <>
-                                    {simulateOpen && (
-                                        <div style={{ padding: "16px 24px" }}>
-                                            <WorkflowSimulationPanel workflow={editorContent} />
-                                        </div>
-                                    )}
-                                    <WorkflowEditor
-                                        workflow={editorContent}
-                                        onChange={handleEditorChange}
-                                        onValidationChange={handleValidationChange}
-                                        theme={effectiveTheme === "dark" ? "dark" : "light"}
-                                        spi={spi}
-                                    />
-                                </>
+                                <WorkflowEditor
+                                    workflow={editorContent}
+                                    onChange={handleEditorChange}
+                                    onValidationChange={handleValidationChange}
+                                    theme={effectiveTheme === "dark" ? "dark" : "light"}
+                                    spi={spi}
+                                />
                             ) : (
                                 <EmptyState>
                                     <EmptyStateBody>
