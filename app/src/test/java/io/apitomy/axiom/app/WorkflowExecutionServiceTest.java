@@ -1,24 +1,18 @@
 package io.apitomy.axiom.app;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.agents.spi.AgentResult;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
-import io.apitomy.flow.model.InstanceStatus;
-import io.apitomy.flow.model.Workflow;
-import io.apitomy.flow.model.WorkflowInstance;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Method;
 import java.time.Instant;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
@@ -37,9 +31,6 @@ class WorkflowExecutionServiceTest {
 
     @Inject
     TaskExecutionService taskExecutionService;
-
-    @Inject
-    ObjectMapper objectMapper;
 
     private static final String LINEAR_CONTENT = """
         {
@@ -121,50 +112,13 @@ class WorkflowExecutionServiceTest {
                 "Run should advance to completed after the action node's task completes");
     }
 
-    /**
-     * When a WAITING instance has multiple active branches (a fork),
-     * {@code instance.currentNodeId()} is {@code null}. Verifies that
-     * {@code createTaskForCurrentNode} guards against this case explicitly
-     * instead of falling through to {@code getHumanTaskInfo}/{@code
-     * getActionInfo} with a null nodeId: no task should be created and no
-     * exception should be thrown (per-branch task creation is deferred to
-     * Task 6). Invokes the private method directly via reflection since a
-     * full multi-branch fork fixture is not yet supported by the engine
-     * integration at this stage.
-     */
-    @Test
-    void createTaskForCurrentNodeGuardsAgainstNullCurrentNodeId() throws Exception {
-        Workflow workflow = objectMapper.readValue(LINEAR_CONTENT, Workflow.class);
-
-        WorkflowInstance forkedInstance = WorkflowInstance.builder()
-                .id("instance-1")
-                .workflowId("linear-wf")
-                .currentNodeId(null)
-                .status(InstanceStatus.WAITING)
-                .createdOn(Instant.now())
-                .updatedOn(Instant.now())
-                .build();
-
-        WorkflowRunEntity entity = new WorkflowRunEntity();
-        entity.id = 999_999L;
-        entity.projectId = 1L;
-
-        Method method = WorkflowExecutionService.class.getDeclaredMethod(
-                "createTaskForCurrentNode", WorkflowRunEntity.class, Workflow.class,
-                WorkflowInstance.class);
-        method.setAccessible(true);
-
-        assertDoesNotThrow(() -> {
-            try {
-                method.invoke(workflowExecutionService, entity, workflow, forkedInstance);
-            } catch (java.lang.reflect.InvocationTargetException e) {
-                throw e.getCause() instanceof RuntimeException re ? re : new RuntimeException(e.getCause());
-            }
-        }, "Guard should return early without throwing when currentNodeId() is null");
-
-        long taskCount = QuarkusTransaction.requiringNew().call(() ->
-                TaskEntity.count("workflowRunId", entity.id));
-        assertEquals(0, taskCount,
-                "No task should be created when the instance has multiple active branches");
-    }
+    // Multi-branch (fork/join) per-branch task creation is covered end-to-end,
+    // through the full public API (trigger -> inbox -> complete), by
+    // WorkflowExecutionParallelTest. A reflection-based unit test invoking the
+    // private createTasksForActiveBranches directly is not used here: the
+    // injected WorkflowExecutionService is a CDI client proxy, and invoking a
+    // private method reflectively on the proxy itself (rather than through
+    // the proxy's normal dispatch) runs against the proxy's own uninitialized
+    // field state, not the real bean instance's @PostConstruct-initialized
+    // state, so workflowEngine is null and the call fails).
 }
