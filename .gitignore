@@ -62,4 +62,5 @@ coverage/
 # Serena / Claude
 /.serena/
 /.claude/
-/claudedocs/.worktrees/
+/claudedocs/
+/.worktrees/
