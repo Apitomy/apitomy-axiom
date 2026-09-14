@@ -49,11 +49,13 @@ import {
 } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
+import { WorkflowSimulationPanel } from "../components/WorkflowSimulationPanel";
 import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
 import RocketIcon from "@patternfly/react-icons/dist/esm/icons/rocket-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import EditIcon from "@patternfly/react-icons/dist/esm/icons/edit-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
+import PlayIcon from "@patternfly/react-icons/dist/esm/icons/play-icon";
 
 const RUN_STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
     running: "blue",
@@ -99,6 +101,7 @@ export function WorkflowDefinitionDetailPage() {
     const [metadataForm, setMetadataForm] = useState({ name: "", description: "" });
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [deleteError, setDeleteError] = useState<string | null>(null);
+    const [simulateOpen, setSimulateOpen] = useState(false);
 
     // EditorSpi for action types — memoized to avoid re-renders
     const spi: EditorSpi = useMemo(() => ({
@@ -342,6 +345,16 @@ export function WorkflowDefinitionDetailPage() {
                             </FlexItem>
                             <FlexItem>
                                 <Button
+                                    variant={simulateOpen ? "primary" : "secondary"}
+                                    icon={<PlayIcon />}
+                                    onClick={() => setSimulateOpen((v) => !v)}
+                                    isDisabled={!editorContent}
+                                >
+                                    Simulate
+                                </Button>
+                            </FlexItem>
+                            <FlexItem>
+                                <Button
                                     variant="primary"
                                     icon={<RocketIcon />}
                                     onClick={handlePublish}
@@ -393,13 +406,20 @@ export function WorkflowDefinitionDetailPage() {
                     {activeTab === 0 && (
                         <div className="workflow-definition-detail__design">
                             {editorContent ? (
-                                <WorkflowEditor
-                                    workflow={editorContent}
-                                    onChange={handleEditorChange}
-                                    onValidationChange={handleValidationChange}
-                                    theme={effectiveTheme === "dark" ? "dark" : "light"}
-                                    spi={spi}
-                                />
+                                <>
+                                    {simulateOpen && (
+                                        <div style={{ padding: "16px 24px" }}>
+                                            <WorkflowSimulationPanel workflow={editorContent} />
+                                        </div>
+                                    )}
+                                    <WorkflowEditor
+                                        workflow={editorContent}
+                                        onChange={handleEditorChange}
+                                        onValidationChange={handleValidationChange}
+                                        theme={effectiveTheme === "dark" ? "dark" : "light"}
+                                        spi={spi}
+                                    />
+                                </>
                             ) : (
                                 <EmptyState>
                                     <EmptyStateBody>
