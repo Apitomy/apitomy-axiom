@@ -404,6 +404,50 @@ class WorkflowDefinitionsResourceTest {
     }
 
     @Test
+    void testPublishRejectsForkWithoutJoin() {
+        int id = createDefinition("Fork Without Join WF");
+
+        // Fork into two branches that each dead-end at their own action node —
+        // they never re-converge and never reach an end node, so Flow 2.x's
+        // parallel-structure validation must report FORK_WITHOUT_JOIN.
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "id": "wf-fork-no-join",
+                        "name": "Fork Without Join",
+                        "nodes": [
+                            {"id": "s1", "type": "start", "name": "Start",
+                             "config": {}, "position": {"x": 100, "y": 100}},
+                            {"id": "a1", "type": "action", "name": "Branch A",
+                             "config": {"actionType": "noop"},
+                             "position": {"x": 50, "y": 200}},
+                            {"id": "a2", "type": "action", "name": "Branch B",
+                             "config": {"actionType": "noop"},
+                             "position": {"x": 150, "y": 200}}
+                        ],
+                        "edges": [
+                            {"id": "edge1", "source": "s1", "target": "a1",
+                             "priority": 0, "isDefault": false},
+                            {"id": "edge2", "source": "s1", "target": "a2",
+                             "priority": 1, "isDefault": false}
+                        ]
+                    }
+                    """)
+                .when()
+                    .put(BASE_PATH + "/" + id + "/content")
+                .then()
+                    .statusCode(204);
+
+        given()
+                .when()
+                    .post(BASE_PATH + "/" + id + "/publish")
+                .then()
+                    .statusCode(400)
+                    .body("code", hasItem("FORK_WITHOUT_JOIN"));
+    }
+
+    @Test
     void testNewDefinitionSeedsCanonicalInputs() {
         int id = createDefinition("Seeded Inputs WF");
 
