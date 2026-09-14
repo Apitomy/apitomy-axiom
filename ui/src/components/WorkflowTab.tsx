@@ -138,7 +138,10 @@ export function WorkflowTab({
             id: String(instance.id),
             workflowId: String(instance.definitionId),
             currentNodeId: instance.currentNodeId ?? null,
-            activeBranches: [],
+            activeBranches: (instance.activeBranches ?? []).map((b) => ({
+                branchId: b.branchId ?? "",
+                nodeId: b.nodeId ?? "",
+            })),
             joinArrivals: {},
             status: instance.status as any,
             context: instance.context || {},
@@ -308,7 +311,23 @@ export function WorkflowTab({
                                 {instance.status}
                             </Label>
                         </FlexItem>
-                        {instance.currentNodeName && isActive && (
+                        {isActive && instance.activeBranches
+                                && instance.activeBranches.length > 1 && (
+                            <FlexItem>
+                                <Flex spaceItems={{ default: "spaceItemsXs" }}>
+                                    {instance.activeBranches.map((b, i) => (
+                                        <FlexItem key={b.branchId ?? i}>
+                                            <Label color="teal">
+                                                {b.nodeName ?? b.nodeId}
+                                            </Label>
+                                        </FlexItem>
+                                    ))}
+                                </Flex>
+                            </FlexItem>
+                        )}
+                        {instance.currentNodeName && isActive
+                                && (!instance.activeBranches
+                                    || instance.activeBranches.length <= 1) && (
                             <FlexItem>
                                 <Label color="teal">
                                     {instance.currentNodeName}
