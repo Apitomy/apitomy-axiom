@@ -768,6 +768,9 @@ export function WorkflowDefinitionDetailPage() {
                 isOpen={diffOpen}
                 onClose={() => setDiffOpen(false)}
                 variant="large"
+                width="95vw"
+                maxWidth="95vw"
+                className="workflow-diff-modal"
             >
                 <ModalHeader
                     title={
@@ -776,7 +779,7 @@ export function WorkflowDefinitionDetailPage() {
                             : "Compare Versions"
                     }
                 />
-                <ModalBody>
+                <ModalBody className="workflow-diff-modal__body">
                     {diffLoading ? (
                         <EmptyState>
                             <EmptyStateBody>Loading versions...</EmptyStateBody>
@@ -784,11 +787,13 @@ export function WorkflowDefinitionDetailPage() {
                     ) : diffError ? (
                         <Alert variant="danger" isInline title={diffError} />
                     ) : diffBaseWorkflow && diffCompareWorkflow ? (
-                        <WorkflowDiffViewer
-                            baseWorkflow={diffBaseWorkflow}
-                            compareWorkflow={diffCompareWorkflow}
-                            theme={effectiveTheme === "dark" ? "dark" : "light"}
-                        />
+                        <div style={{ flex: "1 1 0", minHeight: 0, display: "flex" }}>
+                            <WorkflowDiffViewer
+                                baseWorkflow={diffBaseWorkflow}
+                                compareWorkflow={diffCompareWorkflow}
+                                theme={effectiveTheme === "dark" ? "dark" : "light"}
+                            />
+                        </div>
                     ) : null}
                 </ModalBody>
                 <ModalFooter>
