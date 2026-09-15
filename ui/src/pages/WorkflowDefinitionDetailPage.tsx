@@ -31,6 +31,7 @@ import {
     Toolbar,
     ToolbarContent,
     ToolbarItem,
+    Tooltip,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import {
@@ -60,6 +61,7 @@ import RocketIcon from "@patternfly/react-icons/dist/esm/icons/rocket-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import EditIcon from "@patternfly/react-icons/dist/esm/icons/edit-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
+import CodeBranchIcon from "@patternfly/react-icons/dist/esm/icons/code-branch-icon";
 
 const RUN_STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
     running: "blue",
@@ -292,14 +294,19 @@ export function WorkflowDefinitionDetailPage() {
         [versions, id]
     );
 
-    const handleShowDiff = () => {
-        if (compareBaseVersion === null || compareTargetVersion === null) return;
+    /**
+     * Opens the diff modal comparing two explicit version numbers. Used by both the
+     * manual "compare versions" toolbar (reading its own dropdown selections) and the
+     * per-row "diff vs previous" action (which knows its pair without touching the
+     * dropdown state at all).
+     */
+    const openDiff = (baseVersion: number, targetVersion: number) => {
         setDiffError(null);
         setDiffLoading(true);
         setDiffOpen(true);
         Promise.all([
-            resolveVersionContent(compareBaseVersion),
-            resolveVersionContent(compareTargetVersion),
+            resolveVersionContent(baseVersion),
+            resolveVersionContent(targetVersion),
         ])
             .then(([base, compare]) => {
                 setDiffBaseWorkflow(base);
@@ -310,6 +317,16 @@ export function WorkflowDefinitionDetailPage() {
                 setDiffError("Failed to load one or both versions for comparison.");
             })
             .finally(() => setDiffLoading(false));
+    };
+
+    const handleShowDiff = () => {
+        if (compareBaseVersion === null || compareTargetVersion === null) return;
+        openDiff(compareBaseVersion, compareTargetVersion);
+    };
+
+    /** Opens the diff modal comparing a version against the one immediately before it. */
+    const handleDiffVsPrevious = (version: number, previousVersion: number) => {
+        openDiff(previousVersion, version);
     };
 
     if (loading) {
@@ -536,28 +553,55 @@ export function WorkflowDefinitionDetailPage() {
                                             <Tr>
                                                 <Th>Version</Th>
                                                 <Th>Created</Th>
+                                                <Th screenReaderText="Actions" />
                                             </Tr>
                                         </Thead>
                                         <Tbody>
-                                            {versions.map((v) => (
-                                                <Tr key={v.id}>
-                                                    <Td>
-                                                        v{v.version}
-                                                        {v.version === definition.currentVersion && (
-                                                            <Label
-                                                                isCompact
-                                                                color="blue"
-                                                                style={{ marginLeft: "8px" }}
+                                            {versions.map((v, i) => {
+                                                // versions is sorted newest-first by the backend
+                                                // (Sort.descending("version")), so the version
+                                                // immediately before this row is the next entry.
+                                                const previous = versions[i + 1];
+                                                return (
+                                                    <Tr key={v.id}>
+                                                        <Td>
+                                                            v{v.version}
+                                                            {v.version === definition.currentVersion && (
+                                                                <Label
+                                                                    isCompact
+                                                                    color="blue"
+                                                                    style={{ marginLeft: "8px" }}
+                                                                >
+                                                                    Current
+                                                                </Label>
+                                                            )}
+                                                        </Td>
+                                                        <Td style={{ whiteSpace: "nowrap" }}>
+                                                            {new Date(v.createdOn).toLocaleString()}
+                                                        </Td>
+                                                        <Td style={{ whiteSpace: "nowrap" }}>
+                                                            <Tooltip
+                                                                content={
+                                                                    previous
+                                                                        ? `Diff v${v.version} against v${previous.version}`
+                                                                        : "No earlier version to compare against"
+                                                                }
                                                             >
-                                                                Current
-                                                            </Label>
-                                                        )}
-                                                    </Td>
-                                                    <Td style={{ whiteSpace: "nowrap" }}>
-                                                        {new Date(v.createdOn).toLocaleString()}
-                                                    </Td>
-                                                </Tr>
-                                            ))}
+                                                                <Button
+                                                                    variant="plain"
+                                                                    aria-label={`Diff v${v.version} against previous version`}
+                                                                    icon={<CodeBranchIcon />}
+                                                                    isAriaDisabled={!previous}
+                                                                    onClick={() =>
+                                                                        previous &&
+                                                                        handleDiffVsPrevious(v.version, previous.version)
+                                                                    }
+                                                                />
+                                                            </Tooltip>
+                                                        </Td>
+                                                    </Tr>
+                                                );
+                                            })}
                                         </Tbody>
                                     </Table>
                                 </>
