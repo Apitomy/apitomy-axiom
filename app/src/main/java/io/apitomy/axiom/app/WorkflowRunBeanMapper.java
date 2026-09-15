@@ -73,6 +73,7 @@ public class WorkflowRunBeanMapper {
                                 entity.definitionId,
                                 entity.definitionVersion)
                         .firstResult();
+        Workflow workflow = null;
         if (version != null) {
             try {
                 bean.setWorkflowContent(objectMapper.readValue(
@@ -81,15 +82,16 @@ public class WorkflowRunBeanMapper {
                 bean.setWorkflowContent(null);
             }
 
-            if (entity.currentNodeId != null) {
-                try {
-                    Workflow workflow = objectMapper.readValue(
-                            version.content, Workflow.class);
-                    workflow.findNodeById(entity.currentNodeId)
-                            .ifPresent(node ->
-                                    bean.setCurrentNodeName(node.name()));
-                } catch (JsonProcessingException ignored) {
-                }
+            try {
+                workflow = objectMapper.readValue(
+                        version.content, Workflow.class);
+            } catch (JsonProcessingException ignored) {
+            }
+
+            if (entity.currentNodeId != null && workflow != null) {
+                workflow.findNodeById(entity.currentNodeId)
+                        .ifPresent(node ->
+                                bean.setCurrentNodeName(node.name()));
             }
         }
 
@@ -108,10 +110,28 @@ public class WorkflowRunBeanMapper {
             bean.setHistory(flowInstance.history().stream()
                     .map(h -> toHistoryEntryBean(h, tasksByNode))
                     .toList());
+            Workflow workflowForBranches = workflow;
+            bean.setActiveBranches(flowInstance.activeBranches().stream()
+                    .map(b -> toActiveBranchBean(b, workflowForBranches))
+                    .toList());
         } catch (JsonProcessingException e) {
             bean.setHistory(List.of());
+            bean.setActiveBranches(List.of());
         }
 
+        return bean;
+    }
+
+    private io.apitomy.axiom.api.beans.ActiveBranch toActiveBranchBean(
+            io.apitomy.flow.model.ActiveBranch branch, Workflow workflow) {
+        io.apitomy.axiom.api.beans.ActiveBranch bean =
+                new io.apitomy.axiom.api.beans.ActiveBranch();
+        bean.setBranchId(branch.branchId());
+        bean.setNodeId(branch.nodeId());
+        if (workflow != null) {
+            workflow.findNodeById(branch.nodeId())
+                    .ifPresent(node -> bean.setNodeName(node.name()));
+        }
         return bean;
     }
 
@@ -127,6 +147,9 @@ public class WorkflowRunBeanMapper {
         }
         if (entry.edgeCondition() != null) {
             bean.setEdgeCondition(entry.edgeCondition());
+        }
+        if (entry.branchId() != null) {
+            bean.setBranchId(entry.branchId());
         }
         if (entry.enteredOn() != null) {
             bean.setEnteredOn(Date.from(entry.enteredOn()));

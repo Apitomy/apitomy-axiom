@@ -137,7 +137,12 @@ export function WorkflowTab({
         return {
             id: String(instance.id),
             workflowId: String(instance.definitionId),
-            currentNodeId: instance.currentNodeId || "",
+            currentNodeId: instance.currentNodeId ?? null,
+            activeBranches: (instance.activeBranches ?? []).map((b) => ({
+                branchId: b.branchId ?? "",
+                nodeId: b.nodeId ?? "",
+            })),
+            joinArrivals: {},
             status: instance.status as any,
             context: instance.context || {},
             history: (instance.history || []).map((h) => ({
@@ -306,7 +311,23 @@ export function WorkflowTab({
                                 {instance.status}
                             </Label>
                         </FlexItem>
-                        {instance.currentNodeName && isActive && (
+                        {isActive && instance.activeBranches
+                                && instance.activeBranches.length > 1 && (
+                            <FlexItem>
+                                <Flex spaceItems={{ default: "spaceItemsXs" }}>
+                                    {instance.activeBranches.map((b, i) => (
+                                        <FlexItem key={b.branchId ?? i}>
+                                            <Label color="teal">
+                                                {b.nodeName ?? b.nodeId}
+                                            </Label>
+                                        </FlexItem>
+                                    ))}
+                                </Flex>
+                            </FlexItem>
+                        )}
+                        {instance.currentNodeName && isActive
+                                && (!instance.activeBranches
+                                    || instance.activeBranches.length <= 1) && (
                             <FlexItem>
                                 <Label color="teal">
                                     {instance.currentNodeName}

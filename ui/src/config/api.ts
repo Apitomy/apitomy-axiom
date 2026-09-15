@@ -2224,6 +2224,12 @@ export async function getWorkflowDefinitionVersion(
     return response.json();
 }
 
+export interface ActiveBranchInfo {
+    branchId?: string;
+    nodeId?: string;
+    nodeName?: string;
+}
+
 export interface WorkflowInstanceInfo {
     id: number;
     projectId: number;
@@ -2241,6 +2247,7 @@ export interface WorkflowInstanceInfo {
     completedOn?: string;
     runId?: number;
     traceId?: string;
+    activeBranches?: ActiveBranchInfo[];
 }
 
 export interface HistoryEntryInfo {
@@ -2253,6 +2260,7 @@ export interface HistoryEntryInfo {
     taskStatus?: string;
     edgeId?: string;
     edgeCondition?: string;
+    branchId?: string;
 }
 
 export interface TriggerWorkflowRequest {
