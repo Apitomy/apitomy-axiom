@@ -6,6 +6,7 @@ import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
+import io.apitomy.axiom.core.entities.WorkflowWaitEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
@@ -15,6 +16,8 @@ import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Exercises {@link WorkflowExecutionService#onTaskCompleted(long)} for a
@@ -110,6 +113,114 @@ class WorkflowExecutionServiceTest {
         assertNotNull(completedRun, "Run should still exist");
         assertEquals("completed", completedRun.status,
                 "Run should advance to completed after the action node's task completes");
+    }
+
+    private static final String WAIT_CONTENT = """
+        {
+            "id": "wait-wf",
+            "name": "Wait WF",
+            "nodes": [
+                {"id": "s1", "type": "start", "name": "Start",
+                 "config": {}, "position": {"x": 100, "y": 100}},
+                {"id": "w1", "type": "wait", "name": "Cooldown",
+                 "config": {"duration": "PT5M"},
+                 "position": {"x": 100, "y": 200}},
+                {"id": "e1", "type": "end", "name": "End",
+                 "config": {}, "position": {"x": 100, "y": 300}}
+            ],
+            "edges": [
+                {"id": "edge1", "source": "s1", "target": "w1",
+                 "priority": 0, "isDefault": true},
+                {"id": "edge2", "source": "w1", "target": "e1",
+                 "priority": 0, "isDefault": true}
+            ]
+        }
+        """;
+
+    /**
+     * Triggering a workflow that parks on a Wait node should create a
+     * {@link WorkflowWaitEntity} (not a {@link TaskEntity}) addressed to the
+     * wait node, with {@code resumeAt} set to roughly now + the configured
+     * duration.
+     */
+    @Test
+    void triggeringWaitWorkflowParksWithoutCreatingATask() {
+        long[] ids = createProjectAndDefinition("Wait Run Project", WAIT_CONTENT);
+
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(ids[0], ids[1]));
+        assertEquals("waiting", run.status, "Run should be waiting at the wait node");
+
+        QuarkusTransaction.requiringNew().run(() -> {
+            TaskEntity task = TaskEntity.find("workflowRunId", run.id).firstResult();
+            assertNull(task, "Wait nodes must not create a task");
+
+            WorkflowWaitEntity wait =
+                    WorkflowWaitEntity.find("runId", run.id).firstResult();
+            assertNotNull(wait, "A WorkflowWaitEntity should be created for the wait node");
+            assertEquals("w1", wait.nodeId);
+            assertTrue(wait.resumeAt.isAfter(Instant.now()),
+                    "resumeAt should be in the future");
+        });
+    }
+
+    /**
+     * {@link WorkflowExecutionService#onWaitElapsed(long, String)} should
+     * advance a WAITING run parked on a wait node through to completion,
+     * mirroring what {@link WorkflowWaitScheduler} does once the wait's
+     * duration has elapsed.
+     */
+    @Test
+    void onWaitElapsedAdvancesRunToCompleted() {
+        long[] ids = createProjectAndDefinition("Wait Elapsed Project", WAIT_CONTENT);
+
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(ids[0], ids[1]));
+        assertEquals("waiting", run.status);
+
+        QuarkusTransaction.requiringNew().run(() ->
+                workflowExecutionService.onWaitElapsed(run.id, "w1"));
+
+        WorkflowRunEntity completedRun = QuarkusTransaction.requiringNew().call(() ->
+                WorkflowRunEntity.findById(run.id));
+        assertNotNull(completedRun);
+        assertEquals("completed", completedRun.status,
+                "Run should advance to completed once the wait node's result is applied");
+    }
+
+    /**
+     * Creates a project and a published single-version workflow definition
+     * from the given content, returning {id[0]=projectId, id[1]=definitionId}.
+     */
+    private long[] createProjectAndDefinition(String projectName, String content) {
+        return QuarkusTransaction.requiringNew().call(() -> {
+            ProjectEntity project = new ProjectEntity();
+            project.name = projectName;
+            project.type = "other";
+            project.status = "new";
+            project.ref = "test/" + projectName.toLowerCase().replace(" ", "-");
+            project.createdOn = Instant.now();
+            project.updatedOn = Instant.now();
+            project.persist();
+
+            WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
+            def.name = projectName + " WF";
+            def.content = content;
+            def.currentVersion = 1;
+            def.createdOn = Instant.now();
+            def.updatedOn = Instant.now();
+            def.persist();
+
+            WorkflowDefinitionVersionEntity version =
+                    new WorkflowDefinitionVersionEntity();
+            version.definitionId = def.id;
+            version.version = 1;
+            version.content = content;
+            version.createdOn = Instant.now();
+            version.persist();
+
+            return new long[] { project.id, def.id };
+        });
     }
 
     // Multi-branch (fork/join) per-branch task creation is covered end-to-end,
