@@ -27,7 +27,7 @@
         "react-dom": "19.3.0",
         "react-grid-layout": "2.2.4",
         "react-markdown": "10.1.0",
-        "react-router-dom": "7.18.3",
+        "react-router-dom": "7.18.4",
         "react-syntax-highlighter": "16.1.1",
         "remark-gfm": "4.0.1",
         "victory-area": "37.3.6",
