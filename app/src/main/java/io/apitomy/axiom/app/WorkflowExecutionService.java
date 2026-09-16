@@ -7,6 +7,7 @@ import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
+import io.apitomy.axiom.core.entities.WorkflowEventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.entities.WorkflowWaitEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
@@ -25,6 +26,7 @@ import io.apitomy.flow.model.WorkflowNode;
 import io.apitomy.flow.model.ActionInfo;
 import io.apitomy.flow.model.ActiveBranch;
 import io.apitomy.flow.model.HumanTaskInfo;
+import io.apitomy.flow.model.ReceiveEventInfo;
 import io.apitomy.flow.model.WaitInfo;
 import io.apitomy.flow.spi.NodeExecutionContext;
 import io.apitomy.flow.spi.NodeExecutor;
@@ -52,7 +54,7 @@ public class WorkflowExecutionService {
     private static final Logger LOG = Logger.getLogger(WorkflowExecutionService.class);
     private static final Set<NodeType> SUPPORTED_NODE_TYPES =
             Set.of(NodeType.START, NodeType.END, NodeType.ACTION, NodeType.HUMAN_TASK,
-                    NodeType.WAIT);
+                    NodeType.WAIT, NodeType.RECEIVE_EVENT);
 
     @Inject
     ObjectMapper objectMapper;
@@ -263,6 +265,36 @@ public class WorkflowExecutionService {
     }
 
     /**
+     * Called when an Axiom event has matched a workflow's parked receive-event
+     * node, advancing the workflow. The event map is merged into workflow
+     * context under the {@code event} key so downstream nodes can reference
+     * fields such as {@code event.payload.number}. The caller
+     * (WorkflowEventDispatcher) is responsible for deleting the corresponding
+     * {@link WorkflowEventSubscriptionEntity} row in the same transaction.
+     *
+     * @param runId    the id of the run to advance
+     * @param nodeId   the parked receive-event node's id
+     * @param eventMap the matched event, as built by WorkflowEventMapper
+     */
+    @Transactional
+    public void onEventReceived(long runId, String nodeId, Map<String, Object> eventMap) {
+        WorkflowRunEntity entity = WorkflowRunEntity.findById(runId);
+        if (entity == null) {
+            LOG.warnf("Workflow run %d not found for received event at node %s",
+                    runId, nodeId);
+            return;
+        }
+
+        Workflow workflow = loadWorkflowContent(
+                entity.definitionId, entity.definitionVersion);
+        WorkflowInstance instance = deserializeInstance(entity.instanceState);
+
+        NodeResult result = new NodeResult(
+                NodeResultStatus.COMPLETED, Map.of("event", eventMap));
+        advanceWorkflow(entity, workflow, instance, nodeId, result);
+    }
+
+    /**
      * Applies a node result to a run's instance via the engine, persists the
      * advanced instance state, spawns follow-on tasks/waits for a WAITING
      * result, and handles terminal (COMPLETED/FAILED) transitions. Shared by
@@ -322,6 +354,7 @@ public class WorkflowExecutionService {
 
         persistInstanceState(entity, cancelled);
         WorkflowWaitEntity.delete("runId", entity.id);
+        WorkflowEventSubscriptionEntity.delete("runId", entity.id);
         entity.completedOn = Instant.now();
         completeRunTrace(entity, "cancelled");
 
@@ -416,6 +449,13 @@ public class WorkflowExecutionService {
         WaitInfo waitInfo = workflowEngine.getWaitInfo(workflow, instance, nodeId);
         if (waitInfo != null) {
             createWaitForNode(entity, waitInfo);
+            return;
+        }
+
+        ReceiveEventInfo receiveEventInfo =
+                workflowEngine.getReceiveEventInfo(workflow, instance, nodeId);
+        if (receiveEventInfo != null) {
+            createEventSubscriptionForNode(entity, receiveEventInfo);
             return;
         }
 
@@ -536,6 +576,43 @@ public class WorkflowExecutionService {
                 entity.id, wait.nodeId, wait.resumeAt);
     }
 
+    /**
+     * Parks a branch that has entered a receive-event node: persists a
+     * {@link WorkflowEventSubscriptionEntity} so the event dispatcher can
+     * resume the branch when a matching event arrives. No task is created —
+     * the node resolves automatically, without user action.
+     *
+     * @param entity           the owning workflow run
+     * @param receiveEventInfo the engine's receive-event introspection for the parked node
+     */
+    private void createEventSubscriptionForNode(WorkflowRunEntity entity,
+            ReceiveEventInfo receiveEventInfo) {
+        WorkflowEventSubscriptionEntity sub = new WorkflowEventSubscriptionEntity();
+        sub.runId = entity.id;
+        sub.nodeId = receiveEventInfo.nodeId();
+        sub.eventType = receiveEventInfo.eventType();
+        sub.projectId = entity.projectId;
+        sub.createdOn = Instant.now();
+        sub.persist();
+
+        TraceContext traceCtx = traceContextFor(entity);
+        if (traceCtx != null) {
+            try {
+                String nodeName = receiveEventInfo.nodeName();
+                String label = (nodeName != null && !nodeName.isBlank()
+                        ? nodeName : "Receive event")
+                        + " (awaiting: " + sub.eventType + ")";
+                traceService.addNode(traceCtx, "task", "in-progress", label,
+                        "workflow-event-subscription", sub.id);
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to add workflow event-subscription trace node");
+            }
+        }
+
+        LOG.infof("Parked workflow instance %d at receive-event node %s (awaiting: %s)",
+                entity.id, sub.nodeId, sub.eventType);
+    }
+
     private void persistInstanceState(WorkflowRunEntity entity,
             WorkflowInstance instance) {
         try {
@@ -560,7 +637,7 @@ public class WorkflowExecutionService {
             throw new WebApplicationException(
                     "Workflow contains unsupported node types: "
                             + String.join(", ", unsupported)
-                            + ". Supported: start, end, action, human-task, wait.",
+                            + ". Supported: start, end, action, human-task, wait, receive-event.",
                     400);
         }
     }
