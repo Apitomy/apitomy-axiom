@@ -298,7 +298,8 @@ public class WorkflowExecutionService {
      * Applies a node result to a run's instance via the engine, persists the
      * advanced instance state, spawns follow-on tasks/waits for a WAITING
      * result, and handles terminal (COMPLETED/FAILED) transitions. Shared by
-     * {@link #onTaskCompleted(long)} and {@link #onWaitElapsed(long, String)}.
+     * {@link #onTaskCompleted(long)}, {@link #onWaitElapsed(long, String)},
+     * and {@link #onEventReceived(long, String, Map)}.
      */
     private void advanceWorkflow(WorkflowRunEntity entity, Workflow workflow,
             WorkflowInstance instance, String nodeId, NodeResult result) {

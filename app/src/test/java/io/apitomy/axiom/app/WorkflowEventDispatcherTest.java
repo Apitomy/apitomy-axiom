@@ -83,7 +83,7 @@ class WorkflowEventDispatcherTest {
 
         long eventId = createEvent("issue-created", "github",
                 projectRef(ids[0]), null);
-        QuarkusTransaction.requiringNew().run(() -> dispatcher.dispatchEvent(eventId));
+        dispatcher.dispatchEvent(eventId);
 
         assertRunStatus(run.id, "waiting");
         assertSubscriptionCount(run.id, 1);
@@ -98,7 +98,7 @@ class WorkflowEventDispatcherTest {
 
         // Event correlated to project A (issueRef == project A's ref).
         long eventId = createEvent("pr-merged", "github", projectRef(idsA[0]), null);
-        QuarkusTransaction.requiringNew().run(() -> dispatcher.dispatchEvent(eventId));
+        dispatcher.dispatchEvent(eventId);
 
         assertRunStatus(runA.id, "completed");
         assertRunStatus(runB.id, "waiting");
@@ -113,7 +113,7 @@ class WorkflowEventDispatcherTest {
 
         // No issueRef and no projectId: broadcast.
         long eventId = createEvent("pr-merged", "github", null, null);
-        QuarkusTransaction.requiringNew().run(() -> dispatcher.dispatchEvent(eventId));
+        dispatcher.dispatchEvent(eventId);
 
         assertRunStatus(run.id, "completed");
         assertSubscriptionCount(run.id, 0);
@@ -126,15 +126,42 @@ class WorkflowEventDispatcherTest {
 
         long smallPr = createEvent("pr-merged", "github", projectRef(ids[0]),
                 "{\"number\": 5}");
-        QuarkusTransaction.requiringNew().run(() -> dispatcher.dispatchEvent(smallPr));
+        dispatcher.dispatchEvent(smallPr);
         assertRunStatus(run.id, "waiting");
         assertSubscriptionCount(run.id, 1);
 
         long bigPr = createEvent("pr-merged", "github", projectRef(ids[0]),
                 "{\"number\": 500}");
-        QuarkusTransaction.requiringNew().run(() -> dispatcher.dispatchEvent(bigPr));
+        dispatcher.dispatchEvent(bigPr);
         assertRunStatus(run.id, "completed");
         assertSubscriptionCount(run.id, 0);
+    }
+
+    @Test
+    void failingOfferDoesNotPoisonOtherResumptions() {
+        long[] idsHealthy = setup("Dispatcher Isolation Healthy Project", RECEIVE_EVENT_CONTENT);
+        long[] idsCorrupt = setup("Dispatcher Isolation Corrupt Project", RECEIVE_EVENT_CONTENT);
+        WorkflowRunEntity healthyRun = trigger(idsHealthy);
+        WorkflowRunEntity corruptRun = trigger(idsCorrupt);
+
+        // Corrupt one run's instance state so its offer fails safely inside
+        // its own per-subscription transaction.
+        long corruptRunId = corruptRun.id;
+        QuarkusTransaction.requiringNew().run(() -> {
+            WorkflowRunEntity run = WorkflowRunEntity.findById(corruptRunId);
+            run.instanceState = "not json";
+        });
+
+        // Broadcast event (no issueRef/projectId) matches both subscriptions.
+        long eventId = createEvent("pr-merged", "github", null, null);
+        dispatcher.dispatchEvent(eventId);
+
+        // The healthy run resumed and completed despite the corrupt run's
+        // offer failing; the corrupt run remains parked.
+        assertRunStatus(healthyRun.id, "completed");
+        assertSubscriptionCount(healthyRun.id, 0);
+        assertRunStatus(corruptRun.id, "waiting");
+        assertSubscriptionCount(corruptRun.id, 1);
     }
 
     // -- Helpers --

@@ -17,7 +17,7 @@ import io.apitomy.flow.spi.NodeResultStatus;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.transaction.Transactional;
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import org.jboss.logging.Logger;
 
 import java.util.List;
@@ -66,24 +66,51 @@ public class WorkflowEventDispatcher {
 
     /**
      * Offers an event to all candidate receive-event subscriptions, resuming
-     * every run whose parked node matches. Failures are contained per
-     * subscription; this method itself only throws if the event cannot be
-     * loaded.
+     * every run whose parked node matches. Each offer runs in its own
+     * transaction so a failing resume cannot roll back resumes already
+     * applied for other runs; failures are contained per subscription. This
+     * method itself only throws if the read phase (event load, scoping)
+     * fails.
+     *
+     * <p>Must be called <b>outside</b> an active transaction: the read phase
+     * and each per-subscription offer each start their own
+     * {@link QuarkusTransaction#requiringNew() new transaction}.</p>
      *
      * @param eventId the id of the (filter-allowed) event to dispatch
      */
-    @Transactional
     public void dispatchEvent(long eventId) {
+        DispatchPlan plan = QuarkusTransaction.requiringNew().call(() -> planDispatch(eventId));
+        if (plan == null) {
+            return;
+        }
+
+        for (Long subId : plan.subscriptionIds()) {
+            try {
+                QuarkusTransaction.requiringNew().run(() ->
+                        offerToSubscription(subId, plan.eventMap()));
+            } catch (Exception e) {
+                LOG.errorf(e, "Failed to offer event %d to workflow subscription %d",
+                        eventId, subId);
+            }
+        }
+    }
+
+    /**
+     * Read phase: loads the event, prefilters subscriptions by event type,
+     * applies hybrid project scoping, and builds the event map. Returns
+     * {@code null} when there is nothing to dispatch.
+     */
+    private DispatchPlan planDispatch(long eventId) {
         EventEntity event = EventEntity.findById(eventId);
         if (event == null) {
             LOG.warnf("Event %d not found for workflow dispatch", eventId);
-            return;
+            return null;
         }
 
         List<WorkflowEventSubscriptionEntity> candidates =
                 WorkflowEventSubscriptionEntity.list("eventType", event.eventType);
         if (candidates.isEmpty()) {
-            return;
+            return null;
         }
 
         ProjectEntity project = findProjectForEvent(event);
@@ -94,28 +121,31 @@ public class WorkflowEventDispatcher {
                     .toList();
         }
         if (candidates.isEmpty()) {
-            return;
+            return null;
         }
 
         Map<String, Object> eventMap = WorkflowEventMapper.toEventMap(event, objectMapper);
+        List<Long> subscriptionIds = candidates.stream().map(sub -> sub.id).toList();
+        return new DispatchPlan(subscriptionIds, eventMap);
+    }
 
-        for (WorkflowEventSubscriptionEntity sub : candidates) {
-            try {
-                offerToSubscription(sub, eventMap);
-            } catch (Exception e) {
-                LOG.errorf(e, "Failed to offer event %d to workflow run %d (node %s)",
-                        eventId, sub.runId, sub.nodeId);
-            }
-        }
+    /** Candidate subscription ids plus the event map computed in the read phase. */
+    private record DispatchPlan(List<Long> subscriptionIds, Map<String, Object> eventMap) {
     }
 
     /**
      * Checks a single subscription against the event map and, on match,
-     * deletes the subscription and resumes the run. Subscriptions whose run
-     * is missing or terminal are cleaned up opportunistically.
+     * deletes the subscription and resumes the run — atomically, within the
+     * caller-supplied per-subscription transaction. Subscriptions whose run
+     * is missing or terminal are cleaned up opportunistically; an already
+     * consumed (deleted) subscription is silently skipped.
      */
-    private void offerToSubscription(WorkflowEventSubscriptionEntity sub,
-            Map<String, Object> eventMap) {
+    private void offerToSubscription(long subscriptionId, Map<String, Object> eventMap) {
+        WorkflowEventSubscriptionEntity sub =
+                WorkflowEventSubscriptionEntity.findById(subscriptionId);
+        if (sub == null) {
+            return;
+        }
         WorkflowRunEntity run = WorkflowRunEntity.findById(sub.runId);
         if (run == null || run.completedOn != null) {
             sub.delete();
