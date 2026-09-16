@@ -22,6 +22,7 @@ import io.apitomy.flow.model.Workflow;
 import io.apitomy.flow.model.WorkflowInstance;
 import io.apitomy.flow.model.WorkflowNode;
 import io.apitomy.flow.model.ActionInfo;
+import io.apitomy.flow.model.ActiveBranch;
 import io.apitomy.flow.model.HumanTaskInfo;
 import io.apitomy.flow.spi.NodeExecutionContext;
 import io.apitomy.flow.spi.NodeExecutor;
@@ -166,7 +167,7 @@ public class WorkflowExecutionService {
         }
 
         if (instance.status() == InstanceStatus.WAITING) {
-            createTaskForCurrentNode(entity, workflow, instance);
+            createTasksForActiveBranches(workflow, instance, entity);
         }
 
         logActivity(projectId, "workflow-started",
@@ -200,7 +201,7 @@ public class WorkflowExecutionService {
         WorkflowInstance instance = deserializeInstance(entity.instanceState);
 
         NodeResult result;
-        HumanTaskInfo humanTaskInfo = workflowEngine.getHumanTaskInfo(workflow, instance);
+        HumanTaskInfo humanTaskInfo = workflowEngine.getHumanTaskInfo(workflow, instance, task.nodeId);
         if (humanTaskInfo != null) {
             if ("Completed".equals(task.status)) {
                 Map<String, Object> answers = WorkflowHumanTaskMapper.coerceAnswers(
@@ -232,13 +233,13 @@ public class WorkflowExecutionService {
             result = new NodeResult(NodeResultStatus.FAILED, Map.of());
         }
 
-        WorkflowInstance advanced = workflowEngine.completeCurrentNode(
-                workflow, instance, result);
+        WorkflowInstance advanced = workflowEngine.completeNode(
+                workflow, instance, task.nodeId, result);
 
         persistInstanceState(entity, advanced);
 
         if (advanced.status() == InstanceStatus.WAITING) {
-            createTaskForCurrentNode(entity, workflow, advanced);
+            createTasksForActiveBranches(workflow, advanced, entity);
         } else if (advanced.status() == InstanceStatus.COMPLETED) {
             entity.completedOn = Instant.now();
             completeRunTrace(entity, "completed");
@@ -334,17 +335,49 @@ public class WorkflowExecutionService {
         }
     }
 
-    private void createTaskForCurrentNode(WorkflowRunEntity entity,
-            Workflow workflow, WorkflowInstance instance) {
-        HumanTaskInfo humanTaskInfo = workflowEngine.getHumanTaskInfo(workflow, instance);
+    /** Task statuses that count as "open" for idempotency checks against a node. */
+    private static final List<String> OPEN_TASK_STATUSES =
+            List.of("Pending", "InProgress", "AwaitingInput");
+
+    /**
+     * Creates a task for every active branch node of a WAITING instance that
+     * does not already have an open task, e.g. after a fork spawns several
+     * concurrently-active branches. Idempotent: a branch node with an
+     * existing open ({@code Pending}/{@code InProgress}/{@code AwaitingInput})
+     * task for this run is skipped, so re-entrant calls (or branches whose
+     * task already exists from a prior invocation) never create duplicates.
+     */
+    private void createTasksForActiveBranches(Workflow workflow,
+            WorkflowInstance instance, WorkflowRunEntity entity) {
+        for (ActiveBranch branch : instance.activeBranches()) {
+            String nodeId = branch.nodeId();
+            long openCount = TaskEntity.count(
+                    "workflowRunId = ?1 and nodeId = ?2 and status in ?3",
+                    entity.id, nodeId, OPEN_TASK_STATUSES);
+            if (openCount > 0) {
+                continue;
+            }
+            createTaskForNode(entity, workflow, instance, nodeId);
+        }
+    }
+
+    /**
+     * Creates the appropriate task (human-task or action) for a single node
+     * of a WAITING instance, addressed explicitly by {@code nodeId} (rather
+     * than relying on {@code instance.currentNodeId()}, which is only
+     * meaningful for single-branch instances).
+     */
+    private void createTaskForNode(WorkflowRunEntity entity,
+            Workflow workflow, WorkflowInstance instance, String nodeId) {
+        HumanTaskInfo humanTaskInfo = workflowEngine.getHumanTaskInfo(workflow, instance, nodeId);
         if (humanTaskInfo != null) {
-            createHumanTaskForNode(entity, instance, humanTaskInfo);
+            createHumanTaskForNode(entity, nodeId, humanTaskInfo);
             return;
         }
 
-        ActionInfo actionInfo = workflowEngine.getActionInfo(workflow, instance);
+        ActionInfo actionInfo = workflowEngine.getActionInfo(workflow, instance, nodeId);
         if (actionInfo == null) {
-            LOG.warnf("No action info for current node in instance %d", entity.id);
+            LOG.warnf("No action info for node %s in instance %d", nodeId, entity.id);
             return;
         }
 
@@ -355,7 +388,7 @@ public class WorkflowExecutionService {
         task.status = "Pending";
         task.input = serializeInputs(actionInfo);
         task.workflowRunId = entity.id;
-        task.nodeId = instance.currentNodeId();
+        task.nodeId = nodeId;
         task.traceId = entity.traceId;
         task.createdOn = Instant.now();
         task.persist();
@@ -381,11 +414,11 @@ public class WorkflowExecutionService {
      * node, mapping the node's Flow config into human-facing context and a completion form.
      *
      * @param entity        the owning workflow run
-     * @param instance      the parked (WAITING) engine instance
-     * @param humanTaskInfo the engine's human-task introspection for the current node
+     * @param nodeId        the parked human-task node's id
+     * @param humanTaskInfo the engine's human-task introspection for {@code nodeId}
      */
     private void createHumanTaskForNode(WorkflowRunEntity entity,
-            WorkflowInstance instance, HumanTaskInfo humanTaskInfo) {
+            String nodeId, HumanTaskInfo humanTaskInfo) {
         TaskEntity task = new TaskEntity();
         task.projectId = entity.projectId;
         String nodeName = humanTaskInfo.nodeName();
@@ -393,7 +426,7 @@ public class WorkflowExecutionService {
         task.createdBy = "workflow";
         task.status = "Pending";
         task.workflowRunId = entity.id;
-        task.nodeId = instance.currentNodeId();
+        task.nodeId = nodeId;
         task.traceId = entity.traceId;
         task.createdOn = Instant.now();
 

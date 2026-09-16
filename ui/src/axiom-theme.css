@@ -111,6 +111,24 @@
     padding: 16px 24px;
 }
 
+/* Version diff modal: as large as possible (width is set via the Modal's width/maxWidth
+   props). The modal-box element itself only shrink-wraps its content by default, so it
+   must be given an explicit height here for the body -- and in turn the diff viewer,
+   which expects height:100% from its parent -- to actually fill the available space. */
+.workflow-diff-modal.pf-v6-c-modal-box {
+    height: 90vh;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.workflow-diff-modal__body.pf-v6-c-modal-box__body {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
 /* Project detail page: let the tab area fill the remaining vertical space
    so the active tab's content can scroll (or fill, e.g. the Workflow tab). */
 .project-detail > .pf-v6-c-page__main-body {

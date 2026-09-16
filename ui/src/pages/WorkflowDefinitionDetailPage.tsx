@@ -13,6 +13,8 @@ import {
     FlexItem,
     Form,
     FormGroup,
+    FormSelect,
+    FormSelectOption,
     Label,
     Modal,
     ModalBody,
@@ -29,9 +31,13 @@ import {
     Toolbar,
     ToolbarContent,
     ToolbarItem,
+    Tooltip,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
-import { WorkflowEditor } from "@apitomy/flow-ui";
+import {
+    WorkflowEditor,
+    WorkflowDiffViewer,
+} from "@apitomy/flow-ui";
 import type { Workflow, ValidationProblem, EditorSpi, ActionTypeDescriptor } from "@apitomy/flow-ui";
 import {
     type WorkflowDefinition,
@@ -43,6 +49,7 @@ import {
     publishWorkflowDefinition,
     deleteWorkflowDefinition,
     listWorkflowDefinitionVersions,
+    getWorkflowDefinitionVersion,
     fetchWorkflowDefinitionRuns,
     fetchActionTypes,
     type WorkflowRunSummary,
@@ -54,6 +61,7 @@ import RocketIcon from "@patternfly/react-icons/dist/esm/icons/rocket-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import EditIcon from "@patternfly/react-icons/dist/esm/icons/edit-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
+import CodeBranchIcon from "@patternfly/react-icons/dist/esm/icons/code-branch-icon";
 
 const RUN_STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
     running: "blue",
@@ -99,6 +107,13 @@ export function WorkflowDefinitionDetailPage() {
     const [metadataForm, setMetadataForm] = useState({ name: "", description: "" });
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [deleteError, setDeleteError] = useState<string | null>(null);
+    const [compareBaseVersion, setCompareBaseVersion] = useState<number | null>(null);
+    const [compareTargetVersion, setCompareTargetVersion] = useState<number | null>(null);
+    const [diffOpen, setDiffOpen] = useState(false);
+    const [diffLoading, setDiffLoading] = useState(false);
+    const [diffError, setDiffError] = useState<string | null>(null);
+    const [diffBaseWorkflow, setDiffBaseWorkflow] = useState<Workflow | null>(null);
+    const [diffCompareWorkflow, setDiffCompareWorkflow] = useState<Workflow | null>(null);
 
     // EditorSpi for action types — memoized to avoid re-renders
     const spi: EditorSpi = useMemo(() => ({
@@ -127,6 +142,11 @@ export function WorkflowDefinitionDetailPage() {
                 savedContentRef.current = JSON.stringify(def.content || null);
                 setVersions(vers);
                 setDirty(false);
+                if (vers.length >= 2) {
+                    const sorted = [...vers].sort((a, b) => b.version - a.version);
+                    setCompareBaseVersion(sorted[1].version);
+                    setCompareTargetVersion(sorted[0].version);
+                }
             })
             .catch((err) => {
                 console.error("Failed to load workflow definition:", err);
@@ -256,6 +276,57 @@ export function WorkflowDefinitionDetailPage() {
                 console.error("Failed to delete workflow definition:", err);
                 setDeleteError("Failed to delete this workflow. Please try again.");
             });
+    };
+
+    /**
+     * Resolves the full content for a given version, fetching it from the server
+     * when the already-loaded version summary does not include content.
+     */
+    const resolveVersionContent = useCallback(
+        async (version: number): Promise<Workflow> => {
+            const cached = versions.find((v) => v.version === version);
+            if (cached?.content) {
+                return cached.content as Workflow;
+            }
+            const fetched = await getWorkflowDefinitionVersion(id, version);
+            return fetched.content as Workflow;
+        },
+        [versions, id]
+    );
+
+    /**
+     * Opens the diff modal comparing two explicit version numbers. Used by both the
+     * manual "compare versions" toolbar (reading its own dropdown selections) and the
+     * per-row "diff vs previous" action (which knows its pair without touching the
+     * dropdown state at all).
+     */
+    const openDiff = (baseVersion: number, targetVersion: number) => {
+        setDiffError(null);
+        setDiffLoading(true);
+        setDiffOpen(true);
+        Promise.all([
+            resolveVersionContent(baseVersion),
+            resolveVersionContent(targetVersion),
+        ])
+            .then(([base, compare]) => {
+                setDiffBaseWorkflow(base);
+                setDiffCompareWorkflow(compare);
+            })
+            .catch((err) => {
+                console.error("Failed to load versions for comparison:", err);
+                setDiffError("Failed to load one or both versions for comparison.");
+            })
+            .finally(() => setDiffLoading(false));
+    };
+
+    const handleShowDiff = () => {
+        if (compareBaseVersion === null || compareTargetVersion === null) return;
+        openDiff(compareBaseVersion, compareTargetVersion);
+    };
+
+    /** Opens the diff modal comparing a version against the one immediately before it. */
+    const handleDiffVsPrevious = (version: number, previousVersion: number) => {
+        openDiff(previousVersion, version);
     };
 
     if (loading) {
@@ -420,35 +491,120 @@ export function WorkflowDefinitionDetailPage() {
                                     </EmptyStateBody>
                                 </EmptyState>
                             ) : (
-                                <Table aria-label="Workflow Versions" variant="compact">
-                                    <Thead>
-                                        <Tr>
-                                            <Th>Version</Th>
-                                            <Th>Created</Th>
-                                        </Tr>
-                                    </Thead>
-                                    <Tbody>
-                                        {versions.map((v) => (
-                                            <Tr key={v.id}>
-                                                <Td>
-                                                    v{v.version}
-                                                    {v.version === definition.currentVersion && (
-                                                        <Label
-                                                            isCompact
-                                                            color="blue"
-                                                            style={{ marginLeft: "8px" }}
-                                                        >
-                                                            Current
-                                                        </Label>
-                                                    )}
-                                                </Td>
-                                                <Td style={{ whiteSpace: "nowrap" }}>
-                                                    {new Date(v.createdOn).toLocaleString()}
-                                                </Td>
+                                <>
+                                    {versions.length < 2 ? (
+                                        <EmptyState variant="xs" style={{ marginBottom: "16px" }}>
+                                            <EmptyStateBody>
+                                                At least two versions are required to compare.
+                                            </EmptyStateBody>
+                                        </EmptyState>
+                                    ) : (
+                                        <Toolbar>
+                                            <ToolbarContent>
+                                                <ToolbarItem>
+                                                    <FormSelect
+                                                        aria-label="Base version"
+                                                        value={compareBaseVersion ?? ""}
+                                                        onChange={(_e, v) => setCompareBaseVersion(Number(v))}
+                                                    >
+                                                        {versions.map((v) => (
+                                                            <FormSelectOption
+                                                                key={v.id}
+                                                                value={v.version}
+                                                                label={`v${v.version}`}
+                                                            />
+                                                        ))}
+                                                    </FormSelect>
+                                                </ToolbarItem>
+                                                <ToolbarItem>vs</ToolbarItem>
+                                                <ToolbarItem>
+                                                    <FormSelect
+                                                        aria-label="Compare version"
+                                                        value={compareTargetVersion ?? ""}
+                                                        onChange={(_e, v) => setCompareTargetVersion(Number(v))}
+                                                    >
+                                                        {versions.map((v) => (
+                                                            <FormSelectOption
+                                                                key={v.id}
+                                                                value={v.version}
+                                                                label={`v${v.version}`}
+                                                            />
+                                                        ))}
+                                                    </FormSelect>
+                                                </ToolbarItem>
+                                                <ToolbarItem>
+                                                    <Button
+                                                        variant="secondary"
+                                                        onClick={handleShowDiff}
+                                                        isDisabled={
+                                                            compareBaseVersion === null ||
+                                                            compareTargetVersion === null ||
+                                                            compareBaseVersion === compareTargetVersion
+                                                        }
+                                                    >
+                                                        Show diff
+                                                    </Button>
+                                                </ToolbarItem>
+                                            </ToolbarContent>
+                                        </Toolbar>
+                                    )}
+                                    <Table aria-label="Workflow Versions" variant="compact">
+                                        <Thead>
+                                            <Tr>
+                                                <Th>Version</Th>
+                                                <Th>Created</Th>
+                                                <Th screenReaderText="Actions" />
                                             </Tr>
-                                        ))}
-                                    </Tbody>
-                                </Table>
+                                        </Thead>
+                                        <Tbody>
+                                            {versions.map((v, i) => {
+                                                // versions is sorted newest-first by the backend
+                                                // (Sort.descending("version")), so the version
+                                                // immediately before this row is the next entry.
+                                                const previous = versions[i + 1];
+                                                return (
+                                                    <Tr key={v.id}>
+                                                        <Td>
+                                                            v{v.version}
+                                                            {v.version === definition.currentVersion && (
+                                                                <Label
+                                                                    isCompact
+                                                                    color="blue"
+                                                                    style={{ marginLeft: "8px" }}
+                                                                >
+                                                                    Current
+                                                                </Label>
+                                                            )}
+                                                        </Td>
+                                                        <Td style={{ whiteSpace: "nowrap" }}>
+                                                            {new Date(v.createdOn).toLocaleString()}
+                                                        </Td>
+                                                        <Td style={{ whiteSpace: "nowrap" }}>
+                                                            <Tooltip
+                                                                content={
+                                                                    previous
+                                                                        ? `Diff v${v.version} against v${previous.version}`
+                                                                        : "No earlier version to compare against"
+                                                                }
+                                                            >
+                                                                <Button
+                                                                    variant="plain"
+                                                                    aria-label={`Diff v${v.version} against previous version`}
+                                                                    icon={<CodeBranchIcon />}
+                                                                    isAriaDisabled={!previous}
+                                                                    onClick={() =>
+                                                                        previous &&
+                                                                        handleDiffVsPrevious(v.version, previous.version)
+                                                                    }
+                                                                />
+                                                            </Tooltip>
+                                                        </Td>
+                                                    </Tr>
+                                                );
+                                            })}
+                                        </Tbody>
+                                    </Table>
+                                </>
                             )}
                         </div>
                     )}
@@ -606,6 +762,46 @@ export function WorkflowDefinitionDetailPage() {
                 delete the workflow, all of its versions, and all of its runs and their
                 tasks. This action cannot be undone.
             </ConfirmDeleteModal>
+
+            {/* Version Diff Modal */}
+            <Modal
+                isOpen={diffOpen}
+                onClose={() => setDiffOpen(false)}
+                variant="large"
+                width="95vw"
+                maxWidth="95vw"
+                className="workflow-diff-modal"
+            >
+                <ModalHeader
+                    title={
+                        compareBaseVersion !== null && compareTargetVersion !== null
+                            ? `Compare v${compareBaseVersion} vs v${compareTargetVersion}`
+                            : "Compare Versions"
+                    }
+                />
+                <ModalBody className="workflow-diff-modal__body">
+                    {diffLoading ? (
+                        <EmptyState>
+                            <EmptyStateBody>Loading versions...</EmptyStateBody>
+                        </EmptyState>
+                    ) : diffError ? (
+                        <Alert variant="danger" isInline title={diffError} />
+                    ) : diffBaseWorkflow && diffCompareWorkflow ? (
+                        <div style={{ flex: "1 1 0", minHeight: 0, display: "flex" }}>
+                            <WorkflowDiffViewer
+                                baseWorkflow={diffBaseWorkflow}
+                                compareWorkflow={diffCompareWorkflow}
+                                theme={effectiveTheme === "dark" ? "dark" : "light"}
+                            />
+                        </div>
+                    ) : null}
+                </ModalBody>
+                <ModalFooter>
+                    <Button variant="link" onClick={() => setDiffOpen(false)}>
+                        Close
+                    </Button>
+                </ModalFooter>
+            </Modal>
         </PageSection>
     );
 }
