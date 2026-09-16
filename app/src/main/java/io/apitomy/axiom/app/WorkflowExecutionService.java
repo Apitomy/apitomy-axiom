@@ -8,6 +8,7 @@ import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
+import io.apitomy.axiom.core.entities.WorkflowWaitEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.services.ActionTypeIoValidator;
 import io.apitomy.axiom.core.events.SseEvent;
@@ -24,6 +25,7 @@ import io.apitomy.flow.model.WorkflowNode;
 import io.apitomy.flow.model.ActionInfo;
 import io.apitomy.flow.model.ActiveBranch;
 import io.apitomy.flow.model.HumanTaskInfo;
+import io.apitomy.flow.model.WaitInfo;
 import io.apitomy.flow.spi.NodeExecutionContext;
 import io.apitomy.flow.spi.NodeExecutor;
 import io.apitomy.flow.spi.NodeExecutorProvider;
@@ -49,7 +51,8 @@ public class WorkflowExecutionService {
 
     private static final Logger LOG = Logger.getLogger(WorkflowExecutionService.class);
     private static final Set<NodeType> SUPPORTED_NODE_TYPES =
-            Set.of(NodeType.START, NodeType.END, NodeType.ACTION, NodeType.HUMAN_TASK);
+            Set.of(NodeType.START, NodeType.END, NodeType.ACTION, NodeType.HUMAN_TASK,
+                    NodeType.WAIT);
 
     @Inject
     ObjectMapper objectMapper;
@@ -233,8 +236,42 @@ public class WorkflowExecutionService {
             result = new NodeResult(NodeResultStatus.FAILED, Map.of());
         }
 
+        advanceWorkflow(entity, workflow, instance, task.nodeId, result);
+    }
+
+    /**
+     * Called when a workflow-spawned Wait node's duration has elapsed,
+     * advancing the workflow. The caller ({@link WorkflowWaitScheduler}) is
+     * responsible for deleting the corresponding {@link WorkflowWaitEntity}
+     * row in the same transaction, making resumption idempotent.
+     */
+    @Transactional
+    public void onWaitElapsed(long runId, String nodeId) {
+        WorkflowRunEntity entity = WorkflowRunEntity.findById(runId);
+        if (entity == null) {
+            LOG.warnf("Workflow run %d not found for elapsed wait node %s",
+                    runId, nodeId);
+            return;
+        }
+
+        Workflow workflow = loadWorkflowContent(
+                entity.definitionId, entity.definitionVersion);
+        WorkflowInstance instance = deserializeInstance(entity.instanceState);
+
+        NodeResult result = new NodeResult(NodeResultStatus.COMPLETED, Map.of());
+        advanceWorkflow(entity, workflow, instance, nodeId, result);
+    }
+
+    /**
+     * Applies a node result to a run's instance via the engine, persists the
+     * advanced instance state, spawns follow-on tasks/waits for a WAITING
+     * result, and handles terminal (COMPLETED/FAILED) transitions. Shared by
+     * {@link #onTaskCompleted(long)} and {@link #onWaitElapsed(long, String)}.
+     */
+    private void advanceWorkflow(WorkflowRunEntity entity, Workflow workflow,
+            WorkflowInstance instance, String nodeId, NodeResult result) {
         WorkflowInstance advanced = workflowEngine.completeNode(
-                workflow, instance, task.nodeId, result);
+                workflow, instance, nodeId, result);
 
         persistInstanceState(entity, advanced);
 
@@ -284,6 +321,7 @@ public class WorkflowExecutionService {
                 workflow, instance);
 
         persistInstanceState(entity, cancelled);
+        WorkflowWaitEntity.delete("runId", entity.id);
         entity.completedOn = Instant.now();
         completeRunTrace(entity, "cancelled");
 
@@ -375,6 +413,12 @@ public class WorkflowExecutionService {
             return;
         }
 
+        WaitInfo waitInfo = workflowEngine.getWaitInfo(workflow, instance, nodeId);
+        if (waitInfo != null) {
+            createWaitForNode(entity, waitInfo);
+            return;
+        }
+
         ActionInfo actionInfo = workflowEngine.getActionInfo(workflow, instance, nodeId);
         if (actionInfo == null) {
             LOG.warnf("No action info for node %s in instance %d", nodeId, entity.id);
@@ -457,6 +501,41 @@ public class WorkflowExecutionService {
         taskExecutionService.markTaskAwaitingInput(task.id);
     }
 
+    /**
+     * Parks a branch that has entered a Wait node: persists a
+     * {@link WorkflowWaitEntity} so {@link WorkflowWaitScheduler} can resume
+     * the branch once the node's duration elapses. No task is created — the
+     * wait resolves automatically, without user action.
+     *
+     * @param entity   the owning workflow run
+     * @param waitInfo the engine's wait introspection for the parked node
+     */
+    private void createWaitForNode(WorkflowRunEntity entity, WaitInfo waitInfo) {
+        Instant now = Instant.now();
+        WorkflowWaitEntity wait = new WorkflowWaitEntity();
+        wait.runId = entity.id;
+        wait.nodeId = waitInfo.nodeId();
+        wait.resumeAt = now.plus(waitInfo.duration());
+        wait.createdOn = now;
+        wait.persist();
+
+        TraceContext traceCtx = traceContextFor(entity);
+        if (traceCtx != null) {
+            try {
+                String nodeName = waitInfo.nodeName();
+                String label = (nodeName != null && !nodeName.isBlank() ? nodeName : "Wait")
+                        + " (" + waitInfo.duration() + ")";
+                traceService.addNode(traceCtx, "task", "in-progress", label,
+                        "workflow-wait", wait.id);
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to add workflow wait trace node");
+            }
+        }
+
+        LOG.infof("Parked workflow instance %d at wait node %s until %s",
+                entity.id, wait.nodeId, wait.resumeAt);
+    }
+
     private void persistInstanceState(WorkflowRunEntity entity,
             WorkflowInstance instance) {
         try {
@@ -481,7 +560,7 @@ public class WorkflowExecutionService {
             throw new WebApplicationException(
                     "Workflow contains unsupported node types: "
                             + String.join(", ", unsupported)
-                            + ". Supported: start, end, action, human-task.",
+                            + ". Supported: start, end, action, human-task, wait.",
                     400);
         }
     }
