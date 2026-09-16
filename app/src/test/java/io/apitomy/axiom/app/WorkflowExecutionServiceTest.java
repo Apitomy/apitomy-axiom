@@ -5,6 +5,7 @@ import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
+import io.apitomy.axiom.core.entities.WorkflowEventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.entities.WorkflowWaitEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
@@ -13,6 +14,7 @@ import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -186,6 +188,108 @@ class WorkflowExecutionServiceTest {
         assertNotNull(completedRun);
         assertEquals("completed", completedRun.status,
                 "Run should advance to completed once the wait node's result is applied");
+    }
+
+    private static final String RECEIVE_EVENT_CONTENT = """
+        {
+            "id": "receive-event-wf",
+            "name": "Receive Event WF",
+            "nodes": [
+                {"id": "s1", "type": "start", "name": "Start",
+                 "config": {}, "position": {"x": 100, "y": 100}},
+                {"id": "r1", "type": "receive-event", "name": "Await PR Merge",
+                 "config": {"eventType": "pr-merged"},
+                 "position": {"x": 100, "y": 200}},
+                {"id": "e1", "type": "end", "name": "End",
+                 "config": {}, "position": {"x": 100, "y": 300}}
+            ],
+            "edges": [
+                {"id": "edge1", "source": "s1", "target": "r1",
+                 "priority": 0, "isDefault": true},
+                {"id": "edge2", "source": "r1", "target": "e1",
+                 "priority": 0, "isDefault": true}
+            ]
+        }
+        """;
+
+    /**
+     * Triggering a workflow that parks on a receive-event node should create a
+     * {@link WorkflowEventSubscriptionEntity} (not a {@link TaskEntity})
+     * addressed to the node, with the denormalized eventType and projectId.
+     */
+    @Test
+    void triggeringReceiveEventWorkflowParksWithoutCreatingATask() {
+        long[] ids = createProjectAndDefinition(
+                "Receive Event Park Project", RECEIVE_EVENT_CONTENT);
+
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(ids[0], ids[1]));
+        assertEquals("waiting", run.status,
+                "Run should be waiting at the receive-event node");
+
+        QuarkusTransaction.requiringNew().run(() -> {
+            TaskEntity task = TaskEntity.find("workflowRunId", run.id).firstResult();
+            assertNull(task, "Receive-event nodes must not create a task");
+
+            WorkflowEventSubscriptionEntity sub = WorkflowEventSubscriptionEntity
+                    .find("runId", run.id).firstResult();
+            assertNotNull(sub, "A subscription should be created for the receive-event node");
+            assertEquals("r1", sub.nodeId);
+            assertEquals("pr-merged", sub.eventType);
+            assertEquals(ids[0], sub.projectId);
+        });
+    }
+
+    /**
+     * {@link WorkflowExecutionService#onEventReceived(long, String, Map)}
+     * should advance a WAITING run parked on a receive-event node through to
+     * completion, mirroring what WorkflowEventDispatcher does when a
+     * matching event arrives.
+     */
+    @Test
+    void onEventReceivedAdvancesRunToCompleted() {
+        long[] ids = createProjectAndDefinition(
+                "Receive Event Resume Project", RECEIVE_EVENT_CONTENT);
+
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(ids[0], ids[1]));
+        assertEquals("waiting", run.status);
+
+        Map<String, Object> eventMap = Map.of(
+                "type", "pr-merged",
+                "source", "github",
+                "issueRef", "test/repo#1",
+                "payload", Map.of("number", 1));
+        QuarkusTransaction.requiringNew().run(() ->
+                workflowExecutionService.onEventReceived(run.id, "r1", eventMap));
+
+        WorkflowRunEntity completedRun = QuarkusTransaction.requiringNew().call(() ->
+                WorkflowRunEntity.findById(run.id));
+        assertNotNull(completedRun);
+        assertEquals("completed", completedRun.status,
+                "Run should advance to completed once the event result is applied");
+    }
+
+    /**
+     * Cancelling a run parked on a receive-event node should delete its
+     * subscription rows.
+     */
+    @Test
+    void cancellingRunDeletesEventSubscriptions() {
+        long[] ids = createProjectAndDefinition(
+                "Receive Event Cancel Project", RECEIVE_EVENT_CONTENT);
+
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(ids[0], ids[1]));
+
+        QuarkusTransaction.requiringNew().run(() ->
+                workflowExecutionService.cancelWorkflow(ids[0]));
+
+        QuarkusTransaction.requiringNew().run(() -> {
+            long count = WorkflowEventSubscriptionEntity.count("runId", run.id);
+            assertEquals(0, count,
+                    "Cancelling the run should delete its event subscriptions");
+        });
     }
 
     /**

@@ -132,8 +132,7 @@ class WorkflowInstanceResourceTest {
     }
 
     @Test
-    void testTriggerWithUnsupportedNodeTypesReturns400() {
-        int projectId = createProject("WF Unsupported Nodes Project");
+    void testPublishWithUnknownNodeTypesReturns400() {
         int definitionId = createDefinition(
                 "Unsupported Nodes WF");
 
@@ -146,9 +145,9 @@ class WorkflowInstanceResourceTest {
                         "nodes": [
                             {"id": "s1", "type": "start", "name": "Start",
                              "config": {}, "position": {"x": 100, "y": 100}},
-                            {"id": "re1", "type": "receive-event",
-                             "name": "Receive Event",
-                             "config": {"eventType": "something"},
+                            {"id": "re1", "type": "sub-workflow",
+                             "name": "Sub Workflow",
+                             "config": {"workflowId": "other"},
                              "position": {"x": 100, "y": 200}},
                             {"id": "e1", "type": "end", "name": "End",
                              "config": {}, "position": {"x": 100, "y": 300}}
@@ -168,21 +167,12 @@ class WorkflowInstanceResourceTest {
                 .then()
                     .statusCode(204);
 
+        // Unknown node types are rejected at publish time (every node type
+        // known to the flow model is now executable, so publish validation is
+        // the earliest and only gate for unknown types).
         given()
                 .when()
                     .post(WORKFLOWS_PATH + "/" + definitionId + "/publish")
-                .then()
-                    .statusCode(200);
-
-        given()
-                .contentType(ContentType.JSON)
-                .body("""
-                    {
-                        "workflowDefinitionId": %d
-                    }
-                    """.formatted(definitionId))
-                .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
                 .then()
                     .statusCode(400);
     }

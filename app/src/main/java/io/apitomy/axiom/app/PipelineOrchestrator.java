@@ -67,6 +67,9 @@ public class PipelineOrchestrator {
     @Inject
     TraceService traceService;
 
+    @Inject
+    WorkflowEventDispatcher workflowEventDispatcher;
+
     private volatile boolean shuttingDown = false;
 
     @PreDestroy
@@ -190,6 +193,15 @@ public class PipelineOrchestrator {
                 managed.filterStatus = "allowed";
             }
         });
+
+        // Offer the event to any parked receive-event workflow branches.
+        // Orthogonal to Manager evaluation: failures are logged, never block
+        // the pipeline, and a matched event still flows through the Manager.
+        try {
+            workflowEventDispatcher.dispatchEvent(eventId);
+        } catch (Exception e) {
+            LOG.errorf(e, "Workflow event dispatch failed for event %d", eventId);
+        }
 
         // Trace creation (TraceService manages its own transactions)
         TraceContext traceCtx = null;
