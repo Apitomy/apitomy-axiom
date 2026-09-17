@@ -95,11 +95,16 @@ the run proceeds with `trace_id = null`; node→log drill-down still works via `
 existing `WorkflowTab` filter-by-`projectId` keeps working). `trace-updated` already fires from
 `TraceService`.
 
-**Known limitation (upstream):** run *status* is derived from the engine instance, so until
-[apitomy-flow#38](https://github.com/Apitomy/apitomy-flow/issues/38) is fixed and a new Flow released,
-a failed node yields a "completed" run badge. The failed task and its trace node are recorded
-truthfully regardless, so drill-down is honest even before the fix. We will inherit the corrected run
-status from the new Flow release rather than duplicate engine logic in Axiom.
+**Resolved (was an upstream known limitation):** run *status* is derived from the engine
+instance. [apitomy-flow#38](https://github.com/Apitomy/apitomy-flow/issues/38) — a bug where a
+failed async action node's result was silently converted into a normal advance, yielding a
+"completed" run badge for a run that actually failed — was fixed upstream in
+`apitomy-flow-engine` 1.0.2 (via apitomy-flow PR #39) and inherited automatically once Axiom
+upgraded past that version (Axiom is currently on 2.0.2). A regression test,
+`WorkflowExecutionServiceTest#failingActionTaskAdvancesLinearRunToFailed`, guards against this
+recurring. No Axiom-side change was needed — the run-status branching in
+`WorkflowExecutionService.advanceWorkflow` was already correct and only blocked on the engine
+bug.
 
 ## API Surface (contract-first)
 
@@ -195,7 +200,8 @@ Compilation, bean regeneration, and test runs are handled manually by the develo
 
 ## Out of Scope
 
-- Fixing the run-status-on-node-failure defect (upstream [apitomy-flow#38](https://github.com/Apitomy/apitomy-flow/issues/38)).
+- ~~Fixing the run-status-on-node-failure defect (upstream [apitomy-flow#38](https://github.com/Apitomy/apitomy-flow/issues/38)).~~
+  Resolved — see the "Resolved" note above.
 - A per-definition runs UI page.
 - Per-node retry semantics (multiple tasks per node) — the model is forward-compatible but retries are
   not built here.
