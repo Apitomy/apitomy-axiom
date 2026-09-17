@@ -117,6 +117,69 @@ class WorkflowExecutionServiceTest {
                 "Run should advance to completed after the action node's task completes");
     }
 
+    /**
+     * Regression test for the upstream defect tracked as apitomy-flow#38
+     * ("completeCurrentNode ignores NodeResult FAILED status; failed async
+     * action nodes complete the workflow"), fixed in apitomy-flow-engine
+     * 1.0.2. Failing the single action task of a linear
+     * start -&gt; action -&gt; end workflow must advance the run to the FAILED
+     * terminal state (via {@code completeNode(workflow, instance, nodeId,
+     * result)}), not silently to COMPLETED.
+     */
+    @Test
+    void failingActionTaskAdvancesLinearRunToFailed() {
+        long[] ids = QuarkusTransaction.requiringNew().call(() -> {
+            ProjectEntity project = new ProjectEntity();
+            project.name = "Linear Failure Project";
+            project.type = "other";
+            project.status = "new";
+            project.ref = "test/linear-failure";
+            project.createdOn = Instant.now();
+            project.updatedOn = Instant.now();
+            project.persist();
+
+            WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
+            def.name = "Linear Failure WF";
+            def.content = LINEAR_CONTENT;
+            def.currentVersion = 1;
+            def.createdOn = Instant.now();
+            def.updatedOn = Instant.now();
+            def.persist();
+
+            WorkflowDefinitionVersionEntity version =
+                    new WorkflowDefinitionVersionEntity();
+            version.definitionId = def.id;
+            version.version = 1;
+            version.content = LINEAR_CONTENT;
+            version.createdOn = Instant.now();
+            version.persist();
+
+            return new long[] { project.id, def.id };
+        });
+
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(ids[0], ids[1]));
+        assertEquals("waiting", run.status, "Run should be waiting at the action node");
+
+        long taskId = QuarkusTransaction.requiringNew().call(() -> {
+            TaskEntity task = TaskEntity.find("workflowRunId", run.id).firstResult();
+            assertNotNull(task, "Action task should have been created");
+            assertEquals("a1", task.nodeId, "Task should be addressed to node a1");
+            return task.id;
+        });
+
+        AgentResult failureResult = AgentResult.failure("Action failed");
+        QuarkusTransaction.requiringNew().run(() ->
+                taskExecutionService.onTaskCompleted(taskId, failureResult));
+
+        WorkflowRunEntity failedRun = QuarkusTransaction.requiringNew().call(() ->
+                WorkflowRunEntity.findById(run.id));
+        assertNotNull(failedRun, "Run should still exist");
+        assertEquals("failed", failedRun.status,
+                "Run should advance to failed (not completed) after the action "
+                        + "node's task fails — regression guard for apitomy-flow#38");
+    }
+
     private static final String WAIT_CONTENT = """
         {
             "id": "wait-wf",
