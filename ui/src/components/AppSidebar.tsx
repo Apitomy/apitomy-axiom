@@ -12,7 +12,7 @@ import {
 import { fetchInboxCount } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 
-const COMPONENT_PATHS = ["/action-types", "/agents", "/session-templates", "/event-sources", "/mcp-servers", "/report-definitions", "/scheduled-jobs", "/secrets", "/tools", "/toolsets", "/components/workflows"];
+const COMPONENT_PATHS = ["/action-types", "/agents", "/session-templates", "/connections", "/mcp-servers", "/report-definitions", "/scheduled-jobs", "/secrets", "/tools", "/toolsets", "/components/workflows"];
 const SETTINGS_PATHS = ["/engine", "/manager", "/data-retention", "/configuration-packs"];
 
 export function AppSidebar() {
@@ -67,7 +67,7 @@ export function AppSidebar() {
                                 All Activity
                             </NavItem>
                             <NavItem isActive={location.pathname === "/logs/events"} onClick={() => navigate("/logs/events")}>
-                                Events
+                                Event Stream
                             </NavItem>
                             <NavItem isActive={location.pathname === "/logs/manager"} onClick={() => navigate("/logs/manager")}>
                                 Manager Decisions
@@ -105,8 +105,8 @@ export function AppSidebar() {
                             <NavItem isActive={location.pathname.startsWith("/session-templates")} onClick={() => navigate("/session-templates")}>
                                 AI Assistant
                             </NavItem>
-                            <NavItem isActive={location.pathname.startsWith("/event-sources")} onClick={() => navigate("/event-sources")}>
-                                Event Sources
+                            <NavItem isActive={location.pathname.startsWith("/connections")} onClick={() => navigate("/connections")}>
+                                Connections
                             </NavItem>
                             <NavItem isActive={location.pathname.startsWith("/mcp-servers")} onClick={() => navigate("/mcp-servers")}>
                                 MCP Servers

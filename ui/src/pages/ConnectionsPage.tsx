@@ -20,6 +20,7 @@ import {
     PageSection,
     Pagination,
     Switch,
+    TextArea,
     TextInput,
     Title,
     Toolbar,
@@ -37,46 +38,41 @@ import {
     FilterChips,
 } from "@apitomy/common-ui-components";
 import { BooleanStatusIcon } from "../components/BooleanStatusIcon";
-import { ColoredLabel } from "../components/ColoredLabel";
-import { LabelInput } from "../components/LabelInput";
-import {
-    type EventSource,
-    type NewEventSource,
-    type Secret,
-    fetchEventSources,
-    fetchSecrets,
-    createEventSource,
-    updateEventSource,
-    deleteEventSource,
-} from "../config/api";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
+import {
+    type Connection,
+    type NewConnection,
+    type Secret,
+    fetchConnections,
+    createConnection,
+    deleteConnection,
+    fetchSecrets,
+} from "../config/api";
 
 const FILTER_TYPES: ChipFilterType[] = [
-    { value: "name", label: "Name", testId: "event-source-filter-name" },
-    { value: "type", label: "Type", testId: "event-source-filter-type" },
-    { value: "labels", label: "Labels", testId: "event-source-filter-labels" },
+    { value: "name", label: "Name", testId: "connection-filter-name" },
+    { value: "type", label: "Type", testId: "connection-filter-type" },
 ];
 
-export function EventSourcesPage() {
+const SLUG_PATTERN = /^[a-z0-9-]*$/;
+
+export function ConnectionsPage() {
     const navigate = useNavigate();
-    const [sources, setSources] = useState<EventSource[]>([]);
+    const [connections, setConnections] = useState<Connection[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editing, setEditing] = useState<EventSource | null>(null);
-    const [form, setForm] = useState<NewEventSource>({
-        name: "", sourceType: "github", enabled: true,
+    const [form, setForm] = useState<NewConnection>({
+        id: "", name: "", sourceType: "github", enabled: true, baseUrl: "",
     });
 
-    const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+    const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
     const [secrets, setSecrets] = useState<Secret[]>([]);
 
-    // GitHub-specific fields
-    const [ghUrl, setGhUrl] = useState("");
-
-    // Jira-specific fields
-    const [jiraUrl, setJiraUrl] = useState("");
+    // Configuration text areas
+    const [reposText, setReposText] = useState("");
+    const [projectsText, setProjectsText] = useState("");
 
     const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
     const [page, setPage] = useState(1);
@@ -84,22 +80,18 @@ export function EventSourcesPage() {
 
     const filterName = filters.find((f) => f.filterBy.value === "name")?.filterValue;
     const filterType = filters.find((f) => f.filterBy.value === "type")?.filterValue;
-    const filterLabels = filters
-        .filter((f) => f.filterBy.value === "labels")
-        .map((f) => f.filterValue)
-        .join(",");
     const isFiltered = filters.length > 0;
 
     const load = useCallback(() => {
         setLoading(true);
-        fetchEventSources(page, perPage, filterName || undefined, filterType || undefined, filterLabels || undefined)
+        fetchConnections(page, perPage, filterName || undefined, filterType || undefined)
             .then((results) => {
-                setSources(results.items);
+                setConnections(results.items);
                 setTotalCount(results.totalCount);
             })
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [page, perPage, filterName, filterType, filterLabels]);
+    }, [page, perPage, filterName, filterType]);
 
     useEffect(() => { load(); }, [load]);
     useEffect(() => { fetchSecrets().then(setSecrets).catch(console.error); }, []);
@@ -108,14 +100,10 @@ export function EventSourcesPage() {
         if (!criteria.filterValue) return;
         const updated = filters.filter((f) =>
             !(f.filterBy.value === criteria.filterBy.value && f.filterValue === criteria.filterValue));
-        if (criteria.filterBy.value === "name" || criteria.filterBy.value === "type") {
-            const withoutSame = updated.filter((f) => f.filterBy.value !== criteria.filterBy.value);
-            withoutSame.push(criteria);
-            setFilters(withoutSame);
-        } else {
-            updated.push(criteria);
-            setFilters(updated);
-        }
+        // Name and type are single-value filters
+        const withoutSame = updated.filter((f) => f.filterBy.value !== criteria.filterBy.value);
+        withoutSame.push(criteria);
+        setFilters(withoutSame);
         setPage(1);
     };
 
@@ -130,15 +118,6 @@ export function EventSourcesPage() {
         setPage(1);
     };
 
-    const addLabelFilter = (label: string) => {
-        const already = filters.some((f) => f.filterBy.value === "labels" && f.filterValue === label);
-        if (!already) {
-            const labelType = FILTER_TYPES.find((t) => t.value === "labels")!;
-            setFilters([...filters, { filterBy: labelType, filterValue: label }]);
-            setPage(1);
-        }
-    };
-
     const addTypeFilter = (type: string) => {
         const typeFilterType = FILTER_TYPES.find((t) => t.value === "type")!;
         const withoutType = filters.filter((f) => f.filterBy.value !== "type");
@@ -147,98 +126,58 @@ export function EventSourcesPage() {
         setPage(1);
     };
 
-    const parseGitHubUrl = (url: string): { owner: string; name: string; instance: string } | null => {
-        try {
-            const trimmed = url.replace(/\/+$/, "");
-            const parsed = new URL(trimmed);
-            const parts = parsed.pathname.split("/").filter(Boolean);
-            if (parts.length >= 2) {
-                return { instance: parsed.origin, owner: parts[0], name: parts[1] };
-            }
-        } catch { /* invalid URL */ }
-        return null;
-    };
-
-    const parseJiraUrl = (url: string): { baseUrl: string; project: string } | null => {
-        try {
-            const trimmed = url.replace(/\/+$/, "");
-            const parsed = new URL(trimmed);
-            const parts = parsed.pathname.split("/").filter(Boolean);
-            const idx = parts.findIndex((p) => p === "projects" || p === "browse");
-            if (idx >= 0 && idx + 1 < parts.length) {
-                return { baseUrl: parsed.origin, project: parts[idx + 1] };
-            }
-        } catch { /* invalid URL */ }
-        return null;
-    };
-
     const openCreate = () => {
-        setEditing(null);
-        setForm({ name: "", sourceType: "github", enabled: true, labels: [] });
-        setGhUrl("");
-        setJiraUrl("");
+        setForm({ id: "", name: "", sourceType: "github", enabled: true, baseUrl: "" });
+        setReposText("");
+        setProjectsText("");
         setIsModalOpen(true);
     };
 
-    const buildConfiguration = (): Record<string, string> => {
+    const buildConfiguration = (): Record<string, unknown> => {
         if (form.sourceType === "github") {
-            const parsed = parseGitHubUrl(ghUrl);
-            if (parsed) {
-                return { url: ghUrl.replace(/\/+$/, ""), owner: parsed.owner, name: parsed.name };
-            }
-            return { url: ghUrl };
+            return { repositories: reposText.split("\n").map((l) => l.trim()).filter(Boolean) };
         } else if (form.sourceType === "jira") {
-            const parsed = parseJiraUrl(jiraUrl);
-            if (parsed) {
-                return { url: jiraUrl.replace(/\/+$/, ""), baseUrl: parsed.baseUrl, project: parsed.project };
-            }
-            return { url: jiraUrl };
+            return { projects: projectsText.split("\n").map((l) => l.trim()).filter(Boolean) };
         }
         return {};
     };
 
     const handleSave = () => {
-        const data: NewEventSource = { ...form, configuration: buildConfiguration() };
-        const action = editing
-            ? updateEventSource(editing.id, data)
-            : createEventSource(data);
-        action.then(() => { setIsModalOpen(false); load(); }).catch(console.error);
+        const data: NewConnection = { ...form, configuration: buildConfiguration() };
+        createConnection(data)
+            .then(() => { setIsModalOpen(false); load(); })
+            .catch(console.error);
     };
 
-    const handleDelete = (id: number) => {
+    const handleDelete = (id: string) => {
         setDeleteTarget(id);
     };
 
     const confirmDelete = () => {
         if (deleteTarget !== null) {
-            deleteEventSource(deleteTarget).then(load).catch(console.error);
+            deleteConnection(deleteTarget).then(load).catch(console.error);
             setDeleteTarget(null);
         }
     };
 
     const handleSourceTypeChange = (newType: string) => {
-        setForm({ ...form, sourceType: newType });
-        setGhUrl("");
-        setJiraUrl("");
+        setForm({ ...form, sourceType: newType, baseUrl: "" });
+        setReposText("");
+        setProjectsText("");
     };
 
-    const describeSource = (s: EventSource): string => {
-        const config = s.configuration as Record<string, string> | undefined;
-        if (!config) return "—";
-        if (s.sourceType === "github") {
-            return config.owner && config.name ? `${config.owner}/${config.name}` : config.url || "—";
-        }
-        if (s.sourceType === "jira") {
-            return config.project || "—";
-        }
-        return "—";
+    const isSlugValid = (slug: string): boolean => {
+        return SLUG_PATTERN.test(slug) && slug.length <= 63;
     };
 
     const isFormValid = (): boolean => {
-        if (!form.name || !form.sourceType) return false;
-        if (form.sourceType === "github" && !parseGitHubUrl(ghUrl)) return false;
-        if (form.sourceType === "jira" && !parseJiraUrl(jiraUrl)) return false;
+        if (!form.id || !form.name || !form.sourceType || !form.baseUrl) return false;
+        if (!isSlugValid(form.id)) return false;
         return true;
+    };
+
+    const truncateUrl = (url: string, maxLen = 50): string => {
+        return url.length > maxLen ? url.substring(0, maxLen) + "..." : url;
     };
 
     return (
@@ -246,11 +185,11 @@ export function EventSourcesPage() {
             <Flex justifyContent={{ default: "justifyContentSpaceBetween" }}
                 alignItems={{ default: "alignItemsCenter" }}>
                 <FlexItem>
-                    <Title headingLevel="h1" size="lg">Event Sources</Title>
+                    <Title headingLevel="h1" size="lg">Connections</Title>
                 </FlexItem>
                 <FlexItem>
                     <Button variant="primary" icon={<PlusCircleIcon />} onClick={openCreate}>
-                        Add Event Source
+                        Add Connection
                     </Button>
                 </FlexItem>
             </Flex>
@@ -295,59 +234,47 @@ export function EventSourcesPage() {
             <div>
                 {loading ? (
                     <EmptyState><EmptyStateBody>Loading...</EmptyStateBody></EmptyState>
-                ) : sources.length === 0 ? (
+                ) : connections.length === 0 ? (
                     <EmptyState>
                         <EmptyStateBody>
                             {isFiltered
-                                ? "No event sources match the current filters."
-                                : "No event sources configured."}
+                                ? "No connections match the current filters."
+                                : "No connections configured."}
                         </EmptyStateBody>
                     </EmptyState>
                 ) : (
-                    <Table aria-label="Event Sources" variant="compact">
+                    <Table aria-label="Connections" variant="compact">
                         <Thead>
                             <Tr>
+                                <Th>ID</Th>
                                 <Th>Name</Th>
                                 <Th>Type</Th>
-                                <Th>Source</Th>
-                                <Th>Labels</Th>
+                                <Th>Base URL</Th>
                                 <Th>Enabled</Th>
-                                <Th>Poll Interval</Th>
                                 <Th />
                             </Tr>
                         </Thead>
                         <Tbody>
-                            {sources.map((s) => (
-                                <Tr key={s.id} isClickable onRowClick={() => navigate(`/event-sources/${s.id}`)}>
-                                    <Td>{s.name}</Td>
+                            {connections.map((c) => (
+                                <Tr key={c.id} isClickable onRowClick={() => navigate(`/connections/${c.id}`)}>
+                                    <Td><strong>{c.id}</strong></Td>
+                                    <Td>{c.name}</Td>
                                     <Td>
                                         <Label isCompact
+                                            color={c.sourceType === "github" ? "blue" : c.sourceType === "jira" ? "green" : undefined}
                                             style={{ cursor: "pointer" }}
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                addTypeFilter(s.sourceType);
+                                                addTypeFilter(c.sourceType);
                                             }}>
-                                            {s.sourceType}
+                                            {c.sourceType}
                                         </Label>
                                     </Td>
-                                    <Td><code>{describeSource(s)}</code></Td>
-                                    <Td>
-                                        {s.labels?.map((label) => (
-                                            <ColoredLabel key={label} isCompact
-                                                style={{ marginRight: "4px", cursor: "pointer" }}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    addLabelFilter(label);
-                                                }}>
-                                                {label}
-                                            </ColoredLabel>
-                                        ))}
-                                    </Td>
-                                    <Td><BooleanStatusIcon value={s.enabled} /></Td>
-                                    <Td>{s.pollInterval != null ? `${s.pollInterval}s` : "—"}</Td>
+                                    <Td><code>{truncateUrl(c.baseUrl)}</code></Td>
+                                    <Td><BooleanStatusIcon value={c.enabled} /></Td>
                                     <Td>
                                         <Button variant="plain" size="sm" style={{ padding: 0 }}
-                                            onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }}>
+                                            onClick={(e) => { e.stopPropagation(); handleDelete(c.id); }}>
                                             <TrashIcon />
                                         </Button>
                                     </Td>
@@ -358,19 +285,37 @@ export function EventSourcesPage() {
                 )}
             </div>
 
-            <ConfirmDeleteModal isOpen={deleteTarget !== null} title="Delete Event Source"
+            <ConfirmDeleteModal isOpen={deleteTarget !== null} title="Delete Connection"
                 onConfirm={confirmDelete} onCancel={() => setDeleteTarget(null)}>
-                Delete this event source?
+                Delete this connection?
             </ConfirmDeleteModal>
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} variant="medium">
-                <ModalHeader title={editing ? "Edit Event Source" : "Add Event Source"} />
+                <ModalHeader title="Add Connection" />
                 <ModalBody>
                     <Form>
+                        <FormGroup label="ID (Slug)" isRequired fieldId="id">
+                            <TextInput id="id" isRequired value={form.id}
+                                onChange={(_e, v) => setForm({ ...form, id: v })}
+                                placeholder="my-connection" />
+                            {form.id && !isSlugValid(form.id) ? (
+                                <HelperText>
+                                    <HelperTextItem variant="error">
+                                        Must contain only lowercase letters, numbers, and dashes (max 63 characters)
+                                    </HelperTextItem>
+                                </HelperText>
+                            ) : (
+                                <HelperText>
+                                    <HelperTextItem>
+                                        Unique identifier (lowercase letters, numbers, dashes)
+                                    </HelperTextItem>
+                                </HelperText>
+                            )}
+                        </FormGroup>
                         <FormGroup label="Name" isRequired fieldId="name">
                             <TextInput id="name" isRequired value={form.name}
                                 onChange={(_e, v) => setForm({ ...form, name: v })}
-                                placeholder="e.g. My Project Repo" />
+                                placeholder="e.g. My GitHub Connection" />
                         </FormGroup>
                         <FormGroup label="Source Type" isRequired fieldId="sourceType">
                             <FormSelect id="sourceType" value={form.sourceType}
@@ -379,27 +324,46 @@ export function EventSourcesPage() {
                                 <FormSelectOption value="jira" label="Jira" />
                             </FormSelect>
                         </FormGroup>
+                        <FormGroup label="Base URL" isRequired fieldId="baseUrl">
+                            <TextInput id="baseUrl" isRequired value={form.baseUrl}
+                                onChange={(_e, v) => setForm({ ...form, baseUrl: v })}
+                                placeholder={form.sourceType === "github"
+                                    ? "https://api.github.com"
+                                    : "https://your-org.atlassian.net"} />
+                        </FormGroup>
 
                         {form.sourceType === "github" && (
-                            <FormGroup label="Repository URL" isRequired fieldId="ghUrl">
-                                <TextInput id="ghUrl" isRequired value={ghUrl}
-                                    onChange={(_e, v) => setGhUrl(v)}
-                                    placeholder="https://github.com/owner/repo" />
-                                <HelperText><HelperTextItem>Full URL to the GitHub repository (e.g. https://github.com/Apitomy/apitomy-axiom)</HelperTextItem></HelperText>
+                            <FormGroup label="Repositories" fieldId="repositories">
+                                <TextArea id="repositories" value={reposText}
+                                    onChange={(_e, v) => setReposText(v)}
+                                    placeholder={"owner/repo\nowner/repo2"}
+                                    rows={4} />
+                                <HelperText><HelperTextItem>One owner/repo per line</HelperTextItem></HelperText>
                             </FormGroup>
                         )}
 
                         {form.sourceType === "jira" && (
-                            <FormGroup label="Project URL" isRequired fieldId="jiraUrl">
-                                <TextInput id="jiraUrl" isRequired value={jiraUrl}
-                                    onChange={(_e, v) => setJiraUrl(v)}
-                                    placeholder="https://jira.example.com/projects/MYPROJECT" />
-                                <HelperText><HelperTextItem>Full URL to the Jira project (e.g. https://issues.redhat.com/projects/APICURIO or https://jira.example.com/jira/software/c/projects/KEY)</HelperTextItem></HelperText>
+                            <FormGroup label="Projects" fieldId="projects">
+                                <TextArea id="projects" value={projectsText}
+                                    onChange={(_e, v) => setProjectsText(v)}
+                                    placeholder={"PROJ1\nPROJ2"}
+                                    rows={4} />
+                                <HelperText><HelperTextItem>One project key per line</HelperTextItem></HelperText>
                             </FormGroup>
                         )}
 
+                        <FormGroup label="Authentication Secret" fieldId="secretName">
+                            <FormSelect id="secretName"
+                                value={form.secretName || ""}
+                                onChange={(_e, v) => setForm({ ...form, secretName: v || undefined })}>
+                                <FormSelectOption value="" label="None" />
+                                {secrets.map((s) => (
+                                    <FormSelectOption key={s.name} value={s.name} label={s.name} />
+                                ))}
+                            </FormSelect>
+                        </FormGroup>
                         <FormGroup fieldId="enabled">
-                            <Switch id="enabled" label="Enabled — actively poll for events"
+                            <Switch id="enabled" label="Enabled"
                                 isChecked={form.enabled}
                                 onChange={(_e, v) => setForm({ ...form, enabled: v })} />
                         </FormGroup>
@@ -408,21 +372,6 @@ export function EventSourcesPage() {
                                 value={form.pollInterval?.toString() || ""}
                                 onChange={(_e, v) => setForm({ ...form, pollInterval: v ? parseInt(v) : undefined })}
                                 placeholder="60" />
-                        </FormGroup>
-                        <FormGroup label="Labels" fieldId="labels">
-                            <LabelInput labels={form.labels || []}
-                                onChange={(labels) => setForm({ ...form, labels })} />
-                        </FormGroup>
-                        <FormGroup label="Authentication Secret" fieldId="secretName">
-                            <FormSelect id="secretName"
-                                value={form.secretName || ""}
-                                onChange={(_e, v) => setForm({ ...form, secretName: v || undefined })}>
-                                <FormSelectOption value="" label="Default (auto-detect)" />
-                                {secrets.map((s) => (
-                                    <FormSelectOption key={s.name} value={s.name} label={s.name} />
-                                ))}
-                            </FormSelect>
-                            <HelperText><HelperTextItem>Select a secret from the Secrets store for API authentication. If not set, falls back to the default provider secret (e.g. GH_TOKEN).</HelperTextItem></HelperText>
                         </FormGroup>
                     </Form>
                 </ModalBody>

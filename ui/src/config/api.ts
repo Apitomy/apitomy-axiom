@@ -2365,3 +2365,129 @@ export async function fetchWorkflowDefinitionRuns(
     if (!response.ok) throw new Error(`Failed to fetch definition runs: ${response.status}`);
     return response.json();
 }
+
+// ── Connections ───────────────────────────────────────────────────
+
+export interface Connection {
+    id: string;
+    name: string;
+    description?: string;
+    sourceType: string;
+    enabled: boolean;
+    baseUrl: string;
+    secretName?: string;
+    pollInterval?: number;
+    configuration?: Record<string, unknown>;
+    createdOn?: string;
+    modifiedOn?: string;
+}
+
+export interface NewConnection {
+    id: string;
+    name: string;
+    description?: string;
+    sourceType: string;
+    enabled: boolean;
+    baseUrl: string;
+    secretName?: string;
+    pollInterval?: number;
+    configuration?: Record<string, unknown>;
+}
+
+export interface ConnectionStatus {
+    connectionId: string;
+    enabled: boolean;
+    lastPolledAt?: string;
+    totalEventsProduced: number;
+    lastError?: string;
+    lastErrorAt?: string;
+}
+
+export async function fetchConnections(
+    page = 1, limit = 20, filterName?: string, filterType?: string
+): Promise<SearchResults<Connection>> {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(limit));
+    if (filterName) params.set("filterName", filterName);
+    if (filterType) params.set("filterType", filterType);
+    const response = await fetch(`${API}/connections?${params}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch connections"));
+    return response.json();
+}
+
+export async function fetchConnection(connectionId: string): Promise<Connection> {
+    const response = await fetch(`${API}/connections/${encodeURIComponent(connectionId)}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch connection"));
+    return response.json();
+}
+
+export async function createConnection(data: NewConnection): Promise<Connection> {
+    const response = await fetch(`${API}/connections`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to create connection"));
+    return response.json();
+}
+
+export async function updateConnection(connectionId: string, data: NewConnection): Promise<Connection> {
+    const response = await fetch(`${API}/connections/${encodeURIComponent(connectionId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to update connection"));
+    return response.json();
+}
+
+export async function deleteConnection(connectionId: string): Promise<void> {
+    const response = await fetch(`${API}/connections/${encodeURIComponent(connectionId)}`, {
+        method: "DELETE",
+    });
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to delete connection"));
+}
+
+export async function fetchConnectionStatus(connectionId: string): Promise<ConnectionStatus> {
+    const response = await fetch(`${API}/connections/${encodeURIComponent(connectionId)}/status`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch connection status"));
+    return response.json();
+}
+
+// ── Stream Events ─────────────────────────────────────────────────
+
+export interface StreamEvent {
+    id: string;
+    sourceEventId?: string;
+    source: string;
+    connectionId: string;
+    type: string;
+    ref: string;
+    timestamp: string;
+    actor?: Record<string, unknown>;
+    payload?: Record<string, unknown>;
+    sourceData?: Record<string, unknown>;
+    createdOn?: string;
+}
+
+export async function fetchStreamEvents(
+    page = 1, limit = 20,
+    filterType?: string, filterConnectionId?: string, filterRef?: string
+): Promise<SearchResults<StreamEvent>> {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(limit));
+    if (filterType) params.set("filterType", filterType);
+    if (filterConnectionId) params.set("filterConnectionId", filterConnectionId);
+    if (filterRef) params.set("filterRef", filterRef);
+    const response = await fetch(`${API}/stream/events?${params}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch stream events"));
+    return response.json();
+}
+
+export async function fetchStreamEvent(eventId: string): Promise<StreamEvent> {
+    const response = await fetch(`${API}/stream/events/${encodeURIComponent(eventId)}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch stream event"));
+    return response.json();
+}
