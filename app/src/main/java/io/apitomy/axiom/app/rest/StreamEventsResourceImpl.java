@@ -71,7 +71,7 @@ public class StreamEventsResourceImpl implements StreamResource {
 
         StreamEventSearchResults results = new StreamEventSearchResults();
         results.setItems(items);
-        results.setTotal(totalCount);
+        results.setTotalCount(totalCount);
         results.setPage(pageNum);
         results.setLimit(pageSize);
         return results;

@@ -71,7 +71,7 @@ public class ConnectionsResourceImpl implements ConnectionsResource {
 
         ConnectionSearchResults results = new ConnectionSearchResults();
         results.setItems(items);
-        results.setTotal(totalCount);
+        results.setTotalCount(totalCount);
         results.setPage(pageNum);
         results.setLimit(pageSize);
         return results;

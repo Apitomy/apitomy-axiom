@@ -9806,7 +9806,7 @@
               "$ref": "#/components/schemas/Connection"
             }
           },
-          "total": {
+          "totalCount": {
             "format": "int64",
             "type": "integer"
           },
@@ -9914,7 +9914,7 @@
               "$ref": "#/components/schemas/StreamEvent"
             }
           },
-          "total": {
+          "totalCount": {
             "format": "int64",
             "type": "integer"
           },
@@ -10002,7 +10002,7 @@
               "$ref": "#/components/schemas/Subscription"
             }
           },
-          "total": {
+          "totalCount": {
             "format": "int64",
             "type": "integer"
           },

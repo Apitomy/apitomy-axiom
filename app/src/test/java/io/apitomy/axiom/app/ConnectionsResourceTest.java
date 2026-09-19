@@ -72,7 +72,7 @@ class ConnectionsResourceTest {
                 .statusCode(200)
                 .contentType(ContentType.JSON)
                 .body("items.size()", greaterThanOrEqualTo(2))
-                .body("total", greaterThanOrEqualTo(2))
+                .body("totalCount", greaterThanOrEqualTo(2))
                 .body("page", equalTo(1));
     }
 

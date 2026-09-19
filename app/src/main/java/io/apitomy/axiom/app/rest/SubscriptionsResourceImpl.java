@@ -60,7 +60,7 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
 
         SubscriptionSearchResults results = new SubscriptionSearchResults();
         results.setItems(items);
-        results.setTotal(totalCount);
+        results.setTotalCount(totalCount);
         results.setPage(pageNum);
         results.setLimit(pageSize);
         return results;
