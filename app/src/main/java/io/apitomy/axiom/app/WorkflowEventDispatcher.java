@@ -209,7 +209,7 @@ public class WorkflowEventDispatcher {
         LOG.infof("Event resumed workflow run %d at receive-event node %s", runId, nodeId);
     }
 
-    /** Same correlation rule as PipelineOrchestrator.findProjectForEvent. */
+    /** Correlates an event to its project by issue ref or project ID. */
     private ProjectEntity findProjectForEvent(EventEntity event) {
         if (event.issueRef != null) {
             return ProjectEntity.find("ref", event.issueRef).firstResult();

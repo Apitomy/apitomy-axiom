@@ -131,14 +131,44 @@ public final class ManagerPromptBuilder {
                                           List<AgentEntity> agents,
                                           ProjectEntity project,
                                           List<TaskEntity> recentTasks) {
+        return buildUserPrompt(promptTemplate,
+                event.source, event.eventType, event.issueRef, event.repository, event.payload,
+                actionTypes, agents, project, recentTasks);
+    }
+
+    /**
+     * Builds the user prompt by substituting placeholders in the prompt template
+     * using individual field values. This overload supports both legacy
+     * {@link EventEntity} and the new {@link io.apitomy.axiom.core.entities.StreamEventEntity}.
+     *
+     * @param promptTemplate the configurable prompt template with placeholders
+     * @param source         event source (e.g. "github")
+     * @param eventType      event type (e.g. "issue.created")
+     * @param issueRef       issue reference or URL
+     * @param repository     repository identifier or URL
+     * @param payload        raw event payload JSON
+     * @param actionTypes    the registered action types
+     * @param agents         the configured agents
+     * @param project        the existing project (may be null)
+     * @param recentTasks    recent tasks for the project
+     * @return the resolved user prompt
+     */
+    public static String buildUserPrompt(String promptTemplate,
+                                          String source, String eventType,
+                                          String issueRef, String repository,
+                                          String payload,
+                                          List<ActionTypeEntity> actionTypes,
+                                          List<AgentEntity> agents,
+                                          ProjectEntity project,
+                                          List<TaskEntity> recentTasks) {
         String resolved = promptTemplate;
         resolved = resolved.replace("{{actionTypes}}", formatActionTypes(actionTypes));
         resolved = resolved.replace("{{agents}}", formatAgents(agents));
-        resolved = resolved.replace("{{source}}", event.source != null ? event.source : "");
-        resolved = resolved.replace("{{eventType}}", event.eventType != null ? event.eventType : "");
-        resolved = resolved.replace("{{issueRef}}", event.issueRef != null ? event.issueRef : "");
-        resolved = resolved.replace("{{repository}}", event.repository != null ? event.repository : "");
-        resolved = resolved.replace("{{payload}}", event.payload != null ? event.payload : "{}");
+        resolved = resolved.replace("{{source}}", source != null ? source : "");
+        resolved = resolved.replace("{{eventType}}", eventType != null ? eventType : "");
+        resolved = resolved.replace("{{issueRef}}", issueRef != null ? issueRef : "");
+        resolved = resolved.replace("{{repository}}", repository != null ? repository : "");
+        resolved = resolved.replace("{{payload}}", payload != null ? payload : "{}");
         resolved = resolved.replace("{{projectContext}}", formatProjectContext(project, recentTasks));
         return resolved;
     }

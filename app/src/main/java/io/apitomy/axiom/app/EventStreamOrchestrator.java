@@ -7,6 +7,8 @@ import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.filters.EventSourceFilters;
 import io.apitomy.axiom.core.filters.SubscriptionFilterEvaluator;
 import io.apitomy.axiom.core.filters.FilterResult;
+import io.apitomy.axiom.manager.ManagerDecision;
+import io.apitomy.axiom.manager.ManagerService;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -25,10 +27,6 @@ import java.util.Map;
  * {@link SubscriptionFilterEvaluator}, and routes matching events to the
  * workflow dispatcher (and, in a future phase, the Manager for triage).
  *
- * <p>This orchestrator coexists with the legacy {@link PipelineOrchestrator}
- * during the transition: the old one processes {@code event_queue} entries,
- * this one processes {@code stream_event} entries.</p>
- *
  * <p>Uses an in-memory cursor ({@link #lastProcessedTimestamp}) initialized
  * from the most recent {@code stream_event.createdOn} on first poll, so
  * historical events are not reprocessed on startup.</p>
@@ -46,6 +44,9 @@ public class EventStreamOrchestrator {
 
     @Inject
     WorkflowEventDispatcher workflowEventDispatcher;
+
+    @Inject
+    ManagerService managerService;
 
     private volatile boolean shuttingDown = false;
 
@@ -143,8 +144,19 @@ public class EventStreamOrchestrator {
             LOG.warnf(e, "Failed to dispatch stream event %s to workflows", event.id);
         }
 
-        // Manager triage will be wired in Phase 7 (Task 25)
-        // For now, log the match
+        // Manager triage — evaluate the stream event for decisions.
+        // Full decision processing (creating tasks, escalating, etc.) still lives
+        // in the old PipelineOrchestrator. For now, just invoke the Manager and log.
+        try {
+            List<ManagerDecision> decisions = managerService.evaluateStreamEvent(event);
+            if (decisions != null && !decisions.isEmpty()) {
+                LOG.infof("Manager returned %d decisions for stream event %s",
+                        decisions.size(), event.id);
+            }
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to evaluate stream event %s via Manager", event.id);
+        }
+
         LOG.debugf("Event %s matched subscription '%s' (id=%d)",
                 event.id, sub.name, sub.id);
     }
