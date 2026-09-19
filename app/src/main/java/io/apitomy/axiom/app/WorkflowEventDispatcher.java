@@ -96,6 +96,32 @@ public class WorkflowEventDispatcher {
     }
 
     /**
+     * Dispatches a stream event to all candidate receive-event subscriptions.
+     * Unlike {@link #dispatchEvent(long)}, this method accepts a pre-built
+     * event map from the EventStreamOrchestrator, avoiding entity conversion.
+     *
+     * @param eventType the normalized event type string (e.g., "issue.created")
+     * @param eventMap  the curated event map for EL evaluation and context merging
+     */
+    public void dispatchStreamEvent(String eventType, Map<String, Object> eventMap) {
+        List<Long> subscriptionIds = QuarkusTransaction.requiringNew()
+                .call(() -> planStreamDispatch(eventType, eventMap));
+
+        if (subscriptionIds == null || subscriptionIds.isEmpty()) {
+            return;
+        }
+
+        for (Long subId : subscriptionIds) {
+            try {
+                QuarkusTransaction.requiringNew().run(() ->
+                        offerToSubscription(subId, eventMap));
+            } catch (Exception e) {
+                LOG.errorf(e, "Failed to offer stream event to workflow subscription %d", subId);
+            }
+        }
+    }
+
+    /**
      * Read phase: loads the event, prefilters subscriptions by event type,
      * applies hybrid project scoping, and builds the event map. Returns
      * {@code null} when there is nothing to dispatch.
@@ -131,6 +157,20 @@ public class WorkflowEventDispatcher {
 
     /** Candidate subscription ids plus the event map computed in the read phase. */
     private record DispatchPlan(List<Long> subscriptionIds, Map<String, Object> eventMap) {
+    }
+
+    /**
+     * Read phase for stream events: prefilters subscriptions by event type.
+     * Stream events don't have project scoping the way old events do — the
+     * subscription's filter rules handle scoping instead.
+     */
+    private List<Long> planStreamDispatch(String eventType, Map<String, Object> eventMap) {
+        List<WorkflowEventSubscriptionEntity> candidates =
+                WorkflowEventSubscriptionEntity.list("eventType", eventType);
+        if (candidates.isEmpty()) {
+            return List.of();
+        }
+        return candidates.stream().map(sub -> sub.id).toList();
     }
 
     /**

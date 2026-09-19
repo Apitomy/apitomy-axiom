@@ -12,6 +12,7 @@ import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -162,6 +163,19 @@ class WorkflowEventDispatcherTest {
         assertSubscriptionCount(healthyRun.id, 0);
         assertRunStatus(corruptRun.id, "waiting");
         assertSubscriptionCount(corruptRun.id, 1);
+    }
+
+    @Test
+    void dispatchStreamEventNoMatchingSubscriptionsDoesNotThrow() {
+        Map<String, Object> eventMap = Map.of(
+                "type", "some.unmatched.type",
+                "source", "github",
+                "connectionId", "test-conn",
+                "ref", "https://github.com/owner/repo/issues/1",
+                "timestamp", Instant.now().toString(),
+                "payload", Map.of());
+        dispatcher.dispatchStreamEvent("some.unmatched.type", eventMap);
+        // No exception means the method handled the empty-candidates path.
     }
 
     // -- Helpers --
