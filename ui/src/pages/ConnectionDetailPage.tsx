@@ -245,7 +245,7 @@ function InfoTab({ form, updateForm, reposText, setReposText, projectsText, setP
             <FormGroup label="Base URL" isRequired fieldId="baseUrl">
                 <TextInput id="baseUrl" isRequired value={form.baseUrl || ""}
                     onChange={(_e, v) => updateForm({ baseUrl: v })}
-                    placeholder="https://api.github.com" />
+                    placeholder="https://github.com" />
             </FormGroup>
             {form.sourceType === "github" && (
                 <FormGroup label="Repositories" fieldId="repositories">

@@ -12,20 +12,32 @@ class GitHubConnectionPollerTest {
     private final GitHubConnectionPoller poller = new GitHubConnectionPoller();
 
     @Test
-    void deriveHtmlBaseUrl_publicGitHub() {
-        assertEquals("https://github.com",
-                poller.deriveHtmlBaseUrl("https://api.github.com"));
+    void deriveApiBaseUrl_publicGitHub() {
+        assertEquals("https://api.github.com",
+                poller.deriveApiBaseUrl("https://github.com"));
     }
 
     @Test
-    void deriveHtmlBaseUrl_gheInstance() {
-        assertEquals("https://github.example.com",
-                poller.deriveHtmlBaseUrl("https://github.example.com/api/v3"));
+    void deriveApiBaseUrl_publicGitHubWithTrailingSlash() {
+        assertEquals("https://api.github.com",
+                poller.deriveApiBaseUrl("https://github.com/"));
     }
 
     @Test
-    void deriveHtmlBaseUrl_null() {
-        assertEquals("https://github.com",
-                poller.deriveHtmlBaseUrl(null));
+    void deriveApiBaseUrl_gheInstance() {
+        assertEquals("https://github.example.com/api/v3",
+                poller.deriveApiBaseUrl("https://github.example.com"));
+    }
+
+    @Test
+    void deriveApiBaseUrl_gheInstanceAlreadyHasApiPath() {
+        assertEquals("https://github.example.com/api/v3",
+                poller.deriveApiBaseUrl("https://github.example.com/api/v3"));
+    }
+
+    @Test
+    void deriveApiBaseUrl_null() {
+        assertEquals("https://api.github.com",
+                poller.deriveApiBaseUrl(null));
     }
 }

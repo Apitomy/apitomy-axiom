@@ -100,10 +100,10 @@ public class GitHubConnectionPoller {
             return;
         }
 
-        // Derive HTML base URL from API base URL for ref construction
-        // https://api.github.com -> https://github.com
-        // https://github.example.com/api/v3 -> https://github.example.com
-        String htmlBaseUrl = deriveHtmlBaseUrl(conn.baseUrl);
+        // The stored baseUrl is the human-readable URL (e.g. https://github.com).
+        // Derive the API base URL from it for API calls.
+        String apiBaseUrl = deriveApiBaseUrl(conn.baseUrl);
+        String htmlBaseUrl = conn.baseUrl;
 
         int totalIngested = 0;
         for (String repoFullName : repositories) {
@@ -114,7 +114,7 @@ public class GitHubConnectionPoller {
                         repoFullName, conn.id);
                 continue;
             }
-            totalIngested += pollRepository(conn, parts[0], parts[1], token, htmlBaseUrl);
+            totalIngested += pollRepository(conn, parts[0], parts[1], token, apiBaseUrl, htmlBaseUrl);
         }
 
         updateLastPolledAt(conn.id);
@@ -123,12 +123,12 @@ public class GitHubConnectionPoller {
     }
 
     private int pollRepository(EventSourceConnectionEntity conn, String owner, String repo,
-                                String token, String htmlBaseUrl) {
+                                String token, String apiBaseUrl, String htmlBaseUrl) {
         String cacheKey = conn.id + ":" + owner + "/" + repo;
         String etag = etagCache.get(cacheKey);
 
         GitHubEventsApiClient.EventsPollResult result = apiClient.fetchRepositoryEvents(
-                conn.baseUrl, owner, repo, token, etag);
+                apiBaseUrl, owner, repo, token, etag);
 
         if (!result.success()) {
             LOG.warnf("Failed to poll %s/%s for connection %s: %s",
@@ -165,7 +165,7 @@ public class GitHubConnectionPoller {
             JsonNode fullPr = null;
             String eventType = event.path("type").asText("");
             if (needsPrBackfill(eventType)) {
-                fullPr = backfillPr(conn.baseUrl, owner, repo, event, token);
+                fullPr = backfillPr(apiBaseUrl, owner, repo, event, token);
             }
 
             NormalizedEvent normalized = normalizer.normalize(event, conn.id, htmlBaseUrl, fullPr);
@@ -191,14 +191,14 @@ public class GitHubConnectionPoller {
                 || "PullRequestReviewEvent".equals(eventType);
     }
 
-    private JsonNode backfillPr(String baseUrl, String owner, String repo,
+    private JsonNode backfillPr(String apiBaseUrl, String owner, String repo,
                                  JsonNode event, String token) {
         JsonNode payload = event.path("payload");
         JsonNode prNode = payload.path("pull_request");
         int number = prNode.path("number").asInt(0);
         if (number == 0) return null;
 
-        var result = apiClient.fetchPullRequest(baseUrl, owner, repo, number, token);
+        var result = apiClient.fetchPullRequest(apiBaseUrl, owner, repo, number, token);
         if (result.success()) {
             return result.data();
         }
@@ -207,17 +207,21 @@ public class GitHubConnectionPoller {
     }
 
     /**
-     * Derives the HTML base URL from the API base URL.
-     * "https://api.github.com" -> "https://github.com"
-     * "https://github.example.com/api/v3" -> "https://github.example.com"
+     * Derives the API base URL from the human-readable URL.
+     * "https://github.com" -> "https://api.github.com"
+     * "https://github.example.com" -> "https://github.example.com/api/v3"
      */
-    String deriveHtmlBaseUrl(String apiBaseUrl) {
-        if (apiBaseUrl == null) return "https://github.com";
-        if (apiBaseUrl.contains("api.github.com")) {
-            return "https://github.com";
+    String deriveApiBaseUrl(String htmlBaseUrl) {
+        if (htmlBaseUrl == null) return "https://api.github.com";
+        String url = htmlBaseUrl.replaceAll("/+$", "");
+        if (url.equals("https://github.com") || url.equals("http://github.com")) {
+            return "https://api.github.com";
         }
-        // GHE: strip /api/v3 suffix
-        return apiBaseUrl.replaceAll("/api/v3$", "");
+        // GHE: append /api/v3 if not already present
+        if (url.endsWith("/api/v3")) {
+            return url;
+        }
+        return url + "/api/v3";
     }
 
     private String resolveToken(EventSourceConnectionEntity conn) {

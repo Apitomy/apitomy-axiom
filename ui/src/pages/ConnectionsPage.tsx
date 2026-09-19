@@ -328,7 +328,7 @@ export function ConnectionsPage() {
                             <TextInput id="baseUrl" isRequired value={form.baseUrl}
                                 onChange={(_e, v) => setForm({ ...form, baseUrl: v })}
                                 placeholder={form.sourceType === "github"
-                                    ? "https://api.github.com"
+                                    ? "https://github.com"
                                     : "https://your-org.atlassian.net"} />
                         </FormGroup>
 
