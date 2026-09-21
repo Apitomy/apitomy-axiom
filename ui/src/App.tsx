@@ -37,6 +37,8 @@ import { ConfigurationPacksPage } from "./pages/ConfigurationPacksPage";
 import { DataRetentionPage } from "./pages/DataRetentionPage";
 import { EngineSettingsPage } from "./pages/EngineSettingsPage";
 import { ConnectionDetailPage } from "./pages/ConnectionDetailPage";
+import { SubscriptionsPage } from "./pages/SubscriptionsPage";
+import { SubscriptionDetailPage } from "./pages/SubscriptionDetailPage";
 import { AssistantPage } from "./pages/AssistantPage";
 import { AssistantSessionPage } from "./pages/AssistantSessionPage";
 import { TracesPage } from "./pages/TracesPage";
@@ -153,6 +155,8 @@ export function App() {
                         <Route path="/metrics/disk-usage" element={<DiskUsagePage />} />
                         <Route path="/connections" element={<ConnectionsPage />} />
                         <Route path="/connections/:connectionId" element={<ConnectionDetailPage />} />
+                        <Route path="/subscriptions" element={<SubscriptionsPage />} />
+                        <Route path="/subscriptions/:subscriptionId" element={<SubscriptionDetailPage />} />
                         <Route path="/secrets" element={<SecretsPage />} />
                         <Route path="/configuration-packs" element={<ConfigurationPacksPage />} />
                         <Route path="/data-retention" element={<DataRetentionPage />} />

@@ -973,7 +973,7 @@ export interface EventSourceLog {
 }
 
 export interface EventSourceFilterRule {
-    type: "event-type" | "payload";
+    type: "event-type" | "payload" | "connection" | "ref";
     pointer?: string;
     pattern: string;
 }
@@ -2490,4 +2490,70 @@ export async function fetchStreamEvent(eventId: string): Promise<StreamEvent> {
     const response = await fetch(`${API}/stream/events/${encodeURIComponent(eventId)}`);
     if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch stream event"));
     return response.json();
+}
+
+// ── Subscriptions ─────────────────────────────────────────────────
+
+export interface Subscription {
+    id: number;
+    name: string;
+    description?: string;
+    enabled: boolean;
+    filters?: EventSourceFilters;
+    labels?: string[];
+    createdOn?: string;
+    modifiedOn?: string;
+}
+
+export interface NewSubscription {
+    name: string;
+    description?: string;
+    enabled: boolean;
+    filters?: EventSourceFilters;
+    labels?: string[];
+}
+
+export async function fetchSubscriptions(
+    page = 1, limit = 20, filterName?: string
+): Promise<SearchResults<Subscription>> {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(limit));
+    if (filterName) params.set("filterName", filterName);
+    const response = await fetch(`${API}/subscriptions?${params}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch subscriptions"));
+    return response.json();
+}
+
+export async function fetchSubscription(subscriptionId: number): Promise<Subscription> {
+    const response = await fetch(`${API}/subscriptions/${subscriptionId}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch subscription"));
+    return response.json();
+}
+
+export async function createSubscription(data: NewSubscription): Promise<Subscription> {
+    const response = await fetch(`${API}/subscriptions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to create subscription"));
+    return response.json();
+}
+
+export async function updateSubscription(subscriptionId: number, data: NewSubscription): Promise<Subscription> {
+    const response = await fetch(`${API}/subscriptions/${subscriptionId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to update subscription"));
+    return response.json();
+}
+
+export async function deleteSubscription(subscriptionId: number): Promise<void> {
+    const response = await fetch(`${API}/subscriptions/${subscriptionId}`, {
+        method: "DELETE",
+    });
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to delete subscription"));
 }

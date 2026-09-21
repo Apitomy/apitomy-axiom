@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -166,9 +166,7 @@ export function ConnectionDetailPage() {
     return (
         <PageSection>
             <Breadcrumb style={{ marginBottom: "16px" }}>
-                <BreadcrumbItem to="/connections" onClick={() => navigate("/connections")}>
-                    Connections
-                </BreadcrumbItem>
+                <BreadcrumbItem><Link to="/connections">Connections</Link></BreadcrumbItem>
                 <BreadcrumbItem isActive>{connection?.name || connectionId}</BreadcrumbItem>
             </Breadcrumb>
 
