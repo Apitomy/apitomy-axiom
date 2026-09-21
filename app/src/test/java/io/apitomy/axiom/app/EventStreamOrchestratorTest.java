@@ -2,6 +2,7 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
@@ -32,6 +33,7 @@ class EventStreamOrchestratorTest {
     @AfterEach
     @Transactional
     void cleanup() {
+        EventProcessingLedgerEntity.deleteAll();
         StreamEventEntity.deleteAll();
         EventSubscriptionEntity.deleteAll();
     }
@@ -105,11 +107,8 @@ class EventStreamOrchestratorTest {
     @Test
     void testProcessNewEventsOnEmptyStream() {
         // Calling processNewEvents on an empty database should not throw.
-        // First call initializes the cursor.
+        // No subscriptions exist, so it returns immediately.
         orchestrator.processNewEvents();
-        // Second call actually queries for new events (finds none).
-        orchestrator.processNewEvents();
-        // If we get here without exceptions, the smoke test passes.
     }
 
     // ── Smoke test: event with no subscriptions ──────────────────────
@@ -132,9 +131,7 @@ class EventStreamOrchestratorTest {
             event.persist();
         });
 
-        // Initialize cursor (first call) - this will set cursor to the event's time
-        orchestrator.processNewEvents();
-        // Second call processes events after cursor - nothing new, should not crash
+        // With no subscriptions enabled, processNewEvents returns immediately
         orchestrator.processNewEvents();
     }
 }

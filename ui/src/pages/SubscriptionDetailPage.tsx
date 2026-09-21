@@ -12,8 +12,6 @@ import {
     FlexItem,
     Form,
     FormGroup,
-    FormSelect,
-    FormSelectOption,
     HelperText,
     HelperTextItem,
     Label,
@@ -44,6 +42,7 @@ import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import { CodeEditor } from "@patternfly/react-code-editor";
 import type * as Monaco from "monaco-editor";
+import { ObjectSelect } from "@apitomy/common-ui-components";
 import { LabelInput } from "../components/LabelInput";
 import { StreamEventDetailModal } from "../components/StreamEventDetailModal";
 import { useEffectiveTheme } from "../hooks/useTheme";
@@ -813,12 +812,12 @@ function FilterHelpModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
 
 // ── Routing Tab ────────────────────────────────────────────────────
 
-const ROUTING_TYPE_LABELS: Record<RoutingRule["type"], string> = {
-    manager: "Send to Manager",
-    "workflow-dispatch": "Dispatch to Workflows",
-    "create-workflow": "Create Workflow",
-    "invoke-action": "Invoke Action",
-};
+const ROUTING_TYPES: { value: RoutingRule["type"]; label: string }[] = [
+    { value: "manager", label: "Send to Manager" },
+    { value: "workflow-dispatch", label: "Dispatch to Workflows" },
+    { value: "create-workflow", label: "Create Workflow" },
+    { value: "invoke-action", label: "Invoke Action" },
+];
 
 function RoutingTab({ routing, setRouting }: {
     routing: RoutingRule[];
@@ -884,49 +883,40 @@ function RoutingTab({ routing, setRouting }: {
                         {routing.map((rule, index) => (
                             <Tr key={index}>
                                 <Td style={{ verticalAlign: "middle" }}>
-                                    <FormSelect
-                                        value={rule.type}
-                                        onChange={(_e, value) =>
-                                            updateRule(index, { type: value as RoutingRule["type"] })
+                                    <ObjectSelect
+                                        value={ROUTING_TYPES.find(t => t.value === rule.type) || ROUTING_TYPES[0]}
+                                        items={ROUTING_TYPES}
+                                        onSelect={(item) =>
+                                            updateRule(index, { type: item.value })
                                         }
-                                        aria-label="Destination type"
-                                        style={{ maxWidth: "260px" }}
-                                    >
-                                        {(Object.keys(ROUTING_TYPE_LABELS) as RoutingRule["type"][]).map((t) => (
-                                            <FormSelectOption key={t} value={t} label={ROUTING_TYPE_LABELS[t]} />
-                                        ))}
-                                    </FormSelect>
+                                        itemToString={(item) => item.label}
+                                        testId={`routing-type-${index}`}
+                                    />
                                 </Td>
                                 <Td style={{ verticalAlign: "middle" }}>
                                     {rule.type === "create-workflow" && (
-                                        <FormSelect
-                                            value={rule.workflowDefinitionId ?? ""}
-                                            onChange={(_e, value) =>
-                                                updateRule(index, { workflowDefinitionId: value ? Number(value) : undefined })
+                                        <ObjectSelect
+                                            value={workflowDefs.find(wd => wd.id === rule.workflowDefinitionId) || null}
+                                            items={workflowDefs}
+                                            onSelect={(item) =>
+                                                updateRule(index, { workflowDefinitionId: item?.id })
                                             }
-                                            aria-label="Workflow definition"
-                                            style={{ maxWidth: "300px" }}
-                                        >
-                                            <FormSelectOption value="" label="Select a workflow definition..." />
-                                            {workflowDefs.map((wd) => (
-                                                <FormSelectOption key={wd.id} value={String(wd.id)} label={wd.name} />
-                                            ))}
-                                        </FormSelect>
+                                            itemToString={(item) => item?.name || ""}
+                                            noSelectionLabel="Select a workflow definition..."
+                                            testId={`routing-workflow-${index}`}
+                                        />
                                     )}
                                     {rule.type === "invoke-action" && (
-                                        <FormSelect
-                                            value={rule.actionTypeId ?? ""}
-                                            onChange={(_e, value) =>
-                                                updateRule(index, { actionTypeId: value ? Number(value) : undefined })
+                                        <ObjectSelect
+                                            value={actionTypes.find(at => at.id === rule.actionTypeId) || null}
+                                            items={actionTypes}
+                                            onSelect={(item) =>
+                                                updateRule(index, { actionTypeId: item?.id })
                                             }
-                                            aria-label="Action type"
-                                            style={{ maxWidth: "300px" }}
-                                        >
-                                            <FormSelectOption value="" label="Select an action type..." />
-                                            {actionTypes.map((at) => (
-                                                <FormSelectOption key={at.id} value={String(at.id)} label={at.name} />
-                                            ))}
-                                        </FormSelect>
+                                            itemToString={(item) => item?.name || ""}
+                                            noSelectionLabel="Select an action type..."
+                                            testId={`routing-action-${index}`}
+                                        />
                                     )}
                                     {(rule.type === "manager" || rule.type === "workflow-dispatch") && (
                                         <HelperText>
