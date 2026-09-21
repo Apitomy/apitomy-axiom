@@ -9959,6 +9959,27 @@
           }
         }
       },
+      "RoutingRule": {
+        "required": ["type"],
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["manager", "workflow-dispatch", "create-workflow", "invoke-action"],
+            "description": "Destination type for matched events"
+          },
+          "workflowDefinitionId": {
+            "format": "int64",
+            "type": "integer",
+            "description": "Required for create-workflow: which workflow definition to instantiate"
+          },
+          "actionTypeId": {
+            "format": "int64",
+            "type": "integer",
+            "description": "Required for invoke-action: which action type to invoke"
+          }
+        }
+      },
       "Subscription": {
         "required": [
           "id",
@@ -9988,6 +10009,13 @@
             "items": {
               "type": "string"
             }
+          },
+          "routing": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutingRule"
+            },
+            "description": "Where matched events are sent. Empty = no routing."
           },
           "createdOn": {
             "format": "date-time",
@@ -10023,6 +10051,13 @@
             "items": {
               "type": "string"
             }
+          },
+          "routing": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutingRule"
+            },
+            "description": "Where matched events are sent. Empty = no routing."
           }
         }
       },

@@ -2,8 +2,12 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
+import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
+import io.apitomy.axiom.core.entities.TaskEntity;
+import io.apitomy.axiom.core.events.model.RoutingRule;
 import io.apitomy.axiom.core.filters.SubscriptionFilterEvaluator;
 import io.apitomy.axiom.manager.ManagerDecision;
 import io.apitomy.axiom.manager.ManagerService;
@@ -45,6 +49,9 @@ public class EventStreamOrchestrator {
 
     @Inject
     ManagerService managerService;
+
+    @Inject
+    WorkflowExecutionService workflowExecutionService;
 
     private volatile boolean shuttingDown = false;
 
@@ -127,36 +134,127 @@ public class EventStreamOrchestrator {
 
         for (SubscriptionWithFilters sub : subscriptions) {
             if (filterEvaluator.matches(sub.filterExpression, eventMap)) {
-                routeEvent(event, sub, payloadNode);
+                routeEvent(event, sub, eventMap);
             }
         }
     }
 
     private void routeEvent(StreamEventEntity event, SubscriptionWithFilters sub,
-                             JsonNode payloadNode) {
-        // Dispatch to workflow receive-event nodes
-        try {
-            Map<String, Object> eventMap = buildEventMap(event, payloadNode);
-            workflowEventDispatcher.dispatchStreamEvent(event.type, eventMap);
-        } catch (Exception e) {
-            LOG.warnf(e, "Failed to dispatch stream event %s to workflows", event.id);
+                             Map<String, Object> eventMap) {
+        if (sub.routing == null || sub.routing.isEmpty()) {
+            LOG.debugf("Event %s matched subscription '%s' but no routing rules configured",
+                    event.id, sub.name);
+            return;
         }
 
-        // Manager triage — evaluate the stream event for decisions.
-        // Full decision processing (creating tasks, escalating, etc.) still lives
-        // in the old PipelineOrchestrator. For now, just invoke the Manager and log.
-        try {
-            List<ManagerDecision> decisions = managerService.evaluateStreamEvent(event);
-            if (decisions != null && !decisions.isEmpty()) {
-                LOG.infof("Manager returned %d decisions for stream event %s",
-                        decisions.size(), event.id);
+        for (RoutingRule rule : sub.routing) {
+            try {
+                switch (rule.type()) {
+                    case RoutingRule.TYPE_MANAGER -> routeToManager(event);
+                    case RoutingRule.TYPE_WORKFLOW_DISPATCH -> routeToWorkflowDispatch(event, eventMap);
+                    case RoutingRule.TYPE_CREATE_WORKFLOW -> routeToCreateWorkflow(event, rule, eventMap);
+                    case RoutingRule.TYPE_INVOKE_ACTION -> routeToInvokeAction(event, rule, eventMap);
+                    default -> LOG.warnf("Unknown routing type '%s' in subscription %d",
+                            rule.type(), sub.id);
+                }
+            } catch (Exception e2) {
+                LOG.warnf(e2, "Failed to route event %s via '%s' for subscription '%s'",
+                        event.id, rule.type(), sub.name);
             }
-        } catch (Exception e) {
-            LOG.warnf(e, "Failed to evaluate stream event %s via Manager", event.id);
         }
 
         LOG.debugf("Event %s matched subscription '%s' (id=%d)",
                 event.id, sub.name, sub.id);
+    }
+
+    private void routeToManager(StreamEventEntity event) {
+        List<ManagerDecision> decisions = managerService.evaluateStreamEvent(event);
+        if (decisions != null && !decisions.isEmpty()) {
+            LOG.infof("Manager returned %d decisions for stream event %s",
+                    decisions.size(), event.id);
+        }
+    }
+
+    private void routeToWorkflowDispatch(StreamEventEntity event, Map<String, Object> eventMap) {
+        workflowEventDispatcher.dispatchStreamEvent(event.type, eventMap);
+    }
+
+    private void routeToCreateWorkflow(StreamEventEntity event, RoutingRule rule,
+                                        Map<String, Object> eventMap) {
+        if (rule.workflowDefinitionId() == null) {
+            LOG.warnf("create-workflow routing rule missing workflowDefinitionId for event %s",
+                    event.id);
+            return;
+        }
+
+        Long projectId = findOrCreateProjectForEvent(event);
+        if (projectId == null) {
+            LOG.warnf("Could not find or create project for event %s (ref: %s)",
+                    event.id, event.ref);
+            return;
+        }
+
+        try {
+            QuarkusTransaction.requiringNew().run(() -> {
+                workflowExecutionService.triggerWorkflow(projectId, rule.workflowDefinitionId());
+            });
+            LOG.infof("Created workflow (definition %d) for event %s on project %d",
+                    rule.workflowDefinitionId(), event.id, projectId);
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to create workflow for event %s", event.id);
+        }
+    }
+
+    private void routeToInvokeAction(StreamEventEntity event, RoutingRule rule,
+                                      Map<String, Object> eventMap) {
+        if (rule.actionTypeId() == null) {
+            LOG.warnf("invoke-action routing rule missing actionTypeId for event %s", event.id);
+            return;
+        }
+
+        ActionTypeEntity actionType = QuarkusTransaction.requiringNew().call(() ->
+                ActionTypeEntity.findById(rule.actionTypeId()));
+        if (actionType == null) {
+            LOG.warnf("Action type %d not found for invoke-action routing", rule.actionTypeId());
+            return;
+        }
+
+        Long projectId = findOrCreateProjectForEvent(event);
+        if (projectId == null) {
+            LOG.warnf("Could not find or create project for event %s", event.id);
+            return;
+        }
+
+        QuarkusTransaction.requiringNew().run(() -> {
+            TaskEntity task = new TaskEntity();
+            task.projectId = projectId;
+            task.actionType = actionType.name;
+            task.createdBy = "subscription";
+            task.status = "Pending";
+            task.input = event.payload;
+            task.createdOn = Instant.now();
+            task.persist();
+            LOG.infof("Created task for action '%s' from event %s", actionType.name, event.id);
+        });
+    }
+
+    private Long findOrCreateProjectForEvent(StreamEventEntity event) {
+        return QuarkusTransaction.requiringNew().call(() -> {
+            // Try to find existing project by ref
+            ProjectEntity project = ProjectEntity.find("ref", event.ref).firstResult();
+            if (project != null) return project.id;
+
+            // Auto-create a project
+            project = new ProjectEntity();
+            project.name = "Event: " + event.type + " — " + event.ref;
+            project.ref = event.ref;
+            project.type = "event";
+            project.status = "Active";
+            project.createdOn = Instant.now();
+            project.updatedOn = Instant.now();
+            project.persist();
+            return project.id;
+        });
     }
 
     /**
@@ -201,10 +299,22 @@ public class EventStreamOrchestrator {
     private List<SubscriptionWithFilters> loadSubscriptions() {
         List<EventSubscriptionEntity> entities = EventSubscriptionEntity.list("enabled", true);
         return entities.stream()
-                .map(e -> new SubscriptionWithFilters(e.id, e.name, e.labels, e.filters))
+                .map(e -> {
+                    List<RoutingRule> rules = List.of();
+                    if (e.routing != null && !e.routing.isBlank()) {
+                        try {
+                            rules = objectMapper.readValue(e.routing,
+                                    objectMapper.getTypeFactory().constructCollectionType(
+                                            List.class, RoutingRule.class));
+                        } catch (Exception ex) {
+                            LOG.warnf("Failed to parse routing for subscription %d", e.id);
+                        }
+                    }
+                    return new SubscriptionWithFilters(e.id, e.name, e.labels, e.filters, rules);
+                })
                 .toList();
     }
 
     record SubscriptionWithFilters(long id, String name, List<String> labels,
-                                    String filterExpression) {}
+                                    String filterExpression, List<RoutingRule> routing) {}
 }

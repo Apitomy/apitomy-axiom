@@ -308,6 +308,38 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
         if (data.getLabels() != null) {
             entity.labels.addAll(data.getLabels());
         }
+
+        // Routing rules
+        if (data.getRouting() != null) {
+            // Validate routing rules
+            for (io.apitomy.axiom.api.beans.RoutingRule rule : data.getRouting()) {
+                if (rule.getType() == null) {
+                    throw new WebApplicationException("Routing rule missing required 'type' field", 400);
+                }
+                switch (rule.getType()) {
+                    case CREATE_WORKFLOW -> {
+                        if (rule.getWorkflowDefinitionId() == null) {
+                            throw new WebApplicationException(
+                                    "create-workflow routing rule requires workflowDefinitionId", 400);
+                        }
+                    }
+                    case INVOKE_ACTION -> {
+                        if (rule.getActionTypeId() == null) {
+                            throw new WebApplicationException(
+                                    "invoke-action routing rule requires actionTypeId", 400);
+                        }
+                    }
+                    default -> { /* manager and workflow-dispatch need no extra config */ }
+                }
+            }
+            try {
+                entity.routing = objectMapper.writeValueAsString(data.getRouting());
+            } catch (Exception e) {
+                throw new WebApplicationException("Failed to serialize routing rules", 500);
+            }
+        } else {
+            entity.routing = null;
+        }
     }
 
     /**
@@ -338,6 +370,16 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
         bean.setEnabled(entity.enabled);
         bean.setLabels(entity.labels);
         bean.setFilterExpression(entity.filters);
+        if (entity.routing != null && !entity.routing.isBlank()) {
+            try {
+                bean.setRouting(objectMapper.readValue(entity.routing,
+                        objectMapper.getTypeFactory().constructCollectionType(List.class,
+                                io.apitomy.axiom.api.beans.RoutingRule.class)));
+            } catch (Exception e) {
+                LOG.warnf("Failed to parse routing JSON for subscription %d: %s",
+                        entity.id, e.getMessage());
+            }
+        }
         if (entity.createdOn != null) {
             bean.setCreatedOn(Date.from(entity.createdOn));
         }

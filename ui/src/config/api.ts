@@ -2494,12 +2494,19 @@ export async function fetchStreamEvent(eventId: string): Promise<StreamEvent> {
 
 // ── Subscriptions ─────────────────────────────────────────────────
 
+export interface RoutingRule {
+    type: "manager" | "workflow-dispatch" | "create-workflow" | "invoke-action";
+    workflowDefinitionId?: number;
+    actionTypeId?: number;
+}
+
 export interface Subscription {
     id: number;
     name: string;
     description?: string;
     enabled: boolean;
     filterExpression?: string;
+    routing?: RoutingRule[];
     labels?: string[];
     createdOn?: string;
     modifiedOn?: string;
@@ -2510,6 +2517,7 @@ export interface NewSubscription {
     description?: string;
     enabled: boolean;
     filterExpression?: string;
+    routing?: RoutingRule[];
     labels?: string[];
 }
 

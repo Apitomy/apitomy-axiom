@@ -40,6 +40,14 @@ public class EventSubscriptionEntity extends PanacheEntity {
     public String filters;
 
     /**
+     * Routing rules stored as JSON. Each rule specifies a destination type
+     * and optional configuration. Example:
+     * [{"type":"manager"},{"type":"create-workflow","workflowDefinitionId":5}]
+     */
+    @Column(columnDefinition = "TEXT")
+    public String routing;
+
+    /**
      * Free-form labels for routing and categorization. Used to match
      * subscriptions to action types and to scope Manager evaluation.
      */

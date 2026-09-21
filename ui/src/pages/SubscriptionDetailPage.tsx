@@ -12,6 +12,8 @@ import {
     FlexItem,
     Form,
     FormGroup,
+    FormSelect,
+    FormSelectOption,
     HelperText,
     HelperTextItem,
     Label,
@@ -38,19 +40,26 @@ import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
 import TimesCircleIcon from "@patternfly/react-icons/dist/esm/icons/times-circle-icon";
 import HelpIcon from "@patternfly/react-icons/dist/esm/icons/help-icon";
+import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
+import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import { CodeEditor } from "@patternfly/react-code-editor";
 import type * as Monaco from "monaco-editor";
 import { LabelInput } from "../components/LabelInput";
 import { StreamEventDetailModal } from "../components/StreamEventDetailModal";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import {
+    type ActionType,
+    type NewSubscription,
+    type RoutingRule,
     type StreamEvent,
     type Subscription,
     type SubscriptionPreviewResult,
-    type NewSubscription,
+    type WorkflowDefinition,
+    fetchActionTypes,
     fetchSubscription,
-    updateSubscription,
+    fetchWorkflowDefinitions,
     previewSubscriptionFilter,
+    updateSubscription,
 } from "../config/api";
 
 export function SubscriptionDetailPage() {
@@ -63,6 +72,7 @@ export function SubscriptionDetailPage() {
     const [enabled, setEnabled] = useState(true);
     const [labels, setLabels] = useState<string[]>([]);
     const [filterExpression, setFilterExpression] = useState("");
+    const [routing, setRouting] = useState<RoutingRule[]>([]);
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -82,6 +92,7 @@ export function SubscriptionDetailPage() {
                 setEnabled(sub.enabled);
                 setLabels(sub.labels || []);
                 setFilterExpression(sub.filterExpression || "");
+                setRouting(sub.routing || []);
                 setDirty(false);
             })
             .catch(console.error)
@@ -102,6 +113,7 @@ export function SubscriptionDetailPage() {
             enabled,
             labels,
             filterExpression: filterExpression || undefined,
+            routing: routing.length > 0 ? routing : undefined,
         };
 
         updateSubscription(numericId, data)
@@ -166,6 +178,15 @@ export function SubscriptionDetailPage() {
                             filterExpression={filterExpression}
                             setFilterExpression={(v) => { setFilterExpression(v); setDirty(true); }}
                             effectiveTheme={effectiveTheme}
+                        />
+                    </TabContent>
+                </Tab>
+                <Tab eventKey={2} title={<TabTitleText>Routing</TabTitleText>}>
+                    <TabContent id="routing-tab" eventKey={2} activeKey={activeTab}
+                        style={{ marginTop: "24px" }}>
+                        <RoutingTab
+                            routing={routing}
+                            setRouting={(v) => { setRouting(v); setDirty(true); }}
                         />
                     </TabContent>
                 </Tab>
@@ -787,6 +808,146 @@ function FilterHelpModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
                 </Table>
             </ModalBody>
         </Modal>
+    );
+}
+
+// ── Routing Tab ────────────────────────────────────────────────────
+
+const ROUTING_TYPE_LABELS: Record<RoutingRule["type"], string> = {
+    manager: "Send to Manager",
+    "workflow-dispatch": "Dispatch to Workflows",
+    "create-workflow": "Create Workflow",
+    "invoke-action": "Invoke Action",
+};
+
+function RoutingTab({ routing, setRouting }: {
+    routing: RoutingRule[];
+    setRouting: (v: RoutingRule[]) => void;
+}) {
+    const [workflowDefs, setWorkflowDefs] = useState<WorkflowDefinition[]>([]);
+    const [actionTypes, setActionTypes] = useState<ActionType[]>([]);
+
+    useEffect(() => {
+        fetchWorkflowDefinitions(1, 100).then(r => setWorkflowDefs(r.items)).catch(console.error);
+        fetchActionTypes(1, 100).then(r => setActionTypes(r.items)).catch(console.error);
+    }, []);
+
+    const addRule = () => {
+        setRouting([...routing, { type: "manager" }]);
+    };
+
+    const removeRule = (index: number) => {
+        setRouting(routing.filter((_, i) => i !== index));
+    };
+
+    const updateRule = (index: number, updates: Partial<RoutingRule>) => {
+        const updated = [...routing];
+        const rule = { ...updated[index], ...updates };
+        // Clear irrelevant fields when type changes
+        if (updates.type) {
+            if (updates.type !== "create-workflow") delete rule.workflowDefinitionId;
+            if (updates.type !== "invoke-action") delete rule.actionTypeId;
+        }
+        updated[index] = rule;
+        setRouting(updated);
+    };
+
+    return (
+        <div style={{ maxWidth: "800px" }}>
+            <HelperText style={{ marginBottom: "16px" }}>
+                <HelperTextItem>
+                    Configure where matched events are routed. Add one or more routing rules to specify destinations.
+                </HelperTextItem>
+            </HelperText>
+
+            <Button variant="link" icon={<PlusCircleIcon />} onClick={addRule}
+                style={{ marginBottom: "16px" }}>
+                Add Routing Rule
+            </Button>
+
+            {routing.length === 0 ? (
+                <EmptyState>
+                    <EmptyStateBody>
+                        No routing rules configured. Matched events will not be sent anywhere until at least one routing rule is added.
+                    </EmptyStateBody>
+                </EmptyState>
+            ) : (
+                <Table aria-label="Routing Rules" variant="compact">
+                    <Thead>
+                        <Tr>
+                            <Th>Destination Type</Th>
+                            <Th>Configuration</Th>
+                            <Th style={{ width: "60px" }} />
+                        </Tr>
+                    </Thead>
+                    <Tbody>
+                        {routing.map((rule, index) => (
+                            <Tr key={index}>
+                                <Td style={{ verticalAlign: "middle" }}>
+                                    <FormSelect
+                                        value={rule.type}
+                                        onChange={(_e, value) =>
+                                            updateRule(index, { type: value as RoutingRule["type"] })
+                                        }
+                                        aria-label="Destination type"
+                                        style={{ maxWidth: "260px" }}
+                                    >
+                                        {(Object.keys(ROUTING_TYPE_LABELS) as RoutingRule["type"][]).map((t) => (
+                                            <FormSelectOption key={t} value={t} label={ROUTING_TYPE_LABELS[t]} />
+                                        ))}
+                                    </FormSelect>
+                                </Td>
+                                <Td style={{ verticalAlign: "middle" }}>
+                                    {rule.type === "create-workflow" && (
+                                        <FormSelect
+                                            value={rule.workflowDefinitionId ?? ""}
+                                            onChange={(_e, value) =>
+                                                updateRule(index, { workflowDefinitionId: value ? Number(value) : undefined })
+                                            }
+                                            aria-label="Workflow definition"
+                                            style={{ maxWidth: "300px" }}
+                                        >
+                                            <FormSelectOption value="" label="Select a workflow definition..." />
+                                            {workflowDefs.map((wd) => (
+                                                <FormSelectOption key={wd.id} value={String(wd.id)} label={wd.name} />
+                                            ))}
+                                        </FormSelect>
+                                    )}
+                                    {rule.type === "invoke-action" && (
+                                        <FormSelect
+                                            value={rule.actionTypeId ?? ""}
+                                            onChange={(_e, value) =>
+                                                updateRule(index, { actionTypeId: value ? Number(value) : undefined })
+                                            }
+                                            aria-label="Action type"
+                                            style={{ maxWidth: "300px" }}
+                                        >
+                                            <FormSelectOption value="" label="Select an action type..." />
+                                            {actionTypes.map((at) => (
+                                                <FormSelectOption key={at.id} value={String(at.id)} label={at.name} />
+                                            ))}
+                                        </FormSelect>
+                                    )}
+                                    {(rule.type === "manager" || rule.type === "workflow-dispatch") && (
+                                        <HelperText>
+                                            <HelperTextItem variant="indeterminate">
+                                                No additional configuration needed.
+                                            </HelperTextItem>
+                                        </HelperText>
+                                    )}
+                                </Td>
+                                <Td style={{ verticalAlign: "middle", textAlign: "center" }}>
+                                    <Button variant="plain" aria-label="Remove routing rule"
+                                        onClick={() => removeRule(index)}>
+                                        <TrashIcon />
+                                    </Button>
+                                </Td>
+                            </Tr>
+                        ))}
+                    </Tbody>
+                </Table>
+            )}
+        </div>
     );
 }
 
