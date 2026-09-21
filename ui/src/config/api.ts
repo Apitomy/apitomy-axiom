@@ -2557,3 +2557,34 @@ export async function deleteSubscription(subscriptionId: number): Promise<void> 
     });
     if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to delete subscription"));
 }
+
+export interface SubscriptionPreviewRequest {
+    filterExpression: string;
+    page?: number;
+    limit?: number;
+}
+
+export interface SubscriptionPreviewResult {
+    event: StreamEvent;
+    matched: boolean;
+}
+
+export interface SubscriptionPreviewResponse {
+    results: SubscriptionPreviewResult[];
+    totalCount: number;
+    totalMatched: number;
+    page: number;
+    limit: number;
+}
+
+export async function previewSubscriptionFilter(
+    data: SubscriptionPreviewRequest
+): Promise<SubscriptionPreviewResponse> {
+    const response = await fetch(`${API}/subscriptions/preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to preview filter"));
+    return response.json();
+}

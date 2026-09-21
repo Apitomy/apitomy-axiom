@@ -19,7 +19,9 @@ import {
     FormGroup,
     HelperText,
     HelperTextItem,
+    Label,
     PageSection,
+    Pagination,
     Switch,
     Tab,
     TabContent,
@@ -28,16 +30,27 @@ import {
     TextArea,
     TextInput,
     Title,
+    Toolbar,
+    ToolbarContent,
+    ToolbarItem,
 } from "@patternfly/react-core";
+import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
+import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
+import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
+import TimesCircleIcon from "@patternfly/react-icons/dist/esm/icons/times-circle-icon";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { LabelInput } from "../components/LabelInput";
+import { StreamEventDetailModal } from "../components/StreamEventDetailModal";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import {
+    type StreamEvent,
     type Subscription,
+    type SubscriptionPreviewResult,
     type NewSubscription,
     fetchSubscription,
     updateSubscription,
+    previewSubscriptionFilter,
 } from "../config/api";
 
 export function SubscriptionDetailPage() {
@@ -213,8 +226,181 @@ export function SubscriptionDetailPage() {
                         </div>
                     </TabContent>
                 </Tab>
+                <Tab eventKey={2} title={<TabTitleText>Preview</TabTitleText>}>
+                    <TabContent id="preview-tab" eventKey={2} activeKey={activeTab}
+                        style={{ marginTop: "24px" }}>
+                        <PreviewTab filterExpression={filterExpression} />
+                    </TabContent>
+                </Tab>
             </Tabs>
         </PageSection>
+    );
+}
+
+const SOURCE_COLORS: Record<string, "blue" | "green" | "orange" | "grey"> = {
+    github: "blue",
+    jira: "green",
+};
+
+/**
+ * Extracts a readable short label from a full ref URL.
+ */
+function formatRef(ref?: string): string {
+    if (!ref) return "—";
+    try {
+        const url = new URL(ref);
+        const ghMatch = url.pathname.match(/^\/([^/]+\/[^/]+)\/(?:issues|pull)\/(\d+)/);
+        if (ghMatch) return `${ghMatch[1]}#${ghMatch[2]}`;
+        const jiraMatch = url.pathname.match(/\/browse\/([A-Z][A-Z0-9_]+-\d+)/);
+        if (jiraMatch) return jiraMatch[1];
+    } catch {
+        // Not a valid URL; fall through to truncation.
+    }
+    if (ref.length > 50) return `...${ref.slice(-47)}`;
+    return ref;
+}
+
+function PreviewTab({ filterExpression }: { filterExpression: string }) {
+    const [results, setResults] = useState<SubscriptionPreviewResult[]>([]);
+    const [totalCount, setTotalCount] = useState(0);
+    const [totalMatched, setTotalMatched] = useState(0);
+    const [page, setPage] = useState(1);
+    const [perPage, setPerPage] = useState(20);
+    const [loading, setLoading] = useState(false);
+    const [selectedEvent, setSelectedEvent] = useState<StreamEvent | null>(null);
+
+    const loadPreview = useCallback(() => {
+        setLoading(true);
+        previewSubscriptionFilter({
+            filterExpression: filterExpression || "",
+            page,
+            limit: perPage,
+        })
+            .then((resp) => {
+                setResults(resp.results);
+                setTotalCount(resp.totalCount);
+                setTotalMatched(resp.totalMatched);
+            })
+            .catch(console.error)
+            .finally(() => setLoading(false));
+    }, [filterExpression, page, perPage]);
+
+    useEffect(() => { loadPreview(); }, [loadPreview]);
+
+    return (
+        <div>
+            <Flex style={{ marginBottom: "16px", gap: "24px" }}>
+                <FlexItem>
+                    <strong>Total events:</strong> {totalCount}
+                </FlexItem>
+                <FlexItem>
+                    <strong>Matched:</strong>{" "}
+                    <Label isCompact color="green">{totalMatched}</Label>
+                </FlexItem>
+                <FlexItem>
+                    <strong>Not matched:</strong>{" "}
+                    <Label isCompact color="red">{totalCount - totalMatched}</Label>
+                </FlexItem>
+                {filterExpression ? null : (
+                    <FlexItem>
+                        <HelperText>
+                            <HelperTextItem variant="warning">
+                                No filter expression -- all events match.
+                            </HelperTextItem>
+                        </HelperText>
+                    </FlexItem>
+                )}
+            </Flex>
+
+            <Toolbar>
+                <ToolbarContent>
+                    <ToolbarItem>
+                        <Button variant="control" aria-label="Refresh" onClick={loadPreview}>
+                            <SyncAltIcon /> Refresh
+                        </Button>
+                    </ToolbarItem>
+                    <ToolbarItem variant="pagination" align={{ default: "alignEnd" }}>
+                        <Pagination
+                            itemCount={totalCount}
+                            page={page}
+                            perPage={perPage}
+                            onSetPage={(_e, p) => setPage(p)}
+                            onPerPageSelect={(_e, pp) => { setPerPage(pp); setPage(1); }}
+                            isCompact
+                        />
+                    </ToolbarItem>
+                </ToolbarContent>
+            </Toolbar>
+
+            {loading ? (
+                <EmptyState>
+                    <EmptyStateBody>Evaluating filter...</EmptyStateBody>
+                </EmptyState>
+            ) : results.length === 0 ? (
+                <EmptyState>
+                    <EmptyStateBody>No events in the stream.</EmptyStateBody>
+                </EmptyState>
+            ) : (
+                <Table aria-label="Filter Preview" variant="compact">
+                    <Thead>
+                        <Tr>
+                            <Th>Match</Th>
+                            <Th>Time</Th>
+                            <Th>Source</Th>
+                            <Th>Connection</Th>
+                            <Th>Event Type</Th>
+                            <Th>Ref</Th>
+                            <Th>Actor</Th>
+                        </Tr>
+                    </Thead>
+                    <Tbody>
+                        {results.map((result) => (
+                            <Tr key={result.event.id}
+                                isClickable
+                                onRowClick={() => setSelectedEvent(result.event)}
+                                style={{
+                                    backgroundColor: result.matched
+                                        ? "var(--pf-v6-global--success-color--100, #e6f9e6)"
+                                        : undefined,
+                                    opacity: result.matched ? 1 : 0.6,
+                                }}>
+                                <Td>
+                                    {result.matched
+                                        ? <CheckCircleIcon color="var(--pf-v6-global--success-color--200, #3e8635)" />
+                                        : <TimesCircleIcon color="var(--pf-v6-global--danger-color--100, #c9190b)" />}
+                                </Td>
+                                <Td style={{ whiteSpace: "nowrap" }}>
+                                    {new Date(result.event.timestamp).toLocaleString()}
+                                </Td>
+                                <Td>
+                                    <Label isCompact
+                                        color={SOURCE_COLORS[result.event.source] || "grey"}>
+                                        {result.event.source}
+                                    </Label>
+                                </Td>
+                                <Td>{result.event.connectionId}</Td>
+                                <Td>
+                                    <Label isCompact>{result.event.type}</Label>
+                                </Td>
+                                <Td title={result.event.ref}>
+                                    {formatRef(result.event.ref)}
+                                </Td>
+                                <Td>
+                                    {(result.event.actor?.login as string)
+                                        || (result.event.actor?.displayName as string)
+                                        || "—"}
+                                </Td>
+                            </Tr>
+                        ))}
+                    </Tbody>
+                </Table>
+            )}
+
+            <StreamEventDetailModal
+                event={selectedEvent}
+                onClose={() => setSelectedEvent(null)}
+            />
+        </div>
     );
 }
 

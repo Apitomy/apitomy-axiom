@@ -1,10 +1,20 @@
 package io.apitomy.axiom.app.rest;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.SubscriptionsResource;
+import io.apitomy.axiom.api.beans.Actor;
 import io.apitomy.axiom.api.beans.NewSubscription;
+import io.apitomy.axiom.api.beans.Payload;
+import io.apitomy.axiom.api.beans.SourceData;
+import io.apitomy.axiom.api.beans.StreamEvent;
 import io.apitomy.axiom.api.beans.Subscription;
+import io.apitomy.axiom.api.beans.SubscriptionPreviewRequest;
+import io.apitomy.axiom.api.beans.SubscriptionPreviewResponse;
+import io.apitomy.axiom.api.beans.SubscriptionPreviewResult;
 import io.apitomy.axiom.api.beans.SubscriptionSearchResults;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
+import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.filters.SubscriptionFilterEvaluator;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
@@ -17,6 +27,7 @@ import org.jboss.logging.Logger;
 
 import java.math.BigInteger;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -30,6 +41,9 @@ import java.util.Map;
 public class SubscriptionsResourceImpl implements SubscriptionsResource {
 
     private static final Logger LOG = Logger.getLogger(SubscriptionsResourceImpl.class);
+
+    @Inject
+    ObjectMapper objectMapper;
 
     @Inject
     SubscriptionFilterEvaluator filterEvaluator;
@@ -108,6 +122,167 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
     public void deleteSubscription(long subscriptionId) {
         EventSubscriptionEntity entity = findOrThrow(subscriptionId);
         entity.delete();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public SubscriptionPreviewResponse previewSubscriptionFilter(SubscriptionPreviewRequest data) {
+        int pageNum = data.getPage() != null ? data.getPage() : 1;
+        int pageSize = data.getLimit() != null ? data.getLimit() : 20;
+        String filterExpression = data.getFilterExpression();
+
+        // Query total count
+        long totalCount = StreamEventEntity.count();
+
+        // Fetch paginated events ordered by timestamp DESC (newest first)
+        List<StreamEventEntity> entities = StreamEventEntity.<StreamEventEntity>find(
+                        "1=1", Sort.descending("timestamp"))
+                .page(Page.of(pageNum - 1, pageSize))
+                .list();
+
+        // Evaluate each event against the filter expression
+        List<SubscriptionPreviewResult> results = new ArrayList<>();
+        long totalMatched = 0;
+
+        for (StreamEventEntity entity : entities) {
+            // Build the event map for filter evaluation (same as EventStreamOrchestrator)
+            Map<String, Object> eventMap = buildEventMap(entity);
+            boolean matched = filterEvaluator.matches(filterExpression, eventMap);
+
+            SubscriptionPreviewResult result = new SubscriptionPreviewResult();
+            result.setEvent(toStreamEventBean(entity));
+            result.setMatched(matched);
+            results.add(result);
+
+            if (matched) {
+                totalMatched++;
+            }
+        }
+
+        // If there are more pages, we need to count total matched across all events.
+        // For efficiency, if we're on the only page, use the local count.
+        // Otherwise, iterate through all events to count matches.
+        if (totalCount > pageSize) {
+            // Count total matched across all events
+            totalMatched = countTotalMatched(filterExpression);
+        }
+
+        SubscriptionPreviewResponse response = new SubscriptionPreviewResponse();
+        response.setResults(results);
+        response.setTotalCount(totalCount);
+        response.setTotalMatched(totalMatched);
+        response.setPage(pageNum);
+        response.setLimit(pageSize);
+        return response;
+    }
+
+    /**
+     * Counts the total number of events matching the filter expression across all events.
+     */
+    private long countTotalMatched(String filterExpression) {
+        if (filterExpression == null || filterExpression.isBlank()) {
+            return StreamEventEntity.count();
+        }
+
+        long matched = 0;
+        int batchSize = 100;
+        int batchIndex = 0;
+        List<StreamEventEntity> batch;
+
+        do {
+            batch = StreamEventEntity.<StreamEventEntity>find("1=1", Sort.descending("timestamp"))
+                    .page(Page.of(batchIndex, batchSize))
+                    .list();
+            for (StreamEventEntity entity : batch) {
+                Map<String, Object> eventMap = buildEventMap(entity);
+                if (filterEvaluator.matches(filterExpression, eventMap)) {
+                    matched++;
+                }
+            }
+            batchIndex++;
+        } while (batch.size() == batchSize);
+
+        return matched;
+    }
+
+    /**
+     * Builds the event map used for filter evaluation, compatible with
+     * {@link io.apitomy.axiom.app.EventStreamOrchestrator#buildEventMap}.
+     */
+    private Map<String, Object> buildEventMap(StreamEventEntity event) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("type", event.type);
+        map.put("source", event.source);
+        map.put("connectionId", event.connectionId);
+        map.put("ref", event.ref);
+        map.put("timestamp", event.timestamp.toString());
+
+        // Parse actor
+        if (event.actor != null) {
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> actor = objectMapper.readValue(event.actor, Map.class);
+                map.put("actor", actor);
+            } catch (Exception e) {
+                map.put("actor", Map.of());
+            }
+        }
+
+        // Parse payload
+        if (event.payload != null) {
+            try {
+                JsonNode payloadNode = objectMapper.readTree(event.payload);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> payload = objectMapper.convertValue(payloadNode, Map.class);
+                map.put("payload", payload);
+            } catch (Exception e) {
+                map.put("payload", Map.of());
+            }
+        } else {
+            map.put("payload", Map.of());
+        }
+
+        return map;
+    }
+
+    /**
+     * Converts a StreamEventEntity to a StreamEvent API bean.
+     * Mirrors the logic in {@link StreamEventsResourceImpl#toBean}.
+     */
+    private StreamEvent toStreamEventBean(StreamEventEntity entity) {
+        StreamEvent bean = new StreamEvent();
+        bean.setId(entity.id);
+        bean.setSourceEventId(entity.sourceEventId);
+        bean.setSource(entity.source);
+        bean.setConnectionId(entity.connectionId);
+        bean.setType(entity.type);
+        bean.setRef(entity.ref);
+        bean.setTimestamp(Date.from(entity.timestamp));
+        bean.setCreatedOn(Date.from(entity.createdOn));
+
+        try {
+            bean.setActor(objectMapper.readValue(entity.actor, Actor.class));
+        } catch (Exception e) {
+            LOG.warnf("Failed to parse actor JSON for event %s: %s", entity.id, e.getMessage());
+        }
+
+        try {
+            bean.setPayload(objectMapper.readValue(entity.payload, Payload.class));
+        } catch (Exception e) {
+            LOG.warnf("Failed to parse payload JSON for event %s: %s", entity.id, e.getMessage());
+        }
+
+        if (entity.sourceData != null) {
+            try {
+                bean.setSourceData(objectMapper.readValue(entity.sourceData, SourceData.class));
+            } catch (Exception e) {
+                LOG.warnf("Failed to parse sourceData JSON for event %s: %s", entity.id, e.getMessage());
+            }
+        }
+
+        return bean;
     }
 
     /**

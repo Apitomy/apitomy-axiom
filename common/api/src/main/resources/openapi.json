@@ -5715,6 +5715,37 @@
         }
       }
     },
+    "/subscriptions/preview": {
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Preview a subscription filter against recent events",
+        "operationId": "previewSubscriptionFilter",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscriptionPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Preview results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionPreviewResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/subscriptions/{subscriptionId}": {
       "get": {
         "tags": [
@@ -10005,6 +10036,63 @@
             }
           },
           "totalCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "page": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "limit": {
+            "format": "int32",
+            "type": "integer"
+          }
+        }
+      },
+      "SubscriptionPreviewRequest": {
+        "required": ["filterExpression"],
+        "type": "object",
+        "properties": {
+          "filterExpression": {
+            "type": "string",
+            "description": "EL expression to evaluate against recent events"
+          },
+          "page": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "limit": {
+            "format": "int32",
+            "type": "integer"
+          }
+        }
+      },
+      "SubscriptionPreviewResult": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "$ref": "#/components/schemas/StreamEvent"
+          },
+          "matched": {
+            "type": "boolean",
+            "description": "Whether the filter expression matched this event"
+          }
+        }
+      },
+      "SubscriptionPreviewResponse": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionPreviewResult"
+            }
+          },
+          "totalCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "totalMatched": {
             "format": "int64",
             "type": "integer"
           },
