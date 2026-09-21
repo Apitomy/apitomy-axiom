@@ -1,153 +1,143 @@
 package io.apitomy.axiom.core.filters;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class SubscriptionFilterEvaluatorTest {
 
-    private final SubscriptionFilterEvaluator evaluator = new SubscriptionFilterEvaluator(new ObjectMapper());
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final SubscriptionFilterEvaluator evaluator = new SubscriptionFilterEvaluator();
 
-    // --- Null filters ---
-
-    @Test
-    void nullFiltersAllowsAll() {
-        FilterResult result = evaluator.evaluate(null, "issue.created", "github-com",
-                "https://github.com/EricWittmann/project", mapper.createObjectNode());
-        assertTrue(result.allowed());
+    private Map<String, Object> makeEventMap(String type, String connectionId) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("type", type);
+        map.put("connectionId", connectionId);
+        map.put("source", "github");
+        map.put("ref", "https://github.com/org/repo/issues/1");
+        map.put("timestamp", "2026-09-21T10:00:00Z");
+        map.put("actor", Map.of("login", "octocat"));
+        map.put("payload", Map.of());
+        return map;
     }
 
-    // --- Include event-type ---
+    // --- Null / blank expression matches all ---
 
     @Test
-    void includeEventTypeAllowsMatching() {
-        EventSourceFilters filters = new EventSourceFilters(
-                List.of(new EventSourceFilterRule("event-type", null, "issue.*")),
-                List.of());
-        FilterResult result = evaluator.evaluate(filters, "issue.created", "github-com",
-                "https://github.com/org/repo", mapper.createObjectNode());
-        assertTrue(result.allowed());
+    void nullExpressionMatchesAll() {
+        assertTrue(evaluator.matches(null, makeEventMap("issue.created", "github-com")));
     }
 
     @Test
-    void includeEventTypeBlocksNonMatching() {
-        EventSourceFilters filters = new EventSourceFilters(
-                List.of(new EventSourceFilterRule("event-type", null, "issue.*")),
-                List.of());
-        FilterResult result = evaluator.evaluate(filters, "pr.created", "github-com",
-                "https://github.com/org/repo", mapper.createObjectNode());
-        assertFalse(result.allowed());
-        assertNotNull(result.matchedRule());
+    void blankExpressionMatchesAll() {
+        assertTrue(evaluator.matches("", makeEventMap("issue.created", "github-com")));
     }
 
-    // --- Exclude event-type ---
+    // --- Simple type match ---
 
     @Test
-    void excludeEventTypeBlocks() {
-        EventSourceFilters filters = new EventSourceFilters(
-                List.of(),
-                List.of(new EventSourceFilterRule("event-type", null, "push")));
-        FilterResult result = evaluator.evaluate(filters, "push", "github-com",
-                "https://github.com/org/repo", mapper.createObjectNode());
-        assertFalse(result.allowed());
-        assertTrue(result.matchedRule().contains("push"));
-    }
-
-    // --- Exclude overrides include ---
-
-    @Test
-    void excludeOverridesInclude() {
-        EventSourceFilters filters = new EventSourceFilters(
-                List.of(new EventSourceFilterRule("event-type", null, "issue.*")),
-                List.of(new EventSourceFilterRule("event-type", null, "issue.comment.*")));
-        FilterResult result = evaluator.evaluate(filters, "issue.comment.created", "github-com",
-                "https://github.com/org/repo", mapper.createObjectNode());
-        assertFalse(result.allowed());
-    }
-
-    // --- Connection filter ---
-
-    @Test
-    void connectionFilterAllowsMatching() {
-        EventSourceFilters filters = new EventSourceFilters(
-                List.of(new EventSourceFilterRule("connection", null, "github-*")),
-                List.of());
-        FilterResult result = evaluator.evaluate(filters, "issue.created", "github-com",
-                "https://github.com/org/repo", mapper.createObjectNode());
-        assertTrue(result.allowed());
+    void simpleTypeMatch() {
+        assertTrue(evaluator.matches(
+                "event.type == 'issue.created'",
+                makeEventMap("issue.created", "github-com")));
     }
 
     @Test
-    void connectionFilterBlocksNonMatching() {
-        EventSourceFilters filters = new EventSourceFilters(
-                List.of(new EventSourceFilterRule("connection", null, "github-*")),
-                List.of());
-        FilterResult result = evaluator.evaluate(filters, "issue.created", "jira-prod",
-                "https://jira.example.com/browse/PROJ-1", mapper.createObjectNode());
-        assertFalse(result.allowed());
+    void simpleTypeMismatch() {
+        assertFalse(evaluator.matches(
+                "event.type == 'issue.created'",
+                makeEventMap("pr.merged", "github-com")));
     }
 
-    // --- Ref filter ---
+    // --- Wildcard with startsWith ---
 
     @Test
-    void refFilterMatchesContainingString() {
-        EventSourceFilters filters = new EventSourceFilters(
-                List.of(new EventSourceFilterRule("ref", null, "*EricWittmann*")),
-                List.of());
-        FilterResult result = evaluator.evaluate(filters, "issue.created", "github-com",
-                "https://github.com/EricWittmann/project", mapper.createObjectNode());
-        assertTrue(result.allowed());
+    void startsWithMatch() {
+        assertTrue(evaluator.matches(
+                "event.type.startsWith('issue.')",
+                makeEventMap("issue.created", "github-com")));
     }
 
+    // --- Connection match ---
+
     @Test
-    void refFilterBlocksNonMatching() {
-        EventSourceFilters filters = new EventSourceFilters(
-                List.of(new EventSourceFilterRule("ref", null, "*EricWittmann*")),
-                List.of());
-        FilterResult result = evaluator.evaluate(filters, "issue.created", "github-com",
-                "https://github.com/other-org/project", mapper.createObjectNode());
-        assertFalse(result.allowed());
+    void connectionMatch() {
+        assertTrue(evaluator.matches(
+                "event.connectionId == 'github-com'",
+                makeEventMap("issue.created", "github-com")));
     }
 
-    // --- Payload filter ---
+    // --- AND logic ---
 
     @Test
-    void payloadExcludeBlocksMatchingValue() {
-        ObjectNode payload = mapper.createObjectNode();
-        payload.putObject("issue").put("state", "closed");
-        EventSourceFilters filters = new EventSourceFilters(
-                List.of(),
-                List.of(new EventSourceFilterRule("payload", "/issue/state", "closed")));
-        FilterResult result = evaluator.evaluate(filters, "issue.updated", "github-com",
-                "https://github.com/org/repo", payload);
-        assertFalse(result.allowed());
-        assertTrue(result.matchedRule().contains("/issue/state"));
+    void andLogicBothMatch() {
+        assertTrue(evaluator.matches(
+                "event.type == 'issue.created' && event.connectionId == 'github-com'",
+                makeEventMap("issue.created", "github-com")));
     }
 
     @Test
-    void payloadExcludeAllowsNonMatchingValue() {
-        ObjectNode payload = mapper.createObjectNode();
-        payload.putObject("issue").put("state", "open");
-        EventSourceFilters filters = new EventSourceFilters(
-                List.of(),
-                List.of(new EventSourceFilterRule("payload", "/issue/state", "closed")));
-        FilterResult result = evaluator.evaluate(filters, "issue.updated", "github-com",
-                "https://github.com/org/repo", payload);
-        assertTrue(result.allowed());
+    void andLogicOneFails() {
+        assertFalse(evaluator.matches(
+                "event.type == 'issue.created' && event.connectionId == 'jira-prod'",
+                makeEventMap("issue.created", "github-com")));
     }
 
-    // --- Empty include allows all ---
+    // --- OR logic ---
 
     @Test
-    void emptyIncludeAllowsAll() {
-        EventSourceFilters filters = new EventSourceFilters(List.of(), List.of());
-        FilterResult result = evaluator.evaluate(filters, "anything.here", "some-connection",
-                "https://example.com/ref", mapper.createObjectNode());
-        assertTrue(result.allowed());
+    void orLogicMatchesEither() {
+        assertTrue(evaluator.matches(
+                "event.type == 'issue.created' || event.type == 'pr.created'",
+                makeEventMap("issue.created", "github-com")));
+        assertTrue(evaluator.matches(
+                "event.type == 'issue.created' || event.type == 'pr.created'",
+                makeEventMap("pr.created", "github-com")));
+    }
+
+    // --- NOT logic ---
+
+    @Test
+    void notLogicExcludes() {
+        assertTrue(evaluator.matches(
+                "event.connectionId != 'jira-staging'",
+                makeEventMap("issue.created", "github-com")));
+        assertFalse(evaluator.matches(
+                "event.connectionId != 'github-com'",
+                makeEventMap("issue.created", "github-com")));
+    }
+
+    // --- Payload field access ---
+
+    @Test
+    void payloadFieldAccess() {
+        Map<String, Object> eventMap = makeEventMap("issue.updated", "github-com");
+        eventMap.put("payload", Map.of("issue", Map.of("state", "open")));
+        assertTrue(evaluator.matches(
+                "event.payload.issue.state == 'open'",
+                eventMap));
+    }
+
+    // --- Invalid expression fails closed ---
+
+    @Test
+    void invalidExpressionFailsClosed() {
+        assertFalse(evaluator.matches(
+                "invalid {{[ syntax",
+                makeEventMap("issue.created", "github-com")));
+    }
+
+    // --- isValid ---
+
+    @Test
+    void isValidReturnsTrueForValidExpression() {
+        assertTrue(evaluator.isValid("event.type == 'test'"));
+    }
+
+    @Test
+    void isValidReturnsFalseForInvalidExpression() {
+        assertFalse(evaluator.isValid("event.type ==== 'test'"));
     }
 }

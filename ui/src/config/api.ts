@@ -2499,7 +2499,7 @@ export interface Subscription {
     name: string;
     description?: string;
     enabled: boolean;
-    filters?: EventSourceFilters;
+    filterExpression?: string;
     labels?: string[];
     createdOn?: string;
     modifiedOn?: string;
@@ -2509,7 +2509,7 @@ export interface NewSubscription {
     name: string;
     description?: string;
     enabled: boolean;
-    filters?: EventSourceFilters;
+    filterExpression?: string;
     labels?: string[];
 }
 

@@ -9948,8 +9948,9 @@
           "enabled": {
             "type": "boolean"
           },
-          "filters": {
-            "$ref": "#/components/schemas/EventSourceFilters"
+          "filterExpression": {
+            "type": "string",
+            "description": "Jakarta EL expression that evaluates to boolean. Available variables: event.type, event.source, event.connectionId, event.ref, event.timestamp, event.actor.login, event.payload.* Fields from the typed event payload are accessible via dot notation."
           },
           "labels": {
             "type": "array",
@@ -9982,8 +9983,9 @@
           "enabled": {
             "type": "boolean"
           },
-          "filters": {
-            "$ref": "#/components/schemas/EventSourceFilters"
+          "filterExpression": {
+            "type": "string",
+            "description": "Jakarta EL expression that evaluates to boolean. Available variables: event.type, event.source, event.connectionId, event.ref, event.timestamp, event.actor.login, event.payload.* Fields from the typed event payload are accessible via dot notation."
           },
           "labels": {
             "type": "array",

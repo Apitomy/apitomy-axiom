@@ -32,10 +32,9 @@ public class EventSubscriptionEntity extends PanacheEntity {
     public boolean enabled = true;
 
     /**
-     * Filter configuration stored as JSON. Uses the same include/exclude
-     * rule model as the current EventSource filters, with additional
-     * support for connection scoping.
-     * @see io.apitomy.axiom.core.filters.EventSourceFilters
+     * Jakarta EL filter expression that evaluates to boolean.
+     * Available variables: event.type, event.source, event.connectionId,
+     * event.ref, event.timestamp, event.actor.login, event.payload.*
      */
     @Column(columnDefinition = "TEXT")
     public String filters;

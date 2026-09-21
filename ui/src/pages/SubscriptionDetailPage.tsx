@@ -7,14 +7,16 @@ import {
     Card,
     CardBody,
     CardTitle,
+    DescriptionList,
+    DescriptionListDescription,
+    DescriptionListGroup,
+    DescriptionListTerm,
     EmptyState,
     EmptyStateBody,
     Flex,
     FlexItem,
     Form,
     FormGroup,
-    FormSelect,
-    FormSelectOption,
     HelperText,
     HelperTextItem,
     PageSection,
@@ -27,28 +29,16 @@ import {
     TextInput,
     Title,
 } from "@patternfly/react-core";
-import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
-import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
-import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
+import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { LabelInput } from "../components/LabelInput";
+import { useEffectiveTheme } from "../hooks/useTheme";
 import {
     type Subscription,
     type NewSubscription,
-    type EventSourceFilterRule,
-    type EventSourceFilters,
     fetchSubscription,
     updateSubscription,
 } from "../config/api";
-
-type RuleType = EventSourceFilterRule["type"];
-
-const RULE_TYPE_OPTIONS: { value: RuleType; label: string }[] = [
-    { value: "event-type", label: "Event Type" },
-    { value: "payload", label: "Payload" },
-    { value: "connection", label: "Connection" },
-    { value: "ref", label: "Ref" },
-];
 
 export function SubscriptionDetailPage() {
     const { subscriptionId } = useParams<{ subscriptionId: string }>();
@@ -59,13 +49,14 @@ export function SubscriptionDetailPage() {
     const [description, setDescription] = useState("");
     const [enabled, setEnabled] = useState(true);
     const [labels, setLabels] = useState<string[]>([]);
-    const [includeRules, setIncludeRules] = useState<EventSourceFilterRule[]>([]);
-    const [excludeRules, setExcludeRules] = useState<EventSourceFilterRule[]>([]);
+    const [filterExpression, setFilterExpression] = useState("");
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
     const [activeTab, setActiveTab] = useState(0);
+
+    const effectiveTheme = useEffectiveTheme();
 
     const loadData = useCallback(() => {
         if (isNaN(numericId)) return;
@@ -77,8 +68,7 @@ export function SubscriptionDetailPage() {
                 setDescription(sub.description || "");
                 setEnabled(sub.enabled);
                 setLabels(sub.labels || []);
-                setIncludeRules(sub.filters?.include || []);
-                setExcludeRules(sub.filters?.exclude || []);
+                setFilterExpression(sub.filterExpression || "");
                 setDirty(false);
             })
             .catch(console.error)
@@ -93,17 +83,12 @@ export function SubscriptionDetailPage() {
         if (isNaN(numericId)) return;
         setSaving(true);
 
-        const filters: EventSourceFilters = {
-            include: includeRules,
-            exclude: excludeRules,
-        };
-
         const data: NewSubscription = {
             name,
             description: description || undefined,
             enabled,
             labels,
-            filters,
+            filterExpression: filterExpression || undefined,
         };
 
         updateSubscription(numericId, data)
@@ -164,12 +149,68 @@ export function SubscriptionDetailPage() {
                 <Tab eventKey={1} title={<TabTitleText>Filters</TabTitleText>}>
                     <TabContent id="filters-tab" eventKey={1} activeKey={activeTab}
                         style={{ marginTop: "24px" }}>
-                        <FiltersTab
-                            includeRules={includeRules}
-                            setIncludeRules={(rules) => { setIncludeRules(rules); markDirty(); }}
-                            excludeRules={excludeRules}
-                            setExcludeRules={(rules) => { setExcludeRules(rules); markDirty(); }}
-                        />
+                        <Card isCompact>
+                            <CardTitle>Available Fields</CardTitle>
+                            <CardBody>
+                                <DescriptionList isCompact isHorizontal>
+                                    <DescriptionListGroup>
+                                        <DescriptionListTerm><code>event.type</code></DescriptionListTerm>
+                                        <DescriptionListDescription>Event type (e.g., "issue.created", "pr.merged")</DescriptionListDescription>
+                                    </DescriptionListGroup>
+                                    <DescriptionListGroup>
+                                        <DescriptionListTerm><code>event.source</code></DescriptionListTerm>
+                                        <DescriptionListDescription>Source system ("github" or "jira")</DescriptionListDescription>
+                                    </DescriptionListGroup>
+                                    <DescriptionListGroup>
+                                        <DescriptionListTerm><code>event.connectionId</code></DescriptionListTerm>
+                                        <DescriptionListDescription>Connection slug (e.g., "github-com")</DescriptionListDescription>
+                                    </DescriptionListGroup>
+                                    <DescriptionListGroup>
+                                        <DescriptionListTerm><code>event.ref</code></DescriptionListTerm>
+                                        <DescriptionListDescription>Full URL of the event subject</DescriptionListDescription>
+                                    </DescriptionListGroup>
+                                    <DescriptionListGroup>
+                                        <DescriptionListTerm><code>event.payload.*</code></DescriptionListTerm>
+                                        <DescriptionListDescription>Typed payload fields (e.g., event.payload.issue.title, event.payload.pullRequest.baseBranch)</DescriptionListDescription>
+                                    </DescriptionListGroup>
+                                    <DescriptionListGroup>
+                                        <DescriptionListTerm><code>event.actor.login</code></DescriptionListTerm>
+                                        <DescriptionListDescription>Actor username or account ID</DescriptionListDescription>
+                                    </DescriptionListGroup>
+                                </DescriptionList>
+                            </CardBody>
+                        </Card>
+                        <Card isCompact style={{ marginTop: "16px" }}>
+                            <CardTitle>Examples</CardTitle>
+                            <CardBody>
+                                <div style={{ fontFamily: "monospace", fontSize: "13px", lineHeight: "1.8" }}>
+                                    <div><code>event.type == 'issue.created'</code> — match a specific event type</div>
+                                    <div><code>event.type.startsWith('pr.')</code> — match all PR events</div>
+                                    <div><code>event.connectionId == 'github-com' && event.type.startsWith('issue.')</code> — combine conditions</div>
+                                    <div><code>event.type == 'issue.created' || event.type == 'issue.closed'</code> — match either type</div>
+                                    <div><code>event.connectionId != 'jira-staging'</code> — exclude a connection</div>
+                                    <div><code>event.payload.issue.state == 'open'</code> — match on payload fields</div>
+                                </div>
+                            </CardBody>
+                        </Card>
+                        <div style={{ marginTop: "16px" }}>
+                            <Title headingLevel="h4" size="md" style={{ marginBottom: "8px" }}>
+                                Filter Expression
+                            </Title>
+                            <HelperText style={{ marginBottom: "8px" }}>
+                                <HelperTextItem>
+                                    Jakarta EL expression that evaluates to boolean. Leave empty to match all events.
+                                </HelperTextItem>
+                            </HelperText>
+                            <CodeEditor
+                                code={filterExpression}
+                                onCodeChange={(value) => { setFilterExpression(value); setDirty(true); }}
+                                language={Language.plaintext}
+                                isDarkTheme={effectiveTheme === "dark"}
+                                height="120px"
+                                isLineNumbersVisible={false}
+                            />
+                        </div>
                     </TabContent>
                 </Tab>
             </Tabs>
@@ -206,126 +247,5 @@ function InfoTab({ name, setName, description, setDescription, enabled, setEnabl
                 <LabelInput labels={labels} onChange={setLabels} />
             </FormGroup>
         </Form>
-    );
-}
-
-function FiltersTab({ includeRules, setIncludeRules, excludeRules, setExcludeRules }: {
-    includeRules: EventSourceFilterRule[];
-    setIncludeRules: (rules: EventSourceFilterRule[]) => void;
-    excludeRules: EventSourceFilterRule[];
-    setExcludeRules: (rules: EventSourceFilterRule[]) => void;
-}) {
-    return (
-        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-            <FilterRulesCard
-                title="Include Rules"
-                rules={includeRules}
-                onChange={setIncludeRules}
-            />
-            <FilterRulesCard
-                title="Exclude Rules"
-                rules={excludeRules}
-                onChange={setExcludeRules}
-            />
-        </div>
-    );
-}
-
-function FilterRulesCard({ title, rules, onChange }: {
-    title: string;
-    rules: EventSourceFilterRule[];
-    onChange: (rules: EventSourceFilterRule[]) => void;
-}) {
-    const addRule = () => {
-        onChange([...rules, { type: "event-type", pattern: "" }]);
-    };
-
-    const updateRule = (index: number, updates: Partial<EventSourceFilterRule>) => {
-        const updated = rules.map((rule, i) => {
-            if (i !== index) return rule;
-            const newRule = { ...rule, ...updates };
-            // Clear pointer when type is not payload
-            if (updates.type && updates.type !== "payload") {
-                delete newRule.pointer;
-            }
-            return newRule;
-        });
-        onChange(updated);
-    };
-
-    const removeRule = (index: number) => {
-        onChange(rules.filter((_, i) => i !== index));
-    };
-
-    return (
-        <Card>
-            <CardTitle>{title}</CardTitle>
-            <CardBody>
-                {rules.length === 0 ? (
-                    <EmptyState variant="xs">
-                        <EmptyStateBody>No rules configured.</EmptyStateBody>
-                    </EmptyState>
-                ) : (
-                    <Table aria-label={title} variant="compact">
-                        <Thead>
-                            <Tr>
-                                <Th width={20}>Type</Th>
-                                <Th width={20}>Pointer</Th>
-                                <Th width={45}>Pattern</Th>
-                                <Th width={15} />
-                            </Tr>
-                        </Thead>
-                        <Tbody>
-                            {rules.map((rule, index) => (
-                                <Tr key={index}>
-                                    <Td>
-                                        <FormSelect
-                                            value={rule.type}
-                                            onChange={(_e, v) => updateRule(index, { type: v as RuleType })}
-                                            aria-label="Rule type">
-                                            {RULE_TYPE_OPTIONS.map((opt) => (
-                                                <FormSelectOption key={opt.value} value={opt.value} label={opt.label} />
-                                            ))}
-                                        </FormSelect>
-                                    </Td>
-                                    <Td>
-                                        {rule.type === "payload" ? (
-                                            <TextInput
-                                                value={rule.pointer || ""}
-                                                onChange={(_e, v) => updateRule(index, { pointer: v })}
-                                                placeholder="/issue/state"
-                                                aria-label="JSON Pointer" />
-                                        ) : (
-                                            <span style={{ color: "var(--pf-t--global--color--nonstatus--gray--default)" }}>--</span>
-                                        )}
-                                    </Td>
-                                    <Td>
-                                        <TextInput
-                                            value={rule.pattern}
-                                            onChange={(_e, v) => updateRule(index, { pattern: v })}
-                                            placeholder="e.g. issue.* or pr.merged"
-                                            aria-label="Glob pattern" />
-                                        <HelperText>
-                                            <HelperTextItem>Glob pattern (* and ? wildcards)</HelperTextItem>
-                                        </HelperText>
-                                    </Td>
-                                    <Td>
-                                        <Button variant="plain" size="sm" style={{ padding: 0 }}
-                                            onClick={() => removeRule(index)}
-                                            aria-label="Remove rule">
-                                            <TrashIcon />
-                                        </Button>
-                                    </Td>
-                                </Tr>
-                            ))}
-                        </Tbody>
-                    </Table>
-                )}
-                <Button variant="link" icon={<PlusCircleIcon />}
-                    onClick={addRule} style={{ marginTop: "8px" }}>
-                    Add Rule
-                </Button>
-            </CardBody>
-        </Card>
     );
 }

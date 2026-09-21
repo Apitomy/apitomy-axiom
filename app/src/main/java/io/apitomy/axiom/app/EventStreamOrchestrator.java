@@ -4,9 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
-import io.apitomy.axiom.core.filters.EventSourceFilters;
 import io.apitomy.axiom.core.filters.SubscriptionFilterEvaluator;
-import io.apitomy.axiom.core.filters.FilterResult;
 import io.apitomy.axiom.manager.ManagerDecision;
 import io.apitomy.axiom.manager.ManagerService;
 import io.quarkus.scheduler.Scheduled;
@@ -124,11 +122,11 @@ public class EventStreamOrchestrator {
             LOG.warnf("Failed to parse payload for event %s: %s", event.id, e.getMessage());
         }
 
-        for (SubscriptionWithFilters sub : subscriptions) {
-            FilterResult result = filterEvaluator.evaluate(
-                    sub.filters, event.type, event.connectionId, event.ref, payloadNode);
+        // Build event map once for all subscription filter evaluations
+        Map<String, Object> eventMap = buildEventMap(event, payloadNode);
 
-            if (result.allowed()) {
+        for (SubscriptionWithFilters sub : subscriptions) {
+            if (filterEvaluator.matches(sub.filterExpression, eventMap)) {
                 routeEvent(event, sub, payloadNode);
             }
         }
@@ -202,20 +200,11 @@ public class EventStreamOrchestrator {
 
     private List<SubscriptionWithFilters> loadSubscriptions() {
         List<EventSubscriptionEntity> entities = EventSubscriptionEntity.list("enabled", true);
-        return entities.stream().map(e -> {
-            EventSourceFilters filters = null;
-            if (e.filters != null && !e.filters.isBlank()) {
-                try {
-                    filters = objectMapper.readValue(e.filters, EventSourceFilters.class);
-                } catch (Exception ex) {
-                    LOG.warnf("Failed to parse filters for subscription %d: %s",
-                            e.id, ex.getMessage());
-                }
-            }
-            return new SubscriptionWithFilters(e.id, e.name, e.labels, filters);
-        }).toList();
+        return entities.stream()
+                .map(e -> new SubscriptionWithFilters(e.id, e.name, e.labels, e.filters))
+                .toList();
     }
 
     record SubscriptionWithFilters(long id, String name, List<String> labels,
-                                    EventSourceFilters filters) {}
+                                    String filterExpression) {}
 }

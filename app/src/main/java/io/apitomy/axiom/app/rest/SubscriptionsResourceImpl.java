@@ -1,12 +1,11 @@
 package io.apitomy.axiom.app.rest;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.SubscriptionsResource;
-import io.apitomy.axiom.api.beans.EventSourceFilters;
 import io.apitomy.axiom.api.beans.NewSubscription;
 import io.apitomy.axiom.api.beans.Subscription;
 import io.apitomy.axiom.api.beans.SubscriptionSearchResults;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
+import io.apitomy.axiom.core.filters.SubscriptionFilterEvaluator;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -33,7 +32,7 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
     private static final Logger LOG = Logger.getLogger(SubscriptionsResourceImpl.class);
 
     @Inject
-    ObjectMapper objectMapper;
+    SubscriptionFilterEvaluator filterEvaluator;
 
     /**
      * {@inheritDoc}
@@ -121,12 +120,14 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
         entity.name = data.getName();
         entity.description = data.getDescription();
         entity.enabled = data.getEnabled() != null ? data.getEnabled() : false;
-        if (data.getFilters() != null) {
-            try {
-                entity.filters = objectMapper.writeValueAsString(data.getFilters());
-            } catch (Exception e) {
-                entity.filters = null;
+        if (data.getFilterExpression() != null && !data.getFilterExpression().isBlank()) {
+            if (!filterEvaluator.isValid(data.getFilterExpression())) {
+                throw new WebApplicationException(
+                        "Invalid filter expression: " + data.getFilterExpression(), 400);
             }
+            entity.filters = data.getFilterExpression();
+        } else {
+            entity.filters = data.getFilterExpression(); // null or blank
         }
         entity.labels.clear();
         if (data.getLabels() != null) {
@@ -161,13 +162,7 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
         bean.setDescription(entity.description);
         bean.setEnabled(entity.enabled);
         bean.setLabels(entity.labels);
-        if (entity.filters != null) {
-            try {
-                bean.setFilters(objectMapper.readValue(entity.filters, EventSourceFilters.class));
-            } catch (Exception e) {
-                // ignore parse errors
-            }
-        }
+        bean.setFilterExpression(entity.filters);
         if (entity.createdOn != null) {
             bean.setCreatedOn(Date.from(entity.createdOn));
         }

@@ -14,7 +14,6 @@ import {
     ModalHeader,
     PageSection,
     Pagination,
-    Switch,
     TextArea,
     TextInput,
     Title,
@@ -35,7 +34,6 @@ import {
 import { BooleanStatusIcon } from "../components/BooleanStatusIcon";
 import { ColoredLabel } from "../components/ColoredLabel";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
-import { LabelInput } from "../components/LabelInput";
 import {
     type Subscription,
     type NewSubscription,
@@ -55,7 +53,7 @@ export function SubscriptionsPage() {
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [form, setForm] = useState<NewSubscription>({
-        name: "", description: "", enabled: true, labels: [],
+        name: "", description: "", enabled: false,
     });
 
     const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
@@ -242,16 +240,6 @@ export function SubscriptionsPage() {
                         <FormGroup label="Description" fieldId="description">
                             <TextArea id="description" value={form.description || ""}
                                 onChange={(_e, v) => setForm({ ...form, description: v })} />
-                        </FormGroup>
-                        <FormGroup fieldId="enabled">
-                            <Switch id="enabled" label="Enabled"
-                                isChecked={form.enabled}
-                                onChange={(_e, v) => setForm({ ...form, enabled: v })} />
-                        </FormGroup>
-                        <FormGroup label="Labels" fieldId="labels">
-                            <LabelInput
-                                labels={form.labels || []}
-                                onChange={(labels) => setForm({ ...form, labels })} />
                         </FormGroup>
                     </Form>
                 </ModalBody>

@@ -33,6 +33,11 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
         <dependency>
+            <groupId>io.apitomy</groupId>
+            <artifactId>apitomy-flow-engine</artifactId>
+            <version>2.0.3</version>
+        </dependency>
+        <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-api</artifactId>
             <scope>test</scope>
