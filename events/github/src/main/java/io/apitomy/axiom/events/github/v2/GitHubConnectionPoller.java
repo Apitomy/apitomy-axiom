@@ -22,7 +22,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @ApplicationScoped
-public class GitHubConnectionPoller {
+public class
+
+GitHubConnectionPoller {
 
     private static final Logger LOG = Logger.getLogger(GitHubConnectionPoller.class);
     private static final int DEFAULT_POLL_INTERVAL = 60;

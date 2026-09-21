@@ -1,49 +1,36 @@
 import {
-    Card, CardBody,
-    DescriptionList,
-    DescriptionListDescription,
-    DescriptionListGroup,
-    DescriptionListTerm,
-    Label,
     Modal,
     ModalBody,
     ModalHeader,
-    Title,
 } from "@patternfly/react-core";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { useEffectiveTheme } from "../hooks/useTheme";
+import { JsonPathTree } from "./JsonPathTree";
 import { type StreamEvent } from "../config/api";
-
-const SOURCE_COLORS: Record<string, "blue" | "green" | "orange" | "grey"> = {
-    github: "blue",
-    jira: "green",
-};
 
 interface StreamEventDetailModalProps {
     event: StreamEvent | null;
     onClose: () => void;
+    /**
+     * When provided, JSON keys become clickable. Clicking a key constructs
+     * the full dot-notation path (e.g., "event.actor.login"), calls this
+     * callback, and closes the modal. Used by the subscription filter editor
+     * to insert field paths into the expression.
+     */
+    onSelectPath?: (path: string) => void;
 }
 
 /**
- * Modal dialog that displays full details of a stream event, including
- * metadata, the normalized payload, and optional source data in read-only
- * code editors.
+ * Modal dialog that displays a stream event. When {@link onSelectPath} is
+ * provided, the event renders as an interactive JSON tree with clickable
+ * keys; otherwise it renders as a read-only JSON code editor.
  */
-export function StreamEventDetailModal({ event, onClose }: StreamEventDetailModalProps) {
+export function StreamEventDetailModal({ event, onClose, onSelectPath }: StreamEventDetailModalProps) {
     const effectiveTheme = useEffectiveTheme();
 
-    const formatJson = (data?: Record<string, unknown>): string => {
-        if (!data) return "";
-        try {
-            return JSON.stringify(data, null, 2);
-        } catch {
-            return "";
-        }
-    };
-
-    const actorLogin = event?.actor?.login as string | undefined;
-    const actorDisplayName = event?.actor?.displayName as string | undefined;
-    const actorLabel = [actorLogin, actorDisplayName].filter(Boolean).join(" — ") || undefined;
+    const handleSelectPath = onSelectPath
+        ? (path: string) => { onSelectPath(path); onClose(); }
+        : undefined;
 
     return (
         <Modal isOpen={event !== null} onClose={onClose} variant="large"
@@ -51,102 +38,27 @@ export function StreamEventDetailModal({ event, onClose }: StreamEventDetailModa
             <ModalHeader
                 title={event?.type ?? "Stream Event"}
                 description={event
-                    ? `${event.source} event — ${new Date(event.timestamp).toLocaleString()}`
+                    ? `${event.source} · ${event.connectionId} · ${new Date(event.timestamp).toLocaleString()}${handleSelectPath ? " · Click a field to insert its path" : ""}`
                     : undefined}
             />
             <ModalBody>
                 {event && (
-                    <>
-                        <Card style={{ marginBottom: "8px" }}>
-                            <CardBody>
-                                <DescriptionList isHorizontal isCompact
-                                    style={{ marginBottom: "16px" }}>
-                                    <DescriptionListGroup>
-                                        <DescriptionListTerm>Source</DescriptionListTerm>
-                                        <DescriptionListDescription>
-                                            <Label isCompact
-                                                color={SOURCE_COLORS[event.source] || "grey"}>
-                                                {event.source}
-                                            </Label>
-                                        </DescriptionListDescription>
-                                    </DescriptionListGroup>
-                                    <DescriptionListGroup>
-                                        <DescriptionListTerm>Connection</DescriptionListTerm>
-                                        <DescriptionListDescription>
-                                            {event.connectionId}
-                                        </DescriptionListDescription>
-                                    </DescriptionListGroup>
-                                    <DescriptionListGroup>
-                                        <DescriptionListTerm>Event Type</DescriptionListTerm>
-                                        <DescriptionListDescription>
-                                            <Label isCompact>{event.type}</Label>
-                                        </DescriptionListDescription>
-                                    </DescriptionListGroup>
-                                    {event.ref && (
-                                        <DescriptionListGroup>
-                                            <DescriptionListTerm>Ref</DescriptionListTerm>
-                                            <DescriptionListDescription>
-                                                <a href={event.ref} target="_blank" rel="noopener noreferrer">
-                                                    {event.ref}
-                                                </a>
-                                            </DescriptionListDescription>
-                                        </DescriptionListGroup>
-                                    )}
-                                    <DescriptionListGroup>
-                                        <DescriptionListTerm>Timestamp</DescriptionListTerm>
-                                        <DescriptionListDescription>
-                                            {new Date(event.timestamp).toLocaleString()}
-                                        </DescriptionListDescription>
-                                    </DescriptionListGroup>
-                                    {actorLabel && (
-                                        <DescriptionListGroup>
-                                            <DescriptionListTerm>Actor</DescriptionListTerm>
-                                            <DescriptionListDescription>
-                                                {actorLabel}
-                                            </DescriptionListDescription>
-                                        </DescriptionListGroup>
-                                    )}
-                                    {event.sourceEventId && (
-                                        <DescriptionListGroup>
-                                            <DescriptionListTerm>Source Event ID</DescriptionListTerm>
-                                            <DescriptionListDescription>
-                                                {event.sourceEventId}
-                                            </DescriptionListDescription>
-                                        </DescriptionListGroup>
-                                    )}
-                                </DescriptionList>
-                            </CardBody>
-                        </Card>
-
-                        <Title headingLevel="h4" size="md" style={{ marginBottom: "8px" }}>
-                            Payload
-                        </Title>
+                    handleSelectPath ? (
+                        <JsonPathTree
+                            data={event}
+                            pathPrefix="event"
+                            onSelectPath={handleSelectPath}
+                        />
+                    ) : (
                         <CodeEditor
-                            code={formatJson(event.payload)}
+                            code={JSON.stringify(event, null, 2)}
                             language={Language.json}
                             isDarkTheme={effectiveTheme === "dark"}
-                            height="400px"
+                            height="600px"
                             isReadOnly
                             isLineNumbersVisible
                         />
-
-                        {event.sourceData && (
-                            <>
-                                <Title headingLevel="h4" size="md"
-                                    style={{ marginTop: "16px", marginBottom: "8px" }}>
-                                    Source Data
-                                </Title>
-                                <CodeEditor
-                                    code={formatJson(event.sourceData)}
-                                    language={Language.json}
-                                    isDarkTheme={effectiveTheme === "dark"}
-                                    height="300px"
-                                    isReadOnly
-                                    isLineNumbersVisible
-                                />
-                            </>
-                        )}
-                    </>
+                    )
                 )}
             </ModalBody>
         </Modal>

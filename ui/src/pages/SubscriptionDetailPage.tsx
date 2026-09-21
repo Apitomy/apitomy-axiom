@@ -1,16 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
     Breadcrumb,
     BreadcrumbItem,
     Button,
-    Card,
-    CardBody,
-    CardTitle,
-    DescriptionList,
-    DescriptionListDescription,
-    DescriptionListGroup,
-    DescriptionListTerm,
+    ClipboardCopy,
+    ClipboardCopyVariant,
     EmptyState,
     EmptyStateBody,
     Flex,
@@ -20,6 +15,9 @@ import {
     HelperText,
     HelperTextItem,
     Label,
+    Modal,
+    ModalBody,
+    ModalHeader,
     PageSection,
     Pagination,
     Switch,
@@ -39,7 +37,9 @@ import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
 import TimesCircleIcon from "@patternfly/react-icons/dist/esm/icons/times-circle-icon";
-import { CodeEditor, Language } from "@patternfly/react-code-editor";
+import HelpIcon from "@patternfly/react-icons/dist/esm/icons/help-icon";
+import { CodeEditor } from "@patternfly/react-code-editor";
+import type * as Monaco from "monaco-editor";
 import { LabelInput } from "../components/LabelInput";
 import { StreamEventDetailModal } from "../components/StreamEventDetailModal";
 import { useEffectiveTheme } from "../hooks/useTheme";
@@ -159,77 +159,14 @@ export function SubscriptionDetailPage() {
                         />
                     </TabContent>
                 </Tab>
-                <Tab eventKey={1} title={<TabTitleText>Filters</TabTitleText>}>
-                    <TabContent id="filters-tab" eventKey={1} activeKey={activeTab}
+                <Tab eventKey={1} title={<TabTitleText>Filter</TabTitleText>}>
+                    <TabContent id="filter-tab" eventKey={1} activeKey={activeTab}
                         style={{ marginTop: "24px" }}>
-                        <Card isCompact>
-                            <CardTitle>Available Fields</CardTitle>
-                            <CardBody>
-                                <DescriptionList isCompact isHorizontal>
-                                    <DescriptionListGroup>
-                                        <DescriptionListTerm><code>event.type</code></DescriptionListTerm>
-                                        <DescriptionListDescription>Event type (e.g., "issue.created", "pr.merged")</DescriptionListDescription>
-                                    </DescriptionListGroup>
-                                    <DescriptionListGroup>
-                                        <DescriptionListTerm><code>event.source</code></DescriptionListTerm>
-                                        <DescriptionListDescription>Source system ("github" or "jira")</DescriptionListDescription>
-                                    </DescriptionListGroup>
-                                    <DescriptionListGroup>
-                                        <DescriptionListTerm><code>event.connectionId</code></DescriptionListTerm>
-                                        <DescriptionListDescription>Connection slug (e.g., "github-com")</DescriptionListDescription>
-                                    </DescriptionListGroup>
-                                    <DescriptionListGroup>
-                                        <DescriptionListTerm><code>event.ref</code></DescriptionListTerm>
-                                        <DescriptionListDescription>Full URL of the event subject</DescriptionListDescription>
-                                    </DescriptionListGroup>
-                                    <DescriptionListGroup>
-                                        <DescriptionListTerm><code>event.payload.*</code></DescriptionListTerm>
-                                        <DescriptionListDescription>Typed payload fields (e.g., event.payload.issue.title, event.payload.pullRequest.baseBranch)</DescriptionListDescription>
-                                    </DescriptionListGroup>
-                                    <DescriptionListGroup>
-                                        <DescriptionListTerm><code>event.actor.login</code></DescriptionListTerm>
-                                        <DescriptionListDescription>Actor username or account ID</DescriptionListDescription>
-                                    </DescriptionListGroup>
-                                </DescriptionList>
-                            </CardBody>
-                        </Card>
-                        <Card isCompact style={{ marginTop: "16px" }}>
-                            <CardTitle>Examples</CardTitle>
-                            <CardBody>
-                                <div style={{ fontFamily: "monospace", fontSize: "13px", lineHeight: "1.8" }}>
-                                    <div><code>event.type == 'issue.created'</code> — match a specific event type</div>
-                                    <div><code>event.type.startsWith('pr.')</code> — match all PR events</div>
-                                    <div><code>event.connectionId == 'github-com' && event.type.startsWith('issue.')</code> — combine conditions</div>
-                                    <div><code>event.type == 'issue.created' || event.type == 'issue.closed'</code> — match either type</div>
-                                    <div><code>event.connectionId != 'jira-staging'</code> — exclude a connection</div>
-                                    <div><code>event.payload.issue.state == 'open'</code> — match on payload fields</div>
-                                </div>
-                            </CardBody>
-                        </Card>
-                        <div style={{ marginTop: "16px" }}>
-                            <Title headingLevel="h4" size="md" style={{ marginBottom: "8px" }}>
-                                Filter Expression
-                            </Title>
-                            <HelperText style={{ marginBottom: "8px" }}>
-                                <HelperTextItem>
-                                    Jakarta EL expression that evaluates to boolean. Leave empty to match all events.
-                                </HelperTextItem>
-                            </HelperText>
-                            <CodeEditor
-                                code={filterExpression}
-                                onCodeChange={(value) => { setFilterExpression(value); setDirty(true); }}
-                                language={Language.plaintext}
-                                isDarkTheme={effectiveTheme === "dark"}
-                                height="120px"
-                                isLineNumbersVisible={false}
-                            />
-                        </div>
-                    </TabContent>
-                </Tab>
-                <Tab eventKey={2} title={<TabTitleText>Preview</TabTitleText>}>
-                    <TabContent id="preview-tab" eventKey={2} activeKey={activeTab}
-                        style={{ marginTop: "24px" }}>
-                        <PreviewTab filterExpression={filterExpression} />
+                        <FilterTab
+                            filterExpression={filterExpression}
+                            setFilterExpression={(v) => { setFilterExpression(v); setDirty(true); }}
+                            effectiveTheme={effectiveTheme}
+                        />
                     </TabContent>
                 </Tab>
             </Tabs>
@@ -237,14 +174,13 @@ export function SubscriptionDetailPage() {
     );
 }
 
+// ── Filter Tab (expression editor + live preview) ───────────────
+
 const SOURCE_COLORS: Record<string, "blue" | "green" | "orange" | "grey"> = {
     github: "blue",
     jira: "green",
 };
 
-/**
- * Extracts a readable short label from a full ref URL.
- */
 function formatRef(ref?: string): string {
     if (!ref) return "—";
     try {
@@ -254,23 +190,308 @@ function formatRef(ref?: string): string {
         const jiraMatch = url.pathname.match(/\/browse\/([A-Z][A-Z0-9_]+-\d+)/);
         if (jiraMatch) return jiraMatch[1];
     } catch {
-        // Not a valid URL; fall through to truncation.
+        // Not a valid URL
     }
     if (ref.length > 50) return `...${ref.slice(-47)}`;
     return ref;
 }
 
-function PreviewTab({ filterExpression }: { filterExpression: string }) {
+const DEBOUNCE_MS = 600;
+
+const MATCH_BG_LIGHT = "rgba(56, 134, 53, 0.1)";
+const MATCH_BG_DARK = "rgba(56, 134, 53, 0.2)";
+
+const EL_LANGUAGE_ID = "axiom-el";
+let elLanguageRegistered = false;
+
+/**
+ * Registers a custom Monaco language for EL filter expressions.
+ * Uses the Monarch tokenizer for declarative syntax highlighting.
+ */
+function registerElLanguage(monaco: typeof Monaco) {
+    if (elLanguageRegistered) return;
+    elLanguageRegistered = true;
+
+    monaco.languages.register({ id: EL_LANGUAGE_ID });
+
+    // Custom themes that extend the defaults with operator coloring
+    monaco.editor.defineTheme("axiom-el-light", {
+        base: "vs",
+        inherit: true,
+        rules: [
+            { token: "operator.el", foreground: "811f3f" },
+            { token: "delimiter.el", foreground: "505050" },
+        ],
+        colors: {},
+    });
+    monaco.editor.defineTheme("axiom-el-dark", {
+        base: "vs-dark",
+        inherit: true,
+        rules: [
+            { token: "operator.el", foreground: "d4759a" },
+            { token: "delimiter.el", foreground: "a0a0a0" },
+        ],
+        colors: {},
+    });
+
+    monaco.languages.setMonarchTokensProvider(EL_LANGUAGE_ID, {
+        defaultToken: "",
+        tokenPostfix: ".el",
+
+        keywords: ["true", "false", "null", "empty", "not", "and", "or",
+                    "eq", "ne", "lt", "gt", "le", "ge", "instanceof"],
+
+        operators: ["==", "!=", "&&", "||", "!", ">=", "<=", ">", "<", "?", ":"],
+
+        symbols: /[=><!~?:&|+\-*/^%]+/,
+
+        tokenizer: {
+            root: [
+                // String literals (single-quoted)
+                [/'[^']*'/, "string"],
+                // String literals (double-quoted)
+                [/"[^"]*"/, "string"],
+
+                // Numbers
+                [/\d+(\.\d+)?/, "number"],
+
+                // Identifiers and keywords
+                [/[a-zA-Z_]\w*/, {
+                    cases: {
+                        "@keywords": "keyword",
+                        "@default": "identifier",
+                    },
+                }],
+
+                // Dot accessor
+                [/\./, "delimiter"],
+
+                // Operators
+                [/@symbols/, {
+                    cases: {
+                        "@operators": "operator",
+                        "@default": "",
+                    },
+                }],
+
+                // Parentheses
+                [/[()]/, "delimiter.parenthesis"],
+
+                // Whitespace
+                [/\s+/, "white"],
+            ],
+        },
+    } as Monaco.languages.IMonarchLanguage);
+
+    // ── Context-aware code completion ────────────────────────────
+
+    type SchemaNode = { [key: string]: SchemaNode | string };
+
+    const actorFields: SchemaNode = {
+        login: "Username or account ID",
+        displayName: "Display name",
+        avatarUrl: "Profile image URL",
+        url: "Profile URL",
+    };
+
+    const issueFields: SchemaNode = {
+        number: "Issue number or key (e.g., \"123\", \"PROJ-456\")",
+        title: "Issue title",
+        body: "Issue description",
+        state: "Normalized state: \"open\" or \"closed\"",
+        stateDetail: "Source-specific state (e.g., \"In Progress\")",
+        author: actorFields,
+        assignees: "Current assignees (array)",
+        labels: "Label names (array)",
+        milestone: "Milestone or sprint name",
+        url: "HTML URL to the issue",
+        createdAt: "Creation timestamp (ISO-8601)",
+        updatedAt: "Last update timestamp",
+        closedAt: "Closure timestamp",
+    };
+
+    const pullRequestFields: SchemaNode = {
+        ...issueFields,
+        headBranch: "Source branch name",
+        baseBranch: "Target branch name",
+        headSha: "Latest commit SHA on head",
+        isDraft: "Whether the PR is a draft",
+        isMerged: "Whether the PR has been merged",
+        mergedAt: "Merge timestamp",
+        mergedBy: actorFields,
+        additions: "Lines added",
+        deletions: "Lines deleted",
+        changedFiles: "Number of changed files",
+    };
+
+    const commentFields: SchemaNode = {
+        id: "Comment ID",
+        body: "Comment body text",
+        author: actorFields,
+        url: "HTML URL to the comment",
+        createdAt: "Creation timestamp",
+        updatedAt: "Last edit timestamp",
+    };
+
+    const reviewFields: SchemaNode = {
+        id: "Review ID",
+        state: "Review state: \"approved\", \"changes_requested\", \"commented\", \"dismissed\"",
+        body: "Review body text",
+        author: actorFields,
+        url: "HTML URL to the review",
+        submittedAt: "Submission timestamp",
+    };
+
+    const labelFields: SchemaNode = {
+        name: "Label name",
+        color: "Hex color code",
+        description: "Label description",
+    };
+
+    const changeFields: SchemaNode = {
+        field: "Which field changed",
+        from: "Previous value",
+        to: "New value",
+        author: actorFields,
+    };
+
+    const payloadFields: SchemaNode = {
+        issue: issueFields,
+        pullRequest: pullRequestFields,
+        comment: commentFields,
+        review: reviewFields,
+        label: labelFields,
+        assignee: actorFields,
+        change: changeFields,
+        requestedReviewer: actorFields,
+        ref: "Git ref (push/branch/tag events)",
+        branch: "Branch name (push events)",
+        beforeSha: "SHA before push",
+        afterSha: "SHA after push",
+        forced: "Whether push was forced",
+        commits: "Commits array (push events)",
+        tagName: "Tag name (release events)",
+        name: "Release name (release events)",
+        body: "Release notes (release events)",
+        before: "Previous head SHA (pr.synchronize)",
+        after: "New head SHA (pr.synchronize)",
+    };
+
+    const completionSchema: SchemaNode = {
+        event: {
+            type: "Normalized event type (e.g., \"issue.created\", \"pr.merged\")",
+            source: "Source system: \"github\" or \"jira\"",
+            connectionId: "Connection slug (e.g., \"github-com\")",
+            ref: "Full URL of the event subject",
+            timestamp: "When the event occurred (ISO-8601)",
+            actor: actorFields,
+            payload: payloadFields,
+        },
+    };
+
+    function resolveSchema(path: string[]): SchemaNode | null {
+        let node: SchemaNode = completionSchema;
+        for (const segment of path) {
+            const child = node[segment];
+            if (child == null || typeof child === "string") return null;
+            node = child;
+        }
+        return node;
+    }
+
+    monaco.languages.registerCompletionItemProvider(EL_LANGUAGE_ID, {
+        triggerCharacters: ["."],
+        provideCompletionItems(model, position) {
+            const textUntilPosition = model.getValueInRange({
+                startLineNumber: position.lineNumber,
+                startColumn: 1,
+                endLineNumber: position.lineNumber,
+                endColumn: position.column,
+            });
+
+            // Extract the dot-separated path before the cursor
+            const match = textUntilPosition.match(/([\w.]+)\.$/);
+            const pathStr = match ? match[1] : "";
+            const path = pathStr ? pathStr.split(".") : [];
+
+            const node = path.length > 0 ? resolveSchema(path) : completionSchema;
+            if (!node) return { suggestions: [] };
+
+            const word = model.getWordUntilPosition(position);
+            const range: Monaco.IRange = {
+                startLineNumber: position.lineNumber,
+                endLineNumber: position.lineNumber,
+                startColumn: word.startColumn,
+                endColumn: word.endColumn,
+            };
+
+            const suggestions: Monaco.languages.CompletionItem[] = Object.entries(node).map(
+                ([key, value]) => {
+                    const isLeaf = typeof value === "string";
+                    const detail = isLeaf ? value : "(object)";
+                    return {
+                        label: key,
+                        kind: isLeaf
+                            ? monaco.languages.CompletionItemKind.Field
+                            : monaco.languages.CompletionItemKind.Module,
+                        insertText: key,
+                        range,
+                        detail,
+                        sortText: key,
+                    };
+                }
+            );
+
+            // Add string method suggestions when the path resolves to a string field
+            const lastSegment = path[path.length - 1];
+            const parentPath = path.slice(0, -1);
+            const parent = parentPath.length > 0 ? resolveSchema(parentPath) : completionSchema;
+            if (parent && lastSegment && typeof parent[lastSegment] === "string") {
+                const methods = [
+                    { name: "startsWith", detail: "String prefix match", snippet: "startsWith('$1')" },
+                    { name: "endsWith", detail: "String suffix match", snippet: "endsWith('$1')" },
+                    { name: "contains", detail: "String substring match", snippet: "contains('$1')" },
+                    { name: "isEmpty", detail: "Check if string is empty", snippet: "isEmpty()" },
+                    { name: "length", detail: "String length", snippet: "length()" },
+                ];
+                for (const m of methods) {
+                    suggestions.push({
+                        label: m.name,
+                        kind: monaco.languages.CompletionItemKind.Method,
+                        insertText: m.snippet,
+                        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                        range,
+                        detail: m.detail,
+                        sortText: `~${m.name}`,
+                    });
+                }
+            }
+
+            return { suggestions };
+        },
+    });
+}
+
+function FilterTab({ filterExpression, setFilterExpression, effectiveTheme }: {
+    filterExpression: string;
+    setFilterExpression: (v: string) => void;
+    effectiveTheme: "light" | "dark";
+}) {
+    const matchBg = effectiveTheme === "dark" ? MATCH_BG_DARK : MATCH_BG_LIGHT;
     const [results, setResults] = useState<SubscriptionPreviewResult[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [totalMatched, setTotalMatched] = useState(0);
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState(20);
-    const [loading, setLoading] = useState(false);
+    const [previewLoading, setPreviewLoading] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState<StreamEvent | null>(null);
+    const [helpOpen, setHelpOpen] = useState(false);
+
+    // Debounce timer for auto-refresh
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const loadPreview = useCallback(() => {
-        setLoading(true);
+        setPreviewLoading(true);
         previewSubscriptionFilter({
             filterExpression: filterExpression || "",
             page,
@@ -282,41 +503,101 @@ function PreviewTab({ filterExpression }: { filterExpression: string }) {
                 setTotalMatched(resp.totalMatched);
             })
             .catch(console.error)
-            .finally(() => setLoading(false));
+            .finally(() => setPreviewLoading(false));
     }, [filterExpression, page, perPage]);
 
-    useEffect(() => { loadPreview(); }, [loadPreview]);
+    // Auto-refresh preview when expression changes (debounced)
+    useEffect(() => {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+            loadPreview();
+        }, DEBOUNCE_MS);
+        return () => {
+            if (debounceRef.current) clearTimeout(debounceRef.current);
+        };
+    }, [filterExpression, page, perPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
     return (
         <div>
-            <Flex style={{ marginBottom: "16px", gap: "24px" }}>
+            {/* Expression editor */}
+            <Flex alignItems={{ default: "alignItemsCenter" }}
+                style={{ marginBottom: "8px", gap: "8px" }}>
+                <FlexItem flex={{ default: "flex_1" }}>
+                    <Title headingLevel="h4" size="md">Filter Expression</Title>
+                </FlexItem>
                 <FlexItem>
-                    <strong>Total events:</strong> {totalCount}
+                    <Button variant="plain" aria-label="Filter expression help"
+                        onClick={() => setHelpOpen(true)}>
+                        <HelpIcon />
+                    </Button>
+                </FlexItem>
+            </Flex>
+            <HelperText style={{ marginBottom: "8px" }}>
+                <HelperTextItem>
+                    EL expression that evaluates to boolean. Leave empty to match all events.
+                </HelperTextItem>
+            </HelperText>
+            <CodeEditor
+                code={filterExpression}
+                onCodeChange={(value) => setFilterExpression(value)}
+                language={EL_LANGUAGE_ID as never}
+                isDarkTheme={effectiveTheme === "dark"}
+                height="80px"
+                isLineNumbersVisible={false}
+                onEditorDidMount={(_editor, monaco) => {
+                    registerElLanguage(monaco);
+                    const themeName = effectiveTheme === "dark" ? "axiom-el-dark" : "axiom-el-light";
+                    monaco.editor.setTheme(themeName);
+                }}
+                options={{
+                    theme: effectiveTheme === "dark" ? "axiom-el-dark" : "axiom-el-light",
+                    glyphMargin: false,
+                    folding: false,
+                    lineDecorationsWidth: 0,
+                    lineNumbersMinChars: 0,
+                    minimap: { enabled: false },
+                    overviewRulerLanes: 0,
+                    scrollBeyondLastLine: false,
+                    renderLineHighlight: "none",
+                    padding: { top: 8, bottom: 8 },
+                }}
+            />
+
+            {/* Summary stats */}
+            <Flex style={{ marginTop: "24px", marginBottom: "8px", gap: "24px" }}
+                alignItems={{ default: "alignItemsCenter" }}>
+                <FlexItem>
+                    <Title headingLevel="h4" size="md">Preview</Title>
+                </FlexItem>
+                <FlexItem>
+                    <strong>Total:</strong> {totalCount}
                 </FlexItem>
                 <FlexItem>
                     <strong>Matched:</strong>{" "}
                     <Label isCompact color="green">{totalMatched}</Label>
                 </FlexItem>
                 <FlexItem>
-                    <strong>Not matched:</strong>{" "}
+                    <strong>Excluded:</strong>{" "}
                     <Label isCompact color="red">{totalCount - totalMatched}</Label>
                 </FlexItem>
-                {filterExpression ? null : (
+                {!filterExpression && (
                     <FlexItem>
                         <HelperText>
                             <HelperTextItem variant="warning">
-                                No filter expression -- all events match.
+                                No filter expression — all events match.
                             </HelperTextItem>
                         </HelperText>
                     </FlexItem>
                 )}
             </Flex>
 
+            {/* Toolbar */}
             <Toolbar>
                 <ToolbarContent>
                     <ToolbarItem>
-                        <Button variant="control" aria-label="Refresh" onClick={loadPreview}>
-                            <SyncAltIcon /> Refresh
+                        <Button variant="control" aria-label="Refresh" onClick={loadPreview}
+                            isLoading={previewLoading} isDisabled={previewLoading}>
+                            <SyncAltIcon />
                         </Button>
                     </ToolbarItem>
                     <ToolbarItem variant="pagination" align={{ default: "alignEnd" }}>
@@ -332,7 +613,8 @@ function PreviewTab({ filterExpression }: { filterExpression: string }) {
                 </ToolbarContent>
             </Toolbar>
 
-            {loading ? (
+            {/* Results table */}
+            {previewLoading && results.length === 0 ? (
                 <EmptyState>
                     <EmptyStateBody>Evaluating filter...</EmptyStateBody>
                 </EmptyState>
@@ -344,7 +626,7 @@ function PreviewTab({ filterExpression }: { filterExpression: string }) {
                 <Table aria-label="Filter Preview" variant="compact">
                     <Thead>
                         <Tr>
-                            <Th>Match</Th>
+                            <Th style={{ width: "50px" }}>Match</Th>
                             <Th>Time</Th>
                             <Th>Source</Th>
                             <Th>Connection</Th>
@@ -359,10 +641,8 @@ function PreviewTab({ filterExpression }: { filterExpression: string }) {
                                 isClickable
                                 onRowClick={() => setSelectedEvent(result.event)}
                                 style={{
-                                    backgroundColor: result.matched
-                                        ? "var(--pf-v6-global--success-color--100, #e6f9e6)"
-                                        : undefined,
-                                    opacity: result.matched ? 1 : 0.6,
+                                    backgroundColor: result.matched ? matchBg : undefined,
+                                    opacity: result.matched ? 1 : 0.45,
                                 }}>
                                 <Td>
                                     {result.matched
@@ -399,10 +679,118 @@ function PreviewTab({ filterExpression }: { filterExpression: string }) {
             <StreamEventDetailModal
                 event={selectedEvent}
                 onClose={() => setSelectedEvent(null)}
+                onSelectPath={(path) => {
+                    // Insert the path at the end of the current expression,
+                    // adding a space separator if the expression is non-empty
+                    const separator = filterExpression && !filterExpression.endsWith(" ") ? " " : "";
+                    setFilterExpression(filterExpression + separator + path);
+                }}
             />
+
+            {/* Help modal */}
+            <FilterHelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
         </div>
     );
 }
+
+// ── Filter Help Modal ───────────────────────────────────────────
+
+function FilterHelpModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} variant="large">
+            <ModalHeader title="Filter Expression Reference" />
+            <ModalBody>
+                <Title headingLevel="h4" size="md" style={{ marginBottom: "12px" }}>
+                    Available Fields
+                </Title>
+                <Table aria-label="Available fields" variant="compact">
+                    <Thead>
+                        <Tr>
+                            <Th>Field</Th>
+                            <Th>Description</Th>
+                            <Th>Example Values</Th>
+                        </Tr>
+                    </Thead>
+                    <Tbody>
+                        <Tr><Td><code>event.type</code></Td><Td>Normalized event type</Td><Td><code>"issue.created"</code>, <code>"pr.merged"</code>, <code>"push"</code></Td></Tr>
+                        <Tr><Td><code>event.source</code></Td><Td>Source system</Td><Td><code>"github"</code>, <code>"jira"</code></Td></Tr>
+                        <Tr><Td><code>event.connectionId</code></Td><Td>Connection slug</Td><Td><code>"github-com"</code>, <code>"jira-prod"</code></Td></Tr>
+                        <Tr><Td><code>event.ref</code></Td><Td>Full URL of the event subject</Td><Td><code>"https://github.com/owner/repo/issues/123"</code></Td></Tr>
+                        <Tr><Td><code>event.timestamp</code></Td><Td>When the event occurred</Td><Td>ISO-8601 string</Td></Tr>
+                        <Tr><Td><code>event.actor.login</code></Td><Td>Actor username or account ID</Td><Td><code>"octocat"</code></Td></Tr>
+                        <Tr><Td><code>event.actor.displayName</code></Td><Td>Actor display name</Td><Td><code>"Octo Cat"</code></Td></Tr>
+                        <Tr><Td><code>event.payload.issue.title</code></Td><Td>Issue title (issue events)</Td><Td><code>"Fix login bug"</code></Td></Tr>
+                        <Tr><Td><code>event.payload.issue.state</code></Td><Td>Issue state (issue events)</Td><Td><code>"open"</code>, <code>"closed"</code></Td></Tr>
+                        <Tr><Td><code>event.payload.issue.number</code></Td><Td>Issue number or key</Td><Td><code>"123"</code>, <code>"PROJ-456"</code></Td></Tr>
+                        <Tr><Td><code>event.payload.pullRequest.baseBranch</code></Td><Td>PR target branch (PR events)</Td><Td><code>"main"</code></Td></Tr>
+                        <Tr><Td><code>event.payload.pullRequest.isDraft</code></Td><Td>Whether the PR is a draft</Td><Td><code>true</code>, <code>false</code></Td></Tr>
+                        <Tr><Td><code>event.payload.label.name</code></Td><Td>Label name (labeled/unlabeled events)</Td><Td><code>"bug"</code></Td></Tr>
+                        <Tr><Td><code>event.payload.review.state</code></Td><Td>Review state (review events)</Td><Td><code>"approved"</code>, <code>"changes_requested"</code></Td></Tr>
+                    </Tbody>
+                </Table>
+
+                <Title headingLevel="h4" size="md" style={{ marginTop: "24px", marginBottom: "12px" }}>
+                    Operators
+                </Title>
+                <Table aria-label="Operators" variant="compact">
+                    <Thead>
+                        <Tr>
+                            <Th>Operator</Th>
+                            <Th>Description</Th>
+                            <Th>Example</Th>
+                        </Tr>
+                    </Thead>
+                    <Tbody>
+                        <Tr><Td><code>==</code></Td><Td>Equals</Td><Td><code>event.type == 'issue.created'</code></Td></Tr>
+                        <Tr><Td><code>!=</code></Td><Td>Not equals</Td><Td><code>event.connectionId != 'jira-staging'</code></Td></Tr>
+                        <Tr><Td><code>&&</code></Td><Td>Logical AND</Td><Td><code>event.source == 'github' && event.type == 'push'</code></Td></Tr>
+                        <Tr><Td><code>||</code></Td><Td>Logical OR</Td><Td><code>event.type == 'issue.created' || event.type == 'issue.closed'</code></Td></Tr>
+                        <Tr><Td><code>!</code></Td><Td>Logical NOT</Td><Td><code>!(event.type.startsWith('pr.'))</code></Td></Tr>
+                        <Tr><Td><code>.startsWith('x')</code></Td><Td>String prefix match</Td><Td><code>event.type.startsWith('issue.')</code></Td></Tr>
+                        <Tr><Td><code>.contains('x')</code></Td><Td>String substring match</Td><Td><code>event.ref.contains('my-repo')</code></Td></Tr>
+                        <Tr><Td><code>.endsWith('x')</code></Td><Td>String suffix match</Td><Td><code>event.ref.endsWith('/pull/1')</code></Td></Tr>
+                    </Tbody>
+                </Table>
+
+                <Title headingLevel="h4" size="md" style={{ marginTop: "24px", marginBottom: "12px" }}>
+                    Examples
+                </Title>
+                <Table aria-label="Examples" variant="compact">
+                    <Thead>
+                        <Tr>
+                            <Th>Expression</Th>
+                            <Th>Description</Th>
+                        </Tr>
+                    </Thead>
+                    <Tbody>
+                        {[
+                            ["event.type == 'issue.created'", "Match a specific event type"],
+                            ["event.type.startsWith('pr.')", "Match all pull request events"],
+                            ["event.connectionId == 'github-com' && event.type.startsWith('issue.')", "Issues from a specific connection"],
+                            ["event.type == 'issue.created' || event.type == 'issue.closed'", "Match either of two event types"],
+                            ["event.connectionId != 'jira-staging'", "Exclude events from a specific connection"],
+                            ["event.payload.issue.state == 'open'", "Match events where the issue is open"],
+                            ["event.payload.pullRequest.baseBranch == 'main'", "PR events targeting the main branch"],
+                            ["event.type == 'pr.review.submitted' && event.payload.review.state == 'approved'", "Only approved PR reviews"],
+                        ].map(([expr, desc]) => (
+                            <Tr key={expr}>
+                                <Td>
+                                    <ClipboardCopy isReadOnly hoverTip="Copy" clickTip="Copied"
+                                        variant={ClipboardCopyVariant.inlineCompact}>
+                                        {expr}
+                                    </ClipboardCopy>
+                                </Td>
+                                <Td>{desc}</Td>
+                            </Tr>
+                        ))}
+                    </Tbody>
+                </Table>
+            </ModalBody>
+        </Modal>
+    );
+}
+
+// ── Info Tab ─────────────────────────────────────────────────────
 
 function InfoTab({ name, setName, description, setDescription, enabled, setEnabled, labels, setLabels }: {
     name: string;

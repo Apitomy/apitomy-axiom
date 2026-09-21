@@ -98,7 +98,7 @@ export function SubscriptionsPage() {
     };
 
     const openCreate = () => {
-        setForm({ name: "", description: "", enabled: true, labels: [] });
+        setForm({ name: "", description: "", enabled: false });
         setIsModalOpen(true);
     };
 
