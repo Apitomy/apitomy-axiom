@@ -2463,6 +2463,29 @@ export async function fetchConnectionStatus(connectionId: string): Promise<Conne
     return response.json();
 }
 
+export interface ConnectionPollLog {
+    id: number;
+    connectionId: string;
+    status: string;
+    message: string;
+    detail?: string;
+    eventsIngested?: number;
+    durationMs?: number;
+    createdOn?: string;
+}
+
+export async function fetchConnectionPollLogs(
+    connectionId: string, page = 1, limit = 20
+): Promise<SearchResults<ConnectionPollLog>> {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(limit));
+    const response = await fetch(
+        `${API}/connections/${encodeURIComponent(connectionId)}/logs?${params}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch poll logs"));
+    return response.json();
+}
+
 // ── Stream Events ─────────────────────────────────────────────────
 
 export interface StreamEvent {

@@ -3,10 +3,13 @@ package io.apitomy.axiom.app.rest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.ConnectionsResource;
 import io.apitomy.axiom.api.beans.Connection;
+import io.apitomy.axiom.api.beans.ConnectionPollLog;
+import io.apitomy.axiom.api.beans.ConnectionPollLogSearchResults;
 import io.apitomy.axiom.api.beans.ConnectionSearchResults;
 import io.apitomy.axiom.api.beans.ConnectionStatus;
 import io.apitomy.axiom.api.beans.Configuration;
 import io.apitomy.axiom.api.beans.NewConnection;
+import io.apitomy.axiom.core.entities.ConnectionPollLogEntity;
 import io.apitomy.axiom.core.entities.EventSourceConnectionEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.quarkus.panache.common.Page;
@@ -151,10 +154,57 @@ public class ConnectionsResourceImpl implements ConnectionsResource {
         if (entity.lastPolledAt != null) {
             status.setLastPolledAt(Date.from(entity.lastPolledAt));
         }
-        // Error tracking will be added later
-        status.setLastError(null);
-        status.setLastErrorAt(null);
+        // Find last error from poll logs
+        ConnectionPollLogEntity lastError = ConnectionPollLogEntity.<ConnectionPollLogEntity>find(
+                "connectionId = ?1 and status = 'error' ORDER BY createdOn DESC", connectionId)
+                .firstResult();
+        if (lastError != null) {
+            status.setLastError(lastError.message);
+            status.setLastErrorAt(Date.from(lastError.createdOn));
+        } else {
+            status.setLastError(null);
+            status.setLastErrorAt(null);
+        }
         return status;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public ConnectionPollLogSearchResults listConnectionPollLogs(String connectionId,
+            BigInteger page, BigInteger limit) {
+        findOrThrow(connectionId);
+        int pageNum = page != null ? page.intValue() : 1;
+        int pageSize = limit != null ? limit.intValue() : 20;
+
+        long totalCount = ConnectionPollLogEntity.count("connectionId", connectionId);
+        List<ConnectionPollLog> items = ConnectionPollLogEntity.<ConnectionPollLogEntity>find(
+                        "connectionId = ?1 ORDER BY createdOn DESC", connectionId)
+                .page(Page.of(pageNum - 1, pageSize))
+                .list().stream().map(this::toPollLogBean).toList();
+
+        ConnectionPollLogSearchResults results = new ConnectionPollLogSearchResults();
+        results.setItems(items);
+        results.setTotalCount(totalCount);
+        results.setPage(pageNum);
+        results.setLimit(pageSize);
+        return results;
+    }
+
+    private ConnectionPollLog toPollLogBean(ConnectionPollLogEntity entity) {
+        ConnectionPollLog bean = new ConnectionPollLog();
+        bean.setId(entity.id);
+        bean.setConnectionId(entity.connectionId);
+        bean.setStatus(entity.status);
+        bean.setMessage(entity.message);
+        bean.setDetail(entity.detail);
+        bean.setEventsIngested(entity.eventsIngested);
+        bean.setDurationMs(entity.durationMs);
+        if (entity.createdOn != null) {
+            bean.setCreatedOn(Date.from(entity.createdOn));
+        }
+        return bean;
     }
 
     /**

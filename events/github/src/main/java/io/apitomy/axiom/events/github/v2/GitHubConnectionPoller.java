@@ -2,6 +2,7 @@ package io.apitomy.axiom.events.github.v2;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.core.entities.ConnectionPollLogEntity;
 import io.apitomy.axiom.core.entities.EventSourceConnectionEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.events.model.NormalizedEvent;
@@ -84,6 +85,7 @@ GitHubConnectionPoller {
     }
 
     private void pollConnection(EventSourceConnectionEntity conn) {
+        long startMs = System.currentTimeMillis();
         String token = resolveToken(conn);
         List<String> repositories;
         try {
@@ -91,6 +93,8 @@ GitHubConnectionPoller {
             JsonNode reposNode = config.path("repositories");
             if (!reposNode.isArray() || reposNode.isEmpty()) {
                 LOG.warnf("Connection %s has no repositories configured", conn.id);
+                recordPollLog(conn.id, "error", "No repositories configured",
+                        null, 0, System.currentTimeMillis() - startMs);
                 return;
             }
             repositories = new java.util.ArrayList<>();
@@ -99,6 +103,8 @@ GitHubConnectionPoller {
             }
         } catch (Exception e) {
             LOG.warnf(e, "Failed to parse configuration for connection %s", conn.id);
+            recordPollLog(conn.id, "error", "Configuration error",
+                    e.getMessage(), 0, System.currentTimeMillis() - startMs);
             return;
         }
 
@@ -108,24 +114,41 @@ GitHubConnectionPoller {
         String htmlBaseUrl = conn.baseUrl;
 
         int totalIngested = 0;
+        StringBuilder errors = new StringBuilder();
         for (String repoFullName : repositories) {
             if (shuttingDown) break;
             String[] parts = repoFullName.split("/");
             if (parts.length != 2) {
                 LOG.warnf("Invalid repository format '%s' in connection %s, expected 'owner/repo'",
                         repoFullName, conn.id);
+                if (!errors.isEmpty()) errors.append("; ");
+                errors.append("Invalid repo format: ").append(repoFullName);
                 continue;
             }
-            totalIngested += pollRepository(conn, parts[0], parts[1], token, apiBaseUrl, htmlBaseUrl);
+            int ingested = pollRepository(conn, parts[0], parts[1], token, apiBaseUrl, htmlBaseUrl, errors);
+            totalIngested += ingested;
         }
 
         updateLastPolledAt(conn.id);
+        long duration = System.currentTimeMillis() - startMs;
+
+        if (errors.isEmpty()) {
+            recordPollLog(conn.id, "success",
+                    "Polled " + repositories.size() + " repositories",
+                    null, totalIngested, duration);
+        } else {
+            recordPollLog(conn.id, "error",
+                    "Polled " + repositories.size() + " repositories with errors",
+                    errors.toString(), totalIngested, duration);
+        }
+
         LOG.infof("Polled connection %s: %d events ingested across %d repositories",
                 conn.id, totalIngested, repositories.size());
     }
 
     private int pollRepository(EventSourceConnectionEntity conn, String owner, String repo,
-                                String token, String apiBaseUrl, String htmlBaseUrl) {
+                                String token, String apiBaseUrl, String htmlBaseUrl,
+                                StringBuilder errors) {
         String cacheKey = conn.id + ":" + owner + "/" + repo;
         String etag = etagCache.get(cacheKey);
 
@@ -135,6 +158,8 @@ GitHubConnectionPoller {
         if (!result.success()) {
             LOG.warnf("Failed to poll %s/%s for connection %s: %s",
                     owner, repo, conn.id, result.errorMessage());
+            if (!errors.isEmpty()) errors.append("; ");
+            errors.append(owner).append("/").append(repo).append(": ").append(result.errorMessage());
             return 0;
         }
 
@@ -245,6 +270,20 @@ GitHubConnectionPoller {
         String envToken = System.getenv("GH_TOKEN");
         if (envToken == null) envToken = System.getenv("GITHUB_TOKEN");
         return envToken;
+    }
+
+    @Transactional
+    void recordPollLog(String connectionId, String status, String message,
+                        String detail, int eventsIngested, long durationMs) {
+        ConnectionPollLogEntity log = new ConnectionPollLogEntity();
+        log.connectionId = connectionId;
+        log.status = status;
+        log.message = message;
+        log.detail = detail;
+        log.eventsIngested = eventsIngested;
+        log.durationMs = durationMs;
+        log.createdOn = Instant.now();
+        log.persist();
     }
 
     @Transactional

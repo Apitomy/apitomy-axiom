@@ -28,21 +28,28 @@ import {
     TextArea,
     TextInput,
     Title,
+    Modal,
+    ModalBody,
+    ModalHeader,
+    Pagination,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
+import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
 import { BooleanStatusIcon } from "../components/BooleanStatusIcon";
 import {
     type Connection,
     type NewConnection,
     type ConnectionStatus,
+    type ConnectionPollLog,
     type Secret,
     type StreamEvent,
     fetchConnection,
     updateConnection,
     fetchConnectionStatus,
+    fetchConnectionPollLogs,
     fetchSecrets,
     fetchStreamEvents,
 } from "../config/api";
@@ -203,6 +210,12 @@ export function ConnectionDetailPage() {
                     <TabContent id="status-tab" eventKey={1} activeKey={activeTab}
                         style={{ marginTop: "24px" }}>
                         <StatusTab connectionId={connectionId!} isActive={activeTab === 1} />
+                    </TabContent>
+                </Tab>
+                <Tab eventKey={2} title={<TabTitleText>Poll Logs</TabTitleText>}>
+                    <TabContent id="poll-logs-tab" eventKey={2} activeKey={activeTab}
+                        style={{ marginTop: "24px" }}>
+                        <PollLogsTab connectionId={connectionId!} isActive={activeTab === 2} />
                     </TabContent>
                 </Tab>
             </Tabs>
@@ -419,6 +432,172 @@ function StatusTab({ connectionId, isActive }: {
                         ))}
                     </Tbody>
                 </Table>
+            )}
+        </div>
+    );
+}
+
+function formatDuration(ms?: number): string {
+    if (ms == null) return "-";
+    if (ms < 1000) return `${ms}ms`;
+    return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function PollLogsTab({ connectionId, isActive }: {
+    connectionId: string;
+    isActive: boolean;
+}) {
+    const [logs, setLogs] = useState<ConnectionPollLog[]>([]);
+    const [totalCount, setTotalCount] = useState(0);
+    const [page, setPage] = useState(1);
+    const [perPage, setPerPage] = useState(20);
+    const [loading, setLoading] = useState(false);
+    const [detailModal, setDetailModal] = useState<ConnectionPollLog | null>(null);
+    const loadedRef = useRef(false);
+
+    const loadLogs = useCallback(() => {
+        setLoading(true);
+        fetchConnectionPollLogs(connectionId, page, perPage)
+            .then((results) => {
+                setLogs(results.items);
+                setTotalCount(results.totalCount);
+            })
+            .catch(console.error)
+            .finally(() => setLoading(false));
+    }, [connectionId, page, perPage]);
+
+    useEffect(() => {
+        if (isActive && !loadedRef.current) {
+            loadedRef.current = true;
+            loadLogs();
+        }
+    }, [isActive, loadLogs]);
+
+    useEffect(() => {
+        if (loadedRef.current) {
+            loadLogs();
+        }
+    }, [page, perPage, loadLogs]);
+
+    return (
+        <div>
+            <Flex justifyContent={{ default: "justifyContentSpaceBetween" }}
+                alignItems={{ default: "alignItemsCenter" }}
+                style={{ marginBottom: "16px" }}>
+                <FlexItem>
+                    <Title headingLevel="h3" size="md">Poll Logs</Title>
+                </FlexItem>
+                <FlexItem>
+                    <Button variant="plain" aria-label="Refresh" onClick={loadLogs}>
+                        <SyncAltIcon />
+                    </Button>
+                </FlexItem>
+            </Flex>
+
+            {loading ? (
+                <EmptyState>
+                    <EmptyStateBody>Loading poll logs...</EmptyStateBody>
+                </EmptyState>
+            ) : logs.length === 0 ? (
+                <EmptyState>
+                    <EmptyStateBody>No poll logs yet. Logs will appear after the connection is polled.</EmptyStateBody>
+                </EmptyState>
+            ) : (
+                <>
+                    <Table aria-label="Poll Logs" variant="compact">
+                        <Thead>
+                            <Tr>
+                                <Th>Status</Th>
+                                <Th>Time</Th>
+                                <Th>Message</Th>
+                                <Th>Events</Th>
+                                <Th>Duration</Th>
+                            </Tr>
+                        </Thead>
+                        <Tbody>
+                            {logs.map((log) => (
+                                <Tr key={log.id}
+                                    isClickable={!!log.detail}
+                                    onRowClick={() => log.detail && setDetailModal(log)}>
+                                    <Td>
+                                        <Label color={log.status === "success" ? "green" : "red"}
+                                            icon={log.status === "success"
+                                                ? <CheckCircleIcon />
+                                                : <ExclamationCircleIcon />}>
+                                            {log.status}
+                                        </Label>
+                                    </Td>
+                                    <Td style={{ whiteSpace: "nowrap" }}>
+                                        {log.createdOn
+                                            ? new Date(log.createdOn).toLocaleString()
+                                            : "-"}
+                                    </Td>
+                                    <Td>{log.message}</Td>
+                                    <Td>{log.eventsIngested ?? "-"}</Td>
+                                    <Td>{formatDuration(log.durationMs)}</Td>
+                                </Tr>
+                            ))}
+                        </Tbody>
+                    </Table>
+
+                    <Pagination
+                        itemCount={totalCount}
+                        page={page}
+                        perPage={perPage}
+                        onSetPage={(_e, p) => setPage(p)}
+                        onPerPageSelect={(_e, pp) => { setPerPage(pp); setPage(1); }}
+                        variant="bottom"
+                    />
+                </>
+            )}
+
+            {detailModal && (
+                <Modal
+                    isOpen
+                    onClose={() => setDetailModal(null)}
+                    variant="medium">
+                    <ModalHeader title="Poll Log Detail" />
+                    <ModalBody>
+                        <DescriptionList isHorizontal>
+                            <DescriptionListGroup>
+                                <DescriptionListTerm>Status</DescriptionListTerm>
+                                <DescriptionListDescription>
+                                    <Label color={detailModal.status === "success" ? "green" : "red"}>
+                                        {detailModal.status}
+                                    </Label>
+                                </DescriptionListDescription>
+                            </DescriptionListGroup>
+                            <DescriptionListGroup>
+                                <DescriptionListTerm>Message</DescriptionListTerm>
+                                <DescriptionListDescription>{detailModal.message}</DescriptionListDescription>
+                            </DescriptionListGroup>
+                            <DescriptionListGroup>
+                                <DescriptionListTerm>Detail</DescriptionListTerm>
+                                <DescriptionListDescription>
+                                    <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                                        {detailModal.detail}
+                                    </pre>
+                                </DescriptionListDescription>
+                            </DescriptionListGroup>
+                            <DescriptionListGroup>
+                                <DescriptionListTerm>Events Ingested</DescriptionListTerm>
+                                <DescriptionListDescription>{detailModal.eventsIngested ?? "-"}</DescriptionListDescription>
+                            </DescriptionListGroup>
+                            <DescriptionListGroup>
+                                <DescriptionListTerm>Duration</DescriptionListTerm>
+                                <DescriptionListDescription>{formatDuration(detailModal.durationMs)}</DescriptionListDescription>
+                            </DescriptionListGroup>
+                            <DescriptionListGroup>
+                                <DescriptionListTerm>Time</DescriptionListTerm>
+                                <DescriptionListDescription>
+                                    {detailModal.createdOn
+                                        ? new Date(detailModal.createdOn).toLocaleString()
+                                        : "-"}
+                                </DescriptionListDescription>
+                            </DescriptionListGroup>
+                        </DescriptionList>
+                    </ModalBody>
+                </Modal>
             )}
         </div>
     );

@@ -5532,6 +5532,61 @@
         }
       ]
     },
+    "/connections/{connectionId}/logs": {
+      "get": {
+        "tags": [
+          "Connections"
+        ],
+        "summary": "List connection poll logs",
+        "operationId": "listConnectionPollLogs",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (1-indexed)",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Items per page",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated poll log results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionPollLogSearchResults"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "connectionId",
+          "in": "path",
+          "description": "Connection ID (slug)",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
     "/stream/events": {
       "get": {
         "tags": [
@@ -9910,6 +9965,62 @@
           "lastErrorAt": {
             "format": "date-time",
             "type": "string"
+          }
+        }
+      },
+      "ConnectionPollLog": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "connectionId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "eventsIngested": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "durationMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "createdOn": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      },
+      "ConnectionPollLogSearchResults": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectionPollLog"
+            }
+          },
+          "totalCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "page": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "limit": {
+            "format": "int32",
+            "type": "integer"
           }
         }
       },

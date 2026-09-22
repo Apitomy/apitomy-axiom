@@ -2,6 +2,7 @@ package io.apitomy.axiom.events.jira.v2;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.core.entities.ConnectionPollLogEntity;
 import io.apitomy.axiom.core.entities.EventSourceConnectionEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.events.model.NormalizedEvent;
@@ -73,10 +74,14 @@ public class JiraConnectionPoller {
     }
 
     private void pollConnection(EventSourceConnectionEntity conn) {
+        long startMs = System.currentTimeMillis();
+
         // First poll: set baseline and skip historical events
         if (conn.lastPolledAt == null) {
             LOG.infof("First poll for Jira connection %s — setting baseline to now", conn.id);
             updateLastPolledAt(conn.id);
+            recordPollLog(conn.id, "success", "Baseline set (first poll)",
+                    null, 0, System.currentTimeMillis() - startMs);
             return;
         }
 
@@ -87,6 +92,8 @@ public class JiraConnectionPoller {
             JsonNode projectsNode = config.path("projects");
             if (!projectsNode.isArray() || projectsNode.isEmpty()) {
                 LOG.warnf("Connection %s has no projects configured", conn.id);
+                recordPollLog(conn.id, "error", "No projects configured",
+                        null, 0, System.currentTimeMillis() - startMs);
                 return;
             }
             projects = new ArrayList<>();
@@ -95,6 +102,8 @@ public class JiraConnectionPoller {
             }
         } catch (Exception e) {
             LOG.warnf(e, "Failed to parse configuration for connection %s", conn.id);
+            recordPollLog(conn.id, "error", "Configuration error",
+                    e.getMessage(), 0, System.currentTimeMillis() - startMs);
             return;
         }
 
@@ -107,6 +116,8 @@ public class JiraConnectionPoller {
         if (!result.success()) {
             LOG.warnf("Failed to poll Jira for connection %s: %s", conn.id, result.errorMessage());
             updateLastPolledAt(conn.id);
+            recordPollLog(conn.id, "error", "API request failed",
+                    result.errorMessage(), 0, System.currentTimeMillis() - startMs);
             return;
         }
 
@@ -129,6 +140,10 @@ public class JiraConnectionPoller {
         }
 
         updateLastPolledAt(conn.id);
+        long duration = System.currentTimeMillis() - startMs;
+        recordPollLog(conn.id, "success",
+                "Polled " + projects.size() + " projects, " + issues.size() + " issues",
+                null, totalIngested, duration);
         LOG.infof("Polled Jira connection %s: %d events ingested from %d issues",
                 conn.id, totalIngested, issues.size());
     }
@@ -152,6 +167,20 @@ public class JiraConnectionPoller {
         }
         // Environment variable fallback
         return System.getenv("JIRA_API_TOKEN");
+    }
+
+    @Transactional
+    void recordPollLog(String connectionId, String status, String message,
+                        String detail, int eventsIngested, long durationMs) {
+        ConnectionPollLogEntity log = new ConnectionPollLogEntity();
+        log.connectionId = connectionId;
+        log.status = status;
+        log.message = message;
+        log.detail = detail;
+        log.eventsIngested = eventsIngested;
+        log.durationMs = durationMs;
+        log.createdOn = Instant.now();
+        log.persist();
     }
 
     @Transactional

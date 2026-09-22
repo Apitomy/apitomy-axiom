@@ -1,5 +1,6 @@
 package io.apitomy.axiom.app;
 
+import io.apitomy.axiom.core.entities.ConnectionPollLogEntity;
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
@@ -74,5 +75,12 @@ public class StreamEventCleanup {
 
         LOG.infof("Cleaned up %d stream event(s) and %d ledger entries older than %d days",
                 eventsDeleted, ledgerDeleted, config.eventRetentionDays);
+
+        // Clean up old connection poll logs (3-day retention)
+        Instant pollLogCutoff = Instant.now().minus(3, ChronoUnit.DAYS);
+        long pollLogsDeleted = ConnectionPollLogEntity.delete("createdOn < ?1", pollLogCutoff);
+        if (pollLogsDeleted > 0) {
+            LOG.infof("Cleaned up %d connection poll log(s) older than 3 days", pollLogsDeleted);
+        }
     }
 }
