@@ -184,6 +184,23 @@ public record SseEvent(
     }
 
     /**
+     * Creates a stream-event-received event, indicating a new event
+     * has been added to the event stream.
+     *
+     * @param eventId      the stream event UUID
+     * @param eventType    the normalized event type (e.g., "issue.created")
+     * @param connectionId the connection slug that produced the event
+     * @return a new SSE event
+     */
+    public static SseEvent streamEventReceived(String eventId, String eventType,
+                                                String connectionId) {
+        return new SseEvent("stream-event",
+                "{\"eventId\":\"" + eventId
+                        + "\",\"eventType\":\"" + escapeJson(eventType)
+                        + "\",\"connectionId\":\"" + escapeJson(connectionId) + "\"}");
+    }
+
+    /**
      * Creates a heartbeat event to keep SSE connections alive through proxies.
      *
      * @return a new heartbeat SSE event

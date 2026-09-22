@@ -434,6 +434,8 @@ public class EventStreamOrchestrator {
                 workflowExecutionService.triggerWorkflow(projectId, rule.workflowDefinitionId()));
         LOG.infof("Created workflow (definition %d) for event %s on project %d",
                 rule.workflowDefinitionId(), event.id, projectId);
+
+        sseEvents.fire(SseEvent.projectUpdated(projectId));
     }
 
     private void routeToInvokeAction(StreamEventEntity event, RoutingRule rule) {
@@ -451,7 +453,7 @@ public class EventStreamOrchestrator {
 
         Long projectId = findOrCreateProjectForEvent(event);
 
-        QuarkusTransaction.requiringNew().run(() -> {
+        Long taskId = QuarkusTransaction.requiringNew().call(() -> {
             TaskEntity task = new TaskEntity();
             task.projectId = projectId;
             task.actionType = actionType.name;
@@ -462,7 +464,11 @@ public class EventStreamOrchestrator {
             task.persist();
             LOG.infof("Created task for action '%s' from event %s",
                     actionType.name, event.id);
+            return task.id;
         });
+
+        sseEvents.fire(SseEvent.taskUpdated(projectId, taskId, "Pending"));
+        sseEvents.fire(SseEvent.projectUpdated(projectId));
     }
 
     private Long findOrCreateProjectForEvent(StreamEventEntity event) {

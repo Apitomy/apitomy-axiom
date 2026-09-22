@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
     Button,
     EmptyState,
@@ -24,6 +24,7 @@ import {
     fetchStreamEvents,
 } from "../config/api";
 import { StreamEventDetailModal } from "../components/StreamEventDetailModal";
+import { sseClient, type AxiomSseEvent } from "../config/sse";
 
 const SOURCE_COLORS: Record<string, "blue" | "green" | "orange" | "grey"> = {
     github: "blue",
@@ -97,6 +98,22 @@ export function EventStreamPage() {
     }, [page, perPage, filterType, filterConnectionId, filterRef]);
 
     useEffect(() => { loadData(); }, [loadData]);
+
+    // Auto-refresh when new stream events arrive via SSE (debounced)
+    const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => {
+        const unsubscribe = sseClient.subscribe((event: AxiomSseEvent) => {
+            if (event.type === "stream-event") {
+                // Debounce: wait 1s after last SSE event before refreshing
+                if (refreshTimer.current) clearTimeout(refreshTimer.current);
+                refreshTimer.current = setTimeout(() => loadData(), 1000);
+            }
+        });
+        return () => {
+            unsubscribe();
+            if (refreshTimer.current) clearTimeout(refreshTimer.current);
+        };
+    }, [loadData]);
 
     const onAddFilterCriteria = (criteria: ChipFilterCriteria) => {
         if (!criteria.filterValue) return;
