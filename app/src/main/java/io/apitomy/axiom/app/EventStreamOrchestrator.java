@@ -76,6 +76,7 @@ public class EventStreamOrchestrator {
     WorkspaceService workspaceService;
 
     private volatile boolean shuttingDown = false;
+    private volatile boolean startupRecoveryDone = false;
 
     @PreDestroy
     void onShutdown() {
@@ -86,6 +87,23 @@ public class EventStreamOrchestrator {
                concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     void processNewEvents() {
         if (shuttingDown) return;
+
+        // On first tick, recover orphaned "pending" ledger entries from a
+        // previous crash by marking them as "failed" so the retry loop
+        // picks them up.
+        if (!startupRecoveryDone) {
+            startupRecoveryDone = true;
+            QuarkusTransaction.requiringNew().run(() -> {
+                long recovered = EventProcessingLedgerEntity.update(
+                        "status = 'failed', errorMessage = 'Recovered on startup: " +
+                        "previous instance crashed before completing routing' " +
+                        "where status = 'pending'");
+                if (recovered > 0) {
+                    LOG.infof("Recovered %d orphaned pending ledger entries on startup",
+                            recovered);
+                }
+            });
+        }
 
         // Load enabled subscriptions
         List<SubscriptionWithFilters> subscriptions = QuarkusTransaction.requiringNew()
