@@ -1,79 +1,120 @@
-# Event Sourcing Redesign — Design Document
+# Event System — Design Document
 
 ## Overview
 
-This document describes the redesign of Axiom's event system. The current system
-conflates event production, filtering, and routing into a single "Event Source" concept.
-The new design separates these into three distinct layers:
+Axiom's event system provides a three-layer architecture for monitoring external systems
+and reacting to changes:
 
-1. **EventSourceConnection** — an authenticated link to an external system that produces
-   a raw, normalized event stream
-2. **Event Stream** — a single table of typed, schema-validated events from all connections
-3. **Event Subscription** — a filtered view over the event stream that routes matching
-   events to a destination (Manager triage, workflow dispatch, etc.)
-
-## Motivation
-
-The current event system has several problems:
-
-- **Missing events from GitHub.** The current pollers use GitHub REST APIs not designed
-  for polling (issues, comments, PRs, PR review comments). They infer event types from
-  timestamp heuristics, which is lossy — rapid state changes, label changes, assignments,
-  and review approvals can be missed.
-- **Untyped payloads.** Events carry a raw JSON blob that varies by source and event type.
-  Downstream consumers (workflow EL expressions, Manager prompts, action scripts) must
-  know the internal structure, making integrations fragile.
-- **Conflated concerns.** Each Event Source owns the external connection, the polling, the
-  filtering, and the routing. This makes it impossible to have multiple filtered views
-  over the same event stream without duplicating connections and polling work.
+1. **Connections** — authenticated links to external systems (GitHub, Jira) that poll
+   for changes and produce a normalized event stream
+2. **Event Stream** — a single database table of typed, schema-validated events from
+   all connections, browsable via REST API and UI
+3. **Subscriptions** — filtered views over the event stream with EL expression matching
+   and configurable routing rules that send matched events to destinations (Manager
+   triage, workflow dispatch, workflow creation, action invocation)
 
 ## Architecture
 
-### EventSourceConnection
+### Connections (EventSourceConnection)
 
 A configured, authenticated link to an external system. Produces a raw, normalized event
 stream. No filtering — every detectable event gets recorded.
 
-- Each connection has a user-provided ID (slug) that serves as its primary key.
-  The slug is limited to lowercase letters, numbers, and dashes (e.g., `github-com`,
-  `github-ibm`, `jira-prod`).
+- Each connection has a user-provided **slug ID** as its primary key (lowercase letters,
+  numbers, dashes; max 63 characters, e.g., `github-com`, `github-ibm`, `jira-prod`)
 - Multiple connections of the same type are supported (e.g., github.com + GitHub Enterprise)
 - Each connection specifies what to watch (repositories for GitHub, projects for Jira)
 - A background poller runs per connection, iterating over watched resources
-- Events carry a `connectionId` (the slug) for traceability
+- Poll results are audited in the `connection_poll_log` table with status, timing,
+  events ingested, and error details (3-day retention)
+- The connection's `baseUrl` stores the **human-readable URL** (e.g., `https://github.com`);
+  the poller derives the API URL automatically
 
 **GitHub connection:**
-- Uses the Repository Events API (`GET /repos/{owner}/{repo}/events`) as the primary source
+- Uses the Repository Events API (`GET /repos/{owner}/{repo}/events`)
 - ETag-based conditional polling for efficiency (304 when nothing changed)
 - Per-repo polling under a shared authentication token
-- Configuration: `baseUrl` (default `https://api.github.com`), `secretName`, `repositories` (list), `pollInterval`
+- PR event payloads are truncated by the API; the poller backfills via
+  `GET /repos/{owner}/{repo}/pulls/{number}`
+- Configuration: `baseUrl` (e.g., `https://github.com`), `secretName`,
+  `repositories` (list of `owner/repo`), `pollInterval`
 
 **Jira connection:**
-- Uses JQL search with changelog expansion (`expand=changelog`) for field-level change detection
+- Uses JQL search with changelog expansion (`expand=changelog`)
 - Single query covers all configured projects via `project in (A, B, C)` clause
-- Configuration: `baseUrl`, `secretName`, `projects` (list), `pollInterval`
+- Field-level change detection from changelog entries
+- ADF-to-plain-text conversion for description and comment bodies
+- Configuration: `baseUrl` (e.g., `https://myorg.atlassian.net`), `secretName`,
+  `projects` (list of project keys), `pollInterval`
+
+**Authentication:** Three-tier fallback for both types: per-connection secret (by name
+from the secrets store), default provider secret (`GH_TOKEN`/`GITHUB_TOKEN` for GitHub,
+`JIRA_API_TOKEN` for Jira), environment variable.
 
 ### Event Stream
 
-A single database table of normalized, schema-validated events produced by all connections.
+A single `stream_event` database table of normalized, schema-validated events produced
+by all connections.
 
-- Each event has a well-defined typed payload determined by its event type
-- Deduplication handled by the sourcer using source-specific event IDs
-- Configurable retention policy
-- Browsable via REST API (`GET /events`)
+- Each event has a UUID primary key and a well-defined typed payload determined by its
+  event type (26 types across issue, PR, and repository events)
+- Deduplication via unique index on `source_event_id`
+- Configurable retention via the `eventRetentionDays` setting
+- Browsable via REST API (`GET /stream/events`) and the Event Stream UI page
 
-### Event Subscription (renamed from Event Source)
+### Subscriptions (EventSubscription)
 
-A filtered view over the event stream. Each subscription defines:
+A filtered view over the event stream with configurable routing. Each subscription has:
 
-- **Filter criteria** — event type patterns, payload field matching, connection scoping
-- **Labels** — for routing and categorization
-- **Routing destination** — Manager triage, workflow dispatch; future: direct action invocation, workflow creation
+- **Filter Expression** — a Jakarta EL expression that evaluates to boolean against the
+  event map (e.g., `event.type.startsWith('pr.') && event.connectionId == 'github-com'`).
+  Empty expression matches all events.
+- **Routing Rules** — a list of destinations for matched events (see Routing below)
+- **Labels** — free-form strings for categorization and downstream scoping
+- **Enabled/Disabled** — subscriptions must be explicitly enabled to process events
 
-Filtering happens exclusively at the subscription level. The event source component
-produces the complete raw stream.
+**Filter expression evaluation** uses the flow engine's `ConditionEvaluator` (Jakarta EL).
+The event is exposed as an `event` variable with fields: `type`, `source`, `connectionId`,
+`ref`, `timestamp`, `actor.*`, and `payload.*` (with full typed payload field access).
+
+### Routing Rules
+
+Each subscription defines zero or more routing rules. When an event matches the filter
+expression, each routing rule executes in order:
+
+| Destination Type | Config Required | What Happens |
+|------------------|-----------------|--------------|
+| `manager` | None | Sends the event to the AI Manager for triage. Manager returns decisions (create_task, ignore, script_action, escalate) which are processed: tasks are created, projects auto-created, scripts executed, escalations logged with SSE notifications. Decisions below the confidence threshold are auto-escalated. |
+| `workflow-dispatch` | None | Offers the event to any workflow instances parked at `receive-event` nodes. Matching uses the flow engine's `matchesEvent` with event type and EL expressions. |
+| `create-workflow` | `workflowDefinitionId` | Finds or auto-creates a project from the event's `ref` URL, then starts a new workflow instance from the specified definition on that project. |
+| `invoke-action` | `actionTypeId` | Finds or auto-creates a project, then creates a `TaskEntity` with status "Pending" for the specified action type. The task queue picks it up for execution. |
+
+A subscription with no routing rules matches events silently (useful for previewing
+matches before committing to a routing destination).
+
+## Processing Ledger
+
+The `event_processing_ledger` table provides durable, restart-safe event processing.
+Each `(event_id, subscription_id)` pair gets a ledger entry with one of four statuses:
+
+| Status | Meaning | Next Action |
+|--------|---------|-------------|
+| `pending` | Filter matched, routing in progress | Transitions to `completed` or `failed`. On startup, orphaned `pending` entries are recovered to `failed`. |
+| `completed` | All routing rules executed successfully | Terminal. |
+| `skipped` | Filter did not match | Terminal. Prevents re-evaluation on future ticks. |
+| `failed` | Routing threw an exception | Retried automatically on each tick until success or event retention. |
+
+**Key behaviors:**
+- **Restart-safe:** No in-memory state. The ledger is the complete record.
+- **Retroactive:** Enabling a new subscription evaluates all existing events against it.
+- **Retry:** Failed entries are re-attempted every tick (5-second interval).
+- **Dedup:** Unique constraint on `(event_id, subscription_id)` prevents duplicate processing.
+- **Startup recovery:** Orphaned `pending` entries from a previous crash are bulk-updated
+  to `failed` on the first tick, then retried normally.
 
 ## REST API
+
+### Connections
 
 | Method | Path | Purpose |
 |--------|------|---------|
@@ -83,18 +124,47 @@ produces the complete raw stream.
 | PUT | `/connections/{connectionId}` | Update a connection |
 | DELETE | `/connections/{connectionId}` | Delete a connection |
 | GET | `/connections/{connectionId}/status` | Poll health, last poll time, errors |
-| GET | `/events` | Browse the normalized event stream (paginated, filterable) |
-| GET | `/events/{id}` | Get a single event with full typed payload |
-| GET | `/subscriptions` | List all event subscriptions |
-| POST | `/subscriptions` | Create an event subscription |
-| GET | `/subscriptions/{id}` | Get an event subscription |
-| PUT | `/subscriptions/{id}` | Update an event subscription |
-| DELETE | `/subscriptions/{id}` | Delete an event subscription |
+| GET | `/connections/{connectionId}/logs` | Poll log history |
 
-## Migration
+### Event Stream
 
-This is a clean break from the existing Event Source system. Existing `EventSourceEntity`
-data is not migrated. Users will need to create new connections and subscriptions.
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/stream/events` | Browse events (paginated, filterable by type, connectionId, ref) |
+| GET | `/stream/events/{eventId}` | Get a single event with full typed payload |
+
+### Subscriptions
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/subscriptions` | List all subscriptions |
+| POST | `/subscriptions` | Create a subscription |
+| GET | `/subscriptions/{id}` | Get a subscription |
+| PUT | `/subscriptions/{id}` | Update a subscription |
+| DELETE | `/subscriptions/{id}` | Delete a subscription |
+| POST | `/subscriptions/preview` | Preview filter expression against existing events |
+
+## Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| `event_source_connection` | Connection definitions (VARCHAR slug PK) |
+| `stream_event` | Normalized event stream (UUID PK, unique on `source_event_id`) |
+| `event_subscription` | Subscription definitions (BIGINT PK) |
+| `event_subscription_label` | Subscription labels (join table) |
+| `event_processing_ledger` | Processing state per (event, subscription) pair |
+| `connection_poll_log` | Poll cycle audit log per connection (3-day retention) |
+
+## Retention
+
+- **Stream events and ledger entries:** Cleaned up hourly based on `eventRetentionDays`
+  setting (default 90 days). Ledger entries are deleted first (FK), then events.
+- **Connection poll logs:** Cleaned up hourly with a 3-day fixed retention.
+
+## Configuration Packs
+
+Connections and subscriptions are included in the configuration pack export/import
+system, allowing portable sharing of event system configuration.
 
 ---
 
@@ -107,11 +177,11 @@ Every event in the stream shares this envelope structure.
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | `string` | System-generated unique event ID (UUID) |
-| `sourceEventId` | `string` | Original ID from the source system (for dedup). GitHub: Events API `id`. Jira: synthesized from issue key + changelog entry ID + timestamp |
+| `sourceEventId` | `string` | Original ID from the source system (for dedup). GitHub: Events API `id`. Jira: synthesized from issue key + changelog entry ID |
 | `source` | `string` | Source system identifier: `"github"` or `"jira"` |
-| `connectionId` | `string` | Slug of the EventSourceConnection that produced this event (e.g., `github-com`, `jira-prod`) |
+| `connectionId` | `string` | Slug of the connection that produced this event |
 | `type` | `string` | Normalized event type (e.g., `issue.created`, `pr.merged`) |
-| `ref` | `string` | Full URL uniquely identifying the subject of the event. GitHub: `https://github.com/owner/repo/issues/123` or `https://github.com/owner/repo/pull/456`. Jira: `https://myorg.atlassian.net/browse/PROJ-123`. For repo-level events (push, branch, tag): `https://github.com/owner/repo` |
+| `ref` | `string` | Full URL uniquely identifying the subject of the event |
 | `timestamp` | `ISO-8601` | When the event occurred in the source system |
 | `actor` | `Actor` | Who performed the action |
 | `payload` | `object` | Typed payload, schema determined by `type` |
@@ -124,34 +194,31 @@ Every event in the stream shares this envelope structure.
 | Field | Type | Description |
 |-------|------|-------------|
 | `login` | `string` | Username or account ID. GitHub: `user.login`. Jira: `accountId` |
-| `displayName` | `string?` | Display name. GitHub: same as login. Jira: `displayName` |
+| `displayName` | `string?` | Display name |
 | `avatarUrl` | `string?` | Profile image URL |
 | `url` | `string?` | Profile HTML URL |
 
 ### Issue
 
-Shared sub-object used across issue-related event types. Normalized to be
-source-agnostic — same field names whether the event came from GitHub or Jira.
+Normalized across GitHub and Jira.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `number` | `string` | Issue identifier. GitHub: `"123"` (issue number). Jira: `"PROJ-123"` (issue key) |
-| `title` | `string` | Issue title. GitHub: `title`. Jira: `summary` |
-| `body` | `string?` | Issue description. GitHub: `body` (markdown). Jira: `description` (ADF converted to plain text) |
-| `state` | `string` | Normalized state: `"open"` or `"closed"`. Jira: mapped from status category (`done` = `closed`, all others = `open`) |
-| `stateDetail` | `string?` | Source-specific state detail. GitHub: `state_reason` (`completed`, `not_planned`). Jira: status name (e.g., `"In Progress"`, `"Done"`) |
-| `author` | `Actor` | Who created the issue. GitHub: `user`. Jira: `reporter` |
-| `assignees` | `Actor[]` | Current assignees. Jira: wrapped single assignee into array |
+| `number` | `string` | Issue identifier. GitHub: `"123"`. Jira: `"PROJ-123"` |
+| `title` | `string` | Issue title |
+| `body` | `string?` | Issue description |
+| `state` | `string` | `"open"` or `"closed"` |
+| `stateDetail` | `string?` | Source-specific detail (GitHub: `state_reason`. Jira: status name) |
+| `author` | `Actor` | Who created the issue |
+| `assignees` | `Actor[]` | Current assignees |
 | `labels` | `string[]` | Label names |
-| `milestone` | `string?` | Milestone name. GitHub: `milestone.title`. Jira: sprint name |
-| `url` | `string` | HTML URL to the issue |
+| `milestone` | `string?` | Milestone or sprint name |
+| `url` | `string` | HTML URL |
 | `createdAt` | `ISO-8601` | Creation timestamp |
 | `updatedAt` | `ISO-8601` | Last update timestamp |
 | `closedAt` | `ISO-8601?` | Closure timestamp |
 
 ### PullRequest
-
-Extends Issue with PR-specific fields. GitHub only (Jira does not produce PR events).
 
 All Issue fields plus:
 
@@ -173,15 +240,13 @@ All Issue fields plus:
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | `string` | Comment ID |
-| `body` | `string` | Comment body text. Jira: ADF converted to plain text |
+| `body` | `string` | Comment body text |
 | `author` | `Actor` | Who wrote the comment |
-| `url` | `string` | HTML URL to the comment |
+| `url` | `string` | HTML URL |
 | `createdAt` | `ISO-8601` | Creation timestamp |
 | `updatedAt` | `ISO-8601` | Last edit timestamp |
 
-### Review
-
-GitHub-only. No Jira equivalent.
+### Review (GitHub only)
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -189,7 +254,7 @@ GitHub-only. No Jira equivalent.
 | `state` | `string` | `approved`, `changes_requested`, `commented`, `dismissed` |
 | `body` | `string?` | Review body text |
 | `author` | `Actor` | Who submitted the review |
-| `url` | `string` | HTML URL to the review |
+| `url` | `string` | HTML URL |
 | `submittedAt` | `ISO-8601` | Submission timestamp |
 
 ### Label
@@ -202,444 +267,143 @@ GitHub-only. No Jira equivalent.
 
 ### Change
 
-Used by events that represent a specific field change (e.g., `issue.updated`, status
-transitions). Particularly important for Jira, where events are derived from changelog
-entries.
-
 | Field | Type | Description |
 |-------|------|-------------|
-| `field` | `string` | Which field changed (e.g., `summary`, `status`, `assignee`, `labels`) |
-| `from` | `string?` | Previous value (human-readable) |
-| `to` | `string?` | New value (human-readable) |
-| `author` | `Actor?` | Who made the change (if different from envelope `actor`) |
+| `field` | `string` | Which field changed |
+| `from` | `string?` | Previous value |
+| `to` | `string?` | New value |
+| `author` | `Actor?` | Who made the change |
 
 ---
 
 # Event Type Taxonomy
 
-## Event Types Summary
-
-### Issue Events (GitHub + Jira)
+## Issue Events (GitHub + Jira)
 
 | Event Type | GitHub Source | Jira Source |
 |------------|--------------|-------------|
-| `issue.created` | `IssuesEvent` / `opened` | Issue with `created` timestamp within poll window |
-| `issue.updated` | `IssuesEvent` / `edited` | Changelog: `summary` or `description` field change |
-| `issue.closed` | `IssuesEvent` / `closed` | Changelog: status transition to `Done` category |
-| `issue.reopened` | `IssuesEvent` / `reopened` | Changelog: status transition from `Done` to non-`Done` |
+| `issue.created` | `IssuesEvent` / `opened` | Issue `created` timestamp within poll window |
+| `issue.updated` | `IssuesEvent` / `edited` | Changelog: `summary` or `description` change |
+| `issue.closed` | `IssuesEvent` / `closed` | Changelog: status to `Done` category |
+| `issue.reopened` | `IssuesEvent` / `reopened` | Changelog: status from `Done` to non-`Done` |
 | `issue.assigned` | `IssuesEvent` / `assigned` | Changelog: `assignee` field set |
 | `issue.unassigned` | `IssuesEvent` / `unassigned` | Changelog: `assignee` field cleared |
-| `issue.labeled` | `IssuesEvent` / `labeled` | Changelog: `labels` field (label added) |
-| `issue.unlabeled` | `IssuesEvent` / `unlabeled` | Changelog: `labels` field (label removed) |
-| `issue.comment.created` | `IssueCommentEvent` / `created` | Comment with `created` > last poll |
-| `issue.comment.updated` | `IssueCommentEvent` / `edited` | Comment with `updated` > `created` and > last poll |
-| `issue.comment.deleted` | `IssueCommentEvent` / `deleted` | Not detectable via polling |
+| `issue.labeled` | `IssuesEvent` / `labeled` | Changelog: `labels` (added) |
+| `issue.unlabeled` | `IssuesEvent` / `unlabeled` | Changelog: `labels` (removed) |
+| `issue.comment.created` | `IssueCommentEvent` / `created` | Comment `created` > last poll |
+| `issue.comment.updated` | `IssueCommentEvent` / `edited` | Comment `updated` > `created` and > last poll |
+| `issue.comment.deleted` | `IssueCommentEvent` / `deleted` | Not detectable |
 
-### Pull Request Events (GitHub only)
+## Pull Request Events (GitHub only)
 
 | Event Type | GitHub Source | Notes |
 |------------|--------------|-------|
 | `pr.created` | `PullRequestEvent` / `opened` | Requires PR backfill |
-| `pr.closed` | `PullRequestEvent` / `closed` + `merged == false` | Requires PR backfill to check `merged` |
-| `pr.merged` | `PullRequestEvent` / `closed` + `merged == true` | Requires PR backfill to check `merged` |
+| `pr.closed` | `PullRequestEvent` / `closed` + `merged == false` | Requires PR backfill |
+| `pr.merged` | `PullRequestEvent` / `closed` + `merged == true` | Requires PR backfill |
 | `pr.reopened` | `PullRequestEvent` / `reopened` | Requires PR backfill |
 | `pr.review_requested` | `PullRequestEvent` / `review_requested` | Requires PR backfill |
 | `pr.review.submitted` | `PullRequestReviewEvent` / `created` | Requires PR backfill |
-| `pr.comment.created` | `IssueCommentEvent` / `created` on PR | Detected by `pull_request` key on issue object |
+| `pr.comment.created` | `IssueCommentEvent` on PR | Detected by `pull_request` key |
 | `pr.labeled` | `PullRequestEvent` / `labeled` | Requires PR backfill |
 | `pr.unlabeled` | `PullRequestEvent` / `unlabeled` | Requires PR backfill |
-| `pr.synchronize` | `PullRequestEvent` / `synchronize` | Requires PR backfill; new commits pushed |
+| `pr.synchronize` | `PullRequestEvent` / `synchronize` | New commits pushed |
 
-### Repository Events (GitHub only)
+## Repository Events (GitHub only)
 
 | Event Type | GitHub Source | Notes |
 |------------|--------------|-------|
-| `push` | `PushEvent` | Up to 20 commits per event |
+| `push` | `PushEvent` | Up to 20 commits |
 | `branch.created` | `CreateEvent` / `ref_type == "branch"` | |
 | `branch.deleted` | `DeleteEvent` / `ref_type == "branch"` | |
 | `tag.created` | `CreateEvent` / `ref_type == "tag"` | |
-| `release.published` | `ReleaseEvent` / `published` | Full release visible (excludes drafts) |
+| `release.published` | `ReleaseEvent` / `published` | Excludes drafts |
 
 ---
 
-# Event Type Payload Specifications
-
-## Issue Events
-
-### `issue.created`
-
-| Payload Field | Type |
-|---------------|------|
-| `issue` | `Issue` |
-
-GitHub: full issue object available directly from Events API. Jira: full issue available
-from search results.
-
-### `issue.updated`
-
-| Payload Field | Type | Description |
-|---------------|------|-------------|
-| `issue` | `Issue` | Current state |
-| `change` | `Change?` | What changed (field, from, to) |
-
-GitHub: `changes` object in payload contains `{title?: {from}, body?: {from}}`.
-Jira: derived from changelog entry for `summary`, `description`, or `priority`.
-
-### `issue.closed`
-
-| Payload Field | Type |
-|---------------|------|
-| `issue` | `Issue` |
-
-`issue.state` will be `"closed"`. `issue.stateDetail` will contain the reason
-(GitHub: `completed`/`not_planned`. Jira: resolution name).
-
-### `issue.reopened`
-
-| Payload Field | Type |
-|---------------|------|
-| `issue` | `Issue` |
-
-`issue.state` will be `"open"`.
-
-### `issue.assigned`
-
-| Payload Field | Type | Description |
-|---------------|------|-------------|
-| `issue` | `Issue` | Current state with updated `assignees` |
-| `assignee` | `Actor` | The user who was assigned |
-
-### `issue.unassigned`
-
-| Payload Field | Type | Description |
-|---------------|------|-------------|
-| `issue` | `Issue` | Current state with updated `assignees` |
-| `assignee` | `Actor` | The user who was unassigned |
-
-### `issue.labeled`
-
-| Payload Field | Type | Description |
-|---------------|------|-------------|
-| `issue` | `Issue` | Current state (labels includes the new label) |
-| `label` | `Label` | The label that was added |
-
-### `issue.unlabeled`
-
-| Payload Field | Type | Description |
-|---------------|------|-------------|
-| `issue` | `Issue` | Current state (labels no longer includes the removed label) |
-| `label` | `Label` | The label that was removed |
-
-### `issue.comment.created`
-
-| Payload Field | Type |
-|---------------|------|
-| `issue` | `Issue` |
-| `comment` | `Comment` |
-
-GitHub: the issue object in `IssueCommentEvent` has no `pull_request` key.
-If `pull_request` key is present, the event type becomes `pr.comment.created` instead.
-
-### `issue.comment.updated`
-
-| Payload Field | Type | Description |
-|---------------|------|-------------|
-| `issue` | `Issue` | |
-| `comment` | `Comment` | Current state of the edited comment |
-
-### `issue.comment.deleted`
-
-| Payload Field | Type | Description |
-|---------------|------|-------------|
-| `issue` | `Issue` | |
-| `comment` | `Comment` | Last known state of the deleted comment |
-
-GitHub only. Not detectable from Jira via polling.
-
-## Pull Request Events
-
-All PR event payloads require a **backfill API call** because the GitHub Repository Events
-API truncates `PullRequestEvent` payloads to only `{id, number, url, head, base}`.
-
-The sourcer must call `GET /repos/{owner}/{repo}/pulls/{number}` to fetch the full PR
-before normalizing. PR objects can be cached per poll cycle to avoid redundant calls when
-multiple events fire for the same PR.
-
-### `pr.created`
-
-| Payload Field | Type |
-|---------------|------|
-| `pullRequest` | `PullRequest` |
-
-### `pr.closed`
-
-| Payload Field | Type |
-|---------------|------|
-| `pullRequest` | `PullRequest` |
-
-Detection: `PullRequestEvent` action `closed` where backfilled PR has `merged == false`.
-
-### `pr.merged`
-
-| Payload Field | Type |
-|---------------|------|
-| `pullRequest` | `PullRequest` |
-
-Detection: `PullRequestEvent` action `closed` where backfilled PR has `merged == true`.
-
-### `pr.reopened`
-
-| Payload Field | Type |
-|---------------|------|
-| `pullRequest` | `PullRequest` |
-
-### `pr.review_requested`
-
-| Payload Field | Type | Description |
-|---------------|------|-------------|
-| `pullRequest` | `PullRequest` | |
-| `requestedReviewer` | `Actor` | The user whose review was requested |
-
-### `pr.review.submitted`
-
-| Payload Field | Type | Description |
-|---------------|------|-------------|
-| `pullRequest` | `PullRequest` | |
-| `review` | `Review` | The submitted review |
-
-### `pr.comment.created`
-
-| Payload Field | Type |
-|---------------|------|
-| `pullRequest` | `PullRequest` |
-| `comment` | `Comment` |
-
-Detected when `IssueCommentEvent` has a `pull_request` key on the issue object.
-
-### `pr.labeled`
-
-| Payload Field | Type | Description |
-|---------------|------|-------------|
-| `pullRequest` | `PullRequest` | |
-| `label` | `Label` | The label that was added |
-
-### `pr.unlabeled`
-
-| Payload Field | Type | Description |
-|---------------|------|-------------|
-| `pullRequest` | `PullRequest` | |
-| `label` | `Label` | The label that was removed |
-
-### `pr.synchronize`
-
-| Payload Field | Type | Description |
-|---------------|------|-------------|
-| `pullRequest` | `PullRequest` | PR with updated `headSha` |
-| `before` | `string` | Previous head commit SHA |
-| `after` | `string` | New head commit SHA |
-
-## Repository Events
-
-### `push`
-
-| Payload Field | Type | Description |
-|---------------|------|-------------|
-| `ref` | `string` | Full git ref (e.g., `refs/heads/main`) |
-| `branch` | `string` | Short branch name (extracted from ref) |
-| `beforeSha` | `string` | SHA before the push |
-| `afterSha` | `string` | SHA after the push |
-| `forced` | `boolean` | Whether this was a force push |
-| `commits` | `Commit[]` | Commits in the push (max 20) |
-
-**Commit sub-object:**
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `sha` | `string` | Full commit SHA |
-| `message` | `string` | Commit message |
-| `author` | `object` | `{name: string, email: string}` (git identity, not platform user) |
-| `url` | `string` | HTML URL to the commit |
-
-### `branch.created`
-
-| Payload Field | Type | Description |
-|---------------|------|-------------|
-| `ref` | `string` | Branch name |
-| `defaultBranch` | `string` | Repository's default branch name |
-
-### `branch.deleted`
-
-| Payload Field | Type | Description |
-|---------------|------|-------------|
-| `ref` | `string` | Branch name that was deleted |
-
-### `tag.created`
-
-| Payload Field | Type | Description |
-|---------------|------|-------------|
-| `ref` | `string` | Tag name |
-| `defaultBranch` | `string` | Repository's default branch name |
-
-### `release.published`
-
-| Payload Field | Type | Description |
-|---------------|------|-------------|
-| `tagName` | `string` | Git tag associated with the release (e.g., `v1.2.0`) |
-| `name` | `string` | Release title |
-| `body` | `string?` | Release notes (markdown) |
-| `isDraft` | `boolean` | Whether the release is a draft (always `false` for `published`) |
-| `isPrerelease` | `boolean` | Whether this is a pre-release |
-| `author` | `Actor` | Who created the release |
-| `url` | `string` | HTML URL to the release page |
-| `createdAt` | `ISO-8601` | Creation timestamp |
-| `publishedAt` | `ISO-8601` | Publication timestamp |
-
-GitHub `ReleaseEvent` also supports actions `created`, `edited`, `deleted`,
-`prereleased`, `released`, and `unpublished`. Only `published` is normalized as an
-event type for now. Additional actions can be added if needed.
-
----
-
-# Source-Specific Mapping Notes
+# Source-Specific Notes
 
 ## GitHub
 
-### Event Detection
+**Event detection:** Repository Events API (`GET /repos/{owner}/{repo}/events`).
 
-GitHub events are detected via the Repository Events API (`GET /repos/{owner}/{repo}/events`).
-Each API event has a `type` (e.g., `IssuesEvent`) and a `payload` containing an `action`
-field and source-specific data.
+**PR backfill:** Events API truncates PR payloads. The poller fetches the full PR via
+`GET /repos/{owner}/{repo}/pulls/{number}` for all PR-related events. For
+`PullRequestEvent/closed`, the `merged` field distinguishes `pr.closed` from `pr.merged`.
 
-### PR Backfill
+**Base URL derivation:** The stored `baseUrl` is human-readable (e.g., `https://github.com`).
+The poller derives the API URL: `https://github.com` becomes `https://api.github.com`;
+GHE URLs get `/api/v3` appended.
 
-The Events API truncates `PullRequestEvent` payloads to only `{id, number, url, head, base}`.
-The sourcer must fetch the full PR object from `GET /repos/{owner}/{repo}/pulls/{number}`
-for all PR-related events. Caching per poll cycle reduces redundant calls.
+**`ref` construction:**
 
-For `PullRequestEvent` with action `closed`, the full PR must be fetched to check the
-`merged` field and distinguish `pr.closed` from `pr.merged`.
-
-### Issue Comment vs PR Comment
-
-`IssueCommentEvent` covers comments on both issues and pull requests. The sourcer
-distinguishes them by checking for a `pull_request` key on the event's `issue` object:
-- Present: emit `pr.comment.created`
-- Absent: emit `issue.comment.created`
-
-### `ref` Construction
-
-The envelope `ref` field is a full URL constructed from the event data:
-
-| Event Category | `ref` Format |
-|----------------|--------------|
+| Event Category | Format |
+|----------------|--------|
 | Issue events | `{baseUrl}/{owner}/{repo}/issues/{number}` |
 | PR events | `{baseUrl}/{owner}/{repo}/pull/{number}` |
 | Push events | `{baseUrl}/{owner}/{repo}` |
 | Branch events | `{baseUrl}/{owner}/{repo}/tree/{branchName}` |
-| Tag events | `{baseUrl}/{owner}/{repo}/releases/tag/{tagName}` |
-| Release events | `{baseUrl}/{owner}/{repo}/releases/tag/{tagName}` |
+| Tag/release events | `{baseUrl}/{owner}/{repo}/releases/tag/{tagName}` |
 
-Where `baseUrl` is the connection's configured base URL (e.g., `https://github.com`
-for github.com, or the GHE instance URL).
+**Deduplication:** Each Events API event has a unique `id`. The poller tracks seen IDs
+per connection+repo in memory and deduplicates in the database via the `source_event_id`
+unique index.
 
-### Deduplication
-
-Each event from the Repository Events API has a unique string `id`. The sourcer tracks
-the last-seen event ID per repository and skips events already processed.
-
-### Polling
-
-- ETag-based conditional polling (304 when nothing changed)
-- Recommended interval: 60 seconds per repo (configurable per connection)
-- The API retains up to 300 events for the last 90 days
-
-### GitHub `sourceData`
-
-The escape hatch for GitHub events contains the raw API objects:
-
-```json
-{
-  "githubEventId": "12345678",
-  "githubEventType": "IssuesEvent",
-  "githubAction": "labeled",
-  "rawPayload": { ... }
-}
-```
+**Polling:** ETag-based conditional polling (304 on no change). Default 60-second interval.
 
 ## Jira
 
-### Event Detection
+**Event detection:** JQL search with `expand=changelog`. Changelog entries are filtered
+by timestamp and classified into normalized event types.
 
-Jira events are derived from JQL search results with changelog expansion. A single query
-covers all configured projects: `project in (A, B, C) AND updated >= "{since}"`.
+**Changelog classification:**
 
-### Changelog Processing
-
-The changelog provides field-level change history. Each entry contains `field`,
-`fromString`, `toString`, and a timestamp. The sourcer filters changelog entries by
-timestamp (only entries newer than the last poll) and classifies them into normalized
-event types:
-
-| Changelog Field | Event Type |
-|-----------------|------------|
-| `status` (to Done category) | `issue.closed` |
-| `status` (from Done category) | `issue.reopened` |
+| Field | Event Type |
+|-------|------------|
+| `status` to Done category | `issue.closed` |
+| `status` from Done category | `issue.reopened` |
 | `summary` or `description` | `issue.updated` |
-| `assignee` (set) | `issue.assigned` |
-| `assignee` (cleared) | `issue.unassigned` |
-| `labels` (added) | `issue.labeled` |
-| `labels` (removed) | `issue.unlabeled` |
+| `assignee` set | `issue.assigned` |
+| `assignee` cleared | `issue.unassigned` |
+| `labels` added | `issue.labeled` |
+| `labels` removed | `issue.unlabeled` |
 
-### Label Diffing
+**Label diffing:** Jira provides space-separated before/after lists in changelog.
+The sourcer diffs them to emit individual labeled/unlabeled events.
 
-Jira's changelog for labels provides space-separated before/after lists
-(`fromString: "bug login"`, `toString: "bug login critical"`). The sourcer diffs these
-to determine individual additions/removals. Multiple label changes in one edit produce
-one event per label change.
+**ADF conversion:** Jira v3 returns description and comment body in Atlassian Document
+Format. The sourcer extracts plain text for normalized fields and preserves raw ADF
+in `sourceData`.
 
-### ADF Conversion
+**`ref` construction:** `{baseUrl}/browse/{issueKey}`
 
-Jira Cloud v3 returns `description` and `comment.body` in Atlassian Document Format (ADF).
-The normalized `body` fields contain a plain-text conversion. The raw ADF is preserved in
-`sourceData` (`descriptionAdf`, `commentBodyAdf`).
+**Deduplication:** Stable `sourceEventId` from `{issueKey}-{changelogEntryId}`,
+`{issueKey}-created`, or `{issueKey}-comment-{commentId}`.
 
-### Comment Detection
+---
 
-Comments require separate processing. The sourcer compares comment `created` and `updated`
-timestamps against the last poll to detect new and edited comments.
+# Key Implementation Classes
 
-### `ref` Construction
-
-The envelope `ref` field is a full browse URL:
-
-| Event Category | `ref` Format |
-|----------------|--------------|
-| All issue events | `{baseUrl}/browse/{issueKey}` (e.g., `https://myorg.atlassian.net/browse/PROJ-123`) |
-
-Where `baseUrl` is the connection's configured Jira base URL.
-
-### Deduplication
-
-Jira events are synthesized from changelog entries. The sourcer generates a stable
-`sourceEventId` from: `{issueKey}-{changelogEntryId}` (for changelog-derived events)
-or `{issueKey}-created` (for issue creation) or `{issueKey}-comment-{commentId}` (for
-comment events).
-
-### Jira `sourceData`
-
-```json
-{
-  "jiraId": "10001",
-  "project": { "key": "PROJ", "name": "Project Name" },
-  "issueType": { "name": "Bug", "subtask": false },
-  "priority": { "name": "Medium" },
-  "resolution": { "name": "Done" },
-  "components": [{"name": "Backend"}],
-  "fixVersions": [{"name": "1.0"}],
-  "sprint": { "name": "Sprint 14", "state": "active" },
-  "parent": { "key": "PROJ-100", "summary": "Parent epic" },
-  "dueDate": "2026-10-15",
-  "descriptionAdf": { "type": "doc", "version": 1, "content": [] },
-  "customFields": {}
-}
-```
+| Component | Path |
+|-----------|------|
+| Event envelope + payloads | `core/.../events/model/` (NormalizedEvent, EventType, 26 payload records) |
+| Connection entity | `core/.../entities/EventSourceConnectionEntity.java` |
+| Stream event entity | `core/.../entities/StreamEventEntity.java` |
+| Subscription entity | `core/.../entities/EventSubscriptionEntity.java` |
+| Processing ledger entity | `core/.../entities/EventProcessingLedgerEntity.java` |
+| Poll log entity | `core/.../entities/ConnectionPollLogEntity.java` |
+| Routing rule model | `core/.../events/model/RoutingRule.java` |
+| Filter evaluator | `core/.../filters/SubscriptionFilterEvaluator.java` |
+| GitHub poller | `events/github/.../v2/GitHubConnectionPoller.java` |
+| GitHub normalizer | `events/github/.../v2/GitHubEventNormalizerV2.java` |
+| GitHub API client | `events/github/.../v2/GitHubEventsApiClient.java` |
+| Jira poller | `events/jira/.../v2/JiraConnectionPoller.java` |
+| Jira normalizer | `events/jira/.../v2/JiraEventNormalizerV2.java` |
+| Jira API client | `events/jira/.../v2/JiraEventsApiClient.java` |
+| Event stream service | `events/core/.../EventStreamService.java` |
+| Stream orchestrator | `app/.../EventStreamOrchestrator.java` |
+| Workflow dispatcher | `app/.../WorkflowEventDispatcher.java` |
+| Stream event cleanup | `app/.../StreamEventCleanup.java` |
+| Connections REST | `app/.../rest/ConnectionsResourceImpl.java` |
+| Stream events REST | `app/.../rest/StreamEventsResourceImpl.java` |
+| Subscriptions REST | `app/.../rest/SubscriptionsResourceImpl.java` |
