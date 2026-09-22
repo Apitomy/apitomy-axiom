@@ -39,6 +39,8 @@ import {
     type ReportDefinition,
     type ScheduledJob,
     type SessionTemplate,
+    type Connection,
+    type Subscription,
     type PackExportRequest,
     type ImportResult,
     fetchActionTypes,
@@ -48,6 +50,8 @@ import {
     fetchReportDefinitions,
     fetchScheduledJobs,
     fetchAssistantTemplates,
+    fetchConnections,
+    fetchSubscriptions,
     exportPack,
     importPack,
 } from "../config/api";
@@ -60,6 +64,8 @@ export function ConfigurationPacksPage() {
     const [reportDefs, setReportDefs] = useState<ReportDefinition[]>([]);
     const [scheduledJobs, setScheduledJobs] = useState<ScheduledJob[]>([]);
     const [sessionTemplates, setSessionTemplates] = useState<SessionTemplate[]>([]);
+    const [connections, setConnections] = useState<Connection[]>([]);
+    const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState(0);
 
@@ -73,6 +79,8 @@ export function ConfigurationPacksPage() {
     const [selectedReportDefs, setSelectedReportDefs] = useState<Set<number>>(new Set());
     const [selectedScheduledJobs, setSelectedScheduledJobs] = useState<Set<number>>(new Set());
     const [selectedSessionTemplates, setSelectedSessionTemplates] = useState<Set<string>>(new Set());
+    const [selectedConnections, setSelectedConnections] = useState<Set<string>>(new Set());
+    const [selectedSubscriptions, setSelectedSubscriptions] = useState<Set<number>>(new Set());
     const [exporting, setExporting] = useState(false);
 
     // Import state
@@ -95,8 +103,10 @@ export function ConfigurationPacksPage() {
             fetchReportDefinitions(),
             fetchScheduledJobs(),
             fetchAssistantTemplates(),
+            fetchConnections(1, 100),
+            fetchSubscriptions(1, 100),
         ])
-            .then(([at, t, ts, mcp, rd, sj, st]) => {
+            .then(([at, t, ts, mcp, rd, sj, st, conn, sub]) => {
                 setActionTypes(at.items);
                 setTools(t.items);
                 setToolsets(ts);
@@ -104,6 +114,8 @@ export function ConfigurationPacksPage() {
                 setReportDefs(rd);
                 setScheduledJobs(sj);
                 setSessionTemplates(st.filter((s: SessionTemplate) => !s.builtIn));
+                setConnections(conn.items);
+                setSubscriptions(sub.items);
             })
             .catch(console.error)
             .finally(() => setLoading(false));
@@ -113,7 +125,8 @@ export function ConfigurationPacksPage() {
 
     const totalSelected = selectedActionTypes.size + selectedTools.size
         + selectedToolsets.size + selectedMcpServers.size + selectedReportDefs.size
-        + selectedScheduledJobs.size + selectedSessionTemplates.size;
+        + selectedScheduledJobs.size + selectedSessionTemplates.size
+        + selectedConnections.size + selectedSubscriptions.size;
 
     const handleExport = async () => {
         setExporting(true);
@@ -128,6 +141,8 @@ export function ConfigurationPacksPage() {
                 reportDefinitionIds: [...selectedReportDefs],
                 scheduledJobIds: [...selectedScheduledJobs],
                 sessionTemplateIds: [...selectedSessionTemplates],
+                connectionIds: [...selectedConnections],
+                subscriptionIds: [...selectedSubscriptions],
             };
             const blob = await exportPack(request);
             const url = URL.createObjectURL(blob);
@@ -161,6 +176,8 @@ export function ConfigurationPacksPage() {
                     if (json.reportDefinitions?.length) preview["Report Definitions"] = json.reportDefinitions.length;
                     if (json.scheduledJobs?.length) preview["Scheduled Jobs"] = json.scheduledJobs.length;
                     if (json.sessionTemplates?.length) preview["Session Templates"] = json.sessionTemplates.length;
+                    if (json.connections?.length) preview["Connections"] = json.connections.length;
+                    if (json.subscriptions?.length) preview["Subscriptions"] = json.subscriptions.length;
                     setImportPreview(preview);
                     setImportPackName(json.metadata?.name || "");
                 } catch {
@@ -211,6 +228,12 @@ export function ConfigurationPacksPage() {
     };
 
     const toggleSet = (set: Set<number>, id: number): Set<number> => {
+        const next = new Set(set);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+    };
+
+    const toggleStringSet = (set: Set<string>, id: string): Set<string> => {
         const next = new Set(set);
         if (next.has(id)) next.delete(id); else next.add(id);
         return next;
@@ -278,7 +301,8 @@ export function ConfigurationPacksPage() {
             </Title>
             <p className="axiom-text-subtle" style={{ marginTop: "8px", marginBottom: "16px" }}>
                 Configuration packs bundle related items — action types, tools, toolsets,
-                MCP servers, report definitions, scheduled jobs, and session templates — into a portable JSON
+                MCP servers, report definitions, scheduled jobs, session templates,
+                connections, and subscriptions — into a portable JSON
                 file. Create a pack to share your setup with others, or import one to quickly
                 add pre-configured functionality to your Axiom instance.
             </p>
@@ -448,6 +472,14 @@ export function ConfigurationPacksPage() {
                                             autoSelectReferencedItems([st.allowedTools]);
                                         }
                                     }} />
+                                <ConnectionCheckboxSection
+                                    connections={connections}
+                                    selected={selectedConnections}
+                                    onToggle={(id) => setSelectedConnections(toggleStringSet(selectedConnections, id))} />
+                                <CheckboxSection title="Subscriptions"
+                                    items={subscriptions.map((s) => ({ id: s.id, name: s.name, description: s.description }))}
+                                    selected={selectedSubscriptions}
+                                    onToggle={(id) => setSelectedSubscriptions(toggleSet(selectedSubscriptions, id))} />
                             </div>
 
                             <div style={{ marginTop: "24px" }}>
@@ -533,6 +565,8 @@ export function ConfigurationPacksPage() {
                                         {importResult.reportDefinitions ? <li>{importResult.reportDefinitions} report definition(s)</li> : null}
                                         {importResult.scheduledJobs ? <li>{importResult.scheduledJobs} scheduled job(s)</li> : null}
                                         {importResult.sessionTemplates ? <li>{importResult.sessionTemplates} session template(s)</li> : null}
+                                        {importResult.connections ? <li>{importResult.connections} connection(s)</li> : null}
+                                        {importResult.subscriptions ? <li>{importResult.subscriptions} subscription(s)</li> : null}
                                     </ul>
                                 </Alert>
                             )}
@@ -1036,6 +1070,45 @@ function SessionTemplateCheckboxSection({ templates, selected, onToggle }: {
                         description={t.description}
                         isChecked={selected.has(t.templateId)}
                         onChange={() => onToggle(t.templateId)} />
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function ConnectionCheckboxSection({ connections, selected, onToggle }: {
+    connections: Connection[];
+    selected: Set<string>;
+    onToggle: (id: string) => void;
+}) {
+    if (connections.length === 0) return null;
+
+    const selectedCount = connections.filter((c) => selected.has(c.id)).length;
+
+    return (
+        <div style={{ marginBottom: "16px" }}>
+            <div style={{ fontWeight: 600, marginBottom: "8px", fontSize: "14px" }}>
+                Connections
+                {selectedCount > 0 && (
+                    <Label isCompact color="blue" style={{ marginLeft: "8px" }}>
+                        {selectedCount} selected
+                    </Label>
+                )}
+            </div>
+            <div style={{
+                display: "flex", flexDirection: "column", gap: "4px",
+                maxHeight: "200px", overflowY: "auto",
+                padding: "8px 12px",
+                backgroundColor: "var(--pf-t--global--background--color--secondary--default)",
+                borderRadius: "4px",
+            }}>
+                {connections.map((c) => (
+                    <Checkbox key={c.id}
+                        id={`connection-${c.id}`}
+                        label={c.name}
+                        description={c.description}
+                        isChecked={selected.has(c.id)}
+                        onChange={() => onToggle(c.id)} />
                 ))}
             </div>
         </div>

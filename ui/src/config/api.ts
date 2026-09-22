@@ -187,6 +187,8 @@ export interface PackExportRequest {
     reportDefinitionIds?: number[];
     sessionTemplateIds?: string[];
     scheduledJobIds?: number[];
+    connectionIds?: string[];
+    subscriptionIds?: number[];
 }
 
 export interface ImportResult {
@@ -197,6 +199,8 @@ export interface ImportResult {
     reportDefinitions?: number;
     sessionTemplates?: number;
     scheduledJobs?: number;
+    connections?: number;
+    subscriptions?: number;
 }
 
 export interface AssistantApplyResult {
@@ -220,6 +224,10 @@ export interface AssistantApplyResult {
     eventSourcesUpdated?: number;
     scheduledJobsCreated?: number;
     scheduledJobsUpdated?: number;
+    connectionsCreated?: number;
+    connectionsUpdated?: number;
+    subscriptionsCreated?: number;
+    subscriptionsUpdated?: number;
 }
 
 export async function exportPack(request: PackExportRequest): Promise<Blob> {

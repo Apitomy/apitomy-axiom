@@ -7,7 +7,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.api.beans.ImportResult;
 import io.apitomy.axiom.api.beans.PackExportRequest;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
+import io.apitomy.axiom.core.entities.EventSourceConnectionEntity;
 import io.apitomy.axiom.core.entities.EventSourceEntity;
+import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.McpServerEntity;
 import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobEntity;
@@ -114,6 +116,22 @@ public class ImportExportService {
             }
         }
 
+        if (request.getConnectionIds() != null && !request.getConnectionIds().isEmpty()) {
+            ArrayNode arr = pack.putArray("connections");
+            for (String id : request.getConnectionIds()) {
+                EventSourceConnectionEntity entity = EventSourceConnectionEntity.findById(id);
+                if (entity != null) arr.add(serializeConnection(entity));
+            }
+        }
+
+        if (request.getSubscriptionIds() != null && !request.getSubscriptionIds().isEmpty()) {
+            ArrayNode arr = pack.putArray("subscriptions");
+            for (Number id : request.getSubscriptionIds()) {
+                EventSubscriptionEntity entity = EventSubscriptionEntity.findById(id.longValue());
+                if (entity != null) arr.add(serializeSubscription(entity));
+            }
+        }
+
         LOG.infof("Exported configuration pack '%s'", request.getName());
         return pack;
     }
@@ -136,6 +154,8 @@ public class ImportExportService {
         checkConflicts(pack, "reportDefinitions", "name", "reportDefinition", conflicts);
         checkConflicts(pack, "sessionTemplates", "templateId", "sessionTemplate", conflicts);
         checkConflicts(pack, "scheduledJobs", "name", "scheduledJob", conflicts);
+        checkConflicts(pack, "connections", "id", "connection", conflicts);
+        checkConflicts(pack, "subscriptions", "name", "subscription", conflicts);
 
         if (!conflicts.isEmpty()) {
             ObjectNode error = objectMapper.createObjectNode();
@@ -157,13 +177,15 @@ public class ImportExportService {
         int reportDefinitions = importReportDefinitions(pack.path("reportDefinitions"));
         int sessionTemplates = importSessionTemplates(pack.path("sessionTemplates"));
         int scheduledJobs = importScheduledJobs(pack.path("scheduledJobs"));
+        int connections = importConnections(pack.path("connections"));
+        int subscriptions = importSubscriptions(pack.path("subscriptions"));
 
         String packName = pack.path("metadata").path("name").asText("unnamed");
         LOG.infof("Imported configuration pack '%s': %d tools, %d toolsets, %d MCP servers, "
                         + "%d action types, %d report definitions, %d session templates, "
-                        + "%d scheduled jobs",
+                        + "%d scheduled jobs, %d connections, %d subscriptions",
                 packName, tools, toolsets, mcpServers, actionTypes, reportDefinitions,
-                sessionTemplates, scheduledJobs);
+                sessionTemplates, scheduledJobs, connections, subscriptions);
 
         ImportResult result = new ImportResult();
         result.setTools(tools);
@@ -173,6 +195,8 @@ public class ImportExportService {
         result.setReportDefinitions(reportDefinitions);
         result.setSessionTemplates(sessionTemplates);
         result.setScheduledJobs(scheduledJobs);
+        result.setConnections(connections);
+        result.setSubscriptions(subscriptions);
         return result;
     }
 
@@ -186,7 +210,9 @@ public class ImportExportService {
             int toolsetsCreated, int toolsetsUpdated,
             int sessionTemplatesCreated, int sessionTemplatesUpdated,
             int eventSourcesCreated, int eventSourcesUpdated,
-            int scheduledJobsCreated, int scheduledJobsUpdated
+            int scheduledJobsCreated, int scheduledJobsUpdated,
+            int connectionsCreated, int connectionsUpdated,
+            int subscriptionsCreated, int subscriptionsUpdated
     ) {}
 
     /**
@@ -206,6 +232,8 @@ public class ImportExportService {
         int[] sessionTemplates = upsertSessionTemplates(pack.path("sessionTemplates"));
         int[] eventSources = upsertEventSources(pack.path("eventSources"));
         int[] scheduledJobs = upsertScheduledJobs(pack.path("scheduledJobs"));
+        int[] connections = upsertConnections(pack.path("connections"));
+        int[] subscriptions = upsertSubscriptions(pack.path("subscriptions"));
 
         String packName = pack.path("metadata").path("name").asText("unnamed");
         LOG.infof("Upserted configuration pack '%s': %d tools created, %d updated; "
@@ -214,7 +242,9 @@ public class ImportExportService {
                         + "%d toolsets created, %d updated; "
                         + "%d session templates created, %d updated; "
                         + "%d event sources created, %d updated; "
-                        + "%d scheduled jobs created, %d updated",
+                        + "%d scheduled jobs created, %d updated; "
+                        + "%d connections created, %d updated; "
+                        + "%d subscriptions created, %d updated",
                 packName,
                 tools[0], tools[1],
                 actionTypes[0], actionTypes[1],
@@ -222,7 +252,9 @@ public class ImportExportService {
                 toolsets[0], toolsets[1],
                 sessionTemplates[0], sessionTemplates[1],
                 eventSources[0], eventSources[1],
-                scheduledJobs[0], scheduledJobs[1]);
+                scheduledJobs[0], scheduledJobs[1],
+                connections[0], connections[1],
+                subscriptions[0], subscriptions[1]);
 
         return new UpsertResult(
                 tools[0], tools[1],
@@ -231,7 +263,9 @@ public class ImportExportService {
                 toolsets[0], toolsets[1],
                 sessionTemplates[0], sessionTemplates[1],
                 eventSources[0], eventSources[1],
-                scheduledJobs[0], scheduledJobs[1]
+                scheduledJobs[0], scheduledJobs[1],
+                connections[0], connections[1],
+                subscriptions[0], subscriptions[1]
         );
     }
 
@@ -318,6 +352,8 @@ public class ImportExportService {
                 case "reportDefinition" -> ReportDefinitionEntity.count("name", name) > 0;
                 case "sessionTemplate" -> SessionTemplateEntity.count("templateId", name) > 0;
                 case "scheduledJob" -> ScheduledJobEntity.count("name", name) > 0;
+                case "connection" -> EventSourceConnectionEntity.findById(name) != null;
+                case "subscription" -> EventSubscriptionEntity.count("name", name) > 0;
                 default -> false;
             };
             if (exists) {
@@ -920,6 +956,136 @@ public class ImportExportService {
             e.labels.forEach(arr::add);
         }
         return n;
+    }
+
+    private ObjectNode serializeConnection(EventSourceConnectionEntity e) {
+        ObjectNode n = objectMapper.createObjectNode();
+        n.put("id", e.id);
+        n.put("name", e.name);
+        putIfNotNull(n, "description", e.description);
+        n.put("sourceType", e.sourceType);
+        n.put("enabled", e.enabled);
+        n.put("baseUrl", e.baseUrl);
+        putIfNotNull(n, "secretName", e.secretName);
+        if (e.pollInterval != null) n.put("pollInterval", e.pollInterval);
+        putIfNotNull(n, "configuration", e.configuration);
+        return n;
+    }
+
+    private ObjectNode serializeSubscription(EventSubscriptionEntity e) {
+        ObjectNode n = objectMapper.createObjectNode();
+        n.put("name", e.name);
+        putIfNotNull(n, "description", e.description);
+        n.put("enabled", e.enabled);
+        putIfNotNull(n, "filterExpression", e.filters);
+        putIfNotNull(n, "routing", e.routing);
+        if (e.labels != null && !e.labels.isEmpty()) {
+            var arr = n.putArray("labels");
+            for (String label : e.labels) arr.add(label);
+        }
+        return n;
+    }
+
+    private int importConnections(JsonNode items) {
+        if (!items.isArray()) return 0;
+        int count = 0;
+        for (JsonNode item : items) {
+            EventSourceConnectionEntity entity = new EventSourceConnectionEntity();
+            entity.id = item.path("id").asText();
+            entity.name = item.path("name").asText();
+            entity.description = textOrNull(item, "description");
+            entity.sourceType = item.path("sourceType").asText("github");
+            entity.enabled = item.path("enabled").asBoolean(false);
+            entity.baseUrl = item.path("baseUrl").asText("");
+            entity.secretName = textOrNull(item, "secretName");
+            entity.pollInterval = item.has("pollInterval") ? item.path("pollInterval").asInt() : null;
+            entity.configuration = jsonOrNull(item, "configuration");
+            if (entity.configuration == null) entity.configuration = "{}";
+            entity.createdOn = Instant.now();
+            entity.modifiedOn = Instant.now();
+            entity.persist();
+            count++;
+        }
+        return count;
+    }
+
+    private int importSubscriptions(JsonNode items) {
+        if (!items.isArray()) return 0;
+        int count = 0;
+        for (JsonNode item : items) {
+            EventSubscriptionEntity entity = new EventSubscriptionEntity();
+            entity.name = item.path("name").asText();
+            entity.description = textOrNull(item, "description");
+            entity.enabled = item.path("enabled").asBoolean(false);
+            entity.filters = textOrNull(item, "filterExpression");
+            entity.routing = jsonOrNull(item, "routing");
+            entity.labels = new java.util.ArrayList<>();
+            JsonNode labelsNode = item.path("labels");
+            if (labelsNode.isArray()) {
+                for (JsonNode l : labelsNode) entity.labels.add(l.asText());
+            }
+            entity.createdOn = Instant.now();
+            entity.modifiedOn = Instant.now();
+            entity.persist();
+            count++;
+        }
+        return count;
+    }
+
+    private int[] upsertConnections(JsonNode items) {
+        if (!items.isArray()) return new int[]{0, 0};
+        int created = 0, updated = 0;
+        for (JsonNode item : items) {
+            String id = item.path("id").asText();
+            EventSourceConnectionEntity entity = EventSourceConnectionEntity.findById(id);
+            boolean isNew = (entity == null);
+            if (isNew) {
+                entity = new EventSourceConnectionEntity();
+                entity.id = id;
+                entity.createdOn = Instant.now();
+            }
+            entity.name = item.path("name").asText();
+            entity.description = textOrNull(item, "description");
+            entity.sourceType = item.path("sourceType").asText("github");
+            entity.enabled = item.path("enabled").asBoolean(false);
+            entity.baseUrl = item.path("baseUrl").asText("");
+            entity.secretName = textOrNull(item, "secretName");
+            entity.pollInterval = item.has("pollInterval") ? item.path("pollInterval").asInt() : null;
+            entity.configuration = jsonOrNull(item, "configuration");
+            if (entity.configuration == null) entity.configuration = "{}";
+            entity.modifiedOn = Instant.now();
+            entity.persist();
+            if (isNew) created++; else updated++;
+        }
+        return new int[]{created, updated};
+    }
+
+    private int[] upsertSubscriptions(JsonNode items) {
+        if (!items.isArray()) return new int[]{0, 0};
+        int created = 0, updated = 0;
+        for (JsonNode item : items) {
+            String name = item.path("name").asText();
+            EventSubscriptionEntity entity = EventSubscriptionEntity.find("name", name).firstResult();
+            boolean isNew = (entity == null);
+            if (isNew) {
+                entity = new EventSubscriptionEntity();
+                entity.name = name;
+                entity.createdOn = Instant.now();
+            }
+            entity.description = textOrNull(item, "description");
+            entity.enabled = item.path("enabled").asBoolean(false);
+            entity.filters = textOrNull(item, "filterExpression");
+            entity.routing = jsonOrNull(item, "routing");
+            entity.labels.clear();
+            JsonNode labelsNode = item.path("labels");
+            if (labelsNode.isArray()) {
+                for (JsonNode l : labelsNode) entity.labels.add(l.asText());
+            }
+            entity.modifiedOn = Instant.now();
+            entity.persist();
+            if (isNew) created++; else updated++;
+        }
+        return new int[]{created, updated};
     }
 
     private void putIfNotNull(ObjectNode node, String field, String value) {

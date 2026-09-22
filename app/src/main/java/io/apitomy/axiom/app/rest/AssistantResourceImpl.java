@@ -440,6 +440,10 @@ public class AssistantResourceImpl implements AssistantResource {
             applyResult.setScheduledJobs(result.scheduledJobsCreated() + result.scheduledJobsUpdated());
             applyResult.setScheduledJobsCreated(result.scheduledJobsCreated());
             applyResult.setScheduledJobsUpdated(result.scheduledJobsUpdated());
+            applyResult.setConnectionsCreated(result.connectionsCreated());
+            applyResult.setConnectionsUpdated(result.connectionsUpdated());
+            applyResult.setSubscriptionsCreated(result.subscriptionsCreated());
+            applyResult.setSubscriptionsUpdated(result.subscriptionsUpdated());
             return applyResult;
         } catch (ValidationException e) {
             throw new WebApplicationException(e.getMessage(), 422);

@@ -7747,6 +7747,20 @@
               "format": "int64",
               "type": "integer"
             }
+          },
+          "connectionIds": {
+            "description": "Connection slugs to include",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "subscriptionIds": {
+            "type": "array",
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            }
           }
         }
       },
@@ -7772,6 +7786,12 @@
             "type": "integer"
           },
           "scheduledJobs": {
+            "type": "integer"
+          },
+          "connections": {
+            "type": "integer"
+          },
+          "subscriptions": {
             "type": "integer"
           }
         }
@@ -8069,6 +8089,22 @@
           },
           "scheduledJobsUpdated": {
             "description": "Number of existing scheduled jobs updated",
+            "type": "integer"
+          },
+          "connectionsCreated": {
+            "description": "Number of new connections created",
+            "type": "integer"
+          },
+          "connectionsUpdated": {
+            "description": "Number of existing connections updated",
+            "type": "integer"
+          },
+          "subscriptionsCreated": {
+            "description": "Number of new subscriptions created",
+            "type": "integer"
+          },
+          "subscriptionsUpdated": {
+            "description": "Number of existing subscriptions updated",
             "type": "integer"
           }
         }
