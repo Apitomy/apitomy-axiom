@@ -3,18 +3,24 @@ package io.apitomy.axiom.app;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
+import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
+import io.apitomy.axiom.core.entities.ThreadEntryEntity;
+import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.axiom.core.events.model.RoutingRule;
 import io.apitomy.axiom.core.filters.SubscriptionFilterEvaluator;
+import io.apitomy.axiom.core.lifecycle.ProjectStatus;
+import io.apitomy.axiom.core.services.WorkspaceService;
 import io.apitomy.axiom.manager.ManagerDecision;
 import io.apitomy.axiom.manager.ManagerService;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import org.jboss.logging.Logger;
@@ -59,6 +65,15 @@ public class EventStreamOrchestrator {
 
     @Inject
     WorkflowExecutionService workflowExecutionService;
+
+    @Inject
+    ScriptExecutionService scriptExecutionService;
+
+    @Inject
+    Event<SseEvent> sseEvents;
+
+    @Inject
+    WorkspaceService workspaceService;
 
     private volatile boolean shuttingDown = false;
 
@@ -265,10 +280,126 @@ public class EventStreamOrchestrator {
 
     private void routeToManager(StreamEventEntity event) {
         List<ManagerDecision> decisions = managerService.evaluateStreamEvent(event);
-        if (decisions != null && !decisions.isEmpty()) {
-            LOG.infof("Manager returned %d decisions for stream event %s",
-                    decisions.size(), event.id);
+        if (decisions == null || decisions.isEmpty()) {
+            LOG.debugf("Manager returned no decisions for stream event %s", event.id);
+            return;
         }
+
+        for (ManagerDecision decision : decisions) {
+            try {
+                processManagerDecision(event, decision);
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to process Manager decision '%s' for event %s",
+                        decision.decision(), event.id);
+            }
+        }
+    }
+
+    private void processManagerDecision(StreamEventEntity event, ManagerDecision decision) {
+        // Check confidence threshold — escalate if below
+        if (!managerService.meetsConfidenceThreshold(decision)) {
+            LOG.infof("Decision below confidence threshold (%.2f): %s — escalating",
+                    decision.confidence(), decision.decision());
+            QuarkusTransaction.requiringNew().run(() ->
+                handleEscalation(event, decision,
+                    "Low confidence (" + String.format("%.0f%%", decision.confidence() * 100)
+                        + "): " + decision.reasoning()));
+            return;
+        }
+
+        switch (decision.decision()) {
+            case "create_task" -> QuarkusTransaction.requiringNew().run(() ->
+                    handleCreateTask(event, decision));
+            case "ignore" -> QuarkusTransaction.requiringNew().run(() ->
+                    handleIgnore(event, decision));
+            case "script_action" -> QuarkusTransaction.requiringNew().run(() ->
+                    handleScriptAction(event, decision));
+            case "escalate" -> QuarkusTransaction.requiringNew().run(() ->
+                    handleEscalation(event, decision, decision.reasoning()));
+            default -> LOG.warnf("Unknown Manager decision type: %s", decision.decision());
+        }
+    }
+
+    private void handleCreateTask(StreamEventEntity event, ManagerDecision decision) {
+        ProjectEntity project = findOrCreateProjectForStreamEvent(event);
+
+        TaskEntity task = new TaskEntity();
+        task.projectId = project.id;
+        task.actionType = decision.actionType();
+        task.createdBy = "manager";
+        task.status = "Pending";
+        task.input = decision.inputContext();
+        task.humanContext = decision.humanContext();
+        task.outputSchema = decision.outputSchema();
+        task.createdOn = Instant.now();
+        task.persist();
+
+        LOG.infof("Manager created task %d (%s) for project %d from stream event %s",
+                task.id, task.actionType, project.id, event.id);
+
+        logActivity(project.id, task.id, null, "task-created",
+                "Manager created task: " + task.actionType + " — " + decision.reasoning());
+        addThreadEntry(project.id, "manager", "decision",
+                "Created task: " + task.actionType + "\n\nReasoning: " + decision.reasoning());
+
+        sseEvents.fire(SseEvent.taskUpdated(project.id, task.id, "Pending"));
+        sseEvents.fire(SseEvent.projectUpdated(project.id));
+        sseEvents.fire(SseEvent.threadEntry(project.id));
+    }
+
+    private void handleIgnore(StreamEventEntity event, ManagerDecision decision) {
+        LOG.infof("Manager ignored stream event %s: %s", event.id, decision.reasoning());
+        logActivity(null, null, null, "event-ignored",
+                "Event ignored: " + event.type + " — " + decision.reasoning());
+    }
+
+    private void handleScriptAction(StreamEventEntity event, ManagerDecision decision) {
+        ProjectEntity project = findOrCreateProjectForStreamEvent(event);
+
+        TaskEntity task = new TaskEntity();
+        task.projectId = project.id;
+        task.actionType = decision.actionType();
+        task.createdBy = "manager";
+        task.status = "Pending";
+        task.input = decision.inputContext();
+        task.humanContext = decision.humanContext();
+        task.outputSchema = decision.outputSchema();
+        task.createdOn = Instant.now();
+        task.persist();
+
+        LOG.infof("Manager created script task %d (%s) for project %d from stream event %s",
+                task.id, task.actionType, project.id, event.id);
+
+        logActivity(project.id, task.id, null, "task-created",
+                "Manager created script task: " + task.actionType + " — " + decision.reasoning());
+        addThreadEntry(project.id, "manager", "decision",
+                "Script action: " + task.actionType + "\n\nReasoning: " + decision.reasoning());
+
+        sseEvents.fire(SseEvent.taskUpdated(project.id, task.id, "Pending"));
+        sseEvents.fire(SseEvent.projectUpdated(project.id));
+        sseEvents.fire(SseEvent.threadEntry(project.id));
+
+        // Execute the script immediately
+        scriptExecutionService.executeScript(task, project);
+    }
+
+    private void handleEscalation(StreamEventEntity event, ManagerDecision decision,
+                                   String reason) {
+        LOG.infof("Manager escalated stream event %s: %s", event.id, reason);
+        logActivity(null, null, null, "manager-escalation",
+                "Manager escalation: " + reason);
+
+        // If we can find a project for this event, add to its thread
+        ProjectEntity project = QuarkusTransaction.requiringNew().call(() ->
+                ProjectEntity.find("ref", event.ref).<ProjectEntity>firstResult());
+        if (project != null) {
+            addThreadEntry(project.id, "manager", "question",
+                    "Escalation: " + reason
+                            + "\n\nThe Manager needs your input on how to handle this event.");
+            sseEvents.fire(SseEvent.threadEntry(project.id));
+        }
+
+        sseEvents.fire(SseEvent.notification("Manager escalation: " + reason, "warning"));
     }
 
     private void routeToWorkflowDispatch(StreamEventEntity event, Map<String, Object> eventMap) {
@@ -317,20 +448,64 @@ public class EventStreamOrchestrator {
     }
 
     private Long findOrCreateProjectForEvent(StreamEventEntity event) {
-        return QuarkusTransaction.requiringNew().call(() -> {
-            ProjectEntity project = ProjectEntity.find("ref", event.ref).firstResult();
-            if (project != null) return project.id;
+        return QuarkusTransaction.requiringNew().call(() ->
+                findOrCreateProjectForStreamEvent(event).id);
+    }
 
-            project = new ProjectEntity();
-            project.name = "Event: " + event.type + " — " + event.ref;
-            project.ref = event.ref;
-            project.type = "event";
-            project.status = "Active";
-            project.createdOn = Instant.now();
-            project.updatedOn = Instant.now();
-            project.persist();
-            return project.id;
-        });
+    private ProjectEntity findOrCreateProjectForStreamEvent(StreamEventEntity event) {
+        // Try to find existing project by ref
+        ProjectEntity project = ProjectEntity.find("ref", event.ref).firstResult();
+        if (project != null) return project;
+
+        // Auto-create with metadata from the payload
+        project = new ProjectEntity();
+        project.ref = event.ref;
+        project.refSource = event.source;
+        project.type = determineProjectType(event.type);
+        project.status = ProjectStatus.Created.name();
+        project.createdOn = Instant.now();
+        project.updatedOn = Instant.now();
+
+        // Extract title and body from the normalized payload
+        try {
+            JsonNode payload = objectMapper.readTree(event.payload);
+            // The normalized payload uses "issue.title" or "pullRequest.title"
+            String title = payload.path("issue").path("title").asText(null);
+            if (title == null) title = payload.path("pullRequest").path("title").asText(null);
+            project.name = title != null ? title : event.ref;
+
+            String body = payload.path("issue").path("body").asText(null);
+            if (body == null) body = payload.path("pullRequest").path("body").asText(null);
+            project.body = body;
+        } catch (Exception e) {
+            project.name = event.ref;
+        }
+
+        project.persist();
+
+        LOG.infof("Auto-created project %d for %s", project.id, event.ref);
+
+        logActivity(project.id, null, null, "project-created",
+                "Project auto-created from " + event.type + " event");
+        addThreadEntry(project.id, "system", "message",
+                "Project created from " + event.source + " event: " + event.type);
+
+        // Ensure the workspace directory exists
+        try {
+            workspaceService.ensureWorkspace(project);
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to create workspace for project %d", project.id);
+        }
+
+        return project;
+    }
+
+    private String determineProjectType(String eventType) {
+        if (eventType != null) {
+            if (eventType.startsWith("issue.")) return "issue";
+            if (eventType.startsWith("pr.")) return "pull-request";
+        }
+        return "other";
     }
 
     // ── Event map building ──────────────────────────────────────
@@ -391,4 +566,31 @@ public class EventStreamOrchestrator {
 
     record SubscriptionWithFilters(long id, String name, List<String> labels,
                                     String filterExpression, List<RoutingRule> routing) {}
+
+    // ── Activity and thread logging ────────────────────────────────
+
+    private void logActivity(Long projectId, Long taskId, Long eventId,
+                              String entryType, String summary) {
+        ActivityLogEntity log = new ActivityLogEntity();
+        log.projectId = projectId;
+        log.taskId = taskId;
+        log.eventId = eventId;
+        log.entryType = entryType;
+        log.summary = summary != null && summary.length() > 1024
+                ? summary.substring(0, 1021) + "..."
+                : summary;
+        log.createdOn = Instant.now();
+        log.persist();
+    }
+
+    private void addThreadEntry(Long projectId, String authorType, String entryType,
+                                  String content) {
+        ThreadEntryEntity entry = new ThreadEntryEntity();
+        entry.projectId = projectId;
+        entry.authorType = authorType;
+        entry.entryType = entryType;
+        entry.content = content;
+        entry.createdOn = Instant.now();
+        entry.persist();
+    }
 }
