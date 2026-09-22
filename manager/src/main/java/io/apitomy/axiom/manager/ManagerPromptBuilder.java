@@ -17,11 +17,12 @@ import java.util.List;
  * <ul>
  *   <li>{@code {{actionTypes}}} — formatted list of available action types</li>
  *   <li>{@code {{agents}}} — formatted list of available agents</li>
- *   <li>{@code {{source}}} — event source (e.g. "github")</li>
- *   <li>{@code {{eventType}}} — event type (e.g. "issue-created")</li>
- *   <li>{@code {{issueRef}}} — issue reference (e.g. "owner/repo#42")</li>
- *   <li>{@code {{repository}}} — repository (e.g. "owner/repo")</li>
- *   <li>{@code {{payload}}} — raw event payload JSON</li>
+ *   <li>{@code {{source}}} — event source (e.g. "github", "jira")</li>
+ *   <li>{@code {{eventType}}} — normalized event type (e.g. "issue.created", "pr.merged")</li>
+ *   <li>{@code {{ref}}} — full URL identifying the event subject (e.g. "https://github.com/owner/repo/issues/42")</li>
+ *   <li>{@code {{issueRef}}} — alias for {{ref}} (backward compatibility)</li>
+ *   <li>{@code {{repository}}} — alias for {{ref}} (backward compatibility)</li>
+ *   <li>{@code {{payload}}} — normalized event payload JSON (typed structure)</li>
  *   <li>{@code {{projectContext}}} — existing project and recent task details</li>
  * </ul>
  */
@@ -119,11 +120,11 @@ public final class ManagerPromptBuilder {
      * using individual field values.
      *
      * @param promptTemplate the configurable prompt template with placeholders
-     * @param source         event source (e.g. "github")
-     * @param eventType      event type (e.g. "issue.created")
-     * @param issueRef       issue reference or URL
-     * @param repository     repository identifier or URL
-     * @param payload        raw event payload JSON
+     * @param source         event source (e.g. "github", "jira")
+     * @param eventType      normalized event type (e.g. "issue.created", "pr.merged")
+     * @param issueRef       full URL of the event subject (used for {{ref}} and {{issueRef}})
+     * @param repository     full URL of the event subject (used for {{repository}}, same as issueRef for stream events)
+     * @param payload        normalized event payload JSON (typed structure)
      * @param actionTypes    the registered action types
      * @param agents         the configured agents
      * @param project        the existing project (may be null)
@@ -143,6 +144,7 @@ public final class ManagerPromptBuilder {
         resolved = resolved.replace("{{agents}}", formatAgents(agents));
         resolved = resolved.replace("{{source}}", source != null ? source : "");
         resolved = resolved.replace("{{eventType}}", eventType != null ? eventType : "");
+        resolved = resolved.replace("{{ref}}", issueRef != null ? issueRef : "");
         resolved = resolved.replace("{{issueRef}}", issueRef != null ? issueRef : "");
         resolved = resolved.replace("{{repository}}", repository != null ? repository : "");
         resolved = resolved.replace("{{payload}}", payload != null ? payload : "{}");
@@ -230,8 +232,7 @@ public final class ManagerPromptBuilder {
 
             - **Source:** {{source}}
             - **Event type:** {{eventType}}
-            - **Issue:** {{issueRef}}
-            - **Repository:** {{repository}}
+            - **Ref:** {{ref}}
 
             ### Event Payload
 

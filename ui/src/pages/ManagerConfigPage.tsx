@@ -104,11 +104,10 @@ export function ManagerConfigPage() {
                             Placeholders are substituted at runtime:{" "}
                             <code>{"{{actionTypes}}"}</code> (list of configured action types),{" "}
                             <code>{"{{agents}}"}</code> (list of configured agents),{" "}
-                            <code>{"{{source}}"}</code>,{" "}
-                            <code>{"{{eventType}}"}</code>,{" "}
-                            <code>{"{{issueRef}}"}</code>,{" "}
-                            <code>{"{{repository}}"}</code>,{" "}
-                            <code>{"{{payload}}"}</code> (raw event JSON),{" "}
+                            <code>{"{{source}}"}</code> (e.g. "github", "jira"),{" "}
+                            <code>{"{{eventType}}"}</code> (e.g. "issue.created", "pr.merged"),{" "}
+                            <code>{"{{ref}}"}</code> (full URL of the event subject),{" "}
+                            <code>{"{{payload}}"}</code> (normalized event payload JSON),{" "}
                             <code>{"{{projectContext}}"}</code> (existing project and recent tasks).
                         </p>
                         <CodeEditor

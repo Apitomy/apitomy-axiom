@@ -48,6 +48,7 @@ export function StreamEventDetailModal({ event, onClose, onSelectPath }: StreamE
                             data={event}
                             pathPrefix="event"
                             onSelectPath={handleSelectPath}
+                            isDarkTheme={effectiveTheme === "dark"}
                         />
                     ) : (
                         <CodeEditor
