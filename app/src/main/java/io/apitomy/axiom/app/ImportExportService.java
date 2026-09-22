@@ -8,7 +8,6 @@ import io.apitomy.axiom.api.beans.ImportResult;
 import io.apitomy.axiom.api.beans.PackExportRequest;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.EventSourceConnectionEntity;
-import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.McpServerEntity;
 import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
@@ -209,7 +208,6 @@ public class ImportExportService {
             int reportDefinitionsCreated, int reportDefinitionsUpdated,
             int toolsetsCreated, int toolsetsUpdated,
             int sessionTemplatesCreated, int sessionTemplatesUpdated,
-            int eventSourcesCreated, int eventSourcesUpdated,
             int scheduledJobsCreated, int scheduledJobsUpdated,
             int connectionsCreated, int connectionsUpdated,
             int subscriptionsCreated, int subscriptionsUpdated
@@ -230,7 +228,6 @@ public class ImportExportService {
         int[] reportDefinitions = upsertReportDefinitions(pack.path("reportDefinitions"));
         int[] toolsets = upsertToolsets(pack.path("toolsets"));
         int[] sessionTemplates = upsertSessionTemplates(pack.path("sessionTemplates"));
-        int[] eventSources = upsertEventSources(pack.path("eventSources"));
         int[] scheduledJobs = upsertScheduledJobs(pack.path("scheduledJobs"));
         int[] connections = upsertConnections(pack.path("connections"));
         int[] subscriptions = upsertSubscriptions(pack.path("subscriptions"));
@@ -241,7 +238,6 @@ public class ImportExportService {
                         + "%d report definitions created, %d updated; "
                         + "%d toolsets created, %d updated; "
                         + "%d session templates created, %d updated; "
-                        + "%d event sources created, %d updated; "
                         + "%d scheduled jobs created, %d updated; "
                         + "%d connections created, %d updated; "
                         + "%d subscriptions created, %d updated",
@@ -251,7 +247,6 @@ public class ImportExportService {
                 reportDefinitions[0], reportDefinitions[1],
                 toolsets[0], toolsets[1],
                 sessionTemplates[0], sessionTemplates[1],
-                eventSources[0], eventSources[1],
                 scheduledJobs[0], scheduledJobs[1],
                 connections[0], connections[1],
                 subscriptions[0], subscriptions[1]);
@@ -262,7 +257,6 @@ public class ImportExportService {
                 reportDefinitions[0], reportDefinitions[1],
                 toolsets[0], toolsets[1],
                 sessionTemplates[0], sessionTemplates[1],
-                eventSources[0], eventSources[1],
                 scheduledJobs[0], scheduledJobs[1],
                 connections[0], connections[1],
                 subscriptions[0], subscriptions[1]
@@ -698,42 +692,6 @@ public class ImportExportService {
             if (toolsNode.isArray()) {
                 for (JsonNode t : toolsNode) {
                     entity.allowedTools.add(t.asText());
-                }
-            }
-            entity.persist();
-            if (isNew) created++;
-            else updated++;
-        }
-        return new int[]{created, updated};
-    }
-
-    private int[] upsertEventSources(JsonNode items) {
-        if (!items.isArray()) return new int[]{0, 0};
-        int created = 0, updated = 0;
-        for (JsonNode item : items) {
-            String name = item.path("name").asText();
-            EventSourceEntity entity = EventSourceEntity.find("name", name).firstResult();
-            boolean isNew = (entity == null);
-            if (isNew) {
-                entity = new EventSourceEntity();
-                entity.name = name;
-            }
-            entity.description = textOrNull(item, "description");
-            entity.sourceType = item.path("sourceType").asText("github");
-            entity.enabled = item.path("enabled").asBoolean(false);
-            entity.pollInterval = item.has("pollInterval")
-                    ? item.path("pollInterval").asInt() : null;
-            entity.secretName = textOrNull(item, "secretName");
-            entity.configuration = jsonOrNull(item, "configuration");
-            if (entity.configuration == null) {
-                entity.configuration = "{}";
-            }
-            entity.filters = jsonOrNull(item, "filters");
-            entity.labels.clear();
-            JsonNode labelsNode = item.path("labels");
-            if (labelsNode.isArray()) {
-                for (JsonNode l : labelsNode) {
-                    entity.labels.add(l.asText());
                 }
             }
             entity.persist();

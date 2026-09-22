@@ -17,8 +17,17 @@ class ManagerResourceTest {
     void testEvaluateNonexistentEventReturns404() {
         given()
             .when()
-                .post("/api/v1/manager/evaluate/999999")
+                .post("/api/v1/manager/evaluate/00000000-0000-0000-0000-000000000000")
             .then()
                 .statusCode(404);
+    }
+
+    @Test
+    void testEvaluateInvalidEventIdReturns400() {
+        given()
+            .when()
+                .post("/api/v1/manager/evaluate/not-a-uuid")
+            .then()
+                .statusCode(400);
     }
 }

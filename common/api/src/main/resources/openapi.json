@@ -617,38 +617,6 @@
         }
       ]
     },
-    "/projects/{projectId}/events": {
-      "get": {
-        "tags": [
-          "Events"
-        ],
-        "summary": "List events for a project",
-        "operationId": "listProjectEvents",
-        "responses": {
-          "200": {
-            "description": "List of events related to this project",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Event"
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/ProjectId"
-        }
-      ]
-    },
     "/projects/{projectId}/workflow": {
       "get": {
         "tags": [
@@ -1812,158 +1780,6 @@
         }
       }
     },
-    "/events": {
-      "get": {
-        "tags": [
-          "Events"
-        ],
-        "summary": "List events (paginated)",
-        "operationId": "listEvents",
-        "parameters": [
-          {
-            "name": "page",
-            "in": "query",
-            "schema": {
-              "default": 1,
-              "type": "integer"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "default": 20,
-              "type": "integer"
-            }
-          },
-          {
-            "name": "filterSource",
-            "in": "query",
-            "description": "Filter by event source",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "filterEventType",
-            "in": "query",
-            "description": "Filter by event type",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "filterRepository",
-            "in": "query",
-            "description": "Filter by repository",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "filterLabels",
-            "in": "query",
-            "description": "Filter by labels (comma-separated, AND logic)",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "filterFilterStatus",
-            "in": "query",
-            "description": "Filter by filter status (allowed or blocked)",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "filterEventSourceId",
-            "in": "query",
-            "description": "Filter by event source ID",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Paginated list of events",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EventSearchResults"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Events"
-        ],
-        "summary": "Fire a new event for processing",
-        "operationId": "fireEvent",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewEvent"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Event created and enqueued",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Event"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/events/{eventId}": {
-      "get": {
-        "tags": [
-          "Events"
-        ],
-        "summary": "Get a single event by ID",
-        "operationId": "getEvent",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Event"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "name": "eventId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "format": "int64",
-            "type": "integer"
-          }
-        }
-      ]
-    },
     "/activity": {
       "get": {
         "tags": [
@@ -2106,10 +1922,10 @@
         {
           "name": "eventId",
           "in": "path",
-          "description": "Event ID to evaluate",
+          "description": "Stream event ID (UUID) to evaluate",
           "required": true,
           "schema": {
-            "type": "integer"
+            "type": "string"
           }
         }
       ]
@@ -3785,41 +3601,6 @@
           "name": "nodeId",
           "in": "path",
           "description": "Tool call node ID",
-          "required": true,
-          "schema": {
-            "type": "integer"
-          }
-        }
-      ]
-    },
-    "/events/{eventId}/traces": {
-      "get": {
-        "tags": [
-          "traces"
-        ],
-        "summary": "List traces for an event",
-        "operationId": "listEventTraces",
-        "responses": {
-          "200": {
-            "description": "Traces for event",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Trace"
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "parameters": [
-        {
-          "name": "eventId",
-          "in": "path",
-          "description": "Event ID",
           "required": true,
           "schema": {
             "type": "integer"
@@ -6574,98 +6355,6 @@
             "format": "int32",
             "description": "Number of days to retain ingested events before automatic deletion.",
             "type": "integer"
-          },
-          "eventSourceLogRetentionDays": {
-            "format": "int32",
-            "description": "Number of days to retain event source poll logs before automatic deletion.",
-            "type": "integer"
-          }
-        }
-      },
-      "Event": {
-        "required": [
-          "id",
-          "source",
-          "eventType",
-          "receivedAt"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "source": {
-            "type": "string"
-          },
-          "eventType": {
-            "type": "string"
-          },
-          "issueRef": {
-            "type": "string"
-          },
-          "repository": {
-            "type": "string"
-          },
-          "projectId": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "taskId": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "payload": {
-            "type": "string"
-          },
-          "receivedAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "eventSourceId": {
-            "format": "int64",
-            "description": "ID of the Event Source that produced this event, if applicable",
-            "type": "integer"
-          },
-          "traceId": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "labels": {
-            "description": "Labels inherited from the Event Source",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "filterStatus": {
-            "description": "Filter evaluation result: allowed, blocked, or null for legacy events",
-            "type": "string"
-          },
-          "filterMatchedRule": {
-            "description": "Description of the filter rule that blocked the event, if applicable",
-            "type": "string"
-          }
-        }
-      },
-      "EventSearchResults": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Event"
-            }
-          },
-          "totalCount": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "page": {
-            "type": "integer"
-          },
-          "limit": {
-            "type": "integer"
           }
         }
       },
@@ -7848,36 +7537,6 @@
           },
           "subscriptions": {
             "type": "integer"
-          }
-        }
-      },
-      "NewEvent": {
-        "required": [
-          "source",
-          "eventType",
-          "payload"
-        ],
-        "type": "object",
-        "properties": {
-          "source": {
-            "description": "Event source type (e.g. github, jira, internal)",
-            "type": "string"
-          },
-          "eventType": {
-            "description": "Event type (e.g. issue-created, custom)",
-            "type": "string"
-          },
-          "issueRef": {
-            "description": "Issue reference",
-            "type": "string"
-          },
-          "repository": {
-            "description": "Repository identifier",
-            "type": "string"
-          },
-          "payload": {
-            "description": "JSON payload with event details",
-            "type": "string"
           }
         }
       },

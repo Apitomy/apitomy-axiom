@@ -8,9 +8,7 @@ import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.AgentEntity;
-import io.apitomy.axiom.core.entities.EventEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
-import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.ManagerConfigEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
@@ -66,69 +64,6 @@ public class ManagerService {
     Optional<String> model;
 
     /**
-     * Evaluates an event and returns the Manager's decisions.
-     *
-     * <p>Context loading (action types, agents, project data, config) runs in a short
-     * independent transaction so the subsequent AI engine call does not hold a database
-     * connection.</p>
-     *
-     * @param event    the event to evaluate (may be detached)
-     * @param traceCtx the current trace context (nullable — tracing is non-fatal)
-     * @return a list of decisions (may be empty if the Manager fails)
-     */
-    public List<ManagerDecision> evaluate(EventEntity event, TraceContext traceCtx) {
-        LOG.infof("Manager evaluating event %d: %s [%s]", event.id, event.eventType, event.issueRef);
-
-        // Add manager-evaluation trace node and push onto stack so decisions are children
-        Long evalNodeId = null;
-        if (traceCtx != null) {
-            try {
-                evalNodeId = traceService.addNode(traceCtx, "manager-evaluation", "in-progress",
-                        "Manager evaluation: " + event.eventType, null, null);
-                traceCtx.push(evalNodeId);
-            } catch (Exception e) {
-                LOG.warnf(e, "Failed to add manager-evaluation trace node for event %d", event.id);
-            }
-        }
-
-        // Load context (short transaction — releases connection before AI call)
-        EvalContext ctx = QuarkusTransaction.requiringNew().call(() -> {
-            List<ActionTypeEntity> actionTypes = ActionTypeEntity.list("managerTriggerable", true);
-
-            // Filter action types by label compatibility with the event source
-            List<String> eventSourceLabels = Collections.emptyList();
-            if (event.eventSourceId != null) {
-                EventSourceEntity eventSource = EventSourceEntity.findById(event.eventSourceId);
-                if (eventSource != null && eventSource.labels != null) {
-                    eventSourceLabels = eventSource.labels;
-                }
-            }
-            actionTypes = filterByLabels(actionTypes, eventSourceLabels);
-
-            List<AgentEntity> agents = AgentEntity.listAll();
-
-            ProjectEntity project = null;
-            List<TaskEntity> recentTasks = Collections.emptyList();
-            if (event.issueRef != null) {
-                project = ProjectEntity.find("ref", event.issueRef).firstResult();
-                if (project != null) {
-                    recentTasks = TaskEntity.find(
-                            "projectId = ?1 order by createdOn desc",
-                            project.id).page(0, 10).list();
-                }
-            }
-
-            ManagerConfigEntity config = ManagerConfigEntity.<ManagerConfigEntity>findAll()
-                    .firstResult();
-            return new EvalContext(actionTypes, agents, project, recentTasks, config);
-        });
-
-        return callManagerAI(ctx, event.source, event.eventType, event.issueRef,
-                event.repository, event.payload, event.id, evalNodeId,
-                String.valueOf(event.id));
-    }
-
-    /**
      * Evaluates a stream event using the AI Manager. This method accepts
      * the new normalized event format from the event stream pipeline.
      *
@@ -178,8 +113,7 @@ public class ManagerService {
     }
 
     /**
-     * Core AI evaluation logic shared by both {@link #evaluate(EventEntity, TraceContext)}
-     * and {@link #evaluateStreamEvent(StreamEventEntity)}.
+     * Core AI evaluation logic used by {@link #evaluateStreamEvent(StreamEventEntity)}.
      *
      * @param ctx            pre-loaded evaluation context (action types, agents, project, config)
      * @param source         event source identifier (e.g. "github")

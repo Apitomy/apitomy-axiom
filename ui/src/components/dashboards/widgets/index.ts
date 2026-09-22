@@ -8,6 +8,5 @@ import "./AiCostSummaryWidget";
 import "./AiCostByProjectWidget";
 import "./RecentReportsWidget";
 import "./SystemStatusWidget";
-import "./EventSourceHealthWidget";
 import "./DiskUsageWidget";
 import "./ActionTypesWidget";

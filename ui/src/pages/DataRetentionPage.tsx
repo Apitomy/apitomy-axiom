@@ -158,27 +158,6 @@ export function DataRetentionPage() {
                     </FormHelperText>
                 </FormGroup>
 
-                <FormGroup label="Event source logs" fieldId="event-source-log-retention">
-                    <NumberInput
-                        id="event-source-log-retention"
-                        value={config.eventSourceLogRetentionDays ?? 7}
-                        min={1}
-                        onMinus={() => updateField("eventSourceLogRetentionDays",
-                            (config.eventSourceLogRetentionDays ?? 7) - 1)}
-                        onPlus={() => updateField("eventSourceLogRetentionDays",
-                            (config.eventSourceLogRetentionDays ?? 7) + 1)}
-                        onChange={(event) => updateField("eventSourceLogRetentionDays",
-                            Number((event.target as HTMLInputElement).value))}
-                        widthChars={4}
-                    />
-                    <FormHelperText>
-                        <HelperText>
-                            <HelperTextItem>
-                                Days to retain event source poll log entries.
-                            </HelperTextItem>
-                        </HelperText>
-                    </FormHelperText>
-                </FormGroup>
             </Form>
         </PageSection>
     );

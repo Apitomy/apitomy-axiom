@@ -2,7 +2,6 @@ package io.apitomy.axiom.manager;
 
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.AgentEntity;
-import io.apitomy.axiom.core.entities.EventEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 
@@ -116,30 +115,8 @@ public final class ManagerPromptBuilder {
     }
 
     /**
-     * Builds the user prompt by substituting placeholders in the prompt template.
-     *
-     * @param promptTemplate the configurable prompt template with placeholders
-     * @param event the event to evaluate
-     * @param actionTypes the registered action types
-     * @param agents the configured agents
-     * @param project the existing project (may be null)
-     * @param recentTasks recent tasks for the project
-     * @return the resolved user prompt
-     */
-    public static String buildUserPrompt(String promptTemplate, EventEntity event,
-                                          List<ActionTypeEntity> actionTypes,
-                                          List<AgentEntity> agents,
-                                          ProjectEntity project,
-                                          List<TaskEntity> recentTasks) {
-        return buildUserPrompt(promptTemplate,
-                event.source, event.eventType, event.issueRef, event.repository, event.payload,
-                actionTypes, agents, project, recentTasks);
-    }
-
-    /**
      * Builds the user prompt by substituting placeholders in the prompt template
-     * using individual field values. This overload supports both legacy
-     * {@link EventEntity} and the new {@link io.apitomy.axiom.core.entities.StreamEventEntity}.
+     * using individual field values.
      *
      * @param promptTemplate the configurable prompt template with placeholders
      * @param source         event source (e.g. "github")

@@ -879,7 +879,6 @@ export interface RetentionConfig {
     closedProjectRetentionDays?: number;
     traceRetentionDays?: number;
     eventRetentionDays?: number;
-    eventSourceLogRetentionDays?: number;
 }
 
 export async function fetchRetentionConfig(): Promise<RetentionConfig> {
@@ -898,87 +897,7 @@ export async function updateRetentionConfig(config: RetentionConfig): Promise<Re
     return response.json();
 }
 
-// ── Event Sources ────────────────────────────────────────────────
-
-export interface EventSource {
-    id: number;
-    name: string;
-    description?: string;
-    sourceType: string;
-    enabled: boolean;
-    pollInterval?: number;
-    secretName?: string;
-    configuration?: Record<string, string>;
-    labels?: string[];
-    filters?: EventSourceFilters;
-}
-
-export type NewEventSource = Omit<EventSource, "id">;
-
-export async function fetchEventSources(
-    page = 1, limit = 20, filterName?: string, filterType?: string, filterLabels?: string
-): Promise<SearchResults<EventSource>> {
-    const params = new URLSearchParams();
-    params.set("page", String(page));
-    params.set("limit", String(limit));
-    if (filterName) params.set("filterName", filterName);
-    if (filterType) params.set("filterType", filterType);
-    if (filterLabels) params.set("filterLabels", filterLabels);
-    const response = await fetch(`${API}/event-sources?${params}`);
-    if (!response.ok) throw new Error(`Failed to fetch event sources: ${response.status}`);
-    return response.json();
-}
-
-export async function createEventSource(source: NewEventSource): Promise<EventSource> {
-    const response = await fetch(`${API}/event-sources`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(source),
-    });
-    if (!response.ok) throw new Error(`Failed to create event source: ${response.status}`);
-    return response.json();
-}
-
-export async function updateEventSource(id: number, source: NewEventSource): Promise<EventSource> {
-    const response = await fetch(`${API}/event-sources/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(source),
-    });
-    if (!response.ok) throw new Error(`Failed to update event source: ${response.status}`);
-    return response.json();
-}
-
-export async function deleteEventSource(id: number): Promise<void> {
-    const response = await fetch(`${API}/event-sources/${id}`, { method: "DELETE" });
-    if (!response.ok) throw new Error(`Failed to delete event source: ${response.status}`);
-}
-
-export async function fetchEventSource(id: number): Promise<EventSource> {
-    const response = await fetch(`${API}/event-sources/${id}`);
-    if (!response.ok) throw new Error(`Failed to fetch event source: ${response.status}`);
-    return response.json();
-}
-
-export async function dryRunFilters(request: FilterDryRunRequest): Promise<FilterDryRunResponse> {
-    const response = await fetch(`${API}/event-sources/filters/dry-run`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(request),
-    });
-    if (!response.ok) throw new Error(`Dry run failed: ${response.statusText}`);
-    return response.json();
-}
-
-export interface EventSourceLog {
-    id: number;
-    eventSourceId: number;
-    status: string;
-    message: string;
-    detail?: string;
-    eventsIngested?: number;
-    createdOn: string;
-}
+// ── Event Source Filters (used by subscriptions) ─────────────────
 
 export interface EventSourceFilterRule {
     type: "event-type" | "payload" | "connection" | "ref";
@@ -989,40 +908,6 @@ export interface EventSourceFilterRule {
 export interface EventSourceFilters {
     include: EventSourceFilterRule[];
     exclude: EventSourceFilterRule[];
-}
-
-export interface FilterDryRunRequest {
-    sourceType: string;
-    configuration: Record<string, string>;
-    secretName?: string;
-    filters: EventSourceFilters;
-}
-
-export interface FilterDryRunResult {
-    eventType: string;
-    issueRef: string;
-    summary: string;
-    allowed: boolean;
-    matchedRule?: string;
-    payload?: string;
-}
-
-export interface FilterDryRunResponse {
-    results: FilterDryRunResult[];
-    totalEvaluated: number;
-    totalAllowed: number;
-    totalBlocked: number;
-}
-
-export async function fetchEventSourceLogs(
-    id: number, page = 1, limit = 20
-): Promise<SearchResults<EventSourceLog>> {
-    const params = new URLSearchParams();
-    params.set("page", String(page));
-    params.set("limit", String(limit));
-    const response = await fetch(`${API}/event-sources/${id}/logs?${params}`);
-    if (!response.ok) throw new Error(`Failed to fetch event source logs: ${response.status}`);
-    return response.json();
 }
 
 // ── Thread ────────────────────────────────────────────────────────
@@ -1302,56 +1187,6 @@ export async function fetchDiskUsage(
     if (sortOrder) params.set("sortOrder", sortOrder);
     const response = await fetch(`${API}/usage/disk?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch disk usage: ${response.status}`);
-    return response.json();
-}
-
-// ── Events ───────────────────────────────────────────────────────
-
-export interface AxiomEvent {
-    id: number;
-    eventSourceId?: number;
-    source: string;
-    eventType: string;
-    issueRef?: string;
-    repository?: string;
-    projectId?: number;
-    taskId?: number;
-    payload?: string;
-    receivedAt: string;
-    traceId?: string;
-    labels?: string[];
-    filterStatus?: string;
-    filterMatchedRule?: string;
-}
-
-export async function fetchEvent(id: number): Promise<AxiomEvent> {
-    const response = await fetch(`${API}/events/${id}`);
-    if (!response.ok) throw new Error(`Failed to fetch event: ${response.status}`);
-    return response.json();
-}
-
-export async function fetchProjectEvents(projectId: number): Promise<AxiomEvent[]> {
-    const response = await fetch(`${API}/projects/${projectId}/events`);
-    if (!response.ok) throw new Error(`Failed to fetch project events: ${response.status}`);
-    return response.json();
-}
-
-export async function fetchEvents(
-    page = 1, limit = 20,
-    filterSource?: string, filterEventType?: string, filterRepository?: string,
-    filterLabels?: string, filterFilterStatus?: string, filterEventSourceId?: number
-): Promise<SearchResults<AxiomEvent>> {
-    const params = new URLSearchParams();
-    params.set("page", String(page));
-    params.set("limit", String(limit));
-    if (filterSource) params.set("filterSource", filterSource);
-    if (filterEventType) params.set("filterEventType", filterEventType);
-    if (filterRepository) params.set("filterRepository", filterRepository);
-    if (filterLabels) params.set("filterLabels", filterLabels);
-    if (filterFilterStatus) params.set("filterFilterStatus", filterFilterStatus);
-    if (filterEventSourceId != null) params.set("filterEventSourceId", String(filterEventSourceId));
-    const response = await fetch(`${API}/events?${params}`);
-    if (!response.ok) throw new Error(`Failed to fetch events: ${response.status}`);
     return response.json();
 }
 
@@ -1772,12 +1607,6 @@ export async function fetchTraceNodeDetail(
 ): Promise<TraceNodeDetailResponse> {
     const response = await fetch(`${API}/traces/${traceId}/nodes/${nodeId}`);
     if (!response.ok) throw new Error(`Failed to fetch node detail: ${response.status}`);
-    return response.json();
-}
-
-export async function fetchEventTraces(eventId: number): Promise<Trace[]> {
-    const response = await fetch(`${API}/events/${eventId}/traces`);
-    if (!response.ok) throw new Error(`Failed to fetch event traces: ${response.status}`);
     return response.json();
 }
 

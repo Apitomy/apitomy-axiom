@@ -19,9 +19,8 @@ import {
     ChipFilterInput,
     FilterChips,
 } from "@apitomy/common-ui-components";
-import { type ActivityLogEntry, type AxiomEvent, fetchActivityLog, fetchEvent } from "../config/api";
+import { type ActivityLogEntry, fetchActivityLog } from "../config/api";
 import { ExecutionLogModal } from "../components/ExecutionLogModal";
-import { EventDetailModal } from "../components/EventDetailModal";
 
 const MANAGER_ENTRY_TYPES = "manager-evaluated,manager-error,manager-skipped,manager-escalation,manager-no-decision";
 
@@ -50,9 +49,6 @@ export function ManagerDecisionsPage() {
     // Log modal
     const [isLogModalOpen, setIsLogModalOpen] = useState(false);
     const [logActivityId, setLogActivityId] = useState<number | null>(null);
-
-    // Event payload modal
-    const [selectedEvent, setSelectedEvent] = useState<AxiomEvent | null>(null);
 
     const filterSummary = filters.find((f) => f.filterBy.value === "summary")?.filterValue;
     const filterProjectId = filters.find((f) => f.filterBy.value === "projectId")?.filterValue;
@@ -97,12 +93,6 @@ export function ManagerDecisionsPage() {
     const onClearAllFilters = () => {
         setFilters([]);
         setPage(1);
-    };
-
-    const handleViewEvent = (eventId: number) => {
-        fetchEvent(eventId)
-            .then(setSelectedEvent)
-            .catch(console.error);
     };
 
     const handleViewLog = (activityId: number) => {
@@ -175,7 +165,6 @@ export function ManagerDecisionsPage() {
                                 <Th>Type</Th>
                                 <Th>Summary</Th>
                                 <Th />
-                                <Th />
                             </Tr>
                         </Thead>
                         <Tbody>
@@ -203,14 +192,6 @@ export function ManagerDecisionsPage() {
                                             : entry.summary}
                                     </Td>
                                     <Td>
-                                        {entry.eventId && (
-                                            <Button variant="link" isInline
-                                                onClick={() => handleViewEvent(entry.eventId!)}>
-                                                View Event
-                                            </Button>
-                                        )}
-                                    </Td>
-                                    <Td>
                                         {(entry.entryType === "manager-evaluated"
                                                 || entry.entryType === "manager-error") && (
                                             <Button variant="link" isInline
@@ -232,10 +213,6 @@ export function ManagerDecisionsPage() {
                 onClose={() => setIsLogModalOpen(false)}
             />
 
-            <EventDetailModal
-                event={selectedEvent}
-                onClose={() => setSelectedEvent(null)}
-            />
         </PageSection>
     );
 }

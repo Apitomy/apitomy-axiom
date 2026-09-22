@@ -162,7 +162,6 @@ public class SeedDataInitializer {
         config.closedProjectRetentionDays = 90;
         config.traceRetentionDays = 30;
         config.eventRetentionDays = 90;
-        config.eventSourceLogRetentionDays = 7;
         config.persist();
 
         LOG.info("Seeded default retention configuration");

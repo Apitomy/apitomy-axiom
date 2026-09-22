@@ -9,8 +9,6 @@ import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.AgentEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
-import io.apitomy.axiom.core.entities.EventEntity;
-import io.apitomy.axiom.core.entities.EventQueueEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
@@ -512,11 +510,6 @@ public class TaskExecutionService {
             workflowExecutionService.onTaskCompleted(task.id);
         }
 
-        // Emit internal event if configured. Deferred until after workflow
-        // output-contract validation so consumers never observe a "completed"
-        // task that the workflow layer immediately fails (the emitted event type
-        // reflects the final, post-validation task status).
-        emitInternalEventIfNeeded(task);
     }
 
     @Transactional
@@ -565,28 +558,6 @@ public class TaskExecutionService {
             if (pendingTasks > 0) {
                 executeNextTask(projectId);
             }
-        }
-    }
-
-    private void emitInternalEventIfNeeded(TaskEntity task) {
-        ActionTypeEntity actionType = ActionTypeEntity.find("name", task.actionType).firstResult();
-        if (actionType != null && actionType.emitsEvent) {
-            EventEntity event = new EventEntity();
-            event.source = "internal";
-            event.eventType = task.status.equals("Completed") ? "task-completed" : "task-failed";
-            event.projectId = task.projectId;
-            event.taskId = task.id;
-            event.payload = task.output != null ? task.output : "";
-            event.receivedAt = Instant.now();
-            event.persist();
-
-            EventQueueEntity queueEntry = new EventQueueEntity();
-            queueEntry.eventId = event.id;
-            queueEntry.status = "pending";
-            queueEntry.enqueuedAt = Instant.now();
-            queueEntry.persist();
-
-            LOG.infof("Emitted internal %s event for task %d", event.eventType, task.id);
         }
     }
 

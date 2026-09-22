@@ -228,12 +228,10 @@ public class SystemResourceImpl implements SystemResource {
             config.setClosedProjectRetentionDays(entity.closedProjectRetentionDays);
             config.setTraceRetentionDays(entity.traceRetentionDays);
             config.setEventRetentionDays(entity.eventRetentionDays);
-            config.setEventSourceLogRetentionDays(entity.eventSourceLogRetentionDays);
         } else {
             config.setClosedProjectRetentionDays(90);
             config.setTraceRetentionDays(30);
             config.setEventRetentionDays(90);
-            config.setEventSourceLogRetentionDays(7);
         }
         return config;
     }
@@ -252,7 +250,6 @@ public class SystemResourceImpl implements SystemResource {
         entity.closedProjectRetentionDays = data.getClosedProjectRetentionDays();
         entity.traceRetentionDays = data.getTraceRetentionDays();
         entity.eventRetentionDays = data.getEventRetentionDays();
-        entity.eventSourceLogRetentionDays = data.getEventSourceLogRetentionDays();
         entity.persist();
 
         return data;

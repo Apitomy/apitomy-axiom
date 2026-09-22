@@ -2,7 +2,6 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.apitomy.axiom.core.entities.EventEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 
 import java.util.HashMap;
@@ -18,34 +17,6 @@ import java.util.Map;
 public final class WorkflowEventMapper {
 
     private WorkflowEventMapper() {
-    }
-
-    /**
-     * Maps an event entity to the curated event map.
-     *
-     * @param event        the event to map
-     * @param objectMapper used to parse the raw JSON payload
-     * @return a map with keys {@code type}, {@code source}, {@code payload}
-     *         (always present; payload is an empty map when null/unparseable)
-     *         and {@code issueRef}, {@code repository}, {@code receivedAt}
-     *         (present only when non-null on the entity)
-     */
-    public static Map<String, Object> toEventMap(EventEntity event,
-            ObjectMapper objectMapper) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("type", event.eventType);
-        map.put("source", event.source);
-        if (event.issueRef != null) {
-            map.put("issueRef", event.issueRef);
-        }
-        if (event.repository != null) {
-            map.put("repository", event.repository);
-        }
-        if (event.receivedAt != null) {
-            map.put("receivedAt", event.receivedAt.toString());
-        }
-        map.put("payload", parsePayload(event.payload, objectMapper));
-        return map;
     }
 
     /**

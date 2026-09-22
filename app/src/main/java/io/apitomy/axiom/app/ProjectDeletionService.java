@@ -2,7 +2,6 @@ package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
-import io.apitomy.axiom.core.entities.EventEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
@@ -34,7 +33,6 @@ public class ProjectDeletionService {
         ThreadEntryEntity.delete("projectId", projectId);
         AiUsageEntity.delete("projectId", projectId);
         ActivityLogEntity.delete("projectId", projectId);
-        EventEntity.update("projectId = null where projectId = ?1", projectId);
         TaskEntity.delete("projectId", projectId);
         workspaceService.deleteWorkspace(project);
         project.delete();

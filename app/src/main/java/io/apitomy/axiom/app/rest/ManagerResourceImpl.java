@@ -2,8 +2,8 @@ package io.apitomy.axiom.app.rest;
 
 import io.apitomy.axiom.api.ManagerResource;
 import io.apitomy.axiom.api.beans.ManagerConfig;
-import io.apitomy.axiom.core.entities.EventEntity;
 import io.apitomy.axiom.core.entities.ManagerConfigEntity;
+import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.manager.ManagerPromptBuilder;
 import io.apitomy.axiom.manager.ManagerService;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -13,7 +13,7 @@ import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 
-import java.math.BigInteger;
+import java.util.UUID;
 
 /**
  * Implementation of the Manager REST API, including configuration
@@ -67,11 +67,17 @@ public class ManagerResourceImpl implements ManagerResource {
      * {@inheritDoc}
      */
     @Override
-    public Response evaluateEvent(BigInteger eventId) {
-        EventEntity event = EventEntity.findById(eventId.longValue());
+    public Response evaluateEvent(String eventId) {
+        UUID uuid;
+        try {
+            uuid = UUID.fromString(eventId);
+        } catch (IllegalArgumentException e) {
+            throw new WebApplicationException("Invalid event ID format: " + eventId, 400);
+        }
+        StreamEventEntity event = StreamEventEntity.findById(uuid);
         if (event == null) {
             throw new WebApplicationException("Event not found: " + eventId, 404);
         }
-        return Response.ok(managerService.evaluate(event, null)).build();
+        return Response.ok(managerService.evaluateStreamEvent(event)).build();
     }
 }

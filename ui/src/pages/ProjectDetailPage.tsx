@@ -55,18 +55,18 @@ import AngleRightIcon from "@patternfly/react-icons/dist/esm/icons/angle-right-i
 import AngleDownIcon from "@patternfly/react-icons/dist/esm/icons/angle-down-icon";
 import {
     type ActionType,
-    type AxiomEvent,
     type InboxItem,
     type Project,
     type ProjectMetrics,
+    type StreamEvent,
     type Task,
     type ThreadEntry,
     fetchActionTypes,
     fetchAgents,
     fetchProject,
-    fetchProjectEvents,
     fetchProjectMetrics,
     fetchProjectTasks,
+    fetchStreamEvents,
     fetchThreadEntries,
     createTask,
     deleteProject,
@@ -102,7 +102,7 @@ export function ProjectDetailPage() {
     const [project, setProject] = useState<Project | null>(null);
     const [tasks, setTasks] = useState<Task[]>([]);
     const [thread, setThread] = useState<ThreadEntry[]>([]);
-    const [events, setEvents] = useState<AxiomEvent[]>([]);
+    const [events, setEvents] = useState<StreamEvent[]>([]);
     const [metrics, setMetrics] = useState<ProjectMetrics | null>(null);
     const [agentNames, setAgentNames] = useState<Record<number, string>>({});
     const [activeTab, setActiveTab] = useState(0);
@@ -143,19 +143,23 @@ export function ProjectDetailPage() {
             fetchProject(id),
             fetchProjectTasks(id),
             fetchThreadEntries(id),
-            fetchProjectEvents(id),
             fetchProjectMetrics(id),
             fetchAgents(),
         ])
-            .then(([p, t, th, ev, m, agents]) => {
+            .then(([p, t, th, m, agents]) => {
                 setProject(p);
                 setTasks(t);
                 setThread(th);
-                setEvents(ev);
                 setMetrics(m);
                 const names: Record<number, string> = {};
                 agents.forEach((a) => { names[a.id] = a.name; });
                 setAgentNames(names);
+                // Load stream events by project ref
+                if (p.ref) {
+                    fetchStreamEvents(1, 100, undefined, undefined, p.ref)
+                        .then(r => setEvents(r.items))
+                        .catch(console.error);
+                }
             })
             .catch(console.error)
             .finally(() => setLoading(false));
@@ -832,9 +836,7 @@ const EVENT_TYPE_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "
     "task-failed": "red",
 };
 
-function EventsTab({ events }: { events: AxiomEvent[] }) {
-    const navigate = useNavigate();
-
+function EventsTab({ events }: { events: StreamEvent[] }) {
     if (events.length === 0) {
         return (
             <EmptyState>
@@ -850,32 +852,25 @@ function EventsTab({ events }: { events: AxiomEvent[] }) {
                     <Th>Time</Th>
                     <Th>Source</Th>
                     <Th>Event Type</Th>
-                    <Th>Trace</Th>
+                    <Th>Ref</Th>
                 </Tr>
             </Thead>
             <Tbody>
                 {events.map((event) => (
                     <Tr key={event.id}>
                         <Td style={{ whiteSpace: "nowrap" }}>
-                            {new Date(event.receivedAt).toLocaleString()}
+                            {new Date(event.timestamp).toLocaleString()}
                         </Td>
                         <Td>
                             <Label isCompact>{event.source}</Label>
                         </Td>
                         <Td>
                             <Label isCompact
-                                color={EVENT_TYPE_COLORS[event.eventType] || "grey"}>
-                                {event.eventType}
+                                color={EVENT_TYPE_COLORS[event.type] || "grey"}>
+                                {event.type}
                             </Label>
                         </Td>
-                        <Td>
-                            {event.traceId ? (
-                                <Button variant="link" isInline
-                                    onClick={() => navigate(`/logs/traces/${event.traceId}`)}>
-                                    View Trace
-                                </Button>
-                            ) : "—"}
-                        </Td>
+                        <Td>{event.ref || "—"}</Td>
                     </Tr>
                 ))}
             </Tbody>
