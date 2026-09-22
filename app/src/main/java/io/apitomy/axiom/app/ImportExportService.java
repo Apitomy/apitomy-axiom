@@ -926,7 +926,15 @@ public class ImportExportService {
         n.put("baseUrl", e.baseUrl);
         putIfNotNull(n, "secretName", e.secretName);
         if (e.pollInterval != null) n.put("pollInterval", e.pollInterval);
-        putIfNotNull(n, "configuration", e.configuration);
+        // Configuration is stored as a JSON string in the DB but must be
+        // serialized as a parsed JSON object in the pack
+        if (e.configuration != null) {
+            try {
+                n.set("configuration", objectMapper.readTree(e.configuration));
+            } catch (Exception ex) {
+                n.put("configuration", e.configuration);
+            }
+        }
         return n;
     }
 
@@ -936,7 +944,15 @@ public class ImportExportService {
         putIfNotNull(n, "description", e.description);
         n.put("enabled", e.enabled);
         putIfNotNull(n, "filterExpression", e.filters);
-        putIfNotNull(n, "routing", e.routing);
+        // Routing is stored as a JSON string in the DB but must be
+        // serialized as a parsed JSON array in the pack
+        if (e.routing != null) {
+            try {
+                n.set("routing", objectMapper.readTree(e.routing));
+            } catch (Exception ex) {
+                n.put("routing", e.routing);
+            }
+        }
         if (e.labels != null && !e.labels.isEmpty()) {
             var arr = n.putArray("labels");
             for (String label : e.labels) arr.add(label);

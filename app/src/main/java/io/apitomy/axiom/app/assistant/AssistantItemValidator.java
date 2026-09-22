@@ -86,7 +86,8 @@ public class AssistantItemValidator {
             case "report-definitions" -> validateReportDefinition(content, workingDirectory, errors, warnings);
             case "toolsets" -> validateToolset(content, errors, warnings);
             case "session-templates" -> validateSessionTemplate(content, errors, warnings);
-            case "event-sources" -> validateEventSource(content, errors, warnings);
+            case "connections" -> validateConnection(content, errors, warnings);
+            case "subscriptions" -> validateSubscription(content, errors, warnings);
             case "scheduled-jobs" -> validateScheduledJob(content, workingDirectory, errors, warnings);
             default -> errors.add("Unknown item type: " + itemType);
         }
@@ -110,7 +111,8 @@ public class AssistantItemValidator {
             case "report-definitions" -> "report-definitions";
             case "toolsets" -> "toolsets";
             case "session-templates" -> "session-templates";
-            case "event-sources" -> "event-sources";
+            case "connections" -> "connections";
+            case "subscriptions" -> "subscriptions";
             case "scheduled-jobs" -> "scheduled-jobs";
             default -> null;
         };
@@ -236,13 +238,20 @@ public class AssistantItemValidator {
         collectMessages(result.errors(), result.warnings(), errors, warnings);
     }
 
-    private void validateEventSource(String json, List<String> errors, List<String> warnings) {
+    private void validateConnection(String json, List<String> errors, List<String> warnings) {
         JsonNode node;
         try {
             node = objectMapper.readTree(json);
         } catch (Exception e) {
             errors.add("Invalid JSON: " + e.getMessage());
             return;
+        }
+
+        String id = node.path("id").asText(null);
+        if (id == null || id.isBlank()) {
+            errors.add("'id' is required and must not be blank.");
+        } else if (!id.matches("[a-z0-9-]+")) {
+            errors.add("'id' must match [a-z0-9-]+ pattern, got: " + id);
         }
 
         String name = node.path("name").asText(null);
@@ -257,30 +266,53 @@ public class AssistantItemValidator {
             errors.add("'sourceType' must be 'github' or 'jira', got: " + sourceType);
         }
 
+        String baseUrl = node.path("baseUrl").asText(null);
+        if (baseUrl == null || baseUrl.isBlank()) {
+            errors.add("'baseUrl' is required and must not be blank.");
+        }
+
         JsonNode configNode = node.path("configuration");
-        if (configNode.isMissingNode() || configNode.isNull()
-                || (configNode.isObject() && configNode.isEmpty())) {
-            errors.add("'configuration' is required and must not be empty.");
-        } else if (configNode.isObject() && sourceType != null) {
-            if ("github".equals(sourceType)) {
-                if (!configNode.has("owner") || configNode.path("owner").asText("").isBlank()) {
-                    errors.add("GitHub configuration requires 'owner' field.");
-                }
-                if (!configNode.has("name") || configNode.path("name").asText("").isBlank()) {
-                    errors.add("GitHub configuration requires 'name' field.");
-                }
-            } else if ("jira".equals(sourceType)) {
-                if (!configNode.has("baseUrl") || configNode.path("baseUrl").asText("").isBlank()) {
-                    errors.add("Jira configuration requires 'baseUrl' field.");
-                }
-                if (!configNode.has("project") || configNode.path("project").asText("").isBlank()) {
-                    errors.add("Jira configuration requires 'project' field.");
-                }
-            }
+        if (configNode.isMissingNode() || configNode.isNull() || !configNode.isObject()) {
+            errors.add("'configuration' is required and must be an object.");
+        }
+    }
+
+    private void validateSubscription(String json, List<String> errors, List<String> warnings) {
+        JsonNode node;
+        try {
+            node = objectMapper.readTree(json);
+        } catch (Exception e) {
+            errors.add("Invalid JSON: " + e.getMessage());
+            return;
+        }
+
+        String name = node.path("name").asText(null);
+        if (name == null || name.isBlank()) {
+            errors.add("'name' is required and must not be blank.");
+        }
+
+        JsonNode filterExpr = node.path("filterExpression");
+        if (!filterExpr.isMissingNode() && !filterExpr.isNull() && !filterExpr.isTextual()) {
+            errors.add("'filterExpression' must be a string if provided.");
+        }
+
+        JsonNode routing = node.path("routing");
+        if (!routing.isMissingNode() && !routing.isNull() && !routing.isArray()) {
+            errors.add("'routing' must be an array if provided.");
+        }
+
+        JsonNode labels = node.path("labels");
+        if (!labels.isMissingNode() && !labels.isNull() && !labels.isArray()) {
+            errors.add("'labels' must be an array of strings if provided.");
+        }
+
+        JsonNode enabled = node.path("enabled");
+        if (!enabled.isMissingNode() && !enabled.isNull() && !enabled.isBoolean()) {
+            errors.add("'enabled' must be a boolean if provided.");
         }
 
         if (!node.has("description") || node.path("description").asText("").isBlank()) {
-            warnings.add("'description' is recommended for event sources.");
+            warnings.add("'description' is recommended for subscriptions.");
         }
     }
 
