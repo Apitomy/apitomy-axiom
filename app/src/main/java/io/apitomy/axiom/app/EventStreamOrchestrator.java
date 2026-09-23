@@ -132,11 +132,12 @@ public class EventStreamOrchestrator {
 
             // Find events that have no ledger entry for this subscription.
             // Use a NOT IN subquery for efficiency.
-            // Filter by processEventsFrom to skip historical events.
+            // Filter by processEventsFrom against the event's timestamp (when it
+            // occurred in the source system), not createdOn (when Axiom ingested it).
             List<StreamEventEntity> unprocessed = QuarkusTransaction.requiringNew().call(() ->
                 StreamEventEntity.<StreamEventEntity>find(
-                    "createdOn >= ?1 AND id NOT IN (SELECT l.eventId FROM EventProcessingLedgerEntity l " +
-                    "WHERE l.subscriptionId = ?2) ORDER BY createdOn ASC",
+                    "timestamp >= ?1 AND id NOT IN (SELECT l.eventId FROM EventProcessingLedgerEntity l " +
+                    "WHERE l.subscriptionId = ?2) ORDER BY timestamp ASC",
                     sub.processEventsFrom, sub.id)
                     .page(0, BATCH_SIZE).list()
             );
