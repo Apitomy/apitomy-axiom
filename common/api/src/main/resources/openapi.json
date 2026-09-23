@@ -7820,6 +7820,14 @@
           "subscriptionsUpdated": {
             "description": "Number of existing subscriptions updated",
             "type": "integer"
+          },
+          "workflowDefinitionsCreated": {
+            "description": "Number of new workflow definitions created",
+            "type": "integer"
+          },
+          "workflowDefinitionsUpdated": {
+            "description": "Number of existing workflow definitions updated",
+            "type": "integer"
           }
         }
       },

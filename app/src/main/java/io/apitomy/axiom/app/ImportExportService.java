@@ -210,7 +210,8 @@ public class ImportExportService {
             int sessionTemplatesCreated, int sessionTemplatesUpdated,
             int scheduledJobsCreated, int scheduledJobsUpdated,
             int connectionsCreated, int connectionsUpdated,
-            int subscriptionsCreated, int subscriptionsUpdated
+            int subscriptionsCreated, int subscriptionsUpdated,
+            int workflowDefinitionsCreated, int workflowDefinitionsUpdated
     ) {}
 
     /**
@@ -259,7 +260,8 @@ public class ImportExportService {
                 sessionTemplates[0], sessionTemplates[1],
                 scheduledJobs[0], scheduledJobs[1],
                 connections[0], connections[1],
-                subscriptions[0], subscriptions[1]
+                subscriptions[0], subscriptions[1],
+                0, 0
         );
     }
 
@@ -707,7 +709,7 @@ public class ImportExportService {
         ObjectNode n = objectMapper.createObjectNode();
         n.put("name", e.name);
         putIfNotNull(n, "description", e.description);
-        putIfNotNull(n, "parameters", e.parameters);
+        putJsonIfPossible(n, "parameters", e.parameters);
         putIfNotNull(n, "scriptTemplate", e.scriptTemplate);
         if (e.labels != null && !e.labels.isEmpty()) {
             var labelsArr = n.putArray("labels");
@@ -729,8 +731,8 @@ public class ImportExportService {
         n.put("name", e.name);
         putIfNotNull(n, "description", e.description);
         putIfNotNull(n, "serverCommand", e.serverCommand);
-        putIfNotNull(n, "serverArgs", e.serverArgs);
-        putIfNotNull(n, "serverEnv", e.serverEnv);
+        putJsonIfPossible(n, "serverArgs", e.serverArgs);
+        putJsonIfPossible(n, "serverEnv", e.serverEnv);
         putIfNotNull(n, "serverUrl", e.serverUrl);
         return n;
     }
@@ -760,7 +762,7 @@ public class ImportExportService {
         if (e.maxSteps != null) n.put("maxSteps", e.maxSteps);
         if (e.maxBudgetUsd != null) n.put("maxBudgetUsd", e.maxBudgetUsd);
         if (e.timeoutSeconds != null) n.put("timeoutSeconds", e.timeoutSeconds);
-        putIfNotNull(n, "environment", e.environment);
+        putJsonIfPossible(n, "environment", e.environment);
         if (e.labels != null && !e.labels.isEmpty()) {
             var labelsArr = n.putArray("labels");
             e.labels.forEach(labelsArr::add);
@@ -785,7 +787,7 @@ public class ImportExportService {
         n.put("timeWindow", e.timeWindow);
         putIfNotNull(n, "promptTemplate", e.promptTemplate);
         putIfNotNull(n, "allowedTools", e.allowedTools);
-        putIfNotNull(n, "environment", e.environment);
+        putJsonIfPossible(n, "environment", e.environment);
         putIfNotNull(n, "engine", e.engine);
         putIfNotNull(n, "model", e.model);
         if (e.maxSteps != null) n.put("maxSteps", e.maxSteps);
@@ -806,7 +808,7 @@ public class ImportExportService {
         putIfNotNull(n, "engine", e.engine);
         putIfNotNull(n, "initScript", e.initScript);
         putIfNotNull(n, "initScriptType", e.initScriptType);
-        putIfNotNull(n, "environment", e.environment);
+        putJsonIfPossible(n, "environment", e.environment);
         putIfNotNull(n, "initialMessage", e.initialMessage);
         if (e.mcpServers != null && !e.mcpServers.isEmpty()) {
             ArrayNode arr = n.putArray("mcpServers");
@@ -908,7 +910,7 @@ public class ImportExportService {
         if (e.maxSteps != null) n.put("maxSteps", e.maxSteps);
         if (e.maxBudgetUsd != null) n.put("maxBudgetUsd", e.maxBudgetUsd);
         if (e.timeoutSeconds != null) n.put("timeoutSeconds", e.timeoutSeconds);
-        putIfNotNull(n, "environment", e.environment);
+        putJsonIfPossible(n, "environment", e.environment);
         if (e.labels != null && !e.labels.isEmpty()) {
             ArrayNode arr = n.putArray("labels");
             e.labels.forEach(arr::add);
@@ -1066,6 +1068,25 @@ public class ImportExportService {
         if (value != null) node.put(field, value);
     }
 
+    /**
+     * Stores a value that may be a JSON string in the database. If the value
+     * parses as valid JSON (object or array), it is embedded as a parsed JSON
+     * node in the output; otherwise it is stored as a plain string.
+     */
+    private void putJsonIfPossible(ObjectNode node, String field, String value) {
+        if (value == null) return;
+        try {
+            JsonNode parsed = objectMapper.readTree(value);
+            if (parsed.isObject() || parsed.isArray()) {
+                node.set(field, parsed);
+                return;
+            }
+        } catch (Exception ignored) {
+            // Not valid JSON — fall through to plain string
+        }
+        node.put(field, value);
+    }
+
     private String textOrNull(JsonNode node, String field) {
         JsonNode value = node.path(field);
         return value.isMissingNode() || value.isNull() ? null : value.asText();
@@ -1073,7 +1094,13 @@ public class ImportExportService {
 
     private String jsonOrNull(JsonNode node, String field) {
         JsonNode value = node.path(field);
-        return value.isMissingNode() || value.isNull() ? null : value.toString();
+        if (value.isMissingNode() || value.isNull()) return null;
+        // If the value is a proper JSON object or array, serialize it
+        if (value.isObject() || value.isArray()) return value.toString();
+        // If it's a string that looks like JSON (e.g., from an old export that
+        // double-encoded the value), use the string content directly
+        if (value.isTextual()) return value.asText();
+        return value.toString();
     }
 
     /**

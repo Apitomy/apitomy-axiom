@@ -88,6 +88,7 @@ public class AssistantItemValidator {
             case "session-templates" -> validateSessionTemplate(content, errors, warnings);
             case "connections" -> validateConnection(content, errors, warnings);
             case "subscriptions" -> validateSubscription(content, errors, warnings);
+            case "workflows" -> validateWorkflowDefinition(content, errors, warnings);
             case "scheduled-jobs" -> validateScheduledJob(content, workingDirectory, errors, warnings);
             default -> errors.add("Unknown item type: " + itemType);
         }
@@ -113,6 +114,7 @@ public class AssistantItemValidator {
             case "session-templates" -> "session-templates";
             case "connections" -> "connections";
             case "subscriptions" -> "subscriptions";
+            case "workflows" -> "workflows";
             case "scheduled-jobs" -> "scheduled-jobs";
             default -> null;
         };
@@ -313,6 +315,73 @@ public class AssistantItemValidator {
 
         if (!node.has("description") || node.path("description").asText("").isBlank()) {
             warnings.add("'description' is recommended for subscriptions.");
+        }
+    }
+
+    private void validateWorkflowDefinition(String json, List<String> errors,
+                                              List<String> warnings) {
+        JsonNode node;
+        try {
+            node = objectMapper.readTree(json);
+        } catch (Exception e) {
+            errors.add("Invalid JSON: " + e.getMessage());
+            return;
+        }
+
+        String name = node.path("name").asText(null);
+        if (name == null || name.isBlank()) {
+            errors.add("'name' is required and must not be blank.");
+        }
+
+        JsonNode contentNode = node.path("content");
+        if (contentNode.isMissingNode() || contentNode.isNull() || !contentNode.isObject()) {
+            errors.add("'content' is required and must be an object.");
+            return;
+        }
+
+        JsonNode nodesNode = contentNode.path("nodes");
+        if (nodesNode.isMissingNode() || !nodesNode.isArray()) {
+            errors.add("'content.nodes' is required and must be an array.");
+        } else {
+            boolean hasStart = false;
+            boolean hasEnd = false;
+            for (JsonNode n : nodesNode) {
+                String nodeId = n.path("id").asText(null);
+                String nodeType = n.path("type").asText(null);
+                String nodeName = n.path("name").asText(null);
+
+                if (nodeId == null || nodeId.isBlank()) {
+                    errors.add("Each node must have an 'id'.");
+                }
+                if (nodeType == null || nodeType.isBlank()) {
+                    errors.add("Each node must have a 'type'.");
+                } else {
+                    if ("START".equals(nodeType)) {
+                        hasStart = true;
+                    }
+                    if ("END".equals(nodeType)) {
+                        hasEnd = true;
+                    }
+                }
+                if (nodeName == null || nodeName.isBlank()) {
+                    errors.add("Each node must have a 'name'.");
+                }
+            }
+            if (!hasStart) {
+                errors.add("Workflow content must have at least one START node.");
+            }
+            if (!hasEnd) {
+                errors.add("Workflow content must have at least one END node.");
+            }
+        }
+
+        JsonNode edgesNode = contentNode.path("edges");
+        if (edgesNode.isMissingNode() || !edgesNode.isArray()) {
+            errors.add("'content.edges' is required and must be an array.");
+        }
+
+        if (!node.has("description") || node.path("description").asText("").isBlank()) {
+            warnings.add("'description' is recommended for workflow definitions.");
         }
     }
 

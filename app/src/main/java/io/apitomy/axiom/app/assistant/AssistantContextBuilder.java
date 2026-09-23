@@ -79,6 +79,7 @@ public class AssistantContextBuilder {
             Files.createDirectories(workDir.resolve("session-templates"));
             Files.createDirectories(workDir.resolve("connections"));
             Files.createDirectories(workDir.resolve("subscriptions"));
+            Files.createDirectories(workDir.resolve("workflows"));
             Files.createDirectories(workDir.resolve("scheduled-jobs"));
         }
 

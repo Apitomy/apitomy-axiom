@@ -444,6 +444,8 @@ public class AssistantResourceImpl implements AssistantResource {
             applyResult.setConnectionsUpdated(result.connectionsUpdated());
             applyResult.setSubscriptionsCreated(result.subscriptionsCreated());
             applyResult.setSubscriptionsUpdated(result.subscriptionsUpdated());
+            applyResult.setWorkflowDefinitionsCreated(result.workflowDefinitionsCreated());
+            applyResult.setWorkflowDefinitionsUpdated(result.workflowDefinitionsUpdated());
             return applyResult;
         } catch (ValidationException e) {
             throw new WebApplicationException(e.getMessage(), 422);

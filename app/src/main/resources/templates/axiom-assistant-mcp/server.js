@@ -286,6 +286,36 @@ const TOOLS = [
         },
     },
     {
+        name: "axiom_list_workflow_definitions",
+        description: "List all workflow definitions with their names, descriptions, and current published version.",
+        parameters: [],
+        handler: async () => {
+            const result = JSON.parse(await axiomApi("GET", "/workflow/definitions?limit=100"));
+            const items = result.items || [];
+            if (items.length === 0) return "No workflow definitions configured.";
+            return JSON.stringify(items.map(wd => ({
+                id: wd.id,
+                name: wd.name,
+                description: wd.description || "",
+                currentVersion: wd.currentVersion,
+            })), null, 2);
+        },
+    },
+    {
+        name: "axiom_get_workflow_definition",
+        description: "Get the full details of a workflow definition by ID, including the workflow content (nodes, edges, and their configuration).",
+        parameters: [
+            { name: "workflowDefinitionId", type: "number", description: "The workflow definition ID", required: true },
+        ],
+        handler: async (args) => {
+            try {
+                return await axiomApi("GET", "/workflow/definitions/" + encodeURIComponent(args.workflowDefinitionId));
+            } catch (e) {
+                return `Workflow definition '${args.workflowDefinitionId}' not found.`;
+            }
+        },
+    },
+    {
         name: "axiom_list_secrets",
         description: "List all secret names in Axiom. Returns names and descriptions only (values are never exposed). Use these names with ${secret:NAME} syntax in environment variables and configuration.",
         parameters: [],
