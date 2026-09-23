@@ -356,12 +356,10 @@ public class EventStreamOrchestrator {
         }
 
         switch (decision.decision()) {
-            case "create_task" -> QuarkusTransaction.requiringNew().run(() ->
+            case "create_task", "script_action" -> QuarkusTransaction.requiringNew().run(() ->
                     handleCreateTask(event, decision));
             case "ignore" -> QuarkusTransaction.requiringNew().run(() ->
                     handleIgnore(event, decision));
-            case "script_action" -> QuarkusTransaction.requiringNew().run(() ->
-                    handleScriptAction(event, decision));
             case "escalate" -> QuarkusTransaction.requiringNew().run(() ->
                     handleEscalation(event, decision, decision.reasoning()));
             default -> LOG.warnf("Unknown Manager decision type: %s", decision.decision());
@@ -393,42 +391,20 @@ public class EventStreamOrchestrator {
         sseEvents.fire(SseEvent.taskUpdated(project.id, task.id, "Pending"));
         sseEvents.fire(SseEvent.projectUpdated(project.id));
         sseEvents.fire(SseEvent.threadEntry(project.id));
+
+        // If the action type is script-based, execute the script immediately
+        // rather than waiting for the task queue to pick it up
+        ActionTypeEntity actionType = ActionTypeEntity.find("name", decision.actionType())
+                .firstResult();
+        if (actionType != null && "script".equals(actionType.executionMode)) {
+            scriptExecutionService.executeScript(task, project);
+        }
     }
 
     private void handleIgnore(StreamEventEntity event, ManagerDecision decision) {
         LOG.infof("Manager ignored stream event %s: %s", event.id, decision.reasoning());
         logActivity(null, null, null, "event-ignored",
                 "Event ignored: " + event.type + " — " + decision.reasoning());
-    }
-
-    private void handleScriptAction(StreamEventEntity event, ManagerDecision decision) {
-        ProjectEntity project = findOrCreateProjectForStreamEvent(event);
-
-        TaskEntity task = new TaskEntity();
-        task.projectId = project.id;
-        task.actionType = decision.actionType();
-        task.createdBy = "manager";
-        task.status = "Pending";
-        task.input = decision.inputContext();
-        task.humanContext = decision.humanContext();
-        task.outputSchema = decision.outputSchema();
-        task.createdOn = Instant.now();
-        task.persist();
-
-        LOG.infof("Manager created script task %d (%s) for project %d from stream event %s",
-                task.id, task.actionType, project.id, event.id);
-
-        logActivity(project.id, task.id, null, "task-created",
-                "Manager created script task: " + task.actionType + " — " + decision.reasoning());
-        addThreadEntry(project.id, "manager", "decision",
-                "Script action: " + task.actionType + "\n\nReasoning: " + decision.reasoning());
-
-        sseEvents.fire(SseEvent.taskUpdated(project.id, task.id, "Pending"));
-        sseEvents.fire(SseEvent.projectUpdated(project.id));
-        sseEvents.fire(SseEvent.threadEntry(project.id));
-
-        // Execute the script immediately
-        scriptExecutionService.executeScript(task, project);
     }
 
     private void handleEscalation(StreamEventEntity event, ManagerDecision decision,

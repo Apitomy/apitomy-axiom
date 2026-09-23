@@ -118,7 +118,9 @@ export function SubscriptionDetailPage() {
             labels,
             filterExpression: filterExpression || undefined,
             routing: routing.length > 0 ? routing : undefined,
-            processEventsFrom: processEventsFrom ? new Date(processEventsFrom).toISOString() : undefined,
+            processEventsFrom: processEventsFrom
+                ? new Date(processEventsFrom).toISOString().replace(/\.\d{3}Z$/, "Z")
+                : undefined,
         };
 
         updateSubscription(numericId, data)

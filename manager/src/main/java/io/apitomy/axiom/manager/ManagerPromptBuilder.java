@@ -161,7 +161,7 @@ public final class ManagerPromptBuilder {
                 {"type":"object","required":["decisions"],"properties":{"decisions":\
                 {"type":"array","items":{"type":"object","required":["decision",\
                 "confidence","reasoning"],"properties":{"decision":{"type":"string",\
-                "enum":["create_task","ignore","script_action","escalate"]},\
+                "enum":["create_task","ignore","escalate"]},\
                 "actionType":{"type":"string"},"agentHint":{"type":"string"},\
                 "inputContext":{"type":"string"},"confidence":{"type":"number",\
                 "minimum":0,"maximum":1},"reasoning":{"type":"string"},\
@@ -188,8 +188,8 @@ public final class ManagerPromptBuilder {
             it and decide what actions (if any) should be taken.
 
             For each decision, specify:
-            - **decision**: One of: create_task, ignore, script_action, escalate
-            - **actionType**: The action to perform (required for create_task and script_action)
+            - **decision**: One of: create_task, ignore, escalate
+            - **actionType**: The name of the action type to invoke (required for create_task)
             - **agentHint**: (Optional) preferred agent name
             - **inputContext**: Instructions or context for the agent performing the task
             - **confidence**: 0.0 to 1.0 indicating your confidence
@@ -216,10 +216,11 @@ public final class ManagerPromptBuilder {
 
             Guidelines:
             - You may return multiple decisions for a single event
+            - Use "create_task" to invoke any action type — the system will handle \
+              execution automatically based on the action type's configuration
             - Use "ignore" for events that don't require action (bot comments, trivial edits)
             - Use "escalate" when you're unsure what to do
             - Set a low confidence score if you're uncertain
-            - Script actions run a predefined script (e.g. "close-project", "reopen-project")
             """;
 
     /**
