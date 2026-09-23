@@ -4,14 +4,19 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.StreamResource;
 import io.apitomy.axiom.api.beans.Actor;
 import io.apitomy.axiom.api.beans.EventProcessingEntry;
+import io.apitomy.axiom.api.beans.EventProcessingOutcome;
 import io.apitomy.axiom.api.beans.EventProcessingSearchResults;
 import io.apitomy.axiom.api.beans.Payload;
 import io.apitomy.axiom.api.beans.SourceData;
 import io.apitomy.axiom.api.beans.StreamEvent;
 import io.apitomy.axiom.api.beans.StreamEventSearchResults;
+import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
+import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
+import io.apitomy.axiom.core.entities.TaskEntity;
+import io.apitomy.axiom.core.events.model.RoutingRule;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -108,14 +113,45 @@ public class StreamEventsResourceImpl implements StreamResource {
         List<EventProcessingLedgerEntity> entries = EventProcessingLedgerEntity
                 .find("eventId = ?1 ORDER BY createdOn ASC", uuid).list();
 
-        // Load subscription names in batch
+        // Load subscriptions in batch (for names and routing rules)
         List<Long> subIds = entries.stream().map(e -> e.subscriptionId).distinct().toList();
-        Map<Long, String> subNames = new HashMap<>();
+        Map<Long, EventSubscriptionEntity> subsById = new HashMap<>();
         if (!subIds.isEmpty()) {
             List<EventSubscriptionEntity> subs = EventSubscriptionEntity
                     .find("id in ?1", subIds).list();
             for (EventSubscriptionEntity sub : subs) {
-                subNames.put(sub.id, sub.name);
+                subsById.put(sub.id, sub);
+            }
+        }
+
+        // Load the event to get its ref for looking up related projects
+        StreamEventEntity event = StreamEventEntity.findById(uuid);
+        String eventRef = event != null ? event.ref : null;
+
+        // Look up projects and tasks linked to this event's ref
+        Map<Long, ProjectEntity> projectsByRef = new HashMap<>();
+        Map<Long, List<TaskEntity>> tasksByProject = new HashMap<>();
+        if (eventRef != null) {
+            List<ProjectEntity> projects = ProjectEntity.find("ref", eventRef).list();
+            for (ProjectEntity p : projects) {
+                projectsByRef.put(p.id, p);
+                List<TaskEntity> tasks = TaskEntity
+                        .find("projectId = ?1 and createdBy = 'manager' ORDER BY createdOn ASC", p.id)
+                        .list();
+                tasksByProject.put(p.id, tasks);
+            }
+        }
+
+        // Look up activity log entries related to this event (by time window around processing)
+        List<ActivityLogEntity> relatedActivities = new java.util.ArrayList<>();
+        for (EventProcessingLedgerEntity e : entries) {
+            if ("completed".equals(e.status) && e.processedOn != null) {
+                // Find activities within 5 seconds of processing
+                List<ActivityLogEntity> activities = ActivityLogEntity.find(
+                        "entryType in ?1 and createdOn >= ?2 and createdOn <= ?3",
+                        List.of("manager-evaluated", "event-ignored", "manager-escalation"),
+                        e.processedOn.minusSeconds(5), e.processedOn.plusSeconds(5)).list();
+                relatedActivities.addAll(activities);
             }
         }
 
@@ -123,12 +159,82 @@ public class StreamEventsResourceImpl implements StreamResource {
             EventProcessingEntry entry = new EventProcessingEntry();
             entry.setId(e.id);
             entry.setSubscriptionId(e.subscriptionId);
-            entry.setSubscriptionName(subNames.getOrDefault(e.subscriptionId,
-                    "Subscription #" + e.subscriptionId));
+            EventSubscriptionEntity sub = subsById.get(e.subscriptionId);
+            entry.setSubscriptionName(sub != null ? sub.name : "Subscription #" + e.subscriptionId);
             entry.setStatus(e.status);
             entry.setErrorMessage(e.errorMessage);
             if (e.createdOn != null) entry.setCreatedOn(Date.from(e.createdOn));
             if (e.processedOn != null) entry.setProcessedOn(Date.from(e.processedOn));
+
+            // Add routing rules from subscription
+            if (sub != null && sub.routing != null && !sub.routing.isBlank()) {
+                try {
+                    List<io.apitomy.axiom.api.beans.RoutingRule> rules = objectMapper.readValue(
+                            sub.routing, objectMapper.getTypeFactory().constructCollectionType(
+                                    List.class, io.apitomy.axiom.api.beans.RoutingRule.class));
+                    entry.setRoutingRules(rules);
+                } catch (Exception ex) {
+                    LOG.warnf("Failed to parse routing rules for subscription %d", e.subscriptionId);
+                }
+            }
+
+            // Add outcomes for completed entries
+            if ("completed".equals(e.status)) {
+                List<EventProcessingOutcome> outcomes = new java.util.ArrayList<>();
+
+                // Manager decisions from activity log
+                for (ActivityLogEntity activity : relatedActivities) {
+                    EventProcessingOutcome outcome = new EventProcessingOutcome();
+                    outcome.setType(activity.entryType);
+                    outcome.setSummary(activity.summary);
+                    if (activity.projectId != null) {
+                        outcome.setProjectId(activity.projectId);
+                        ProjectEntity proj = projectsByRef.get(activity.projectId);
+                        if (proj != null) outcome.setProjectName(proj.name);
+                    }
+                    if (activity.taskId != null) {
+                        outcome.setTaskId(activity.taskId);
+                        // Find task status
+                        for (List<TaskEntity> tasks : tasksByProject.values()) {
+                            for (TaskEntity t : tasks) {
+                                if (t.id.equals(activity.taskId)) {
+                                    outcome.setTaskStatus(t.status);
+                                }
+                            }
+                        }
+                    }
+                    outcomes.add(outcome);
+                }
+
+                // If no activity log entries found but projects exist, add project/task info
+                if (outcomes.isEmpty() && !projectsByRef.isEmpty()) {
+                    for (ProjectEntity proj : projectsByRef.values()) {
+                        EventProcessingOutcome projOutcome = new EventProcessingOutcome();
+                        projOutcome.setType("project-created");
+                        projOutcome.setSummary("Project: " + proj.name);
+                        projOutcome.setProjectId(proj.id);
+                        projOutcome.setProjectName(proj.name);
+                        outcomes.add(projOutcome);
+
+                        List<TaskEntity> tasks = tasksByProject.getOrDefault(proj.id, List.of());
+                        for (TaskEntity t : tasks) {
+                            EventProcessingOutcome taskOutcome = new EventProcessingOutcome();
+                            taskOutcome.setType("task-created");
+                            taskOutcome.setSummary("Task: " + t.actionType);
+                            taskOutcome.setProjectId(proj.id);
+                            taskOutcome.setProjectName(proj.name);
+                            taskOutcome.setTaskId(t.id);
+                            taskOutcome.setTaskStatus(t.status);
+                            outcomes.add(taskOutcome);
+                        }
+                    }
+                }
+
+                if (!outcomes.isEmpty()) {
+                    entry.setOutcomes(outcomes);
+                }
+            }
+
             return entry;
         }).toList();
 

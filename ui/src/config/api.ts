@@ -2353,12 +2353,23 @@ export async function fetchStreamEvent(eventId: string): Promise<StreamEvent> {
     return response.json();
 }
 
+export interface EventProcessingOutcome {
+    type: string;
+    summary: string;
+    projectId?: number;
+    projectName?: string;
+    taskId?: number;
+    taskStatus?: string;
+}
+
 export interface EventProcessingEntry {
     id: number;
     subscriptionId: number;
     subscriptionName: string;
     status: string;
     errorMessage?: string;
+    routingRules?: RoutingRule[];
+    outcomes?: EventProcessingOutcome[];
     createdOn?: string;
     processedOn?: string;
 }

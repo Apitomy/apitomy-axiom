@@ -9834,12 +9834,52 @@
           "errorMessage": {
             "type": "string"
           },
+          "routingRules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutingRule"
+            },
+            "description": "The subscription's routing rules that were executed"
+          },
+          "outcomes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventProcessingOutcome"
+            },
+            "description": "What the routing produced (projects, tasks, decisions)"
+          },
           "createdOn": {
             "format": "date-time",
             "type": "string"
           },
           "processedOn": {
             "format": "date-time",
+            "type": "string"
+          }
+        }
+      },
+      "EventProcessingOutcome": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Outcome type: project-created, task-created, manager-decision, event-ignored, manager-escalation"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "projectId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "projectName": {
+            "type": "string"
+          },
+          "taskId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "taskStatus": {
             "type": "string"
           }
         }

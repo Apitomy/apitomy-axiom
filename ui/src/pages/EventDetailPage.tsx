@@ -189,15 +189,22 @@ function ProcessingTab({ entries, loading }: {
         );
     }
 
+    const ROUTING_TYPE_LABELS: Record<string, string> = {
+        manager: "Send to Manager",
+        "workflow-dispatch": "Dispatch to Workflows",
+        "create-workflow": "Create Workflow",
+        "invoke-action": "Invoke Action",
+    };
+
     return (
         <Table aria-label="Event Processing Audit Trail" variant="compact">
             <Thead>
                 <Tr>
                     <Th>Status</Th>
                     <Th>Subscription</Th>
-                    <Th>Created</Th>
+                    <Th>Routing</Th>
+                    <Th>Outcomes</Th>
                     <Th>Processed</Th>
-                    <Th>Error</Th>
                 </Tr>
             </Thead>
             <Tbody>
@@ -214,31 +221,70 @@ function ProcessingTab({ entries, loading }: {
                                 {entry.subscriptionName}
                             </Link>
                         </Td>
-                        <Td style={{ whiteSpace: "nowrap" }}>
-                            {entry.createdOn
-                                ? new Date(entry.createdOn).toLocaleString()
-                                : "---"}
+                        <Td>
+                            {entry.routingRules && entry.routingRules.length > 0
+                                ? entry.routingRules.map((r, i) => (
+                                    <div key={i}>
+                                        <Label isCompact color="blue" style={{ marginBottom: "2px" }}>
+                                            {ROUTING_TYPE_LABELS[r.type] || r.type}
+                                        </Label>
+                                    </div>
+                                ))
+                                : entry.status === "skipped" ? "---" : "No routing rules"}
+                        </Td>
+                        <Td>
+                            {entry.outcomes && entry.outcomes.length > 0
+                                ? entry.outcomes.map((o, i) => (
+                                    <div key={i} style={{ marginBottom: "4px" }}>
+                                        {o.type === "manager-evaluated" && (
+                                            <span>{o.summary}</span>
+                                        )}
+                                        {o.type === "event-ignored" && (
+                                            <span style={{ fontStyle: "italic" }}>Ignored: {o.summary}</span>
+                                        )}
+                                        {o.type === "manager-escalation" && (
+                                            <Label isCompact color="orange">Escalated</Label>
+                                        )}
+                                        {(o.type === "task-created" || o.type === "project-created") && (
+                                            <span>
+                                                {o.projectId && (
+                                                    <Link to={`/projects/${o.projectId}`}>
+                                                        {o.projectName || `Project #${o.projectId}`}
+                                                    </Link>
+                                                )}
+                                                {o.taskId && (
+                                                    <span>
+                                                        {" → "}
+                                                        <Label isCompact
+                                                            color={o.taskStatus === "Completed" ? "green"
+                                                                : o.taskStatus === "Failed" ? "red"
+                                                                : "grey"}>
+                                                            {o.taskStatus || "Pending"}
+                                                        </Label>
+                                                    </span>
+                                                )}
+                                            </span>
+                                        )}
+                                    </div>
+                                ))
+                                : entry.status === "skipped" ? "---"
+                                : entry.status === "completed" ? "No details available"
+                                : entry.errorMessage ? (
+                                    <Tooltip content={entry.errorMessage}>
+                                        <span style={{
+                                            maxWidth: "300px", display: "inline-block",
+                                            overflow: "hidden", textOverflow: "ellipsis",
+                                            whiteSpace: "nowrap", color: "var(--pf-v6-global--danger-color--100)",
+                                        }}>
+                                            {entry.errorMessage}
+                                        </span>
+                                    </Tooltip>
+                                ) : "---"}
                         </Td>
                         <Td style={{ whiteSpace: "nowrap" }}>
                             {entry.processedOn
                                 ? new Date(entry.processedOn).toLocaleString()
                                 : "---"}
-                        </Td>
-                        <Td>
-                            {entry.errorMessage ? (
-                                <Tooltip content={entry.errorMessage}>
-                                    <span style={{
-                                        maxWidth: "300px",
-                                        display: "inline-block",
-                                        overflow: "hidden",
-                                        textOverflow: "ellipsis",
-                                        whiteSpace: "nowrap",
-                                        verticalAlign: "middle",
-                                    }}>
-                                        {entry.errorMessage}
-                                    </span>
-                                </Tooltip>
-                            ) : "---"}
                         </Td>
                     </Tr>
                 ))}
