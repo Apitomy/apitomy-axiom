@@ -13,6 +13,7 @@ import io.apitomy.axiom.api.beans.ToolTestRequest;
 import io.apitomy.axiom.api.beans.ToolTestResponse;
 import io.apitomy.axiom.app.ToolAiService;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
+import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.ToolValidator;
 import io.apitomy.axiom.core.services.ToolValidator.ValidationResult;
 import io.quarkus.panache.common.Page;
@@ -50,6 +51,9 @@ public class ToolsResourceImpl implements ToolsResource {
 
     @Inject
     ToolAiService toolAiService;
+
+    @Inject
+    EnvironmentResolver environmentResolver;
 
     /**
      * {@inheritDoc}
@@ -189,6 +193,14 @@ public class ToolsResourceImpl implements ToolsResource {
 
                 ProcessBuilder pb = new ProcessBuilder("/bin/bash", scriptFile.toString())
                         .redirectErrorStream(true);
+
+                // Inject environment variables with ${secret:NAME} resolution
+                Map<String, String> testEnv = resolveTestEnvironment(data);
+                if (!testEnv.isEmpty()) {
+                    pb.environment().putAll(testEnv);
+                    LOG.infof("Injected %d environment variable(s) for tool test", testEnv.size());
+                }
+
                 Process process = pb.start();
                 String output = new String(process.getInputStream().readAllBytes());
                 boolean finished = process.waitFor(TEST_TIMEOUT_SECONDS, TimeUnit.SECONDS);
@@ -236,6 +248,29 @@ public class ToolsResourceImpl implements ToolsResource {
             }
         }
         return resolved;
+    }
+
+    /**
+     * Resolves environment variables for a tool test request.
+     * If the request has an explicit environment map, resolves ${secret:NAME}
+     * references in the values. Otherwise returns an empty map.
+     */
+    private Map<String, String> resolveTestEnvironment(ToolTestRequest data) {
+        // Check if the request has environment variables
+        // The generated bean's getEnvironment() returns an Environment object or null
+        var env = data.getEnvironment();
+        if (env == null || env.getAdditionalProperties().isEmpty()) {
+            return Map.of();
+        }
+
+        // Convert to JSON and use EnvironmentResolver for ${secret:NAME} resolution
+        try {
+            String envJson = objectMapper.writeValueAsString(env);
+            return environmentResolver.resolve(envJson);
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to resolve test environment variables");
+            return Map.of();
+        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────

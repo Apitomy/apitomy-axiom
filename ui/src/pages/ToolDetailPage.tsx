@@ -14,6 +14,8 @@ import {
     FormSelect,
     FormSelectOption,
     ExpandableSection,
+    HelperText,
+    HelperTextItem,
     Label,
     Modal,
     ModalBody,
@@ -37,6 +39,7 @@ import PlayIcon from "@patternfly/react-icons/dist/esm/icons/play-icon";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import TimesIcon from "@patternfly/react-icons/dist/esm/icons/times-icon";
 import MagicIcon from "@patternfly/react-icons/dist/esm/icons/magic-icon";
+import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import {
     type ToolDefinition,
     type ToolParameter,
@@ -425,6 +428,7 @@ function TestTab({ toolId, params, scriptTemplate }: {
 }) {
     const effectiveTheme = useEffectiveTheme();
     const [paramValues, setParamValues] = useState<Record<string, string>>({});
+    const [envVars, setEnvVars] = useState<{key: string, value: string}[]>([]);
     const [running, setRunning] = useState(false);
     const [result, setResult] = useState<ToolTestResponse | null>(null);
     const [resultOpen, setResultOpen] = useState(false);
@@ -443,7 +447,19 @@ function TestTab({ toolId, params, scriptTemplate }: {
     const handleRun = () => {
         setRunning(true);
         setResult(null);
-        testTool(toolId, { scriptTemplate, parameters: paramValues })
+
+        const environment: Record<string, string> = {};
+        for (const ev of envVars) {
+            if (ev.key.trim()) {
+                environment[ev.key.trim()] = ev.value;
+            }
+        }
+
+        testTool(toolId, {
+            scriptTemplate,
+            parameters: paramValues,
+            environment: Object.keys(environment).length > 0 ? environment : undefined,
+        })
             .then((r) => {
                 setResult(r);
                 setResultOpen(true);
@@ -468,8 +484,7 @@ function TestTab({ toolId, params, scriptTemplate }: {
     return (
         <div style={{ maxWidth: "800px" }}>
             <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
-                Test this tool by providing parameter values and executing the script template.
-                Secrets are not injected during testing.
+                Test this tool by providing parameter values and optional environment variables.
             </p>
 
             {params.length > 0 && (
@@ -487,6 +502,59 @@ function TestTab({ toolId, params, scriptTemplate }: {
                     ))}
                 </Form>
             )}
+
+            <Title headingLevel="h4" size="md" style={{ marginTop: "24px", marginBottom: "8px" }}>
+                Environment Variables
+            </Title>
+            <HelperText style={{ marginBottom: "12px" }}>
+                <HelperTextItem>
+                    Provide environment variables for the test. Use <code>{"${secret:NAME}"}</code> to
+                    reference secrets from the Axiom secrets store.
+                </HelperTextItem>
+            </HelperText>
+
+            {envVars.map((ev, i) => (
+                <Flex key={i} style={{ marginBottom: "8px", gap: "8px" }}
+                    alignItems={{ default: "alignItemsFlexStart" }}>
+                    <FlexItem style={{ flex: 1 }}>
+                        <TextInput
+                            aria-label="Variable name"
+                            placeholder="Variable name (e.g. GH_TOKEN)"
+                            value={ev.key}
+                            onChange={(_e, v) => {
+                                const updated = [...envVars];
+                                updated[i] = { ...ev, key: v };
+                                setEnvVars(updated);
+                            }}
+                        />
+                    </FlexItem>
+                    <FlexItem style={{ flex: 2 }}>
+                        <TextInput
+                            aria-label="Variable value"
+                            placeholder="Value or ${secret:SECRET_NAME}"
+                            value={ev.value}
+                            onChange={(_e, v) => {
+                                const updated = [...envVars];
+                                updated[i] = { ...ev, value: v };
+                                setEnvVars(updated);
+                            }}
+                        />
+                    </FlexItem>
+                    <FlexItem>
+                        <Button variant="plain" aria-label="Remove variable"
+                            onClick={() => setEnvVars(envVars.filter((_, idx) => idx !== i))}>
+                            <TrashIcon />
+                        </Button>
+                    </FlexItem>
+                </Flex>
+            ))}
+            <Button variant="link" icon={<PlusCircleIcon />}
+                onClick={() => setEnvVars([...envVars, { key: "", value: "" }])}
+                style={{ marginBottom: "16px" }}>
+                Add Environment Variable
+            </Button>
+
+            <br />
 
             <Button variant="primary" icon={<PlayIcon />}
                 onClick={handleRun}

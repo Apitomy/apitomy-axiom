@@ -7433,6 +7433,13 @@
           "scriptTemplate": {
             "description": "Script template to use for the test. If provided, this overrides the saved script template from the database, allowing tests against unsaved changes.",
             "type": "string"
+          },
+          "environment": {
+            "description": "Environment variables to inject into the test subprocess. Values may use ${secret:NAME} syntax to reference secrets.",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         }
       },
