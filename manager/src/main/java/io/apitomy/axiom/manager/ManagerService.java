@@ -164,24 +164,20 @@ public class ManagerService {
             String executionLog = result.executionLog();
 
             // Record AI usage for this Manager evaluation
-            if (eventId != null) {
-                try {
-                    recordAiUsage(eventId, ctx.project() != null ? ctx.project().id : null,
-                            result.costUsd(), result.inputTokens(), result.outputTokens(),
-                            result.engine(), result.model());
-                } catch (Exception e) {
-                    LOG.warnf(e, "Failed to record AI usage for event %s", eventIdForLog);
-                }
+            try {
+                recordAiUsage(eventId, ctx.project() != null ? ctx.project().id : null,
+                        result.costUsd(), result.inputTokens(), result.outputTokens(),
+                        result.engine(), result.model());
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to record AI usage for event %s", eventIdForLog);
             }
 
             if (!result.success()) {
                 LOG.errorf("Manager AI engine failed for event %s: %s",
                         eventIdForLog, result.output());
-                if (eventId != null) {
-                    logManagerActivity(eventId, "manager-error",
-                            "Manager failed to evaluate event: " + result.output(),
-                            executionLog);
-                }
+                logManagerActivity(eventId, "manager-error",
+                        "Manager failed to evaluate event: " + result.output(),
+                        executionLog);
                 completeEvalNode(evalNodeId, "failed", null);
                 return Collections.emptyList();
             }
@@ -204,21 +200,16 @@ public class ManagerService {
             String summaryText = decisions.isEmpty()
                     ? "Manager returned no decisions for event " + eventIdForLog
                     : "Manager decisions for event " + eventIdForLog + ": " + summary;
-            Long activityLogId = null;
-            if (eventId != null) {
-                activityLogId = logManagerActivity(eventId, "manager-evaluated",
-                        summaryText, executionLog);
-            }
+            Long activityLogId = logManagerActivity(eventId, "manager-evaluated",
+                    summaryText, executionLog);
             completeEvalNode(evalNodeId, "completed", activityLogId);
 
             return decisions;
 
         } catch (Exception e) {
             LOG.errorf(e, "Manager evaluation failed for event %s", eventIdForLog);
-            if (eventId != null) {
-                logManagerActivity(eventId, "manager-error",
-                        "Manager evaluation error: " + e.getMessage(), null);
-            }
+            logManagerActivity(eventId, "manager-error",
+                    "Manager evaluation error: " + e.getMessage(), null);
             completeEvalNode(evalNodeId, "failed", null);
             return Collections.emptyList();
         }

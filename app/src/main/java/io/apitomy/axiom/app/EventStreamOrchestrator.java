@@ -75,6 +75,9 @@ public class EventStreamOrchestrator {
     @Inject
     WorkspaceService workspaceService;
 
+    @Inject
+    io.apitomy.axiom.core.tracing.TraceService traceService;
+
     private volatile boolean shuttingDown = false;
     private volatile boolean startupRecoveryDone = false;
 
@@ -297,9 +300,23 @@ public class EventStreamOrchestrator {
     }
 
     private void routeToManager(StreamEventEntity event) {
+        // Create a trace for this manager evaluation
+        io.apitomy.axiom.core.tracing.TraceContext traceCtx = null;
+        try {
+            traceCtx = traceService.createTrace(
+                    "manager",
+                    "Manager evaluation: " + event.type + " — " + event.ref,
+                    null, null, null,
+                    "manager-evaluation", "Manager evaluation: " + event.type,
+                    null, null);
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to create trace for manager evaluation of event %s", event.id);
+        }
+
         List<ManagerDecision> decisions = managerService.evaluateStreamEvent(event);
         if (decisions == null || decisions.isEmpty()) {
             LOG.debugf("Manager returned no decisions for stream event %s", event.id);
+            completeTrace(traceCtx, "completed");
             return;
         }
 
@@ -310,6 +327,17 @@ public class EventStreamOrchestrator {
                 LOG.warnf(e, "Failed to process Manager decision '%s' for event %s",
                         decision.decision(), event.id);
             }
+        }
+
+        completeTrace(traceCtx, "completed");
+    }
+
+    private void completeTrace(io.apitomy.axiom.core.tracing.TraceContext traceCtx, String status) {
+        if (traceCtx == null) return;
+        try {
+            traceService.completeTrace(traceCtx.traceId(), status);
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to complete trace %s", traceCtx.traceId());
         }
     }
 
