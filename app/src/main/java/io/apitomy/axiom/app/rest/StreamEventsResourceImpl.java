@@ -74,8 +74,24 @@ public class StreamEventsResourceImpl implements StreamResource {
                 .page(Page.of(pageNum - 1, pageSize))
                 .list();
 
+        // Batch-load matched subscription counts from the processing ledger
+        List<UUID> eventIds = entities.stream().map(e -> e.id).toList();
+        Map<UUID, Integer> matchCounts = new HashMap<>();
+        if (!eventIds.isEmpty()) {
+            // Count completed ledger entries per event
+            List<EventProcessingLedgerEntity> completedEntries = EventProcessingLedgerEntity
+                    .find("eventId IN ?1 AND status = 'completed'", eventIds).list();
+            for (EventProcessingLedgerEntity entry : completedEntries) {
+                matchCounts.merge(entry.eventId, 1, Integer::sum);
+            }
+        }
+
         List<StreamEvent> items = entities.stream()
-                .map(this::toBean)
+                .map(e -> {
+                    StreamEvent bean = toBean(e);
+                    bean.setMatchedSubscriptions(matchCounts.getOrDefault(e.id, 0));
+                    return bean;
+                })
                 .toList();
 
         StreamEventSearchResults results = new StreamEventSearchResults();

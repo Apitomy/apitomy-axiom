@@ -14,6 +14,7 @@ import {
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
+import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
 import {
     type ChipFilterCriteria,
     type ChipFilterType,
@@ -192,6 +193,7 @@ export function EventStreamPage() {
                     <Table aria-label="Event Stream" variant="compact">
                         <Thead>
                             <Tr>
+                                <Th style={{ width: "40px" }}></Th>
                                 <Th>Time</Th>
                                 <Th>Source</Th>
                                 <Th>Connection</Th>
@@ -204,6 +206,14 @@ export function EventStreamPage() {
                             {events.map((event) => (
                                 <Tr key={event.id} isClickable
                                     onRowClick={() => navigate(`/logs/events/${event.id}`)}>
+                                    <Td>
+                                        {(event.matchedSubscriptions ?? 0) > 0 && (
+                                            <CheckCircleIcon
+                                                color="var(--pf-v6-global--success-color--200, #3e8635)"
+                                                title={`Matched ${event.matchedSubscriptions} subscription(s)`}
+                                            />
+                                        )}
+                                    </Td>
                                     <Td style={{ whiteSpace: "nowrap" }}>
                                         {new Date(event.timestamp).toLocaleString()}
                                     </Td>

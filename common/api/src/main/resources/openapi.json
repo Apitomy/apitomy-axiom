@@ -9787,6 +9787,11 @@
           "createdOn": {
             "format": "date-time",
             "type": "string"
+          },
+          "matchedSubscriptions": {
+            "format": "int32",
+            "type": "integer",
+            "description": "Number of subscriptions that matched this event (completed status in the processing ledger)"
           }
         }
       },

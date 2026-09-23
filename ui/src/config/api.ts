@@ -2330,6 +2330,7 @@ export interface StreamEvent {
     payload?: Record<string, unknown>;
     sourceData?: Record<string, unknown>;
     createdOn?: string;
+    matchedSubscriptions?: number;
 }
 
 export async function fetchStreamEvents(
