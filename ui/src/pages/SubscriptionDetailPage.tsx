@@ -94,8 +94,15 @@ export function SubscriptionDetailPage() {
                 setFilterExpression(sub.filterExpression || "");
                 setRouting(sub.routing || []);
                 if (sub.processEventsFrom) {
-                    // Convert ISO to datetime-local format (YYYY-MM-DDTHH:mm)
-                    setProcessEventsFrom(new Date(sub.processEventsFrom).toISOString().slice(0, 16));
+                    // Convert UTC to local time for the datetime-local input.
+                    // datetime-local interprets its value as local time, so we
+                    // must format using local accessors (getHours, etc.), not
+                    // toISOString() which always produces UTC.
+                    const d = new Date(sub.processEventsFrom);
+                    const pad = (n: number) => String(n).padStart(2, "0");
+                    setProcessEventsFrom(
+                        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+                    );
                 }
                 setDirty(false);
             })
