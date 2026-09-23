@@ -5472,6 +5472,39 @@
         }
       ]
     },
+    "/stream/events/{eventId}/processing": {
+      "get": {
+        "tags": [
+          "StreamEvents"
+        ],
+        "summary": "List processing audit trail for a stream event",
+        "operationId": "listEventProcessing",
+        "responses": {
+          "200": {
+            "description": "Processing audit trail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventProcessingSearchResults"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "eventId",
+          "in": "path",
+          "description": "Stream event ID",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
     "/subscriptions": {
       "get": {
         "tags": [
@@ -9769,6 +9802,52 @@
           },
           "limit": {
             "format": "int32",
+            "type": "integer"
+          }
+        }
+      },
+      "EventProcessingEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "subscriptionId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "subscriptionName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "pending, completed, skipped, or failed"
+          },
+          "errorMessage": {
+            "type": "string"
+          },
+          "createdOn": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "processedOn": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      },
+      "EventProcessingSearchResults": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventProcessingEntry"
+            }
+          },
+          "totalCount": {
+            "format": "int64",
             "type": "integer"
           }
         }

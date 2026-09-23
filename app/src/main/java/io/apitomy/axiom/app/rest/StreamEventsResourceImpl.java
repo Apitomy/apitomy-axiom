@@ -3,10 +3,14 @@ package io.apitomy.axiom.app.rest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.StreamResource;
 import io.apitomy.axiom.api.beans.Actor;
+import io.apitomy.axiom.api.beans.EventProcessingEntry;
+import io.apitomy.axiom.api.beans.EventProcessingSearchResults;
 import io.apitomy.axiom.api.beans.Payload;
 import io.apitomy.axiom.api.beans.SourceData;
 import io.apitomy.axiom.api.beans.StreamEvent;
 import io.apitomy.axiom.api.beans.StreamEventSearchResults;
+import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
+import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
@@ -90,6 +94,48 @@ public class StreamEventsResourceImpl implements StreamResource {
             throw new WebApplicationException("Stream event not found: " + eventId, 404);
         }
         return toBean(entity);
+    }
+
+    @Override
+    public EventProcessingSearchResults listEventProcessing(String eventId) {
+        UUID uuid;
+        try {
+            uuid = UUID.fromString(eventId);
+        } catch (IllegalArgumentException e) {
+            throw new WebApplicationException("Invalid event ID: " + eventId, 400);
+        }
+
+        List<EventProcessingLedgerEntity> entries = EventProcessingLedgerEntity
+                .find("eventId = ?1 ORDER BY createdOn ASC", uuid).list();
+
+        // Load subscription names in batch
+        List<Long> subIds = entries.stream().map(e -> e.subscriptionId).distinct().toList();
+        Map<Long, String> subNames = new HashMap<>();
+        if (!subIds.isEmpty()) {
+            List<EventSubscriptionEntity> subs = EventSubscriptionEntity
+                    .find("id in ?1", subIds).list();
+            for (EventSubscriptionEntity sub : subs) {
+                subNames.put(sub.id, sub.name);
+            }
+        }
+
+        List<EventProcessingEntry> items = entries.stream().map(e -> {
+            EventProcessingEntry entry = new EventProcessingEntry();
+            entry.setId(e.id);
+            entry.setSubscriptionId(e.subscriptionId);
+            entry.setSubscriptionName(subNames.getOrDefault(e.subscriptionId,
+                    "Subscription #" + e.subscriptionId));
+            entry.setStatus(e.status);
+            entry.setErrorMessage(e.errorMessage);
+            if (e.createdOn != null) entry.setCreatedOn(Date.from(e.createdOn));
+            if (e.processedOn != null) entry.setProcessedOn(Date.from(e.processedOn));
+            return entry;
+        }).toList();
+
+        EventProcessingSearchResults results = new EventProcessingSearchResults();
+        results.setItems(items);
+        results.setTotalCount((long) items.size());
+        return results;
     }
 
     private StreamEvent toBean(StreamEventEntity entity) {

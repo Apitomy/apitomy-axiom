@@ -2352,6 +2352,26 @@ export async function fetchStreamEvent(eventId: string): Promise<StreamEvent> {
     return response.json();
 }
 
+export interface EventProcessingEntry {
+    id: number;
+    subscriptionId: number;
+    subscriptionName: string;
+    status: string;
+    errorMessage?: string;
+    createdOn?: string;
+    processedOn?: string;
+}
+
+export async function fetchEventProcessing(eventId: string): Promise<{
+    items: EventProcessingEntry[];
+    totalCount: number;
+}> {
+    const response = await fetch(
+        `${API}/stream/events/${encodeURIComponent(eventId)}/processing`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch event processing"));
+    return response.json();
+}
+
 // ── Subscriptions ─────────────────────────────────────────────────
 
 export interface RoutingRule {

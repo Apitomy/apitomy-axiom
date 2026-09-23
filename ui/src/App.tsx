@@ -11,6 +11,7 @@ import { AgentDetailPage } from "./pages/AgentDetailPage";
 import { ManagerConfigPage } from "./pages/ManagerConfigPage";
 import { ActionTypesPage } from "./pages/ActionTypesPage";
 import { ActivityLogPage } from "./pages/ActivityLogPage";
+import { EventDetailPage } from "./pages/EventDetailPage";
 import { EventStreamPage } from "./pages/EventStreamPage";
 import { ManagerDecisionsPage } from "./pages/ManagerDecisionsPage";
 import { TasksPage } from "./pages/TasksPage";
@@ -140,6 +141,7 @@ export function App() {
                         <Route path="/mcp-servers/:mcpServerId" element={<McpServerDetailPage />} />
                         <Route path="/logs/activity" element={<ActivityLogPage />} />
                         <Route path="/logs/events" element={<EventStreamPage />} />
+                        <Route path="/logs/events/:eventId" element={<EventDetailPage />} />
                         <Route path="/logs/manager" element={<ManagerDecisionsPage />} />
                         <Route path="/logs/tasks" element={<TasksPage />} />
                         <Route path="/logs/job-runs" element={<ScheduledJobRunsPage />} />

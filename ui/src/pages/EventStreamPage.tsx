@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import {
     Button,
     EmptyState,
@@ -23,7 +24,6 @@ import {
     type StreamEvent,
     fetchStreamEvents,
 } from "../config/api";
-import { StreamEventDetailModal } from "../components/StreamEventDetailModal";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 
 const SOURCE_COLORS: Record<string, "blue" | "green" | "orange" | "grey"> = {
@@ -65,6 +65,7 @@ function formatRef(ref?: string): string {
 }
 
 export function EventStreamPage() {
+    const navigate = useNavigate();
     const [events, setEvents] = useState<StreamEvent[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [page, setPage] = useState(1);
@@ -72,9 +73,6 @@ export function EventStreamPage() {
     const [loading, setLoading] = useState(true);
 
     const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
-
-    // Detail modal
-    const [selectedEvent, setSelectedEvent] = useState<StreamEvent | null>(null);
 
     const filterType = filters.find((f) => f.filterBy.value === "type")?.filterValue;
     const filterConnectionId = filters.find((f) => f.filterBy.value === "connectionId")?.filterValue;
@@ -205,7 +203,7 @@ export function EventStreamPage() {
                         <Tbody>
                             {events.map((event) => (
                                 <Tr key={event.id} isClickable
-                                    onRowClick={() => setSelectedEvent(event)}>
+                                    onRowClick={() => navigate(`/logs/events/${event.id}`)}>
                                     <Td style={{ whiteSpace: "nowrap" }}>
                                         {new Date(event.timestamp).toLocaleString()}
                                     </Td>
@@ -240,10 +238,6 @@ export function EventStreamPage() {
                 )}
             </div>
 
-            <StreamEventDetailModal
-                event={selectedEvent}
-                onClose={() => setSelectedEvent(null)}
-            />
         </PageSection>
     );
 }
