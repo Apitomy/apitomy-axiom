@@ -72,6 +72,7 @@ export function SubscriptionDetailPage() {
     const [labels, setLabels] = useState<string[]>([]);
     const [filterExpression, setFilterExpression] = useState("");
     const [routing, setRouting] = useState<RoutingRule[]>([]);
+    const [processEventsFrom, setProcessEventsFrom] = useState("");
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -92,6 +93,10 @@ export function SubscriptionDetailPage() {
                 setLabels(sub.labels || []);
                 setFilterExpression(sub.filterExpression || "");
                 setRouting(sub.routing || []);
+                if (sub.processEventsFrom) {
+                    // Convert ISO to datetime-local format (YYYY-MM-DDTHH:mm)
+                    setProcessEventsFrom(new Date(sub.processEventsFrom).toISOString().slice(0, 16));
+                }
                 setDirty(false);
             })
             .catch(console.error)
@@ -113,6 +118,7 @@ export function SubscriptionDetailPage() {
             labels,
             filterExpression: filterExpression || undefined,
             routing: routing.length > 0 ? routing : undefined,
+            processEventsFrom: processEventsFrom ? new Date(processEventsFrom).toISOString() : undefined,
         };
 
         updateSubscription(numericId, data)
@@ -167,6 +173,8 @@ export function SubscriptionDetailPage() {
                             description={description} setDescription={(v) => { setDescription(v); markDirty(); }}
                             enabled={enabled} setEnabled={(v) => { setEnabled(v); markDirty(); }}
                             labels={labels} setLabels={(v) => { setLabels(v); markDirty(); }}
+                            processEventsFrom={processEventsFrom}
+                            setProcessEventsFrom={(v) => { setProcessEventsFrom(v); markDirty(); }}
                         />
                     </TabContent>
                 </Tab>
@@ -943,7 +951,7 @@ function RoutingTab({ routing, setRouting }: {
 
 // ── Info Tab ─────────────────────────────────────────────────────
 
-function InfoTab({ name, setName, description, setDescription, enabled, setEnabled, labels, setLabels }: {
+function InfoTab({ name, setName, description, setDescription, enabled, setEnabled, labels, setLabels, processEventsFrom, setProcessEventsFrom }: {
     name: string;
     setName: (v: string) => void;
     description: string;
@@ -952,6 +960,8 @@ function InfoTab({ name, setName, description, setDescription, enabled, setEnabl
     setEnabled: (v: boolean) => void;
     labels: string[];
     setLabels: (v: string[]) => void;
+    processEventsFrom: string;
+    setProcessEventsFrom: (v: string) => void;
 }) {
     return (
         <Form style={{ maxWidth: "600px" }}>
@@ -967,6 +977,16 @@ function InfoTab({ name, setName, description, setDescription, enabled, setEnabl
                 <Switch id="enabled" label="Enabled"
                     isChecked={enabled}
                     onChange={(_e, v) => setEnabled(v)} />
+            </FormGroup>
+            <FormGroup label="Process Events From" fieldId="processEventsFrom">
+                <TextInput id="processEventsFrom" type="datetime-local"
+                    value={processEventsFrom}
+                    onChange={(_e, v) => setProcessEventsFrom(v)} />
+                <HelperText>
+                    <HelperTextItem>
+                        Events before this timestamp are ignored. Set to an earlier date to retroactively process historical events.
+                    </HelperTextItem>
+                </HelperText>
             </FormGroup>
             <FormGroup label="Labels" fieldId="labels">
                 <LabelInput labels={labels} onChange={setLabels} />

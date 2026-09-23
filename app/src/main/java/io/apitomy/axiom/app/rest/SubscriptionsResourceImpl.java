@@ -88,6 +88,11 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
         EventSubscriptionEntity entity = new EventSubscriptionEntity();
         applyFields(entity, data);
         Instant now = Instant.now();
+        if (data.getProcessEventsFrom() != null) {
+            entity.processEventsFrom = data.getProcessEventsFrom().toInstant();
+        } else {
+            entity.processEventsFrom = Instant.now();
+        }
         entity.createdOn = now;
         entity.modifiedOn = now;
         entity.persist();
@@ -309,6 +314,10 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
             entity.labels.addAll(data.getLabels());
         }
 
+        if (data.getProcessEventsFrom() != null) {
+            entity.processEventsFrom = data.getProcessEventsFrom().toInstant();
+        }
+
         // Routing rules
         if (data.getRouting() != null) {
             // Validate routing rules
@@ -379,6 +388,9 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
                 LOG.warnf("Failed to parse routing JSON for subscription %d: %s",
                         entity.id, e.getMessage());
             }
+        }
+        if (entity.processEventsFrom != null) {
+            bean.setProcessEventsFrom(Date.from(entity.processEventsFrom));
         }
         if (entity.createdOn != null) {
             bean.setCreatedOn(Date.from(entity.createdOn));

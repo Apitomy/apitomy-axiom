@@ -48,6 +48,14 @@ public class EventSubscriptionEntity extends PanacheEntity {
     public String routing;
 
     /**
+     * Earliest event timestamp this subscription will evaluate. Events with
+     * createdOn before this timestamp are ignored. Defaults to the subscription's
+     * creation time, preventing retroactive processing of historical events.
+     */
+    @Column(name = "process_events_from")
+    public Instant processEventsFrom;
+
+    /**
      * Free-form labels for routing and categorization. Used to match
      * subscriptions to action types and to scope Manager evaluation.
      */

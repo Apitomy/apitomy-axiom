@@ -2368,6 +2368,7 @@ export interface Subscription {
     filterExpression?: string;
     routing?: RoutingRule[];
     labels?: string[];
+    processEventsFrom?: string;
     createdOn?: string;
     modifiedOn?: string;
 }
@@ -2379,6 +2380,7 @@ export interface NewSubscription {
     filterExpression?: string;
     routing?: RoutingRule[];
     labels?: string[];
+    processEventsFrom?: string;
 }
 
 export async function fetchSubscriptions(

@@ -132,10 +132,12 @@ public class EventStreamOrchestrator {
 
             // Find events that have no ledger entry for this subscription.
             // Use a NOT IN subquery for efficiency.
+            // Filter by processEventsFrom to skip historical events.
             List<StreamEventEntity> unprocessed = QuarkusTransaction.requiringNew().call(() ->
                 StreamEventEntity.<StreamEventEntity>find(
-                    "id NOT IN (SELECT l.eventId FROM EventProcessingLedgerEntity l " +
-                    "WHERE l.subscriptionId = ?1) ORDER BY createdOn ASC", sub.id)
+                    "createdOn >= ?1 AND id NOT IN (SELECT l.eventId FROM EventProcessingLedgerEntity l " +
+                    "WHERE l.subscriptionId = ?2) ORDER BY createdOn ASC",
+                    sub.processEventsFrom, sub.id)
                     .page(0, BATCH_SIZE).list()
             );
 
@@ -611,13 +613,15 @@ public class EventStreamOrchestrator {
                             LOG.warnf("Failed to parse routing for subscription %d", e.id);
                         }
                     }
-                    return new SubscriptionWithFilters(e.id, e.name, e.labels, e.filters, rules);
+                    return new SubscriptionWithFilters(e.id, e.name, e.labels, e.filters, rules,
+                            e.processEventsFrom != null ? e.processEventsFrom : Instant.EPOCH);
                 })
                 .toList();
     }
 
     record SubscriptionWithFilters(long id, String name, List<String> labels,
-                                    String filterExpression, List<RoutingRule> routing) {}
+                                    String filterExpression, List<RoutingRule> routing,
+                                    Instant processEventsFrom) {}
 
     // ── Activity and thread logging ────────────────────────────────
 

@@ -7,6 +7,7 @@ CREATE TABLE event_subscription (
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
     filters TEXT,
     routing TEXT,
+    process_events_from TIMESTAMP,
     created_on TIMESTAMP NOT NULL,
     modified_on TIMESTAMP NOT NULL
 );

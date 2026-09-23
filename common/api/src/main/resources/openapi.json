@@ -9831,6 +9831,11 @@
             },
             "description": "Where matched events are sent. Empty = no routing."
           },
+          "processEventsFrom": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Earliest event timestamp to process. Events before this are ignored. Defaults to subscription creation time."
+          },
           "createdOn": {
             "format": "date-time",
             "type": "string"
@@ -9872,6 +9877,11 @@
               "$ref": "#/components/schemas/RoutingRule"
             },
             "description": "Where matched events are sent. Empty = no routing."
+          },
+          "processEventsFrom": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Earliest event timestamp to process. Events before this are ignored. Defaults to subscription creation time."
           }
         }
       },
