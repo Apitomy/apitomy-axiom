@@ -325,7 +325,7 @@ public class EventStreamOrchestrator {
 
         for (ManagerDecision decision : decisions) {
             try {
-                processManagerDecision(event, decision);
+                processManagerDecision(event, decision, traceCtx);
             } catch (Exception e) {
                 LOG.warnf(e, "Failed to process Manager decision '%s' for event %s",
                         decision.decision(), event.id);
@@ -344,7 +344,8 @@ public class EventStreamOrchestrator {
         }
     }
 
-    private void processManagerDecision(StreamEventEntity event, ManagerDecision decision) {
+    private void processManagerDecision(StreamEventEntity event, ManagerDecision decision,
+                                         io.apitomy.axiom.core.tracing.TraceContext traceCtx) {
         // Check confidence threshold — escalate if below
         if (!managerService.meetsConfidenceThreshold(decision)) {
             LOG.infof("Decision below confidence threshold (%.2f): %s — escalating",
@@ -358,7 +359,7 @@ public class EventStreamOrchestrator {
 
         switch (decision.decision()) {
             case "create_task", "script_action" -> QuarkusTransaction.requiringNew().run(() ->
-                    handleCreateTask(event, decision));
+                    handleCreateTask(event, decision, traceCtx));
             case "ignore" -> QuarkusTransaction.requiringNew().run(() ->
                     handleIgnore(event, decision));
             case "escalate" -> QuarkusTransaction.requiringNew().run(() ->
@@ -367,7 +368,8 @@ public class EventStreamOrchestrator {
         }
     }
 
-    private void handleCreateTask(StreamEventEntity event, ManagerDecision decision) {
+    private void handleCreateTask(StreamEventEntity event, ManagerDecision decision,
+                                   io.apitomy.axiom.core.tracing.TraceContext traceCtx) {
         ProjectEntity project = findOrCreateProjectForStreamEvent(event);
 
         TaskEntity task = new TaskEntity();
@@ -379,7 +381,20 @@ public class EventStreamOrchestrator {
         task.humanContext = decision.humanContext();
         task.outputSchema = decision.outputSchema();
         task.createdOn = Instant.now();
+        if (traceCtx != null) {
+            task.traceId = traceCtx.traceId();
+        }
         task.persist();
+
+        // Add a trace node for this task so the task execution is linked to the trace
+        if (traceCtx != null) {
+            try {
+                traceService.addNode(traceCtx, "task", "in-progress",
+                        "Task: " + task.actionType, "task", task.id);
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to add task trace node for task %d", task.id);
+            }
+        }
 
         LOG.infof("Manager created task %d (%s) for project %d from stream event %s",
                 task.id, task.actionType, project.id, event.id);
