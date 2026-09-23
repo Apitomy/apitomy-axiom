@@ -959,6 +959,9 @@ public class ImportExportService {
             var arr = n.putArray("labels");
             for (String label : e.labels) arr.add(label);
         }
+        if (e.processEventsFrom != null) {
+            n.put("processEventsFrom", e.processEventsFrom.toString());
+        }
         return n;
     }
 
@@ -1000,6 +1003,8 @@ public class ImportExportService {
             if (labelsNode.isArray()) {
                 for (JsonNode l : labelsNode) entity.labels.add(l.asText());
             }
+            String pef = textOrNull(item, "processEventsFrom");
+            entity.processEventsFrom = pef != null ? Instant.parse(pef) : Instant.now();
             entity.createdOn = Instant.now();
             entity.modifiedOn = Instant.now();
             entity.persist();
@@ -1056,6 +1061,12 @@ public class ImportExportService {
             JsonNode labelsNode = item.path("labels");
             if (labelsNode.isArray()) {
                 for (JsonNode l : labelsNode) entity.labels.add(l.asText());
+            }
+            String pef = textOrNull(item, "processEventsFrom");
+            if (pef != null) {
+                entity.processEventsFrom = Instant.parse(pef);
+            } else if (isNew) {
+                entity.processEventsFrom = Instant.now();
             }
             entity.modifiedOn = Instant.now();
             entity.persist();
