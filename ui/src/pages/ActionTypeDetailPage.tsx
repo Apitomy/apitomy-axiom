@@ -519,6 +519,10 @@ function PromptTemplateTab({ value, onChange, inputs }: {
     inputs: ActionTypeField[];
 }) {
     const effectiveTheme = useEffectiveTheme();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const editorRef = useRef<any>(null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const monacoRef = useRef<any>(null);
 
     // Build dynamic placeholders from defined inputs
     const allPlaceholders = useMemo(() => {
@@ -530,6 +534,13 @@ function PromptTemplateTab({ value, onChange, inputs }: {
             }));
         return [...ACTION_TYPE_PLACEHOLDERS, ...inputPlaceholders];
     }, [inputs]);
+
+    // Re-register completions when inputs change
+    useEffect(() => {
+        if (editorRef.current && monacoRef.current) {
+            registerPlaceholderCompletions(editorRef.current, monacoRef.current, "markdown", allPlaceholders);
+        }
+    }, [allPlaceholders]);
 
     return (
         <div>
@@ -560,6 +571,8 @@ function PromptTemplateTab({ value, onChange, inputs }: {
                 isDarkTheme={effectiveTheme === "dark"}
                 isLineNumbersVisible
                 onEditorDidMount={(editor, monaco) => {
+                    editorRef.current = editor;
+                    monacoRef.current = monaco;
                     registerPlaceholderCompletions(editor, monaco, "markdown", allPlaceholders);
                 }}
             />
