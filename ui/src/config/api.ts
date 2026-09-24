@@ -189,6 +189,7 @@ export interface PackExportRequest {
     scheduledJobIds?: number[];
     connectionIds?: string[];
     subscriptionIds?: number[];
+    workflowDefinitionIds?: number[];
 }
 
 export interface ImportResult {
@@ -201,6 +202,7 @@ export interface ImportResult {
     scheduledJobs?: number;
     connections?: number;
     subscriptions?: number;
+    workflowDefinitions?: number;
 }
 
 export interface AssistantApplyResult {

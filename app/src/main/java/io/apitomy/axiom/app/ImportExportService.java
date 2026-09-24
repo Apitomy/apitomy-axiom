@@ -15,6 +15,8 @@ import io.apitomy.axiom.core.entities.ScheduledJobEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.SessionTemplateEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
+import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
+import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.app.assistant.SessionTemplateService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -131,6 +133,14 @@ public class ImportExportService {
             }
         }
 
+        if (request.getWorkflowDefinitionIds() != null && !request.getWorkflowDefinitionIds().isEmpty()) {
+            ArrayNode arr = pack.putArray("workflowDefinitions");
+            for (Number id : request.getWorkflowDefinitionIds()) {
+                WorkflowDefinitionEntity entity = WorkflowDefinitionEntity.findById(id.longValue());
+                if (entity != null) arr.add(serializeWorkflowDefinition(entity));
+            }
+        }
+
         LOG.infof("Exported configuration pack '%s'", request.getName());
         return pack;
     }
@@ -155,6 +165,7 @@ public class ImportExportService {
         checkConflicts(pack, "scheduledJobs", "name", "scheduledJob", conflicts);
         checkConflicts(pack, "connections", "id", "connection", conflicts);
         checkConflicts(pack, "subscriptions", "name", "subscription", conflicts);
+        checkConflicts(pack, "workflowDefinitions", "name", "workflowDefinition", conflicts);
 
         if (!conflicts.isEmpty()) {
             ObjectNode error = objectMapper.createObjectNode();
@@ -178,13 +189,16 @@ public class ImportExportService {
         int scheduledJobs = importScheduledJobs(pack.path("scheduledJobs"));
         int connections = importConnections(pack.path("connections"));
         int subscriptions = importSubscriptions(pack.path("subscriptions"));
+        int workflowDefinitions = importWorkflowDefinitions(pack.path("workflowDefinitions"));
 
         String packName = pack.path("metadata").path("name").asText("unnamed");
         LOG.infof("Imported configuration pack '%s': %d tools, %d toolsets, %d MCP servers, "
                         + "%d action types, %d report definitions, %d session templates, "
-                        + "%d scheduled jobs, %d connections, %d subscriptions",
+                        + "%d scheduled jobs, %d connections, %d subscriptions, "
+                        + "%d workflow definitions",
                 packName, tools, toolsets, mcpServers, actionTypes, reportDefinitions,
-                sessionTemplates, scheduledJobs, connections, subscriptions);
+                sessionTemplates, scheduledJobs, connections, subscriptions,
+                workflowDefinitions);
 
         ImportResult result = new ImportResult();
         result.setTools(tools);
@@ -196,6 +210,7 @@ public class ImportExportService {
         result.setScheduledJobs(scheduledJobs);
         result.setConnections(connections);
         result.setSubscriptions(subscriptions);
+        result.setWorkflowDefinitions(workflowDefinitions);
         return result;
     }
 
@@ -232,6 +247,7 @@ public class ImportExportService {
         int[] scheduledJobs = upsertScheduledJobs(pack.path("scheduledJobs"));
         int[] connections = upsertConnections(pack.path("connections"));
         int[] subscriptions = upsertSubscriptions(pack.path("subscriptions"));
+        int[] workflowDefs = upsertWorkflowDefinitions(pack.path("workflowDefinitions"));
 
         String packName = pack.path("metadata").path("name").asText("unnamed");
         LOG.infof("Upserted configuration pack '%s': %d tools created, %d updated; "
@@ -241,7 +257,8 @@ public class ImportExportService {
                         + "%d session templates created, %d updated; "
                         + "%d scheduled jobs created, %d updated; "
                         + "%d connections created, %d updated; "
-                        + "%d subscriptions created, %d updated",
+                        + "%d subscriptions created, %d updated; "
+                        + "%d workflow definitions created, %d updated",
                 packName,
                 tools[0], tools[1],
                 actionTypes[0], actionTypes[1],
@@ -250,7 +267,8 @@ public class ImportExportService {
                 sessionTemplates[0], sessionTemplates[1],
                 scheduledJobs[0], scheduledJobs[1],
                 connections[0], connections[1],
-                subscriptions[0], subscriptions[1]);
+                subscriptions[0], subscriptions[1],
+                workflowDefs[0], workflowDefs[1]);
 
         return new UpsertResult(
                 tools[0], tools[1],
@@ -261,7 +279,7 @@ public class ImportExportService {
                 scheduledJobs[0], scheduledJobs[1],
                 connections[0], connections[1],
                 subscriptions[0], subscriptions[1],
-                0, 0
+                workflowDefs[0], workflowDefs[1]
         );
     }
 
@@ -350,6 +368,7 @@ public class ImportExportService {
                 case "scheduledJob" -> ScheduledJobEntity.count("name", name) > 0;
                 case "connection" -> EventSourceConnectionEntity.findById(name) != null;
                 case "subscription" -> EventSubscriptionEntity.count("name", name) > 0;
+                case "workflowDefinition" -> WorkflowDefinitionEntity.count("name", name) > 0;
                 default -> false;
             };
             if (exists) {
@@ -1070,6 +1089,84 @@ public class ImportExportService {
             }
             entity.modifiedOn = Instant.now();
             entity.persist();
+            if (isNew) created++; else updated++;
+        }
+        return new int[]{created, updated};
+    }
+
+    private ObjectNode serializeWorkflowDefinition(WorkflowDefinitionEntity e) {
+        ObjectNode n = objectMapper.createObjectNode();
+        n.put("name", e.name);
+        putIfNotNull(n, "description", e.description);
+
+        // Include the published version's content if available
+        if (e.currentVersion != null) {
+            WorkflowDefinitionVersionEntity version = WorkflowDefinitionVersionEntity
+                    .find("definitionId = ?1 and version = ?2", e.id, e.currentVersion)
+                    .firstResult();
+            if (version != null && version.content != null) {
+                putJsonIfPossible(n, "content", version.content);
+            }
+        }
+        return n;
+    }
+
+    private int importWorkflowDefinitions(JsonNode items) {
+        if (!items.isArray()) return 0;
+        int count = 0;
+        for (JsonNode item : items) {
+            WorkflowDefinitionEntity entity = new WorkflowDefinitionEntity();
+            entity.name = item.path("name").asText();
+            entity.description = textOrNull(item, "description");
+            entity.createdOn = Instant.now();
+            entity.updatedOn = Instant.now();
+            entity.persist();
+
+            JsonNode content = item.path("content");
+            if (!content.isMissingNode() && !content.isNull()) {
+                WorkflowDefinitionVersionEntity version = new WorkflowDefinitionVersionEntity();
+                version.definitionId = entity.id;
+                version.version = 1;
+                version.content = content.isObject() ? content.toString() : content.asText();
+                version.createdOn = Instant.now();
+                version.persist();
+                entity.currentVersion = 1;
+            }
+            count++;
+        }
+        return count;
+    }
+
+    private int[] upsertWorkflowDefinitions(JsonNode items) {
+        if (!items.isArray()) return new int[]{0, 0};
+        int created = 0, updated = 0;
+        for (JsonNode item : items) {
+            String name = item.path("name").asText();
+            WorkflowDefinitionEntity entity = WorkflowDefinitionEntity.find("name", name).firstResult();
+            boolean isNew = (entity == null);
+            if (isNew) {
+                entity = new WorkflowDefinitionEntity();
+                entity.name = name;
+                entity.createdOn = Instant.now();
+            }
+            entity.description = textOrNull(item, "description");
+            entity.updatedOn = Instant.now();
+
+            JsonNode content = item.path("content");
+            if (!content.isMissingNode() && !content.isNull()) {
+                int nextVersion = (entity.currentVersion != null ? entity.currentVersion : 0) + 1;
+                entity.persist(); // Ensure entity has ID before creating version
+
+                WorkflowDefinitionVersionEntity version = new WorkflowDefinitionVersionEntity();
+                version.definitionId = entity.id;
+                version.version = nextVersion;
+                version.content = content.isObject() ? content.toString() : content.asText();
+                version.createdOn = Instant.now();
+                version.persist();
+                entity.currentVersion = nextVersion;
+            } else {
+                entity.persist();
+            }
             if (isNew) created++; else updated++;
         }
         return new int[]{created, updated};

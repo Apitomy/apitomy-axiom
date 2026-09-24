@@ -41,6 +41,7 @@ import {
     type SessionTemplate,
     type Connection,
     type Subscription,
+    type WorkflowDefinition,
     type PackExportRequest,
     type ImportResult,
     fetchActionTypes,
@@ -52,6 +53,7 @@ import {
     fetchAssistantTemplates,
     fetchConnections,
     fetchSubscriptions,
+    fetchWorkflowDefinitions,
     exportPack,
     importPack,
 } from "../config/api";
@@ -66,6 +68,7 @@ export function ConfigurationPacksPage() {
     const [sessionTemplates, setSessionTemplates] = useState<SessionTemplate[]>([]);
     const [connections, setConnections] = useState<Connection[]>([]);
     const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+    const [workflowDefs, setWorkflowDefs] = useState<WorkflowDefinition[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState(0);
 
@@ -81,6 +84,7 @@ export function ConfigurationPacksPage() {
     const [selectedSessionTemplates, setSelectedSessionTemplates] = useState<Set<string>>(new Set());
     const [selectedConnections, setSelectedConnections] = useState<Set<string>>(new Set());
     const [selectedSubscriptions, setSelectedSubscriptions] = useState<Set<number>>(new Set());
+    const [selectedWorkflowDefs, setSelectedWorkflowDefs] = useState<Set<number>>(new Set());
     const [exporting, setExporting] = useState(false);
 
     // Import state
@@ -105,8 +109,9 @@ export function ConfigurationPacksPage() {
             fetchAssistantTemplates(),
             fetchConnections(1, 100),
             fetchSubscriptions(1, 100),
+            fetchWorkflowDefinitions(1, 1000),
         ])
-            .then(([at, t, ts, mcp, rd, sj, st, conn, sub]) => {
+            .then(([at, t, ts, mcp, rd, sj, st, conn, sub, wd]) => {
                 setActionTypes(at.items);
                 setTools(t.items);
                 setToolsets(ts);
@@ -116,6 +121,7 @@ export function ConfigurationPacksPage() {
                 setSessionTemplates(st.filter((s: SessionTemplate) => !s.builtIn));
                 setConnections(conn.items);
                 setSubscriptions(sub.items);
+                setWorkflowDefs(wd.items);
             })
             .catch(console.error)
             .finally(() => setLoading(false));
@@ -126,7 +132,8 @@ export function ConfigurationPacksPage() {
     const totalSelected = selectedActionTypes.size + selectedTools.size
         + selectedToolsets.size + selectedMcpServers.size + selectedReportDefs.size
         + selectedScheduledJobs.size + selectedSessionTemplates.size
-        + selectedConnections.size + selectedSubscriptions.size;
+        + selectedConnections.size + selectedSubscriptions.size
+        + selectedWorkflowDefs.size;
 
     const handleExport = async () => {
         setExporting(true);
@@ -143,6 +150,7 @@ export function ConfigurationPacksPage() {
                 sessionTemplateIds: [...selectedSessionTemplates],
                 connectionIds: [...selectedConnections],
                 subscriptionIds: [...selectedSubscriptions],
+                workflowDefinitionIds: [...selectedWorkflowDefs],
             };
             const blob = await exportPack(request);
             const url = URL.createObjectURL(blob);
@@ -178,6 +186,7 @@ export function ConfigurationPacksPage() {
                     if (json.sessionTemplates?.length) preview["Session Templates"] = json.sessionTemplates.length;
                     if (json.connections?.length) preview["Connections"] = json.connections.length;
                     if (json.subscriptions?.length) preview["Subscriptions"] = json.subscriptions.length;
+                    if (json.workflowDefinitions?.length) preview["Workflow Definitions"] = json.workflowDefinitions.length;
                     setImportPreview(preview);
                     setImportPackName(json.metadata?.name || "");
                 } catch {
@@ -302,7 +311,7 @@ export function ConfigurationPacksPage() {
             <p className="axiom-text-subtle" style={{ marginTop: "8px", marginBottom: "16px" }}>
                 Configuration packs bundle related items — action types, tools, toolsets,
                 MCP servers, report definitions, scheduled jobs, session templates,
-                connections, and subscriptions — into a portable JSON
+                connections, subscriptions, and workflow definitions — into a portable JSON
                 file. Create a pack to share your setup with others, or import one to quickly
                 add pre-configured functionality to your Axiom instance.
             </p>
@@ -480,6 +489,10 @@ export function ConfigurationPacksPage() {
                                     items={subscriptions.map((s) => ({ id: s.id, name: s.name, description: s.description }))}
                                     selected={selectedSubscriptions}
                                     onToggle={(id) => setSelectedSubscriptions(toggleSet(selectedSubscriptions, id))} />
+                                <CheckboxSection title="Workflow Definitions"
+                                    items={workflowDefs.map((wd) => ({ id: wd.id, name: wd.name, description: wd.description }))}
+                                    selected={selectedWorkflowDefs}
+                                    onToggle={(id) => setSelectedWorkflowDefs(toggleSet(selectedWorkflowDefs, id))} />
                             </div>
 
                             <div style={{ marginTop: "24px" }}>
@@ -567,6 +580,7 @@ export function ConfigurationPacksPage() {
                                         {importResult.sessionTemplates ? <li>{importResult.sessionTemplates} session template(s)</li> : null}
                                         {importResult.connections ? <li>{importResult.connections} connection(s)</li> : null}
                                         {importResult.subscriptions ? <li>{importResult.subscriptions} subscription(s)</li> : null}
+                                        {importResult.workflowDefinitions ? <li>{importResult.workflowDefinitions} workflow definition(s)</li> : null}
                                     </ul>
                                 </Alert>
                             )}
