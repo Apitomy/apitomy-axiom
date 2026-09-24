@@ -475,13 +475,17 @@ public class EventStreamOrchestrator {
 
         Long projectId = findOrCreateProjectForEvent(event);
 
+        // Build a structured input with a human-readable summary for {{managerInput}}
+        // and the raw event payload for {{event}}
+        String taskInput = buildInvokeActionInput(event);
+
         Long taskId = QuarkusTransaction.requiringNew().call(() -> {
             TaskEntity task = new TaskEntity();
             task.projectId = projectId;
             task.actionType = actionType.name;
             task.createdBy = "subscription";
             task.status = "Pending";
-            task.input = event.payload;
+            task.input = taskInput;
             task.createdOn = Instant.now();
             task.persist();
             LOG.infof("Created task for action '%s' from event %s",
@@ -491,6 +495,57 @@ public class EventStreamOrchestrator {
 
         sseEvents.fire(SseEvent.taskUpdated(projectId, taskId, "Pending"));
         sseEvents.fire(SseEvent.projectUpdated(projectId));
+    }
+
+    /**
+     * Builds the task input for invoke-action routing. Contains a JSON object with:
+     * - "summary": a human-readable description of the event for {{managerInput}}
+     * - "event": the raw event payload for {{event}}
+     */
+    private String buildInvokeActionInput(StreamEventEntity event) {
+        try {
+            var node = objectMapper.createObjectNode();
+
+            // Build human-readable summary
+            StringBuilder summary = new StringBuilder();
+            summary.append("Event: ").append(event.type).append("\n");
+            summary.append("Source: ").append(event.source).append("\n");
+            summary.append("Ref: ").append(event.ref).append("\n");
+
+            // Extract key details from payload
+            try {
+                JsonNode payload = objectMapper.readTree(event.payload);
+                JsonNode issue = payload.path("issue");
+                JsonNode pr = payload.path("pullRequest");
+                if (!issue.isMissingNode()) {
+                    summary.append("Title: ").append(issue.path("title").asText("")).append("\n");
+                    String body = issue.path("body").asText(null);
+                    if (body != null && !body.isBlank()) {
+                        summary.append("Body: ").append(body.length() > 500
+                                ? body.substring(0, 500) + "..." : body).append("\n");
+                    }
+                    summary.append("State: ").append(issue.path("state").asText("")).append("\n");
+                } else if (!pr.isMissingNode()) {
+                    summary.append("Title: ").append(pr.path("title").asText("")).append("\n");
+                    String body = pr.path("body").asText(null);
+                    if (body != null && !body.isBlank()) {
+                        summary.append("Body: ").append(body.length() > 500
+                                ? body.substring(0, 500) + "..." : body).append("\n");
+                    }
+                    summary.append("Base branch: ").append(pr.path("baseBranch").asText("")).append("\n");
+                }
+            } catch (Exception e) {
+                LOG.debugf("Failed to extract details from event payload: %s", e.getMessage());
+            }
+
+            node.put("summary", summary.toString());
+            node.set("event", objectMapper.readTree(event.payload));
+
+            return objectMapper.writeValueAsString(node);
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to build invoke-action input for event %s", event.id);
+            return event.payload;
+        }
     }
 
     private Long findOrCreateProjectForEvent(StreamEventEntity event) {

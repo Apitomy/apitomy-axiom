@@ -290,7 +290,28 @@ public class TaskExecutionService {
         }
 
         String resolved = actionType.promptTemplate;
-        resolved = resolved.replace("{{managerInput}}", task.input != null ? task.input : "");
+
+        // Extract managerInput and event from task input.
+        // For invoke-action routing, task.input is a JSON object with "summary" and "event" fields.
+        // For Manager routing, task.input is the Manager's inputContext string.
+        String managerInput = task.input != null ? task.input : "";
+        String eventPayload = "";
+        if (task.input != null) {
+            try {
+                com.fasterxml.jackson.databind.JsonNode inputNode = objectMapper.readTree(task.input);
+                if (inputNode.has("summary") && inputNode.has("event")) {
+                    // invoke-action format: extract summary for managerInput, event for {{event}}
+                    managerInput = inputNode.path("summary").asText("");
+                    eventPayload = objectMapper.writerWithDefaultPrettyPrinter()
+                            .writeValueAsString(inputNode.path("event"));
+                }
+            } catch (Exception e) {
+                // Not JSON or not the invoke-action format — use raw input as managerInput
+            }
+        }
+
+        resolved = resolved.replace("{{managerInput}}", managerInput);
+        resolved = resolved.replace("{{event}}", eventPayload);
         resolved = resolved.replace("{{actionType}}", task.actionType != null ? task.actionType : "");
         resolved = resolved.replace("{{ref}}", project.ref != null ? project.ref : "");
         resolved = resolved.replace("{{repository}}", project.repository != null ? project.repository : "");

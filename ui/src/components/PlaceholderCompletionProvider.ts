@@ -135,11 +135,13 @@ export const MANAGER_PLACEHOLDERS: PlaceholderItem[] = [
  * Placeholders available in the Action Type prompt template.
  */
 export const ACTION_TYPE_PLACEHOLDERS: PlaceholderItem[] = [
-    { name: "managerInput", description: "Instructions/context from the Manager's decision" },
+    { name: "managerInput", description: "Instructions from the Manager, or a formatted event summary for invoke-action routing" },
+    { name: "event", description: "Full normalized event payload JSON (available for invoke-action routing)" },
     { name: "actionType", description: "The action type name" },
-    { name: "ref", description: "Project reference (e.g. 'owner/repo#42' or 'CVE-2024-12345')" },
-    { name: "repository", description: "Repository (e.g. 'owner/repo')" },
+    { name: "ref", description: "Full URL of the event subject (e.g. 'https://github.com/owner/repo/issues/42')" },
+    { name: "repository", description: "Repository identifier" },
     { name: "projectName", description: "Project name" },
+    { name: "workDir", description: "Absolute path to the project workspace directory" },
 ];
 
 /**
