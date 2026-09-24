@@ -199,7 +199,7 @@ export function SubscriptionsPage() {
                         </Thead>
                         <Tbody>
                             {subscriptions.map((s) => (
-                                <Tr key={s.id} isClickable onRowClick={() => navigate(`/subscriptions/${s.id}`)}>
+                                <Tr key={s.id} isClickable onRowClick={() => navigate(`/events/subscriptions/${s.id}`)}>
                                     <Td><strong>{s.name}</strong></Td>
                                     <Td>{truncate(s.description)}</Td>
                                     <Td><BooleanStatusIcon value={s.enabled} /></Td>

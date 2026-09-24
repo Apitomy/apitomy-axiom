@@ -173,7 +173,7 @@ export function ConnectionDetailPage() {
     return (
         <PageSection>
             <Breadcrumb style={{ marginBottom: "16px" }}>
-                <BreadcrumbItem><Link to="/connections">Connections</Link></BreadcrumbItem>
+                <BreadcrumbItem><Link to="/events/connections">Connections</Link></BreadcrumbItem>
                 <BreadcrumbItem isActive>{connection?.name || connectionId}</BreadcrumbItem>
             </Breadcrumb>
 

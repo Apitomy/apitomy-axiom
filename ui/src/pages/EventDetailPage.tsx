@@ -96,7 +96,7 @@ export function EventDetailPage() {
     return (
         <PageSection>
             <Breadcrumb style={{ marginBottom: "16px" }}>
-                <BreadcrumbItem><Link to="/logs/events">Event Stream</Link></BreadcrumbItem>
+                <BreadcrumbItem><Link to="/events/stream">Event Stream</Link></BreadcrumbItem>
                 <BreadcrumbItem isActive>{event.type}</BreadcrumbItem>
             </Breadcrumb>
 
@@ -116,7 +116,7 @@ export function EventDetailPage() {
                 <DescriptionListGroup>
                     <DescriptionListTerm>Connection</DescriptionListTerm>
                     <DescriptionListDescription>
-                        <Link to={`/connections/${event.connectionId}`}>{event.connectionId}</Link>
+                        <Link to={`/events/connections/${event.connectionId}`}>{event.connectionId}</Link>
                     </DescriptionListDescription>
                 </DescriptionListGroup>
                 <DescriptionListGroup>
@@ -217,7 +217,7 @@ function ProcessingTab({ entries, loading }: {
                             </Label>
                         </Td>
                         <Td>
-                            <Link to={`/subscriptions/${entry.subscriptionId}`}>
+                            <Link to={`/events/subscriptions/${entry.subscriptionId}`}>
                                 {entry.subscriptionName}
                             </Link>
                         </Td>

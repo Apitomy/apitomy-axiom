@@ -155,7 +155,7 @@ export function SubscriptionDetailPage() {
     return (
         <PageSection>
             <Breadcrumb style={{ marginBottom: "16px" }}>
-                <BreadcrumbItem><Link to="/subscriptions">Subscriptions</Link></BreadcrumbItem>
+                <BreadcrumbItem><Link to="/events/subscriptions">Subscriptions</Link></BreadcrumbItem>
                 <BreadcrumbItem isActive>{subscription.name}</BreadcrumbItem>
             </Breadcrumb>
 

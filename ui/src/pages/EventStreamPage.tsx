@@ -205,7 +205,7 @@ export function EventStreamPage() {
                         <Tbody>
                             {events.map((event) => (
                                 <Tr key={event.id} isClickable
-                                    onRowClick={() => navigate(`/logs/events/${event.id}`)}>
+                                    onRowClick={() => navigate(`/events/stream/${event.id}`)}>
                                     <Td>
                                         {(event.matchedSubscriptions ?? 0) > 0 && (
                                             <CheckCircleIcon

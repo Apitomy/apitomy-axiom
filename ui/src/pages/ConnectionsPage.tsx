@@ -256,7 +256,7 @@ export function ConnectionsPage() {
                         </Thead>
                         <Tbody>
                             {connections.map((c) => (
-                                <Tr key={c.id} isClickable onRowClick={() => navigate(`/connections/${c.id}`)}>
+                                <Tr key={c.id} isClickable onRowClick={() => navigate(`/events/connections/${c.id}`)}>
                                     <Td><strong>{c.id}</strong></Td>
                                     <Td>{c.name}</Td>
                                     <Td>

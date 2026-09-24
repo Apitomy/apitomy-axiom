@@ -140,8 +140,8 @@ export function App() {
                         <Route path="/mcp-servers" element={<McpServersPage />} />
                         <Route path="/mcp-servers/:mcpServerId" element={<McpServerDetailPage />} />
                         <Route path="/logs/activity" element={<ActivityLogPage />} />
-                        <Route path="/logs/events" element={<EventStreamPage />} />
-                        <Route path="/logs/events/:eventId" element={<EventDetailPage />} />
+                        <Route path="/events/stream" element={<EventStreamPage />} />
+                        <Route path="/events/stream/:eventId" element={<EventDetailPage />} />
                         <Route path="/logs/manager" element={<ManagerDecisionsPage />} />
                         <Route path="/logs/tasks" element={<TasksPage />} />
                         <Route path="/logs/job-runs" element={<ScheduledJobRunsPage />} />
@@ -155,10 +155,10 @@ export function App() {
                         <Route path="/report-definitions/:definitionId" element={<ReportDefinitionDetailPage />} />
                         <Route path="/metrics/ai-usage" element={<AiUsagePage />} />
                         <Route path="/metrics/disk-usage" element={<DiskUsagePage />} />
-                        <Route path="/connections" element={<ConnectionsPage />} />
-                        <Route path="/connections/:connectionId" element={<ConnectionDetailPage />} />
-                        <Route path="/subscriptions" element={<SubscriptionsPage />} />
-                        <Route path="/subscriptions/:subscriptionId" element={<SubscriptionDetailPage />} />
+                        <Route path="/events/connections" element={<ConnectionsPage />} />
+                        <Route path="/events/connections/:connectionId" element={<ConnectionDetailPage />} />
+                        <Route path="/events/subscriptions" element={<SubscriptionsPage />} />
+                        <Route path="/events/subscriptions/:subscriptionId" element={<SubscriptionDetailPage />} />
                         <Route path="/secrets" element={<SecretsPage />} />
                         <Route path="/configuration-packs" element={<ConfigurationPacksPage />} />
                         <Route path="/data-retention" element={<DataRetentionPage />} />
