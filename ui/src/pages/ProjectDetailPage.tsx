@@ -341,13 +341,13 @@ export function ProjectDetailPage() {
                 <DescriptionListGroup>
                     <DescriptionListTerm>Reference</DescriptionListTerm>
                     <DescriptionListDescription>
-                        {project.refSource === "github" && project.ref ? (
-                            <a href={`https://github.com/${project.ref.replace("#", "/issues/")}`}
+                        {project.ref ? (
+                            <a href={project.ref}
                                 target="_blank" rel="noopener noreferrer">
                                 {project.ref}
                             </a>
                         ) : (
-                            project.ref
+                            "—"
                         )}
                     </DescriptionListDescription>
                 </DescriptionListGroup>

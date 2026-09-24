@@ -45,8 +45,19 @@ export function registerPlaceholderCompletions(
     placeholders: PlaceholderItem[]
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): any {
-    // Guard against duplicate registration
+    // Guard against duplicate registration. If the placeholder set changed
+    // (e.g., inputs were added/removed), dispose the old provider first.
     const key = `${language}:${placeholders.map(p => p.name).join(",")}`;
+    const langPrefix = `${language}:`;
+
+    // Dispose any existing provider for this language with a different placeholder set
+    for (const [existingKey, disposable] of registeredProviders.entries()) {
+        if (existingKey.startsWith(langPrefix) && existingKey !== key) {
+            disposable.dispose();
+            registeredProviders.delete(existingKey);
+        }
+    }
+
     if (registeredProviders.has(key)) {
         // Still apply editor options on re-mount
         editor.updateOptions({

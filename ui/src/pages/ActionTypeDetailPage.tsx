@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import { useParams, Link } from "react-router-dom";
 import {
@@ -26,7 +26,7 @@ import {
     Title,
 } from "@patternfly/react-core";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
-import { registerPlaceholderCompletions, ACTION_TYPE_PLACEHOLDERS } from "../components/PlaceholderCompletionProvider";
+import { registerPlaceholderCompletions, ACTION_TYPE_PLACEHOLDERS, type PlaceholderItem } from "../components/PlaceholderCompletionProvider";
 import { EditLabelsModal } from "../components/EditLabelsModal";
 import { AiConfigTab } from "../components/AiConfigTab";
 import { EnvironmentTab } from "../components/EnvironmentTab";
@@ -47,6 +47,7 @@ import {
     validateActionType,
     fetchModels,
     fetchEngines,
+    type ActionTypeField,
 } from "../config/api";
 import ExclamationTriangleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-triangle-icon";
 import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
@@ -358,6 +359,7 @@ export function ActionTypeDetailPage() {
                             <PromptTemplateTab
                                 value={form.promptTemplate || ""}
                                 onChange={(v) => updateForm({ promptTemplate: v })}
+                                inputs={form.inputs || []}
                             />
                         </TabContent>
                     </Tab>
@@ -511,11 +513,24 @@ function InfoTab({ form, updateForm, onEditLabels }: {
     );
 }
 
-function PromptTemplateTab({ value, onChange }: {
+function PromptTemplateTab({ value, onChange, inputs }: {
     value: string;
     onChange: (v: string) => void;
+    inputs: ActionTypeField[];
 }) {
     const effectiveTheme = useEffectiveTheme();
+
+    // Build dynamic placeholders from defined inputs
+    const allPlaceholders = useMemo(() => {
+        const inputPlaceholders: PlaceholderItem[] = inputs
+            .filter((i) => i.name)
+            .map((i) => ({
+                name: `inputs.${i.name}`,
+                description: i.description || `Input: ${i.name} (${i.type})`,
+            }));
+        return [...ACTION_TYPE_PLACEHOLDERS, ...inputPlaceholders];
+    }, [inputs]);
+
     return (
         <div>
             <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
@@ -525,6 +540,17 @@ function PromptTemplateTab({ value, onChange }: {
                 <code>{"{{ref}}"}</code>,{" "}
                 <code>{"{{repository}}"}</code>,{" "}
                 <code>{"{{projectName}}"}</code>
+                {inputs.length > 0 && (
+                    <span>
+                        , and inputs:{" "}
+                        {inputs.filter((i) => i.name).map((i, idx) => (
+                            <span key={i.name}>
+                                {idx > 0 && ", "}
+                                <code>{`{{inputs.${i.name}}}`}</code>
+                            </span>
+                        ))}
+                    </span>
+                )}
             </p>
             <CodeEditor
                 code={value}
@@ -534,7 +560,7 @@ function PromptTemplateTab({ value, onChange }: {
                 isDarkTheme={effectiveTheme === "dark"}
                 isLineNumbersVisible
                 onEditorDidMount={(editor, monaco) => {
-                    registerPlaceholderCompletions(editor, monaco, "markdown", ACTION_TYPE_PLACEHOLDERS);
+                    registerPlaceholderCompletions(editor, monaco, "markdown", allPlaceholders);
                 }}
             />
         </div>
