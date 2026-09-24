@@ -16,6 +16,9 @@ import {
     FormGroup,
     FormSelect,
     FormSelectOption,
+    Modal,
+    ModalBody,
+    ModalHeader,
     PageSection,
     Tab,
     TabContent,
@@ -25,6 +28,8 @@ import {
     TextInput,
     Title,
 } from "@patternfly/react-core";
+import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
+import HelpIcon from "@patternfly/react-icons/dist/esm/icons/help-icon";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { registerPlaceholderCompletions, ACTION_TYPE_PLACEHOLDERS, type PlaceholderItem } from "../components/PlaceholderCompletionProvider";
 import { EditLabelsModal } from "../components/EditLabelsModal";
@@ -542,27 +547,48 @@ function PromptTemplateTab({ value, onChange, inputs }: {
         }
     }, [allPlaceholders]);
 
+    const [helpOpen, setHelpOpen] = useState(false);
+
+    const insertPlaceholder = (name: string) => {
+        const text = `{{${name}}}`;
+        const editor = editorRef.current;
+        if (editor) {
+            const position = editor.getPosition();
+            if (position) {
+                editor.executeEdits("placeholder-insert", [{
+                    range: {
+                        startLineNumber: position.lineNumber,
+                        startColumn: position.column,
+                        endLineNumber: position.lineNumber,
+                        endColumn: position.column,
+                    },
+                    text,
+                }]);
+                editor.focus();
+            }
+        } else {
+            onChange(value + text);
+        }
+        setHelpOpen(false);
+    };
+
     return (
         <div>
-            <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
-                The prompt sent to the AI agent when executing this action type.
-                Supports placeholders:{" "}
-                <code>{"{{managerInput}}"}</code>,{" "}
-                <code>{"{{ref}}"}</code>,{" "}
-                <code>{"{{repository}}"}</code>,{" "}
-                <code>{"{{projectName}}"}</code>
-                {inputs.length > 0 && (
-                    <span>
-                        , and inputs:{" "}
-                        {inputs.filter((i) => i.name).map((i, idx) => (
-                            <span key={i.name}>
-                                {idx > 0 && ", "}
-                                <code>{`{{inputs.${i.name}}}`}</code>
-                            </span>
-                        ))}
+            <Flex alignItems={{ default: "alignItemsCenter" }}
+                style={{ marginBottom: "12px", gap: "8px" }}>
+                <FlexItem>
+                    <span className="axiom-text-subtle">
+                        The prompt sent to the AI agent when executing this action type.
+                        Placeholders are substituted at runtime.
                     </span>
-                )}
-            </p>
+                </FlexItem>
+                <FlexItem>
+                    <Button variant="plain" aria-label="Placeholder reference"
+                        onClick={() => setHelpOpen(true)}>
+                        <HelpIcon />
+                    </Button>
+                </FlexItem>
+            </Flex>
             <CodeEditor
                 code={value}
                 onCodeChange={(v) => onChange(v)}
@@ -576,6 +602,38 @@ function PromptTemplateTab({ value, onChange, inputs }: {
                     registerPlaceholderCompletions(editor, monaco, "markdown", allPlaceholders);
                 }}
             />
+
+            <Modal isOpen={helpOpen} onClose={() => setHelpOpen(false)} variant="large"
+                aria-label="Prompt template placeholder reference">
+                <ModalHeader title="Prompt Template Placeholders" />
+                <ModalBody>
+                    <p style={{ marginBottom: "16px" }}>
+                        These placeholders are replaced with actual values when the action type
+                        is executed. Click a placeholder to insert it into the prompt template.
+                    </p>
+                    <Table aria-label="Template placeholders" variant="compact">
+                        <Thead>
+                            <Tr>
+                                <Th>Placeholder</Th>
+                                <Th>Description</Th>
+                            </Tr>
+                        </Thead>
+                        <Tbody>
+                            {allPlaceholders.map((p) => (
+                                <Tr key={p.name} isClickable
+                                    onRowClick={() => insertPlaceholder(p.name)}>
+                                    <Td>
+                                        <code style={{ cursor: "pointer", color: "var(--pf-v6-global--link--Color, #0066cc)" }}>
+                                            {`{{${p.name}}}`}
+                                        </code>
+                                    </Td>
+                                    <Td>{p.description}</Td>
+                                </Tr>
+                            ))}
+                        </Tbody>
+                    </Table>
+                </ModalBody>
+            </Modal>
         </div>
     );
 }
