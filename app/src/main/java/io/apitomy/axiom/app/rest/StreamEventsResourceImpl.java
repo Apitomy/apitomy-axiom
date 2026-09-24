@@ -210,11 +210,14 @@ public class StreamEventsResourceImpl implements StreamResource {
                     }
                     if (activity.taskId != null) {
                         outcome.setTaskId(activity.taskId);
-                        // Find task status
+                        // Find task status and trace ID
                         for (List<TaskEntity> tasks : tasksByProject.values()) {
                             for (TaskEntity t : tasks) {
                                 if (t.id.equals(activity.taskId)) {
                                     outcome.setTaskStatus(t.status);
+                                    if (t.traceId != null) {
+                                        outcome.setTraceId(t.traceId);
+                                    }
                                 }
                             }
                         }
@@ -241,6 +244,9 @@ public class StreamEventsResourceImpl implements StreamResource {
                             taskOutcome.setProjectName(proj.name);
                             taskOutcome.setTaskId(t.id);
                             taskOutcome.setTaskStatus(t.status);
+                            if (t.traceId != null) {
+                                taskOutcome.setTraceId(t.traceId);
+                            }
                             outcomes.add(taskOutcome);
                         }
                     }

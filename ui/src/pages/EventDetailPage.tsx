@@ -263,6 +263,15 @@ function ProcessingTab({ entries, loading }: {
                                                         </Label>
                                                     </span>
                                                 )}
+                                                {o.traceId && (
+                                                    <span>
+                                                        {" "}
+                                                        <Link to={`/logs/traces/${o.traceId}`}
+                                                            onClick={(e) => e.stopPropagation()}>
+                                                            View Trace
+                                                        </Link>
+                                                    </span>
+                                                )}
                                             </span>
                                         )}
                                     </div>

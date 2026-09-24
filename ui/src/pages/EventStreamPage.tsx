@@ -231,7 +231,15 @@ export function EventStreamPage() {
                                     </Td>
                                     <Td>{event.connectionId}</Td>
                                     <Td>
-                                        <Label isCompact>{event.type}</Label>
+                                        <Label isCompact
+                                            style={{ cursor: "pointer" }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const typeFilter = FILTER_TYPES.find((t) => t.value === "type")!;
+                                                onAddFilterCriteria({ filterBy: typeFilter, filterValue: event.type });
+                                            }}>
+                                            {event.type}
+                                        </Label>
                                     </Td>
                                     <Td title={event.ref}>
                                         {formatRef(event.ref)}

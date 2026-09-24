@@ -2361,6 +2361,7 @@ export interface EventProcessingOutcome {
     projectName?: string;
     taskId?: number;
     taskStatus?: string;
+    traceId?: string;
 }
 
 export interface EventProcessingEntry {

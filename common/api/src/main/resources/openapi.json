@@ -9886,6 +9886,11 @@
           },
           "taskStatus": {
             "type": "string"
+          },
+          "traceId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Trace ID linked to this outcome (for navigating to the trace detail page)"
           }
         }
       },
