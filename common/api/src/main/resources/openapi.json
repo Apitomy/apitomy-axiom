@@ -6003,7 +6003,8 @@
             "enum": [
               "manager",
               "user",
-              "workflow"
+              "workflow",
+              "subscription"
             ],
             "type": "string"
           },
