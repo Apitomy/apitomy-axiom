@@ -473,11 +473,25 @@ public class EventStreamOrchestrator {
                     "Action type " + rule.actionTypeId() + " not found");
         }
 
+        // Create a trace for this invoke-action routing
+        io.apitomy.axiom.core.tracing.TraceContext traceCtx = null;
+        try {
+            traceCtx = traceService.createTrace(
+                    "invoke-action",
+                    "Invoke action: " + actionType.name + " — " + event.ref,
+                    null, null, null,
+                    "invoke-action", "Invoke action: " + actionType.name,
+                    null, null);
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to create trace for invoke-action of event %s", event.id);
+        }
+
         Long projectId = findOrCreateProjectForEvent(event);
 
         // Build a structured input with a human-readable summary for {{managerInput}}
         // and the raw event payload for {{event}}
         String taskInput = buildInvokeActionInput(event);
+        final io.apitomy.axiom.core.tracing.TraceContext finalTraceCtx = traceCtx;
 
         Long taskId = QuarkusTransaction.requiringNew().call(() -> {
             TaskEntity task = new TaskEntity();
@@ -487,12 +501,31 @@ public class EventStreamOrchestrator {
             task.status = "Pending";
             task.input = taskInput;
             task.createdOn = Instant.now();
+            if (finalTraceCtx != null) {
+                task.traceId = finalTraceCtx.traceId();
+            }
             task.persist();
+
+            // Add a trace node for the task
+            if (finalTraceCtx != null) {
+                try {
+                    traceService.addNode(finalTraceCtx, "task", "in-progress",
+                            "Task: " + task.actionType, "task", task.id);
+                } catch (Exception e) {
+                    LOG.warnf(e, "Failed to add task trace node for task %d", task.id);
+                }
+            }
+
+            // Log activity
+            logActivity(projectId, task.id, null, "task-created",
+                    "Subscription invoked action: " + task.actionType);
+
             LOG.infof("Created task for action '%s' from event %s",
                     actionType.name, event.id);
             return task.id;
         });
 
+        completeTrace(traceCtx, "completed");
         sseEvents.fire(SseEvent.taskUpdated(projectId, taskId, "Pending"));
         sseEvents.fire(SseEvent.projectUpdated(projectId));
     }

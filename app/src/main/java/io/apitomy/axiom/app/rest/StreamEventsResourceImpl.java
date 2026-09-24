@@ -165,7 +165,7 @@ public class StreamEventsResourceImpl implements StreamResource {
                 // Find activities within 5 seconds of processing
                 List<ActivityLogEntity> activities = ActivityLogEntity.find(
                         "entryType in ?1 and createdOn >= ?2 and createdOn <= ?3",
-                        List.of("manager-evaluated", "event-ignored", "manager-escalation"),
+                        List.of("manager-evaluated", "event-ignored", "manager-escalation", "task-created"),
                         e.processedOn.minusSeconds(5), e.processedOn.plusSeconds(5)).list();
                 relatedActivities.addAll(activities);
             }
