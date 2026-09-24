@@ -3,6 +3,13 @@ import { useParams, Link } from "react-router-dom";
 import {
     Breadcrumb,
     BreadcrumbItem,
+    DataList,
+    DataListCell,
+    DataListContent,
+    DataListItem,
+    DataListItemCells,
+    DataListItemRow,
+    DataListToggle,
     DescriptionList,
     DescriptionListDescription,
     DescriptionListGroup,
@@ -16,9 +23,8 @@ import {
     TabTitleText,
     Tabs,
     Title,
-    Tooltip,
 } from "@patternfly/react-core";
-import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
+import { CheckCircleIcon, TimesCircleIcon } from "@patternfly/react-icons";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import {
@@ -173,10 +179,25 @@ export function EventDetailPage() {
     );
 }
 
+const ROUTING_LABELS: Record<string, string> = {
+    manager: "Send to Manager",
+    "workflow-dispatch": "Dispatch to Workflows",
+    "create-workflow": "Create Workflow",
+    "invoke-action": "Invoke Action",
+};
+
 function ProcessingTab({ entries, loading }: {
     entries: EventProcessingEntry[];
     loading: boolean;
 }) {
+    const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
+
+    const toggleItem = (id: number) => {
+        const next = new Set(expandedItems);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        setExpandedItems(next);
+    };
+
     if (loading) {
         return <EmptyState><EmptyStateBody>Loading processing data...</EmptyStateBody></EmptyState>;
     }
@@ -189,115 +210,138 @@ function ProcessingTab({ entries, loading }: {
         );
     }
 
-    const ROUTING_TYPE_LABELS: Record<string, string> = {
-        manager: "Send to Manager",
-        "workflow-dispatch": "Dispatch to Workflows",
-        "create-workflow": "Create Workflow",
-        "invoke-action": "Invoke Action",
-    };
-
     return (
-        <Table aria-label="Event Processing Audit Trail" variant="compact">
-            <Thead>
-                <Tr>
-                    <Th>Status</Th>
-                    <Th>Subscription</Th>
-                    <Th>Routing</Th>
-                    <Th>Outcomes</Th>
-                    <Th>Processed</Th>
-                </Tr>
-            </Thead>
-            <Tbody>
-                {entries.map((entry) => (
-                    <Tr key={entry.id}>
-                        <Td>
-                            <Label isCompact
-                                color={STATUS_COLORS[entry.status] || "grey"}>
-                                {entry.status}
-                            </Label>
-                        </Td>
-                        <Td>
-                            <Link to={`/events/subscriptions/${entry.subscriptionId}`}>
-                                {entry.subscriptionName}
-                            </Link>
-                        </Td>
-                        <Td>
-                            {entry.routingRules && entry.routingRules.length > 0
-                                ? entry.routingRules.map((r, i) => (
-                                    <div key={i}>
-                                        <Label isCompact color="blue" style={{ marginBottom: "2px" }}>
-                                            {ROUTING_TYPE_LABELS[r.type] || r.type}
+        <DataList aria-label="Event Processing Audit Trail" isCompact>
+            {entries.map((entry) => {
+                const isExpanded = expandedItems.has(entry.id);
+                const hasOutcomes = entry.outcomes && entry.outcomes.length > 0;
+                const hasFailed = entry.status === "failed";
+                const isExpandable = hasOutcomes || hasFailed;
+
+                return (
+                    <DataListItem
+                        key={entry.id}
+                        id={`entry-${entry.id}`}
+                        aria-labelledby={`entry-label-${entry.id}`}
+                        isExpanded={isExpanded}
+                    >
+                        <DataListItemRow>
+                            {isExpandable ? (
+                                <DataListToggle
+                                    id={`toggle-${entry.id}`}
+                                    onClick={() => toggleItem(entry.id)}
+                                    isExpanded={isExpanded}
+                                    aria-controls={`content-${entry.id}`}
+                                    aria-label="Toggle details"
+                                />
+                            ) : (
+                                <div style={{ width: 48 }} />
+                            )}
+                            <DataListItemCells
+                                dataListCells={[
+                                    <DataListCell key="status" width={1}>
+                                        <Label isCompact
+                                            color={STATUS_COLORS[entry.status] || "grey"}>
+                                            {entry.status}
                                         </Label>
+                                    </DataListCell>,
+                                    <DataListCell key="sub" width={2}
+                                        id={`entry-label-${entry.id}`}>
+                                        <Link to={`/events/subscriptions/${entry.subscriptionId}`}>
+                                            {entry.subscriptionName}
+                                        </Link>
+                                    </DataListCell>,
+                                    <DataListCell key="rules" width={2}>
+                                        {entry.routingRules && entry.routingRules.length > 0
+                                            ? `${entry.routingRules.length} routing rule${entry.routingRules.length > 1 ? "s" : ""}`
+                                            : entry.status === "skipped" ? "---" : "No routing rules"}
+                                    </DataListCell>,
+                                    <DataListCell key="time" width={2}>
+                                        {entry.processedOn
+                                            ? new Date(entry.processedOn).toLocaleString()
+                                            : "---"}
+                                    </DataListCell>,
+                                ]}
+                            />
+                        </DataListItemRow>
+                        {isExpandable && (
+                            <DataListContent
+                                aria-label="Entry details"
+                                id={`content-${entry.id}`}
+                                isHidden={!isExpanded}
+                                hasNoPadding={false}
+                            >
+                                {hasFailed && entry.errorMessage && (
+                                    <div style={{
+                                        padding: "8px 16px",
+                                        color: "var(--pf-v6-global--danger-color--100)",
+                                    }}>
+                                        <strong>Error:</strong> {entry.errorMessage}
                                     </div>
-                                ))
-                                : entry.status === "skipped" ? "---" : "No routing rules"}
-                        </Td>
-                        <Td>
-                            {entry.outcomes && entry.outcomes.length > 0
-                                ? entry.outcomes.map((o, i) => (
-                                    <div key={i} style={{ marginBottom: "4px" }}>
-                                        {o.type === "manager-evaluated" && (
-                                            <span>{o.summary}</span>
-                                        )}
-                                        {o.type === "event-ignored" && (
-                                            <span style={{ fontStyle: "italic" }}>Ignored: {o.summary}</span>
-                                        )}
-                                        {o.type === "manager-escalation" && (
-                                            <Label isCompact color="orange">Escalated</Label>
-                                        )}
-                                        {(o.type === "task-created" || o.type === "project-created") && (
-                                            <span>
-                                                {o.projectId && (
-                                                    <Link to={`/projects/${o.projectId}`}>
-                                                        {o.projectName || `Project #${o.projectId}`}
-                                                    </Link>
-                                                )}
-                                                {o.taskId && (
-                                                    <span>
-                                                        {" → "}
-                                                        <Label isCompact
-                                                            color={o.taskStatus === "Completed" ? "green"
-                                                                : o.taskStatus === "Failed" ? "red"
-                                                                : "grey"}>
-                                                            {o.taskStatus || "Pending"}
-                                                        </Label>
-                                                    </span>
-                                                )}
-                                                {o.traceId && (
-                                                    <span>
-                                                        {" "}
-                                                        <Link to={`/logs/traces/${o.traceId}`}
-                                                            onClick={(e) => e.stopPropagation()}>
-                                                            View Trace
-                                                        </Link>
-                                                    </span>
-                                                )}
-                                            </span>
-                                        )}
+                                )}
+                                {hasOutcomes && (
+                                    <div style={{ padding: "8px 16px" }}>
+                                        {entry.outcomes!.map((o, i) => (
+                                            <div key={i} style={{
+                                                display: "flex",
+                                                alignItems: "flex-start",
+                                                gap: "12px",
+                                                marginBottom: i < entry.outcomes!.length - 1 ? "12px" : 0,
+                                                padding: "8px 0",
+                                                borderBottom: i < entry.outcomes!.length - 1
+                                                    ? "1px solid var(--pf-v6-global--BorderColor--100)"
+                                                    : "none",
+                                            }}>
+                                                <div style={{ flexShrink: 0 }}>
+                                                    <Label isCompact color="blue">
+                                                        {ROUTING_LABELS[o.type] || o.type}
+                                                    </Label>
+                                                </div>
+                                                <div style={{ flexShrink: 0, marginTop: "2px" }}>
+                                                    {o.summary && !o.summary.toLowerCase().includes("failed") ? (
+                                                        <CheckCircleIcon color="var(--pf-v6-global--success-color--100)" />
+                                                    ) : (
+                                                        <TimesCircleIcon color="var(--pf-v6-global--danger-color--100)" />
+                                                    )}
+                                                </div>
+                                                <div style={{ flex: 1 }}>
+                                                    <div>{o.summary}</div>
+                                                    <div style={{
+                                                        display: "flex",
+                                                        gap: "12px",
+                                                        marginTop: "4px",
+                                                        flexWrap: "wrap",
+                                                    }}>
+                                                        {o.projectId && (
+                                                            <Link to={`/projects/${o.projectId}`}>
+                                                                {o.projectName || `Project #${o.projectId}`}
+                                                            </Link>
+                                                        )}
+                                                        {o.taskId && (
+                                                            <Label isCompact
+                                                                color={o.taskStatus === "Completed" ? "green"
+                                                                    : o.taskStatus === "Failed" ? "red"
+                                                                    : "grey"}>
+                                                                {o.taskStatus || "Pending"}
+                                                            </Label>
+                                                        )}
+                                                        {o.traceId && (
+                                                            <Link to={`/logs/traces/${o.traceId}`}
+                                                                onClick={(e) => e.stopPropagation()}>
+                                                                View Trace
+                                                            </Link>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))
-                                : entry.status === "skipped" ? "---"
-                                : entry.status === "completed" ? "No details available"
-                                : entry.errorMessage ? (
-                                    <Tooltip content={entry.errorMessage}>
-                                        <span style={{
-                                            maxWidth: "300px", display: "inline-block",
-                                            overflow: "hidden", textOverflow: "ellipsis",
-                                            whiteSpace: "nowrap", color: "var(--pf-v6-global--danger-color--100)",
-                                        }}>
-                                            {entry.errorMessage}
-                                        </span>
-                                    </Tooltip>
-                                ) : "---"}
-                        </Td>
-                        <Td style={{ whiteSpace: "nowrap" }}>
-                            {entry.processedOn
-                                ? new Date(entry.processedOn).toLocaleString()
-                                : "---"}
-                        </Td>
-                    </Tr>
-                ))}
-            </Tbody>
-        </Table>
+                                )}
+                            </DataListContent>
+                        )}
+                    </DataListItem>
+                );
+            })}
+        </DataList>
     );
 }

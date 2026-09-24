@@ -10,13 +10,12 @@ import io.apitomy.axiom.api.beans.Payload;
 import io.apitomy.axiom.api.beans.SourceData;
 import io.apitomy.axiom.api.beans.StreamEvent;
 import io.apitomy.axiom.api.beans.StreamEventSearchResults;
-import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
-import io.apitomy.axiom.core.events.model.RoutingRule;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -140,34 +139,48 @@ public class StreamEventsResourceImpl implements StreamResource {
             }
         }
 
-        // Load the event to get its ref for looking up related projects
-        StreamEventEntity event = StreamEventEntity.findById(uuid);
-        String eventRef = event != null ? event.ref : null;
-
-        // Look up projects and tasks linked to this event's ref
-        Map<Long, ProjectEntity> projectsByRef = new HashMap<>();
-        Map<Long, List<TaskEntity>> tasksByProject = new HashMap<>();
-        if (eventRef != null) {
-            List<ProjectEntity> projects = ProjectEntity.find("ref", eventRef).list();
-            for (ProjectEntity p : projects) {
-                projectsByRef.put(p.id, p);
-                List<TaskEntity> tasks = TaskEntity
-                        .find("projectId = ?1 and createdBy = 'manager' ORDER BY createdOn ASC", p.id)
-                        .list();
-                tasksByProject.put(p.id, tasks);
+        // Load routing outcomes for completed entries
+        List<Long> completedLedgerIds = entries.stream()
+                .filter(e -> "completed".equals(e.status))
+                .map(e -> e.id).toList();
+        Map<Long, List<RoutingOutcomeEntity>> outcomesByLedger = new HashMap<>();
+        if (!completedLedgerIds.isEmpty()) {
+            List<RoutingOutcomeEntity> allOutcomes = RoutingOutcomeEntity
+                    .find("ledgerId IN ?1 ORDER BY createdOn ASC", completedLedgerIds).list();
+            for (RoutingOutcomeEntity o : allOutcomes) {
+                outcomesByLedger.computeIfAbsent(o.ledgerId, k -> new java.util.ArrayList<>()).add(o);
             }
         }
 
-        // Look up activity log entries related to this event (by time window around processing)
-        List<ActivityLogEntity> relatedActivities = new java.util.ArrayList<>();
-        for (EventProcessingLedgerEntity e : entries) {
-            if ("completed".equals(e.status) && e.processedOn != null) {
-                // Find activities within 5 seconds of processing
-                List<ActivityLogEntity> activities = ActivityLogEntity.find(
-                        "entryType in ?1 and createdOn >= ?2 and createdOn <= ?3",
-                        List.of("manager-evaluated", "event-ignored", "manager-escalation", "task-created"),
-                        e.processedOn.minusSeconds(5), e.processedOn.plusSeconds(5)).list();
-                relatedActivities.addAll(activities);
+        // Load project names for outcome project IDs
+        java.util.Set<Long> outcomeProjectIds = new java.util.HashSet<>();
+        for (List<RoutingOutcomeEntity> ocs : outcomesByLedger.values()) {
+            for (RoutingOutcomeEntity o : ocs) {
+                if (o.projectId != null) outcomeProjectIds.add(o.projectId);
+            }
+        }
+        Map<Long, String> projectNames = new HashMap<>();
+        if (!outcomeProjectIds.isEmpty()) {
+            List<ProjectEntity> projects = ProjectEntity
+                    .find("id IN ?1", new java.util.ArrayList<>(outcomeProjectIds)).list();
+            for (ProjectEntity p : projects) {
+                projectNames.put(p.id, p.name);
+            }
+        }
+
+        // Load task statuses for outcome task IDs
+        java.util.Set<Long> outcomeTaskIds = new java.util.HashSet<>();
+        for (List<RoutingOutcomeEntity> ocs : outcomesByLedger.values()) {
+            for (RoutingOutcomeEntity o : ocs) {
+                if (o.taskId != null) outcomeTaskIds.add(o.taskId);
+            }
+        }
+        Map<Long, String> taskStatuses = new HashMap<>();
+        if (!outcomeTaskIds.isEmpty()) {
+            List<TaskEntity> tasks = TaskEntity
+                    .find("id IN ?1", new java.util.ArrayList<>(outcomeTaskIds)).list();
+            for (TaskEntity t : tasks) {
+                taskStatuses.put(t.id, t.status);
             }
         }
 
@@ -194,67 +207,22 @@ public class StreamEventsResourceImpl implements StreamResource {
                 }
             }
 
-            // Add outcomes for completed entries
-            if ("completed".equals(e.status)) {
-                List<EventProcessingOutcome> outcomes = new java.util.ArrayList<>();
-
-                // Manager decisions from activity log
-                for (ActivityLogEntity activity : relatedActivities) {
-                    EventProcessingOutcome outcome = new EventProcessingOutcome();
-                    outcome.setType(activity.entryType);
-                    outcome.setSummary(activity.summary);
-                    if (activity.projectId != null) {
-                        outcome.setProjectId(activity.projectId);
-                        ProjectEntity proj = projectsByRef.get(activity.projectId);
-                        if (proj != null) outcome.setProjectName(proj.name);
-                    }
-                    if (activity.taskId != null) {
-                        outcome.setTaskId(activity.taskId);
-                        // Find task status and trace ID
-                        for (List<TaskEntity> tasks : tasksByProject.values()) {
-                            for (TaskEntity t : tasks) {
-                                if (t.id.equals(activity.taskId)) {
-                                    outcome.setTaskStatus(t.status);
-                                    if (t.traceId != null) {
-                                        outcome.setTraceId(t.traceId);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    outcomes.add(outcome);
-                }
-
-                // If no activity log entries found but projects exist, add project/task info
-                if (outcomes.isEmpty() && !projectsByRef.isEmpty()) {
-                    for (ProjectEntity proj : projectsByRef.values()) {
-                        EventProcessingOutcome projOutcome = new EventProcessingOutcome();
-                        projOutcome.setType("project-created");
-                        projOutcome.setSummary("Project: " + proj.name);
-                        projOutcome.setProjectId(proj.id);
-                        projOutcome.setProjectName(proj.name);
-                        outcomes.add(projOutcome);
-
-                        List<TaskEntity> tasks = tasksByProject.getOrDefault(proj.id, List.of());
-                        for (TaskEntity t : tasks) {
-                            EventProcessingOutcome taskOutcome = new EventProcessingOutcome();
-                            taskOutcome.setType("task-created");
-                            taskOutcome.setSummary("Task: " + t.actionType);
-                            taskOutcome.setProjectId(proj.id);
-                            taskOutcome.setProjectName(proj.name);
-                            taskOutcome.setTaskId(t.id);
-                            taskOutcome.setTaskStatus(t.status);
-                            if (t.traceId != null) {
-                                taskOutcome.setTraceId(t.traceId);
-                            }
-                            outcomes.add(taskOutcome);
-                        }
-                    }
-                }
-
-                if (!outcomes.isEmpty()) {
-                    entry.setOutcomes(outcomes);
-                }
+            // Add outcomes from routing_outcome table
+            List<RoutingOutcomeEntity> entryOutcomes = outcomesByLedger
+                    .getOrDefault(e.id, List.of());
+            List<EventProcessingOutcome> outcomes = entryOutcomes.stream().map(o -> {
+                EventProcessingOutcome outcome = new EventProcessingOutcome();
+                outcome.setType(o.routingType);
+                outcome.setSummary(o.summary);
+                outcome.setProjectId(o.projectId);
+                if (o.projectId != null) outcome.setProjectName(projectNames.get(o.projectId));
+                outcome.setTaskId(o.taskId);
+                if (o.taskId != null) outcome.setTaskStatus(taskStatuses.get(o.taskId));
+                outcome.setTraceId(o.traceId);
+                return outcome;
+            }).toList();
+            if (!outcomes.isEmpty()) {
+                entry.setOutcomes(outcomes);
             }
 
             return entry;

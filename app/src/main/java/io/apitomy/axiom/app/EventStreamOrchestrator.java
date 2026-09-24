@@ -7,6 +7,7 @@ import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
@@ -179,7 +180,7 @@ public class EventStreamOrchestrator {
 
             // Execute routing rules
             try {
-                routeEvent(event, sub, eventMap);
+                routeEvent(event, sub, eventMap, ledgerId);
                 completeLedgerEntry(ledgerId);
             } catch (Exception e) {
                 failLedgerEntry(ledgerId, e.getMessage());
@@ -222,7 +223,7 @@ public class EventStreamOrchestrator {
             try {
                 JsonNode payloadNode = objectMapper.readTree(event.payload);
                 Map<String, Object> eventMap = buildEventMap(event, payloadNode);
-                routeEvent(event, sub, eventMap);
+                routeEvent(event, sub, eventMap, entry.id);
                 completeLedgerEntry(entry.id);
                 LOG.infof("Retry succeeded for event %s / subscription %d", event.id, sub.id);
             } catch (Exception e) {
@@ -283,7 +284,7 @@ public class EventStreamOrchestrator {
     // ── Routing ─────────────────────────────────────────────────
 
     private void routeEvent(StreamEventEntity event, SubscriptionWithFilters sub,
-                             Map<String, Object> eventMap) {
+                             Map<String, Object> eventMap, Long ledgerId) {
         if (sub.routing == null || sub.routing.isEmpty()) {
             LOG.debugf("Event %s matched subscription '%s' but no routing rules configured",
                     event.id, sub.name);
@@ -291,18 +292,44 @@ public class EventStreamOrchestrator {
         }
 
         for (RoutingRule rule : sub.routing) {
-            switch (rule.type()) {
-                case RoutingRule.TYPE_MANAGER -> routeToManager(event);
-                case RoutingRule.TYPE_WORKFLOW_DISPATCH -> routeToWorkflowDispatch(event, eventMap);
-                case RoutingRule.TYPE_CREATE_WORKFLOW -> routeToCreateWorkflow(event, rule);
-                case RoutingRule.TYPE_INVOKE_ACTION -> routeToInvokeAction(event, rule);
-                default -> LOG.warnf("Unknown routing type '%s' in subscription %d",
-                        rule.type(), sub.id);
+            try {
+                RoutingOutcomeEntity outcome = switch (rule.type()) {
+                    case RoutingRule.TYPE_MANAGER -> routeToManager(event);
+                    case RoutingRule.TYPE_WORKFLOW_DISPATCH -> routeToWorkflowDispatch(event, eventMap);
+                    case RoutingRule.TYPE_CREATE_WORKFLOW -> routeToCreateWorkflow(event, rule);
+                    case RoutingRule.TYPE_INVOKE_ACTION -> routeToInvokeAction(event, rule);
+                    default -> {
+                        LOG.warnf("Unknown routing type '%s' in subscription %d",
+                                rule.type(), sub.id);
+                        yield null;
+                    }
+                };
+                if (outcome != null) {
+                    outcome.ledgerId = ledgerId;
+                    outcome.routingType = rule.type();
+                    outcome.createdOn = Instant.now();
+                    QuarkusTransaction.requiringNew().run(() -> outcome.persist());
+                }
+            } catch (Exception e) {
+                // Record failed outcome
+                QuarkusTransaction.requiringNew().run(() -> {
+                    RoutingOutcomeEntity failedOutcome = new RoutingOutcomeEntity();
+                    failedOutcome.ledgerId = ledgerId;
+                    failedOutcome.routingType = rule.type();
+                    failedOutcome.status = "failed";
+                    failedOutcome.errorMessage = e.getMessage() != null
+                            ? e.getMessage().substring(0, Math.min(e.getMessage().length(), 2000))
+                            : "Unknown error";
+                    failedOutcome.createdOn = Instant.now();
+                    failedOutcome.persist();
+                });
+                // Still throw to mark the ledger entry as failed
+                throw e;
             }
         }
     }
 
-    private void routeToManager(StreamEventEntity event) {
+    private RoutingOutcomeEntity routeToManager(StreamEventEntity event) {
         // Create a trace for this manager evaluation
         io.apitomy.axiom.core.tracing.TraceContext traceCtx = null;
         try {
@@ -316,23 +343,48 @@ public class EventStreamOrchestrator {
             LOG.warnf(e, "Failed to create trace for manager evaluation of event %s", event.id);
         }
 
+        RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
+        outcome.status = "completed";
+        if (traceCtx != null) {
+            outcome.traceId = traceCtx.traceId();
+        }
+
         List<ManagerDecision> decisions = managerService.evaluateStreamEvent(event);
         if (decisions == null || decisions.isEmpty()) {
             LOG.debugf("Manager returned no decisions for stream event %s", event.id);
+            outcome.summary = "No decisions";
             completeTrace(traceCtx, "completed");
-            return;
+            return outcome;
         }
 
+        // Build summary from decisions and capture first project/task created
+        StringBuilder summaryBuilder = new StringBuilder();
         for (ManagerDecision decision : decisions) {
             try {
-                processManagerDecision(event, decision, traceCtx);
+                ManagerDecisionResult result = processManagerDecision(event, decision, traceCtx);
+                if (summaryBuilder.length() > 0) summaryBuilder.append("; ");
+                summaryBuilder.append(decision.decision());
+                if (decision.actionType() != null) {
+                    summaryBuilder.append("(").append(decision.actionType()).append(")");
+                }
+                // Capture first project/task from decisions
+                if (result != null) {
+                    if (outcome.projectId == null && result.projectId != null) {
+                        outcome.projectId = result.projectId;
+                    }
+                    if (outcome.taskId == null && result.taskId != null) {
+                        outcome.taskId = result.taskId;
+                    }
+                }
             } catch (Exception e) {
                 LOG.warnf(e, "Failed to process Manager decision '%s' for event %s",
                         decision.decision(), event.id);
             }
         }
+        outcome.summary = summaryBuilder.toString();
 
         completeTrace(traceCtx, "completed");
+        return outcome;
     }
 
     private void completeTrace(io.apitomy.axiom.core.tracing.TraceContext traceCtx, String status) {
@@ -344,8 +396,15 @@ public class EventStreamOrchestrator {
         }
     }
 
-    private void processManagerDecision(StreamEventEntity event, ManagerDecision decision,
-                                         io.apitomy.axiom.core.tracing.TraceContext traceCtx) {
+    /**
+     * Result of processing a single manager decision, capturing the IDs of any
+     * project/task created so they can be recorded in the routing outcome.
+     */
+    record ManagerDecisionResult(Long projectId, Long taskId) {}
+
+    private ManagerDecisionResult processManagerDecision(StreamEventEntity event,
+                                                          ManagerDecision decision,
+                                                          io.apitomy.axiom.core.tracing.TraceContext traceCtx) {
         // Check confidence threshold — escalate if below
         if (!managerService.meetsConfidenceThreshold(decision)) {
             LOG.infof("Decision below confidence threshold (%.2f): %s — escalating",
@@ -354,22 +413,32 @@ public class EventStreamOrchestrator {
                 handleEscalation(event, decision,
                     "Low confidence (" + String.format("%.0f%%", decision.confidence() * 100)
                         + "): " + decision.reasoning()));
-            return;
+            return null;
         }
 
-        switch (decision.decision()) {
-            case "create_task", "script_action" -> QuarkusTransaction.requiringNew().run(() ->
+        return switch (decision.decision()) {
+            case "create_task", "script_action" -> QuarkusTransaction.requiringNew().call(() ->
                     handleCreateTask(event, decision, traceCtx));
-            case "ignore" -> QuarkusTransaction.requiringNew().run(() ->
-                    handleIgnore(event, decision));
-            case "escalate" -> QuarkusTransaction.requiringNew().run(() ->
-                    handleEscalation(event, decision, decision.reasoning()));
-            default -> LOG.warnf("Unknown Manager decision type: %s", decision.decision());
-        }
+            case "ignore" -> {
+                QuarkusTransaction.requiringNew().run(() ->
+                        handleIgnore(event, decision));
+                yield null;
+            }
+            case "escalate" -> {
+                QuarkusTransaction.requiringNew().run(() ->
+                        handleEscalation(event, decision, decision.reasoning()));
+                yield null;
+            }
+            default -> {
+                LOG.warnf("Unknown Manager decision type: %s", decision.decision());
+                yield null;
+            }
+        };
     }
 
-    private void handleCreateTask(StreamEventEntity event, ManagerDecision decision,
-                                   io.apitomy.axiom.core.tracing.TraceContext traceCtx) {
+    private ManagerDecisionResult handleCreateTask(StreamEventEntity event,
+                                                     ManagerDecision decision,
+                                                     io.apitomy.axiom.core.tracing.TraceContext traceCtx) {
         ProjectEntity project = findOrCreateProjectForStreamEvent(event);
 
         TaskEntity task = new TaskEntity();
@@ -415,6 +484,8 @@ public class EventStreamOrchestrator {
         if (actionType != null && "script".equals(actionType.executionMode)) {
             scriptExecutionService.executeScript(task, project);
         }
+
+        return new ManagerDecisionResult(project.id, task.id);
     }
 
     private void handleIgnore(StreamEventEntity event, ManagerDecision decision) {
@@ -442,11 +513,17 @@ public class EventStreamOrchestrator {
         sseEvents.fire(SseEvent.notification("Manager escalation: " + reason, "warning"));
     }
 
-    private void routeToWorkflowDispatch(StreamEventEntity event, Map<String, Object> eventMap) {
+    private RoutingOutcomeEntity routeToWorkflowDispatch(StreamEventEntity event,
+                                                          Map<String, Object> eventMap) {
         workflowEventDispatcher.dispatchStreamEvent(event.type, eventMap);
+
+        RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
+        outcome.status = "completed";
+        outcome.summary = "Dispatched to workflow receive-event nodes";
+        return outcome;
     }
 
-    private void routeToCreateWorkflow(StreamEventEntity event, RoutingRule rule) {
+    private RoutingOutcomeEntity routeToCreateWorkflow(StreamEventEntity event, RoutingRule rule) {
         if (rule.workflowDefinitionId() == null) {
             throw new IllegalStateException(
                     "create-workflow routing rule missing workflowDefinitionId");
@@ -458,9 +535,15 @@ public class EventStreamOrchestrator {
                 rule.workflowDefinitionId(), event.id, projectId);
 
         sseEvents.fire(SseEvent.projectUpdated(projectId));
+
+        RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
+        outcome.status = "completed";
+        outcome.summary = "Created workflow from definition " + rule.workflowDefinitionId();
+        outcome.projectId = projectId;
+        return outcome;
     }
 
-    private void routeToInvokeAction(StreamEventEntity event, RoutingRule rule) {
+    private RoutingOutcomeEntity routeToInvokeAction(StreamEventEntity event, RoutingRule rule) {
         if (rule.actionTypeId() == null) {
             throw new IllegalStateException(
                     "invoke-action routing rule missing actionTypeId");
@@ -528,6 +611,16 @@ public class EventStreamOrchestrator {
         completeTrace(traceCtx, "completed");
         sseEvents.fire(SseEvent.taskUpdated(projectId, taskId, "Pending"));
         sseEvents.fire(SseEvent.projectUpdated(projectId));
+
+        RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
+        outcome.status = "completed";
+        outcome.summary = "Invoked action: " + actionType.name;
+        outcome.projectId = projectId;
+        outcome.taskId = taskId;
+        if (traceCtx != null) {
+            outcome.traceId = traceCtx.traceId();
+        }
+        return outcome;
     }
 
     /**

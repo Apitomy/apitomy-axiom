@@ -38,3 +38,21 @@ CREATE SEQUENCE IF NOT EXISTS event_processing_ledger_SEQ START WITH 1 INCREMENT
 CREATE INDEX idx_epl_status ON event_processing_ledger(status);
 CREATE INDEX idx_epl_subscription ON event_processing_ledger(subscription_id);
 CREATE INDEX idx_epl_event ON event_processing_ledger(event_id);
+
+-- Routing outcome: records what each routing rule produced for a ledger entry.
+CREATE TABLE routing_outcome (
+    id BIGINT PRIMARY KEY,
+    ledger_id BIGINT NOT NULL REFERENCES event_processing_ledger(id) ON DELETE CASCADE,
+    routing_type VARCHAR(32) NOT NULL,
+    status VARCHAR(16) NOT NULL,
+    summary TEXT,
+    project_id BIGINT,
+    task_id BIGINT,
+    trace_id UUID,
+    error_message TEXT,
+    created_on TIMESTAMP NOT NULL
+);
+
+CREATE SEQUENCE IF NOT EXISTS routing_outcome_SEQ START WITH 1 INCREMENT BY 50;
+
+CREATE INDEX idx_ro_ledger ON routing_outcome(ledger_id);

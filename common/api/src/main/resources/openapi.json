@@ -9879,7 +9879,7 @@
         "properties": {
           "type": {
             "type": "string",
-            "description": "Outcome type: project-created, task-created, manager-decision, event-ignored, manager-escalation"
+            "description": "Routing type that produced this outcome: manager, workflow-dispatch, create-workflow, invoke-action"
           },
           "summary": {
             "type": "string"
