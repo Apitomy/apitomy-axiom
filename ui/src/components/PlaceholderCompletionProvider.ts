@@ -156,6 +156,7 @@ export const SCRIPT_PLACEHOLDERS: PlaceholderItem[] = [
     { name: "projectName", description: "Project name" },
     { name: "managerInput", description: "Instructions from the Manager or event summary" },
     { name: "apiBaseUrl", description: "Base URL of the Axiom API (e.g. 'http://localhost:8080/api/v1')" },
+    { name: "workDir", description: "Absolute path to the project workspace directory" },
 ];
 
 /**
