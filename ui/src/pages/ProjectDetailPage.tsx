@@ -393,7 +393,7 @@ export function ProjectDetailPage() {
                     <Tab eventKey={4} title={<TabTitleText>Metrics</TabTitleText>} />
                     <Tab eventKey={5} title={<TabTitleText>Workflow{project?.hasWorkflowInstance ? " ●" : ""}</TabTitleText>} />
                 </Tabs>
-                <div className="project-detail__tab-content">
+                <div className={`project-detail__tab-content${activeTab === 5 ? " project-detail__tab-content--fill" : ""}`}>
                     {activeTab === 0 && (
                         <div style={{
                             padding: "0 14px",

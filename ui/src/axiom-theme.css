@@ -180,6 +180,12 @@
     padding-top: 16px;
 }
 
+.project-detail__tab-content--fill {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
 /* Body edit controls: pinned to the top-right, overlaying the scrolling
    body so they stay in view without taking up any vertical flow. */
 .project-detail__body-actions {
