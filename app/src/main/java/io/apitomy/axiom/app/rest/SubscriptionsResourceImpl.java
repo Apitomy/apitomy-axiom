@@ -138,12 +138,18 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
         int pageSize = data.getLimit() != null ? data.getLimit() : 20;
         String filterExpression = data.getFilterExpression();
 
-        // Query total count
-        long totalCount = StreamEventEntity.count();
+        // Build query with optional processEventsFrom filter
+        String hql = "1=1";
+        Map<String, Object> params = new HashMap<>();
+        if (data.getProcessEventsFrom() != null) {
+            hql += " and timestamp >= :fromTs";
+            params.put("fromTs", data.getProcessEventsFrom().toInstant());
+        }
 
-        // Fetch paginated events ordered by timestamp DESC (newest first)
+        long totalCount = StreamEventEntity.count(hql, params);
+
         List<StreamEventEntity> entities = StreamEventEntity.<StreamEventEntity>find(
-                        "1=1", Sort.descending("timestamp"))
+                        hql, Sort.descending("timestamp"), params)
                 .page(Page.of(pageNum - 1, pageSize))
                 .list();
 
@@ -170,8 +176,7 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
         // For efficiency, if we're on the only page, use the local count.
         // Otherwise, iterate through all events to count matches.
         if (totalCount > pageSize) {
-            // Count total matched across all events
-            totalMatched = countTotalMatched(filterExpression);
+            totalMatched = countTotalMatched(filterExpression, hql, params);
         }
 
         SubscriptionPreviewResponse response = new SubscriptionPreviewResponse();
@@ -186,9 +191,9 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
     /**
      * Counts the total number of events matching the filter expression across all events.
      */
-    private long countTotalMatched(String filterExpression) {
+    private long countTotalMatched(String filterExpression, String hql, Map<String, Object> params) {
         if (filterExpression == null || filterExpression.isBlank()) {
-            return StreamEventEntity.count();
+            return StreamEventEntity.count(hql, params);
         }
 
         long matched = 0;
@@ -197,7 +202,7 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
         List<StreamEventEntity> batch;
 
         do {
-            batch = StreamEventEntity.<StreamEventEntity>find("1=1", Sort.descending("timestamp"))
+            batch = StreamEventEntity.<StreamEventEntity>find(hql, Sort.descending("timestamp"), params)
                     .page(Page.of(batchIndex, batchSize))
                     .list();
             for (StreamEventEntity entity : batch) {

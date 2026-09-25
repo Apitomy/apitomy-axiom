@@ -2481,6 +2481,7 @@ export interface SubscriptionPreviewRequest {
     filterExpression: string;
     page?: number;
     limit?: number;
+    processEventsFrom?: string;
 }
 
 export interface SubscriptionPreviewResult {

@@ -193,6 +193,7 @@ export function SubscriptionDetailPage() {
                         <FilterTab
                             filterExpression={filterExpression}
                             setFilterExpression={(v) => { setFilterExpression(v); setDirty(true); }}
+                            processEventsFrom={processEventsFrom}
                             effectiveTheme={effectiveTheme}
                         />
                     </TabContent>
@@ -509,9 +510,10 @@ function registerElLanguage(monaco: typeof Monaco) {
     });
 }
 
-function FilterTab({ filterExpression, setFilterExpression, effectiveTheme }: {
+function FilterTab({ filterExpression, setFilterExpression, processEventsFrom, effectiveTheme }: {
     filterExpression: string;
     setFilterExpression: (v: string) => void;
+    processEventsFrom: string;
     effectiveTheme: "light" | "dark";
 }) {
     const matchBg = effectiveTheme === "dark" ? MATCH_BG_DARK : MATCH_BG_LIGHT;
@@ -529,11 +531,15 @@ function FilterTab({ filterExpression, setFilterExpression, effectiveTheme }: {
 
     const loadPreview = useCallback(() => {
         setPreviewLoading(true);
-        previewSubscriptionFilter({
+        const req: Parameters<typeof previewSubscriptionFilter>[0] = {
             filterExpression: filterExpression || "",
             page,
             limit: perPage,
-        })
+        };
+        if (processEventsFrom) {
+            req.processEventsFrom = new Date(processEventsFrom).toISOString().replace(/\.\d{3}Z$/, "Z");
+        }
+        previewSubscriptionFilter(req)
             .then((resp) => {
                 setResults(resp.results);
                 setTotalCount(resp.totalCount);
@@ -541,7 +547,7 @@ function FilterTab({ filterExpression, setFilterExpression, effectiveTheme }: {
             })
             .catch(console.error)
             .finally(() => setPreviewLoading(false));
-    }, [filterExpression, page, perPage]);
+    }, [filterExpression, processEventsFrom, page, perPage]);
 
     // Auto-refresh preview when expression changes (debounced)
     useEffect(() => {
@@ -552,7 +558,7 @@ function FilterTab({ filterExpression, setFilterExpression, effectiveTheme }: {
         return () => {
             if (debounceRef.current) clearTimeout(debounceRef.current);
         };
-    }, [filterExpression, page, perPage]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [filterExpression, processEventsFrom, page, perPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
     return (
         <div>

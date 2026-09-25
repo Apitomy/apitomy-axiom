@@ -10070,6 +10070,11 @@
           "limit": {
             "format": "int32",
             "type": "integer"
+          },
+          "processEventsFrom": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Only include events at or after this timestamp"
           }
         }
       },
