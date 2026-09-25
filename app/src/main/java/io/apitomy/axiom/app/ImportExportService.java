@@ -1124,10 +1124,13 @@ public class ImportExportService {
 
             JsonNode content = item.path("content");
             if (!content.isMissingNode() && !content.isNull()) {
+                String contentStr = content.isObject() ? content.toString() : content.asText();
+                entity.content = contentStr;
+
                 WorkflowDefinitionVersionEntity version = new WorkflowDefinitionVersionEntity();
                 version.definitionId = entity.id;
                 version.version = 1;
-                version.content = content.isObject() ? content.toString() : content.asText();
+                version.content = contentStr;
                 version.createdOn = Instant.now();
                 version.persist();
                 entity.currentVersion = 1;
@@ -1154,13 +1157,15 @@ public class ImportExportService {
 
             JsonNode content = item.path("content");
             if (!content.isMissingNode() && !content.isNull()) {
+                String contentStr = content.isObject() ? content.toString() : content.asText();
+                entity.content = contentStr;
                 int nextVersion = (entity.currentVersion != null ? entity.currentVersion : 0) + 1;
-                entity.persist(); // Ensure entity has ID before creating version
+                entity.persist();
 
                 WorkflowDefinitionVersionEntity version = new WorkflowDefinitionVersionEntity();
                 version.definitionId = entity.id;
                 version.version = nextVersion;
-                version.content = content.isObject() ? content.toString() : content.asText();
+                version.content = contentStr;
                 version.createdOn = Instant.now();
                 version.persist();
                 entity.currentVersion = nextVersion;
