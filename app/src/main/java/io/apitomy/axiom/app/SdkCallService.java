@@ -2,6 +2,7 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
 import io.apitomy.axiom.core.lifecycle.ProjectStatus;
@@ -58,6 +59,10 @@ public class SdkCallService {
             case "axiom_add_thread_entry" -> addThreadEntry(params);
             case "axiom_get_project" -> getProject(params);
             case "axiom_create_task" -> createTask(params);
+            case "axiom_fire_event" -> fireEvent(params);
+            case "axiom_list_projects" -> listProjects(params);
+            case "axiom_create_project" -> createProject(params);
+            case "axiom_update_project_body" -> updateProjectBody(params);
             default -> SdkCallResult.error("Unknown SDK function: " + functionName);
         };
     }
@@ -70,7 +75,9 @@ public class SdkCallService {
             case "axiom_close_project", "axiom_reopen_project",
                  "axiom_add_project_label", "axiom_remove_project_label",
                  "axiom_update_project", "axiom_add_thread_entry",
-                 "axiom_get_project", "axiom_create_task" -> true;
+                 "axiom_get_project", "axiom_create_task",
+                 "axiom_fire_event", "axiom_list_projects",
+                 "axiom_create_project", "axiom_update_project_body" -> true;
             default -> false;
         };
     }
@@ -178,6 +185,99 @@ public class SdkCallService {
         task.persist();
         return SdkCallResult.ok("Task " + task.id + " created",
                 Map.of("taskId", task.id));
+    }
+
+    private SdkCallResult fireEvent(Map<String, Object> params) {
+        String source = toString(params.get("source"));
+        String eventType = toString(params.get("eventType"));
+        String payload = toString(params.get("payload"));
+        if (source == null) return SdkCallResult.error("source is required");
+        if (eventType == null) return SdkCallResult.error("eventType is required");
+        if (payload == null) payload = "{}";
+
+        StreamEventEntity event = new StreamEventEntity();
+        event.id = java.util.UUID.randomUUID();
+        event.sourceEventId = "sdk-" + event.id;
+        event.source = source;
+        event.connectionId = "sdk";
+        event.type = eventType;
+        event.ref = toString(params.getOrDefault("ref", ""));
+        event.timestamp = Instant.now();
+        event.actor = "{\"login\":\"workflow\"}";
+        event.payload = payload;
+        event.createdOn = Instant.now();
+        event.persist();
+
+        return SdkCallResult.ok("Event fired: " + eventType,
+                Map.of("eventId", event.id.toString()));
+    }
+
+    private SdkCallResult listProjects(Map<String, Object> params) {
+        String filterName = toString(params.get("filterName"));
+        String filterRef = toString(params.get("filterRef"));
+
+        StringBuilder hql = new StringBuilder("1=1");
+        java.util.Map<String, Object> queryParams = new java.util.HashMap<>();
+
+        if (filterName != null) {
+            hql.append(" and (lower(name) like :name or lower(ref) like :name)");
+            queryParams.put("name", "%" + filterName.toLowerCase() + "%");
+        }
+        if (filterRef != null) {
+            hql.append(" and ref = :ref");
+            queryParams.put("ref", filterRef);
+        }
+
+        var projects = ProjectEntity.<ProjectEntity>find(hql.toString(),
+                io.quarkus.panache.common.Sort.descending("createdOn"), queryParams)
+                .page(0, 50).list();
+
+        var items = projects.stream().map(p -> Map.<String, Object>of(
+                "id", p.id,
+                "name", p.name != null ? p.name : "",
+                "status", p.status != null ? p.status : "",
+                "ref", p.ref != null ? p.ref : "",
+                "type", p.type != null ? p.type : ""
+        )).toList();
+
+        return SdkCallResult.ok("Found " + items.size() + " projects",
+                Map.of("projects", items, "count", items.size()));
+    }
+
+    private SdkCallResult createProject(Map<String, Object> params) {
+        String name = toString(params.get("name"));
+        String type = toString(params.get("type"));
+        String ref = toString(params.get("ref"));
+        if (name == null) return SdkCallResult.error("name is required");
+        if (type == null) return SdkCallResult.error("type is required");
+        if (ref == null) return SdkCallResult.error("ref is required");
+
+        ProjectEntity project = new ProjectEntity();
+        project.name = name;
+        project.type = type;
+        project.ref = ref;
+        project.refSource = toString(params.get("refSource"));
+        project.repository = toString(params.get("repository"));
+        project.body = toString(params.get("body"));
+        project.status = ProjectStatus.Created.name();
+        project.createdOn = Instant.now();
+        project.updatedOn = Instant.now();
+        project.persist();
+
+        return SdkCallResult.ok("Project " + project.id + " created",
+                Map.of("projectId", project.id));
+    }
+
+    private SdkCallResult updateProjectBody(Map<String, Object> params) {
+        Long projectId = toLong(params.get("projectId"));
+        String body = toString(params.get("body"));
+        if (projectId == null) return SdkCallResult.error("projectId is required");
+        if (body == null) return SdkCallResult.error("body is required");
+        ProjectEntity project = ProjectEntity.findById(projectId);
+        if (project == null) return SdkCallResult.error("Project not found: " + projectId);
+        project.body = body;
+        project.updatedOn = Instant.now();
+        return SdkCallResult.ok("Project " + projectId + " body updated");
     }
 
     private Long toLong(Object value) {
