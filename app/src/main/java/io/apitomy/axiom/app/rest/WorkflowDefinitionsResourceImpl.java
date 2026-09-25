@@ -388,16 +388,13 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
         List<Map<String, Object>> startInputs = List.of(
                 Map.of("name", "projectId", "type", "number",
                         "required", true,
-                        "description", "The Axiom project id"),
-                Map.of("name", "projectName", "type", "string",
-                        "required", true,
-                        "description", "The Axiom project name"),
-                Map.of("name", "repository", "type", "string",
-                        "required", false,
-                        "description", "The project git repository, if any"),
+                        "description", "The Axiom project ID"),
                 Map.of("name", "ref", "type", "string",
+                        "required", true,
+                        "description", "Full URL identifying the project subject"),
+                Map.of("name", "event", "type", "object",
                         "required", false,
-                        "description", "The project git ref, if any"));
+                        "description", "The triggering event (present when created by subscription routing)"));
         Map<String, Object> startNode = Map.of(
                 "id", "start-1",
                 "type", "start",
