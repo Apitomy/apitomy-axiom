@@ -22,11 +22,16 @@ import {
     Toolbar,
     ToolbarContent,
     ToolbarItem,
+    Tooltip,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
+import UserIcon from "@patternfly/react-icons/dist/esm/icons/user-icon";
+import CogIcon from "@patternfly/react-icons/dist/esm/icons/cog-icon";
+import BoltIcon from "@patternfly/react-icons/dist/esm/icons/bolt-icon";
+import ShareSquareIcon from "@patternfly/react-icons/dist/esm/icons/share-square-icon";
 import {
     type ChipFilterCriteria,
     type ChipFilterType,
@@ -40,7 +45,6 @@ import {
     createActionType,
     deleteActionType,
 } from "../config/api";
-import { BooleanStatusIcon } from "../components/BooleanStatusIcon";
 import { ColoredLabel } from "../components/ColoredLabel";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
@@ -234,9 +238,7 @@ export function ActionTypesPage() {
                                 <Th>Name</Th>
                                 <Th>Mode</Th>
                                 <Th>Labels</Th>
-                                <Th>User Triggerable</Th>
-                                <Th>Manager Triggerable</Th>
-                                <Th>Emits Event</Th>
+                                <Th>Flags</Th>
                                 <Th>Tools</Th>
                                 <Th />
                             </Tr>
@@ -272,9 +274,30 @@ export function ActionTypesPage() {
                                             </ColoredLabel>
                                         ))}
                                     </Td>
-                                    <Td><BooleanStatusIcon value={at.userTriggerable} /></Td>
-                                    <Td><BooleanStatusIcon value={at.managerTriggerable} /></Td>
-                                    <Td><BooleanStatusIcon value={at.emitsEvent} /></Td>
+                                    <Td>
+                                        <div style={{ display: "flex", gap: 6 }}>
+                                            {at.userTriggerable && (
+                                                <Tooltip content="User Triggerable">
+                                                    <UserIcon color="var(--pf-t--global--color--status--success--default)" />
+                                                </Tooltip>
+                                            )}
+                                            {at.managerTriggerable && (
+                                                <Tooltip content="Manager Triggerable">
+                                                    <CogIcon color="var(--pf-t--global--color--status--info--default)" />
+                                                </Tooltip>
+                                            )}
+                                            {at.emitsEvent && (
+                                                <Tooltip content="Emits Event">
+                                                    <BoltIcon color="var(--pf-t--global--color--status--warning--default)" />
+                                                </Tooltip>
+                                            )}
+                                            {at.workflowEnabled && (
+                                                <Tooltip content="Workflow Enabled">
+                                                    <ShareSquareIcon color="var(--pf-t--global--color--status--custom--default)" />
+                                                </Tooltip>
+                                            )}
+                                        </div>
+                                    </Td>
                                     <Td>{at.executionMode === "agent" ? `${at.allowedTools?.length || 0} tools` : "—"}</Td>
                                     <Td>
                                         <Button variant="plain" size="sm" style={{ padding: 0 }}
