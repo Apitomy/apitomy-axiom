@@ -57,7 +57,7 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
 
     /** All inputs Axiom may inject (always-present plus conditionally-present). */
     private static final List<String> CANONICAL_INPUT_NAMES =
-            List.of("projectId", "projectName", "repository", "ref");
+            List.of("projectId", "projectName", "repository", "ref", "event");
 
     private static final Set<String> CANONICAL_INPUTS = Set.copyOf(CANONICAL_INPUT_NAMES);
 

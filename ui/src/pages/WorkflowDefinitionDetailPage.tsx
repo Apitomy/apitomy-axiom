@@ -93,6 +93,7 @@ export function WorkflowDefinitionDetailPage() {
     const savedContentRef = useRef<string>("");
     const [saving, setSaving] = useState(false);
     const [publishing, setPublishing] = useState(false);
+    const [publishError, setPublishError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [validationErrors, setValidationErrors] = useState<ValidationProblem[]>([]);
     const [versions, setVersions] = useState<WorkflowDefinitionVersion[]>([]);
@@ -231,12 +232,14 @@ export function WorkflowDefinitionDetailPage() {
 
     const handlePublish = () => {
         setPublishing(true);
+        setPublishError(null);
         publishWorkflowDefinition(id)
             .then(() => {
                 loadDefinition();
             })
             .catch((err) => {
                 console.error("Failed to publish workflow definition:", err);
+                setPublishError(err.message || "Failed to publish workflow definition");
             })
             .finally(() => setPublishing(false));
     };
@@ -439,6 +442,13 @@ export function WorkflowDefinitionDetailPage() {
                     <p className="axiom-text-subtle" style={{ marginTop: "8px" }}>
                         {definition.description}
                     </p>
+                )}
+                {publishError && (
+                    <Alert variant="danger" title="Publish failed" isInline
+                        actionClose={<AlertActionCloseButton onClose={() => setPublishError(null)} />}
+                        style={{ marginTop: 12 }}>
+                        {publishError}
+                    </Alert>
                 )}
             </div>
 
