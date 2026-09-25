@@ -457,10 +457,9 @@ class WorkflowDefinitionsResourceTest {
                 .then()
                     .statusCode(200)
                     .body("content.nodes[0].type", equalTo("start"))
-                    .body("content.nodes[0].config.inputs.size()", equalTo(4))
+                    .body("content.nodes[0].config.inputs.size()", equalTo(3))
                     .body("content.nodes[0].config.inputs.name",
-                            hasItems("projectId", "projectName",
-                                     "repository", "ref"));
+                            hasItems("projectId", "ref", "event"));
     }
 
     // -- Helpers --

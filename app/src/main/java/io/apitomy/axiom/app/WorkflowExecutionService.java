@@ -68,6 +68,9 @@ public class WorkflowExecutionService {
     @Inject
     TaskExecutionService taskExecutionService;
 
+    @Inject
+    SdkCallService sdkCallService;
+
     private WorkflowEngine workflowEngine;
 
     @PostConstruct
@@ -489,9 +492,21 @@ public class WorkflowExecutionService {
             return;
         }
 
+        // Check for SDK call prefix — execute synchronously, no task created
+        String actionTypeStr = actionInfo.actionType();
+        if (actionTypeStr != null && actionTypeStr.startsWith("sdk:")) {
+            executeSdkCallForNode(entity, workflow, instance, nodeId, actionInfo);
+            return;
+        }
+
+        // Strip "action:" prefix if present (backward-compatible)
+        if (actionTypeStr != null && actionTypeStr.startsWith("action:")) {
+            actionTypeStr = actionTypeStr.substring("action:".length());
+        }
+
         TaskEntity task = new TaskEntity();
         task.projectId = entity.projectId;
-        task.actionType = actionInfo.actionType();
+        task.actionType = actionTypeStr;
         task.createdBy = "workflow";
         task.status = "Pending";
         task.input = serializeInputs(actionInfo);
@@ -515,6 +530,43 @@ public class WorkflowExecutionService {
                 task.id, entity.id, actionInfo.actionType());
 
         sseEvents.fire(SseEvent.taskUpdated(entity.projectId, task.id, task.status));
+    }
+
+    /**
+     * Executes an SDK function call directly for a workflow action node,
+     * then advances the workflow with the result. No task entity is created.
+     */
+    private void executeSdkCallForNode(WorkflowRunEntity entity,
+            Workflow workflow, WorkflowInstance instance, String nodeId,
+            ActionInfo actionInfo) {
+        String functionName = actionInfo.actionType().substring("sdk:".length());
+
+        // Build parameters from the action info's resolved inputs
+        Map<String, Object> params = new HashMap<>();
+        if (actionInfo.resolvedInputs() != null) {
+            params.putAll(actionInfo.resolvedInputs());
+        }
+        // Always inject projectId from the workflow run
+        params.putIfAbsent("projectId", entity.projectId);
+
+        LOG.infof("Executing SDK call %s for workflow %d node %s", functionName, entity.id, nodeId);
+
+        SdkCallService.SdkCallResult result = sdkCallService.execute(functionName, params);
+
+        // Build node result and advance the workflow
+        Map<String, Object> output = new HashMap<>(result.outputMap());
+        output.put("success", result.success());
+        output.put("output", result.output());
+
+        NodeResult nodeResult = new NodeResult(
+                result.success() ? NodeResultStatus.COMPLETED : NodeResultStatus.FAILED,
+                output);
+
+        advanceWorkflow(entity, workflow, instance, nodeId, nodeResult);
+
+        LOG.infof("SDK call %s %s for workflow %d node %s: %s",
+                functionName, result.success() ? "completed" : "failed",
+                entity.id, nodeId, result.output());
     }
 
     /**
