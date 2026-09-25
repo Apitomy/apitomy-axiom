@@ -156,15 +156,9 @@ public class WorkflowExecutionService {
 
         Map<String, Object> context = new HashMap<>();
         context.put("projectId", project.id);
-        context.put("projectName", project.name);
-        if (project.repository != null) {
-            context.put("repository", project.repository);
-        }
-        if (project.ref != null) {
-            context.put("ref", project.ref);
-        }
+        context.put("ref", project.ref != null ? project.ref : "");
 
-        // Merge extra context (e.g., event data) if provided
+        // Merge extra context (e.g., event data from create-workflow routing)
         if (extraContext != null) {
             context.putAll(extraContext);
         }
