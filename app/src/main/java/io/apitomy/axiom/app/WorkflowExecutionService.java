@@ -89,8 +89,32 @@ public class WorkflowExecutionService {
     /**
      * Triggers a workflow on a project.
      */
+    /**
+     * Triggers a workflow on a project with additional context variables
+     * merged into the initial workflow context.
+     *
+     * @param projectId    the project to run the workflow on
+     * @param definitionId the workflow definition to instantiate
+     * @param extraContext additional key-value pairs merged into the workflow
+     *                     context (e.g., event data as a JsonNode)
+     * @return the created workflow run entity
+     */
+    @Transactional
+    public WorkflowRunEntity triggerWorkflow(long projectId, long definitionId,
+                                              Map<String, Object> extraContext) {
+        return doTriggerWorkflow(projectId, definitionId, extraContext);
+    }
+
+    /**
+     * Triggers a workflow on a project.
+     */
     @Transactional
     public WorkflowRunEntity triggerWorkflow(long projectId, long definitionId) {
+        return doTriggerWorkflow(projectId, definitionId, null);
+    }
+
+    private WorkflowRunEntity doTriggerWorkflow(long projectId, long definitionId,
+                                                  Map<String, Object> extraContext) {
         ProjectEntity project = ProjectEntity.findById(projectId);
         if (project == null) {
             throw new WebApplicationException("Project not found", 404);
@@ -138,6 +162,11 @@ public class WorkflowExecutionService {
         }
         if (project.ref != null) {
             context.put("ref", project.ref);
+        }
+
+        // Merge extra context (e.g., event data) if provided
+        if (extraContext != null) {
+            context.putAll(extraContext);
         }
 
         WorkflowInstance instance;

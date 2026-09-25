@@ -529,8 +529,32 @@ public class EventStreamOrchestrator {
                     "create-workflow routing rule missing workflowDefinitionId");
         }
         Long projectId = findOrCreateProjectForEvent(event);
+
+        // Build the event as a JsonNode so the workflow context can access
+        // event fields via EL expressions (e.g., context.event.type,
+        // context.event.payload.issue.title). The flow engine's
+        // JsonNodeELResolver handles JsonNode navigation in EL.
+        Map<String, Object> extraContext = new HashMap<>();
+        try {
+            com.fasterxml.jackson.databind.node.ObjectNode eventNode = objectMapper.createObjectNode();
+            eventNode.put("type", event.type);
+            eventNode.put("source", event.source);
+            eventNode.put("connectionId", event.connectionId);
+            eventNode.put("ref", event.ref);
+            eventNode.put("timestamp", event.timestamp.toString());
+            if (event.actor != null) {
+                eventNode.set("actor", objectMapper.readTree(event.actor));
+            }
+            if (event.payload != null) {
+                eventNode.set("payload", objectMapper.readTree(event.payload));
+            }
+            extraContext.put("event", eventNode);
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to build event context for workflow creation");
+        }
+
         QuarkusTransaction.requiringNew().run(() ->
-                workflowExecutionService.triggerWorkflow(projectId, rule.workflowDefinitionId()));
+                workflowExecutionService.triggerWorkflow(projectId, rule.workflowDefinitionId(), extraContext));
         LOG.infof("Created workflow (definition %d) for event %s on project %d",
                 rule.workflowDefinitionId(), event.id, projectId);
 
