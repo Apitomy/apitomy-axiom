@@ -30,7 +30,7 @@ import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import UserIcon from "@patternfly/react-icons/dist/esm/icons/user-icon";
 import CogIcon from "@patternfly/react-icons/dist/esm/icons/cog-icon";
-import BoltIcon from "@patternfly/react-icons/dist/esm/icons/bolt-icon";
+import EnvelopeIcon from "@patternfly/react-icons/dist/esm/icons/envelope-icon";
 import ShareSquareIcon from "@patternfly/react-icons/dist/esm/icons/share-square-icon";
 import {
     type ChipFilterCriteria,
@@ -288,7 +288,7 @@ export function ActionTypesPage() {
                                             )}
                                             {at.emitsEvent && (
                                                 <Tooltip content="Emits Event">
-                                                    <BoltIcon color="var(--pf-t--global--color--status--warning--default)" />
+                                                    <EnvelopeIcon color="var(--pf-t--global--color--status--warning--default)" />
                                                 </Tooltip>
                                             )}
                                             {at.workflowEnabled && (
