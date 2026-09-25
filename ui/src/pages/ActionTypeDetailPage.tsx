@@ -389,6 +389,7 @@ export function ActionTypeDetailPage() {
                             <ScriptTab
                                 value={form.scriptTemplate || ""}
                                 onChange={(v) => updateForm({ scriptTemplate: v })}
+                                inputs={form.inputs || []}
                             />
                         </TabContent>
                     </Tab>
@@ -638,9 +639,10 @@ function PromptTemplateTab({ value, onChange, inputs }: {
     );
 }
 
-function ScriptTab({ value, onChange }: {
+function ScriptTab({ value, onChange, inputs }: {
     value: string;
     onChange: (v: string) => void;
+    inputs: ActionTypeField[];
 }) {
     const effectiveTheme = useEffectiveTheme();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -648,6 +650,22 @@ function ScriptTab({ value, onChange }: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const monacoRef = useRef<any>(null);
     const [helpOpen, setHelpOpen] = useState(false);
+
+    const allPlaceholders = useMemo(() => {
+        const inputPlaceholders: PlaceholderItem[] = inputs
+            .filter((i) => i.name)
+            .map((i) => ({
+                name: `inputs.${i.name}`,
+                description: i.description || `Input: ${i.name} (${i.type})`,
+            }));
+        return [...SCRIPT_PLACEHOLDERS, ...inputPlaceholders];
+    }, [inputs]);
+
+    useEffect(() => {
+        if (editorRef.current && monacoRef.current) {
+            registerPlaceholderCompletions(editorRef.current, monacoRef.current, "shell", allPlaceholders);
+        }
+    }, [allPlaceholders]);
 
     const insertPlaceholder = (name: string) => {
         const text = `{{${name}}}`;
@@ -699,7 +717,7 @@ function ScriptTab({ value, onChange }: {
                 onEditorDidMount={(editor, monaco) => {
                     editorRef.current = editor;
                     monacoRef.current = monaco;
-                    registerPlaceholderCompletions(editor, monaco, "shell", SCRIPT_PLACEHOLDERS);
+                    registerPlaceholderCompletions(editor, monaco, "shell", allPlaceholders);
                 }}
             />
 
@@ -719,7 +737,7 @@ function ScriptTab({ value, onChange }: {
                             </Tr>
                         </Thead>
                         <Tbody>
-                            {SCRIPT_PLACEHOLDERS.map((p) => (
+                            {allPlaceholders.map((p) => (
                                 <Tr key={p.name} isClickable
                                     onRowClick={() => insertPlaceholder(p.name)}>
                                     <Td>
