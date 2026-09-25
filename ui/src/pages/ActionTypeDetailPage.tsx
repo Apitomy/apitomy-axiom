@@ -31,7 +31,7 @@ import {
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import HelpIcon from "@patternfly/react-icons/dist/esm/icons/help-icon";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
-import { registerPlaceholderCompletions, ACTION_TYPE_PLACEHOLDERS, type PlaceholderItem } from "../components/PlaceholderCompletionProvider";
+import { registerPlaceholderCompletions, ACTION_TYPE_PLACEHOLDERS, SCRIPT_PLACEHOLDERS, type PlaceholderItem } from "../components/PlaceholderCompletionProvider";
 import { EditLabelsModal } from "../components/EditLabelsModal";
 import { AiConfigTab } from "../components/AiConfigTab";
 import { EnvironmentTab } from "../components/EnvironmentTab";
@@ -643,20 +643,52 @@ function ScriptTab({ value, onChange }: {
     onChange: (v: string) => void;
 }) {
     const effectiveTheme = useEffectiveTheme();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const editorRef = useRef<any>(null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const monacoRef = useRef<any>(null);
+    const [helpOpen, setHelpOpen] = useState(false);
+
+    const insertPlaceholder = (name: string) => {
+        const text = `{{${name}}}`;
+        const editor = editorRef.current;
+        if (editor) {
+            const position = editor.getPosition();
+            if (position) {
+                editor.executeEdits("placeholder-insert", [{
+                    range: {
+                        startLineNumber: position.lineNumber,
+                        startColumn: position.column,
+                        endLineNumber: position.lineNumber,
+                        endColumn: position.column,
+                    },
+                    text,
+                }]);
+                editor.focus();
+            }
+        } else {
+            onChange(value + text);
+        }
+        setHelpOpen(false);
+    };
+
     return (
         <div>
-            <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
-                A bash script that runs when this action type is triggered.
-                Supports placeholders:{" "}
-                <code>{"{{projectId}}"}</code>,{" "}
-                <code>{"{{eventId}}"}</code>,{" "}
-                <code>{"{{taskId}}"}</code>,{" "}
-                <code>{"{{ref}}"}</code>,{" "}
-                <code>{"{{repository}}"}</code>,{" "}
-                <code>{"{{projectName}}"}</code>,{" "}
-                <code>{"{{managerInput}}"}</code>,{" "}
-                <code>{"{{apiBaseUrl}}"}</code>
-            </p>
+            <Flex alignItems={{ default: "alignItemsCenter" }}
+                style={{ marginBottom: "12px", gap: "8px" }}>
+                <FlexItem>
+                    <span className="axiom-text-subtle">
+                        A bash script that runs when this action type is triggered.
+                        Placeholders are substituted at runtime.
+                    </span>
+                </FlexItem>
+                <FlexItem>
+                    <Button variant="plain" aria-label="Placeholder reference"
+                        onClick={() => setHelpOpen(true)}>
+                        <HelpIcon />
+                    </Button>
+                </FlexItem>
+            </Flex>
             <CodeEditor
                 code={value}
                 onCodeChange={(v) => onChange(v)}
@@ -664,7 +696,44 @@ function ScriptTab({ value, onChange }: {
                 height="500px"
                 isDarkTheme={effectiveTheme === "dark"}
                 isLineNumbersVisible
+                onEditorDidMount={(editor, monaco) => {
+                    editorRef.current = editor;
+                    monacoRef.current = monaco;
+                    registerPlaceholderCompletions(editor, monaco, "shell", SCRIPT_PLACEHOLDERS);
+                }}
             />
+
+            <Modal isOpen={helpOpen} onClose={() => setHelpOpen(false)} variant="large"
+                aria-label="Script template placeholder reference">
+                <ModalHeader title="Script Template Placeholders" />
+                <ModalBody>
+                    <p style={{ marginBottom: "16px" }}>
+                        These placeholders are replaced with actual values when the script
+                        is executed. Click a placeholder to insert it into the script template.
+                    </p>
+                    <Table aria-label="Script placeholders" variant="compact">
+                        <Thead>
+                            <Tr>
+                                <Th>Placeholder</Th>
+                                <Th>Description</Th>
+                            </Tr>
+                        </Thead>
+                        <Tbody>
+                            {SCRIPT_PLACEHOLDERS.map((p) => (
+                                <Tr key={p.name} isClickable
+                                    onRowClick={() => insertPlaceholder(p.name)}>
+                                    <Td>
+                                        <code style={{ cursor: "pointer", color: "var(--pf-v6-global--link--Color, #0066cc)" }}>
+                                            {`{{${p.name}}}`}
+                                        </code>
+                                    </Td>
+                                    <Td>{p.description}</Td>
+                                </Tr>
+                            ))}
+                        </Tbody>
+                    </Table>
+                </ModalBody>
+            </Modal>
         </div>
     );
 }
