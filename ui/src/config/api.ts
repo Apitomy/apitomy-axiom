@@ -2037,7 +2037,20 @@ export async function publishWorkflowDefinition(
     const response = await fetch(`${API}/workflow/definitions/${id}/publish`, {
         method: "POST",
     });
-    if (!response.ok) throw new Error(`Failed to publish workflow definition: ${response.status}`);
+    if (!response.ok) {
+        let detail = `${response.status}`;
+        try {
+            const body = await response.json();
+            if (Array.isArray(body)) {
+                detail = body.map((p: { code?: string; message?: string }) => p.message || p.code || JSON.stringify(p)).join("; ");
+            } else if (body.message) {
+                detail = body.message;
+            } else {
+                detail = JSON.stringify(body);
+            }
+        } catch { /* no parseable body */ }
+        throw new Error(detail);
+    }
     return response.json();
 }
 
