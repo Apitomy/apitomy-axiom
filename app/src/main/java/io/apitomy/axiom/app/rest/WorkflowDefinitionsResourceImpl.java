@@ -53,7 +53,7 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
 
     /** Inputs Axiom always injects when starting a workflow (may be marked required). */
     private static final Set<String> ALWAYS_PRESENT_INPUTS =
-            Set.of("projectId", "projectName");
+            Set.of("projectId", "ref");
 
     /** All inputs Axiom may inject (always-present plus conditionally-present). */
     private static final List<String> CANONICAL_INPUT_NAMES =
@@ -335,7 +335,7 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
                         Response.status(400).entity(Map.of("message",
                                 "Start node input '" + name + "' cannot be marked "
                                         + "required because Axiom does not always provide "
-                                        + "it. Only projectId and projectName may be "
+                                        + "it. Only projectId and ref may be "
                                         + "required.")).build());
             }
         }
