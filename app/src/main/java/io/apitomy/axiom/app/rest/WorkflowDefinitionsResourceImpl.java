@@ -399,14 +399,12 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
                 "id", "start-1",
                 "type", "start",
                 "name", "Start",
-                "config", Map.of("inputs", startInputs),
-                "position", Map.of("x", 250, "y", 100));
+                "config", Map.of("inputs", startInputs));
         Map<String, Object> endNode = Map.of(
                 "id", "end-1",
                 "type", "end",
                 "name", "End",
-                "config", Map.of(),
-                "position", Map.of("x", 250, "y", 400));
+                "config", Map.of());
         Map<String, Object> edge = Map.of(
                 "id", "edge-1",
                 "source", "start-1",
