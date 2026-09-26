@@ -1,6 +1,6 @@
 package io.apitomy.axiom.app;
 
-import io.apitomy.axiom.core.SdkToolNames;
+import io.apitomy.axiom.core.SdkFunctionRegistry;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 
 import java.util.List;
@@ -101,7 +101,7 @@ public class SeedDataInitializer {
         }
         seedToolset("Axiom SDK",
                 "Built-in Axiom SDK tools for programmatic interaction with Axiom from AI agents",
-                SdkToolNames.ALL_CSV);
+                SdkFunctionRegistry.allToolNamesCsv());
         LOG.info("Created 'Axiom SDK' toolset");
     }
 

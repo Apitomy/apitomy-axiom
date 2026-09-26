@@ -5697,6 +5697,40 @@
           }
         }
       ]
+    },
+    "/sdk/functions": {
+      "get": {
+        "tags": [
+          "SDK"
+        ],
+        "summary": "List all SDK functions",
+        "operationId": "listSdkFunctions",
+        "parameters": [
+          {
+            "name": "sdkCallOnly",
+            "in": "query",
+            "description": "If true, only return functions that support direct SDK call execution",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of SDK functions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SdkFunctionDescriptor"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -10116,6 +10150,43 @@
             "type": "integer"
           }
         }
+      },
+      "SdkFunctionDescriptor": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "parameters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SdkFunctionParam"
+            }
+          },
+          "sdkCallSupported": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SdkFunctionParam": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        }
       }
     },
     "responses": {
@@ -10281,6 +10352,10 @@
     {
       "name": "Subscriptions",
       "description": "Event subscription management"
+    },
+    {
+      "name": "SDK",
+      "description": "Axiom SDK function registry"
     }
   ]
 }

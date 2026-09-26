@@ -55,6 +55,7 @@ import {
     type WorkflowRunSummary,
 } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
+import { fetchSdkFunctions } from "../config/sdkTools";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
 import RocketIcon from "@patternfly/react-icons/dist/esm/icons/rocket-icon";
@@ -62,56 +63,6 @@ import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import EditIcon from "@patternfly/react-icons/dist/esm/icons/edit-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import CodeBranchIcon from "@patternfly/react-icons/dist/esm/icons/code-branch-icon";
-
-const SDK_ACTION_TYPES: ActionTypeDescriptor[] = [
-    { value: "sdk:axiom_close_project", label: "SDK: Close Project", description: "Close (complete) an Axiom project" },
-    { value: "sdk:axiom_reopen_project", label: "SDK: Reopen Project", description: "Reopen a previously closed project" },
-    { value: "sdk:axiom_add_project_label", label: "SDK: Add Project Label", description: "Add a label to a project",
-        inputs: [{ name: "label", type: "string", required: true, description: "Label to add" }] },
-    { value: "sdk:axiom_remove_project_label", label: "SDK: Remove Project Label", description: "Remove a label from a project",
-        inputs: [{ name: "label", type: "string", required: true, description: "Label to remove" }] },
-    { value: "sdk:axiom_update_project", label: "SDK: Update Project", description: "Update project name or status",
-        inputs: [
-            { name: "name", type: "string", required: false, description: "New project name" },
-            { name: "status", type: "string", required: false, description: "New project status" },
-        ] },
-    { value: "sdk:axiom_update_project_body", label: "SDK: Update Project Body", description: "Update a project's body content",
-        inputs: [{ name: "body", type: "string", required: true, description: "Markdown body content" }] },
-    { value: "sdk:axiom_add_thread_entry", label: "SDK: Add Thread Entry", description: "Post a message to a project's thread",
-        inputs: [{ name: "content", type: "string", required: true, description: "Message content" }] },
-    { value: "sdk:axiom_get_project", label: "SDK: Get Project", description: "Get details of the current project",
-        outputs: [
-            { name: "name", type: "string" },
-            { name: "status", type: "string" },
-            { name: "ref", type: "string" },
-            { name: "type", type: "string" },
-        ] },
-    { value: "sdk:axiom_create_task", label: "SDK: Create Task", description: "Create a new task on the project",
-        inputs: [
-            { name: "actionType", type: "string", required: true, description: "Action type name" },
-            { name: "input", type: "string", required: false, description: "Task input" },
-        ],
-        outputs: [{ name: "taskId", type: "number" }] },
-    { value: "sdk:axiom_fire_event", label: "SDK: Fire Event", description: "Fire a new event into the stream",
-        inputs: [
-            { name: "source", type: "string", required: true, description: "Event source identifier" },
-            { name: "eventType", type: "string", required: true, description: "Event type" },
-            { name: "payload", type: "string", required: false, description: "Event payload JSON" },
-        ],
-        outputs: [{ name: "eventId", type: "string" }] },
-    { value: "sdk:axiom_list_projects", label: "SDK: List Projects", description: "List projects with optional filtering",
-        inputs: [
-            { name: "filterName", type: "string", required: false, description: "Filter by name" },
-            { name: "filterRef", type: "string", required: false, description: "Filter by ref" },
-        ] },
-    { value: "sdk:axiom_create_project", label: "SDK: Create Project", description: "Create a new Axiom project",
-        inputs: [
-            { name: "name", type: "string", required: true, description: "Project name" },
-            { name: "type", type: "string", required: true, description: "Project type" },
-            { name: "ref", type: "string", required: true, description: "Project reference URL" },
-        ],
-        outputs: [{ name: "projectId", type: "number" }] },
-];
 
 const RUN_STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
     running: "blue",
@@ -169,7 +120,10 @@ export function WorkflowDefinitionDetailPage() {
     // EditorSpi for action types — memoized to avoid re-renders
     const spi: EditorSpi = useMemo(() => ({
         actionTypes: async () => {
-            const results = await fetchActionTypes(1, 1000, undefined, undefined, undefined, true);
+            const [results, sdkFunctions] = await Promise.all([
+                fetchActionTypes(1, 1000, undefined, undefined, undefined, true),
+                fetchSdkFunctions(),
+            ]);
             const configured = results.items.map((at): ActionTypeDescriptor => ({
                 value: at.name,
                 label: at.name,
@@ -177,7 +131,20 @@ export function WorkflowDefinitionDetailPage() {
                 inputs: at.inputs,
                 outputs: at.outputs,
             }));
-            return [...configured, ...SDK_ACTION_TYPES];
+            const sdkActions = sdkFunctions
+                .filter(fn => fn.sdkCallSupported)
+                .map((fn): ActionTypeDescriptor => ({
+                    value: `sdk:${fn.name}`,
+                    label: `SDK: ${fn.name.replace(/^axiom_/, "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}`,
+                    description: fn.description,
+                    inputs: fn.parameters?.map(p => ({
+                        name: p.name,
+                        type: (p.type || "string") as "string" | "number" | "boolean" | "object",
+                        required: p.required,
+                        description: p.description,
+                    })),
+                }));
+            return [...configured, ...sdkActions];
         },
     }), []);
 

@@ -8,7 +8,7 @@ import {
 } from "../config/api";
 import { TypeaheadAddInput, type TypeaheadAddSuggestion } from "./TypeaheadAddInput";
 import { BrowseToolsModal } from "./BrowseToolsModal";
-import { SDK_TOOL_VALUES } from "../config/sdkTools";
+import { fetchSdkToolValues } from "../config/sdkTools";
 
 /**
  * Well-known Claude Code built-in tools available for autocomplete.
@@ -80,14 +80,16 @@ export function AddToolInput({
     const [toolsets, setToolsets] = useState<Toolset[]>([]);
     const [customTools, setCustomTools] = useState<ToolDefinition[]>([]);
     const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
+    const [sdkToolValues, setSdkToolValues] = useState<string[]>([]);
     const [isBrowseOpen, setIsBrowseOpen] = useState(false);
 
     useEffect(() => {
-        Promise.all([fetchToolsets(), fetchTools(1, 1000), fetchMcpServers()])
-            .then(([ts, toolsResult, servers]) => {
+        Promise.all([fetchToolsets(), fetchTools(1, 1000), fetchMcpServers(), fetchSdkToolValues()])
+            .then(([ts, toolsResult, servers, sdkValues]) => {
                 setToolsets(ts);
                 setCustomTools(toolsResult.items);
                 setMcpServers(servers);
+                setSdkToolValues(sdkValues);
             })
             .catch(console.error);
     }, []);
@@ -101,7 +103,7 @@ export function AddToolInput({
         customTools.forEach((t) =>
             items.push({ value: `mcp__axiom-tools__${t.name}`, style: MCP_STYLE }));
 
-        SDK_TOOL_VALUES.forEach((t) =>
+        sdkToolValues.forEach((t) =>
             items.push({ value: t, style: MCP_STYLE }));
 
         mcpServers.forEach((s) =>
@@ -111,7 +113,7 @@ export function AddToolInput({
             items.push({ value: t }));
 
         return items;
-    }, [toolsets, customTools, mcpServers])();
+    }, [toolsets, customTools, mcpServers, sdkToolValues])();
 
     return (
         <>

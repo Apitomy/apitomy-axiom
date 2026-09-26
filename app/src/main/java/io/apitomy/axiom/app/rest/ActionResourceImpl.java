@@ -15,7 +15,7 @@ import io.apitomy.axiom.app.ActionTypeAiService;
 import io.apitomy.axiom.app.ScriptAiService;
 import io.apitomy.axiom.api.beans.ToolValidationResult;
 import io.apitomy.axiom.api.beans.ToolValidationMessage;
-import io.apitomy.axiom.core.SdkToolNames;
+import io.apitomy.axiom.core.SdkFunctionRegistry;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
@@ -197,7 +197,7 @@ public class ActionResourceImpl implements ActionResource {
         Set<String> toolsets = ToolsetEntity.<ToolsetEntity>listAll().stream()
                 .map(t -> t.name)
                 .collect(java.util.stream.Collectors.toSet());
-        Set<String> sdkTools = SdkToolNames.ALL;
+        Set<String> sdkTools = SdkFunctionRegistry.allToolNames();
         return new ActionTypeValidator.KnownNames(secrets, tools, toolsets, sdkTools);
     }
 

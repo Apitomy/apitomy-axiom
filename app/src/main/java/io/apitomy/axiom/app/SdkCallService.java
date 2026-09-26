@@ -1,6 +1,7 @@
 package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.core.SdkFunctionRegistry;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
@@ -68,18 +69,11 @@ public class SdkCallService {
     }
 
     /**
-     * Returns true if the given function name is a recognized SDK function.
+     * Returns true if the given function name is a recognized SDK function
+     * that supports direct (non-MCP) execution.
      */
     public boolean isValidFunction(String functionName) {
-        return switch (functionName) {
-            case "axiom_close_project", "axiom_reopen_project",
-                 "axiom_add_project_label", "axiom_remove_project_label",
-                 "axiom_update_project", "axiom_add_thread_entry",
-                 "axiom_get_project", "axiom_create_task",
-                 "axiom_fire_event", "axiom_list_projects",
-                 "axiom_create_project", "axiom_update_project_body" -> true;
-            default -> false;
-        };
+        return SdkFunctionRegistry.isValidSdkCall(functionName);
     }
 
     private SdkCallResult closeProject(Map<String, Object> params) {

@@ -16,7 +16,7 @@ import {
     type Toolset,
     type ToolDefinition,
 } from "../config/api";
-import { SDK_TOOLS as SDK_TOOL_ENTRIES } from "../config/sdkTools";
+import { fetchSdkTools } from "../config/sdkTools";
 
 interface ToolEntry {
     value: string;
@@ -24,8 +24,6 @@ interface ToolEntry {
     description?: string;
     category: "toolset" | "custom" | "sdk";
 }
-
-const SDK_TOOLS: ToolEntry[] = SDK_TOOL_ENTRIES.map(t => ({ ...t, category: "sdk" as const }));
 
 interface BrowseToolsModalProps {
     isOpen: boolean;
@@ -37,6 +35,7 @@ interface BrowseToolsModalProps {
 export function BrowseToolsModal({ isOpen, onClose, onSave, existingTools }: BrowseToolsModalProps) {
     const [toolsets, setToolsets] = useState<ToolEntry[]>([]);
     const [customTools, setCustomTools] = useState<ToolEntry[]>([]);
+    const [sdkTools, setSdkTools] = useState<ToolEntry[]>([]);
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const [filter, setFilter] = useState("");
     const [toolsetsExpanded, setToolsetsExpanded] = useState(true);
@@ -48,8 +47,8 @@ export function BrowseToolsModal({ isOpen, onClose, onSave, existingTools }: Bro
         setSelected(new Set(existingTools));
         setFilter("");
 
-        Promise.all([fetchToolsets(), fetchTools(1, 1000)])
-            .then(([ts, toolsResult]) => {
+        Promise.all([fetchToolsets(), fetchTools(1, 1000), fetchSdkTools()])
+            .then(([ts, toolsResult, sdkEntries]) => {
                 setToolsets(ts.map((t: Toolset) => ({
                     value: `@${t.name}`,
                     label: `@${t.name}`,
@@ -62,6 +61,7 @@ export function BrowseToolsModal({ isOpen, onClose, onSave, existingTools }: Bro
                     description: t.description || undefined,
                     category: "custom" as const,
                 })));
+                setSdkTools(sdkEntries.map(t => ({ ...t, category: "sdk" as const })));
             })
             .catch(console.error);
     }, [isOpen, existingTools]);
@@ -76,7 +76,7 @@ export function BrowseToolsModal({ isOpen, onClose, onSave, existingTools }: Bro
 
     const filteredToolsets = toolsets.filter(matchesFilter);
     const filteredCustom = customTools.filter(matchesFilter);
-    const filteredSdk = SDK_TOOLS.filter(matchesFilter);
+    const filteredSdk = sdkTools.filter(matchesFilter);
 
     const toggleSelection = (value: string) => {
         setSelected((prev) => {
