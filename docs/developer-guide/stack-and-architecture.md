@@ -1,7 +1,9 @@
 # Stack & Architecture
 
-This guide provides a high-level overview of Axiom's technology stack, module structure,
-and runtime architecture.
+This guide provides a high-level overview of Axiom's technology stack and runtime
+architecture. For the current module layout and entity model, read the source under
+`core/src/main/java/io/apitomy/axiom/core/entities/` and the root `pom.xml` — those are
+the authoritative reference and change more often than documentation should chase.
 
 ---
 
@@ -9,70 +11,16 @@ and runtime architecture.
 
 | Layer | Technology |
 |-------|-----------|
-| Language | Java 25 |
-| Framework | Quarkus 3.33 LTS |
+| Language | Java |
+| Framework | Quarkus |
 | Database | H2 (in-memory for dev, file-based for prod) |
 | ORM | Hibernate with Panache (active record pattern) |
 | Migrations | Flyway |
-| Frontend | TypeScript, React 19, PatternFly 6 |
-| Build (frontend) | Vite 6.4 |
-| Build (backend) | Maven 3.9+ |
+| Frontend | TypeScript, React, PatternFly |
+| Build (frontend) | Vite |
+| Build (backend) | Maven |
 | API | Contract-first OpenAPI with Apitomy Codegen |
-| AI Engines | Claude Code CLI, OpenCode, GitHub Copilot CLI (pluggable) |
-
----
-
-## Module Map
-
-Axiom is a multi-module Maven project. Each module has a focused responsibility:
-
-```
-apitomy-axiom/
-├── common/api/          OpenAPI contract + generated JAX-RS interfaces
-├── core/                Domain entities, lifecycle state machine, services
-├── engine/
-│   ├── spi/             AI engine abstraction (AiEngine, AiEngineRegistry)
-│   ├── opencode/        OpenCode engine + actor implementation
-│   └── copilot/         GitHub Copilot CLI engine + actor implementation
-├── manager/             AI Manager — event triage and decision-making
-├── actors/
-│   ├── spi/             Actor interface (Actor, ActorContext, TaskResult)
-│   ├── claude-code/     Claude Code engine + actor implementation
-│   └── human/           Human actor (notification-driven)
-├── events/
-│   ├── core/            Event queue and EventService
-│   ├── github/          GitHub poller and API client
-│   └── jira/            Jira poller and API client
-├── notifications/
-│   ├── spi/             Notification channel interface (stub)
-│   ├── slack/           Slack notification channel
-│   └── telegram/        Telegram notification channel
-├── app/                 Quarkus application — assembles all modules
-├── ui/                  React frontend (standalone Vite project)
-└── ui-bundle/           Packages UI assets into the backend JAR
-```
-
-### Module Dependency Flow
-
-```
-common/api ◄── core ◄── manager
-                 ▲        ▲
-                 │        │
-              engine/spi ◄┘
-                 ▲
-                 │
-       ┌─────────┼──────────┐
-engine/opencode  engine/copilot  actors/claude-code
-                                       ▲
-                                       │
-                    actors/spi ◄── actors/human
-                         ▲
-                         │
-events/core ◄── events/github
-            ◄── events/jira
-
-            All modules ──► app (assembles everything)
-```
+| AI Agents | Claude Code CLI, OpenCode, GitHub Copilot CLI (pluggable) |
 
 ---
 
@@ -84,39 +32,55 @@ scheduled pollers and services cooperate to process events and execute work.
 ### Event Ingestion
 
 ```
-GitHubPoller / JiraPoller
-  │  @Scheduled — polls external APIs at configurable intervals
+GitHubConnectionPoller / JiraConnectionPoller
+  │  @Scheduled — polls external APIs at each connection's configured interval
   │
   ▼
-EventService.ingestEvent()
-  │  Persists EventEntity + creates EventQueueEntity (status: pending)
+EventStreamService.persistEvent()
+  │  Persists a normalized StreamEventEntity, deduplicated by source event ID
   │
   ▼
-EventQueueEntity table (FIFO queue)
+stream_event table
 ```
 
-Event source pollers run on a tick interval (default 10 seconds) and check whether each
-enabled event source's poll interval has elapsed. When it has, the poller fetches new
-activity from the external API, normalizes it into events, and enqueues them.
-
-### Event Processing Pipeline
+### Subscription Evaluation and Routing
 
 ```
-PipelineOrchestrator
-  │  @Scheduled — dequeues one pending event per tick
+EventStreamOrchestrator
+  │  @Scheduled — evaluates unprocessed (event, subscription) pairs each tick
   │
   ▼
-ManagerService.evaluate(event)
-  │  Invokes AI engine with structured output schema
+SubscriptionFilterEvaluator
+  │  Evaluates the subscription's EL filter expression against the event
+  │
+  ▼
+Routing dispatch (in order, per matched subscription)
+  ├── manager           → ManagerService.evaluateStreamEvent()
+  ├── workflow-dispatch  → offers the event to parked receive-event workflow nodes
+  ├── create-workflow    → finds/creates a project, starts a new workflow instance
+  └── invoke-action      → finds/creates a project, creates a TaskEntity directly
+```
+
+A durable processing ledger records the outcome of every (event, subscription) pair
+(`skipped`, `completed`, or `failed`), so processing survives restarts and failed
+routing is retried automatically on each tick.
+
+### Manager Evaluation
+
+```
+ManagerService.evaluateStreamEvent(event)
+  │  Invokes an AI agent with a structured output schema
   │  Returns List<ManagerDecision>
   │
   ▼
 Decision dispatch
-  ├── create_task → find/create Project, create TaskEntity
-  ├── ignore → mark event processed, log
-  ├── script_action → trigger ScriptExecutionService
-  └── escalate → create task for human review
+  ├── create_task / script_action → find/create Project, create TaskEntity
+  ├── ignore                       → mark processed, log
+  └── escalate                     → create an Inbox task for human review
 ```
+
+Decisions below the configured confidence threshold are automatically escalated
+regardless of their decision type.
 
 ### Task Execution
 
@@ -126,18 +90,19 @@ TaskQueuePoller
   │
   ▼
 TaskExecutionService.executeNextTask(projectId)
-  │  Resolves Actor implementation via CDI
-  │  Builds ActorContext (tools, prompt, env, MCP config)
+  │  Requests a lease from AgentPool using a capability string (e.g. "action:Name")
+  │  Builds an AgentRequest (tools, prompt, env, MCP config)
   │  Enforces project-level serialization (one task at a time)
   │
   ▼
-Actor.execute(task, context)
-  │  Runs AI engine subprocess or sends notifications
-  │  Returns TaskResult (output, cost, tokens, log)
+Agent.execute(request)
+  │  Runs the agent's subprocess/HTTP call, or completes via human input
+  │  Returns AgentResult (output, cost, tokens, log)
   │
   ▼
 TaskEntity updated with result
 AiUsageEntity created with cost/token data
+AgentPool lease released
 ```
 
 ### Report Generation
@@ -154,7 +119,8 @@ ReportQueueConsumer
   │
   ▼
 ReportExecutionService
-  │  Invokes AI engine with report prompt and tools
+  │  Requests a lease from AgentPool using capability "report:<slug>"
+  │  Invokes the leased agent with the report prompt and tools
   │  Writes generated Markdown to ReportEntity
 ```
 
@@ -172,28 +138,46 @@ ScheduledJobQueueConsumer
   │
   ▼
 ScheduledJobExecutionService
-  │  Actor mode: invokes AI engine with job prompt and tools
+  │  Agent mode: requests a lease using capability "job:<slug>", invokes the agent
   │  Script mode: runs bash script via ProcessBuilder
   │  Writes output to ScheduledJobRunEntity
 ```
+
+### Workflow Execution
+
+```
+WorkflowExecutionService.triggerWorkflow(projectId, definitionId)
+  │  Manual trigger, or a subscription's "create-workflow"/"workflow-dispatch" rule
+  │
+  ▼
+WorkflowEngine (from the shared flow-engine library)
+  │  Advances the workflow instance through its node graph
+  │  action / human-task nodes create TaskEntity rows via TaskExecutionService
+  │  wait nodes park the instance until a resume time
+  │  receive-event nodes park the instance until a matching event is dispatched
+  │
+  ▼
+WorkflowRunEntity updated with instance state, current node, and status
+```
+
+See [Workflows](../user-guide/workflows.md) for the authoring and run-time reference.
 
 ### AI Assistant Sessions
 
 ```
 AssistantSessionManager
   │  Creates session from template
-  │  Resolves MCP servers, allowed tools, working directory
+  │  Resolves agent type, MCP servers, allowed tools, working directory
   │  Runs optional init script
   │
   ▼
-AssistantSession (Claude Code subprocess)
-  │  ProcessBuilder with stream-json I/O
+InteractiveSessionDriver (Claude Code or OpenCode)
+  │  ProcessBuilder or HTTP session with stream-json / SSE I/O
   │  Virtual threads: stdout reader, stderr reader, process monitor
-  │  Bidirectional: JSON lines to stdin, NDJSON events from stdout
   │
   ▼
 AssistantEventParser
-  │  Normalizes NDJSON into typed SseEvent records
+  │  Normalizes engine-specific events into typed SseEvent records
   │  Auto-approval rules intercept permission requests
   │
   ▼
@@ -208,19 +192,17 @@ are accumulated per-session and persisted to `AiUsageEntity` on session destruct
 #### Init Script Security
 
 Session templates support optional init scripts (bash or Node.js) that run once when a
-session is created. The `runInitScript` method in `AssistantSessionManager` executes
-these scripts via `ProcessBuilder` with **no sandboxing** — the script runs as the same
-OS user as the Axiom server process, with full filesystem and network access. The only
-safeguard is a 60-second timeout.
+session is created. These scripts run via `ProcessBuilder` with **no sandboxing** — the
+script runs as the same OS user as the Axiom server process, with full filesystem and
+network access. The only safeguard is a 60-second timeout.
 
 **Trust model:** The init script content comes from session templates stored in the
-database (user-defined) or in built-in JSON files under
-`resources/templates/assistant-templates/`. There are currently no authentication or
-role-based access controls on the template CRUD endpoints
-(`POST/PUT /assistant/templates`). Any user with network access to Axiom can create a
-template containing an arbitrary init script, which will execute with server privileges
-when a session is created from that template. Template authors are therefore implicitly
-trusted with server-level code execution.
+database (user-defined) or in built-in JSON files bundled with the application. There
+are currently no authentication or role-based access controls on the template CRUD
+endpoints. Any user with network access to Axiom can create a template containing an
+arbitrary init script, which will execute with server privileges when a session is
+created from that template. Template authors are therefore implicitly trusted with
+server-level code execution.
 
 **Future hardening options** (not currently implemented):
 
@@ -252,19 +234,21 @@ SseClient (browser)
 
 ### SPI / Provider Pattern
 
-Extension points (engines, actors, event sources) use a consistent pattern:
+Extension points (AI agents, notification channels) use a consistent pattern:
 
-1. An **SPI module** defines the interface (e.g. `AiEngine`, `Actor`)
+1. An **SPI module** defines the interface (e.g. `Agent`)
 2. **Implementation modules** provide concrete classes annotated with `@ApplicationScoped`
 3. A **registry** or CDI `Instance<T>` discovers implementations at runtime
-4. Selection is driven by configuration (e.g. `axiom.ai-engine=claude-code`)
+4. Selection is driven by configuration (e.g. `axiom.agent.default-type=claude-code`)
+   or, for agent pool leasing, by capability matching
 
 See the [Extending Axiom](extending-axiom.md) guide for details.
 
 ### Panache Active Record
 
-All entities extend `PanacheEntity` and use the active record pattern — queries are
-static methods on the entity class:
+All entities extend `PanacheEntity` (or `PanacheEntityBase` for entities with
+non-Long primary keys) and use the active record pattern — queries are static methods
+on the entity class:
 
 ```java
 ProjectEntity project = ProjectEntity.findById(id);
@@ -276,24 +260,22 @@ entity.persist();
 
 Configuration objects use builders for clean, immutable construction:
 
-- `AiEngineConfig.Builder` — engine invocation settings
-- `ActorContext.Builder` — task execution context
-- `TaskResult.Builder` — execution results
+- `AgentRequest.Builder` — agent invocation settings
+- `AgentResult.Builder` — execution results
 
 ### Async Execution
 
-Actor execution and engine invocations return `CompletableFuture`, keeping the
-scheduled pollers non-blocking.
+Agent execution returns `CompletableFuture`, keeping the scheduled pollers
+non-blocking.
 
 ### Tracing
 
-Every event pipeline run and report generation produces a **trace** — a tree of
-lightweight nodes recording each step. The tracing subsystem follows several key
-design principles:
+Every manager evaluation, workflow run, scheduled job run, and report generation
+produces a **trace** — a tree of lightweight nodes recording each step. The tracing
+subsystem follows several key design principles:
 
-- **`TraceService` lives in `core`** — both the `app` module (PipelineOrchestrator,
-  TaskExecutionService) and the `manager` module (ManagerService) inject it directly,
-  avoiding circular dependencies
+- **`TraceService` lives in `core`** — all producers of traces (`app` and `manager`
+  modules) inject it directly, avoiding circular dependencies
 - **Stack-based context** — `TraceContext` maintains a mutable node stack. Call
   `push(nodeId)` when descending into a child scope and `pop()` when returning. The
   current top of the stack is the parent for new nodes.
@@ -304,9 +286,8 @@ design principles:
   interrupt the main pipeline
 - **SSE broadcast** — every trace mutation fires `SseEvent.traceUpdated(traceId)` for
   real-time UI updates
-- **UUID primary key** — `TraceEntity` uses a UUID PK (the only entity in the project
-  to do so). The trace ID doubles as the correlation identifier threaded through
-  environment variables and API callbacks.
+- **UUID primary key** — `TraceEntity` uses a UUID PK. The trace ID doubles as the
+  correlation identifier threaded through environment variables and API callbacks.
 
 See the [Tracing](tracing.md) developer guide for the full data model, service API, and
 REST endpoint reference.
@@ -314,13 +295,6 @@ REST endpoint reference.
 ### Scheduled Pollers
 
 All background processing uses Quarkus `@Scheduled` with
-`concurrentExecution = SKIP` to prevent overlapping executions:
-
-| Poller | Responsibility |
-|--------|---------------|
-| `GitHubPoller` | Poll GitHub repos for new activity |
-| `JiraPoller` | Poll Jira projects for new activity |
-| `PipelineOrchestrator` | Dequeue and process events |
-| `TaskQueuePoller` | Dispatch pending tasks to actors |
-| `ReportScheduler` | Check for due report definitions |
-| `ScheduledJobScheduler` | Check for due scheduled jobs |
+`concurrentExecution = SKIP` to prevent overlapping executions, including the
+connection pollers, the event stream orchestrator, the task queue poller, and the
+report and scheduled job schedulers.

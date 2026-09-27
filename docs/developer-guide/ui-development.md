@@ -7,16 +7,15 @@ in the Axiom React UI.
 
 ## Tech Stack
 
-| Technology | Version | Purpose |
-|-----------|---------|---------|
-| React | 19 | UI framework |
-| PatternFly | 6 | Component library (Red Hat's design system) |
-| TypeScript | 5.9 | Type-safe JavaScript |
-| Vite | 6.4 | Build tool and dev server |
-| Monaco Editor | 0.55 | Code editors (prompt templates, scripts, logs) |
-| react-markdown | 10 | Markdown rendering (reports, thread entries) |
-| Biome | — | Linter and formatter |
-| `@apitomy/common-ui-components` | 4.1 | Shared filtering components |
+| Technology | Purpose |
+|-----------|---------|
+| React | UI framework |
+| PatternFly | Component library (Red Hat's design system) |
+| TypeScript | Type-safe JavaScript |
+| Vite | Build tool and dev server |
+| Monaco Editor | Code editors (prompt templates, scripts, logs) |
+| react-markdown | Markdown rendering (reports, thread entries) |
+| `@apitomy/common-ui-components` | Shared filtering components |
 
 ---
 
@@ -265,4 +264,4 @@ import { CodeEditor, Language } from "@patternfly/react-code-editor";
 2. The Vite dev server runs on port 9191 and proxies `/api` requests to the backend
    on port 9090
 3. Hot module replacement (HMR) updates the browser instantly when you save a file
-4. Run `npm run lint` to check code quality before committing
+4. Run `npm run build` (which runs `tsc -b && vite build`) to type-check before committing

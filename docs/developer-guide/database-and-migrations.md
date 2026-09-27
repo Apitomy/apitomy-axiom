@@ -30,34 +30,10 @@ The `prod` profile is activated automatically when running from the release JAR.
 ## Entity Model
 
 All entities are in `core/src/main/java/io/apitomy/axiom/core/entities/` and extend
-Quarkus `PanacheEntity`, which provides an auto-generated `id` field and the active
-record pattern.
-
-### Key Entities
-
-| Entity | Purpose |
-|--------|---------|
-| `ProjectEntity` | Long-lived project tracking work for an issue |
-| `TaskEntity` | A unit of work assigned to an actor within a project |
-| `EventEntity` | A normalized event from an external source |
-| `EventQueueEntity` | Processing queue entry for pending events |
-| `EventSourceEntity` | Configuration for a GitHub/Jira event source |
-| `ActionTypeEntity` | Defines a type of work (prompt, tools, mode) |
-| `ActorEntity` | A registered AI agent or human actor |
-| `ToolDefinitionEntity` | A script-based tool definition |
-| `ToolsetEntity` | A named collection of tools |
-| `McpServerEntity` | An external MCP server configuration |
-| `ReportDefinitionEntity` | A report template with schedule and prompt |
-| `ReportEntity` | A generated report instance |
-| `SecretEntity` | An encrypted secret (env var for subprocesses) |
-| `ManagerConfigEntity` | Manager system prompt and prompt template |
-| `AiUsageEntity` | Token cost and usage tracking per invocation |
-| `ActivityLogEntity` | Unified activity log entries |
-| `ThreadEntryEntity` | Chronological project thread entries |
-| `EventSourceLogEntity` | Per-poll-cycle log for event sources |
-| `TraceEntity` | Root trace record (UUID PK) — one per pipeline run or report generation |
-| `TraceNodeEntity` | A step/span in a trace tree — references a detail entity via `entityType` + `entityId` |
-| `ToolExecutionEntity` | Detailed MCP tool invocation record — stores full JSON input and output |
+Quarkus `PanacheEntity` (or `PanacheEntityBase` for entities with non-`Long` primary
+keys, such as `TraceEntity`'s UUID key), which provides the active record pattern.
+Read the entity classes directly for the current field list — that is the
+authoritative reference, not this guide.
 
 ### Active Record Pattern
 
@@ -76,7 +52,7 @@ List<TaskEntity> tasks = TaskEntity.find("projectId = ?1 and status = ?2",
 entity.persist();
 
 // Count
-long count = EventEntity.count("repository", "owner/repo");
+long count = StreamEventEntity.count("source", "github");
 ```
 
 No separate DAO or repository classes are needed.
@@ -200,3 +176,6 @@ CREATE INDEX IF NOT EXISTS idx_task_status ON task (status);
   data to verify it runs cleanly.
 - The H2 console is available at `http://localhost:9090/q/h2` during development
   (Quarkus dev mode only).
+
+See [Upgrading and Backups](upgrading-and-backups.md) for what a production upgrade
+can change and what needs to be backed up alongside the database.

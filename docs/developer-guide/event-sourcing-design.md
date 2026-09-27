@@ -106,7 +106,12 @@ Each `(event_id, subscription_id)` pair gets a ledger entry with one of four sta
 
 **Key behaviors:**
 - **Restart-safe:** No in-memory state. The ledger is the complete record.
-- **Retroactive:** Enabling a new subscription evaluates all existing events against it.
+- **Cutoff-scoped, not fully retroactive:** Each subscription has a
+  `processEventsFrom` timestamp, defaulted to the moment the subscription is created
+  (it can be set to an earlier or later time explicitly, e.g. via the API). Only
+  events whose `timestamp` is at or after that cutoff are ever evaluated against the
+  subscription. Enabling a subscription does not retroactively evaluate events that
+  occurred before its cutoff.
 - **Retry:** Failed entries are re-attempted every tick (5-second interval).
 - **Dedup:** Unique constraint on `(event_id, subscription_id)` prevents duplicate processing.
 - **Startup recovery:** Orphaned `pending` entries from a previous crash are bulk-updated
@@ -143,17 +148,6 @@ Each `(event_id, subscription_id)` pair gets a ledger entry with one of four sta
 | PUT | `/subscriptions/{id}` | Update a subscription |
 | DELETE | `/subscriptions/{id}` | Delete a subscription |
 | POST | `/subscriptions/preview` | Preview filter expression against existing events |
-
-## Database Tables
-
-| Table | Purpose |
-|-------|---------|
-| `event_source_connection` | Connection definitions (VARCHAR slug PK) |
-| `stream_event` | Normalized event stream (UUID PK, unique on `source_event_id`) |
-| `event_subscription` | Subscription definitions (BIGINT PK) |
-| `event_subscription_label` | Subscription labels (join table) |
-| `event_processing_ledger` | Processing state per (event, subscription) pair |
-| `connection_poll_log` | Poll cycle audit log per connection (3-day retention) |
 
 ## Retention
 
@@ -380,30 +374,3 @@ in `sourceData`.
 **Deduplication:** Stable `sourceEventId` from `{issueKey}-{changelogEntryId}`,
 `{issueKey}-created`, or `{issueKey}-comment-{commentId}`.
 
----
-
-# Key Implementation Classes
-
-| Component | Path |
-|-----------|------|
-| Event envelope + payloads | `core/.../events/model/` (NormalizedEvent, EventType, 26 payload records) |
-| Connection entity | `core/.../entities/EventSourceConnectionEntity.java` |
-| Stream event entity | `core/.../entities/StreamEventEntity.java` |
-| Subscription entity | `core/.../entities/EventSubscriptionEntity.java` |
-| Processing ledger entity | `core/.../entities/EventProcessingLedgerEntity.java` |
-| Poll log entity | `core/.../entities/ConnectionPollLogEntity.java` |
-| Routing rule model | `core/.../events/model/RoutingRule.java` |
-| Filter evaluator | `core/.../filters/SubscriptionFilterEvaluator.java` |
-| GitHub poller | `events/github/.../v2/GitHubConnectionPoller.java` |
-| GitHub normalizer | `events/github/.../v2/GitHubEventNormalizerV2.java` |
-| GitHub API client | `events/github/.../v2/GitHubEventsApiClient.java` |
-| Jira poller | `events/jira/.../v2/JiraConnectionPoller.java` |
-| Jira normalizer | `events/jira/.../v2/JiraEventNormalizerV2.java` |
-| Jira API client | `events/jira/.../v2/JiraEventsApiClient.java` |
-| Event stream service | `events/core/.../EventStreamService.java` |
-| Stream orchestrator | `app/.../EventStreamOrchestrator.java` |
-| Workflow dispatcher | `app/.../WorkflowEventDispatcher.java` |
-| Stream event cleanup | `app/.../StreamEventCleanup.java` |
-| Connections REST | `app/.../rest/ConnectionsResourceImpl.java` |
-| Stream events REST | `app/.../rest/StreamEventsResourceImpl.java` |
-| Subscriptions REST | `app/.../rest/SubscriptionsResourceImpl.java` |

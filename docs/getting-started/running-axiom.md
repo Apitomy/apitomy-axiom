@@ -5,8 +5,10 @@ downloads and runs the latest release automatically.
 
 ## Prerequisites
 
-- **Java** 25+
+- **Java**
 - **curl** and **jq** (for downloading releases)
+- **Node.js** and **npm** (used by Axiom at runtime for custom MCP tool servers and the
+  AI Assistant's MCP server)
 - One of the supported AI engine CLIs:
 
 | Engine | Config Value | Binary | Install |
@@ -45,5 +47,5 @@ Open **http://localhost:9191** in your browser to access the Axiom dashboard.
 
 - [Configuring Axiom](configuring-axiom.md) — AI engine settings, database profiles, and
   application properties
-- [User Guide](../user-guide/concepts.md) — Core concepts, event sources, action types,
+- [User Guide](../user-guide/concepts.md) — Core concepts, connections, action types,
   and advanced usage
