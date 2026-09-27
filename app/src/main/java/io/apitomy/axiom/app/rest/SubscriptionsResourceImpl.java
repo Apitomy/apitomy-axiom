@@ -137,30 +137,25 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
         int pageNum = data.getPage() != null ? data.getPage() : 1;
         int pageSize = data.getLimit() != null ? data.getLimit() : 20;
         String filterExpression = data.getFilterExpression();
+        Instant fromTs = data.getProcessEventsFrom() != null
+                ? data.getProcessEventsFrom().toInstant() : null;
 
-        // Build query with optional processEventsFrom filter
-        String hql = "1=1";
-        Map<String, Object> params = new HashMap<>();
-        if (data.getProcessEventsFrom() != null) {
-            hql += " and timestamp >= :fromTs";
-            params.put("fromTs", data.getProcessEventsFrom().toInstant());
-        }
-
-        long totalCount = StreamEventEntity.count(hql, params);
+        long totalCount = StreamEventEntity.count();
 
         List<StreamEventEntity> entities = StreamEventEntity.<StreamEventEntity>find(
-                        hql, Sort.descending("timestamp"), params)
+                        "1=1", Sort.descending("timestamp"))
                 .page(Page.of(pageNum - 1, pageSize))
                 .list();
 
-        // Evaluate each event against the filter expression
         List<SubscriptionPreviewResult> results = new ArrayList<>();
         long totalMatched = 0;
 
         for (StreamEventEntity entity : entities) {
-            // Build the event map for filter evaluation (same as EventStreamOrchestrator)
+            boolean beforeCutoff = fromTs != null && entity.timestamp != null
+                    && entity.timestamp.isBefore(fromTs);
             Map<String, Object> eventMap = buildEventMap(entity);
-            boolean matched = filterEvaluator.matches(filterExpression, eventMap);
+            boolean matched = !beforeCutoff
+                    && filterEvaluator.matches(filterExpression, eventMap);
 
             SubscriptionPreviewResult result = new SubscriptionPreviewResult();
             result.setEvent(toStreamEventBean(entity));
@@ -172,11 +167,8 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
             }
         }
 
-        // If there are more pages, we need to count total matched across all events.
-        // For efficiency, if we're on the only page, use the local count.
-        // Otherwise, iterate through all events to count matches.
         if (totalCount > pageSize) {
-            totalMatched = countTotalMatched(filterExpression, hql, params);
+            totalMatched = countTotalMatched(filterExpression, fromTs);
         }
 
         SubscriptionPreviewResponse response = new SubscriptionPreviewResponse();
@@ -189,11 +181,12 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
     }
 
     /**
-     * Counts the total number of events matching the filter expression across all events.
+     * Counts the total number of events matching the filter expression across all events,
+     * excluding events before the processEventsFrom cutoff.
      */
-    private long countTotalMatched(String filterExpression, String hql, Map<String, Object> params) {
-        if (filterExpression == null || filterExpression.isBlank()) {
-            return StreamEventEntity.count(hql, params);
+    private long countTotalMatched(String filterExpression, Instant fromTs) {
+        if ((filterExpression == null || filterExpression.isBlank()) && fromTs == null) {
+            return StreamEventEntity.count();
         }
 
         long matched = 0;
@@ -202,10 +195,14 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
         List<StreamEventEntity> batch;
 
         do {
-            batch = StreamEventEntity.<StreamEventEntity>find(hql, Sort.descending("timestamp"), params)
+            batch = StreamEventEntity.<StreamEventEntity>find("1=1", Sort.descending("timestamp"))
                     .page(Page.of(batchIndex, batchSize))
                     .list();
             for (StreamEventEntity entity : batch) {
+                if (fromTs != null && entity.timestamp != null
+                        && entity.timestamp.isBefore(fromTs)) {
+                    continue;
+                }
                 Map<String, Object> eventMap = buildEventMap(entity);
                 if (filterEvaluator.matches(filterExpression, eventMap)) {
                     matched++;
