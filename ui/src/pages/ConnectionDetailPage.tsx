@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import {
     Breadcrumb,
     BreadcrumbItem,
@@ -61,8 +61,6 @@ const SOURCE_COLORS: Record<string, "blue" | "green" | "orange" | "grey"> = {
 
 export function ConnectionDetailPage() {
     const { connectionId } = useParams<{ connectionId: string }>();
-    const navigate = useNavigate();
-
     const [connection, setConnection] = useState<Connection | null>(null);
     const [form, setForm] = useState<Partial<Connection>>({});
     const [reposText, setReposText] = useState("");

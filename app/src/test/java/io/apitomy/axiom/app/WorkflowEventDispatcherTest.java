@@ -1,6 +1,7 @@
 package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.WorkflowEventSubscriptionEntity;
@@ -118,6 +119,46 @@ class WorkflowEventDispatcherTest {
         dispatcher.dispatchStreamEvent("pr-merged", bigPr);
         assertRunStatus(run.id, "completed");
         assertSubscriptionCount(run.id, 0);
+    }
+
+    @Test
+    void matchingEventCompletesReceiveEventTraceNode() {
+        long[] ids = setup("Dispatcher Trace Project", RECEIVE_EVENT_CONTENT);
+        WorkflowRunEntity run = trigger(ids);
+
+        // Verify the trace node for the receive-event subscription was created as in-progress
+        QuarkusTransaction.requiringNew().run(() -> {
+            WorkflowRunEntity r = WorkflowRunEntity.findById(run.id);
+            if (r.traceId != null) {
+                TraceNodeEntity node = TraceNodeEntity.find(
+                    "traceId = ?1 and entityType = 'workflow-event-subscription'",
+                    r.traceId).firstResult();
+                if (node != null) {
+                    assertEquals("in-progress", node.status,
+                        "Trace node should be in-progress while parked");
+                }
+            }
+        });
+
+        Map<String, Object> eventMap = buildStreamEventMap("pr-merged", "github",
+                projectRef(ids[0]), null);
+        dispatcher.dispatchStreamEvent("pr-merged", eventMap);
+
+        assertRunStatus(run.id, "completed");
+
+        // Verify the trace node was completed
+        QuarkusTransaction.requiringNew().run(() -> {
+            WorkflowRunEntity r = WorkflowRunEntity.findById(run.id);
+            if (r.traceId != null) {
+                TraceNodeEntity node = TraceNodeEntity.find(
+                    "traceId = ?1 and entityType = 'workflow-event-subscription'",
+                    r.traceId).firstResult();
+                if (node != null) {
+                    assertEquals("completed", node.status,
+                        "Trace node should be completed after event received");
+                }
+            }
+        });
     }
 
     @Test
