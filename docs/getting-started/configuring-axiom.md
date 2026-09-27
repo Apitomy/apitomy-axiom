@@ -14,78 +14,103 @@ underscores and uppercase everything. For example:
 
 | Property | Environment Variable | Java System Property |
 |----------|---------------------|---------------------|
-| `axiom.ai-engine` | `AXIOM_AI_ENGINE` | `-Daxiom.ai-engine=...` |
-| `axiom.claude-code.max-turns` | `AXIOM_CLAUDE_CODE_MAX_TURNS` | `-Daxiom.claude-code.max-turns=...` |
+| `axiom.agent.default-type` | `AXIOM_AGENT_DEFAULT_TYPE` | `-Daxiom.agent.default-type=...` |
+| `axiom.agent.claude-code.max-steps` | `AXIOM_AGENT_CLAUDE_CODE_MAX_STEPS` | `-Daxiom.agent.claude-code.max-steps=...` |
 | `axiom.manager.confidence-threshold` | `AXIOM_MANAGER_CONFIDENCE_THRESHOLD` | `-Daxiom.manager.confidence-threshold=...` |
 
-For example, to run Axiom with OpenCode as the AI engine and a custom timeout:
+For example, to run Axiom with OpenCode as the default agent and a custom timeout:
 
 ```bash
-export AXIOM_AI_ENGINE=opencode
-export AXIOM_OPENCODE_TIMEOUT_SECONDS=300
-java -jar apitomy-axiom-2.1.0.jar
+export AXIOM_AGENT_DEFAULT_TYPE=opencode
+export AXIOM_AGENT_OPENCODE_TIMEOUT_SECONDS=300
+java -jar apitomy-axiom-3.0.0.jar
 ```
 
 Or using system properties:
 
 ```bash
-java -Daxiom.ai-engine=opencode -Daxiom.opencode.timeout-seconds=300 -jar apitomy-axiom-2.1.0.jar
+java -Daxiom.agent.default-type=opencode -Daxiom.agent.opencode.timeout-seconds=300 -jar apitomy-axiom-3.0.0.jar
 ```
 
 See the [Quarkus Configuration Reference](https://quarkus.io/guides/config-reference) for
 full details on property sources and precedence.
 
-### AI Engine
+The active default agent can also be changed at runtime from **Settings > AI Engine** in
+the UI, without restarting the server. The UI setting takes precedence over
+`axiom.agent.default-type` once it has been set.
 
-Axiom supports multiple AI engines. Set the active engine with:
+### AI Agents
+
+Axiom supports multiple pluggable AI agents (Claude Code, OpenCode, and GitHub Copilot
+CLI). Set the default agent used for tasks, reports, and agent-mode scheduled jobs
+(unless overridden per-item) with:
 
 | Property | Default | Description |
-|----------|---------|-------------|
-| `axiom.ai-engine` | `claude-code` | AI engine to use (`claude-code`, `opencode`, or `copilot`) |
+|----------|---------|--------------|
+| `axiom.agent.default-type` | `claude-code` | Default agent type (`claude-code`, `opencode`, or `copilot`) |
 
 #### Claude Code Settings
 
 | Property | Default | Description |
-|----------|---------|-------------|
-| `axiom.claude-code.executable` | `claude` | Path to the Claude CLI binary |
-| `axiom.claude-code.model` | *(engine default)* | AI model override |
-| `axiom.claude-code.max-turns` | `50` | Maximum agentic turns per task |
-| `axiom.claude-code.max-budget-usd` | `5.0` | Maximum cost per task in USD |
-| `axiom.claude-code.timeout-seconds` | `600` | Subprocess timeout |
+|----------|---------|--------------|
+| `axiom.agent.claude-code.executable` | `claude` | Path to the Claude CLI binary |
+| `axiom.agent.claude-code.model` | *(agent default)* | AI model override |
+| `axiom.agent.claude-code.max-steps` | `50` | Maximum agentic steps per task |
+| `axiom.agent.claude-code.max-budget-usd` | `5.0` | Maximum cost per task in USD |
+| `axiom.agent.claude-code.timeout-seconds` | `600` | Subprocess timeout |
+| `axiom.agent.claude-code.available-models` | *(empty)* | Comma-separated model list for the UI model picker |
 
 #### OpenCode Settings
 
 | Property | Default | Description |
-|----------|---------|-------------|
-| `axiom.opencode.server.hostname` | `127.0.0.1` | OpenCode server hostname |
-| `axiom.opencode.server.port` | `4096` | OpenCode server port |
-| `axiom.opencode.max-steps` | `50` | Maximum agent steps per task |
-| `axiom.opencode.timeout-seconds` | `600` | HTTP request timeout |
+|----------|---------|--------------|
+| `axiom.agent.opencode.executable` | `opencode` | Path to the OpenCode CLI binary |
+| `axiom.agent.opencode.server.hostname` | `127.0.0.1` | OpenCode server hostname |
+| `axiom.agent.opencode.server.port` | `4096` | OpenCode server port |
+| `axiom.agent.opencode.model` | *(agent default)* | Model in `provider/model` format |
+| `axiom.agent.opencode.max-steps` | `50` | Maximum agent steps per task |
+| `axiom.agent.opencode.timeout-seconds` | `600` | HTTP request timeout |
+| `axiom.agent.opencode.available-models` | *(empty)* | Comma-separated model list for the UI model picker |
+| `axiom.agent.opencode.model-discovery.enabled` | `true` | Enable dynamic model discovery from the OpenCode server |
+| `axiom.agent.opencode.model-discovery.timeout-seconds` | `8` | Timeout for a model discovery request |
+| `axiom.agent.opencode.model-discovery.cache-seconds` | `86400` | How long discovered models are cached |
 
 #### GitHub Copilot CLI Settings
 
 | Property | Default | Description |
-|----------|---------|-------------|
-| `axiom.copilot.executable` | `copilot` | Path to the Copilot CLI binary |
-| `axiom.copilot.model` | *(engine default)* | AI model override |
-| `axiom.copilot.timeout-seconds` | `600` | Subprocess timeout |
+|----------|---------|--------------|
+| `axiom.agent.copilot.executable` | `copilot` | Path to the Copilot CLI binary |
+| `axiom.agent.copilot.model` | *(agent default)* | AI model override |
+| `axiom.agent.copilot.timeout-seconds` | `600` | Subprocess timeout |
+| `axiom.agent.copilot.available-models` | *(empty)* | Comma-separated model list for the UI model picker |
 
 ### Manager
 
-The AI Manager triages incoming events and decides what actions to take.
+The AI Manager triages incoming stream events and decides what actions to take.
 
 | Property | Default | Description |
-|----------|---------|-------------|
+|----------|---------|--------------|
 | `axiom.manager.confidence-threshold` | `0.7` | Minimum confidence for auto-execution (0.0–1.0) |
 | `axiom.manager.timeout-seconds` | `120` | Manager subprocess timeout |
 | `axiom.manager.max-turns` | `5` | Maximum agentic turns for the Manager |
+| `axiom.manager.engine` | *(global default)* | Agent type override for the Manager |
+| `axiom.manager.model` | *(agent default)* | Model override for the Manager |
+
+Decisions below the confidence threshold are escalated to the Inbox for human review
+rather than executed automatically.
+
+### Event Stream Pipeline
+
+| Property | Default | Description |
+|----------|---------|--------------|
+| `axiom.stream-pipeline.poll-interval` | `5s` | How often the event stream orchestrator evaluates unprocessed (event, subscription) pairs |
 
 ### Scheduled Jobs
 
 Scheduled Jobs run on a configurable CRON-style schedule.
 
 | Property | Default | Description |
-|----------|---------|-------------|
+|----------|---------|--------------|
 | `axiom.scheduled-jobs.poll-interval` | `60s` | How often to check for due scheduled jobs |
 
 ### AI Assistant
@@ -94,16 +119,34 @@ The interactive AI Assistant allows users to create and update configuration ite
 conversation.
 
 | Property | Default | Description |
-|----------|---------|-------------|
+|----------|---------|--------------|
 | `axiom.assistant.max-sessions` | `3` | Maximum concurrent assistant sessions |
-| `axiom.assistant.opencode.executable` | `opencode` | OpenCode CLI executable |
+| `axiom.assistant.opencode.executable` | `opencode` | OpenCode CLI executable used for interactive sessions |
 | `axiom.assistant.opencode.startup-timeout-seconds` | `30` | Per-session server startup timeout |
+
+Session availability also depends on which registered agents support interactive
+sessions — see [AI Assistant](../user-guide/ai-assistant.md).
 
 ### Workspaces
 
 | Property | Default | Description |
-|----------|---------|-------------|
+|----------|---------|--------------|
 | `axiom.workspace.root` | `~/.axiom/workspaces` | Root directory for project git clones |
+
+## Data Retention
+
+Retention periods for closed projects, execution traces, and stream events are stored
+in the database (not as static properties) and can be changed at any time from
+**Settings > Data Retention** in the UI. Defaults are:
+
+| Setting | Default | What it controls |
+|---------|---------|-------------------|
+| Closed projects | 90 days | How long a `Completed` project (and its tasks, events, and thread) is kept before automatic deletion |
+| Traces | 30 days | How long execution traces (and their nodes and tool execution records) are kept |
+| Events | 90 days | How long stream events and their subscription processing ledger entries are kept |
+
+Cleanup runs hourly in the background. Connection poll logs are always retained for a
+fixed 3 days and are not configurable.
 
 ## Database Profiles
 
@@ -113,7 +156,7 @@ Axiom uses H2 with different profiles for different environments:
 |---------|----------|-------|
 | `dev` (default) | H2 in-memory | Development — schema recreated on restart |
 | `persist` | H2 file (`~/.axiom/data/axiom`) | Persistent dev — Flyway migrations |
-| `prod` | H2 file | Production — uber-jar with Flyway |
+| `prod` | H2 file | Production — release JAR with Flyway |
 
 When running from the release JAR, the `prod` profile is active automatically. For
 development with persistent data, activate the `persist` profile:
@@ -124,3 +167,11 @@ mvn quarkus:dev -Dquarkus.profile=persist
 
 Database schema migrations are managed by Flyway and run automatically on startup when
 using the `persist` or `prod` profiles.
+
+## Secrets and Encryption
+
+Secret values (API tokens, credentials) are encrypted at rest using a key that Axiom
+generates automatically on first startup and stores at `~/.axiom/secret.key`. This key
+is separate from the database — see
+[Upgrading and Backups](../developer-guide/upgrading-and-backups.md) for what to back up
+and restore together.

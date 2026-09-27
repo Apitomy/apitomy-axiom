@@ -35,12 +35,12 @@ When making changes, use this guide to find the right module:
 | REST API endpoint | `common/api` (OpenAPI spec) + `app/rest/` (implementation) |
 | Domain entity or lifecycle | `core/` |
 | Manager behavior | `manager/` |
-| Claude Code engine/actor | `actors/claude-code/` |
-| OpenCode engine/actor | `engine/opencode/` |
-| GitHub Copilot CLI engine/actor | `engine/copilot/` |
+| Claude Code agent | `agents/claude-code/` |
+| OpenCode agent | `agents/opencode/` |
+| GitHub Copilot CLI agent | `agents/copilot/` |
 | GitHub polling | `events/github/` |
 | Jira polling | `events/jira/` |
-| Pipeline orchestration | `app/` (PipelineOrchestrator, TaskExecutionService, etc.) |
+| Event stream routing, workflow, and pipeline orchestration | `app/` (`EventStreamOrchestrator`, `TaskExecutionService`, `WorkflowExecutionService`, etc.) |
 | UI page or component | `ui/src/pages/` or `ui/src/components/` |
 | API client functions | `ui/src/config/api.ts` |
 | Database migration | `app/src/main/resources/db/migration/` |
@@ -54,18 +54,17 @@ When making changes, use this guide to find the right module:
 - Follow existing Quarkus patterns: `@ApplicationScoped`, `@Inject`,
   `@ConfigProperty`, `@Scheduled`
 - Use Panache active record for entities (no separate DAO/repository layer)
-- Use builders for configuration objects (`AiEngineConfig.Builder`, etc.)
+- Use builders for configuration objects (`AgentRequest.Builder`, etc.)
 - Async work returns `CompletableFuture`
 - Keep transactional boundaries small — one `@Transactional` method per database
   operation
 
 ### TypeScript (Frontend)
 
-- Code is formatted and linted with [Biome](https://biomejs.dev/)
-- Run `npm run lint` before committing
-- Use PatternFly 6 components — don't introduce other UI libraries
+- Use PatternFly components — don't introduce other UI libraries
 - API calls go in `ui/src/config/api.ts`
 - Pages go in `ui/src/pages/`, reusable components in `ui/src/components/`
+- Run `npm run build` (`tsc -b && vite build`) to catch type errors before committing
 
 ---
 
@@ -85,7 +84,7 @@ Use conventional commits:
 Examples:
 
 ```
-feat: add Jira event source polling
+feat: add Jira connection polling
 fix: resolve timeout in Claude Code subprocess
 docs: add extending-axiom developer guide
 ```
@@ -101,7 +100,7 @@ docs: add extending-axiom developer guide
 2. **Make your changes** following the conventions above
 3. **Test locally**:
    - `mvn test` — run backend unit tests
-   - `npm run lint` — check frontend code quality
+   - `cd ui && npm run build` — type-check the frontend
    - `./dev.sh` — verify the change works end-to-end
 4. **Commit** with a conventional commit message
 5. **Push** and open a pull request against `main`
@@ -112,7 +111,7 @@ docs: add extending-axiom developer guide
 
 - Keep PRs focused on a single feature or fix
 - Update documentation if the change affects user-facing behavior
-- Ensure CI checks pass (build, lint)
+- Ensure CI checks pass
 - Be responsive to review feedback
 
 All submissions require code review before merging.
@@ -128,7 +127,7 @@ directory.
 
 ### Integration Tests
 
-Some tests require a running AI engine CLI. These are gated behind an environment
+Some tests require a running AI agent CLI. These are gated behind an environment
 variable:
 
 ```bash
@@ -136,14 +135,6 @@ AXIOM_CLAUDE_TESTS=true mvn test
 ```
 
 This requires the `claude` CLI on your PATH and a valid `ANTHROPIC_API_KEY`.
-
-### Frontend Linting
-
-```bash
-cd ui
-npm run lint          # Check for issues
-npm run lint:fix      # Auto-fix what Biome can
-```
 
 ---
 

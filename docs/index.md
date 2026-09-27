@@ -1,19 +1,20 @@
 # Apitomy Axiom
 
 An event-driven project orchestration platform that monitors GitHub and Jira issues, creates
-long-lived projects around them, and delegates work to human and AI actors.
+long-lived projects around them, and delegates work to human and AI agents.
 
 ## Key Features
 
-- **AI-Powered Triage** — an AI Manager triages incoming events and decides what actions to take
-- **Human + AI Actors** — pluggable actor system supports Claude Code, OpenCode, GitHub Copilot CLI, and human actors
+- **AI-Powered Triage** — an AI Manager triages incoming stream events and decides what actions to take
+- **Human + AI Agents** — pluggable agent pool supports Claude Code, OpenCode, GitHub Copilot CLI, and human-completed tasks
 - **Project Lifecycle** — long-lived projects track work from triage through completion
-- **Event Sources** — watches GitHub and Jira repositories via webhooks or polling
-- **Scheduled Jobs** — CRON-style automation with AI actor or script execution modes
+- **Event Connections & Subscriptions** — polls GitHub and Jira for activity, then routes matched events to the Manager, a workflow, or an action via filterable subscriptions
+- **Workflows** — visually authored, versioned automations with human-task, wait, and event-triggered nodes
+- **Scheduled Jobs** — CRON-style automation with agent or script execution modes
 - **Web Dashboard** — React + PatternFly UI with real-time SSE updates
 - **AI Assistant** — interactive conversational interface with customizable session templates,
   real-time tool permission management, and plan mode
-- **Pluggable AI Engines** — swap between Claude Code CLI, OpenCode, and GitHub Copilot CLI without code changes
+- **Pluggable AI Agents** — swap between Claude Code CLI, OpenCode, and GitHub Copilot CLI without code changes
 
 ## Quick Links
 
@@ -25,11 +26,11 @@ long-lived projects around them, and delegates work to human and AI actors.
 
 | Component | Technology |
 |-----------|-----------|
-| Backend | Java 25 / Quarkus 3.33 LTS |
-| Frontend | TypeScript / React 19 / PatternFly 6 |
+| Backend | Java / Quarkus |
+| Frontend | TypeScript / React / PatternFly |
 | Database | H2 (in-memory dev, file-based prod) |
 | Migrations | Flyway (automatic on startup) |
-| AI Engines | Claude Code CLI, OpenCode, GitHub Copilot CLI (pluggable) |
+| AI Agents | Claude Code CLI, OpenCode, GitHub Copilot CLI (pluggable) |
 | API | Contract-first OpenAPI + Apitomy Codegen |
 
 ## Community

@@ -49,6 +49,7 @@ nav:
     - Concepts: user-guide/concepts.md
     - Navigating the UI: user-guide/navigating-the-ui.md
     - Usage Examples: user-guide/usage-examples.md
+    - Workflows: user-guide/workflows.md
     - AI Assistant: user-guide/ai-assistant.md
     - Logging and Debugging: user-guide/logging-and-debugging.md
   - Developer Guide:
@@ -57,6 +58,10 @@ nav:
     - How to Contribute: developer-guide/how-to-contribute.md
     - API-First Development: developer-guide/api-first-development.md
     - Database & Migrations: developer-guide/database-and-migrations.md
+    - Upgrading and Backups: developer-guide/upgrading-and-backups.md
+    - Event System Design: developer-guide/event-sourcing-design.md
+    - Workflow Input Contract: developer-guide/workflow-input-contract.md
+    - Workflow Human-Task Nodes: developer-guide/workflow-human-task-nodes.md
     - Tracing: developer-guide/tracing.md
     - UI Development: developer-guide/ui-development.md
     - Extending Axiom: developer-guide/extending-axiom.md

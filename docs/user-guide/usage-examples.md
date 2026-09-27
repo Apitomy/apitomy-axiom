@@ -17,7 +17,7 @@ When a new issue is opened on a monitored GitHub repository, an AI agent reads t
 issue title and body, examines the repository's available labels, chooses the most
 relevant ones, and applies them — all automatically.
 
-This example uses an **Action Type** in actor mode with three custom **Tools** that
+This example uses an **Action Type** in agent mode with three custom **Tools** that
 encapsulate the GitHub CLI commands. The AI agent can only call these three tools,
 ensuring it can read issue details and apply labels but nothing else.
 
@@ -26,10 +26,11 @@ ensuring it can read issue details and apply labels but nothing else.
 | Item | Purpose |
 |------|---------|
 | Secret | GitHub API token for authentication |
-| Event Source | Polls a GitHub repository for new issues |
+| Connection | Polls a GitHub repository for new activity |
+| Subscription | Routes new-issue events to the AI Manager |
 | 3 Tools | Fetch labels, fetch issue details, apply labels |
 | Action Type | Defines the auto-labeling behavior and prompt |
-| Actor | An AI agent to execute the task |
+| Agent | An AI agent slot to execute the task |
 
 ### Step 1: Create a Secret
 
@@ -44,23 +45,39 @@ Navigate to **Configuration > Secrets** and add a secret:
 This token is encrypted at rest and injected as an environment variable into AI agent
 subprocesses, where the `gh` CLI picks it up automatically.
 
-### Step 2: Add an Event Source
+### Step 2: Add a Connection
 
-Navigate to **Configuration > Event Sources** and click **Add Event Source**:
+Navigate to **Events > Connections** and click **Add Connection**:
 
 | Field | Value |
 |-------|-------|
+| **ID** | e.g. `github-com` |
 | **Name** | e.g. `My Project` |
 | **Source Type** | GitHub |
-| **Repository URL** | `https://github.com/your-org/your-repo` |
+| **Base URL** | `https://github.com` |
+| **Repositories** | `your-org/your-repo` |
 | **Enabled** | Yes |
 | **Poll Interval** | `60` (seconds) |
 | **Authentication Secret** | `GH_TOKEN` |
 
 Axiom will now poll this repository every 60 seconds for new issues, pull requests,
-comments, and other activity.
+comments, and other activity, and record it in the event stream.
 
-### Step 3: Create Three Tools
+### Step 3: Add a Subscription
+
+Navigate to **Events > Subscriptions** and click **Add Subscription**:
+
+| Field | Value |
+|-------|-------|
+| **Name** | e.g. `Route issue activity to Manager` |
+| **Filter Expression** | `event.type.startsWith('issue.')` |
+| **Enabled** | Yes |
+
+Under **Routing Rules**, add one rule with destination **Manager**. This sends every
+matching issue event to the AI Manager for triage. Use **Preview** on the subscription
+editor to confirm the filter matches the events you expect before saving.
+
+### Step 4: Create Three Tools
 
 Navigate to **Configuration > Tools** and create each of the following tools. For each
 one, click **Create Tool**, enter the name, then configure the description, parameters,
@@ -110,15 +127,18 @@ to understand what the issue is about.
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `issue_ref` | string | Yes | Issue reference (e.g. owner/repo#42) |
+| `issue_url` | string | Yes | Full URL of the issue |
 
 **Script Template tab:**
 
 ```bash
 #!/bin/bash
 set -euo pipefail
-gh issue view "{{issue_ref}}" --json title,body,labels
+gh issue view "{{issue_url}}" --json title,body,labels
 ```
+
+The `gh` CLI accepts a full issue URL anywhere it accepts an issue reference, so this
+tool works directly with the `ref` value Axiom passes to the agent.
 
 ---
 
@@ -137,7 +157,7 @@ Adds labels to an issue. This is the only write operation the AI agent can perfo
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `issue_ref` | string | Yes | Issue reference (e.g. owner/repo#42) |
+| `issue_url` | string | Yes | Full URL of the issue |
 | `labels` | string | Yes | Comma-separated list of label names to apply |
 
 **Script Template tab:**
@@ -145,17 +165,17 @@ Adds labels to an issue. This is the only write operation the AI agent can perfo
 ```bash
 #!/bin/bash
 set -euo pipefail
-gh issue edit "{{issue_ref}}" --add-label "{{labels}}"
+gh issue edit "{{issue_url}}" --add-label "{{labels}}"
 ```
 
-### Step 4: Create the Action Type
+### Step 5: Create the Action Type
 
 Navigate to **Configuration > Action Types** and click **Create Action Type**:
 
 | Field | Value |
 |-------|-------|
 | **Name** | `Auto-Label Issue` |
-| **Execution Mode** | Actor |
+| **Execution Mode** | Agent |
 
 On the detail page, configure the remaining fields:
 
@@ -184,8 +204,8 @@ is to apply the most relevant labels from the repository's existing label set.
 
 ## Instructions
 
-1. Fetch the issue details using the `fetch_github_issue` tool with issue reference
-   `{{issueRef}}`.
+1. Fetch the issue details using the `fetch_github_issue` tool with issue URL
+   `{{ref}}`.
 
 2. Fetch the available labels using the `fetch_github_labels` tool with repository
    `{{repository}}`.
@@ -195,30 +215,35 @@ is to apply the most relevant labels from the repository's existing label set.
    1-3 labels is appropriate. Do not invent new labels — only use labels that
    exist in the repository.
 
-4. Apply the selected labels using the `apply_github_labels` tool.
+4. Apply the selected labels using the `apply_github_labels` tool with issue URL
+   `{{ref}}`.
 
 If the issue already has appropriate labels, or if no labels clearly apply, do not
 make any changes.
 ```
 
-### Step 5: Ensure an Actor Exists
+### Step 6: Ensure a Matching Agent Exists
 
-Navigate to **Configuration > Actors**. You need at least one AI agent actor. If none
-exist, click **Create Actor**:
+Navigate to **Configuration > Agents**. You need at least one enabled agent whose
+capabilities match this action type. If none exist, click **Create Agent**:
 
 | Field | Value           |
 |-------|-----------------|
 | **Name** | e.g. `AI Agent` |
-| **Type** | AI Agent        |
+| **Type** | Claude Code (or your preferred agent type) |
 | **Capabilities** | `*`             |
 
-### Step 6: Verify the Manager Configuration
+A capability of `*` matches any work, including the `action:Auto-Label Issue`
+capability this task will request. See
+[AI Agents](concepts.md#ai-agents) for how capability matching works.
+
+### Step 7: Verify the Manager Configuration
 
 No changes are needed to the Manager for this example. The Manager's default prompt
 template includes the `{{actionTypes}}` placeholder, which automatically lists all
-configured action types — including the new `Auto-Label Issue` type. When the Manager
-sees an `issue-created` event, it will recognize this action type as an option and can
-assign it to an available actor.
+manager-triggerable action types — including the new `Auto-Label Issue` type. When the
+Manager sees an `issue.created` event routed to it, it will recognize this action type
+as an option and can assign it to an available agent.
 
 You can review the Manager's prompt template under **Configuration > Manager** to
 confirm the `{{actionTypes}}` placeholder is present.
@@ -226,13 +251,17 @@ confirm the `{{actionTypes}}` placeholder is present.
 ### How It Works End to End
 
 1. Someone opens a new issue on the monitored repository
-2. The Event Source detects the new issue on its next poll
-3. The AI Manager triages the event and decides to assign the `Auto-Label Issue`
+2. The Connection detects the new issue on its next poll and records it in the event
+   stream
+3. The Subscription's filter matches the `issue.created` event and routes it to the
+   Manager
+4. The AI Manager triages the event and decides to assign the `Auto-Label Issue`
    action type
-4. A Task is created and assigned to an available AI agent actor
-5. The actor reads the issue, checks available labels, picks the best matches, and
+5. A Task is created and leased by an available agent whose capabilities match
+   `action:Auto-Label Issue`
+6. The agent reads the issue, checks available labels, picks the best matches, and
    applies them
-6. The task completes and the result is visible on the project's detail page
+7. The task completes and the result is visible on the project's detail page
 
 ---
 
@@ -254,6 +283,7 @@ GitHub notifications API for @mentions.
 | Secret | GitHub API token for authentication |
 | Tool | Queries GitHub notifications API for @mentions |
 | Report Definition | Defines the schedule, time window, and prompt |
+| Agent | An AI agent slot to generate the report |
 
 ### Step 1: Create a Secret
 
@@ -378,11 +408,18 @@ title and context. If none need attention, note that explicitly.
 - Sort mentions within each repository by date (newest first)
 ```
 
+### Step 4: Ensure a Matching Agent Exists
+
+Report generation draws from the same shared agent pool as tasks and scheduled jobs.
+Navigate to **Configuration > Agents** and confirm at least one enabled agent's
+capabilities match `report:weekly-mentions` (the definition's slug). A capability of
+`*` or `report:*` matches any report.
+
 ### How It Works End to End
 
 1. Every Monday at 08:00, Axiom triggers the `Weekly @Mentions` report definition
-2. An AI agent is launched with the prompt template (placeholders substituted with
-   the actual date range)
+2. An agent matching `report:weekly-mentions` is leased from the pool and launched
+   with the prompt template (placeholders substituted with the actual date range)
 3. The agent calls the `github_mentions` tool with the start date of the time window
 4. The tool queries the GitHub notifications API and returns all @mentions from the
    past 7 days

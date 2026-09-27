@@ -5,15 +5,16 @@ software development workflows. It has four primary capabilities:
 
 - **Reports** — AI-generated reports about your repositories and projects, produced
   on a schedule or on demand
-- **Event-driven automation** — monitor GitHub and Jira for activity, triage incoming
-  events with an AI Manager, and delegate work to AI or human actors
+- **Event-driven automation** — poll GitHub and Jira for activity, filter and route the
+  resulting event stream through subscriptions, and let the AI Manager or a workflow
+  decide what to do
 - **Scheduled Jobs** — CRON-style automation that runs on a configurable schedule,
   independent of events or reports
 - **AI Assistant** — an interactive conversational interface for arbitrary tasks,
   powered by customizable session templates
 
 All four capabilities share a common set of configuration items — tools, secrets, MCP
-servers, and more — that give the AI agents the capabilities they need. This guide
+servers, and more — that give AI agents the capabilities they need. This guide
 explains each concept and how they relate.
 
 ---
@@ -33,11 +34,15 @@ Report Definition ──► Axiom triggers AI agent ──► Agent runs tools �
 ```
 
 1. You create a **Report Definition** that describes what the report should contain
-2. Axiom triggers the AI agent — either on a schedule (hourly, daily, weekly, monthly) or
+2. Axiom triggers an AI agent — either on a schedule (hourly, daily, weekly, monthly) or
    when you click **Run Now**
 3. The agent executes the allowed tools (shell commands, MCP tools) to gather data
 4. The agent produces a Markdown report based on your prompt template
 5. The report is stored and viewable in the Axiom UI
+
+Report generation shares the same pool of AI agents used for tasks and scheduled jobs
+(see [AI Agents](#ai-agents) below) — an agent whose capabilities match the report is
+leased for the duration of the run.
 
 ### Report Definitions
 
@@ -62,7 +67,6 @@ to the AI agent:
 
 | Placeholder | Value |
 |-------------|-------|
-| `{{repositories}}` | Comma-separated list of repositories from your event sources |
 | `{{timeRangeStart}}` | Start of the report time window (ISO date) |
 | `{{timeRangeEnd}}` | End of the report time window (ISO date) |
 | `{{timeWindow}}` | Human-readable time window description (e.g. "last 7 days") |
@@ -96,49 +100,89 @@ Reports are browsable, filterable, and searchable in the UI.
 
 ## Event-Driven Automation
 
-The second use-case is monitoring external systems for activity and responding
-automatically. An AI Manager triages each event and decides what action to take —
-creating a project, assigning a task to an actor, or ignoring the event entirely.
+The second use-case is monitoring external systems for activity and reacting
+automatically. Axiom polls GitHub and Jira through **Connections**, normalizes activity
+into a single **Event Stream**, and evaluates each event against your **Subscriptions**
+to decide what happens next.
 
 ### The Event Pipeline
 
 ```
-Event Source ──► Event Queue ──► AI Manager ──► Decision ──► Action
-  (GitHub/Jira)    (normalized)    (triage)    (structured)   (create project,
-                                                               assign task, ignore)
+Connection ──► Event Stream ──► Subscription filter ──► Routing rule(s) ──► Destination
+ (GitHub/Jira)   (normalized,     (EL expression,          (ordered list)     (Manager, workflow,
+   poller)        deduplicated)    per subscription)                          or action)
 ```
 
-1. **Event Sources** poll GitHub or Jira repositories for new activity at a
-   configurable interval
-2. New activity is normalized into **Events** and placed in an internal queue
-3. The **Pipeline Orchestrator** dequeues events and passes them to the **AI Manager**
-4. The Manager analyzes the event and produces a structured **Decision**
-5. The orchestrator executes the decision
+1. A **Connection** polls GitHub or Jira for new activity at a configurable interval
+2. New activity is normalized into typed **stream events** and persisted to the event
+   stream, deduplicated by source event ID
+3. Every enabled **Subscription** is evaluated against each new event using a filter
+   expression
+4. When an event matches a subscription's filter, the subscription's **routing rules**
+   run in order, sending the event to one or more destinations
+5. A durable processing ledger tracks the result of every (event, subscription) pair,
+   so processing survives restarts and failed routing is retried automatically
 
-### Event Sources
+### Connections
 
-An event source connects Axiom to an external system. Each source is configured with:
+A Connection is an authenticated link to an external system. Each connection is
+configured with:
+
+| Field | Purpose |
+|-------|---------|
+| **ID** | A URL-safe slug that identifies the connection (e.g. `github-com`) |
+| **Name** | Display name |
+| **Source type** | `github` or `jira` |
+| **Base URL** | The human-readable URL of the system (e.g. `https://github.com`) |
+| **Repositories / Projects** | Which repositories (GitHub) or projects (Jira) to watch |
+| **Poll interval** | How often to check for new activity |
+| **Authentication secret** | Which secret to use for API access, or fall back to a default provider secret or environment variable |
+| **Enabled** | Whether polling is active |
+
+You can create multiple connections of the same type — for example, one for
+`github.com` and another for a GitHub Enterprise instance.
+
+### Event Stream
+
+Every event a connection detects is normalized into a single, browsable stream of
+typed events (issue, pull request, and repository activity for GitHub; issue activity
+for Jira). Events are deduplicated so the same source activity is never recorded twice.
+You can browse the raw stream from **Events > Event Stream** in the UI, independent of
+whether any subscription has matched it yet.
+
+### Subscriptions
+
+A Subscription is a filtered view over the event stream with configurable routing. Each
+subscription has:
 
 | Field | Purpose |
 |-------|---------|
 | **Name** | Display name |
-| **Source type** | `github` or `jira` |
-| **Repository/Project URL** | Full URL to the GitHub repo or Jira project |
-| **Poll interval** | How often to check for new activity (in seconds) |
-| **Authentication secret** | Which secret to use for API access (or auto-detect) |
-| **Labels** | Free-form labels for categorization and action type scoping (see [Label-Based Action Type Filtering](#label-based-action-type-filtering)) |
-| **Enabled** | Whether polling is active |
+| **Filter expression** | An EL expression evaluated against each event (e.g. `event.type.startsWith('pr.') && event.connectionId == 'github-com'`). An empty expression matches every event. |
+| **Process events from** | The cutoff timestamp; events that occurred before this are never evaluated against this subscription (defaults to the moment the subscription is created) |
+| **Routing rules** | An ordered list of destinations for matched events |
+| **Labels** | Free-form strings for organization |
+| **Enabled** | Subscriptions must be explicitly enabled to process events |
 
-When enabled, a GitHub event source polls for new issues, pull requests, comments, and
-reviews. A Jira event source polls for new issues and comments.
+Use **Preview** on the subscription editor to test a filter expression against existing
+events before saving.
 
-When the Manager creates a new project from an event, the event source's labels are
-automatically copied to the new project.
+#### Routing Rule Destinations
+
+| Destination | What Happens |
+|-------------|--------------|
+| **Manager** | Sends the event to the AI Manager for triage (see [AI Manager](#ai-manager) below) |
+| **Workflow dispatch** | Offers the event to any running workflow instances parked at a `receive-event` node whose event-type and EL match succeed |
+| **Create workflow** | Finds or creates a project from the event's `ref` URL, then starts a new instance of the specified workflow definition on that project |
+| **Invoke action** | Finds or creates a project, then creates a task for the specified action type directly — bypassing the Manager |
+
+A subscription with no routing rules matches events silently, which is useful for
+previewing matches before committing to a destination.
 
 ### AI Manager
 
-The Manager receives events and produces structured decisions. It uses the configured AI
-engine (Claude Code, OpenCode, or GitHub Copilot CLI) to analyze each event in context.
+The Manager receives events routed to it and produces structured decisions. It uses the
+configured AI agent to analyze each event in context.
 
 The Manager's behavior is controlled by two editable templates:
 
@@ -149,108 +193,87 @@ The Manager's behavior is controlled by two editable templates:
 
 | Placeholder | Value |
 |-------------|-------|
-| `{{actionTypes}}` | Formatted list of action types available for this event (filtered by label compatibility — see [Label-Based Action Type Filtering](#label-based-action-type-filtering)) |
-| `{{actors}}` | Formatted list of all configured actors |
+| `{{actionTypes}}` | Formatted list of manager-triggerable action types |
+| `{{agents}}` | Formatted list of all configured agents |
 | `{{source}}` | Event source type (e.g. "github") |
-| `{{eventType}}` | Event type (e.g. "issue-created", "comment-added") |
-| `{{issueRef}}` | Issue reference (e.g. "owner/repo#42") |
-| `{{repository}}` | Repository (e.g. "owner/repo") |
-| `{{payload}}` | Raw event payload JSON |
-| `{{projectContext}}` | Existing project details and recent task history |
+| `{{eventType}}` | Normalized event type (e.g. "issue.created", "pr.merged") |
+| `{{ref}}` | Full URL identifying the subject of the event |
+| `{{payload}}` | Typed event payload JSON |
+| `{{projectContext}}` | Existing project details and recent task history, when the event matches an existing project |
 
 #### Manager Decisions
 
-The Manager produces one of these decision types:
+The Manager produces one of these decision types for each event it evaluates:
 
 | Decision | What Happens |
 |----------|-------------|
-| **create_project** | A new Project is created to track work for this issue |
-| **assign_task** | A Task is created and assigned to an Actor using a specific Action Type |
-| **update_project** | An existing Project's status or details are updated |
+| **create_task** | A Task is created (and a Project found or created) for the chosen action type |
+| **script_action** | Same as `create_task`, but for a script-mode action type |
 | **ignore** | No action — the event is logged but nothing else happens |
-| **request_info** | The Manager needs more context before deciding |
+| **escalate** | The Manager flags the event for human review without taking action |
 
 Each decision includes a **confidence score** (0.0–1.0). Only decisions above the
 configured threshold (default 0.7) are auto-executed. Lower-confidence decisions are
-flagged for human review in the UI.
-
-#### Label-Based Action Type Filtering
-
-Before the Manager evaluates an event, Axiom filters the list of candidate action
-types based on **label compatibility** between the event's source and the action types:
-
-- **Action types with no labels** are always included. This is the default — existing
-  action types without labels continue to work for all event sources.
-- **Action types with labels** are included only if their labels are a **subset** of
-  the event source's labels.
-
-This lets you scope action types to specific teams, environments, or domains. For
-example, if you label an event source `"frontend"` and an action type `"frontend"`,
-that action type will only be offered to the Manager for events from that source. An
-action type labeled `"frontend", "security"` would require an event source with *both*
-labels to be included.
-
-Action types with no labels remain universally available, so existing configurations
-are unaffected.
+automatically escalated to the Inbox for human review.
 
 ### Projects
 
 A Project is a long-lived entity that tracks all work related to an issue. When the
-Manager decides to create a project for a GitHub issue, Axiom:
+Manager (or a routing rule) creates a project for a GitHub issue or Jira ticket, Axiom:
 
-1. Creates a Project record linked to the issue reference (e.g. `owner/repo#42`)
+1. Creates a Project record linked to the issue's `ref` URL
 2. Sets up a workspace directory for the Project
-3. Tracks all tasks, events, and activity related to that issue
+3. Tracks all tasks, workflow runs, and activity related to that issue
 
 Projects follow a lifecycle state machine:
 
 ```
-Created ──► In Progress ──► Completed
-                         ──► Failed
-          ──► Idle       ──► In Progress
-          ──► Cancelled
+Created ──► InProgress ──► Completed
+        ──► Idle       ──► InProgress
 ```
 
 The project detail page shows:
 
-- **Summary** — status, issue reference, repository, labels, creation date
+- **Summary** — status, ref, repository, labels, creation date
 - **Tasks** — all tasks assigned within this project
 - **Thread** — a chronological log of all activity (events, decisions, task results)
-- **Events** — raw events associated with this project
+- **Events** — raw stream events associated with this project
 - **Metrics** — AI cost, token usage, and disk usage for this project
 
 ### Action Types
 
 An Action Type defines a kind of work that can be performed. It is the bridge between
-a Manager decision ("assign a task") and the actual execution. Each action type
-specifies:
+a Manager decision (or a direct `invoke-action` routing rule) and the actual execution.
+Each action type specifies:
 
 | Field | Purpose |
 |-------|---------|
 | **Name** | Identifies the action type (e.g. "Implement Feature", "Code Review") |
-| **Execution mode** | `actor` (AI agent or human) or `script` (bash script) |
-| **Prompt template** | Instructions for the AI agent (actor mode) |
+| **Execution mode** | `agent` (AI agent or human-completed task) or `script` (bash script) |
+| **Prompt template** | Instructions for the AI agent (agent mode) |
 | **Script template** | Bash script to execute (script mode) |
 | **Allowed tools** | Which tools the AI agent may use |
 | **Environment** | Custom environment variables for the subprocess |
-| **Model / Engine** | Override the global AI model or engine for this action type |
-| **Labels** | Free-form labels that scope this action type to matching event sources (see [Label-Based Action Type Filtering](#label-based-action-type-filtering)) |
+| **Model / Engine** | Override the global AI model or agent type for this action type |
 | **User triggerable** | Can be manually triggered from the project detail page |
 | **Manager triggerable** | Can be selected by the AI Manager during triage |
 | **Emits event** | Whether completing this action creates an internal event (enabling chained actions) |
 
 #### Execution Modes
 
-**Actor mode** — the action is executed by an AI agent (or a human actor). The agent
-receives the prompt template with placeholders substituted:
+**Agent mode** — the action is executed by an AI agent. The agent receives the prompt
+template with placeholders substituted:
 
 | Placeholder | Value |
 |-------------|-------|
 | `{{managerInput}}` | Instructions/context from the Manager's decision |
 | `{{actionType}}` | The action type name |
-| `{{issueRef}}` | Issue reference |
-| `{{repository}}` | Repository |
+| `{{ref}}` | Full URL identifying the project's subject |
+| `{{repository}}` | Repository, when applicable |
 | `{{projectName}}` | Project name |
+| `{{event}}` | Raw event payload JSON, when the task originated from an event |
+| `{{workDir}}` | The project's workspace directory |
+| `{{inputs.NAME}}` | A named workflow input (workflow tasks only) |
 
 **Script mode** — a bash script runs directly. The script template supports the same
 placeholders plus additional ones:
@@ -261,7 +284,6 @@ placeholders plus additional ones:
 | `{{eventId}}` | The triggering event ID |
 | `{{taskId}}` | The task ID |
 | `{{apiBaseUrl}}` | Axiom's own API base URL (for callbacks) |
-| `{{inputs.NAME}}` | A named workflow input (workflow tasks only) |
 
 > **Placeholder values are treated as literal data.** In script mode each
 > placeholder is not inlined into the script text. Instead its value is passed to
@@ -283,53 +305,69 @@ placeholders plus additional ones:
 A Task is a single unit of work within a Project. Tasks are created when:
 
 - The Manager assigns work via an action type
+- A routing rule with an `invoke-action` destination fires
 - A user manually triggers an action type from the project detail page
+- A workflow reaches an `action` or `human-task` node
 
-Each task records its assigned actor, action type, execution output, status, cost, and
+Each task records its assigned agent, action type, execution output, status, cost, and
 duration. Task statuses:
 
 | Status | Meaning |
 |--------|---------|
-| **Pending** | Queued, waiting for an available actor |
-| **In Progress** | Currently being executed |
-| **Awaiting Input** | The AI agent asked the user a question (actor mode) |
+| **Pending** | Queued, waiting for an available agent |
+| **InProgress** | Currently being executed |
+| **AwaitingInput** | The task requires human input and is visible in the Inbox |
 | **Completed** | Finished successfully |
 | **Failed** | Execution failed |
 | **Cancelled** | Cancelled before completion |
 
-### Actors
+Tasks in **AwaitingInput** status appear in the Inbox — either because the Manager
+escalated a low-confidence decision, an AI agent asked a question, or a workflow
+reached a human-task node. See [Navigating the UI](navigating-the-ui.md#inbox).
 
-An Actor is an entity that performs tasks. Axiom supports two types:
+### AI Agents
 
-**AI Agent** — uses the configured AI engine (Claude Code, OpenCode, or GitHub Copilot CLI) as a subprocess.
-The agent receives the action type's prompt template, runs with the allowed tools, and
-reports back with results.
-
-**Human** — sends notifications (via Slack or Telegram, when configured) to a team
-member. The task remains in a pending state until the human updates it through the UI.
-
-Each actor has:
+An Agent is a configured slot in Axiom's agent pool that executes work — tasks, report
+generation, and agent-mode scheduled jobs all draw from the same pool. Each configured
+agent has:
 
 - **Name** and **description**
-- **Type** — `ai-agent` or `human`
-- **Capabilities** — tags that help the Manager choose the right actor for a task
-  (e.g. "analyze", "implement", "review")
+- **Agent type** — `claude-code`, `opencode`, or `copilot`
+- **Capabilities** — glob patterns that determine which work this agent is eligible for
+  (e.g. `action:*`, `report:weekly-status`, or `*` for anything)
+- **Enabled** — whether the agent is currently available for new work
 
-#### Why Create Multiple AI Agent Actors?
+#### How Work Is Matched to Agents
 
-Each AI agent actor can only execute one task at a time. Creating multiple AI agent
-actors serves two purposes:
+Each unit of work requests a capability string when it needs an agent:
 
-1. **Control concurrency** — the number of AI agent actors determines how many AI tasks
-   can run simultaneously. Three AI agent actors means at most three tasks executing in
-   parallel. If all actors are busy, new tasks queue until one becomes available.
+| Work | Capability requested |
+|------|------------------------|
+| Task for action type `X` | `action:X` |
+| Report definition with slug `X` | `report:X` |
+| Scheduled job with slug `X` | `job:X` |
 
-2. **Restrict which actors handle which work** — an actor's capabilities are matched
-   against the action type when the Manager assigns a task. By giving different actors
-   different capabilities, you control which actors are eligible for which types of work.
-   For example, you might create a single actor with the capability "security-review" so
-   that security review tasks always run one at a time, while having three actors with
-   "implement" capability to allow three feature tasks in parallel.
+Axiom leases the first enabled, idle agent whose capability patterns match. Each agent
+can execute only one unit of work at a time; if no matching agent is idle, the work
+stays queued until one becomes available. This means the number of configured agents —
+and how their capabilities are scoped — determines how much work can run in parallel
+and which agents are eligible for which kind of work.
+
+#### Why Create Multiple Agents?
+
+1. **Control concurrency** — the number of agents with a matching capability
+   determines how many units of that kind of work can run simultaneously.
+2. **Restrict which agents handle which work** — by scoping capabilities narrowly
+   (e.g. `action:security-review` on a single agent, `action:*` on several others),
+   you can guarantee sensitive work runs one at a time while general work runs in
+   parallel.
+
+#### Human-Completed Tasks
+
+Not every task is executed by an AI agent. Some action types produce tasks that require
+a human to respond — these tasks move to **AwaitingInput** status and appear in the
+Inbox until a user completes them through the UI, at which point the task result is
+recorded and any downstream automation (e.g. a waiting workflow) resumes.
 
 ---
 
@@ -344,12 +382,12 @@ fixed cadence.
 
 ```
 Scheduled Job ──► Axiom triggers execution ──► Agent or script runs ──► Run record
-  (definition)      (on schedule or ad hoc)      (actor or bash)        (stored + viewable)
+  (definition)      (on schedule or ad hoc)      (agent or bash)        (stored + viewable)
 ```
 
 1. You create a **Scheduled Job** that defines what to do and when to do it
 2. Axiom triggers execution on the configured schedule, or when you click **Run Now**
-3. The job runs using the configured execution mode — an AI agent (actor mode) or a
+3. The job runs using the configured execution mode — an AI agent (agent mode) or a
    bash script (script mode)
 4. The result is recorded as a **Run** with status, output, cost, and duration
 
@@ -364,12 +402,12 @@ Each scheduled job includes:
 | **Schedule** | When to run: hourly, daily, weekly, monthly, or none (manual only) |
 | **Time of day** | Time to run (e.g. `08:00`) |
 | **Day of week** | For weekly schedules (e.g. `monday`) |
-| **Execution mode** | `actor` (AI agent) or `script` (bash script) |
-| **Prompt template** | Instructions for the AI agent (actor mode) |
+| **Execution mode** | `agent` (AI agent) or `script` (bash script) |
+| **Prompt template** | Instructions for the AI agent (agent mode) |
 | **Script template** | Bash script to execute (script mode) |
-| **Allowed tools** | Tools the AI agent may use (actor mode) |
+| **Allowed tools** | Tools the AI agent may use (agent mode) |
 | **Environment** | Custom environment variables with `${secret:NAME}` support |
-| **Model / Engine** | Override the global AI model or engine |
+| **Model / Engine** | Override the global AI model or agent type |
 | **Max steps** | Optional limit on agent turns |
 | **Max budget** | Optional cost limit in USD |
 | **Labels** | Free-form labels for organization |
@@ -377,8 +415,9 @@ Each scheduled job includes:
 
 #### Execution Modes
 
-**Actor mode** — the job is executed by an AI agent. The agent receives the prompt
-template with placeholders substituted:
+**Agent mode** — the job is executed by an AI agent drawn from the shared agent pool
+(capability `job:<slug>`). The agent receives the prompt template with placeholders
+substituted:
 
 | Placeholder | Value |
 |-------------|-------|
@@ -403,11 +442,11 @@ with metadata:
 - **Status** — Pending, Running, Completed, or Failed
 - **Trigger** — whether the run was triggered by the schedule or manually
 - **Output** — the execution result
-- **Cost** — AI token cost in USD (actor mode)
+- **Cost** — AI token cost in USD (agent mode)
 - **Duration** — how long execution took
 - **Execution log** — full transcript for debugging
 
-Runs are viewable from the scheduled job detail page.
+Runs are viewable from the scheduled job detail page and from **Logs > Job Runs**.
 
 ### Differences from Reports and Action Types
 
@@ -418,14 +457,26 @@ Scheduled Jobs fill a gap between reports and action types:
   documents.
 - **Unlike action types**, scheduled jobs are not triggered by events or tied to
   projects. They run on a fixed schedule and are global to the Axiom instance.
-- **Like both**, scheduled jobs support allowed tools, environment variables, and
-  model/engine overrides.
+- **Like both**, scheduled jobs draw from the shared agent pool and support allowed
+  tools, environment variables, and model/engine overrides.
+
+---
+
+## Workflows
+
+Workflows let you define a multi-step automation — including branching, human
+approvals, waits, and event-triggered branches — as a versioned, visually authored
+graph of nodes. A workflow runs against a single project and drives that project's
+tasks.
+
+For the full authoring and run-time reference, see
+[Workflows](workflows.md).
 
 ---
 
 ## Supporting Configuration
 
-Reports, event-driven automation, and scheduled jobs share the following
+Reports, event-driven automation, scheduled jobs, and workflows share the following
 configuration items.
 
 ### Tools
@@ -500,23 +551,26 @@ injected into all subprocesses by default. For fine-grained control, action type
 report definitions can specify a custom **Environment** that selectively references
 secrets using `${secret:SECRET_NAME}` syntax.
 
-Secrets are also used by Event Sources for API authentication when polling.
+Secrets are also used by Connections for API authentication when polling.
 
-### AI Engine
+### AI Agent Pool
 
-Axiom's AI engine is pluggable. The global engine setting determines which CLI is used
-for Manager evaluations and actor task execution:
+Axiom's AI agent support is pluggable. See [AI Agents](#ai-agents) above for how work is
+matched to configured agents, and the [AI Assistant](ai-assistant.md) guide for the
+separate interactive-session use case.
 
-| Engine | CLI | Description |
-|--------|-----|-------------|
+| Agent Type | CLI | Description |
+|------------|-----|-------------|
 | **Claude Code** | `claude` | Anthropic's Claude Code CLI (default) |
 | **OpenCode** | `opencode` | OpenCode CLI with multi-provider support |
 | **GitHub Copilot CLI** | `copilot` | GitHub's Copilot CLI |
 
-Individual action types can override the global engine and model selection, allowing you
-to use different models for different types of work.
+Individual action types, report definitions, and scheduled jobs can override the
+default agent type and model selection, allowing you to use different models for
+different types of work.
 
-The AI Engine page in the UI shows the active engine, health checks, and available models.
+The AI Engine page in the UI shows the default agent type, health checks, and available
+models for each registered agent type.
 
 ### Configuration Packs
 
@@ -529,23 +583,30 @@ files. A pack can include any combination of:
 - MCP servers
 - Report definitions
 - Scheduled jobs
+- Session templates
+- Connections
+- Subscriptions
+- Workflow definitions
 
 This is useful for sharing configurations between Axiom instances, backing up
-configuration, or distributing pre-built setups.
+configuration, or distributing pre-built setups. A configuration pack is not a full
+instance backup — see
+[Upgrading and Backups](../developer-guide/upgrading-and-backups.md) for what else is
+needed to fully back up and restore an instance.
 
 ---
 
 ## AI Assistant
 
-The AI Assistant is an interactive conversational interface built on top of Claude Code. You
-can use it for arbitrary tasks — from creating Axiom configuration items to general-purpose
-coding, analysis, or exploration.
+The AI Assistant is an interactive conversational interface. You can use it for
+arbitrary tasks — from creating Axiom configuration items to general-purpose coding,
+analysis, or exploration.
 
 Sessions are created from **Session Templates**, which define the assistant's system
-prompt, available tools, MCP servers, and working directory. Axiom ships with built-in
-templates (including the Configuration Assistant for creating and updating tools, action
-types, report definitions, scheduled jobs, toolsets, and session templates), and you can
-create your own templates for custom workflows.
+prompt, agent type, available tools, MCP servers, and working directory. Axiom ships
+with built-in templates (including the Configuration Assistant for creating and
+updating tools, action types, report definitions, scheduled jobs, toolsets, workflows,
+and session templates), and you can create your own templates for custom workflows.
 
 For full details, see the [AI Assistant](ai-assistant.md) guide.
 
@@ -605,24 +666,21 @@ The diagram below shows how the concepts relate:
 │    ├─ allowed tools ────────┼──► Tools / @Toolsets / MCP Servers     │
 │    └─ environment ──────────┼──► Secrets                             │
 │                             │                                       │
-│                    AI Engine (Claude Code / OpenCode / Copilot)      │
+│                       Agent Pool (Claude Code / OpenCode / Copilot)   │
 │                                                                     │
 ├─────────────────────────────────────────────────────────────────────┤
 │                   EVENT-DRIVEN AUTOMATION                            │
 │                                                                     │
-│  Event Source ──► Event ──► Manager ──► Decision ──► Task ──► Actor  │
-│    └─ secret          ├─ system prompt    │           │        │     │
-│                       └─ prompt template  │           │        │     │
-│                                           │           │     uses     │
-│                                      Action Type      │        │     │
-│                                        ├─ prompt ─────┘        │     │
-│                                        ├─ tools ───────────────┼──►  │
-│                                        └─ environment ─────────┼──►  │
+│  Connection ──► Event Stream ──► Subscription ──► Routing ──► ...    │
+│    └─ secret                          │            ├─ Manager ──► Task ──► Agent
+│                                       │            ├─ Workflow dispatch
+│                                       │            ├─ Create workflow
+│                                       │            └─ Invoke action ──► Task ──► Agent
 │                                                                │     │
 │                             Tools / @Toolsets / MCP Servers ◄──┘     │
 │                             Secrets ◄──────────────────────────┘     │
 │                                                                     │
-│                    AI Engine (Claude Code / OpenCode / Copilot)      │
+│                       Agent Pool (Claude Code / OpenCode / Copilot)   │
 │                                                                     │
 ├─────────────────────────────────────────────────────────────────────┤
 │                      SCHEDULED JOBS                                  │
@@ -633,23 +691,24 @@ The diagram below shows how the concepts relate:
 │    ├─ allowed tools ───────┼──► Tools / @Toolsets / MCP Servers       │
 │    └─ environment ─────────┼──► Secrets                               │
 │                            │                                         │
-│                   AI Engine (Claude Code / OpenCode / Copilot)        │
+│                      Agent Pool (Claude Code / OpenCode / Copilot)    │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Shared building blocks**: Tools, Toolsets, MCP Servers, Secrets, and the AI Engine
+**Shared building blocks**: Tools, Toolsets, MCP Servers, Secrets, and the Agent Pool
 are shared across all use-cases. Configure them once and reference them from any
-number of report definitions, action types, and scheduled jobs.
+number of report definitions, action types, scheduled jobs, and workflows.
 
 **Reports** are self-contained — they only need a report definition with a prompt
-template and tools. No event sources, projects, or actors are required.
+template, tools, and a matching agent. No connections, projects, or workflows are
+required.
 
-**Event-driven automation** uses the full pipeline — event sources feed events to the
-Manager, which creates projects and assigns tasks to actors using action types. The
-action types determine what tools and prompts the actors use.
+**Event-driven automation** uses the full pipeline — connections feed the event
+stream, subscriptions filter and route matching events, and the Manager (or a direct
+`invoke-action` rule) creates projects and tasks that draw from the agent pool.
 
 **Scheduled Jobs** are self-contained like reports — they need a job definition with
-a schedule and either a prompt template (actor mode) or a script template (script
+a schedule and either a prompt template (agent mode) or a script template (script
 mode). They run independently of the event pipeline and do not produce Markdown
 reports.
 
@@ -657,19 +716,22 @@ reports.
 
 ## Traces
 
-A **Trace** is a hierarchical record of every step that occurred during a single pipeline
-run or report generation. While the [Activity Log](logging-and-debugging.md) shows a flat
-timeline of events across all runs, a trace shows the *tree structure* of one run — which
-steps led to which, how long each took, and whether each succeeded or failed.
+A **Trace** is a hierarchical record of every step that occurred during a single
+manager evaluation, workflow run, scheduled job run, or report generation. While the
+[Activity Log](logging-and-debugging.md) shows a flat timeline of events across all
+runs, a trace shows the *tree structure* of one run — which steps led to which, how
+long each took, and whether each succeeded or failed.
 
 ### When Traces Are Created
 
-Axiom creates a trace automatically whenever it processes an event or generates a report:
+Axiom creates a trace automatically for:
 
-| Trace Type | Trigger | Root Node |
-|------------|---------|-----------|
-| `event-pipeline` | An event is dequeued for processing | `event-ingested` |
-| `report-generation` | A report definition runs (scheduled or ad hoc) | `report-triggered` |
+| Trace Type | Trigger |
+|------------|---------|
+| `manager` | A subscription routes an event to the Manager for evaluation |
+| `workflow` | A workflow instance is triggered |
+| `scheduled-job-execution` | A scheduled job run starts |
+| `report-generation` | A report definition runs (scheduled or ad hoc) |
 
 Each trace has a status (`in-progress`, `completed`, or `failed`), timestamps, and a
 human-readable summary. Traces with asynchronous tasks (e.g. AI agent execution) remain
@@ -677,10 +739,10 @@ human-readable summary. Traces with asynchronous tasks (e.g. AI agent execution)
 
 ### Trace Nodes
 
-Each step in the pipeline creates a **trace node** — a lightweight breadcrumb that
-records what happened at that point. Nodes form a parent-child tree: the root node is the
-trigger (event received or report triggered), and child nodes represent subsequent steps
-like manager evaluation, decision processing, task creation, and tool execution.
+Each step in a run creates a **trace node** — a lightweight breadcrumb that
+records what happened at that point. Nodes form a parent-child tree: the root node is
+the trigger, and child nodes represent subsequent steps such as decision processing,
+task creation, and tool execution.
 
 Every node has:
 
@@ -693,20 +755,6 @@ Every node has:
 
 The entity reference pattern keeps trace nodes small and fast to query. When you click a
 node in the UI, the detail is fetched from the referenced entity on demand.
-
-### Node Types
-
-| Node Type | Meaning | Appears In |
-|-----------|---------|------------|
-| `event-ingested` | An event was received and processing began | Event pipeline (root) |
-| `manager-evaluation` | The AI Manager was invoked to triage the event | Event pipeline |
-| `decision-processed` | A single decision from the Manager was executed | Event pipeline |
-| `task` | A task was created and assigned to an actor | Event pipeline |
-| `tool-execution` | An MCP tool was invoked during task or report execution | Both |
-| `escalation` | The Manager escalated a decision for human review | Event pipeline |
-| `event-ignored` | The Manager decided to ignore the event | Event pipeline |
-| `report-triggered` | A report generation was triggered | Report (root) |
-| `report-ai-invoked` | The AI agent was launched to generate the report | Report |
 
 ### Tool Call Tracing
 
@@ -725,7 +773,7 @@ normally. Tracing never interrupts the agent's work.
 Traces are accessible from several places in the UI:
 
 - **Logs > Traces** — browse and filter all traces
-- **Events page** — click **View Trace** on an event row to jump to its pipeline trace
+- **Project detail page** — view traces associated with the project
 - **Report detail page** — click **View Execution Trace** to see the report's trace
 
 The trace detail page renders the node tree as an interactive tree. Click any

@@ -11,8 +11,9 @@ find things.
 The masthead runs across the top of every page. It contains:
 
 - **Apitomy Axiom** — click the title to return to the Dashboards page from any page
-- **Robot icon** — opens the [AI Assistant](ai-assistant.md) (visible only when the
-  Claude Code engine is active)
+- **Robot icon** — opens the [AI Assistant](ai-assistant.md) (visible only when at
+  least one registered agent supports interactive sessions)
+- **Theme toggle** — cycles between light, dark, and system theme
 - **Question mark icon** — opens the About dialog showing the application version, active
   AI engine, and links to the source repository
 
@@ -57,7 +58,7 @@ only projects, events, and activity associated with that label.
 
 ### Widget Catalog
 
-Axiom ships with 12 built-in widget types across four categories:
+Axiom ships with built-in widget types across several categories:
 
 | Category | Widgets |
 |----------|---------|
@@ -77,7 +78,8 @@ to adjust its settings.
 
 ## Sidebar Navigation
 
-The sidebar organizes the UI into six sections.
+The sidebar organizes the UI into these sections: Dashboards, Inbox, Reports, Projects,
+Events, Logs, Metrics, Components, and Settings.
 
 ### Dashboards
 
@@ -85,10 +87,11 @@ See [Dashboards](#dashboards) above.
 
 ### Inbox
 
-The **Inbox** page shows Manager decisions that require human review — typically
-low-confidence decisions that were not auto-executed. A badge on the sidebar shows
-the count of unreviewed items. Click any item to review the Manager's reasoning and
-approve or reject the proposed action.
+The **Inbox** page shows tasks with status **AwaitingInput** — human tasks routed
+directly to a person, low-confidence Manager decisions escalated for review, tasks
+where an AI agent asked a question, and workflow runs parked at a human-task node. A
+badge on the sidebar shows the count of unreviewed items. Click any item to review its
+context and respond.
 
 ### Reports
 
@@ -101,52 +104,62 @@ range), and execution log.
 
 ### Projects
 
-The **Projects** page lists all projects with their name, status, issue reference,
-labels, and last update. You can filter by name, status, or labels.
+The **Projects** page lists all projects with their name, status, ref, labels, and last
+update. You can filter by name, status, or labels.
 
 Click any project to open its detail page, which has several tabs:
 
-- **Summary** — project status, issue reference, repository, labels, and key metrics
+- **Summary** — project status, ref, repository, labels, and key metrics
 - **Tasks** — all tasks assigned within this project, with status and execution details
 - **Thread** — a chronological log of everything that happened in the project (events
   received, manager decisions, task results)
-- **Events** — raw events from external sources associated with this project
+- **Events** — raw stream events from connections associated with this project
 
 From the project detail page you can also:
 
 - **Trigger an action** — manually run a user-triggerable action type against this
   project
+- **Run a workflow** — start a workflow definition on this project (if none is already
+  running)
 - **Edit labels** — add or remove labels for organization and filtering
 - **Delete** — remove a completed project and all its data
 
+### Events
+
+The **Events** section covers the connection-based event pipeline described in
+[Event-Driven Automation](concepts.md#event-driven-automation):
+
+| Page | What it shows |
+|------|--------------|
+| **Event Stream** | Every normalized event Axiom has recorded from its connections, browsable and filterable. Click a row to view the full typed payload. |
+| **Connections** | Configured links to GitHub/Jira, their poll status, and poll log history |
+| **Subscriptions** | Filtered, routed views over the event stream — create, edit, and preview filter expressions here |
+
 ### Logs
 
-The **Logs** section has four sub-pages, each showing a different slice of system
+The **Logs** section has several sub-pages, each showing a different slice of system
 activity:
 
 | Page | What it shows |
 |------|--------------|
 | **All Activity** | Unified feed of all system events — project creation, task execution, report generation, manager decisions |
-| **Events** | Raw events received from event sources (GitHub issues, PRs, comments) |
 | **Manager Decisions** | The AI Manager's triage results — what action it chose for each event and its confidence score |
-| **Tasks** | Task execution history — which actor ran what action type, duration, cost, and outcome |
-| **Traces** | Visual graph of pipeline execution — shows every step from event ingestion through manager evaluation, decision processing, and task execution |
+| **Tasks** | Task execution history — which agent ran what action type, duration, cost, and outcome |
+| **Job Runs** | Scheduled job execution history |
+| **Traces** | Browse and filter execution traces across manager evaluations, workflow runs, scheduled job runs, and report generation |
+| **Workflow Runs** | All workflow instances across all projects, with status and current node |
 
 Each log page supports filtering and pagination.
 
-The **Traces** page deserves special mention. While the other log pages show tabular data,
-traces render as an interactive directed graph. Each node in the graph represents a step
-in the pipeline (event received, manager evaluated, task created, tool executed, etc.).
-Nodes are color-coded by status — green for completed, blue for in-progress, red for
-failed. Click any node to open a detail modal showing the full data for that step,
-including tool input/output for tool executions and AI reasoning for manager evaluations.
+The **Traces** page deserves special mention. While the other log pages show tabular
+data, a trace detail page renders the node tree as an interactive tree. Each node
+represents a step in the run (event received, decision processed, task created, tool
+executed, etc.) and is color-coded by status. Click any node to open a detail view
+showing the full data for that step, including tool input/output for tool executions
+and AI reasoning for manager evaluations.
 
-You can also navigate to a trace directly from:
-
-- An **event row** on the Events page — click **View Trace** to see the full pipeline
-  trace for that event
-- A **report detail page** — click **View Execution Trace** to see the report generation
-  trace
+You can also navigate to a trace directly from a **report detail page** — click
+**View Execution Trace** — or from a project's tasks and workflow runs.
 
 ### Metrics
 
@@ -154,28 +167,36 @@ The **Metrics** section has two sub-pages:
 
 | Page | What it shows |
 |------|--------------|
-| **AI Usage** | Token costs broken down by invocation type (task vs. manager), action type, and date range. Shows summary totals at the top. |
+| **AI Usage** | Token costs broken down by invocation type (task, manager, report, scheduled job), action type, and date range. Shows summary totals at the top. |
 | **Disk Usage** | Workspace storage consumed by each project's git clone. Shows total disk usage and per-project breakdown. |
 
-### Configuration
+### Components
 
-The **Configuration** section contains all the setup pages. Each page lets you create,
-edit, and delete configuration items:
+The **Components** section contains configuration for the units of work Axiom can
+execute:
 
 | Page | Purpose |
 |------|---------|
-| **AI Engine** | View the active engine, health checks, and available models |
-| **Action Types** | Define kinds of work — prompt templates, allowed tools, execution mode, and labels for event source scoping |
-| **Actors** | Register AI agents and human actors with capabilities |
-| **Manager** | Edit the Manager's system prompt and prompt template |
+| **Action Types** | Define kinds of work — prompt templates, allowed tools, execution mode, and manager/user triggerability |
+| **Agents** | Register AI agent slots with capabilities that determine which work they're eligible for |
+| **AI Assistant** (Session Templates) | Define AI Assistant session templates with system prompts, agent type, tools, and MCP servers |
 | **MCP Servers** | Register external MCP tool servers (HTTP or stdio) |
 | **Report Definitions** | Create report templates with schedules, time windows, and prompts |
 | **Scheduled Jobs** | Define CRON-style automation with schedules, prompt or script templates, and allowed tools |
-| **Event Sources** | Connect to GitHub or Jira repositories for event polling, with labels and event filters |
 | **Secrets** | Store encrypted credentials injected into subprocesses |
 | **Tools** | Define script-based tools with parameters and bash templates |
 | **Toolsets** | Group tools into named collections for reuse |
-| **Session Templates** | Define AI Assistant session templates with system prompts, tools, and MCP servers |
+| **Workflows** | Author, version, and publish workflow definitions |
+
+### Settings
+
+The **Settings** section contains instance-wide configuration:
+
+| Page | Purpose |
+|------|---------|
+| **AI Engine** | View and change the default agent type, health checks, and available models per registered agent |
+| **Manager** | Edit the Manager's system prompt and prompt template |
+| **Data Retention** | Configure how long closed projects, traces, and events are kept before automatic cleanup |
 | **Configuration Packs** | Export and import bundles of configuration as JSON |
 
 Most configuration pages follow the same pattern: a list view with a **Create** button,

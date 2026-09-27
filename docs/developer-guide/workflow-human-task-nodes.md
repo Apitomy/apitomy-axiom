@@ -131,7 +131,7 @@ Downstream nodes and edge conditions can reference the answers via their keys (e
 
 ---
 
-## Supported and Unsupported Node Types
+## Supported Node Types
 
 Axiom workflows currently support the following node types:
 
@@ -139,14 +139,12 @@ Axiom workflows currently support the following node types:
 - `end` — workflow termination
 - `action` — executes a tool or script
 - `human-task` — pauses for user input (this doc)
+- `wait` — pauses the instance for a fixed duration before resuming automatically
+- `receive-event` — pauses the instance until a matching stream event is dispatched to it by a
+  subscription's `workflow-dispatch` routing rule
 
-**Unsupported node types** (rejected at workflow trigger time):
-
-- `wait` — time-based delays
-- `receive-event` — external event subscriptions
-
-Attempting to run a workflow containing unsupported node types will fail with an error indicating which
-node type is not yet implemented.
+For the full authoring and run-time reference across all node types, see
+[Workflows](../user-guide/workflows.md).
 
 ---
 
@@ -154,10 +152,11 @@ node type is not yet implemented.
 
 A workflow that waits for manager approval before deploying:
 
-1. **Start node** — receives `projectId`, `projectName`, `repository`, `ref` (canonical inputs).
+1. **Start node** — receives `projectId` and `ref` (canonical inputs; see
+   [Workflow Input Contract](workflow-input-contract.md)).
 2. **Action node** — runs a build script, outputs `buildArtifact`.
 3. **Human-task node** (`Manager Approval`) —
-   - Inputs: `projectName`, `buildArtifact` (shown as read-only context)
+   - Inputs: `ref`, `buildArtifact` (shown as read-only context)
    - Outputs:
      ```json
      [
@@ -170,5 +169,5 @@ A workflow that waits for manager approval before deploying:
 5. **Action node** (`Deploy`) — uses `buildArtifact` from step 2.
 
 When the workflow reaches step 3, a manager sees a task titled "Manager Approval" with read-only details
-showing the project name and build artifact, plus a checkbox for approval and a textarea for notes. After
+showing the project ref and build artifact, plus a checkbox for approval and a textarea for notes. After
 they submit, the workflow continues based on their `approved` answer.

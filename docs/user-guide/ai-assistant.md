@@ -8,14 +8,17 @@ coding assistance.
 
 Out of the box, Axiom ships three built-in templates: a **Configuration Assistant** for
 creating and updating tools, action types, report definitions, scheduled jobs, toolsets,
-and session templates, a **General Assistant** for open-ended tasks, and a **Project
-Assistant** for working within the context of a specific project. You can also create
-your own templates to define custom workflows.
+connections, subscriptions, workflows, and session templates, a **General Assistant** for
+open-ended tasks, and a **Project Assistant** for working within the context of a
+specific project. You can also create your own templates to define custom workflows.
 
 !!! note
-    The AI Assistant requires an active AI engine that supports interactive sessions
-    (`claude-code` or `opencode`). If OpenCode capability checks fail at startup,
-    session creation is rejected with a compatibility error.
+    The AI Assistant requires at least one registered agent that supports interactive
+    sessions (currently `claude-code` or `opencode`). A session template can select
+    which agent type to use; if none is specified, the template falls back to the
+    instance's default agent type. If OpenCode capability checks fail at startup,
+    session creation using an OpenCode-backed template is rejected with a compatibility
+    error.
 
 ---
 
@@ -39,6 +42,7 @@ Each template specifies:
 | **Name / Description** | Display name and summary shown in the template picker. |
 | **System Prompt** | Markdown instructions passed to the active interactive engine. |
 | **Welcome Message** | First message shown in the chat, attributed to the assistant. |
+| **Agent Type** | Optional override selecting which registered agent type (`claude-code`, `opencode`) drives sessions created from this template. Falls back to the instance's default agent type when unset. |
 | **Working Directory** | Absolute path for the session. If empty, Axiom creates a temporary directory under `~/.axiom/assistant/sessions/`. For project-scoped sessions, defaults to the project workspace. |
 | **Initial Message** | Optional message automatically sent to the AI when a session starts. Supports `{{projectName}}` placeholder. |
 | **Model** | Optional AI model override (e.g., a specific Claude model). |
@@ -88,9 +92,9 @@ Select the script type from the **Init Script** tab dropdown when editing a temp
 Write the script body in the editor below it.
 
 **Timeout:** Init scripts have a **60-second timeout**. If the script does not exit
-within 60 seconds, it is killed and the session continues without it. Keep scripts
-focused on quick setup tasks — long-running operations should be handled by the
-assistant itself during the conversation.
+within 60 seconds, or exits with a non-zero status, session creation fails and an
+error is shown. Keep scripts focused on quick setup tasks — long-running operations
+should be handled by the assistant itself during the conversation.
 
 **Environment:** Init scripts do **not** inherit the template's environment variables.
 Template environment variables (including resolved `${secret:NAME}` references) are
@@ -157,8 +161,8 @@ fs.writeFileSync("context.json", JSON.stringify(issue, null, 2));
    "rocket-penguin-waffle"). You can accept or change it.
 5. Click **Create** to start the session.
 
-Axiom supports a limited number of concurrent sessions (default: 3). Idle sessions are
-automatically destroyed after one hour.
+Axiom supports a limited number of concurrent sessions (default: 3, configurable via
+`axiom.assistant.max-sessions`).
 
 ---
 
@@ -267,16 +271,19 @@ the standard session interface with a two-panel layout and an Apply workflow.
 ### Generated Items
 
 As the assistant creates or updates items, they appear in the sidebar. The assistant
-can work with six types of configuration items:
+can work with these types of configuration items:
 
 | Type | What it produces |
 |------|-----------------|
 | **Tools** | Script-based tools with parameters, descriptions, and bash script templates |
-| **Action Types** | Actor or script-mode action types with prompt templates, allowed tools, and trigger settings |
+| **Action Types** | Agent or script-mode action types with prompt templates, allowed tools, and trigger settings |
 | **Report Definitions** | Scheduled or ad-hoc reports with prompt templates, allowed tools, and time windows |
 | **Scheduled Jobs** | CRON-style automation with prompt or script templates, allowed tools, and schedule settings |
 | **Toolsets** | Named groups of tools that can be referenced in action types and session templates using `@ToolsetName` |
 | **Session Templates** | Custom AI Assistant session configurations with a persona, system prompt, MCP servers, and allowed tools |
+| **Connections** | Links to GitHub or Jira for the event stream pipeline |
+| **Subscriptions** | Filter expressions and routing rules over the event stream |
+| **Workflows** | Versioned, multi-step automation definitions |
 
 Each item shows its type, name, and validation status — a green checkmark if valid, or
 a warning/error icon if there are problems. Click any item to open a detail modal

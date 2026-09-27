@@ -26,60 +26,54 @@ new pipeline stages with tracing.
 
 ## Data Model
 
-All trace entities live in `core/src/main/java/io/apitomy/axiom/core/entities/`.
+Trace entities live in `core/src/main/java/io/apitomy/axiom/core/entities/`. Read
+`TraceEntity.java`, `TraceNodeEntity.java`, and `ToolExecutionEntity.java` directly for
+the exact field list — the concepts below are what you need to work with the API and
+build new instrumentation.
 
 ### TraceEntity
 
-Root of a complete execution trace. Extends `PanacheEntityBase` (not `PanacheEntity`)
-because it uses a UUID primary key instead of the standard auto-increment Long.
+The root of a complete execution trace (table `trace`). It uses a UUID primary key
+(`traceId`) instead of the standard auto-increment `Long` used elsewhere, because that
+ID doubles as the correlation identifier threaded through subprocess environment
+variables and API callbacks. Each trace has a `traceType` (see below), a status
+(`in-progress`, `completed`, or `failed`), a human-readable summary, optional
+`eventId`/`projectId`/`reportId` associations, and start/completion timestamps.
 
-**Table:** `trace`
+Current trace types:
 
-| Field | Type | Nullable | Description |
-|-------|------|----------|-------------|
-| `traceId` | `UUID` | No (PK) | Unique trace identifier |
-| `traceType` | `String` | No | Trace category: `"event-pipeline"` or `"report-generation"` |
-| `status` | `String` | No | Current status: `"in-progress"`, `"completed"`, or `"failed"` |
-| `summary` | `String(1024)` | No | Human-readable description (truncated to 1024 chars) |
-| `eventId` | `Long` | Yes | Associated event ID (for event pipeline traces) |
-| `projectId` | `Long` | Yes | Associated project ID |
-| `reportId` | `Long` | Yes | Associated report ID (for report generation traces) |
-| `startedOn` | `Instant` | No | Trace start timestamp |
-| `completedOn` | `Instant` | Yes | Trace completion timestamp |
+| Trace Type | Trigger |
+|------------|---------|
+| `manager` | A subscription routes an event to the Manager for evaluation |
+| `workflow` | A workflow instance is triggered |
+| `scheduled-job-execution` | A scheduled job run starts |
+| `report-generation` | A report definition runs (scheduled or ad hoc) |
+| `user-action` | A user manually triggers an action type from the project detail page |
 
 ### TraceNodeEntity
 
-A single step/span within a trace tree. Extends `PanacheEntity` (auto-increment Long PK).
-
-**Table:** `trace_node`
-
-| Field | Type | Nullable | Description |
-|-------|------|----------|-------------|
-| `id` | `Long` | No (PK) | Auto-generated node ID |
-| `traceId` | `UUID` | No | Parent trace UUID |
-| `parentNodeId` | `Long` | Yes | Parent node ID (`null` for root nodes) |
-| `nodeType` | `String` | No | Step type identifier (see Node Types below) |
-| `status` | `String` | No | Current status: `"in-progress"`, `"completed"`, or `"failed"` |
-| `summary` | `String(1024)` | No | Human-readable description |
-| `startedOn` | `Instant` | No | Node start timestamp |
-| `completedOn` | `Instant` | Yes | Node completion timestamp |
-| `durationMs` | `Long` | Yes | Elapsed time in milliseconds (set at completion) |
-| `entityType` | `String` | Yes | Type of the referenced detail entity |
-| `entityId` | `Long` | Yes | ID of the referenced detail entity |
+A single step/span within a trace tree (table `trace_node`). Nodes form a parent-child
+tree via `parentNodeId` (null for the root node). Each node has a `nodeType`, a status,
+a summary, start/completion timestamps with a computed `durationMs`, and an optional
+`entityType` + `entityId` pair that points to a more detailed record elsewhere in the
+system.
 
 #### Node Types
 
+Node type strings are chosen by whichever service creates the node — there is no
+enum, so treat this as the currently observed set rather than an exhaustive contract:
+
 | Node Type | Meaning | Typical Entity Reference |
 |-----------|---------|--------------------------|
-| `event-ingested` | Event received, processing began | `event` |
-| `manager-evaluation` | AI Manager was invoked | `activity-log` |
-| `decision-processed` | A Manager decision was executed | `activity-log` |
+| `manager-evaluation` | AI Manager was invoked (root node of a `manager` trace) | — |
 | `task` | A task was created and assigned | `task` |
+| `report-triggered` | Report generation started (root node of a `report-generation` trace) | `report` |
+| `report-ai-invoked` | AI agent launched for the report | `report` |
+| `scheduled-job-triggered` | Scheduled job run started (root node of a `scheduled-job-execution` trace) | — |
+| `scheduled-job-ai-invoked` | AI agent launched for the job run | — |
+| `workflow` | Workflow instance started (root node of a `workflow` trace) | `workflow-run` |
+| `workflow-wait` | Workflow parked at a `wait` or `receive-event` node | — |
 | `tool-execution` | An MCP tool was invoked | `tool-execution` |
-| `escalation` | Decision escalated for human review | `activity-log` |
-| `event-ignored` | Manager decided to ignore the event | `activity-log` |
-| `report-triggered` | Report generation started | `report` |
-| `report-ai-invoked` | AI agent launched for report | `report` |
 
 #### Entity Types
 
@@ -87,30 +81,20 @@ The `entityType` field determines which entity table the `entityId` references:
 
 | Entity Type | Referenced Entity | Detail Content |
 |-------------|-------------------|----------------|
-| `event` | `EventEntity` | Raw event payload |
+| `event` | `StreamEventEntity` | Raw normalized event payload |
 | `activity-log` | `ActivityLogEntity` | Log entry with type, summary, execution log |
-| `task` | `TaskEntity` | Task details — action type, actor, status, output |
+| `task` | `TaskEntity` | Task details — action type, agent, status, output |
 | `tool-execution` | `ToolExecutionEntity` | Full JSON input and output |
 | `ai-usage` | `AiUsageEntity` | Token counts, cost, model |
 | `report` | `ReportEntity` | Report metadata and content |
+| `workflow-run` | `WorkflowRunEntity` | Workflow run state and current node |
 
 ### ToolExecutionEntity
 
-Detailed record of an MCP tool invocation. Stores the full JSON input and output for
-debugging. Referenced by trace nodes via `entityType="tool-execution"`.
-
-**Table:** `tool_execution`
-
-| Field | Type | Nullable | Description |
-|-------|------|----------|-------------|
-| `id` | `Long` | No (PK) | Auto-generated ID |
-| `traceId` | `UUID` | No | Associated trace UUID |
-| `toolName` | `String` | No | Name of the MCP tool |
-| `toolInput` | `String (TEXT)` | Yes | Tool input as JSON |
-| `toolOutput` | `String (TEXT)` | Yes | Tool output as JSON |
-| `status` | `String` | No | Execution status: `"in-progress"`, `"completed"`, or `"failed"` |
-| `durationMs` | `Long` | Yes | Tool execution time in milliseconds |
-| `createdOn` | `Instant` | No | Creation timestamp |
+Detailed record of an MCP tool invocation (table `tool_execution`), storing the full
+JSON input and output for debugging. Referenced by trace nodes via
+`entityType="tool-execution"`. Each record carries the associated `traceId`, the tool
+name, its JSON input/output, a status, and a duration.
 
 ---
 
@@ -127,7 +111,7 @@ Creates a new trace and its root node in a single transaction, then fires an SSE
 
 ```java
 public TraceContext createTrace(
-    String traceType,        // e.g. "event-pipeline", "report-generation"
+    String traceType,        // e.g. "manager", "workflow", "scheduled-job-execution", "report-generation"
     String summary,          // human-readable trace description
     Long eventId,            // associated event ID (nullable)
     Long projectId,          // associated project ID (nullable)
@@ -238,7 +222,7 @@ Returns a paginated list of traces with optional filtering.
 |-----------|------|---------|-------------|
 | `page` | integer | 1 | Page number (1-indexed) |
 | `limit` | integer | 20 | Page size |
-| `filterTraceType` | string | — | Filter by trace type (e.g. `"event-pipeline"`) |
+| `filterTraceType` | string | — | Filter by trace type (e.g. `"manager"`, `"workflow"`, `"scheduled-job-execution"`, `"report-generation"`) |
 | `filterStatus` | string | — | Filter by status (comma-separated, e.g. `"in-progress,completed"`) |
 | `filterEventId` | integer | — | Filter by event ID |
 | `filterProjectId` | integer | — | Filter by project ID |
@@ -251,11 +235,11 @@ Returns a paginated list of traces with optional filtering.
   "items": [
     {
       "traceId": "a1b2c3d4-...",
-      "traceType": "event-pipeline",
+      "traceType": "manager",
       "status": "completed",
-      "summary": "Processing event #42: issue-created",
-      "eventId": 42,
-      "projectId": null,
+      "summary": "Manager evaluation: issue.created — https://github.com/owner/repo/issues/42",
+      "eventId": null,
+      "projectId": 7,
       "reportId": null,
       "startedOn": "2026-06-29T10:00:00Z",
       "completedOn": "2026-06-29T10:00:05Z"
@@ -269,18 +253,16 @@ Returns a paginated list of traces with optional filtering.
 
 ### Convenience: List Traces by Entity
 
-The API also provides convenience endpoints that return traces for a specific event,
-project, or report. These return a JSON array of `Trace` objects (not paginated).
+The API also provides convenience endpoints that return traces for a specific project
+or report. These return a JSON array of `Trace` objects (not paginated).
 
 ```
-GET /api/v1/events/{eventId}/traces
 GET /api/v1/projects/{projectId}/traces
 GET /api/v1/reports/{reportId}/traces
 ```
 
 | Endpoint | Path Parameter | Description |
 |----------|----------------|-------------|
-| `GET /events/{eventId}/traces` | `eventId` (integer) | All traces associated with the given event |
 | `GET /projects/{projectId}/traces` | `projectId` (integer) | All traces associated with the given project |
 | `GET /reports/{reportId}/traces` | `reportId` (integer) | All traces associated with the given report |
 
@@ -307,10 +289,10 @@ Returns a trace and all of its nodes.
 {
   "trace": {
     "traceId": "a1b2c3d4-...",
-    "traceType": "event-pipeline",
+    "traceType": "manager",
     "status": "completed",
-    "summary": "Processing event #42: issue-created",
-    "eventId": 42,
+    "summary": "Manager evaluation: issue.created — https://github.com/owner/repo/issues/42",
+    "projectId": 7,
     "startedOn": "2026-06-29T10:00:00Z",
     "completedOn": "2026-06-29T10:00:05Z"
   },
@@ -319,26 +301,26 @@ Returns a trace and all of its nodes.
       "id": 1,
       "traceId": "a1b2c3d4-...",
       "parentNodeId": null,
-      "nodeType": "event-ingested",
+      "nodeType": "manager-evaluation",
       "status": "completed",
-      "summary": "Event received: issue-created",
+      "summary": "Manager evaluation: issue.created",
       "startedOn": "2026-06-29T10:00:00Z",
       "completedOn": "2026-06-29T10:00:00Z",
       "durationMs": 0,
-      "entityType": "event",
-      "entityId": 42
+      "entityType": null,
+      "entityId": null
     },
     {
       "id": 2,
       "traceId": "a1b2c3d4-...",
       "parentNodeId": 1,
-      "nodeType": "manager-evaluation",
+      "nodeType": "task",
       "status": "completed",
-      "summary": "Manager evaluation: issue-created",
-      "startedOn": "2026-06-29T10:00:00Z",
-      "completedOn": "2026-06-29T10:00:03Z",
-      "durationMs": 3000,
-      "entityType": "activity-log",
+      "summary": "Task: Auto-Label Issue",
+      "startedOn": "2026-06-29T10:00:03Z",
+      "completedOn": "2026-06-29T10:00:05Z",
+      "durationMs": 2000,
+      "entityType": "task",
       "entityId": 15
     }
   ]
@@ -466,7 +448,7 @@ TraceService traceService;
 
 ### Step 2: Create a Trace or Add a Node
 
-If your code is the entry point for a new pipeline (like `PipelineOrchestrator` or
+If your code is the entry point for a new pipeline (like `EventStreamOrchestrator` or
 `ReportExecutionService`), create a new trace:
 
 ```java
