@@ -282,6 +282,8 @@ public class WorkflowExecutionService {
             return;
         }
 
+        completeParkedTraceNode(entity, "workflow-wait");
+
         Workflow workflow = loadWorkflowContent(
                 entity.definitionId, entity.definitionVersion);
         WorkflowInstance instance = deserializeInstance(entity.instanceState);
@@ -310,6 +312,8 @@ public class WorkflowExecutionService {
                     runId, nodeId);
             return;
         }
+
+        completeParkedTraceNode(entity, "workflow-event-subscription");
 
         Workflow workflow = loadWorkflowContent(
                 entity.definitionId, entity.definitionVersion);
@@ -419,6 +423,28 @@ public class WorkflowExecutionService {
             return null;
         }
         return new TraceContext(run.traceId, root.id);
+    }
+
+    /**
+     * Completes the trace node for a parked workflow node (wait or receive-event)
+     * when the node resumes. Looks up the trace node by entity type and marks it
+     * completed.
+     */
+    private void completeParkedTraceNode(WorkflowRunEntity entity, String entityType) {
+        if (entity.traceId == null) {
+            return;
+        }
+        try {
+            io.apitomy.axiom.core.entities.TraceNodeEntity node =
+                    io.apitomy.axiom.core.entities.TraceNodeEntity.find(
+                            "traceId = ?1 and entityType = ?2 and status = 'in-progress'",
+                            entity.traceId, entityType).firstResult();
+            if (node != null) {
+                traceService.completeNode(node.id, "completed");
+            }
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to complete parked trace node for workflow run %d", entity.id);
+        }
     }
 
     /** Best-effort completion of a run's execution trace. */
