@@ -2,7 +2,7 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.apitomy.axiom.core.entities.EventEntity;
+import io.apitomy.axiom.core.entities.StreamEventEntity;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -20,29 +20,35 @@ public final class WorkflowEventMapper {
     }
 
     /**
-     * Maps an event entity to the curated event map.
+     * Maps a stream event entity to the curated event map for workflow matching.
+     * The map structure is compatible with the Flow engine's EL evaluation.
      *
-     * @param event        the event to map
-     * @param objectMapper used to parse the raw JSON payload
-     * @return a map with keys {@code type}, {@code source}, {@code payload}
-     *         (always present; payload is an empty map when null/unparseable)
-     *         and {@code issueRef}, {@code repository}, {@code receivedAt}
-     *         (present only when non-null on the entity)
+     * @param event        the stream event entity
+     * @param objectMapper used to parse JSON fields
+     * @return a map with keys: type, source, connectionId, ref, timestamp,
+     *         actor, payload
      */
-    public static Map<String, Object> toEventMap(EventEntity event,
+    public static Map<String, Object> toEventMap(StreamEventEntity event,
             ObjectMapper objectMapper) {
         Map<String, Object> map = new HashMap<>();
-        map.put("type", event.eventType);
+        map.put("type", event.type);
         map.put("source", event.source);
-        if (event.issueRef != null) {
-            map.put("issueRef", event.issueRef);
+        map.put("connectionId", event.connectionId);
+        map.put("ref", event.ref);
+        map.put("timestamp", event.timestamp.toString());
+
+        // Parse actor JSON
+        if (event.actor != null) {
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> actor = objectMapper.readValue(event.actor, Map.class);
+                map.put("actor", actor);
+            } catch (JsonProcessingException e) {
+                map.put("actor", Map.of());
+            }
         }
-        if (event.repository != null) {
-            map.put("repository", event.repository);
-        }
-        if (event.receivedAt != null) {
-            map.put("receivedAt", event.receivedAt.toString());
-        }
+
+        // Parse payload JSON
         map.put("payload", parsePayload(event.payload, objectMapper));
         return map;
     }

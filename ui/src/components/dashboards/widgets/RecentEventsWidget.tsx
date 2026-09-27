@@ -1,23 +1,22 @@
 import { useState, useEffect } from "react";
 import { Label } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
-import { type AxiomEvent, fetchEvents } from "../../../config/api";
+import { type StreamEvent, fetchStreamEvents } from "../../../config/api";
 import { registerWidget, type WidgetProps } from "../widget-registry";
 import { WidgetError } from "../WidgetError";
 
-function RecentEventsWidget({ config, labels }: WidgetProps) {
-    const [events, setEvents] = useState<AxiomEvent[]>([]);
+function RecentEventsWidget({ config }: WidgetProps) {
+    const [events, setEvents] = useState<StreamEvent[]>([]);
     const [error, setError] = useState(false);
     const maxRows = Number(config.maxRows) || 10;
 
     useEffect(() => {
         let cancelled = false;
-        const labelsParam = labels.length > 0 ? labels.join(",") : undefined;
-        fetchEvents(1, maxRows, undefined, undefined, undefined, labelsParam)
+        fetchStreamEvents(1, maxRows)
             .then(result => { if (!cancelled) setEvents(result.items); })
             .catch(() => { if (!cancelled) setError(true); });
         return () => { cancelled = true; };
-    }, [labels, maxRows]);
+    }, [maxRows]);
 
     if (error) return <WidgetError />;
 
@@ -30,7 +29,7 @@ function RecentEventsWidget({ config, labels }: WidgetProps) {
     return (
         <Table aria-label="Recent Events" variant="compact" isStickyHeader>
             <Thead><Tr>
-                <Th>Source</Th><Th>Type</Th><Th>Repository</Th><Th>Time</Th>
+                <Th>Source</Th><Th>Type</Th><Th>Ref</Th><Th>Time</Th>
             </Tr></Thead>
             <Tbody>
                 {events.map(evt => (
@@ -40,9 +39,9 @@ function RecentEventsWidget({ config, labels }: WidgetProps) {
                                 {evt.source}
                             </Label>
                         </Td>
-                        <Td>{evt.eventType}</Td>
-                        <Td>{evt.repository || "—"}</Td>
-                        <Td>{formatTime(evt.receivedAt)}</Td>
+                        <Td>{evt.type}</Td>
+                        <Td>{evt.ref || "—"}</Td>
+                        <Td>{formatTime(evt.timestamp)}</Td>
                     </Tr>
                 ))}
                 {events.length === 0 && (

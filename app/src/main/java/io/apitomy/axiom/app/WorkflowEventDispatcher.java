@@ -1,8 +1,6 @@
 package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.apitomy.axiom.core.entities.EventEntity;
-import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.WorkflowEventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
@@ -65,72 +63,43 @@ public class WorkflowEventDispatcher {
     }
 
     /**
-     * Offers an event to all candidate receive-event subscriptions, resuming
-     * every run whose parked node matches. Each offer runs in its own
-     * transaction so a failing resume cannot roll back resumes already
-     * applied for other runs; failures are contained per subscription. This
-     * method itself only throws if the read phase (event load, scoping)
-     * fails.
+     * Dispatches a stream event to all candidate receive-event subscriptions.
+     * Unlike {@link #dispatchEvent(long)}, this method accepts a pre-built
+     * event map from the EventStreamOrchestrator, avoiding entity conversion.
      *
-     * <p>Must be called <b>outside</b> an active transaction: the read phase
-     * and each per-subscription offer each start their own
-     * {@link QuarkusTransaction#requiringNew() new transaction}.</p>
-     *
-     * @param eventId the id of the (filter-allowed) event to dispatch
+     * @param eventType the normalized event type string (e.g., "issue.created")
+     * @param eventMap  the curated event map for EL evaluation and context merging
      */
-    public void dispatchEvent(long eventId) {
-        DispatchPlan plan = QuarkusTransaction.requiringNew().call(() -> planDispatch(eventId));
-        if (plan == null) {
+    public void dispatchStreamEvent(String eventType, Map<String, Object> eventMap) {
+        List<Long> subscriptionIds = QuarkusTransaction.requiringNew()
+                .call(() -> planStreamDispatch(eventType, eventMap));
+
+        if (subscriptionIds == null || subscriptionIds.isEmpty()) {
             return;
         }
 
-        for (Long subId : plan.subscriptionIds()) {
+        for (Long subId : subscriptionIds) {
             try {
                 QuarkusTransaction.requiringNew().run(() ->
-                        offerToSubscription(subId, plan.eventMap()));
+                        offerToSubscription(subId, eventMap));
             } catch (Exception e) {
-                LOG.errorf(e, "Failed to offer event %d to workflow subscription %d",
-                        eventId, subId);
+                LOG.errorf(e, "Failed to offer stream event to workflow subscription %d", subId);
             }
         }
     }
 
     /**
-     * Read phase: loads the event, prefilters subscriptions by event type,
-     * applies hybrid project scoping, and builds the event map. Returns
-     * {@code null} when there is nothing to dispatch.
+     * Read phase for stream events: prefilters subscriptions by event type.
+     * Stream events don't have project scoping the way old events do — the
+     * subscription's filter rules handle scoping instead.
      */
-    private DispatchPlan planDispatch(long eventId) {
-        EventEntity event = EventEntity.findById(eventId);
-        if (event == null) {
-            LOG.warnf("Event %d not found for workflow dispatch", eventId);
-            return null;
-        }
-
+    private List<Long> planStreamDispatch(String eventType, Map<String, Object> eventMap) {
         List<WorkflowEventSubscriptionEntity> candidates =
-                WorkflowEventSubscriptionEntity.list("eventType", event.eventType);
+                WorkflowEventSubscriptionEntity.list("eventType", eventType);
         if (candidates.isEmpty()) {
-            return null;
+            return List.of();
         }
-
-        ProjectEntity project = findProjectForEvent(event);
-        if (project != null) {
-            Long projectId = project.id;
-            candidates = candidates.stream()
-                    .filter(sub -> projectId.equals(sub.projectId))
-                    .toList();
-        }
-        if (candidates.isEmpty()) {
-            return null;
-        }
-
-        Map<String, Object> eventMap = WorkflowEventMapper.toEventMap(event, objectMapper);
-        List<Long> subscriptionIds = candidates.stream().map(sub -> sub.id).toList();
-        return new DispatchPlan(subscriptionIds, eventMap);
-    }
-
-    /** Candidate subscription ids plus the event map computed in the read phase. */
-    private record DispatchPlan(List<Long> subscriptionIds, Map<String, Object> eventMap) {
+        return candidates.stream().map(sub -> sub.id).toList();
     }
 
     /**
@@ -167,17 +136,6 @@ public class WorkflowEventDispatcher {
         sub.delete();
         workflowExecutionService.onEventReceived(runId, nodeId, eventMap);
         LOG.infof("Event resumed workflow run %d at receive-event node %s", runId, nodeId);
-    }
-
-    /** Same correlation rule as PipelineOrchestrator.findProjectForEvent. */
-    private ProjectEntity findProjectForEvent(EventEntity event) {
-        if (event.issueRef != null) {
-            return ProjectEntity.find("ref", event.issueRef).firstResult();
-        }
-        if (event.projectId != null) {
-            return ProjectEntity.findById(event.projectId);
-        }
-        return null;
     }
 
     private Workflow loadWorkflowContent(long definitionId, int definitionVersion) {

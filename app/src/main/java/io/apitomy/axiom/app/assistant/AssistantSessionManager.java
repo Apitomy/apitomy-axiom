@@ -18,6 +18,8 @@ import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.SystemConfigEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
+import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
+import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.WorkspaceService;
 import jakarta.enterprise.event.Event;
@@ -446,7 +448,9 @@ public class AssistantSessionManager {
         collectItems(workDir, "report-definitions", items);
         collectItems(workDir, "toolsets", items);
         collectItems(workDir, "session-templates", items);
-        collectItems(workDir, "event-sources", items);
+        collectItems(workDir, "connections", items);
+        collectItems(workDir, "subscriptions", items);
+        collectItems(workDir, "workflows", items);
         collectItems(workDir, "scheduled-jobs", items);
 
         return items;
@@ -509,6 +513,20 @@ public class AssistantSessionManager {
 
         // Import or update via the upsert service
         ImportExportService.UpsertResult result = importExportService.importOrUpdatePack(pack);
+
+        // Apply workflow definitions separately (not part of config pack)
+        Path workflowsDir = session.getWorkingDirectory().resolve("workflows");
+        int[] wfCounts = applyWorkflowDefinitions(workflowsDir);
+        result = new ImportExportService.UpsertResult(
+                result.toolsCreated(), result.toolsUpdated(),
+                result.actionTypesCreated(), result.actionTypesUpdated(),
+                result.reportDefinitionsCreated(), result.reportDefinitionsUpdated(),
+                result.toolsetsCreated(), result.toolsetsUpdated(),
+                result.sessionTemplatesCreated(), result.sessionTemplatesUpdated(),
+                result.scheduledJobsCreated(), result.scheduledJobsUpdated(),
+                result.connectionsCreated(), result.connectionsUpdated(),
+                result.subscriptionsCreated(), result.subscriptionsUpdated(),
+                wfCounts[0], wfCounts[1]);
 
         // Destroy session on success
         destroySession(sessionId);
@@ -725,7 +743,9 @@ public class AssistantSessionManager {
                 validateAndFeedback(workDir, "report-definitions", session);
                 validateAndFeedback(workDir, "toolsets", session);
                 validateAndFeedback(workDir, "session-templates", session);
-                validateAndFeedback(workDir, "event-sources", session);
+                validateAndFeedback(workDir, "connections", session);
+                validateAndFeedback(workDir, "subscriptions", session);
+                validateAndFeedback(workDir, "workflows", session);
                 validateAndFeedback(workDir, "scheduled-jobs", session);
             } catch (Exception e) {
                 LOG.warnf(e, "Validation listener error in session %s",
@@ -806,7 +826,8 @@ public class AssistantSessionManager {
         ArrayNode reportDefsArr = pack.putArray("reportDefinitions");
         ArrayNode toolsetsArr = pack.putArray("toolsets");
         ArrayNode templatesArr = pack.putArray("sessionTemplates");
-        ArrayNode eventSourcesArr = pack.putArray("eventSources");
+        ArrayNode connectionsArr = pack.putArray("connections");
+        ArrayNode subscriptionsArr = pack.putArray("subscriptions");
         ArrayNode scheduledJobsArr = pack.putArray("scheduledJobs");
 
         for (AssistantItem item : items) {
@@ -820,12 +841,92 @@ public class AssistantSessionManager {
                 case "report-definitions" -> reportDefsArr.add(content);
                 case "toolsets" -> toolsetsArr.add(content);
                 case "session-templates" -> templatesArr.add(content);
-                case "event-sources" -> eventSourcesArr.add(content);
+                case "connections" -> connectionsArr.add(content);
+                case "subscriptions" -> subscriptionsArr.add(content);
+                case "workflows" -> {} // Handled separately in applyWorkflowDefinitions
                 case "scheduled-jobs" -> scheduledJobsArr.add(content);
             }
         }
 
         return pack;
+    }
+
+    private int[] applyWorkflowDefinitions(Path workflowsDir) throws IOException {
+        if (!Files.isDirectory(workflowsDir)) {
+            return new int[]{0, 0};
+        }
+        int created = 0;
+        int updated = 0;
+
+        try (Stream<Path> files = Files.list(workflowsDir)) {
+            for (Path file : files.filter(f -> f.toString().endsWith(".json")).toList()) {
+                JsonNode json = objectMapper.readTree(Files.readString(file));
+                String name = json.path("name").asText(null);
+                if (name == null) {
+                    continue;
+                }
+
+                JsonNode content = json.path("content");
+                String description = json.has("description")
+                        ? json.path("description").asText() : null;
+
+                // Find existing definition by name
+                WorkflowDefinitionEntity existing = WorkflowDefinitionEntity
+                        .<WorkflowDefinitionEntity>find("name", name).firstResult();
+
+                if (existing == null) {
+                    // Create new definition
+                    WorkflowDefinitionEntity entity = new WorkflowDefinitionEntity();
+                    entity.name = name;
+                    entity.description = description;
+                    entity.createdOn = Instant.now();
+                    entity.updatedOn = Instant.now();
+
+                    if (content != null && !content.isMissingNode()) {
+                        entity.content = objectMapper.writeValueAsString(content);
+                    }
+
+                    entity.persist();
+
+                    if (content != null && !content.isMissingNode()) {
+                        WorkflowDefinitionVersionEntity version =
+                                new WorkflowDefinitionVersionEntity();
+                        version.definitionId = entity.id;
+                        version.version = 1;
+                        version.content = objectMapper.writeValueAsString(content);
+                        version.createdOn = Instant.now();
+                        version.persist();
+                        entity.currentVersion = 1;
+                    }
+
+                    created++;
+                } else {
+                    // Update existing definition
+                    if (description != null) {
+                        existing.description = description;
+                    }
+                    existing.updatedOn = Instant.now();
+
+                    if (content != null && !content.isMissingNode()) {
+                        existing.content = objectMapper.writeValueAsString(content);
+                        int nextVersion = (existing.currentVersion != null
+                                ? existing.currentVersion : 0) + 1;
+                        WorkflowDefinitionVersionEntity version =
+                                new WorkflowDefinitionVersionEntity();
+                        version.definitionId = existing.id;
+                        version.version = nextVersion;
+                        version.content = objectMapper.writeValueAsString(content);
+                        version.createdOn = Instant.now();
+                        version.persist();
+                        existing.currentVersion = nextVersion;
+                    }
+
+                    updated++;
+                }
+            }
+        }
+
+        return new int[]{created, updated};
     }
 
     private Map<String, AssistantContextBuilder.McpServerConfig> resolveMcpServers(

@@ -10,7 +10,7 @@ import io.apitomy.axiom.api.beans.ToolValidationMessage;
 import io.apitomy.axiom.api.beans.ToolValidationResult;
 import io.apitomy.axiom.app.ScheduledJobQueueConsumer;
 import io.apitomy.axiom.app.ScheduledJobScheduler;
-import io.apitomy.axiom.core.SdkToolNames;
+import io.apitomy.axiom.core.SdkFunctionRegistry;
 import io.apitomy.axiom.core.entities.ScheduledJobEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
@@ -287,7 +287,7 @@ public class ScheduledJobsResourceImpl implements ScheduledResource {
         Set<String> toolsets = ToolsetEntity.<ToolsetEntity>listAll().stream()
                 .map(t -> t.name)
                 .collect(java.util.stream.Collectors.toSet());
-        Set<String> sdkTools = SdkToolNames.ALL;
+        Set<String> sdkTools = SdkFunctionRegistry.allToolNames();
         return new ScheduledJobValidator.KnownNames(secrets, tools, toolsets, sdkTools);
     }
 

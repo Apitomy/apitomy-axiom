@@ -373,8 +373,8 @@ export function WorkflowTab({
 
             {workflowContent && viewerInstance && (
                 <div style={{
-                    flex: "1 1 auto",
-                    minHeight: "500px" }}>
+                    flex: "1 1 0",
+                    minHeight: 0 }}>
                     <WorkflowViewer
                         workflow={workflowContent}
                         instance={viewerInstance}

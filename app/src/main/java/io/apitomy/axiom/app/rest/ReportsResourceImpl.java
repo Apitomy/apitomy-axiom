@@ -15,7 +15,7 @@ import io.apitomy.axiom.api.beans.Environment;
 import io.apitomy.axiom.app.ReportAiService;
 import io.apitomy.axiom.app.ReportQueueConsumer;
 import io.apitomy.axiom.app.ReportScheduler;
-import io.apitomy.axiom.core.SdkToolNames;
+import io.apitomy.axiom.core.SdkFunctionRegistry;
 import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
 import io.apitomy.axiom.core.entities.ReportEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
@@ -324,7 +324,7 @@ public class ReportsResourceImpl implements ReportsResource {
         Set<String> toolsets = ToolsetEntity.<ToolsetEntity>listAll().stream()
                 .map(t -> t.name)
                 .collect(java.util.stream.Collectors.toSet());
-        Set<String> sdkTools = SdkToolNames.ALL;
+        Set<String> sdkTools = SdkFunctionRegistry.allToolNames();
         return new ReportDefinitionValidator.KnownNames(secrets, tools, toolsets, sdkTools);
     }
 

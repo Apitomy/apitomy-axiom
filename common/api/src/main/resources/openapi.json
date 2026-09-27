@@ -617,38 +617,6 @@
         }
       ]
     },
-    "/projects/{projectId}/events": {
-      "get": {
-        "tags": [
-          "Events"
-        ],
-        "summary": "List events for a project",
-        "operationId": "listProjectEvents",
-        "responses": {
-          "200": {
-            "description": "List of events related to this project",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Event"
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/ProjectId"
-        }
-      ]
-    },
     "/projects/{projectId}/workflow": {
       "get": {
         "tags": [
@@ -1165,181 +1133,6 @@
           }
         }
       }
-    },
-    "/event-sources": {
-      "get": {
-        "tags": [
-          "EventSources"
-        ],
-        "summary": "List all event sources",
-        "operationId": "listEventSources",
-        "parameters": [
-          {
-            "name": "page",
-            "in": "query",
-            "description": "Page number (1-indexed)",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Items per page",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "filterName",
-            "in": "query",
-            "description": "Filter by name or description (substring match)",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "filterType",
-            "in": "query",
-            "description": "Filter by source type (github or jira)",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "filterLabels",
-            "in": "query",
-            "description": "Filter by labels (comma-separated, AND logic)",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EventSourceSearchResults"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "EventSources"
-        ],
-        "summary": "Create an event source",
-        "operationId": "createEventSource",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewEventSource"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EventSource"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/event-sources/{eventSourceId}": {
-      "get": {
-        "tags": [
-          "EventSources"
-        ],
-        "summary": "Get an event source by ID",
-        "operationId": "getEventSource",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EventSource"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "EventSources"
-        ],
-        "summary": "Update an event source",
-        "operationId": "updateEventSource",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewEventSource"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EventSource"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "EventSources"
-        ],
-        "summary": "Delete an event source",
-        "operationId": "deleteEventSource",
-        "responses": {
-          "204": {
-            "description": "Deleted"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "name": "eventSourceId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "format": "int64",
-            "type": "integer"
-          }
-        }
-      ]
     },
     "/reports/definitions": {
       "get": {
@@ -1987,158 +1780,6 @@
         }
       }
     },
-    "/events": {
-      "get": {
-        "tags": [
-          "Events"
-        ],
-        "summary": "List events (paginated)",
-        "operationId": "listEvents",
-        "parameters": [
-          {
-            "name": "page",
-            "in": "query",
-            "schema": {
-              "default": 1,
-              "type": "integer"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "default": 20,
-              "type": "integer"
-            }
-          },
-          {
-            "name": "filterSource",
-            "in": "query",
-            "description": "Filter by event source",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "filterEventType",
-            "in": "query",
-            "description": "Filter by event type",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "filterRepository",
-            "in": "query",
-            "description": "Filter by repository",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "filterLabels",
-            "in": "query",
-            "description": "Filter by labels (comma-separated, AND logic)",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "filterFilterStatus",
-            "in": "query",
-            "description": "Filter by filter status (allowed or blocked)",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "filterEventSourceId",
-            "in": "query",
-            "description": "Filter by event source ID",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Paginated list of events",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EventSearchResults"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Events"
-        ],
-        "summary": "Fire a new event for processing",
-        "operationId": "fireEvent",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewEvent"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Event created and enqueued",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Event"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/events/{eventId}": {
-      "get": {
-        "tags": [
-          "Events"
-        ],
-        "summary": "Get a single event by ID",
-        "operationId": "getEvent",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Event"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "name": "eventId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "format": "int64",
-            "type": "integer"
-          }
-        }
-      ]
-    },
     "/activity": {
       "get": {
         "tags": [
@@ -2281,10 +1922,10 @@
         {
           "name": "eventId",
           "in": "path",
-          "description": "Event ID to evaluate",
+          "description": "Stream event ID (UUID) to evaluate",
           "required": true,
           "schema": {
-            "type": "integer"
+            "type": "string"
           }
         }
       ]
@@ -3125,94 +2766,6 @@
         }
       ]
     },
-    "/event-sources/{eventSourceId}/logs": {
-      "get": {
-        "tags": [
-          "Event Sources"
-        ],
-        "summary": "List poll logs for an event source",
-        "operationId": "listEventSourceLogs",
-        "parameters": [
-          {
-            "name": "page",
-            "in": "query",
-            "description": "Page number (1-indexed)",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Items per page",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "List of poll log entries",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EventSourceLogSearchResults",
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/EventSourceLog"
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "parameters": [
-        {
-          "name": "eventSourceId",
-          "in": "path",
-          "description": "Event source ID",
-          "required": true,
-          "schema": {
-            "type": "integer"
-          }
-        }
-      ]
-    },
-    "/event-sources/filters/dry-run": {
-      "post": {
-        "tags": [
-          "EventSources"
-        ],
-        "summary": "Test filter configuration against live events",
-        "description": "Fetches recent events from the source API and evaluates the provided filter configuration against them. No events are ingested. Use this to preview what filters would allow or block before saving.",
-        "operationId": "dryRunFilters",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FilterDryRunRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Dry run results",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FilterDryRunResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/system/packs/export": {
       "post": {
         "tags": [
@@ -4048,41 +3601,6 @@
           "name": "nodeId",
           "in": "path",
           "description": "Tool call node ID",
-          "required": true,
-          "schema": {
-            "type": "integer"
-          }
-        }
-      ]
-    },
-    "/events/{eventId}/traces": {
-      "get": {
-        "tags": [
-          "traces"
-        ],
-        "summary": "List traces for an event",
-        "operationId": "listEventTraces",
-        "responses": {
-          "200": {
-            "description": "Traces for event",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Trace"
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "parameters": [
-        {
-          "name": "eventId",
-          "in": "path",
-          "description": "Event ID",
           "required": true,
           "schema": {
             "type": "integer"
@@ -5589,6 +5107,630 @@
           "$ref": "#/components/parameters/WorkflowDefinitionId"
         }
       ]
+    },
+    "/connections": {
+      "get": {
+        "tags": [
+          "Connections"
+        ],
+        "summary": "List all connections",
+        "operationId": "listConnections",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (1-indexed)",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Items per page",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "filterName",
+            "in": "query",
+            "description": "Filter by name (substring match)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filterType",
+            "in": "query",
+            "description": "Filter by source type (github or jira)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of connections",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionSearchResults"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Connections"
+        ],
+        "summary": "Create a connection",
+        "operationId": "createConnection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewConnection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Connection created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connection"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/connections/{connectionId}": {
+      "get": {
+        "tags": [
+          "Connections"
+        ],
+        "summary": "Get a connection by ID",
+        "operationId": "getConnection",
+        "responses": {
+          "200": {
+            "description": "Connection details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connection"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Connections"
+        ],
+        "summary": "Update a connection",
+        "operationId": "updateConnection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewConnection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Connection updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connection"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Connections"
+        ],
+        "summary": "Delete a connection",
+        "operationId": "deleteConnection",
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "connectionId",
+          "in": "path",
+          "description": "Connection ID (slug)",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "/connections/{connectionId}/status": {
+      "get": {
+        "tags": [
+          "Connections"
+        ],
+        "summary": "Get connection status",
+        "operationId": "getConnectionStatus",
+        "responses": {
+          "200": {
+            "description": "Connection status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "connectionId",
+          "in": "path",
+          "description": "Connection ID (slug)",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "/connections/{connectionId}/logs": {
+      "get": {
+        "tags": [
+          "Connections"
+        ],
+        "summary": "List connection poll logs",
+        "operationId": "listConnectionPollLogs",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (1-indexed)",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Items per page",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated poll log results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionPollLogSearchResults"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "connectionId",
+          "in": "path",
+          "description": "Connection ID (slug)",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "/stream/events": {
+      "get": {
+        "tags": [
+          "StreamEvents"
+        ],
+        "summary": "List stream events",
+        "operationId": "listStreamEvents",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (1-indexed)",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Items per page",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "filterType",
+            "in": "query",
+            "description": "Filter by event type pattern",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filterConnectionId",
+            "in": "query",
+            "description": "Filter by connection ID",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filterRef",
+            "in": "query",
+            "description": "Filter by ref (substring match)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of stream events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamEventSearchResults"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stream/events/{eventId}": {
+      "get": {
+        "tags": [
+          "StreamEvents"
+        ],
+        "summary": "Get a stream event by ID",
+        "operationId": "getStreamEvent",
+        "responses": {
+          "200": {
+            "description": "Stream event details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamEvent"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "eventId",
+          "in": "path",
+          "description": "Stream event ID",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    "/stream/events/{eventId}/processing": {
+      "get": {
+        "tags": [
+          "StreamEvents"
+        ],
+        "summary": "List processing audit trail for a stream event",
+        "operationId": "listEventProcessing",
+        "responses": {
+          "200": {
+            "description": "Processing audit trail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventProcessingSearchResults"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "eventId",
+          "in": "path",
+          "description": "Stream event ID",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    "/subscriptions": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "List subscriptions",
+        "operationId": "listSubscriptions",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (1-indexed)",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Items per page",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "filterName",
+            "in": "query",
+            "description": "Filter by name (substring match)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of subscriptions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionSearchResults"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Create a subscription",
+        "operationId": "createSubscription",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewSubscription"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Subscription created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Subscription"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/subscriptions/preview": {
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Preview a subscription filter against recent events",
+        "operationId": "previewSubscriptionFilter",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscriptionPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Preview results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionPreviewResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/subscriptions/{subscriptionId}": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Get a subscription by ID",
+        "operationId": "getSubscription",
+        "responses": {
+          "200": {
+            "description": "Subscription details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Subscription"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Update a subscription",
+        "operationId": "updateSubscription",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewSubscription"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Subscription updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Subscription"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Delete a subscription",
+        "operationId": "deleteSubscription",
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "subscriptionId",
+          "in": "path",
+          "description": "Subscription ID",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/sdk/functions": {
+      "get": {
+        "tags": [
+          "SDK"
+        ],
+        "summary": "List all SDK functions",
+        "operationId": "listSdkFunctions",
+        "parameters": [
+          {
+            "name": "sdkCallOnly",
+            "in": "query",
+            "description": "If true, only return functions that support direct SDK call execution",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of SDK functions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SdkFunctionDescriptor"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5895,7 +6037,8 @@
             "enum": [
               "manager",
               "user",
-              "workflow"
+              "workflow",
+              "subscription"
             ],
             "type": "string"
           },
@@ -6279,198 +6422,6 @@
           "eventRetentionDays": {
             "format": "int32",
             "description": "Number of days to retain ingested events before automatic deletion.",
-            "type": "integer"
-          },
-          "eventSourceLogRetentionDays": {
-            "format": "int32",
-            "description": "Number of days to retain event source poll logs before automatic deletion.",
-            "type": "integer"
-          }
-        }
-      },
-      "EventSource": {
-        "required": [
-          "id",
-          "name",
-          "sourceType"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "name": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "sourceType": {
-            "enum": [
-              "github",
-              "jira"
-            ],
-            "type": "string"
-          },
-          "enabled": {
-            "type": "boolean"
-          },
-          "pollInterval": {
-            "type": "integer"
-          },
-          "secretName": {
-            "description": "Name of the secret to use for authentication (from Secrets store). Falls back to default provider secret if not set.",
-            "type": "string"
-          },
-          "configuration": {
-            "description": "Source-specific configuration (JSON object)",
-            "type": "object",
-            "additionalProperties": {}
-          },
-          "labels": {
-            "description": "Free-form labels for categorization",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "filters": {
-            "$ref": "#/components/schemas/EventSourceFilters"
-          }
-        }
-      },
-      "NewEventSource": {
-        "required": [
-          "name",
-          "sourceType",
-          "configuration"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "sourceType": {
-            "enum": [
-              "github",
-              "jira"
-            ],
-            "type": "string"
-          },
-          "enabled": {
-            "type": "boolean"
-          },
-          "pollInterval": {
-            "type": "integer"
-          },
-          "secretName": {
-            "description": "Name of the secret to use for authentication (from Secrets store). Falls back to default provider secret if not set.",
-            "type": "string"
-          },
-          "configuration": {
-            "description": "Source-specific configuration (JSON object)",
-            "type": "object",
-            "additionalProperties": {}
-          },
-          "labels": {
-            "description": "Free-form labels for categorization",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "filters": {
-            "$ref": "#/components/schemas/EventSourceFilters"
-          }
-        }
-      },
-      "Event": {
-        "required": [
-          "id",
-          "source",
-          "eventType",
-          "receivedAt"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "source": {
-            "type": "string"
-          },
-          "eventType": {
-            "type": "string"
-          },
-          "issueRef": {
-            "type": "string"
-          },
-          "repository": {
-            "type": "string"
-          },
-          "projectId": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "taskId": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "payload": {
-            "type": "string"
-          },
-          "receivedAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "eventSourceId": {
-            "format": "int64",
-            "description": "ID of the Event Source that produced this event, if applicable",
-            "type": "integer"
-          },
-          "traceId": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "labels": {
-            "description": "Labels inherited from the Event Source",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "filterStatus": {
-            "description": "Filter evaluation result: allowed, blocked, or null for legacy events",
-            "type": "string"
-          },
-          "filterMatchedRule": {
-            "description": "Description of the filter rule that blocked the event, if applicable",
-            "type": "string"
-          }
-        }
-      },
-      "EventSearchResults": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Event"
-            }
-          },
-          "totalCount": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "page": {
-            "type": "integer"
-          },
-          "limit": {
             "type": "integer"
           }
         }
@@ -7517,6 +7468,13 @@
           "scriptTemplate": {
             "description": "Script template to use for the test. If provided, this overrides the saved script template from the database, allowing tests against unsaved changes.",
             "type": "string"
+          },
+          "environment": {
+            "description": "Environment variables to inject into the test subprocess. Values may use ${secret:NAME} syntax to reference secrets.",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         }
       },
@@ -7542,58 +7500,6 @@
           "durationMs": {
             "format": "int64",
             "description": "Execution duration in milliseconds",
-            "type": "integer"
-          }
-        }
-      },
-      "EventSourceLog": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "eventSourceId": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "status": {
-            "description": "success or error",
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          },
-          "eventsIngested": {
-            "type": "integer"
-          },
-          "createdOn": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "detail": {
-            "description": "Full detailed log of the poll cycle",
-            "type": "string"
-          }
-        }
-      },
-      "EventSourceLogSearchResults": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/EventSourceLog"
-            }
-          },
-          "totalCount": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "page": {
-            "type": "integer"
-          },
-          "limit": {
             "type": "integer"
           }
         }
@@ -7660,6 +7566,27 @@
               "format": "int64",
               "type": "integer"
             }
+          },
+          "connectionIds": {
+            "description": "Connection slugs to include",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "subscriptionIds": {
+            "type": "array",
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          "workflowDefinitionIds": {
+            "type": "array",
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            }
           }
         }
       },
@@ -7686,36 +7613,15 @@
           },
           "scheduledJobs": {
             "type": "integer"
-          }
-        }
-      },
-      "NewEvent": {
-        "required": [
-          "source",
-          "eventType",
-          "payload"
-        ],
-        "type": "object",
-        "properties": {
-          "source": {
-            "description": "Event source type (e.g. github, jira, internal)",
-            "type": "string"
           },
-          "eventType": {
-            "description": "Event type (e.g. issue-created, custom)",
-            "type": "string"
+          "connections": {
+            "type": "integer"
           },
-          "issueRef": {
-            "description": "Issue reference",
-            "type": "string"
+          "subscriptions": {
+            "type": "integer"
           },
-          "repository": {
-            "description": "Repository identifier",
-            "type": "string"
-          },
-          "payload": {
-            "description": "JSON payload with event details",
-            "type": "string"
+          "workflowDefinitions": {
+            "type": "integer"
           }
         }
       },
@@ -7982,6 +7888,30 @@
           },
           "scheduledJobsUpdated": {
             "description": "Number of existing scheduled jobs updated",
+            "type": "integer"
+          },
+          "connectionsCreated": {
+            "description": "Number of new connections created",
+            "type": "integer"
+          },
+          "connectionsUpdated": {
+            "description": "Number of existing connections updated",
+            "type": "integer"
+          },
+          "subscriptionsCreated": {
+            "description": "Number of new subscriptions created",
+            "type": "integer"
+          },
+          "subscriptionsUpdated": {
+            "description": "Number of existing subscriptions updated",
+            "type": "integer"
+          },
+          "workflowDefinitionsCreated": {
+            "description": "Number of new workflow definitions created",
+            "type": "integer"
+          },
+          "workflowDefinitionsUpdated": {
+            "description": "Number of existing workflow definitions updated",
             "type": "integer"
           }
         }
@@ -8936,81 +8866,6 @@
           }
         }
       },
-      "FilterDryRunRequest": {
-        "required": [
-          "sourceType",
-          "configuration",
-          "filters"
-        ],
-        "type": "object",
-        "properties": {
-          "sourceType": {
-            "enum": [
-              "github",
-              "jira"
-            ],
-            "type": "string"
-          },
-          "configuration": {
-            "description": "Source-specific configuration (same shape as EventSource.configuration)",
-            "type": "object",
-            "additionalProperties": {}
-          },
-          "secretName": {
-            "description": "Name of the secret to use for authentication",
-            "type": "string"
-          },
-          "filters": {
-            "$ref": "#/components/schemas/EventSourceFilters"
-          }
-        }
-      },
-      "FilterDryRunResponse": {
-        "type": "object",
-        "properties": {
-          "results": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/FilterDryRunResult"
-            }
-          },
-          "totalEvaluated": {
-            "type": "integer"
-          },
-          "totalAllowed": {
-            "type": "integer"
-          },
-          "totalBlocked": {
-            "type": "integer"
-          }
-        }
-      },
-      "FilterDryRunResult": {
-        "type": "object",
-        "properties": {
-          "eventType": {
-            "type": "string"
-          },
-          "issueRef": {
-            "type": "string"
-          },
-          "summary": {
-            "description": "Human-readable summary of the event (e.g. issue title, comment author)",
-            "type": "string"
-          },
-          "allowed": {
-            "type": "boolean"
-          },
-          "matchedRule": {
-            "description": "Description of the filter rule that matched, if blocked",
-            "type": "string"
-          },
-          "payload": {
-            "description": "The raw event payload JSON",
-            "type": "string"
-          }
-        }
-      },
       "ActionTypeSearchResults": {
         "type": "object",
         "properties": {
@@ -9018,27 +8873,6 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ActionType"
-            }
-          },
-          "totalCount": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "page": {
-            "type": "integer"
-          },
-          "limit": {
-            "type": "integer"
-          }
-        }
-      },
-      "EventSourceSearchResults": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/EventSource"
             }
           },
           "totalCount": {
@@ -9726,6 +9560,633 @@
             "type": "string"
           }
         }
+      },
+      "Connection": {
+        "required": [
+          "id",
+          "name",
+          "sourceType",
+          "baseUrl",
+          "configuration"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "User-provided slug identifier (lowercase letters, numbers, dashes)",
+            "pattern": "^[a-z0-9-]+$",
+            "maxLength": 63
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "sourceType": {
+            "enum": [
+              "github",
+              "jira"
+            ],
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "baseUrl": {
+            "type": "string",
+            "description": "Base URL for the API (e.g., https://api.github.com or https://myorg.atlassian.net)"
+          },
+          "secretName": {
+            "type": "string",
+            "description": "Name of the secret for authentication"
+          },
+          "pollInterval": {
+            "type": "integer",
+            "description": "Poll interval in seconds"
+          },
+          "configuration": {
+            "type": "object",
+            "additionalProperties": {},
+            "description": "Source-specific config. GitHub: {repositories: [...]}, Jira: {projects: [...]}"
+          },
+          "createdOn": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "modifiedOn": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      },
+      "NewConnection": {
+        "required": [
+          "id",
+          "name",
+          "sourceType",
+          "baseUrl",
+          "configuration"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "User-provided slug identifier (lowercase letters, numbers, dashes)",
+            "pattern": "^[a-z0-9-]+$",
+            "maxLength": 63
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "sourceType": {
+            "enum": [
+              "github",
+              "jira"
+            ],
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "baseUrl": {
+            "type": "string",
+            "description": "Base URL for the API (e.g., https://api.github.com or https://myorg.atlassian.net)"
+          },
+          "secretName": {
+            "type": "string",
+            "description": "Name of the secret for authentication"
+          },
+          "pollInterval": {
+            "type": "integer",
+            "description": "Poll interval in seconds"
+          },
+          "configuration": {
+            "type": "object",
+            "additionalProperties": {},
+            "description": "Source-specific config. GitHub: {repositories: [...]}, Jira: {projects: [...]}"
+          }
+        }
+      },
+      "ConnectionSearchResults": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Connection"
+            }
+          },
+          "totalCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "page": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "limit": {
+            "format": "int32",
+            "type": "integer"
+          }
+        }
+      },
+      "ConnectionStatus": {
+        "type": "object",
+        "properties": {
+          "connectionId": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "lastPolledAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "totalEventsProduced": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "lastError": {
+            "type": "string"
+          },
+          "lastErrorAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      },
+      "ConnectionPollLog": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "connectionId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "eventsIngested": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "durationMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "createdOn": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      },
+      "ConnectionPollLogSearchResults": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConnectionPollLog"
+            }
+          },
+          "totalCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "page": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "limit": {
+            "format": "int32",
+            "type": "integer"
+          }
+        }
+      },
+      "StreamEvent": {
+        "required": [
+          "id",
+          "source",
+          "connectionId",
+          "type",
+          "ref",
+          "timestamp"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceEventId": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "description": "Source system: github or jira"
+          },
+          "connectionId": {
+            "type": "string",
+            "description": "Slug of the connection that produced this event"
+          },
+          "type": {
+            "type": "string",
+            "description": "Normalized event type (e.g., issue.created, pr.merged)"
+          },
+          "ref": {
+            "type": "string",
+            "description": "Full URL identifying the event subject"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "actor": {
+            "type": "object",
+            "additionalProperties": {},
+            "description": "Who performed the action"
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": {},
+            "description": "Typed event payload"
+          },
+          "sourceData": {
+            "type": "object",
+            "additionalProperties": {},
+            "description": "Raw source-specific data"
+          },
+          "createdOn": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "matchedSubscriptions": {
+            "format": "int32",
+            "type": "integer",
+            "description": "Number of subscriptions that matched this event (completed status in the processing ledger)"
+          }
+        }
+      },
+      "StreamEventSearchResults": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StreamEvent"
+            }
+          },
+          "totalCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "page": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "limit": {
+            "format": "int32",
+            "type": "integer"
+          }
+        }
+      },
+      "EventProcessingEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "subscriptionId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "subscriptionName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "pending, completed, skipped, or failed"
+          },
+          "errorMessage": {
+            "type": "string"
+          },
+          "routingRules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutingRule"
+            },
+            "description": "The subscription's routing rules that were executed"
+          },
+          "outcomes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventProcessingOutcome"
+            },
+            "description": "What the routing produced (projects, tasks, decisions)"
+          },
+          "createdOn": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "processedOn": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      },
+      "EventProcessingOutcome": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Routing type that produced this outcome: manager, workflow-dispatch, create-workflow, invoke-action"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "projectId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "projectName": {
+            "type": "string"
+          },
+          "taskId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "taskStatus": {
+            "type": "string"
+          },
+          "traceId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Trace ID linked to this outcome (for navigating to the trace detail page)"
+          }
+        }
+      },
+      "EventProcessingSearchResults": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventProcessingEntry"
+            }
+          },
+          "totalCount": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      },
+      "RoutingRule": {
+        "required": ["type"],
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["manager", "workflow-dispatch", "create-workflow", "invoke-action"],
+            "description": "Destination type for matched events"
+          },
+          "workflowDefinitionId": {
+            "format": "int64",
+            "type": "integer",
+            "description": "Required for create-workflow: which workflow definition to instantiate"
+          },
+          "actionTypeId": {
+            "format": "int64",
+            "type": "integer",
+            "description": "Required for invoke-action: which action type to invoke"
+          }
+        }
+      },
+      "Subscription": {
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "filterExpression": {
+            "type": "string",
+            "description": "Jakarta EL expression that evaluates to boolean. Available variables: event.type, event.source, event.connectionId, event.ref, event.timestamp, event.actor.login, event.payload.* Fields from the typed event payload are accessible via dot notation."
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "routing": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutingRule"
+            },
+            "description": "Where matched events are sent. Empty = no routing."
+          },
+          "processEventsFrom": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Earliest event timestamp to process. Events before this are ignored. Defaults to subscription creation time."
+          },
+          "createdOn": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "modifiedOn": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      },
+      "NewSubscription": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "filterExpression": {
+            "type": "string",
+            "description": "Jakarta EL expression that evaluates to boolean. Available variables: event.type, event.source, event.connectionId, event.ref, event.timestamp, event.actor.login, event.payload.* Fields from the typed event payload are accessible via dot notation."
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "routing": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutingRule"
+            },
+            "description": "Where matched events are sent. Empty = no routing."
+          },
+          "processEventsFrom": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Earliest event timestamp to process. Events before this are ignored. Defaults to subscription creation time."
+          }
+        }
+      },
+      "SubscriptionSearchResults": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Subscription"
+            }
+          },
+          "totalCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "page": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "limit": {
+            "format": "int32",
+            "type": "integer"
+          }
+        }
+      },
+      "SubscriptionPreviewRequest": {
+        "required": ["filterExpression"],
+        "type": "object",
+        "properties": {
+          "filterExpression": {
+            "type": "string",
+            "description": "EL expression to evaluate against recent events"
+          },
+          "page": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "limit": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "processEventsFrom": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Only include events at or after this timestamp"
+          }
+        }
+      },
+      "SubscriptionPreviewResult": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "$ref": "#/components/schemas/StreamEvent"
+          },
+          "matched": {
+            "type": "boolean",
+            "description": "Whether the filter expression matched this event"
+          }
+        }
+      },
+      "SubscriptionPreviewResponse": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionPreviewResult"
+            }
+          },
+          "totalCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "totalMatched": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "page": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "limit": {
+            "format": "int32",
+            "type": "integer"
+          }
+        }
+      },
+      "SdkFunctionDescriptor": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "parameters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SdkFunctionParam"
+            }
+          },
+          "sdkCallSupported": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SdkFunctionParam": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        }
       }
     },
     "responses": {
@@ -9879,6 +10340,22 @@
     {
       "name": "WorkflowRuns",
       "description": "Workflow run history and execution observability"
+    },
+    {
+      "name": "Connections",
+      "description": "Event source connection management"
+    },
+    {
+      "name": "StreamEvents",
+      "description": "Normalized event stream browsing"
+    },
+    {
+      "name": "Subscriptions",
+      "description": "Event subscription management"
+    },
+    {
+      "name": "SDK",
+      "description": "Axiom SDK function registry"
     }
   ]
 }

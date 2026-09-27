@@ -8,8 +8,7 @@ import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.AgentEntity;
-import io.apitomy.axiom.core.entities.EventEntity;
-import io.apitomy.axiom.core.entities.EventSourceEntity;
+import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.ManagerConfigEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
@@ -65,51 +64,32 @@ public class ManagerService {
     Optional<String> model;
 
     /**
-     * Evaluates an event and returns the Manager's decisions.
+     * Evaluates a stream event using the AI Manager. This method accepts
+     * the new normalized event format from the event stream pipeline.
      *
-     * <p>Context loading (action types, agents, project data, config) runs in a short
-     * independent transaction so the subsequent AI engine call does not hold a database
-     * connection.</p>
+     * <p>This is a transitional method — in the future, the prompt builder
+     * will use the typed payload fields directly. For now, it maps stream
+     * event fields to the same template variables used by the legacy
+     * {@link EventEntity} evaluation.</p>
      *
-     * @param event    the event to evaluate (may be detached)
-     * @param traceCtx the current trace context (nullable — tracing is non-fatal)
-     * @return a list of decisions (may be empty if the Manager fails)
+     * @param streamEvent the stream event entity to evaluate
+     * @return list of Manager decisions (may be empty if the Manager fails)
      */
-    public List<ManagerDecision> evaluate(EventEntity event, TraceContext traceCtx) {
-        LOG.infof("Manager evaluating event %d: %s [%s]", event.id, event.eventType, event.issueRef);
+    public List<ManagerDecision> evaluateStreamEvent(StreamEventEntity streamEvent) {
+        LOG.infof("Manager evaluating stream event %s: %s [%s]",
+                streamEvent.id, streamEvent.type, streamEvent.ref);
 
-        // Add manager-evaluation trace node and push onto stack so decisions are children
-        Long evalNodeId = null;
-        if (traceCtx != null) {
-            try {
-                evalNodeId = traceService.addNode(traceCtx, "manager-evaluation", "in-progress",
-                        "Manager evaluation: " + event.eventType, null, null);
-                traceCtx.push(evalNodeId);
-            } catch (Exception e) {
-                LOG.warnf(e, "Failed to add manager-evaluation trace node for event %d", event.id);
-            }
-        }
-
-        // Load context (short transaction — releases connection before AI call)
+        // Load context — stream events do not carry event source labels,
+        // so all manager-triggerable action types are included (no label filtering).
         EvalContext ctx = QuarkusTransaction.requiringNew().call(() -> {
             List<ActionTypeEntity> actionTypes = ActionTypeEntity.list("managerTriggerable", true);
-
-            // Filter action types by label compatibility with the event source
-            List<String> eventSourceLabels = Collections.emptyList();
-            if (event.eventSourceId != null) {
-                EventSourceEntity eventSource = EventSourceEntity.findById(event.eventSourceId);
-                if (eventSource != null && eventSource.labels != null) {
-                    eventSourceLabels = eventSource.labels;
-                }
-            }
-            actionTypes = filterByLabels(actionTypes, eventSourceLabels);
 
             List<AgentEntity> agents = AgentEntity.listAll();
 
             ProjectEntity project = null;
             List<TaskEntity> recentTasks = Collections.emptyList();
-            if (event.issueRef != null) {
-                project = ProjectEntity.find("ref", event.issueRef).firstResult();
+            if (streamEvent.ref != null) {
+                project = ProjectEntity.find("ref", streamEvent.ref).firstResult();
                 if (project != null) {
                     recentTasks = TaskEntity.find(
                             "projectId = ?1 order by createdOn desc",
@@ -121,6 +101,35 @@ public class ManagerService {
                     .firstResult();
             return new EvalContext(actionTypes, agents, project, recentTasks, config);
         });
+
+        // Map stream event fields to template variables:
+        //   streamEvent.source  → source
+        //   streamEvent.type    → eventType
+        //   streamEvent.ref     → issueRef and repository (full URL)
+        //   streamEvent.payload → payload
+        return callManagerAI(ctx, streamEvent.source, streamEvent.type, streamEvent.ref,
+                streamEvent.ref, streamEvent.payload, null, null,
+                String.valueOf(streamEvent.id));
+    }
+
+    /**
+     * Core AI evaluation logic used by {@link #evaluateStreamEvent(StreamEventEntity)}.
+     *
+     * @param ctx            pre-loaded evaluation context (action types, agents, project, config)
+     * @param source         event source identifier (e.g. "github")
+     * @param eventType      event type (e.g. "issue-created" or "issue.created")
+     * @param issueRef       issue reference or URL
+     * @param repository     repository identifier or URL
+     * @param payload        raw event payload JSON
+     * @param eventId        legacy event ID for activity/usage logging (null for stream events)
+     * @param evalNodeId     trace node ID (null if tracing is not active)
+     * @param eventIdForLog  string representation of the event ID for log messages
+     * @return list of Manager decisions
+     */
+    private List<ManagerDecision> callManagerAI(
+            EvalContext ctx,
+            String source, String eventType, String issueRef, String repository, String payload,
+            Long eventId, Long evalNodeId, String eventIdForLog) {
 
         // Build prompts from detached context (no transaction needed)
         String systemPrompt = ManagerPromptBuilder.DEFAULT_SYSTEM_PROMPT;
@@ -135,8 +144,8 @@ public class ManagerService {
         }
 
         String userPrompt = ManagerPromptBuilder.buildUserPrompt(
-                promptTemplate, event, ctx.actionTypes(), ctx.agents(),
-                ctx.project(), ctx.recentTasks());
+                promptTemplate, source, eventType, issueRef, repository, payload,
+                ctx.actionTypes(), ctx.agents(), ctx.project(), ctx.recentTasks());
         String jsonSchema = ManagerPromptBuilder.getResponseJsonSchema();
 
         // Build agent request (prompt is part of the request object)
@@ -156,16 +165,17 @@ public class ManagerService {
 
             // Record AI usage for this Manager evaluation
             try {
-                recordAiUsage(event.id, ctx.project() != null ? ctx.project().id : null,
+                recordAiUsage(eventId, ctx.project() != null ? ctx.project().id : null,
                         result.costUsd(), result.inputTokens(), result.outputTokens(),
                         result.engine(), result.model());
             } catch (Exception e) {
-                LOG.warnf(e, "Failed to record AI usage for event %d", event.id);
+                LOG.warnf(e, "Failed to record AI usage for event %s", eventIdForLog);
             }
 
             if (!result.success()) {
-                LOG.errorf("Manager AI engine failed: %s", result.output());
-                logManagerActivity(event.id, "manager-error",
+                LOG.errorf("Manager AI engine failed for event %s: %s",
+                        eventIdForLog, result.output());
+                logManagerActivity(eventId, "manager-error",
                         "Manager failed to evaluate event: " + result.output(),
                         executionLog);
                 completeEvalNode(evalNodeId, "failed", null);
@@ -177,8 +187,8 @@ public class ManagerService {
             // Build summary of decisions for the activity log
             StringBuilder summary = new StringBuilder();
             for (ManagerDecision decision : decisions) {
-                LOG.infof("Manager decision for event %d: %s (action: %s, confidence: %.2f) — %s",
-                        event.id, decision.decision(), decision.actionType(),
+                LOG.infof("Manager decision for event %s: %s (action: %s, confidence: %.2f) — %s",
+                        eventIdForLog, decision.decision(), decision.actionType(),
                         decision.confidence(), decision.reasoning());
                 if (!summary.isEmpty()) summary.append("; ");
                 summary.append(decision.decision());
@@ -188,17 +198,17 @@ public class ManagerService {
             }
 
             String summaryText = decisions.isEmpty()
-                    ? "Manager returned no decisions for event " + event.id
-                    : "Manager decisions for event " + event.id + ": " + summary;
-            Long activityLogId = logManagerActivity(event.id, "manager-evaluated",
+                    ? "Manager returned no decisions for event " + eventIdForLog
+                    : "Manager decisions for event " + eventIdForLog + ": " + summary;
+            Long activityLogId = logManagerActivity(eventId, "manager-evaluated",
                     summaryText, executionLog);
             completeEvalNode(evalNodeId, "completed", activityLogId);
 
             return decisions;
 
         } catch (Exception e) {
-            LOG.errorf(e, "Manager evaluation failed for event %d", event.id);
-            logManagerActivity(event.id, "manager-error",
+            LOG.errorf(e, "Manager evaluation failed for event %s", eventIdForLog);
+            logManagerActivity(eventId, "manager-error",
                     "Manager evaluation error: " + e.getMessage(), null);
             completeEvalNode(evalNodeId, "failed", null);
             return Collections.emptyList();

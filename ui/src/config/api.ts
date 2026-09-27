@@ -187,6 +187,9 @@ export interface PackExportRequest {
     reportDefinitionIds?: number[];
     sessionTemplateIds?: string[];
     scheduledJobIds?: number[];
+    connectionIds?: string[];
+    subscriptionIds?: number[];
+    workflowDefinitionIds?: number[];
 }
 
 export interface ImportResult {
@@ -197,6 +200,9 @@ export interface ImportResult {
     reportDefinitions?: number;
     sessionTemplates?: number;
     scheduledJobs?: number;
+    connections?: number;
+    subscriptions?: number;
+    workflowDefinitions?: number;
 }
 
 export interface AssistantApplyResult {
@@ -220,6 +226,10 @@ export interface AssistantApplyResult {
     eventSourcesUpdated?: number;
     scheduledJobsCreated?: number;
     scheduledJobsUpdated?: number;
+    connectionsCreated?: number;
+    connectionsUpdated?: number;
+    subscriptionsCreated?: number;
+    subscriptionsUpdated?: number;
 }
 
 export async function exportPack(request: PackExportRequest): Promise<Blob> {
@@ -645,6 +655,7 @@ export async function deleteTool(id: number): Promise<void> {
 export interface ToolTestRequest {
     scriptTemplate?: string;
     parameters?: Record<string, string>;
+    environment?: Record<string, string>;
 }
 
 export interface ToolTestResponse {
@@ -871,7 +882,6 @@ export interface RetentionConfig {
     closedProjectRetentionDays?: number;
     traceRetentionDays?: number;
     eventRetentionDays?: number;
-    eventSourceLogRetentionDays?: number;
 }
 
 export async function fetchRetentionConfig(): Promise<RetentionConfig> {
@@ -890,90 +900,10 @@ export async function updateRetentionConfig(config: RetentionConfig): Promise<Re
     return response.json();
 }
 
-// ── Event Sources ────────────────────────────────────────────────
-
-export interface EventSource {
-    id: number;
-    name: string;
-    description?: string;
-    sourceType: string;
-    enabled: boolean;
-    pollInterval?: number;
-    secretName?: string;
-    configuration?: Record<string, string>;
-    labels?: string[];
-    filters?: EventSourceFilters;
-}
-
-export type NewEventSource = Omit<EventSource, "id">;
-
-export async function fetchEventSources(
-    page = 1, limit = 20, filterName?: string, filterType?: string, filterLabels?: string
-): Promise<SearchResults<EventSource>> {
-    const params = new URLSearchParams();
-    params.set("page", String(page));
-    params.set("limit", String(limit));
-    if (filterName) params.set("filterName", filterName);
-    if (filterType) params.set("filterType", filterType);
-    if (filterLabels) params.set("filterLabels", filterLabels);
-    const response = await fetch(`${API}/event-sources?${params}`);
-    if (!response.ok) throw new Error(`Failed to fetch event sources: ${response.status}`);
-    return response.json();
-}
-
-export async function createEventSource(source: NewEventSource): Promise<EventSource> {
-    const response = await fetch(`${API}/event-sources`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(source),
-    });
-    if (!response.ok) throw new Error(`Failed to create event source: ${response.status}`);
-    return response.json();
-}
-
-export async function updateEventSource(id: number, source: NewEventSource): Promise<EventSource> {
-    const response = await fetch(`${API}/event-sources/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(source),
-    });
-    if (!response.ok) throw new Error(`Failed to update event source: ${response.status}`);
-    return response.json();
-}
-
-export async function deleteEventSource(id: number): Promise<void> {
-    const response = await fetch(`${API}/event-sources/${id}`, { method: "DELETE" });
-    if (!response.ok) throw new Error(`Failed to delete event source: ${response.status}`);
-}
-
-export async function fetchEventSource(id: number): Promise<EventSource> {
-    const response = await fetch(`${API}/event-sources/${id}`);
-    if (!response.ok) throw new Error(`Failed to fetch event source: ${response.status}`);
-    return response.json();
-}
-
-export async function dryRunFilters(request: FilterDryRunRequest): Promise<FilterDryRunResponse> {
-    const response = await fetch(`${API}/event-sources/filters/dry-run`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(request),
-    });
-    if (!response.ok) throw new Error(`Dry run failed: ${response.statusText}`);
-    return response.json();
-}
-
-export interface EventSourceLog {
-    id: number;
-    eventSourceId: number;
-    status: string;
-    message: string;
-    detail?: string;
-    eventsIngested?: number;
-    createdOn: string;
-}
+// ── Event Source Filters (used by subscriptions) ─────────────────
 
 export interface EventSourceFilterRule {
-    type: "event-type" | "payload";
+    type: "event-type" | "payload" | "connection" | "ref";
     pointer?: string;
     pattern: string;
 }
@@ -981,40 +911,6 @@ export interface EventSourceFilterRule {
 export interface EventSourceFilters {
     include: EventSourceFilterRule[];
     exclude: EventSourceFilterRule[];
-}
-
-export interface FilterDryRunRequest {
-    sourceType: string;
-    configuration: Record<string, string>;
-    secretName?: string;
-    filters: EventSourceFilters;
-}
-
-export interface FilterDryRunResult {
-    eventType: string;
-    issueRef: string;
-    summary: string;
-    allowed: boolean;
-    matchedRule?: string;
-    payload?: string;
-}
-
-export interface FilterDryRunResponse {
-    results: FilterDryRunResult[];
-    totalEvaluated: number;
-    totalAllowed: number;
-    totalBlocked: number;
-}
-
-export async function fetchEventSourceLogs(
-    id: number, page = 1, limit = 20
-): Promise<SearchResults<EventSourceLog>> {
-    const params = new URLSearchParams();
-    params.set("page", String(page));
-    params.set("limit", String(limit));
-    const response = await fetch(`${API}/event-sources/${id}/logs?${params}`);
-    if (!response.ok) throw new Error(`Failed to fetch event source logs: ${response.status}`);
-    return response.json();
 }
 
 // ── Thread ────────────────────────────────────────────────────────
@@ -1294,56 +1190,6 @@ export async function fetchDiskUsage(
     if (sortOrder) params.set("sortOrder", sortOrder);
     const response = await fetch(`${API}/usage/disk?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch disk usage: ${response.status}`);
-    return response.json();
-}
-
-// ── Events ───────────────────────────────────────────────────────
-
-export interface AxiomEvent {
-    id: number;
-    eventSourceId?: number;
-    source: string;
-    eventType: string;
-    issueRef?: string;
-    repository?: string;
-    projectId?: number;
-    taskId?: number;
-    payload?: string;
-    receivedAt: string;
-    traceId?: string;
-    labels?: string[];
-    filterStatus?: string;
-    filterMatchedRule?: string;
-}
-
-export async function fetchEvent(id: number): Promise<AxiomEvent> {
-    const response = await fetch(`${API}/events/${id}`);
-    if (!response.ok) throw new Error(`Failed to fetch event: ${response.status}`);
-    return response.json();
-}
-
-export async function fetchProjectEvents(projectId: number): Promise<AxiomEvent[]> {
-    const response = await fetch(`${API}/projects/${projectId}/events`);
-    if (!response.ok) throw new Error(`Failed to fetch project events: ${response.status}`);
-    return response.json();
-}
-
-export async function fetchEvents(
-    page = 1, limit = 20,
-    filterSource?: string, filterEventType?: string, filterRepository?: string,
-    filterLabels?: string, filterFilterStatus?: string, filterEventSourceId?: number
-): Promise<SearchResults<AxiomEvent>> {
-    const params = new URLSearchParams();
-    params.set("page", String(page));
-    params.set("limit", String(limit));
-    if (filterSource) params.set("filterSource", filterSource);
-    if (filterEventType) params.set("filterEventType", filterEventType);
-    if (filterRepository) params.set("filterRepository", filterRepository);
-    if (filterLabels) params.set("filterLabels", filterLabels);
-    if (filterFilterStatus) params.set("filterFilterStatus", filterFilterStatus);
-    if (filterEventSourceId != null) params.set("filterEventSourceId", String(filterEventSourceId));
-    const response = await fetch(`${API}/events?${params}`);
-    if (!response.ok) throw new Error(`Failed to fetch events: ${response.status}`);
     return response.json();
 }
 
@@ -1764,12 +1610,6 @@ export async function fetchTraceNodeDetail(
 ): Promise<TraceNodeDetailResponse> {
     const response = await fetch(`${API}/traces/${traceId}/nodes/${nodeId}`);
     if (!response.ok) throw new Error(`Failed to fetch node detail: ${response.status}`);
-    return response.json();
-}
-
-export async function fetchEventTraces(eventId: number): Promise<Trace[]> {
-    const response = await fetch(`${API}/events/${eventId}/traces`);
-    if (!response.ok) throw new Error(`Failed to fetch event traces: ${response.status}`);
     return response.json();
 }
 
@@ -2197,7 +2037,20 @@ export async function publishWorkflowDefinition(
     const response = await fetch(`${API}/workflow/definitions/${id}/publish`, {
         method: "POST",
     });
-    if (!response.ok) throw new Error(`Failed to publish workflow definition: ${response.status}`);
+    if (!response.ok) {
+        let detail = `${response.status}`;
+        try {
+            const body = await response.json();
+            if (Array.isArray(body)) {
+                detail = body.map((p: { code?: string; message?: string }) => p.message || p.code || JSON.stringify(p)).join("; ");
+            } else if (body.message) {
+                detail = body.message;
+            } else {
+                detail = JSON.stringify(body);
+            }
+        } catch { /* no parseable body */ }
+        throw new Error(detail);
+    }
     return response.json();
 }
 
@@ -2363,5 +2216,295 @@ export async function fetchWorkflowDefinitionRuns(
     const response = await fetch(
         `${API}/workflow/definitions/${definitionId}/runs?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch definition runs: ${response.status}`);
+    return response.json();
+}
+
+// ── Connections ───────────────────────────────────────────────────
+
+export interface Connection {
+    id: string;
+    name: string;
+    description?: string;
+    sourceType: string;
+    enabled: boolean;
+    baseUrl: string;
+    secretName?: string;
+    pollInterval?: number;
+    configuration?: Record<string, unknown>;
+    createdOn?: string;
+    modifiedOn?: string;
+}
+
+export interface NewConnection {
+    id: string;
+    name: string;
+    description?: string;
+    sourceType: string;
+    enabled: boolean;
+    baseUrl: string;
+    secretName?: string;
+    pollInterval?: number;
+    configuration?: Record<string, unknown>;
+}
+
+export interface ConnectionStatus {
+    connectionId: string;
+    enabled: boolean;
+    lastPolledAt?: string;
+    totalEventsProduced: number;
+    lastError?: string;
+    lastErrorAt?: string;
+}
+
+export async function fetchConnections(
+    page = 1, limit = 20, filterName?: string, filterType?: string
+): Promise<SearchResults<Connection>> {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(limit));
+    if (filterName) params.set("filterName", filterName);
+    if (filterType) params.set("filterType", filterType);
+    const response = await fetch(`${API}/connections?${params}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch connections"));
+    return response.json();
+}
+
+export async function fetchConnection(connectionId: string): Promise<Connection> {
+    const response = await fetch(`${API}/connections/${encodeURIComponent(connectionId)}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch connection"));
+    return response.json();
+}
+
+export async function createConnection(data: NewConnection): Promise<Connection> {
+    const response = await fetch(`${API}/connections`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to create connection"));
+    return response.json();
+}
+
+export async function updateConnection(connectionId: string, data: NewConnection): Promise<Connection> {
+    const response = await fetch(`${API}/connections/${encodeURIComponent(connectionId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to update connection"));
+    return response.json();
+}
+
+export async function deleteConnection(connectionId: string): Promise<void> {
+    const response = await fetch(`${API}/connections/${encodeURIComponent(connectionId)}`, {
+        method: "DELETE",
+    });
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to delete connection"));
+}
+
+export async function fetchConnectionStatus(connectionId: string): Promise<ConnectionStatus> {
+    const response = await fetch(`${API}/connections/${encodeURIComponent(connectionId)}/status`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch connection status"));
+    return response.json();
+}
+
+export interface ConnectionPollLog {
+    id: number;
+    connectionId: string;
+    status: string;
+    message: string;
+    detail?: string;
+    eventsIngested?: number;
+    durationMs?: number;
+    createdOn?: string;
+}
+
+export async function fetchConnectionPollLogs(
+    connectionId: string, page = 1, limit = 20
+): Promise<SearchResults<ConnectionPollLog>> {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(limit));
+    const response = await fetch(
+        `${API}/connections/${encodeURIComponent(connectionId)}/logs?${params}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch poll logs"));
+    return response.json();
+}
+
+// ── Stream Events ─────────────────────────────────────────────────
+
+export interface StreamEvent {
+    id: string;
+    sourceEventId?: string;
+    source: string;
+    connectionId: string;
+    type: string;
+    ref: string;
+    timestamp: string;
+    actor?: Record<string, unknown>;
+    payload?: Record<string, unknown>;
+    sourceData?: Record<string, unknown>;
+    createdOn?: string;
+    matchedSubscriptions?: number;
+}
+
+export async function fetchStreamEvents(
+    page = 1, limit = 20,
+    filterType?: string, filterConnectionId?: string, filterRef?: string
+): Promise<SearchResults<StreamEvent>> {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(limit));
+    if (filterType) params.set("filterType", filterType);
+    if (filterConnectionId) params.set("filterConnectionId", filterConnectionId);
+    if (filterRef) params.set("filterRef", filterRef);
+    const response = await fetch(`${API}/stream/events?${params}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch stream events"));
+    return response.json();
+}
+
+export async function fetchStreamEvent(eventId: string): Promise<StreamEvent> {
+    const response = await fetch(`${API}/stream/events/${encodeURIComponent(eventId)}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch stream event"));
+    return response.json();
+}
+
+export interface EventProcessingOutcome {
+    type: string;
+    summary: string;
+    projectId?: number;
+    projectName?: string;
+    taskId?: number;
+    taskStatus?: string;
+    traceId?: string;
+}
+
+export interface EventProcessingEntry {
+    id: number;
+    subscriptionId: number;
+    subscriptionName: string;
+    status: string;
+    errorMessage?: string;
+    routingRules?: RoutingRule[];
+    outcomes?: EventProcessingOutcome[];
+    createdOn?: string;
+    processedOn?: string;
+}
+
+export async function fetchEventProcessing(eventId: string): Promise<{
+    items: EventProcessingEntry[];
+    totalCount: number;
+}> {
+    const response = await fetch(
+        `${API}/stream/events/${encodeURIComponent(eventId)}/processing`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch event processing"));
+    return response.json();
+}
+
+// ── Subscriptions ─────────────────────────────────────────────────
+
+export interface RoutingRule {
+    type: "manager" | "workflow-dispatch" | "create-workflow" | "invoke-action";
+    workflowDefinitionId?: number;
+    actionTypeId?: number;
+}
+
+export interface Subscription {
+    id: number;
+    name: string;
+    description?: string;
+    enabled: boolean;
+    filterExpression?: string;
+    routing?: RoutingRule[];
+    labels?: string[];
+    processEventsFrom?: string;
+    createdOn?: string;
+    modifiedOn?: string;
+}
+
+export interface NewSubscription {
+    name: string;
+    description?: string;
+    enabled: boolean;
+    filterExpression?: string;
+    routing?: RoutingRule[];
+    labels?: string[];
+    processEventsFrom?: string;
+}
+
+export async function fetchSubscriptions(
+    page = 1, limit = 20, filterName?: string
+): Promise<SearchResults<Subscription>> {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(limit));
+    if (filterName) params.set("filterName", filterName);
+    const response = await fetch(`${API}/subscriptions?${params}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch subscriptions"));
+    return response.json();
+}
+
+export async function fetchSubscription(subscriptionId: number): Promise<Subscription> {
+    const response = await fetch(`${API}/subscriptions/${subscriptionId}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch subscription"));
+    return response.json();
+}
+
+export async function createSubscription(data: NewSubscription): Promise<Subscription> {
+    const response = await fetch(`${API}/subscriptions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to create subscription"));
+    return response.json();
+}
+
+export async function updateSubscription(subscriptionId: number, data: NewSubscription): Promise<Subscription> {
+    const response = await fetch(`${API}/subscriptions/${subscriptionId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to update subscription"));
+    return response.json();
+}
+
+export async function deleteSubscription(subscriptionId: number): Promise<void> {
+    const response = await fetch(`${API}/subscriptions/${subscriptionId}`, {
+        method: "DELETE",
+    });
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to delete subscription"));
+}
+
+export interface SubscriptionPreviewRequest {
+    filterExpression: string;
+    page?: number;
+    limit?: number;
+    processEventsFrom?: string;
+}
+
+export interface SubscriptionPreviewResult {
+    event: StreamEvent;
+    matched: boolean;
+}
+
+export interface SubscriptionPreviewResponse {
+    results: SubscriptionPreviewResult[];
+    totalCount: number;
+    totalMatched: number;
+    page: number;
+    limit: number;
+}
+
+export async function previewSubscriptionFilter(
+    data: SubscriptionPreviewRequest
+): Promise<SubscriptionPreviewResponse> {
+    const response = await fetch(`${API}/subscriptions/preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to preview filter"));
     return response.json();
 }

@@ -11,10 +11,11 @@ import { AgentDetailPage } from "./pages/AgentDetailPage";
 import { ManagerConfigPage } from "./pages/ManagerConfigPage";
 import { ActionTypesPage } from "./pages/ActionTypesPage";
 import { ActivityLogPage } from "./pages/ActivityLogPage";
-import { EventsPage } from "./pages/EventsPage";
+import { EventDetailPage } from "./pages/EventDetailPage";
+import { EventStreamPage } from "./pages/EventStreamPage";
 import { ManagerDecisionsPage } from "./pages/ManagerDecisionsPage";
 import { TasksPage } from "./pages/TasksPage";
-import { EventSourcesPage } from "./pages/EventSourcesPage";
+import { ConnectionsPage } from "./pages/ConnectionsPage";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage";
 import { ActionTypeDetailPage } from "./pages/ActionTypeDetailPage";
 import { ToolsPage } from "./pages/ToolsPage";
@@ -36,7 +37,9 @@ import { ConfigurationWarning } from "./components/ConfigurationWarning";
 import { ConfigurationPacksPage } from "./pages/ConfigurationPacksPage";
 import { DataRetentionPage } from "./pages/DataRetentionPage";
 import { EngineSettingsPage } from "./pages/EngineSettingsPage";
-import { EventSourceDetailPage } from "./pages/EventSourceDetailPage";
+import { ConnectionDetailPage } from "./pages/ConnectionDetailPage";
+import { SubscriptionsPage } from "./pages/SubscriptionsPage";
+import { SubscriptionDetailPage } from "./pages/SubscriptionDetailPage";
 import { AssistantPage } from "./pages/AssistantPage";
 import { AssistantSessionPage } from "./pages/AssistantSessionPage";
 import { TracesPage } from "./pages/TracesPage";
@@ -137,7 +140,8 @@ export function App() {
                         <Route path="/mcp-servers" element={<McpServersPage />} />
                         <Route path="/mcp-servers/:mcpServerId" element={<McpServerDetailPage />} />
                         <Route path="/logs/activity" element={<ActivityLogPage />} />
-                        <Route path="/logs/events" element={<EventsPage />} />
+                        <Route path="/events/stream" element={<EventStreamPage />} />
+                        <Route path="/events/stream/:eventId" element={<EventDetailPage />} />
                         <Route path="/logs/manager" element={<ManagerDecisionsPage />} />
                         <Route path="/logs/tasks" element={<TasksPage />} />
                         <Route path="/logs/job-runs" element={<ScheduledJobRunsPage />} />
@@ -151,8 +155,10 @@ export function App() {
                         <Route path="/report-definitions/:definitionId" element={<ReportDefinitionDetailPage />} />
                         <Route path="/metrics/ai-usage" element={<AiUsagePage />} />
                         <Route path="/metrics/disk-usage" element={<DiskUsagePage />} />
-                        <Route path="/event-sources" element={<EventSourcesPage />} />
-                        <Route path="/event-sources/:eventSourceId" element={<EventSourceDetailPage />} />
+                        <Route path="/events/connections" element={<ConnectionsPage />} />
+                        <Route path="/events/connections/:connectionId" element={<ConnectionDetailPage />} />
+                        <Route path="/events/subscriptions" element={<SubscriptionsPage />} />
+                        <Route path="/events/subscriptions/:subscriptionId" element={<SubscriptionDetailPage />} />
                         <Route path="/secrets" element={<SecretsPage />} />
                         <Route path="/configuration-packs" element={<ConfigurationPacksPage />} />
                         <Route path="/data-retention" element={<DataRetentionPage />} />

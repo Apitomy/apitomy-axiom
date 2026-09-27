@@ -22,6 +22,4 @@ public class RetentionConfigEntity extends PanacheEntity {
     @Column(name = "event_retention_days", nullable = false)
     public int eventRetentionDays;
 
-    @Column(name = "event_source_log_retention_days", nullable = false)
-    public int eventSourceLogRetentionDays;
 }

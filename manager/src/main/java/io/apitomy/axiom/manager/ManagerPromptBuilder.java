@@ -2,7 +2,6 @@ package io.apitomy.axiom.manager;
 
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.AgentEntity;
-import io.apitomy.axiom.core.entities.EventEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 
@@ -18,11 +17,12 @@ import java.util.List;
  * <ul>
  *   <li>{@code {{actionTypes}}} — formatted list of available action types</li>
  *   <li>{@code {{agents}}} — formatted list of available agents</li>
- *   <li>{@code {{source}}} — event source (e.g. "github")</li>
- *   <li>{@code {{eventType}}} — event type (e.g. "issue-created")</li>
- *   <li>{@code {{issueRef}}} — issue reference (e.g. "owner/repo#42")</li>
- *   <li>{@code {{repository}}} — repository (e.g. "owner/repo")</li>
- *   <li>{@code {{payload}}} — raw event payload JSON</li>
+ *   <li>{@code {{source}}} — event source (e.g. "github", "jira")</li>
+ *   <li>{@code {{eventType}}} — normalized event type (e.g. "issue.created", "pr.merged")</li>
+ *   <li>{@code {{ref}}} — full URL identifying the event subject (e.g. "https://github.com/owner/repo/issues/42")</li>
+ *   <li>{@code {{issueRef}}} — alias for {{ref}} (backward compatibility)</li>
+ *   <li>{@code {{repository}}} — alias for {{ref}} (backward compatibility)</li>
+ *   <li>{@code {{payload}}} — normalized event payload JSON (typed structure)</li>
  *   <li>{@code {{projectContext}}} — existing project and recent task details</li>
  * </ul>
  */
@@ -116,17 +116,25 @@ public final class ManagerPromptBuilder {
     }
 
     /**
-     * Builds the user prompt by substituting placeholders in the prompt template.
+     * Builds the user prompt by substituting placeholders in the prompt template
+     * using individual field values.
      *
      * @param promptTemplate the configurable prompt template with placeholders
-     * @param event the event to evaluate
-     * @param actionTypes the registered action types
-     * @param agents the configured agents
-     * @param project the existing project (may be null)
-     * @param recentTasks recent tasks for the project
+     * @param source         event source (e.g. "github", "jira")
+     * @param eventType      normalized event type (e.g. "issue.created", "pr.merged")
+     * @param issueRef       full URL of the event subject (used for {{ref}} and {{issueRef}})
+     * @param repository     full URL of the event subject (used for {{repository}}, same as issueRef for stream events)
+     * @param payload        normalized event payload JSON (typed structure)
+     * @param actionTypes    the registered action types
+     * @param agents         the configured agents
+     * @param project        the existing project (may be null)
+     * @param recentTasks    recent tasks for the project
      * @return the resolved user prompt
      */
-    public static String buildUserPrompt(String promptTemplate, EventEntity event,
+    public static String buildUserPrompt(String promptTemplate,
+                                          String source, String eventType,
+                                          String issueRef, String repository,
+                                          String payload,
                                           List<ActionTypeEntity> actionTypes,
                                           List<AgentEntity> agents,
                                           ProjectEntity project,
@@ -134,11 +142,12 @@ public final class ManagerPromptBuilder {
         String resolved = promptTemplate;
         resolved = resolved.replace("{{actionTypes}}", formatActionTypes(actionTypes));
         resolved = resolved.replace("{{agents}}", formatAgents(agents));
-        resolved = resolved.replace("{{source}}", event.source != null ? event.source : "");
-        resolved = resolved.replace("{{eventType}}", event.eventType != null ? event.eventType : "");
-        resolved = resolved.replace("{{issueRef}}", event.issueRef != null ? event.issueRef : "");
-        resolved = resolved.replace("{{repository}}", event.repository != null ? event.repository : "");
-        resolved = resolved.replace("{{payload}}", event.payload != null ? event.payload : "{}");
+        resolved = resolved.replace("{{source}}", source != null ? source : "");
+        resolved = resolved.replace("{{eventType}}", eventType != null ? eventType : "");
+        resolved = resolved.replace("{{ref}}", issueRef != null ? issueRef : "");
+        resolved = resolved.replace("{{issueRef}}", issueRef != null ? issueRef : "");
+        resolved = resolved.replace("{{repository}}", repository != null ? repository : "");
+        resolved = resolved.replace("{{payload}}", payload != null ? payload : "{}");
         resolved = resolved.replace("{{projectContext}}", formatProjectContext(project, recentTasks));
         return resolved;
     }
@@ -152,7 +161,7 @@ public final class ManagerPromptBuilder {
                 {"type":"object","required":["decisions"],"properties":{"decisions":\
                 {"type":"array","items":{"type":"object","required":["decision",\
                 "confidence","reasoning"],"properties":{"decision":{"type":"string",\
-                "enum":["create_task","ignore","script_action","escalate"]},\
+                "enum":["create_task","ignore","escalate"]},\
                 "actionType":{"type":"string"},"agentHint":{"type":"string"},\
                 "inputContext":{"type":"string"},"confidence":{"type":"number",\
                 "minimum":0,"maximum":1},"reasoning":{"type":"string"},\
@@ -179,8 +188,8 @@ public final class ManagerPromptBuilder {
             it and decide what actions (if any) should be taken.
 
             For each decision, specify:
-            - **decision**: One of: create_task, ignore, script_action, escalate
-            - **actionType**: The action to perform (required for create_task and script_action)
+            - **decision**: One of: create_task, ignore, escalate
+            - **actionType**: The name of the action type to invoke (required for create_task)
             - **agentHint**: (Optional) preferred agent name
             - **inputContext**: Instructions or context for the agent performing the task
             - **confidence**: 0.0 to 1.0 indicating your confidence
@@ -207,10 +216,11 @@ public final class ManagerPromptBuilder {
 
             Guidelines:
             - You may return multiple decisions for a single event
+            - Use "create_task" to invoke any action type — the system will handle \
+              execution automatically based on the action type's configuration
             - Use "ignore" for events that don't require action (bot comments, trivial edits)
             - Use "escalate" when you're unsure what to do
             - Set a low confidence score if you're uncertain
-            - Script actions run a predefined script (e.g. "close-project", "reopen-project")
             """;
 
     /**
@@ -223,8 +233,7 @@ public final class ManagerPromptBuilder {
 
             - **Source:** {{source}}
             - **Event type:** {{eventType}}
-            - **Issue:** {{issueRef}}
-            - **Repository:** {{repository}}
+            - **Ref:** {{ref}}
 
             ### Event Payload
 

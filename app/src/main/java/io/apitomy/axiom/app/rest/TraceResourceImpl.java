@@ -14,7 +14,7 @@ import io.apitomy.axiom.api.beans.TraceNodeDetail;
 import io.apitomy.axiom.api.beans.TraceSearchResults;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
-import io.apitomy.axiom.core.entities.EventEntity;
+import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.ReportEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ToolExecutionEntity;
@@ -219,7 +219,7 @@ public class TraceResourceImpl implements TracesResource {
 
         Object entity = switch (entityType) {
             case "activity-log" -> ActivityLogEntity.findById(entityId);
-            case "event" -> EventEntity.findById(entityId);
+            case "event" -> StreamEventEntity.findById(UUID.fromString(String.valueOf(entityId)));
             case "ai-usage" -> AiUsageEntity.findById(entityId);
             case "tool-execution" -> ToolExecutionEntity.findById(entityId);
             case "task" -> TaskEntity.findById(entityId);

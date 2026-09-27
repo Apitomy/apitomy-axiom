@@ -2,7 +2,6 @@ package io.apitomy.axiom.manager;
 
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.AgentEntity;
-import io.apitomy.axiom.core.entities.EventEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import org.junit.jupiter.api.Test;
@@ -24,8 +23,9 @@ class ManagerPromptBuilderTest {
         assertTrue(prompt.contains("Axiom Manager"));
         assertTrue(prompt.contains("create_task"));
         assertTrue(prompt.contains("ignore"));
-        assertTrue(prompt.contains("script_action"));
         assertTrue(prompt.contains("escalate"));
+        assertFalse(prompt.contains("script_action"),
+                "script_action should not be in the prompt — the Manager chooses action types, not execution modes");
     }
 
     @Test
@@ -67,13 +67,6 @@ class ManagerPromptBuilderTest {
 
     @Test
     void testBuildUserPromptSubstitutesPlaceholders() {
-        EventEntity event = new EventEntity();
-        event.source = "github";
-        event.eventType = "issue-created";
-        event.issueRef = "Apicurio/axiom#42";
-        event.repository = "Apicurio/axiom";
-        event.payload = "{\"action\":\"opened\",\"issue\":{\"title\":\"Test\"}}";
-
         ActionTypeEntity at = new ActionTypeEntity();
         at.name = "analyze";
         at.executionMode = "agent";
@@ -85,7 +78,9 @@ class ManagerPromptBuilderTest {
 
         String prompt = ManagerPromptBuilder.buildUserPrompt(
                 ManagerPromptBuilder.DEFAULT_PROMPT_TEMPLATE,
-                event, List.of(at), List.of(agent), null, Collections.emptyList());
+                "github", "issue-created", "Apicurio/axiom#42", "Apicurio/axiom",
+                "{\"action\":\"opened\",\"issue\":{\"title\":\"Test\"}}",
+                List.of(at), List.of(agent), null, Collections.emptyList());
 
         assertTrue(prompt.contains("github"));
         assertTrue(prompt.contains("issue-created"));
@@ -97,12 +92,6 @@ class ManagerPromptBuilderTest {
 
     @Test
     void testBuildUserPromptContainsProjectContext() {
-        EventEntity event = new EventEntity();
-        event.source = "github";
-        event.eventType = "comment-added";
-        event.issueRef = "Apicurio/axiom#10";
-        event.payload = "{}";
-
         ProjectEntity project = new ProjectEntity();
         project.id = 1L;
         project.name = "Fix login bug";
@@ -116,7 +105,8 @@ class ManagerPromptBuilderTest {
 
         String prompt = ManagerPromptBuilder.buildUserPrompt(
                 ManagerPromptBuilder.DEFAULT_PROMPT_TEMPLATE,
-                event, Collections.emptyList(), Collections.emptyList(),
+                "github", "comment-added", "Apicurio/axiom#10", null, "{}",
+                Collections.emptyList(), Collections.emptyList(),
                 project, List.of(task));
 
         assertTrue(prompt.contains("Fix login bug"));

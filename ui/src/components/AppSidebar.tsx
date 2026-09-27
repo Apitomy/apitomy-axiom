@@ -12,7 +12,8 @@ import {
 import { fetchInboxCount } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 
-const COMPONENT_PATHS = ["/action-types", "/agents", "/session-templates", "/event-sources", "/mcp-servers", "/report-definitions", "/scheduled-jobs", "/secrets", "/tools", "/toolsets", "/components/workflows"];
+const COMPONENT_PATHS = ["/action-types", "/agents", "/session-templates", "/mcp-servers", "/report-definitions", "/scheduled-jobs", "/secrets", "/tools", "/toolsets", "/components/workflows"];
+const EVENTS_PATHS = ["/events/stream", "/events/connections", "/events/subscriptions"];
 const SETTINGS_PATHS = ["/engine", "/manager", "/data-retention", "/configuration-packs"];
 
 export function AppSidebar() {
@@ -34,6 +35,9 @@ export function AppSidebar() {
     }, []);
 
     const isComponentsActive = COMPONENT_PATHS.some(
+        (p) => location.pathname === p || location.pathname.startsWith(p + "/")
+    );
+    const isEventsActive = EVENTS_PATHS.some(
         (p) => location.pathname === p || location.pathname.startsWith(p + "/")
     );
     const isSettingsActive = SETTINGS_PATHS.some(
@@ -60,14 +64,24 @@ export function AppSidebar() {
                         <NavItem isActive={location.pathname.startsWith("/projects")} onClick={() => navigate("/projects")}>
                             Projects
                         </NavItem>
+                        <NavExpandable title="Events"
+                            isActive={isEventsActive}
+                            isExpanded={isEventsActive}>
+                            <NavItem isActive={location.pathname.startsWith("/events/stream")} onClick={() => navigate("/events/stream")}>
+                                Event Stream
+                            </NavItem>
+                            <NavItem isActive={location.pathname.startsWith("/events/connections")} onClick={() => navigate("/events/connections")}>
+                                Connections
+                            </NavItem>
+                            <NavItem isActive={location.pathname.startsWith("/events/subscriptions")} onClick={() => navigate("/events/subscriptions")}>
+                                Subscriptions
+                            </NavItem>
+                        </NavExpandable>
                         <NavExpandable title="Logs"
                             isActive={location.pathname.startsWith("/logs")}
                             isExpanded={location.pathname.startsWith("/logs")}>
                             <NavItem isActive={location.pathname === "/logs/activity"} onClick={() => navigate("/logs/activity")}>
                                 All Activity
-                            </NavItem>
-                            <NavItem isActive={location.pathname === "/logs/events"} onClick={() => navigate("/logs/events")}>
-                                Events
                             </NavItem>
                             <NavItem isActive={location.pathname === "/logs/manager"} onClick={() => navigate("/logs/manager")}>
                                 Manager Decisions
@@ -104,9 +118,6 @@ export function AppSidebar() {
                             </NavItem>
                             <NavItem isActive={location.pathname.startsWith("/session-templates")} onClick={() => navigate("/session-templates")}>
                                 AI Assistant
-                            </NavItem>
-                            <NavItem isActive={location.pathname.startsWith("/event-sources")} onClick={() => navigate("/event-sources")}>
-                                Event Sources
                             </NavItem>
                             <NavItem isActive={location.pathname.startsWith("/mcp-servers")} onClick={() => navigate("/mcp-servers")}>
                                 MCP Servers

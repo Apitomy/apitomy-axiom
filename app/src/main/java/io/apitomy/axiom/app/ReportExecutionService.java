@@ -8,7 +8,7 @@ import io.apitomy.axiom.core.util.SlugUtil;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.events.SseEvent;
-import io.apitomy.axiom.core.entities.EventSourceEntity;
+import io.apitomy.axiom.core.entities.EventSourceConnectionEntity;
 import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
 import io.apitomy.axiom.core.entities.ReportEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
@@ -403,12 +403,12 @@ public class ReportExecutionService {
      * @return a comma-separated list of owner/repo strings
      */
     private String resolveRepositories(ReportDefinitionEntity definition) {
-        // Query all GitHub event sources and build the repository list
-        List<EventSourceEntity> all = EventSourceEntity.list("sourceType", "github");
+        // Query all GitHub connections and build the repository list
+        List<EventSourceConnectionEntity> all = EventSourceConnectionEntity.list("sourceType", "github");
         return all.stream()
-                .map(source -> {
+                .map(conn -> {
                     try {
-                        JsonNode config = objectMapper.readTree(source.configuration);
+                        JsonNode config = objectMapper.readTree(conn.configuration);
                         String owner = config.path("owner").asText("");
                         String name = config.path("name").asText("");
                         return owner + "/" + name;

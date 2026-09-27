@@ -7,6 +7,7 @@ import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
@@ -32,6 +33,19 @@ class McpConfigGeneratorTest {
 
     @Inject
     ObjectMapper objectMapper;
+
+    @BeforeEach
+    @Transactional
+    void ensureTestToolExists() {
+        if (ToolDefinitionEntity.count() == 0) {
+            ToolDefinitionEntity tool = new ToolDefinitionEntity();
+            tool.name = "test_tool";
+            tool.description = "Test tool for MCP config tests";
+            tool.parameters = "[]";
+            tool.scriptTemplate = "echo test";
+            tool.persist();
+        }
+    }
 
     // ── Unrestricted config (both servers) ───────────────────────────
 
@@ -116,7 +130,7 @@ class McpConfigGeneratorTest {
     // ── Tools JSON file content ──────────────────────────────────────
 
     @Test
-    void testToolsJsonContainsSeededTools() throws Exception {
+    void testToolsJsonContainsTools() throws Exception {
         Path configFile = generator.generateMcpConfig(9005L, Map.of(), null);
         JsonNode config = objectMapper.readTree(Files.readString(configFile));
 
@@ -125,23 +139,14 @@ class McpConfigGeneratorTest {
         JsonNode tools = objectMapper.readTree(Files.readString(Path.of(toolsJsonPath)));
 
         assertTrue(tools.isArray(), "Tools should be a JSON array");
-        assertTrue(tools.size() >= 4, "Should have at least 4 seeded script tools");
+        assertTrue(tools.size() >= 1, "Should have at least 1 script tool");
 
-        boolean hasListLabels = false;
-        boolean hasApplyLabels = false;
-        boolean hasListIssues = false;
-        boolean hasListPrs = false;
+        boolean hasTestTool = false;
         for (JsonNode tool : tools) {
             String name = tool.get("name").asText();
-            if ("list_github_labels".equals(name)) hasListLabels = true;
-            if ("apply_github_labels".equals(name)) hasApplyLabels = true;
-            if ("list_github_issues".equals(name)) hasListIssues = true;
-            if ("list_github_prs".equals(name)) hasListPrs = true;
+            if ("test_tool".equals(name)) hasTestTool = true;
         }
-        assertTrue(hasListLabels, "Should contain list_github_labels tool");
-        assertTrue(hasApplyLabels, "Should contain apply_github_labels tool");
-        assertTrue(hasListIssues, "Should contain list_github_issues tool");
-        assertTrue(hasListPrs, "Should contain list_github_prs tool");
+        assertTrue(hasTestTool, "Should contain test_tool");
     }
 
     @Test
@@ -153,28 +158,16 @@ class McpConfigGeneratorTest {
                 .get("args").get(1).asText();
         JsonNode tools = objectMapper.readTree(Files.readString(Path.of(toolsJsonPath)));
 
-        JsonNode applyLabelsTool = null;
+        JsonNode testTool = null;
         for (JsonNode tool : tools) {
-            if ("apply_github_labels".equals(tool.get("name").asText())) {
-                applyLabelsTool = tool;
+            if ("test_tool".equals(tool.get("name").asText())) {
+                testTool = tool;
                 break;
             }
         }
-        assertNotNull(applyLabelsTool, "apply_github_labels tool should exist");
-        assertTrue(applyLabelsTool.has("description"), "Tool should have description");
-        assertTrue(applyLabelsTool.has("scriptTemplate"), "Tool should have scriptTemplate");
-        assertTrue(applyLabelsTool.has("parameters"), "Tool should have parameters");
-
-        JsonNode params = applyLabelsTool.get("parameters");
-        assertTrue(params.isArray(), "Parameters should be an array");
-        assertTrue(params.size() >= 3, "apply_github_labels should have at least 3 parameters");
-
-        for (JsonNode param : params) {
-            assertTrue(param.has("name"), "Parameter should have name");
-            assertTrue(param.has("type"), "Parameter should have type");
-            assertTrue(param.has("description"), "Parameter should have description");
-            assertTrue(param.has("required"), "Parameter should have required flag");
-        }
+        assertNotNull(testTool, "test_tool should exist");
+        assertTrue(testTool.has("description"), "Tool should have description");
+        assertTrue(testTool.has("scriptTemplate"), "Tool should have scriptTemplate");
     }
 
     // ── MCP server installation ──────────────────────────────────────
@@ -216,7 +209,7 @@ class McpConfigGeneratorTest {
     @Test
     void testOnlyScriptToolsNoSdkServer() throws Exception {
         Path configFile = generator.generateMcpConfig(9016L, Map.of(),
-                List.of("mcp__axiom-tools__list_github_labels"));
+                List.of("mcp__axiom-tools__test_tool"));
         assertNotNull(configFile);
 
         JsonNode config = objectMapper.readTree(Files.readString(configFile));

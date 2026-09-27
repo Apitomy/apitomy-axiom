@@ -194,37 +194,6 @@ const TOOLS = [
         },
     },
     {
-        name: "axiom_list_event_sources",
-        description: "List all configured event sources in Axiom. Returns names, source types (github/jira), and whether they are enabled.",
-        parameters: [],
-        handler: async () => {
-            const response = JSON.parse(await axiomApi("GET", "/event-sources"));
-            const items = response.items || [];
-            if (items.length === 0) return "No event sources configured.";
-            return JSON.stringify(items.map(es => ({
-                id: es.id,
-                name: es.name,
-                description: es.description || "",
-                sourceType: es.sourceType,
-                enabled: es.enabled,
-            })), null, 2);
-        },
-    },
-    {
-        name: "axiom_get_event_source",
-        description: "Get full details of a specific event source by name, including its configuration, filters, poll interval, and labels.",
-        parameters: [
-            { name: "name", type: "string", description: "The event source name", required: true },
-        ],
-        handler: async (args) => {
-            const response = JSON.parse(await axiomApi("GET", "/event-sources"));
-            const items = response.items || [];
-            const es = items.find(e => e.name === args.name);
-            if (!es) return `Event source '${args.name}' not found.`;
-            return JSON.stringify(es, null, 2);
-        },
-    },
-    {
         name: "axiom_list_scheduled_jobs",
         description: "List all scheduled jobs in Axiom. Returns names, schedules, execution modes, and whether they are enabled.",
         parameters: [],
@@ -252,6 +221,98 @@ const TOOLS = [
             const job = items.find(j => j.name === args.name);
             if (!job) return `Scheduled job '${args.name}' not found.`;
             return JSON.stringify(job, null, 2);
+        },
+    },
+    {
+        name: "axiom_list_connections",
+        description: "List all configured event source connections (GitHub, Jira) with their IDs, names, types, and enabled status.",
+        parameters: [],
+        handler: async () => {
+            const result = JSON.parse(await axiomApi("GET", "/connections?limit=100"));
+            const items = result.items || [];
+            if (items.length === 0) return "No connections configured.";
+            return JSON.stringify(items.map(c => ({
+                id: c.id,
+                name: c.name,
+                sourceType: c.sourceType,
+                enabled: c.enabled,
+                baseUrl: c.baseUrl || "",
+            })), null, 2);
+        },
+    },
+    {
+        name: "axiom_get_connection",
+        description: "Get the full details of an event source connection by its slug ID, including configuration (repositories/projects), base URL, and poll interval.",
+        parameters: [
+            { name: "connectionId", type: "string", description: "The connection slug ID (e.g., 'github-com')", required: true },
+        ],
+        handler: async (args) => {
+            try {
+                return await axiomApi("GET", "/connections/" + encodeURIComponent(args.connectionId));
+            } catch (e) {
+                return `Connection '${args.connectionId}' not found.`;
+            }
+        },
+    },
+    {
+        name: "axiom_list_subscriptions",
+        description: "List all event subscriptions with their names, enabled status, filter expressions, and routing rules.",
+        parameters: [],
+        handler: async () => {
+            const result = JSON.parse(await axiomApi("GET", "/subscriptions?limit=100"));
+            const items = result.items || [];
+            if (items.length === 0) return "No subscriptions configured.";
+            return JSON.stringify(items.map(s => ({
+                id: s.id,
+                name: s.name,
+                enabled: s.enabled,
+                filterExpression: s.filterExpression || "",
+                routing: s.routing || [],
+            })), null, 2);
+        },
+    },
+    {
+        name: "axiom_get_subscription",
+        description: "Get the full details of an event subscription by ID, including its filter expression, routing rules, and labels.",
+        parameters: [
+            { name: "subscriptionId", type: "number", description: "The subscription ID", required: true },
+        ],
+        handler: async (args) => {
+            try {
+                return await axiomApi("GET", "/subscriptions/" + encodeURIComponent(args.subscriptionId));
+            } catch (e) {
+                return `Subscription '${args.subscriptionId}' not found.`;
+            }
+        },
+    },
+    {
+        name: "axiom_list_workflow_definitions",
+        description: "List all workflow definitions with their names, descriptions, and current published version.",
+        parameters: [],
+        handler: async () => {
+            const result = JSON.parse(await axiomApi("GET", "/workflow/definitions?limit=100"));
+            const items = result.items || [];
+            if (items.length === 0) return "No workflow definitions configured.";
+            return JSON.stringify(items.map(wd => ({
+                id: wd.id,
+                name: wd.name,
+                description: wd.description || "",
+                currentVersion: wd.currentVersion,
+            })), null, 2);
+        },
+    },
+    {
+        name: "axiom_get_workflow_definition",
+        description: "Get the full details of a workflow definition by ID, including the workflow content (nodes, edges, and their configuration).",
+        parameters: [
+            { name: "workflowDefinitionId", type: "number", description: "The workflow definition ID", required: true },
+        ],
+        handler: async (args) => {
+            try {
+                return await axiomApi("GET", "/workflow/definitions/" + encodeURIComponent(args.workflowDefinitionId));
+            } catch (e) {
+                return `Workflow definition '${args.workflowDefinitionId}' not found.`;
+            }
         },
     },
     {

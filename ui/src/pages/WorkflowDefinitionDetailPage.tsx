@@ -55,6 +55,7 @@ import {
     type WorkflowRunSummary,
 } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
+import { fetchSdkFunctions } from "../config/sdkTools";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
 import RocketIcon from "@patternfly/react-icons/dist/esm/icons/rocket-icon";
@@ -93,6 +94,7 @@ export function WorkflowDefinitionDetailPage() {
     const savedContentRef = useRef<string>("");
     const [saving, setSaving] = useState(false);
     const [publishing, setPublishing] = useState(false);
+    const [publishError, setPublishError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [validationErrors, setValidationErrors] = useState<ValidationProblem[]>([]);
     const [versions, setVersions] = useState<WorkflowDefinitionVersion[]>([]);
@@ -118,14 +120,31 @@ export function WorkflowDefinitionDetailPage() {
     // EditorSpi for action types — memoized to avoid re-renders
     const spi: EditorSpi = useMemo(() => ({
         actionTypes: async () => {
-            const results = await fetchActionTypes(1, 1000, undefined, undefined, undefined, true);
-            return results.items.map((at): ActionTypeDescriptor => ({
+            const [results, sdkFunctions] = await Promise.all([
+                fetchActionTypes(1, 1000, undefined, undefined, undefined, true),
+                fetchSdkFunctions(),
+            ]);
+            const configured = results.items.map((at): ActionTypeDescriptor => ({
                 value: at.name,
                 label: at.name,
                 description: at.description,
                 inputs: at.inputs,
                 outputs: at.outputs,
             }));
+            const sdkActions = sdkFunctions
+                .filter(fn => fn.sdkCallSupported)
+                .map((fn): ActionTypeDescriptor => ({
+                    value: `sdk:${fn.name}`,
+                    label: `SDK: ${fn.name.replace(/^axiom_/, "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}`,
+                    description: fn.description,
+                    inputs: fn.parameters?.map(p => ({
+                        name: p.name,
+                        type: (p.type || "string") as "string" | "number" | "boolean" | "object",
+                        required: p.required,
+                        description: p.description,
+                    })),
+                }));
+            return [...configured, ...sdkActions];
         },
     }), []);
 
@@ -231,12 +250,14 @@ export function WorkflowDefinitionDetailPage() {
 
     const handlePublish = () => {
         setPublishing(true);
+        setPublishError(null);
         publishWorkflowDefinition(id)
             .then(() => {
                 loadDefinition();
             })
             .catch((err) => {
                 console.error("Failed to publish workflow definition:", err);
+                setPublishError(err.message || "Failed to publish workflow definition");
             })
             .finally(() => setPublishing(false));
     };
@@ -439,6 +460,13 @@ export function WorkflowDefinitionDetailPage() {
                     <p className="axiom-text-subtle" style={{ marginTop: "8px" }}>
                         {definition.description}
                     </p>
+                )}
+                {publishError && (
+                    <Alert variant="danger" title="Publish failed" isInline
+                        actionClose={<AlertActionCloseButton onClose={() => setPublishError(null)} />}
+                        style={{ marginTop: 12 }}>
+                        {publishError}
+                    </Alert>
                 )}
             </div>
 

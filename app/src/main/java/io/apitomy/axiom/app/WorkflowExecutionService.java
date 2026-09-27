@@ -68,6 +68,9 @@ public class WorkflowExecutionService {
     @Inject
     TaskExecutionService taskExecutionService;
 
+    @Inject
+    SdkCallService sdkCallService;
+
     private WorkflowEngine workflowEngine;
 
     @PostConstruct
@@ -89,8 +92,32 @@ public class WorkflowExecutionService {
     /**
      * Triggers a workflow on a project.
      */
+    /**
+     * Triggers a workflow on a project with additional context variables
+     * merged into the initial workflow context.
+     *
+     * @param projectId    the project to run the workflow on
+     * @param definitionId the workflow definition to instantiate
+     * @param extraContext additional key-value pairs merged into the workflow
+     *                     context (e.g., event data as a JsonNode)
+     * @return the created workflow run entity
+     */
+    @Transactional
+    public WorkflowRunEntity triggerWorkflow(long projectId, long definitionId,
+                                              Map<String, Object> extraContext) {
+        return doTriggerWorkflow(projectId, definitionId, extraContext);
+    }
+
+    /**
+     * Triggers a workflow on a project.
+     */
     @Transactional
     public WorkflowRunEntity triggerWorkflow(long projectId, long definitionId) {
+        return doTriggerWorkflow(projectId, definitionId, null);
+    }
+
+    private WorkflowRunEntity doTriggerWorkflow(long projectId, long definitionId,
+                                                  Map<String, Object> extraContext) {
         ProjectEntity project = ProjectEntity.findById(projectId);
         if (project == null) {
             throw new WebApplicationException("Project not found", 404);
@@ -132,12 +159,11 @@ public class WorkflowExecutionService {
 
         Map<String, Object> context = new HashMap<>();
         context.put("projectId", project.id);
-        context.put("projectName", project.name);
-        if (project.repository != null) {
-            context.put("repository", project.repository);
-        }
-        if (project.ref != null) {
-            context.put("ref", project.ref);
+        context.put("ref", project.ref != null ? project.ref : "");
+
+        // Merge extra context (e.g., event data from create-workflow routing)
+        if (extraContext != null) {
+            context.putAll(extraContext);
         }
 
         WorkflowInstance instance;
@@ -256,6 +282,8 @@ public class WorkflowExecutionService {
             return;
         }
 
+        completeParkedTraceNode(entity, "workflow-wait");
+
         Workflow workflow = loadWorkflowContent(
                 entity.definitionId, entity.definitionVersion);
         WorkflowInstance instance = deserializeInstance(entity.instanceState);
@@ -284,6 +312,8 @@ public class WorkflowExecutionService {
                     runId, nodeId);
             return;
         }
+
+        completeParkedTraceNode(entity, "workflow-event-subscription");
 
         Workflow workflow = loadWorkflowContent(
                 entity.definitionId, entity.definitionVersion);
@@ -395,6 +425,28 @@ public class WorkflowExecutionService {
         return new TraceContext(run.traceId, root.id);
     }
 
+    /**
+     * Completes the trace node for a parked workflow node (wait or receive-event)
+     * when the node resumes. Looks up the trace node by entity type and marks it
+     * completed.
+     */
+    private void completeParkedTraceNode(WorkflowRunEntity entity, String entityType) {
+        if (entity.traceId == null) {
+            return;
+        }
+        try {
+            io.apitomy.axiom.core.entities.TraceNodeEntity node =
+                    io.apitomy.axiom.core.entities.TraceNodeEntity.find(
+                            "traceId = ?1 and entityType = ?2 and status = 'in-progress'",
+                            entity.traceId, entityType).firstResult();
+            if (node != null) {
+                traceService.completeNode(node.id, "completed");
+            }
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to complete parked trace node for workflow run %d", entity.id);
+        }
+    }
+
     /** Best-effort completion of a run's execution trace. */
     private void completeRunTrace(WorkflowRunEntity run, String status) {
         if (run.traceId == null) {
@@ -466,9 +518,21 @@ public class WorkflowExecutionService {
             return;
         }
 
+        // Check for SDK call prefix — execute synchronously, no task created
+        String actionTypeStr = actionInfo.actionType();
+        if (actionTypeStr != null && actionTypeStr.startsWith("sdk:")) {
+            executeSdkCallForNode(entity, workflow, instance, nodeId, actionInfo);
+            return;
+        }
+
+        // Strip "action:" prefix if present (backward-compatible)
+        if (actionTypeStr != null && actionTypeStr.startsWith("action:")) {
+            actionTypeStr = actionTypeStr.substring("action:".length());
+        }
+
         TaskEntity task = new TaskEntity();
         task.projectId = entity.projectId;
-        task.actionType = actionInfo.actionType();
+        task.actionType = actionTypeStr;
         task.createdBy = "workflow";
         task.status = "Pending";
         task.input = serializeInputs(actionInfo);
@@ -492,6 +556,43 @@ public class WorkflowExecutionService {
                 task.id, entity.id, actionInfo.actionType());
 
         sseEvents.fire(SseEvent.taskUpdated(entity.projectId, task.id, task.status));
+    }
+
+    /**
+     * Executes an SDK function call directly for a workflow action node,
+     * then advances the workflow with the result. No task entity is created.
+     */
+    private void executeSdkCallForNode(WorkflowRunEntity entity,
+            Workflow workflow, WorkflowInstance instance, String nodeId,
+            ActionInfo actionInfo) {
+        String functionName = actionInfo.actionType().substring("sdk:".length());
+
+        // Build parameters from the action info's resolved inputs
+        Map<String, Object> params = new HashMap<>();
+        if (actionInfo.resolvedInputs() != null) {
+            params.putAll(actionInfo.resolvedInputs());
+        }
+        // Always inject projectId from the workflow run
+        params.putIfAbsent("projectId", entity.projectId);
+
+        LOG.infof("Executing SDK call %s for workflow %d node %s", functionName, entity.id, nodeId);
+
+        SdkCallService.SdkCallResult result = sdkCallService.execute(functionName, params);
+
+        // Build node result and advance the workflow
+        Map<String, Object> output = new HashMap<>(result.outputMap());
+        output.put("success", result.success());
+        output.put("output", result.output());
+
+        NodeResult nodeResult = new NodeResult(
+                result.success() ? NodeResultStatus.COMPLETED : NodeResultStatus.FAILED,
+                output);
+
+        advanceWorkflow(entity, workflow, instance, nodeId, nodeResult);
+
+        LOG.infof("SDK call %s %s for workflow %d node %s: %s",
+                functionName, result.success() ? "completed" : "failed",
+                entity.id, nodeId, result.output());
     }
 
     /**

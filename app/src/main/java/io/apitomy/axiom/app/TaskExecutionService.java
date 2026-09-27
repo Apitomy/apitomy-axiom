@@ -9,8 +9,6 @@ import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.AgentEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
-import io.apitomy.axiom.core.entities.EventEntity;
-import io.apitomy.axiom.core.entities.EventQueueEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
@@ -292,7 +290,28 @@ public class TaskExecutionService {
         }
 
         String resolved = actionType.promptTemplate;
-        resolved = resolved.replace("{{managerInput}}", task.input != null ? task.input : "");
+
+        // Extract managerInput and event from task input.
+        // For invoke-action routing, task.input is a JSON object with "summary" and "event" fields.
+        // For Manager routing, task.input is the Manager's inputContext string.
+        String managerInput = task.input != null ? task.input : "";
+        String eventPayload = "";
+        if (task.input != null) {
+            try {
+                com.fasterxml.jackson.databind.JsonNode inputNode = objectMapper.readTree(task.input);
+                if (inputNode.has("summary") && inputNode.has("event")) {
+                    // invoke-action format: extract summary for managerInput, event for {{event}}
+                    managerInput = inputNode.path("summary").asText("");
+                    eventPayload = objectMapper.writerWithDefaultPrettyPrinter()
+                            .writeValueAsString(inputNode.path("event"));
+                }
+            } catch (Exception e) {
+                // Not JSON or not the invoke-action format — use raw input as managerInput
+            }
+        }
+
+        resolved = resolved.replace("{{managerInput}}", managerInput);
+        resolved = resolved.replace("{{event}}", eventPayload);
         resolved = resolved.replace("{{actionType}}", task.actionType != null ? task.actionType : "");
         resolved = resolved.replace("{{ref}}", project.ref != null ? project.ref : "");
         resolved = resolved.replace("{{repository}}", project.repository != null ? project.repository : "");
@@ -512,11 +531,6 @@ public class TaskExecutionService {
             workflowExecutionService.onTaskCompleted(task.id);
         }
 
-        // Emit internal event if configured. Deferred until after workflow
-        // output-contract validation so consumers never observe a "completed"
-        // task that the workflow layer immediately fails (the emitted event type
-        // reflects the final, post-validation task status).
-        emitInternalEventIfNeeded(task);
     }
 
     @Transactional
@@ -565,28 +579,6 @@ public class TaskExecutionService {
             if (pendingTasks > 0) {
                 executeNextTask(projectId);
             }
-        }
-    }
-
-    private void emitInternalEventIfNeeded(TaskEntity task) {
-        ActionTypeEntity actionType = ActionTypeEntity.find("name", task.actionType).firstResult();
-        if (actionType != null && actionType.emitsEvent) {
-            EventEntity event = new EventEntity();
-            event.source = "internal";
-            event.eventType = task.status.equals("Completed") ? "task-completed" : "task-failed";
-            event.projectId = task.projectId;
-            event.taskId = task.id;
-            event.payload = task.output != null ? task.output : "";
-            event.receivedAt = Instant.now();
-            event.persist();
-
-            EventQueueEntity queueEntry = new EventQueueEntity();
-            queueEntry.eventId = event.id;
-            queueEntry.status = "pending";
-            queueEntry.enqueuedAt = Instant.now();
-            queueEntry.persist();
-
-            LOG.infof("Emitted internal %s event for task %d", event.eventType, task.id);
         }
     }
 

@@ -1,6 +1,5 @@
 package io.apitomy.axiom.app;
 
-import io.apitomy.axiom.core.entities.EventEntity;
 import io.apitomy.axiom.core.entities.ReportEntity;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
@@ -69,7 +68,6 @@ public class TraceCleanup {
         TraceNodeEntity.delete("traceId in ?1", traceIds);
 
         TaskEntity.update("traceId = null where traceId in ?1", traceIds);
-        EventEntity.update("traceId = null where traceId in ?1", traceIds);
         ScheduledJobRunEntity.update("traceId = null where traceId in ?1", traceIds);
         ReportEntity.update("traceId = null where traceId in ?1", traceIds);
 

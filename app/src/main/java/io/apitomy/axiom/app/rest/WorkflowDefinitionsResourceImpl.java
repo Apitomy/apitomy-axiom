@@ -53,11 +53,11 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
 
     /** Inputs Axiom always injects when starting a workflow (may be marked required). */
     private static final Set<String> ALWAYS_PRESENT_INPUTS =
-            Set.of("projectId", "projectName");
+            Set.of("projectId", "ref");
 
     /** All inputs Axiom may inject (always-present plus conditionally-present). */
     private static final List<String> CANONICAL_INPUT_NAMES =
-            List.of("projectId", "projectName", "repository", "ref");
+            List.of("projectId", "projectName", "repository", "ref", "event");
 
     private static final Set<String> CANONICAL_INPUTS = Set.copyOf(CANONICAL_INPUT_NAMES);
 
@@ -335,7 +335,7 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
                         Response.status(400).entity(Map.of("message",
                                 "Start node input '" + name + "' cannot be marked "
                                         + "required because Axiom does not always provide "
-                                        + "it. Only projectId and projectName may be "
+                                        + "it. Only projectId and ref may be "
                                         + "required.")).build());
             }
         }
@@ -388,28 +388,23 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
         List<Map<String, Object>> startInputs = List.of(
                 Map.of("name", "projectId", "type", "number",
                         "required", true,
-                        "description", "The Axiom project id"),
-                Map.of("name", "projectName", "type", "string",
-                        "required", true,
-                        "description", "The Axiom project name"),
-                Map.of("name", "repository", "type", "string",
-                        "required", false,
-                        "description", "The project git repository, if any"),
+                        "description", "The Axiom project ID"),
                 Map.of("name", "ref", "type", "string",
+                        "required", true,
+                        "description", "Full URL identifying the project subject"),
+                Map.of("name", "event", "type", "object",
                         "required", false,
-                        "description", "The project git ref, if any"));
+                        "description", "The triggering event (present when created by subscription routing)"));
         Map<String, Object> startNode = Map.of(
                 "id", "start-1",
                 "type", "start",
                 "name", "Start",
-                "config", Map.of("inputs", startInputs),
-                "position", Map.of("x", 250, "y", 100));
+                "config", Map.of("inputs", startInputs));
         Map<String, Object> endNode = Map.of(
                 "id", "end-1",
                 "type", "end",
                 "name", "End",
-                "config", Map.of(),
-                "position", Map.of("x", 250, "y", 400));
+                "config", Map.of());
         Map<String, Object> edge = Map.of(
                 "id", "edge-1",
                 "source", "start-1",

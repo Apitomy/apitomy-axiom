@@ -10,6 +10,8 @@ import {
     Tab,
     Tabs,
     TabTitleText,
+    EmptyState,
+    EmptyStateBody,
 } from "@patternfly/react-core";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { useState } from "react";
@@ -26,6 +28,35 @@ interface ActionTypeDetailModalProps {
     errors?: string[];
 }
 
+function FieldsTable({ fields }: { fields: { name: string; type: string; required?: boolean; description?: string }[] }) {
+    if (fields.length === 0) {
+        return (
+            <EmptyState variant="sm">
+                <EmptyStateBody>No fields declared.</EmptyStateBody>
+            </EmptyState>
+        );
+    }
+    return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {fields.map((f, i) => (
+                <div key={i} style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    padding: "8px 12px",
+                    backgroundColor: "var(--pf-t--global--background--color--secondary--default)",
+                    borderRadius: 4,
+                }}>
+                    <span style={{ fontWeight: 600, fontSize: 13, minWidth: 140 }}>{f.name}</span>
+                    <Label isCompact color="blue">{f.type}</Label>
+                    {f.required && <Label isCompact color="orange">required</Label>}
+                    {f.description && (
+                        <span className="axiom-text-subtle" style={{ fontSize: 13, flex: 1 }}>{f.description}</span>
+                    )}
+                </div>
+            ))}
+        </div>
+    );
+}
+
 export function ActionTypeDetailModal({ isOpen, onClose, name, content, errors }: ActionTypeDetailModalProps) {
     const effectiveTheme = useEffectiveTheme();
     const [activeTab, setActiveTab] = useState(0);
@@ -35,6 +66,9 @@ export function ActionTypeDetailModal({ isOpen, onClose, name, content, errors }
     const userTriggerable = content.userTriggerable as boolean ?? false;
     const managerTriggerable = content.managerTriggerable as boolean ?? false;
     const emitsEvent = content.emitsEvent as boolean ?? false;
+    const workflowEnabled = content.workflowEnabled as boolean ?? false;
+    const inputs = Array.isArray(content.inputs) ? content.inputs as { name: string; type: string; required?: boolean; description?: string }[] : [];
+    const outputs = Array.isArray(content.outputs) ? content.outputs as { name: string; type: string; required?: boolean; description?: string }[] : [];
     const rawAllowedTools = content.allowedTools;
     const promptTemplate = (content.promptTemplate as string) || "";
     const scriptTemplate = (content.scriptTemplate as string) || "";
@@ -92,7 +126,8 @@ export function ActionTypeDetailModal({ isOpen, onClose, name, content, errors }
                                         {userTriggerable && <Label isCompact color="green" style={{ marginRight: 4 }}>User Triggerable</Label>}
                                         {managerTriggerable && <Label isCompact color="blue" style={{ marginRight: 4 }}>Manager Triggerable</Label>}
                                         {emitsEvent && <Label isCompact color="purple" style={{ marginRight: 4 }}>Emits Event</Label>}
-                                        {!userTriggerable && !managerTriggerable && !emitsEvent && "—"}
+                                        {workflowEnabled && <Label isCompact color="teal" style={{ marginRight: 4 }}>Workflow Enabled</Label>}
+                                        {!userTriggerable && !managerTriggerable && !emitsEvent && !workflowEnabled && "—"}
                                     </DescriptionListDescription>
                                 </DescriptionListGroup>
                                 {toolsList.length > 0 && (
@@ -158,8 +193,22 @@ export function ActionTypeDetailModal({ isOpen, onClose, name, content, errors }
                             </div>
                         </Tab>
                     ) : null}
+                    {workflowEnabled && inputs.length > 0 && (
+                        <Tab eventKey={2} title={<TabTitleText>Inputs ({inputs.length})</TabTitleText>}>
+                            <div style={{ paddingTop: 16 }}>
+                                <FieldsTable fields={inputs} />
+                            </div>
+                        </Tab>
+                    )}
+                    {workflowEnabled && outputs.length > 0 && (
+                        <Tab eventKey={3} title={<TabTitleText>Outputs ({outputs.length})</TabTitleText>}>
+                            <div style={{ paddingTop: 16 }}>
+                                <FieldsTable fields={outputs} />
+                            </div>
+                        </Tab>
+                    )}
                     {(errors?.length ?? 0) > 0 && (
-                        <Tab eventKey={2} title={
+                        <Tab eventKey={4} title={
                             <TabTitleText>
                                 <ExclamationCircleIcon className="axiom-icon-danger" style={{ marginRight: 6 }} />
                                 Problems ({errors!.length})

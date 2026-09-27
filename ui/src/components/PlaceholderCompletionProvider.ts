@@ -20,9 +20,16 @@ export interface PlaceholderItem {
     description: string;
 }
 
+// Track registered providers per language to prevent duplicate registrations
+// across component re-mounts. Key: "language:placeholderNames"
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const registeredProviders = new Map<string, any>();
+
 /**
  * Registers a completion provider for the given language that triggers
- * on "{{" and suggests the provided placeholders.
+ * on "{{" and suggests the provided placeholders. Safe to call multiple
+ * times — duplicate registrations for the same language and placeholder
+ * set are silently ignored.
  *
  * @param monaco the Monaco namespace object
  * @param language the language ID (e.g. "markdown", "shell")
@@ -38,13 +45,34 @@ export function registerPlaceholderCompletions(
     placeholders: PlaceholderItem[]
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): any {
+    // Guard against duplicate registration. If the placeholder set changed
+    // (e.g., inputs were added/removed), dispose the old provider first.
+    const key = `${language}:${placeholders.map(p => p.name).join(",")}`;
+    const langPrefix = `${language}:`;
+
+    // Dispose any existing provider for this language with a different placeholder set
+    for (const [existingKey, disposable] of registeredProviders.entries()) {
+        if (existingKey.startsWith(langPrefix) && existingKey !== key) {
+            disposable.dispose();
+            registeredProviders.delete(existingKey);
+        }
+    }
+
+    if (registeredProviders.has(key)) {
+        // Still apply editor options on re-mount
+        editor.updateOptions({
+            wordBasedSuggestions: "off",
+            quickSuggestions: false,
+        });
+        return registeredProviders.get(key);
+    }
     // Disable default word-based suggestions — only show our placeholder completions
     editor.updateOptions({
         wordBasedSuggestions: "off",
         quickSuggestions: false,
     });
 
-    return monaco.languages.registerCompletionItemProvider(language, {
+    const disposable = monaco.languages.registerCompletionItemProvider(language, {
         triggerCharacters: ["{"],
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         provideCompletionItems: (model: any, position: any) => {
@@ -83,6 +111,9 @@ export function registerPlaceholderCompletions(
             return { suggestions };
         },
     });
+
+    registeredProviders.set(key, disposable);
+    return disposable;
 }
 
 /**
@@ -91,11 +122,12 @@ export function registerPlaceholderCompletions(
 export const MANAGER_PLACEHOLDERS: PlaceholderItem[] = [
     { name: "actionTypes", description: "Formatted list of all configured action types with names and descriptions" },
     { name: "agents", description: "Formatted list of all configured agents with names, types, and capabilities" },
-    { name: "source", description: "Event source (e.g. 'github')" },
-    { name: "eventType", description: "Event type (e.g. 'issue-created', 'comment-added')" },
-    { name: "issueRef", description: "Issue reference (e.g. 'owner/repo#42')" },
-    { name: "repository", description: "Repository (e.g. 'owner/repo')" },
-    { name: "payload", description: "Raw event payload JSON" },
+    { name: "source", description: "Event source (e.g. 'github', 'jira')" },
+    { name: "eventType", description: "Normalized event type (e.g. 'issue.created', 'pr.merged')" },
+    { name: "ref", description: "Full URL of the event subject (e.g. 'https://github.com/owner/repo/issues/42')" },
+    { name: "issueRef", description: "Alias for ref (backward compatibility)" },
+    { name: "repository", description: "Alias for ref (backward compatibility)" },
+    { name: "payload", description: "Normalized event payload JSON (typed structure)" },
     { name: "projectContext", description: "Existing project details and recent task history" },
 ];
 
@@ -103,11 +135,28 @@ export const MANAGER_PLACEHOLDERS: PlaceholderItem[] = [
  * Placeholders available in the Action Type prompt template.
  */
 export const ACTION_TYPE_PLACEHOLDERS: PlaceholderItem[] = [
-    { name: "managerInput", description: "Instructions/context from the Manager's decision" },
+    { name: "managerInput", description: "Instructions from the Manager, or a formatted event summary for invoke-action routing" },
+    { name: "event", description: "Full normalized event payload JSON (available for invoke-action routing)" },
     { name: "actionType", description: "The action type name" },
-    { name: "ref", description: "Project reference (e.g. 'owner/repo#42' or 'CVE-2024-12345')" },
-    { name: "repository", description: "Repository (e.g. 'owner/repo')" },
+    { name: "ref", description: "Full URL of the event subject (e.g. 'https://github.com/owner/repo/issues/42')" },
+    { name: "repository", description: "Repository identifier" },
     { name: "projectName", description: "Project name" },
+    { name: "workDir", description: "Absolute path to the project workspace directory" },
+];
+
+/**
+ * Placeholders available in the Action Type script template.
+ */
+export const SCRIPT_PLACEHOLDERS: PlaceholderItem[] = [
+    { name: "projectId", description: "Numeric ID of the Axiom project" },
+    { name: "eventId", description: "ID of the triggering event (if applicable)" },
+    { name: "taskId", description: "ID of the task executing this script" },
+    { name: "ref", description: "Full URL of the event subject (e.g. 'https://github.com/owner/repo/issues/42')" },
+    { name: "repository", description: "Repository identifier" },
+    { name: "projectName", description: "Project name" },
+    { name: "managerInput", description: "Instructions from the Manager or event summary" },
+    { name: "apiBaseUrl", description: "Base URL of the Axiom API (e.g. 'http://localhost:8080/api/v1')" },
+    { name: "workDir", description: "Absolute path to the project workspace directory" },
 ];
 
 /**

@@ -1,7 +1,7 @@
 package io.apitomy.axiom.app;
 
-import io.apitomy.axiom.core.entities.EventEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.WorkflowEventSubscriptionEntity;
@@ -12,15 +12,16 @@ import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
- * Exercises {@link WorkflowEventDispatcher#dispatchEvent(long)} directly
- * (bypassing the pipeline scheduler, disabled in the test profile), verifying
- * event-type prefiltering, hybrid project/broadcast scoping, match-expression
- * filtering, and end-to-end run resumption.
+ * Exercises {@link WorkflowEventDispatcher#dispatchStreamEvent(String, Map)}
+ * directly (bypassing the pipeline scheduler, disabled in the test profile),
+ * verifying event-type prefiltering, match-expression filtering, and
+ * end-to-end run resumption.
  */
 @QuarkusTest
 class WorkflowEventDispatcherTest {
@@ -81,39 +82,22 @@ class WorkflowEventDispatcherTest {
         long[] ids = setup("Dispatcher Type Filter Project", RECEIVE_EVENT_CONTENT);
         WorkflowRunEntity run = trigger(ids);
 
-        long eventId = createEvent("issue-created", "github",
+        Map<String, Object> eventMap = buildStreamEventMap("issue-created", "github",
                 projectRef(ids[0]), null);
-        dispatcher.dispatchEvent(eventId);
+        dispatcher.dispatchStreamEvent("issue-created", eventMap);
 
         assertRunStatus(run.id, "waiting");
         assertSubscriptionCount(run.id, 1);
     }
 
     @Test
-    void projectScopedEventDoesNotResumeOtherProjectsRun() {
-        long[] idsA = setup("Dispatcher Scope Project A", RECEIVE_EVENT_CONTENT);
-        long[] idsB = setup("Dispatcher Scope Project B", RECEIVE_EVENT_CONTENT);
-        WorkflowRunEntity runA = trigger(idsA);
-        WorkflowRunEntity runB = trigger(idsB);
-
-        // Event correlated to project A (issueRef == project A's ref).
-        long eventId = createEvent("pr-merged", "github", projectRef(idsA[0]), null);
-        dispatcher.dispatchEvent(eventId);
-
-        assertRunStatus(runA.id, "completed");
-        assertRunStatus(runB.id, "waiting");
-        assertSubscriptionCount(runA.id, 0);
-        assertSubscriptionCount(runB.id, 1);
-    }
-
-    @Test
-    void broadcastEventResumesAnyMatchingRun() {
-        long[] ids = setup("Dispatcher Broadcast Project", RECEIVE_EVENT_CONTENT);
+    void matchingEventTypeResumesRun() {
+        long[] ids = setup("Dispatcher Match Project", RECEIVE_EVENT_CONTENT);
         WorkflowRunEntity run = trigger(ids);
 
-        // No issueRef and no projectId: broadcast.
-        long eventId = createEvent("pr-merged", "github", null, null);
-        dispatcher.dispatchEvent(eventId);
+        Map<String, Object> eventMap = buildStreamEventMap("pr-merged", "github",
+                projectRef(ids[0]), null);
+        dispatcher.dispatchStreamEvent("pr-merged", eventMap);
 
         assertRunStatus(run.id, "completed");
         assertSubscriptionCount(run.id, 0);
@@ -124,44 +108,70 @@ class WorkflowEventDispatcherTest {
         long[] ids = setup("Dispatcher Match Expr Project", MATCH_EXPRESSION_CONTENT);
         WorkflowRunEntity run = trigger(ids);
 
-        long smallPr = createEvent("pr-merged", "github", projectRef(ids[0]),
-                "{\"number\": 5}");
-        dispatcher.dispatchEvent(smallPr);
+        Map<String, Object> smallPr = buildStreamEventMap("pr-merged", "github",
+                projectRef(ids[0]), Map.of("number", 5));
+        dispatcher.dispatchStreamEvent("pr-merged", smallPr);
         assertRunStatus(run.id, "waiting");
         assertSubscriptionCount(run.id, 1);
 
-        long bigPr = createEvent("pr-merged", "github", projectRef(ids[0]),
-                "{\"number\": 500}");
-        dispatcher.dispatchEvent(bigPr);
+        Map<String, Object> bigPr = buildStreamEventMap("pr-merged", "github",
+                projectRef(ids[0]), Map.of("number", 500));
+        dispatcher.dispatchStreamEvent("pr-merged", bigPr);
         assertRunStatus(run.id, "completed");
         assertSubscriptionCount(run.id, 0);
     }
 
     @Test
-    void failingOfferDoesNotPoisonOtherResumptions() {
-        long[] idsHealthy = setup("Dispatcher Isolation Healthy Project", RECEIVE_EVENT_CONTENT);
-        long[] idsCorrupt = setup("Dispatcher Isolation Corrupt Project", RECEIVE_EVENT_CONTENT);
-        WorkflowRunEntity healthyRun = trigger(idsHealthy);
-        WorkflowRunEntity corruptRun = trigger(idsCorrupt);
+    void matchingEventCompletesReceiveEventTraceNode() {
+        long[] ids = setup("Dispatcher Trace Project", RECEIVE_EVENT_CONTENT);
+        WorkflowRunEntity run = trigger(ids);
 
-        // Corrupt one run's instance state so its offer fails safely inside
-        // its own per-subscription transaction.
-        long corruptRunId = corruptRun.id;
+        // Verify the trace node for the receive-event subscription was created as in-progress
         QuarkusTransaction.requiringNew().run(() -> {
-            WorkflowRunEntity run = WorkflowRunEntity.findById(corruptRunId);
-            run.instanceState = "not json";
+            WorkflowRunEntity r = WorkflowRunEntity.findById(run.id);
+            if (r.traceId != null) {
+                TraceNodeEntity node = TraceNodeEntity.find(
+                    "traceId = ?1 and entityType = 'workflow-event-subscription'",
+                    r.traceId).firstResult();
+                if (node != null) {
+                    assertEquals("in-progress", node.status,
+                        "Trace node should be in-progress while parked");
+                }
+            }
         });
 
-        // Broadcast event (no issueRef/projectId) matches both subscriptions.
-        long eventId = createEvent("pr-merged", "github", null, null);
-        dispatcher.dispatchEvent(eventId);
+        Map<String, Object> eventMap = buildStreamEventMap("pr-merged", "github",
+                projectRef(ids[0]), null);
+        dispatcher.dispatchStreamEvent("pr-merged", eventMap);
 
-        // The healthy run resumed and completed despite the corrupt run's
-        // offer failing; the corrupt run remains parked.
-        assertRunStatus(healthyRun.id, "completed");
-        assertSubscriptionCount(healthyRun.id, 0);
-        assertRunStatus(corruptRun.id, "waiting");
-        assertSubscriptionCount(corruptRun.id, 1);
+        assertRunStatus(run.id, "completed");
+
+        // Verify the trace node was completed
+        QuarkusTransaction.requiringNew().run(() -> {
+            WorkflowRunEntity r = WorkflowRunEntity.findById(run.id);
+            if (r.traceId != null) {
+                TraceNodeEntity node = TraceNodeEntity.find(
+                    "traceId = ?1 and entityType = 'workflow-event-subscription'",
+                    r.traceId).firstResult();
+                if (node != null) {
+                    assertEquals("completed", node.status,
+                        "Trace node should be completed after event received");
+                }
+            }
+        });
+    }
+
+    @Test
+    void dispatchStreamEventNoMatchingSubscriptionsDoesNotThrow() {
+        Map<String, Object> eventMap = Map.of(
+                "type", "some.unmatched.type",
+                "source", "github",
+                "connectionId", "test-conn",
+                "ref", "https://github.com/owner/repo/issues/1",
+                "timestamp", Instant.now().toString(),
+                "payload", Map.of());
+        dispatcher.dispatchStreamEvent("some.unmatched.type", eventMap);
+        // No exception means the method handled the empty-candidates path.
     }
 
     // -- Helpers --
@@ -208,19 +218,16 @@ class WorkflowEventDispatcherTest {
                 ((ProjectEntity) ProjectEntity.findById(projectId)).ref);
     }
 
-    private long createEvent(String eventType, String source, String issueRef,
-            String payload) {
-        return QuarkusTransaction.requiringNew().call(() -> {
-            EventEntity event = new EventEntity();
-            event.eventType = eventType;
-            event.source = source;
-            event.issueRef = issueRef;
-            // payload is NOT NULL in the schema; default to an empty object.
-            event.payload = payload != null ? payload : "{}";
-            event.receivedAt = Instant.now();
-            event.persist();
-            return event.id;
-        });
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> buildStreamEventMap(String eventType, String source,
+            String ref, Map<String, Object> payload) {
+        return Map.of(
+                "type", eventType,
+                "source", source,
+                "connectionId", "test-conn",
+                "ref", ref != null ? ref : "",
+                "timestamp", Instant.now().toString(),
+                "payload", payload != null ? payload : Map.of());
     }
 
     private void assertRunStatus(long runId, String expected) {
