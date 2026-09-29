@@ -256,7 +256,8 @@ public class AssistantSessionManager {
                             autoApprovalSink,
                             template.model(),
                             openCodeTools,
-                            sessionName));
+                            sessionName,
+                            mcpConfigs));
 
             AssistantSession session = new AssistantSession(sessionName, templateId, sessionDir,
                     workDir, command, resolvedEnv, agent.getType(), projectId, projectName, driver);

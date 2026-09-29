@@ -1,15 +1,20 @@
 package io.apitomy.axiom.app.assistant.runtime;
 
+import io.apitomy.axiom.app.assistant.AssistantContextBuilder;
 import io.apitomy.axiom.app.assistant.AssistantEventParser;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.lang.reflect.Field;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class InteractiveSessionDriverFactoryTest {
 
@@ -41,7 +46,8 @@ class InteractiveSessionDriverFactoryTest {
                 },
                 "github-copilot/claude-sonnet-5",
                 null,
-                "Session"
+                "Session",
+                Map.of()
         ));
 
         Object process = extractProcess(driver);
@@ -77,7 +83,8 @@ class InteractiveSessionDriverFactoryTest {
                 },
                 "github-copilot/claude-sonnet-5",
                 null,
-                "Session"
+                "Session",
+                Map.of()
         ));
 
         Object process = extractProcess(driver);
@@ -114,11 +121,68 @@ class InteractiveSessionDriverFactoryTest {
                 },
                 "github-copilot/claude-sonnet-5",
                 null,
-                "Session"
+                "Session",
+                Map.of()
         ));
 
         Object process = extractProcess(driver);
         assertEquals(0, getField(process, "configuredPort"));
+    }
+
+    @Test
+    void createDriverWritesOpenCodeConfigAndPointsServerAtIt(@TempDir Path sessionDir) throws Exception {
+        InteractiveSessionDriverFactory.DefaultInteractiveSessionDriverFactory factory = defaultFactory();
+
+        InteractiveSessionDriver driver = factory.createDriver(new InteractiveSessionDriverFactory.DriverRequest(
+                "opencode", "axiom-config-assistant", sessionDir, sessionDir.resolve("work"),
+                List.of(), Map.of(), null, null, event -> {
+                }, event -> {
+                }, "github-copilot/claude-sonnet-5", null, "Session",
+                Map.of("axiom", AssistantContextBuilder.McpServerConfig.stdio("node", List.of("server.js"), Map.of()))));
+
+        Path configFile = sessionDir.resolve("opencode.json");
+        assertTrue(Files.exists(configFile));
+        assertTrue(Files.readString(configFile).contains("\"axiom\""));
+
+        Object process = extractProcess(driver);
+        @SuppressWarnings("unchecked")
+        Map<String, String> environment = (Map<String, String>) getField(process, "environment");
+        assertEquals(configFile.toString(), environment.get("OPENCODE_CONFIG"));
+
+        @SuppressWarnings("unchecked")
+        java.util.Set<String> expected = (java.util.Set<String>) getField(driver, "expectedMcpServers");
+        assertEquals(java.util.Set.of("axiom"), expected);
+    }
+
+    @Test
+    void createDriverSkipsOpenCodeConfigWhenNoMcpServers(@TempDir Path sessionDir) throws Exception {
+        InteractiveSessionDriver driver = defaultFactory().createDriver(
+                new InteractiveSessionDriverFactory.DriverRequest(
+                        "opencode", "general-assistant", sessionDir, sessionDir, List.of(), Map.of(),
+                        null, null, event -> {
+                        }, event -> {
+                        }, "github-copilot/claude-sonnet-5", null, "Session", Map.of()));
+
+        assertFalse(Files.exists(sessionDir.resolve("opencode.json")));
+        Object process = extractProcess(driver);
+        @SuppressWarnings("unchecked")
+        Map<String, String> environment = (Map<String, String>) getField(process, "environment");
+        assertFalse(environment.containsKey("OPENCODE_CONFIG"));
+    }
+
+    private static InteractiveSessionDriverFactory.DefaultInteractiveSessionDriverFactory defaultFactory()
+            throws Exception {
+        InteractiveSessionDriverFactory.DefaultInteractiveSessionDriverFactory factory =
+                new InteractiveSessionDriverFactory.DefaultInteractiveSessionDriverFactory();
+        setField(factory, "assistantOpenCodeExecutable", Optional.empty());
+        setField(factory, "openCodeExecutable", "opencode");
+        setField(factory, "assistantOpenCodeStartupTimeoutSeconds", Optional.empty());
+        setField(factory, "legacyAssistantOpenCodeServerStartupTimeoutSeconds", Optional.empty());
+        setField(factory, "openCodeServerStartupTimeoutSeconds", 30);
+        setField(factory, "assistantOpenCodeServerPort", Optional.empty());
+        setField(factory, "openCodeServerHostname", "127.0.0.1");
+        setField(factory, "openCodeServerPort", 0);
+        return factory;
     }
 
     private static Object extractProcess(InteractiveSessionDriver driver) throws Exception {
