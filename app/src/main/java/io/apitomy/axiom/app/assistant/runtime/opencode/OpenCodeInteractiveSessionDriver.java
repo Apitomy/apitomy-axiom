@@ -1,6 +1,8 @@
 package io.apitomy.axiom.app.assistant.runtime.opencode;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
 import io.apitomy.axiom.app.assistant.AssistantSession;
 import io.apitomy.axiom.app.assistant.runtime.InteractiveSessionDriver;
@@ -9,8 +11,10 @@ import org.jboss.logging.Logger;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -32,6 +36,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
     private final String sessionTitle;
     private final String model;
     private final JsonNode tools;
+    private final Set<String> expectedMcpServers;
 
     private final AtomicBoolean turnInFlight = new AtomicBoolean(false);
     private final AtomicReference<String> errorMessage = new AtomicReference<>();
@@ -42,7 +47,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
     private volatile String openCodeSessionId;
 
     /**
-     * Creates an OpenCode interactive session driver.
+     * Creates an OpenCode interactive session driver without expected MCP servers.
      *
      * @param serverProcess OpenCode session server handle
      * @param capabilityProbe OpenCode capability probe
@@ -61,15 +66,35 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                                             String sessionTitle,
                                             String model,
                                             JsonNode tools) {
-        this(serverProcess,
-                capabilityProbe,
-                normalizer,
-                eventSink,
-                autoApprovalSink,
-                OpenCodeAssistantClient::connectEvents,
-                sessionTitle,
-                model,
-                tools);
+        this(serverProcess, capabilityProbe, normalizer, eventSink, autoApprovalSink,
+                sessionTitle, model, tools, Set.of());
+    }
+
+    /**
+     * Creates an OpenCode interactive session driver.
+     *
+     * @param serverProcess OpenCode session server handle
+     * @param capabilityProbe OpenCode capability probe
+     * @param normalizer event normalizer
+     * @param eventSink sink for non-permission events
+     * @param autoApprovalSink sink for permission_request events
+     * @param sessionTitle title used when creating OpenCode sessions
+     * @param model model in provider/model format
+     * @param tools optional tools payload for prompt submissions
+     * @param expectedMcpServers names of MCP servers configured for the session; a warning is emitted
+     *                           for each one that OpenCode does not report as connected
+     */
+    public OpenCodeInteractiveSessionDriver(ServerProcessHandle serverProcess,
+                                            CapabilityProbe capabilityProbe,
+                                            OpenCodeEventNormalizer normalizer,
+                                            Consumer<SseEvent> eventSink,
+                                            Consumer<SseEvent> autoApprovalSink,
+                                            String sessionTitle,
+                                            String model,
+                                            JsonNode tools,
+                                            Set<String> expectedMcpServers) {
+        this(serverProcess, capabilityProbe, normalizer, eventSink, autoApprovalSink,
+                OpenCodeAssistantClient::connectEvents, sessionTitle, model, tools, expectedMcpServers);
     }
 
     OpenCodeInteractiveSessionDriver(ServerProcessHandle serverProcess,
@@ -81,6 +106,20 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                                      String sessionTitle,
                                      String model,
                                      JsonNode tools) {
+        this(serverProcess, capabilityProbe, normalizer, eventSink, autoApprovalSink,
+                eventStreamConnector, sessionTitle, model, tools, Set.of());
+    }
+
+    OpenCodeInteractiveSessionDriver(ServerProcessHandle serverProcess,
+                                     CapabilityProbe capabilityProbe,
+                                     OpenCodeEventNormalizer normalizer,
+                                     Consumer<SseEvent> eventSink,
+                                     Consumer<SseEvent> autoApprovalSink,
+                                     EventStreamConnector eventStreamConnector,
+                                     String sessionTitle,
+                                     String model,
+                                     JsonNode tools,
+                                     Set<String> expectedMcpServers) {
         this.serverProcess = Objects.requireNonNull(serverProcess, "serverProcess");
         this.capabilityProbe = Objects.requireNonNull(capabilityProbe, "capabilityProbe");
         this.normalizer = Objects.requireNonNull(normalizer, "normalizer");
@@ -90,6 +129,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
         this.sessionTitle = sessionTitle;
         this.model = model;
         this.tools = tools;
+        this.expectedMcpServers = expectedMcpServers != null ? Set.copyOf(expectedMcpServers) : Set.of();
         this.status = new AtomicReference<>(AssistantSession.Status.STARTING);
     }
 
@@ -124,6 +164,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                     this::handleStreamFailure
             );
             status.compareAndSet(AssistantSession.Status.STARTING, AssistantSession.Status.RUNNING);
+            reportMcpServerStatus();
         } catch (SessionCompatibilityException e) {
             safeStopServer();
             throw e;
@@ -133,6 +174,40 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
             safeStopServer();
             throw new IOException("Failed to start OpenCode interactive session", e);
         }
+    }
+
+    private void reportMcpServerStatus() {
+        if (expectedMcpServers.isEmpty()) {
+            return;
+        }
+        Map<String, OpenCodeAssistantClient.McpServerStatus> statuses;
+        try {
+            statuses = client.mcpStatus();
+        } catch (RuntimeException e) {
+            LOG.warnf(e, "Unable to query OpenCode MCP server status");
+            emitMcpWarning("Unable to verify MCP server status: " + e.getMessage());
+            return;
+        }
+        for (String name : new TreeSet<>(expectedMcpServers)) {
+            OpenCodeAssistantClient.McpServerStatus serverStatus = statuses.get(name);
+            if (serverStatus == null) {
+                emitMcpWarning("MCP server '" + name + "' was not loaded by OpenCode");
+            } else if (!serverStatus.connected()) {
+                String message = "MCP server '" + name + "' is unavailable (" + serverStatus.status() + ")";
+                if (serverStatus.error() != null && !serverStatus.error().isBlank()) {
+                    message += ": " + serverStatus.error();
+                }
+                emitMcpWarning(message);
+            }
+        }
+    }
+
+    private void emitMcpWarning(String message) {
+        LOG.warn(message);
+        ObjectNode data = JsonNodeFactory.instance.objectNode();
+        data.put("name", "McpServerUnavailable");
+        data.put("message", message);
+        eventSink.accept(new SseEvent("session_error", data));
     }
 
     @Override
