@@ -98,6 +98,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                 new SessionSettings(sessionTitle, model, tools, expectedMcpServers, null));
     }
 
+    /** Canonical constructor; all other constructors delegate here (package-private for test injection). */
     /**
      * Creates an OpenCode interactive session driver.
      *
