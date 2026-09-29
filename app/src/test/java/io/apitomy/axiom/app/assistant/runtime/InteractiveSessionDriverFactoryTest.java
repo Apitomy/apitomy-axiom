@@ -8,6 +8,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -148,6 +149,7 @@ class InteractiveSessionDriverFactoryTest {
         @SuppressWarnings("unchecked")
         Map<String, String> environment = (Map<String, String>) getField(process, "environment");
         assertEquals(configFile.toString(), environment.get("OPENCODE_CONFIG"));
+        assertEquals(sessionDir.resolve("work"), getField(process, "workingDirectory"));
 
         @SuppressWarnings("unchecked")
         java.util.Set<String> expected = (java.util.Set<String>) getField(driver, "expectedMcpServers");
@@ -168,6 +170,62 @@ class InteractiveSessionDriverFactoryTest {
         @SuppressWarnings("unchecked")
         Map<String, String> environment = (Map<String, String>) getField(process, "environment");
         assertFalse(environment.containsKey("OPENCODE_CONFIG"));
+    }
+
+    @Test
+    void createDriverRunsOpenCodeInWorkingDirectoryWithSessionEnvironment(@TempDir Path sessionDir)
+            throws Exception {
+        Path workDir = Files.createDirectories(sessionDir.resolve("workDir"));
+
+        InteractiveSessionDriver driver = defaultFactory().createDriver(
+                new InteractiveSessionDriverFactory.DriverRequest(
+                        "opencode", "project-assistant", sessionDir, workDir, List.of(),
+                        Map.of("AXIOM_PROJECT_ID", "42", "TEMPLATE_SECRET", "s3cr3t"),
+                        42L, "demo", event -> {
+                        }, event -> {
+                        }, "github-copilot/claude-sonnet-5", null, "Session", Map.of()));
+
+        Object process = extractProcess(driver);
+        assertEquals(workDir, getField(process, "workingDirectory"));
+        @SuppressWarnings("unchecked")
+        Map<String, String> environment = (Map<String, String>) getField(process, "environment");
+        assertEquals("42", environment.get("AXIOM_PROJECT_ID"));
+        assertEquals("s3cr3t", environment.get("TEMPLATE_SECRET"));
+        assertFalse(environment.containsKey("OPENCODE_CONFIG"));
+    }
+
+    @Test
+    void axiomManagedOpenCodeConfigOverridesTemplateEnvironment() {
+        Map<String, String> result =
+                InteractiveSessionDriverFactory.DefaultInteractiveSessionDriverFactory.buildOpenCodeEnvironment(
+                        Map.of("OPENCODE_CONFIG", "/template/value.json", "A", "1"),
+                        Path.of("/session/opencode.json"));
+
+        assertEquals("/session/opencode.json", result.get("OPENCODE_CONFIG"));
+        assertEquals("1", result.get("A"));
+    }
+
+    @Test
+    void templateOpenCodeConfigIsKeptWhenAxiomWroteNoConfig() {
+        Map<String, String> result =
+                InteractiveSessionDriverFactory.DefaultInteractiveSessionDriverFactory.buildOpenCodeEnvironment(
+                        Map.of("OPENCODE_CONFIG", "/template/value.json"), null);
+
+        assertEquals("/template/value.json", result.get("OPENCODE_CONFIG"));
+    }
+
+    @Test
+    void nullEnvironmentEntriesAreSkipped() {
+        Map<String, String> requestEnvironment = new HashMap<>();
+        requestEnvironment.put("KEEP", "yes");
+        requestEnvironment.put("NULL_VALUE", null);
+        requestEnvironment.put(null, "null-key");
+
+        Map<String, String> result =
+                InteractiveSessionDriverFactory.DefaultInteractiveSessionDriverFactory.buildOpenCodeEnvironment(
+                        requestEnvironment, null);
+
+        assertEquals(Map.of("KEEP", "yes"), result);
     }
 
     private static InteractiveSessionDriverFactory.DefaultInteractiveSessionDriverFactory defaultFactory()
