@@ -37,6 +37,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
     private final String model;
     private final JsonNode tools;
     private final Set<String> expectedMcpServers;
+    private final String systemPrompt;
 
     private final AtomicBoolean turnInFlight = new AtomicBoolean(false);
     private final AtomicReference<String> errorMessage = new AtomicReference<>();
@@ -94,7 +95,27 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                                             JsonNode tools,
                                             Set<String> expectedMcpServers) {
         this(serverProcess, capabilityProbe, normalizer, eventSink, autoApprovalSink,
-                OpenCodeAssistantClient::connectEvents, sessionTitle, model, tools, expectedMcpServers);
+                new SessionSettings(sessionTitle, model, tools, expectedMcpServers, null));
+    }
+
+    /**
+     * Creates an OpenCode interactive session driver.
+     *
+     * @param serverProcess OpenCode session server handle
+     * @param capabilityProbe OpenCode capability probe
+     * @param normalizer event normalizer
+     * @param eventSink sink for non-permission events
+     * @param autoApprovalSink sink for permission_request events
+     * @param settings per-session settings
+     */
+    public OpenCodeInteractiveSessionDriver(ServerProcessHandle serverProcess,
+                                            CapabilityProbe capabilityProbe,
+                                            OpenCodeEventNormalizer normalizer,
+                                            Consumer<SseEvent> eventSink,
+                                            Consumer<SseEvent> autoApprovalSink,
+                                            SessionSettings settings) {
+        this(serverProcess, capabilityProbe, normalizer, eventSink, autoApprovalSink,
+                OpenCodeAssistantClient::connectEvents, settings);
     }
 
     OpenCodeInteractiveSessionDriver(ServerProcessHandle serverProcess,
@@ -120,16 +141,29 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                                      String model,
                                      JsonNode tools,
                                      Set<String> expectedMcpServers) {
+        this(serverProcess, capabilityProbe, normalizer, eventSink, autoApprovalSink, eventStreamConnector,
+                new SessionSettings(sessionTitle, model, tools, expectedMcpServers, null));
+    }
+
+    OpenCodeInteractiveSessionDriver(ServerProcessHandle serverProcess,
+                                     CapabilityProbe capabilityProbe,
+                                     OpenCodeEventNormalizer normalizer,
+                                     Consumer<SseEvent> eventSink,
+                                     Consumer<SseEvent> autoApprovalSink,
+                                     EventStreamConnector eventStreamConnector,
+                                     SessionSettings settings) {
+        Objects.requireNonNull(settings, "settings");
         this.serverProcess = Objects.requireNonNull(serverProcess, "serverProcess");
         this.capabilityProbe = Objects.requireNonNull(capabilityProbe, "capabilityProbe");
         this.normalizer = Objects.requireNonNull(normalizer, "normalizer");
         this.eventSink = Objects.requireNonNull(eventSink, "eventSink");
         this.autoApprovalSink = Objects.requireNonNull(autoApprovalSink, "autoApprovalSink");
         this.eventStreamConnector = Objects.requireNonNull(eventStreamConnector, "eventStreamConnector");
-        this.sessionTitle = sessionTitle;
-        this.model = model;
-        this.tools = tools;
-        this.expectedMcpServers = expectedMcpServers != null ? Set.copyOf(expectedMcpServers) : Set.of();
+        this.sessionTitle = settings.sessionTitle();
+        this.model = settings.model();
+        this.tools = settings.tools();
+        this.expectedMcpServers = settings.expectedMcpServers();
+        this.systemPrompt = settings.systemPrompt();
         this.status = new AtomicReference<>(AssistantSession.Status.STARTING);
     }
 
@@ -229,7 +263,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
         }
 
         try {
-            client.sendPromptAsync(openCodeSessionId, message, model, tools);
+            client.sendPromptAsync(openCodeSessionId, message, model, tools, systemPrompt);
         } catch (RuntimeException e) {
             turnInFlight.set(false);
             throw new IOException("Failed to submit OpenCode prompt", e);
@@ -406,6 +440,30 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
     private void ensureRunning() {
         if (status.get() != AssistantSession.Status.RUNNING || client == null || openCodeSessionId == null) {
             throw new IllegalStateException("OpenCode interactive session is not running");
+        }
+    }
+
+    /**
+     * Per-session settings applied to the OpenCode session and its prompts.
+     *
+     * @param sessionTitle title used when creating the OpenCode session
+     * @param model model in provider/model format, or null for OpenCode's default
+     * @param tools optional tools payload for prompt submissions
+     * @param expectedMcpServers names of MCP servers configured for the session; a warning is emitted for each one
+     *                           that OpenCode does not report as connected
+     * @param systemPrompt system prompt sent with every prompt, or null/blank for none
+     */
+    public record SessionSettings(String sessionTitle,
+                                  String model,
+                                  JsonNode tools,
+                                  Set<String> expectedMcpServers,
+                                  String systemPrompt) {
+
+        /**
+         * Normalizes a null MCP server set to an empty set and copies non-null sets.
+         */
+        public SessionSettings {
+            expectedMcpServers = expectedMcpServers != null ? Set.copyOf(expectedMcpServers) : Set.of();
         }
     }
 
