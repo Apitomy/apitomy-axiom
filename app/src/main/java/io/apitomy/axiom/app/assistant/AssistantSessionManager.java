@@ -1039,9 +1039,14 @@ public class AssistantSessionManager {
      * implied but not already present. This mirrors the auto-derivation logic
      * in {@link McpConfigGenerator#generateMcpConfig} so that users don't have
      * to manually keep the MCP servers list and allowed tools list in sync.
+     * Built-in servers are added by their template alias ({@code @axiom-assistant},
+     * {@code @axiom-tools}, {@code @axiom-sdk}), never by their registered name.
+     *
+     * @param serverNames mutable list of requested server names; implied servers are appended
+     * @param allowedTools resolved allowed tools (Claude-style names such as {@code mcp__server__tool})
      */
-    private void augmentServersFromAllowedTools(List<String> serverNames,
-                                                List<String> allowedTools) {
+    static void augmentServersFromAllowedTools(List<String> serverNames,
+                                               List<String> allowedTools) {
         if (allowedTools == null || allowedTools.isEmpty()) {
             return;
         }
@@ -1050,6 +1055,10 @@ public class AssistantSessionManager {
                 && allowedTools.stream().anyMatch(t -> t.startsWith("mcp__axiom-tools__"));
         boolean needsAxiomSdk = !serverNames.contains("@axiom-sdk")
                 && allowedTools.stream().anyMatch(t -> t.startsWith("mcp__axiom-sdk__"));
+        // "mcp__axiom__*" tools come from the built-in @axiom-assistant server,
+        // which is registered under the name "axiom".
+        boolean needsAxiomAssistant = !serverNames.contains("@axiom-assistant")
+                && allowedTools.stream().anyMatch(t -> t.startsWith("mcp__axiom__"));
 
         if (needsAxiomTools) {
             LOG.infof("Auto-including @axiom-tools server (implied by allowed tools)");
@@ -1059,11 +1068,16 @@ public class AssistantSessionManager {
             LOG.infof("Auto-including @axiom-sdk server (implied by allowed tools)");
             serverNames.add("@axiom-sdk");
         }
+        if (needsAxiomAssistant) {
+            LOG.infof("Auto-including @axiom-assistant server (implied by allowed tools)");
+            serverNames.add("@axiom-assistant");
+        }
 
         // Auto-include external MCP servers referenced in allowed tools
         for (String tool : allowedTools) {
             if (tool.startsWith("mcp__") && !tool.startsWith("mcp__axiom-tools__")
-                    && !tool.startsWith("mcp__axiom-sdk__")) {
+                    && !tool.startsWith("mcp__axiom-sdk__")
+                    && !tool.startsWith("mcp__axiom__")) {
                 int secondSep = tool.indexOf("__", 5);
                 if (secondSep > 5) {
                     String externalName = tool.substring(5, secondSep);
