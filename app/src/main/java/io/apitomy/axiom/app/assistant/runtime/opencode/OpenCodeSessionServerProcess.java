@@ -6,6 +6,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.ServerSocket;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -23,6 +24,7 @@ public final class OpenCodeSessionServerProcess {
     private final int configuredPort;
     private final int startupTimeoutSeconds;
     private final Map<String, String> environment;
+    private final Path workingDirectory;
 
     private volatile Process process;
     private volatile int resolvedPort;
@@ -44,7 +46,7 @@ public final class OpenCodeSessionServerProcess {
     }
 
     /**
-     * Creates a per-session OpenCode server process manager.
+     * Creates a per-session OpenCode server process manager that inherits the JVM working directory.
      *
      * @param executable OpenCode executable name or path
      * @param hostname host to bind
@@ -57,11 +59,32 @@ public final class OpenCodeSessionServerProcess {
                                         int configuredPort,
                                         int startupTimeoutSeconds,
                                         Map<String, String> environment) {
+        this(executable, hostname, configuredPort, startupTimeoutSeconds, environment, null);
+    }
+
+    /**
+     * Creates a per-session OpenCode server process manager.
+     *
+     * @param executable OpenCode executable name or path
+     * @param hostname host to bind
+     * @param configuredPort explicit port or {@code 0} for ephemeral
+     * @param startupTimeoutSeconds startup timeout in seconds
+     * @param environment extra environment variables for the server process (e.g. {@code OPENCODE_CONFIG})
+     * @param workingDirectory working directory for the server process, or {@code null} to inherit the JVM's;
+     *                         OpenCode uses it as the directory sessions and tools operate in
+     */
+    public OpenCodeSessionServerProcess(String executable,
+                                        String hostname,
+                                        int configuredPort,
+                                        int startupTimeoutSeconds,
+                                        Map<String, String> environment,
+                                        Path workingDirectory) {
         this.executable = executable;
         this.hostname = hostname;
         this.configuredPort = configuredPort;
         this.startupTimeoutSeconds = startupTimeoutSeconds;
         this.environment = environment != null ? Map.copyOf(environment) : Map.of();
+        this.workingDirectory = workingDirectory;
     }
 
     /**
@@ -98,6 +121,9 @@ public final class OpenCodeSessionServerProcess {
                 "--port", String.valueOf(port)
         );
         processBuilder.environment().putAll(environment);
+        if (workingDirectory != null) {
+            processBuilder.directory(workingDirectory.toFile());
+        }
         processBuilder.redirectErrorStream(true);
         return processBuilder;
     }
