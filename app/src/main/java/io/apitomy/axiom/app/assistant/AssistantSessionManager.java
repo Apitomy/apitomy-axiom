@@ -257,7 +257,8 @@ public class AssistantSessionManager {
                             template.model(),
                             openCodeTools,
                             sessionName,
-                            mcpConfigs));
+                            mcpConfigs,
+                            systemPrompt));
 
             AssistantSession session = new AssistantSession(sessionName, templateId, sessionDir,
                     workDir, command, resolvedEnv, agent.getType(), projectId, projectName, driver);

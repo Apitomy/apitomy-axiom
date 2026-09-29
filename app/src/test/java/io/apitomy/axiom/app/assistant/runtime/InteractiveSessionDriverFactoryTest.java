@@ -48,7 +48,8 @@ class InteractiveSessionDriverFactoryTest {
                 "github-copilot/claude-sonnet-5",
                 null,
                 "Session",
-                Map.of()
+                Map.of(),
+                null
         ));
 
         Object process = extractProcess(driver);
@@ -85,7 +86,8 @@ class InteractiveSessionDriverFactoryTest {
                 "github-copilot/claude-sonnet-5",
                 null,
                 "Session",
-                Map.of()
+                Map.of(),
+                null
         ));
 
         Object process = extractProcess(driver);
@@ -123,7 +125,8 @@ class InteractiveSessionDriverFactoryTest {
                 "github-copilot/claude-sonnet-5",
                 null,
                 "Session",
-                Map.of()
+                Map.of(),
+                null
         ));
 
         Object process = extractProcess(driver);
@@ -139,7 +142,8 @@ class InteractiveSessionDriverFactoryTest {
                 List.of(), Map.of(), null, null, event -> {
                 }, event -> {
                 }, "github-copilot/claude-sonnet-5", null, "Session",
-                Map.of("axiom", AssistantContextBuilder.McpServerConfig.stdio("node", List.of("server.js"), Map.of()))));
+                Map.of("axiom", AssistantContextBuilder.McpServerConfig.stdio("node", List.of("server.js"), Map.of())),
+                null));
 
         Path configFile = sessionDir.resolve("opencode.json");
         assertTrue(Files.exists(configFile));
@@ -163,7 +167,7 @@ class InteractiveSessionDriverFactoryTest {
                         "opencode", "general-assistant", sessionDir, sessionDir, List.of(), Map.of(),
                         null, null, event -> {
                         }, event -> {
-                        }, "github-copilot/claude-sonnet-5", null, "Session", Map.of()));
+                        }, "github-copilot/claude-sonnet-5", null, "Session", Map.of(), null));
 
         assertFalse(Files.exists(sessionDir.resolve("opencode.json")));
         Object process = extractProcess(driver);
@@ -183,7 +187,7 @@ class InteractiveSessionDriverFactoryTest {
                         Map.of("AXIOM_PROJECT_ID", "42", "TEMPLATE_SECRET", "s3cr3t"),
                         42L, "demo", event -> {
                         }, event -> {
-                        }, "github-copilot/claude-sonnet-5", null, "Session", Map.of()));
+                        }, "github-copilot/claude-sonnet-5", null, "Session", Map.of(), null));
 
         Object process = extractProcess(driver);
         assertEquals(workDir, getField(process, "workingDirectory"));
@@ -192,6 +196,19 @@ class InteractiveSessionDriverFactoryTest {
         assertEquals("42", environment.get("AXIOM_PROJECT_ID"));
         assertEquals("s3cr3t", environment.get("TEMPLATE_SECRET"));
         assertFalse(environment.containsKey("OPENCODE_CONFIG"));
+    }
+
+    @Test
+    void createDriverPassesSystemPromptToOpenCodeDriver(@TempDir Path sessionDir) throws Exception {
+        InteractiveSessionDriver driver = defaultFactory().createDriver(
+                new InteractiveSessionDriverFactory.DriverRequest(
+                        "opencode", "axiom-config-assistant", sessionDir, sessionDir, List.of(), Map.of(),
+                        null, null, event -> {
+                        }, event -> {
+                        }, "github-copilot/claude-sonnet-5", null, "Session", Map.of(),
+                        "You are the Axiom Configuration Assistant."));
+
+        assertEquals("You are the Axiom Configuration Assistant.", getField(driver, "systemPrompt"));
     }
 
     @Test
