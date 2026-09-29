@@ -686,6 +686,86 @@ class OpenCodeInteractiveSessionDriverTest {
         assertEquals(Set.of(), settings.expectedMcpServers());
     }
 
+    private static EventResponder replayFixture(String fixture) {
+        return exchange -> {
+            List<com.fasterxml.jackson.databind.JsonNode> events = OpenCodeEventFixtures.load(fixture);
+            String capturedSessionId = OpenCodeEventFixtures.first(events,
+                            event -> "session.created".equals(event.path("type").asText()))
+                    .path("properties").path("info").path("id").asText();
+            exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+            exchange.sendResponseHeaders(200, 0);
+            try (OutputStream outputStream = exchange.getResponseBody()) {
+                for (com.fasterxml.jackson.databind.JsonNode event : events) {
+                    String line = event.toString().replace(capturedSessionId, "session-1");
+                    outputStream.write(("data: " + line + "\n\n").getBytes(StandardCharsets.UTF_8));
+                }
+                outputStream.flush();
+            }
+        };
+    }
+
+    private static List<SseEvent> replayThroughDriver(String fixture, List<SseEvent> permissionEvents)
+            throws Exception {
+        List<SseEvent> events = new CopyOnWriteArrayList<>();
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start(replayFixture(fixture))) {
+            OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
+                    new FakeServerProcess(server.baseUrl()),
+                    client -> OpenCodeCapabilityProbe.Result.pass(),
+                    new OpenCodeEventNormalizer(),
+                    events::add,
+                    permissionEvents::add,
+                    "Axiom Session",
+                    "github-copilot/claude-sonnet-5",
+                    null);
+            driver.start();
+            waitUntil(() -> events.stream().anyMatch(event -> "turn_complete".equals(event.type())),
+                    Duration.ofSeconds(5));
+            driver.destroy();
+        }
+        return events;
+    }
+
+    @Test
+    void replaysRealToolCallStreamIntoAssistantEvents() throws Exception {
+        List<SseEvent> permissionEvents = new CopyOnWriteArrayList<>();
+
+        List<SseEvent> events = replayThroughDriver("1.18.33-tool-calls.jsonl", permissionEvents);
+
+        List<String> summary = events.stream()
+                .filter(event -> !"session_error".equals(event.type()))
+                .map(event -> switch (event.type()) {
+                    case "tool_use" -> "tool_use:" + event.data().path("name").asText() + ":"
+                            + event.data().path("id").asText();
+                    case "tool_result" -> "tool_result:" + event.data().path("toolUseId").asText();
+                    case "assistant_text" -> "assistant_text:" + event.data().path("text").asText();
+                    default -> event.type();
+                })
+                .toList();
+        assertEquals(List.of(
+                "thinking",
+                "tool_use:read:toolu_01AaGr1CuwaqRudKSw25JKcY",
+                "tool_use:bash:toolu_01LG86GQEhToDrjJWeL12dQw",
+                "tool_result:toolu_01AaGr1CuwaqRudKSw25JKcY",
+                "tool_result:toolu_01LG86GQEhToDrjJWeL12dQw",
+                "assistant_text:DONE",
+                "turn_complete"), summary);
+        assertEquals(1, permissionEvents.size());
+        assertEquals("permission_request", permissionEvents.get(0).type());
+    }
+
+    @Test
+    void replaysRealToolErrorStreamIntoAssistantEvents() throws Exception {
+        List<SseEvent> events = replayThroughDriver("1.18.33-tool-error.jsonl", new CopyOnWriteArrayList<>());
+
+        List<SseEvent> results = events.stream().filter(event -> "tool_result".equals(event.type())).toList();
+        assertEquals(1, results.size());
+        assertEquals("", results.get(0).data().path("stdout").asText());
+        assertEquals("File not found: /tmp/opencode/cap/does-not-exist.txt",
+                results.get(0).data().path("stderr").asText());
+        assertTrue(events.stream().noneMatch(event -> "unhandled_event".equals(event.type())));
+        assertEquals("turn_complete", events.get(events.size() - 1).type());
+    }
+
     @FunctionalInterface
     private interface EventResponder {
 
