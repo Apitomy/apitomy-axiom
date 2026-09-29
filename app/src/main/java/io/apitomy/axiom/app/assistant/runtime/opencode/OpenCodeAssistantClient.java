@@ -96,7 +96,7 @@ public final class OpenCodeAssistantClient {
     }
 
     /**
-     * Sends an async prompt to an existing OpenCode session.
+     * Sends an async prompt to an existing OpenCode session without a system prompt.
      *
      * @param sessionId session identifier
      * @param prompt prompt text
@@ -104,6 +104,20 @@ public final class OpenCodeAssistantClient {
      * @param tools optional tools object
      */
     public void sendPromptAsync(String sessionId, String prompt, String model, JsonNode tools) {
+        sendPromptAsync(sessionId, prompt, model, tools, null);
+    }
+
+    /**
+     * Sends an async prompt to an existing OpenCode session.
+     *
+     * @param sessionId session identifier
+     * @param prompt prompt text
+     * @param model provider/model string or null
+     * @param tools optional tools object
+     * @param system system prompt added to OpenCode's own system prompt for this message; omitted when null or
+     *               blank. OpenCode stores it per message, so callers must pass it on every prompt.
+     */
+    public void sendPromptAsync(String sessionId, String prompt, String model, JsonNode tools, String system) {
         ObjectNode body = MAPPER.createObjectNode();
         ArrayNode parts = body.putArray("parts");
         ObjectNode textPart = parts.addObject();
@@ -118,6 +132,9 @@ public final class OpenCodeAssistantClient {
         }
         if (tools != null && !tools.isNull()) {
             body.set("tools", normalizePromptTools(tools));
+        }
+        if (system != null && !system.isBlank()) {
+            body.put("system", system);
         }
 
         postJson("/session/" + sessionId + "/prompt_async", body, 204);

@@ -46,6 +46,8 @@ public interface InteractiveSessionDriverFactory {
      * @param projectId optional project identifier when session is project scoped
      * @param projectName optional project name when session is project scoped
      * @param mcpServers resolved MCP servers for the session, keyed by name
+     * @param systemPrompt final system prompt for the session (template prompt plus project context);
+     *        applied by the OpenCode driver. The Claude driver receives it through {@code command}.
      */
     record DriverRequest(String engineType,
                          String templateId,
@@ -60,7 +62,8 @@ public interface InteractiveSessionDriverFactory {
                          String model,
                          com.fasterxml.jackson.databind.JsonNode tools,
                          String sessionTitle,
-                         Map<String, AssistantContextBuilder.McpServerConfig> mcpServers) {
+                         Map<String, AssistantContextBuilder.McpServerConfig> mcpServers,
+                         String systemPrompt) {
 
         /**
          * Normalizes a null MCP server map to an empty map.
@@ -157,11 +160,12 @@ public interface InteractiveSessionDriverFactory {
                         normalizer,
                         request.eventSink(),
                         request.autoApprovalSink(),
-                        sessionTitle,
-                        request.model(),
-                        request.tools(),
-                        request.mcpServers().keySet()
-                );
+                        new OpenCodeInteractiveSessionDriver.SessionSettings(
+                                sessionTitle,
+                                request.model(),
+                                request.tools(),
+                                request.mcpServers().keySet(),
+                                request.systemPrompt()));
             }
 
             return new ClaudeInteractiveSessionDriver(

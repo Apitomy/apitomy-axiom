@@ -557,6 +557,132 @@ class OpenCodeInteractiveSessionDriverTest {
         }
     }
 
+    @Test
+    void sendUserMessageIncludesSessionSystemPrompt() throws Exception {
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start()) {
+            OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
+                    new FakeServerProcess(server.baseUrl()),
+                    client -> OpenCodeCapabilityProbe.Result.pass(),
+                    new OpenCodeEventNormalizer(),
+                    event -> {
+                    },
+                    event -> {
+                    },
+                    new OpenCodeInteractiveSessionDriver.SessionSettings(
+                            "Axiom Session", "github-copilot/claude-sonnet-5", null, Set.of(),
+                            "You are the Axiom Configuration Assistant."));
+            driver.start();
+
+            driver.sendUserMessage("hello");
+
+            com.fasterxml.jackson.databind.JsonNode body =
+                    new com.fasterxml.jackson.databind.ObjectMapper().readTree(server.lastPromptBody());
+            assertEquals("You are the Axiom Configuration Assistant.", body.path("system").asText());
+            assertEquals("hello", body.path("parts").get(0).path("text").asText());
+            driver.destroy();
+        }
+    }
+
+    @Test
+    void sendUserMessageIncludesSessionSystemPromptOnEveryPrompt() throws Exception {
+        String systemPrompt = "You are the Axiom Configuration Assistant.";
+        AtomicReference<FakeOpenCodeServer> serverRef = new AtomicReference<>();
+        CountDownLatch testDone = new CountDownLatch(1);
+        String idleEvent = "event: message\n"
+                + "data: {\"type\":\"session.idle\",\"properties\":{\"sessionID\":\"session-1\"}}\n\n";
+        EventResponder eventResponder = exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+            exchange.sendResponseHeaders(200, 0);
+            try (OutputStream outputStream = exchange.getResponseBody()) {
+                long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+                int completedTurns = 0;
+                while (completedTurns < 2 && System.nanoTime() < deadline) {
+                    FakeOpenCodeServer current = serverRef.get();
+                    if (current != null && current.promptBodies().size() > completedTurns) {
+                        outputStream.write(idleEvent.getBytes(StandardCharsets.UTF_8));
+                        outputStream.flush();
+                        completedTurns++;
+                    } else {
+                        Thread.sleep(10);
+                    }
+                }
+                testDone.await(5, TimeUnit.SECONDS);
+            }
+        };
+
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start(eventResponder)) {
+            serverRef.set(server);
+            OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
+                    new FakeServerProcess(server.baseUrl()),
+                    client -> OpenCodeCapabilityProbe.Result.pass(),
+                    new OpenCodeEventNormalizer(),
+                    event -> {
+                    },
+                    event -> {
+                    },
+                    new OpenCodeInteractiveSessionDriver.SessionSettings(
+                            "Axiom Session", "github-copilot/claude-sonnet-5", null, Set.of(), systemPrompt));
+            driver.start();
+
+            driver.sendUserMessage("first");
+            waitUntil(() -> {
+                try {
+                    return !isTurnInFlight(driver);
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+            }, Duration.ofSeconds(3));
+            assertFalse(isTurnInFlight(driver));
+
+            driver.sendUserMessage("second");
+
+            List<String> bodies = server.promptBodies();
+            assertEquals(2, bodies.size());
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode first = mapper.readTree(bodies.get(0));
+            com.fasterxml.jackson.databind.JsonNode second = mapper.readTree(bodies.get(1));
+            assertEquals(systemPrompt, first.path("system").asText());
+            assertEquals("first", first.path("parts").get(0).path("text").asText());
+            assertEquals(systemPrompt, second.path("system").asText());
+            assertEquals("second", second.path("parts").get(0).path("text").asText());
+            testDone.countDown();
+            driver.destroy();
+        }
+    }
+
+    @Test
+    void sendUserMessageOmitsSystemWhenNoSystemPrompt() throws Exception {
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start()) {
+            OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
+                    new FakeServerProcess(server.baseUrl()),
+                    client -> OpenCodeCapabilityProbe.Result.pass(),
+                    new OpenCodeEventNormalizer(),
+                    event -> {
+                    },
+                    event -> {
+                    },
+                    "Axiom Session",
+                    "github-copilot/claude-sonnet-5",
+                    null);
+            driver.start();
+
+            driver.sendUserMessage("hello");
+
+            com.fasterxml.jackson.databind.JsonNode body =
+                    new com.fasterxml.jackson.databind.ObjectMapper().readTree(server.lastPromptBody());
+            assertFalse(body.has("system"));
+            driver.destroy();
+        }
+    }
+
+    @Test
+    void sessionSettingsNormalizesExpectedMcpServers() {
+        OpenCodeInteractiveSessionDriver.SessionSettings settings =
+                new OpenCodeInteractiveSessionDriver.SessionSettings("t", null, null, null, null);
+
+        assertEquals(Set.of(), settings.expectedMcpServers());
+    }
+
     @FunctionalInterface
     private interface EventResponder {
 
@@ -570,6 +696,8 @@ class OpenCodeInteractiveSessionDriverTest {
         private final HttpServer server;
         private final AtomicInteger promptCalls = new AtomicInteger();
         private final AtomicInteger abortCalls = new AtomicInteger();
+        private final AtomicReference<String> lastPromptBody = new AtomicReference<>();
+        private final List<String> promptBodies = new CopyOnWriteArrayList<>();
 
         private FakeOpenCodeServer(HttpServer server) {
             this.server = server;
@@ -620,6 +748,8 @@ class OpenCodeInteractiveSessionDriverTest {
                     promptSubmitted.countDown();
                 }
                 String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+                fakeOpenCodeServer.lastPromptBody.set(body);
+                fakeOpenCodeServer.promptBodies.add(body);
                 if (body.contains("\"tools\":{\"allowed\"")) {
                     byte[] payload = "{\"name\":\"BadRequest\",\"data\":{\"message\":\"Expected boolean\",\"kind\":\"Payload\"}}"
                             .getBytes(StandardCharsets.UTF_8);
@@ -642,12 +772,22 @@ class OpenCodeInteractiveSessionDriverTest {
                 exchange.close();
             });
             server.createContext("/mcp", new JsonHandler(mcpStatusCode, mcpResponse));
+            // Serve each exchange on its own thread so a long-lived /event stream cannot block prompt_async.
+            server.setExecutor(java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor());
             server.start();
             return fakeOpenCodeServer;
         }
 
         String baseUrl() {
             return "http://127.0.0.1:" + server.getAddress().getPort();
+        }
+
+        List<String> promptBodies() {
+            return promptBodies;
+        }
+
+        String lastPromptBody() {
+            return lastPromptBody.get();
         }
 
         int promptCallCount() {

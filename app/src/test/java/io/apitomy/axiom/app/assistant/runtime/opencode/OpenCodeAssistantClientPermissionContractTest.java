@@ -55,12 +55,44 @@ class OpenCodeAssistantClientPermissionContractTest {
         }
     }
 
+    @Test
+    void sendPromptAsyncIncludesSystemPromptWhenProvided() throws Exception {
+        RecordingPermissionServer recordingServer = RecordingPermissionServer.start();
+        try {
+            OpenCodeAssistantClient client = new OpenCodeAssistantClient(recordingServer.baseUrl());
+
+            client.sendPromptAsync(SESSION_ID, "hello", null, null, "You are the Axiom Configuration Assistant.");
+
+            com.fasterxml.jackson.databind.JsonNode body =
+                    new com.fasterxml.jackson.databind.ObjectMapper().readTree(recordingServer.rawBody());
+            assertEquals("You are the Axiom Configuration Assistant.", body.path("system").asText());
+            assertEquals("hello", body.path("parts").get(0).path("text").asText());
+        } finally {
+            recordingServer.close();
+        }
+    }
+
+    @Test
+    void sendPromptAsyncOmitsBlankSystemPrompt() throws Exception {
+        RecordingPermissionServer recordingServer = RecordingPermissionServer.start();
+        try {
+            OpenCodeAssistantClient client = new OpenCodeAssistantClient(recordingServer.baseUrl());
+
+            client.sendPromptAsync(SESSION_ID, "hello", null, null, "   ");
+
+            assertEquals("{\"parts\":[{\"type\":\"text\",\"text\":\"hello\"}]}", recordingServer.body());
+        } finally {
+            recordingServer.close();
+        }
+    }
+
     private static final class RecordingPermissionServer implements AutoCloseable {
 
         private final HttpServer server;
         private volatile String method;
         private volatile String path;
         private volatile String body;
+        private volatile String rawBody;
 
         private RecordingPermissionServer(HttpServer server) {
             this.server = server;
@@ -91,6 +123,10 @@ class OpenCodeAssistantClientPermissionContractTest {
 
         String body() {
             return body;
+        }
+
+        String rawBody() {
+            return rawBody;
         }
 
         @Override
@@ -130,8 +166,9 @@ class OpenCodeAssistantClientPermissionContractTest {
         public void handle(HttpExchange exchange) throws IOException {
             recordingServer.method = exchange.getRequestMethod();
             recordingServer.path = exchange.getRequestURI().getPath();
-            recordingServer.body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8)
-                    .replaceAll("\\s+", "");
+            String requestBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            recordingServer.rawBody = requestBody;
+            recordingServer.body = requestBody.replaceAll("\\s+", "");
             exchange.sendResponseHeaders(204, -1);
             exchange.close();
         }
