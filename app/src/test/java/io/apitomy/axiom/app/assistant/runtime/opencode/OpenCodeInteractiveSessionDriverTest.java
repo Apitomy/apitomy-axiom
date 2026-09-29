@@ -132,8 +132,9 @@ class OpenCodeInteractiveSessionDriverTest {
     @Test
     void ignoresEventWithMissingSessionId() throws Exception {
         CountDownLatch eventWritten = new CountDownLatch(1);
-        String eventPayload = "event: session.message.part\n"
-                + "data: {\"part\":{\"type\":\"text\",\"text\":\"hello\"}}\n\n";
+        String eventPayload = "event: message\n"
+                + "data: {\"type\":\"message.part.updated\",\"properties\":{\"part\":"
+                + "{\"id\":\"prt_1\",\"messageID\":\"msg_1\",\"type\":\"text\",\"text\":\"hello\"}}}\n\n";
         EventResponder eventResponder = exchange -> {
             exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
             exchange.sendResponseHeaders(200, 0);
@@ -266,8 +267,10 @@ class OpenCodeInteractiveSessionDriverTest {
             exchange.sendResponseHeaders(200, 0);
             promptSubmitted.await(3, TimeUnit.SECONDS);
             try (OutputStream outputStream = exchange.getResponseBody()) {
-                outputStream.write("event: session.message.part\n".getBytes(StandardCharsets.UTF_8));
-                outputStream.write("data: {\"sessionID\":\"session-1\",\"part\":{\"type\":\"text\"\n\n"
+                outputStream.write("event: message\n".getBytes(StandardCharsets.UTF_8));
+                outputStream.write(("data: {\"type\":\"message.part.updated\",\"properties\":"
+                        + "{\"sessionID\":\"session-1\",\"part\":{\"id\":\"prt_1\",\"sessionID\":\"session-1\","
+                        + "\"messageID\":\"msg_1\",\"type\":\"text\"\n\n")
                         .getBytes(StandardCharsets.UTF_8));
                 outputStream.flush();
             }
