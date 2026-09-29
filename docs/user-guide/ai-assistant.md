@@ -20,6 +20,12 @@ specific project. You can also create your own templates to define custom workfl
     session creation using an OpenCode-backed template is rejected with a compatibility
     error.
 
+    MCP servers configured on a template are available to both Claude Code and OpenCode sessions. For
+    OpenCode, Axiom writes them to an `opencode.json` file in the session directory and starts the
+    session's `opencode serve` process with `OPENCODE_CONFIG` pointing at it. MCP servers from your global
+    OpenCode configuration are also loaded. If a configured MCP server fails to connect, the session shows a
+    warning message with the error reported by OpenCode.
+
 ---
 
 ## Accessing the Assistant
