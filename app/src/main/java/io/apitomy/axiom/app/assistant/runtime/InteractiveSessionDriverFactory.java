@@ -104,24 +104,48 @@ public interface InteractiveSessionDriverFactory {
         @ConfigProperty(name = "axiom.assistant.opencode.startup-timeout-seconds", defaultValue = "30")
         int openCodeServerStartupTimeoutSeconds;
 
+        /**
+         * Builds the extra environment for a session's {@code opencode serve} process: the session's
+         * template/project environment, overridden by the Axiom-managed {@code OPENCODE_CONFIG} when Axiom wrote
+         * a config file. Entries with a null key or value are skipped.
+         *
+         * @param requestEnvironment resolved session environment; may be null
+         * @param openCodeConfig path of the generated OpenCode config, or null if none was written
+         * @return environment entries to add to the server process
+         */
+        static Map<String, String> buildOpenCodeEnvironment(Map<String, String> requestEnvironment,
+                                                            Path openCodeConfig) {
+            Map<String, String> environment = new LinkedHashMap<>();
+            if (requestEnvironment != null) {
+                requestEnvironment.forEach((String key, String value) -> {
+                    if (key != null && value != null) {
+                        environment.put(key, value);
+                    }
+                });
+            }
+            if (openCodeConfig != null) {
+                environment.put("OPENCODE_CONFIG", openCodeConfig.toString());
+            }
+            return environment;
+        }
+
         @Override
         public InteractiveSessionDriver createDriver(DriverRequest request) throws IOException {
             Objects.requireNonNull(request, "request");
 
             String engineType = request.engineType();
             if ("opencode".equalsIgnoreCase(engineType)) {
-                Map<String, String> serverEnvironment = new LinkedHashMap<>();
                 Path openCodeConfig = OpenCodeConfigWriter.writeConfig(
                         request.sessionDirectory(), request.mcpServers());
-                if (openCodeConfig != null) {
-                    serverEnvironment.put("OPENCODE_CONFIG", openCodeConfig.toString());
-                }
+                Map<String, String> serverEnvironment =
+                        buildOpenCodeEnvironment(request.environment(), openCodeConfig);
                 OpenCodeSessionServerProcess openCodeSessionServerProcess =
                         new OpenCodeSessionServerProcess(resolveOpenCodeExecutable(),
                                 openCodeServerHostname,
                                 resolveOpenCodeServerPort(),
                                 resolveOpenCodeStartupTimeoutSeconds(),
-                                serverEnvironment);
+                                serverEnvironment,
+                                request.workingDirectory());
                 OpenCodeCapabilityProbe capabilityProbe = new OpenCodeCapabilityProbe();
                 OpenCodeEventNormalizer normalizer = new OpenCodeEventNormalizer();
                 String sessionTitle = request.sessionTitle() != null && !request.sessionTitle().isBlank()

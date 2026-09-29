@@ -26,6 +26,17 @@ specific project. You can also create your own templates to define custom workfl
     OpenCode configuration are also loaded. If a configured MCP server fails to connect, the session shows a
     warning message with the error reported by OpenCode.
 
+    OpenCode sessions run in the same working directory as Claude Code sessions: the template's working
+    directory if set, otherwise the project workspace for project sessions, otherwise a directory created
+    inside the session directory. The template's environment variables and, for project sessions only,
+    `AXIOM_PROJECT_ID`, `AXIOM_PROJECT_NAME`, `AXIOM_REF`, and `AXIOM_REPOSITORY` are passed to the
+    session's `opencode serve` process, so they are available to OpenCode's tools and MCP servers.
+    Environment variables (including template secrets) are visible to the agent's tools, for example its
+    shell tool. Like Claude Code with `CLAUDE.md`, OpenCode also loads project-level configuration
+    (`opencode.json`, `.opencode/`, `AGENTS.md`) from the working directory and its git repository;
+    project-level `opencode.json` settings are applied after Axiom's generated config and can override
+    them (for example MCP servers or permissions).
+
 ---
 
 ## Accessing the Assistant
