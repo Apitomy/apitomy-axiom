@@ -95,12 +95,14 @@ class OpenCodeSessionServerProcessTest {
                 "opencode", "127.0.0.1", 0, 30, Map.of(), workDir);
         try {
             process.start();
-            HttpResponse<String> response = HttpClient.newBuilder()
+            HttpClient client = HttpClient.newBuilder()
                     .version(HttpClient.Version.HTTP_1_1)
-                    .build()
-                    .send(
+                    .build();
+            HttpResponse<String> response = client.send(
                     HttpRequest.newBuilder(URI.create(process.baseUrl() + "/path")).GET().build(),
                     HttpResponse.BodyHandlers.ofString());
+
+            assertEquals(200, response.statusCode(), response.body());
 
             String directory = new ObjectMapper().readTree(response.body()).path("directory").asText();
             assertEquals(workDir.toRealPath().toString(), Path.of(directory).toRealPath().toString());
