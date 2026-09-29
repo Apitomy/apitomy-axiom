@@ -5,6 +5,9 @@ import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
+import io.apitomy.axiom.core.entities.WorkflowEventSubscriptionEntity;
+import io.apitomy.axiom.core.entities.WorkflowRunEntity;
+import io.apitomy.axiom.core.entities.WorkflowWaitEntity;
 import io.apitomy.axiom.core.services.WorkspaceService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -22,7 +25,8 @@ public class ProjectDeletionService {
 
     /**
      * Deletes a project and all associated data: thread entries, AI usage records,
-     * activity log entries, tasks, and the workspace directory. Nullifies the
+     * activity log entries, tasks, workflow runs (with their waits and event
+     * subscriptions), and the workspace directory. Nullifies the
      * projectId on any linked events rather than deleting them.
      *
      * @param project the project to delete (must already be in Completed status)
@@ -34,6 +38,11 @@ public class ProjectDeletionService {
         AiUsageEntity.delete("projectId", projectId);
         ActivityLogEntity.delete("projectId", projectId);
         TaskEntity.delete("projectId", projectId);
+        WorkflowWaitEntity.delete(
+                "runId in (select r.id from WorkflowRunEntity r where r.projectId = ?1)", projectId);
+        WorkflowEventSubscriptionEntity.delete(
+                "runId in (select r.id from WorkflowRunEntity r where r.projectId = ?1)", projectId);
+        WorkflowRunEntity.delete("projectId", projectId);
         workspaceService.deleteWorkspace(project);
         project.delete();
     }
