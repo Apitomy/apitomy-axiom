@@ -15,6 +15,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 
@@ -140,6 +143,26 @@ public final class OpenCodeAssistantClient {
         ObjectNode body = MAPPER.createObjectNode();
         body.put("response", allow ? "once" : "reject");
         postJson("/session/" + sessionId + "/permissions/" + permissionId, body, 200);
+    }
+
+    /**
+     * Returns the connection status of every MCP server known to the OpenCode server.
+     *
+     * @return statuses keyed by MCP server name
+     * @throws IllegalStateException if the request fails
+     */
+    public Map<String, McpServerStatus> mcpStatus() {
+        JsonNode body = getJson("/mcp");
+        Map<String, McpServerStatus> statuses = new LinkedHashMap<>();
+        Iterator<Map.Entry<String, JsonNode>> fields = body.fields();
+        while (fields.hasNext()) {
+            Map.Entry<String, JsonNode> field = fields.next();
+            JsonNode value = field.getValue();
+            statuses.put(field.getKey(), new McpServerStatus(
+                    value.path("status").asText(""),
+                    value.hasNonNull("error") ? value.path("error").asText() : null));
+        }
+        return statuses;
     }
 
     /**
@@ -279,6 +302,27 @@ public final class OpenCodeAssistantClient {
         return normalized;
     }
 
+    private JsonNode getJson(String path) {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + path))
+                .GET()
+                .timeout(Duration.ofSeconds(30))
+                .build();
+        try {
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                throw new IllegalStateException(
+                        "OpenCode request failed: " + path + " -> HTTP " + response.statusCode());
+            }
+            return MAPPER.readTree(response.body());
+        } catch (IOException e) {
+            throw new IllegalStateException("OpenCode request failed: " + path, e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted during OpenCode request: " + path, e);
+        }
+    }
+
     private JsonNode postJson(String path, JsonNode body, int... okStatuses) {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl + path))
@@ -315,6 +359,22 @@ public final class OpenCodeAssistantClient {
      * @param version server version
      */
     public record HealthStatus(boolean healthy, String version) {
+    }
+
+    /**
+     * Connection status of a single MCP server as reported by {@code GET /mcp}.
+     *
+     * @param status status value ({@code connected}, {@code failed}, {@code disabled}, {@code needs_auth}, ...)
+     * @param error error message when available, otherwise null
+     */
+    public record McpServerStatus(String status, String error) {
+
+        /**
+         * @return true when the server is connected
+         */
+        public boolean connected() {
+            return "connected".equals(status);
+        }
     }
 
     /**
