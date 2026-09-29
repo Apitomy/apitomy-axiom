@@ -177,6 +177,14 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
     }
 
     private void reportMcpServerStatus() {
+        try {
+            doReportMcpServerStatus();
+        } catch (RuntimeException e) {
+            LOG.warnf(e, "Failed to report OpenCode MCP server status");
+        }
+    }
+
+    private void doReportMcpServerStatus() {
         if (expectedMcpServers.isEmpty()) {
             return;
         }
@@ -185,7 +193,10 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
             statuses = client.mcpStatus();
         } catch (RuntimeException e) {
             LOG.warnf(e, "Unable to query OpenCode MCP server status");
-            emitMcpWarning("Unable to verify MCP server status: " + e.getMessage());
+            String reason = e.getMessage() == null || e.getMessage().isBlank()
+                    ? e.getClass().getSimpleName()
+                    : e.getMessage();
+            emitMcpWarning("Unable to verify MCP server status: " + reason);
             return;
         }
         for (String name : new TreeSet<>(expectedMcpServers)) {
