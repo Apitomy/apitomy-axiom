@@ -8,6 +8,7 @@ import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -21,13 +22,14 @@ public final class OpenCodeSessionServerProcess {
     private final String hostname;
     private final int configuredPort;
     private final int startupTimeoutSeconds;
+    private final Map<String, String> environment;
 
     private volatile Process process;
     private volatile int resolvedPort;
     private volatile OpenCodeAssistantClient client;
 
     /**
-     * Creates a per-session OpenCode server process manager.
+     * Creates a per-session OpenCode server process manager with no extra environment.
      *
      * @param executable OpenCode executable name or path
      * @param hostname host to bind
@@ -38,10 +40,28 @@ public final class OpenCodeSessionServerProcess {
                                         String hostname,
                                         int configuredPort,
                                         int startupTimeoutSeconds) {
+        this(executable, hostname, configuredPort, startupTimeoutSeconds, Map.of());
+    }
+
+    /**
+     * Creates a per-session OpenCode server process manager.
+     *
+     * @param executable OpenCode executable name or path
+     * @param hostname host to bind
+     * @param configuredPort explicit port or {@code 0} for ephemeral
+     * @param startupTimeoutSeconds startup timeout in seconds
+     * @param environment extra environment variables for the server process (e.g. {@code OPENCODE_CONFIG})
+     */
+    public OpenCodeSessionServerProcess(String executable,
+                                        String hostname,
+                                        int configuredPort,
+                                        int startupTimeoutSeconds,
+                                        Map<String, String> environment) {
         this.executable = executable;
         this.hostname = hostname;
         this.configuredPort = configuredPort;
         this.startupTimeoutSeconds = startupTimeoutSeconds;
+        this.environment = environment != null ? Map.copyOf(environment) : Map.of();
     }
 
     /**
@@ -54,13 +74,7 @@ public final class OpenCodeSessionServerProcess {
 
         resolvedPort = configuredPort == 0 ? resolveEphemeralPort() : configuredPort;
 
-        ProcessBuilder processBuilder = new ProcessBuilder(
-                executable,
-                "serve",
-                "--hostname", hostname,
-                "--port", String.valueOf(resolvedPort)
-        );
-        processBuilder.redirectErrorStream(true);
+        ProcessBuilder processBuilder = createProcessBuilder(resolvedPort);
 
         try {
             process = processBuilder.start();
@@ -74,6 +88,18 @@ public final class OpenCodeSessionServerProcess {
             stop();
             throw e;
         }
+    }
+
+    ProcessBuilder createProcessBuilder(int port) {
+        ProcessBuilder processBuilder = new ProcessBuilder(
+                executable,
+                "serve",
+                "--hostname", hostname,
+                "--port", String.valueOf(port)
+        );
+        processBuilder.environment().putAll(environment);
+        processBuilder.redirectErrorStream(true);
+        return processBuilder;
     }
 
     /**

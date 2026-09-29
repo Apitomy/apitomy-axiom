@@ -3,6 +3,7 @@ package io.apitomy.axiom.app.assistant.runtime.opencode;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
 import io.apitomy.axiom.app.assistant.AssistantSession;
 import org.junit.jupiter.api.Test;
 
@@ -13,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -439,6 +441,122 @@ class OpenCodeInteractiveSessionDriverTest {
         boolean getAsBoolean();
     }
 
+    @Test
+    void emitsSessionErrorForExpectedMcpServersThatAreNotConnected() throws Exception {
+        String mcp = "{\"axiom\":{\"status\":\"connected\"},"
+                + "\"broken\":{\"status\":\"failed\",\"error\":\"ENOENT\"},"
+                + "\"user-global\":{\"status\":\"failed\",\"error\":\"ignored\"}}";
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.startWithMcp(mcp)) {
+            List<SseEvent> events = new CopyOnWriteArrayList<>();
+            OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
+                    new FakeServerProcess(server.baseUrl()),
+                    client -> OpenCodeCapabilityProbe.Result.pass(),
+                    new OpenCodeEventNormalizer(),
+                    events::add,
+                    event -> {
+                    },
+                    "Axiom Session",
+                    "github-copilot/claude-sonnet-5",
+                    null,
+                    Set.of("axiom", "broken", "missing"));
+
+            driver.start();
+
+            List<String> messages = events.stream()
+                    .filter(e -> "session_error".equals(e.type()))
+                    .filter(e -> "McpServerUnavailable".equals(e.data().path("name").asText()))
+                    .map(e -> e.data().path("message").asText())
+                    .toList();
+            assertEquals(List.of(
+                    "MCP server 'broken' is unavailable (failed): ENOENT",
+                    "MCP server 'missing' was not loaded by OpenCode"), messages);
+            assertEquals(AssistantSession.Status.RUNNING, driver.getStatus());
+
+            driver.destroy();
+        }
+    }
+
+    @Test
+    void emitsNoMcpWarningsWhenAllExpectedServersConnected() throws Exception {
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.startWithMcp("{\"axiom\":{\"status\":\"connected\"}}")) {
+            List<SseEvent> events = new CopyOnWriteArrayList<>();
+            OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
+                    new FakeServerProcess(server.baseUrl()),
+                    client -> OpenCodeCapabilityProbe.Result.pass(),
+                    new OpenCodeEventNormalizer(),
+                    events::add,
+                    event -> {
+                    },
+                    "Axiom Session",
+                    "github-copilot/claude-sonnet-5",
+                    null,
+                    Set.of("axiom"));
+
+            driver.start();
+
+            assertTrue(events.stream().noneMatch(e -> "McpServerUnavailable".equals(e.data().path("name").asText())));
+            assertEquals(AssistantSession.Status.RUNNING, driver.getStatus());
+            driver.destroy();
+        }
+    }
+
+    @Test
+    void emitsSingleMcpWarningWhenMcpStatusQueryFails() throws Exception {
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start(
+                exchange -> new EventHandler().handle(exchange), null, 500, "{\"error\":\"boom\"}")) {
+            List<SseEvent> events = new CopyOnWriteArrayList<>();
+            OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
+                    new FakeServerProcess(server.baseUrl()),
+                    client -> OpenCodeCapabilityProbe.Result.pass(),
+                    new OpenCodeEventNormalizer(),
+                    events::add,
+                    event -> {
+                    },
+                    "Axiom Session",
+                    "github-copilot/claude-sonnet-5",
+                    null,
+                    Set.of("axiom"));
+
+            driver.start();
+
+            List<String> messages = events.stream()
+                    .filter(e -> "session_error".equals(e.type()))
+                    .filter(e -> "McpServerUnavailable".equals(e.data().path("name").asText()))
+                    .map(e -> e.data().path("message").asText())
+                    .toList();
+            assertEquals(1, messages.size());
+            assertTrue(messages.get(0).startsWith("Unable to verify MCP server status: "), messages.get(0));
+            assertEquals(AssistantSession.Status.RUNNING, driver.getStatus());
+            driver.destroy();
+        }
+    }
+
+    @Test
+    void mcpWarningSinkFailureDoesNotFailSession() throws Exception {
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.startWithMcp("{\"axiom\":{\"status\":\"failed\"}}")) {
+            OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
+                    new FakeServerProcess(server.baseUrl()),
+                    client -> OpenCodeCapabilityProbe.Result.pass(),
+                    new OpenCodeEventNormalizer(),
+                    event -> {
+                        if ("McpServerUnavailable".equals(event.data().path("name").asText())) {
+                            throw new IllegalStateException("sink failure");
+                        }
+                    },
+                    event -> {
+                    },
+                    "Axiom Session",
+                    "github-copilot/claude-sonnet-5",
+                    null,
+                    Set.of("axiom"));
+
+            driver.start();
+
+            assertEquals(AssistantSession.Status.RUNNING, driver.getStatus());
+            driver.destroy();
+        }
+    }
+
     @FunctionalInterface
     private interface EventResponder {
 
@@ -467,6 +585,23 @@ class OpenCodeInteractiveSessionDriverTest {
 
         static FakeOpenCodeServer start(EventResponder eventResponder,
                                         CountDownLatch promptSubmitted) throws IOException {
+            return start(eventResponder, promptSubmitted, "{}");
+        }
+
+        static FakeOpenCodeServer startWithMcp(String mcpResponse) throws IOException {
+            return start(exchange -> new EventHandler().handle(exchange), null, mcpResponse);
+        }
+
+        static FakeOpenCodeServer start(EventResponder eventResponder,
+                                        CountDownLatch promptSubmitted,
+                                        String mcpResponse) throws IOException {
+            return start(eventResponder, promptSubmitted, 200, mcpResponse);
+        }
+
+        static FakeOpenCodeServer start(EventResponder eventResponder,
+                                        CountDownLatch promptSubmitted,
+                                        int mcpStatusCode,
+                                        String mcpResponse) throws IOException {
             HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             FakeOpenCodeServer fakeOpenCodeServer = new FakeOpenCodeServer(server);
             server.createContext("/session", new JsonHandler(201, "{\"id\":\"" + SESSION_ID + "\"}"));
@@ -506,6 +641,7 @@ class OpenCodeInteractiveSessionDriverTest {
                 exchange.sendResponseHeaders(200, -1);
                 exchange.close();
             });
+            server.createContext("/mcp", new JsonHandler(mcpStatusCode, mcpResponse));
             server.start();
             return fakeOpenCodeServer;
         }

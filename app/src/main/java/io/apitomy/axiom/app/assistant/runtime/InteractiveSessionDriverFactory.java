@@ -1,7 +1,9 @@
 package io.apitomy.axiom.app.assistant.runtime;
 
+import io.apitomy.axiom.app.assistant.AssistantContextBuilder;
 import io.apitomy.axiom.app.assistant.AssistantEventParser;
 import io.apitomy.axiom.app.assistant.runtime.opencode.OpenCodeCapabilityProbe;
+import io.apitomy.axiom.app.assistant.runtime.opencode.OpenCodeConfigWriter;
 import io.apitomy.axiom.app.assistant.runtime.opencode.OpenCodeEventNormalizer;
 import io.apitomy.axiom.app.assistant.runtime.opencode.OpenCodeInteractiveSessionDriver;
 import io.apitomy.axiom.app.assistant.runtime.opencode.OpenCodeSessionServerProcess;
@@ -11,6 +13,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -42,6 +45,7 @@ public interface InteractiveSessionDriverFactory {
      * @param environment resolved runtime environment variables
      * @param projectId optional project identifier when session is project scoped
      * @param projectName optional project name when session is project scoped
+     * @param mcpServers resolved MCP servers for the session, keyed by name
      */
     record DriverRequest(String engineType,
                          String templateId,
@@ -55,7 +59,15 @@ public interface InteractiveSessionDriverFactory {
                          Consumer<AssistantEventParser.SseEvent> autoApprovalSink,
                          String model,
                          com.fasterxml.jackson.databind.JsonNode tools,
-                         String sessionTitle) {
+                         String sessionTitle,
+                         Map<String, AssistantContextBuilder.McpServerConfig> mcpServers) {
+
+        /**
+         * Normalizes a null MCP server map to an empty map.
+         */
+        public DriverRequest {
+            mcpServers = mcpServers != null ? mcpServers : Map.of();
+        }
     }
 
     /**
@@ -98,11 +110,18 @@ public interface InteractiveSessionDriverFactory {
 
             String engineType = request.engineType();
             if ("opencode".equalsIgnoreCase(engineType)) {
+                Map<String, String> serverEnvironment = new LinkedHashMap<>();
+                Path openCodeConfig = OpenCodeConfigWriter.writeConfig(
+                        request.sessionDirectory(), request.mcpServers());
+                if (openCodeConfig != null) {
+                    serverEnvironment.put("OPENCODE_CONFIG", openCodeConfig.toString());
+                }
                 OpenCodeSessionServerProcess openCodeSessionServerProcess =
                         new OpenCodeSessionServerProcess(resolveOpenCodeExecutable(),
                                 openCodeServerHostname,
                                 resolveOpenCodeServerPort(),
-                                resolveOpenCodeStartupTimeoutSeconds());
+                                resolveOpenCodeStartupTimeoutSeconds(),
+                                serverEnvironment);
                 OpenCodeCapabilityProbe capabilityProbe = new OpenCodeCapabilityProbe();
                 OpenCodeEventNormalizer normalizer = new OpenCodeEventNormalizer();
                 String sessionTitle = request.sessionTitle() != null && !request.sessionTitle().isBlank()
@@ -116,7 +135,8 @@ public interface InteractiveSessionDriverFactory {
                         request.autoApprovalSink(),
                         sessionTitle,
                         request.model(),
-                        request.tools()
+                        request.tools(),
+                        request.mcpServers().keySet()
                 );
             }
 
