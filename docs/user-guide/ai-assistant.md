@@ -56,6 +56,11 @@ specific project. You can also create your own templates to define custom workfl
     the session falls back to `axiom.agent.opencode.model`, or to OpenCode's own default model if that is also
     unavailable (in which case the session header shows no model).
 
+    Each OpenCode session's local server is protected with a generated password (a template value for
+    `OPENCODE_SERVER_PASSWORD` is ignored). If the connection to OpenCode drops, Axiom reconnects and shows a
+    notice that some updates may be missing. If stopping a reply fails, a notice is shown and the session keeps
+    running.
+
 ---
 
 ## Accessing the Assistant

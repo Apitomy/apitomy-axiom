@@ -380,6 +380,55 @@ class OpenCodeInteractiveSessionDriverTest {
     }
 
     @Test
+    void streamFailureEmitsSessionEndedBeforeReportingNotAlive() throws Exception {
+        CountDownLatch promptSubmitted = new CountDownLatch(1);
+        EventResponder eventResponder = exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+            exchange.sendResponseHeaders(200, 0);
+            promptSubmitted.await(3, TimeUnit.SECONDS);
+            try (OutputStream outputStream = exchange.getResponseBody()) {
+                outputStream.write("event: message\ndata: {broken\n\n".getBytes(StandardCharsets.UTF_8));
+                outputStream.flush();
+            }
+        };
+
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start(eventResponder, promptSubmitted)) {
+            FakeServerProcess process = new FakeServerProcess(server.baseUrl());
+            AtomicReference<Boolean> aliveAtSessionEnded = new AtomicReference<>();
+            AtomicReference<OpenCodeInteractiveSessionDriver> driverRef = new AtomicReference<>();
+
+            OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
+                    process,
+                    client -> OpenCodeCapabilityProbe.Result.pass(),
+                    new OpenCodeEventNormalizer(),
+                    event -> {
+                        if ("session_ended".equals(event.type())) {
+                            aliveAtSessionEnded.set(driverRef.get().isAlive());
+                        }
+                    },
+                    event -> { },
+                    "Axiom Session",
+                    "github-copilot/claude-sonnet-5",
+                    null
+            );
+            driverRef.set(driver);
+
+            driver.setReconnectBackoffs(ZERO_BACKOFFS);
+            driver.start();
+            driver.sendUserMessage("first");
+
+            waitUntil(() -> aliveAtSessionEnded.get() != null, Duration.ofSeconds(3));
+            waitUntil(() -> !driver.isAlive(), Duration.ofSeconds(3));
+
+            assertEquals(Boolean.TRUE, aliveAtSessionEnded.get());
+            assertFalse(driver.isAlive());
+            assertEquals(AssistantSession.Status.ERROR, driver.getStatus());
+
+            driver.destroy();
+        }
+    }
+
+    @Test
     void sendUserMessageWrapsPromptFailureWithCauseMessage() throws Exception {
         try (FakeOpenCodeServer server = FakeOpenCodeServer.start()) {
             OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(

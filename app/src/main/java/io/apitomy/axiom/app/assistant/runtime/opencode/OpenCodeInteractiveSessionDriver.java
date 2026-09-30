@@ -70,7 +70,10 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
     private volatile List<Duration> reconnectBackoffs = DEFAULT_RECONNECT_BACKOFFS;
     private volatile OpenCodeAssistantClient.EventStream eventStream;
     private volatile boolean destroyed;
+    /** Published only after {@code session_ended} is emitted; read by {@link #isAlive()}. */
     private volatile boolean streamFailed;
+    /** Set once (under {@code streamLock}) when a stream failure has been decided. */
+    private boolean streamFailureDecided;
     /** Incremented per connection so callbacks from superseded streams are ignored. */
     private long streamGeneration;
 
@@ -618,10 +621,10 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
 
     private void failStream(long generation, Throwable throwable) {
         synchronized (streamLock) {
-            if (destroyed || generation != streamGeneration || streamFailed) {
+            if (destroyed || generation != streamGeneration || streamFailureDecided) {
                 return;
             }
-            streamFailed = true;
+            streamFailureDecided = true;
             eventStream = null;
         }
         String message = throwable != null && throwable.getMessage() != null
@@ -634,7 +637,12 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
         ObjectNode terminalData = JsonNodeFactory.instance.objectNode();
         terminalData.put("status", AssistantSession.Status.ERROR.name());
         terminalData.put("message", message);
-        eventSink.accept(new SseEvent("session_ended", terminalData));
+        try {
+            eventSink.accept(new SseEvent("session_ended", terminalData));
+        } finally {
+            // Publish only after the terminal event so drainers never exit before seeing it.
+            streamFailed = true;
+        }
     }
 
     private void openRawEventsLog() {
