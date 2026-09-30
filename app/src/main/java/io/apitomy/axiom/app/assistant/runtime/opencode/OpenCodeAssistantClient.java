@@ -15,12 +15,14 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -33,14 +35,29 @@ public final class OpenCodeAssistantClient {
 
     private final String baseUrl;
     private final HttpClient httpClient;
+    private final String authorization;
 
     /**
-     * Creates an OpenCode assistant client for the provided base URL.
+     * Creates an OpenCode assistant client for the provided base URL without authentication.
      *
      * @param baseUrl OpenCode server base URL
      */
     public OpenCodeAssistantClient(String baseUrl) {
+        this(baseUrl, null);
+    }
+
+    /**
+     * Creates an OpenCode assistant client that authenticates with HTTP Basic {@code opencode:<password>}.
+     *
+     * @param baseUrl OpenCode server base URL
+     * @param password server password, or {@code null}/blank for no authentication
+     */
+    public OpenCodeAssistantClient(String baseUrl, String password) {
         this.baseUrl = Objects.requireNonNull(baseUrl, "baseUrl");
+        this.authorization = password == null || password.isBlank()
+                ? null
+                : "Basic " + Base64.getEncoder().encodeToString(
+                        ("opencode:" + password).getBytes(StandardCharsets.UTF_8));
         this.httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofSeconds(5))
@@ -57,13 +74,29 @@ public final class OpenCodeAssistantClient {
     }
 
     /**
+     * Returns the {@code Authorization} header value this client sends, if a password is configured.
+     *
+     * @return header value, or empty when no password is configured
+     */
+    public Optional<String> authorizationHeader() {
+        return Optional.ofNullable(authorization);
+    }
+
+    private HttpRequest.Builder request(String path) {
+        HttpRequest.Builder builder = HttpRequest.newBuilder().uri(URI.create(baseUrl + path));
+        if (authorization != null) {
+            builder.header("Authorization", authorization);
+        }
+        return builder;
+    }
+
+    /**
      * Queries OpenCode global health status.
      *
      * @return health response wrapper
      */
     public HealthStatus health() {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/global/health"))
+        HttpRequest request = request("/global/health")
                 .GET()
                 .timeout(Duration.ofSeconds(5))
                 .build();
@@ -159,11 +192,21 @@ public final class OpenCodeAssistantClient {
      * @throws IllegalStateException if the request fails or returns a status other than 200 or 204
      */
     public void deleteSession(String sessionId) {
+        deleteSession(sessionId, Duration.ofSeconds(30));
+    }
+
+    /**
+     * Deletes a session with a request timeout.
+     *
+     * @param sessionId session identifier
+     * @param timeout request timeout
+     * @throws IllegalStateException if the request fails or returns a status other than 200 or 204
+     */
+    public void deleteSession(String sessionId, Duration timeout) {
         String path = "/session/" + sessionId;
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + path))
+        HttpRequest request = request(path)
                 .DELETE()
-                .timeout(Duration.ofSeconds(30))
+                .timeout(timeout)
                 .build();
         try {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
@@ -262,39 +305,65 @@ public final class OpenCodeAssistantClient {
      * @param onEvent callback invoked per event
      */
     public void connectEvents(Consumer<OpenCodeRawEvent> onEvent) {
-        connectEvents(onEvent, throwable -> {
+        startEventStream(onEvent, throwable -> {
             throw new IllegalStateException("OpenCode event stream terminated", throwable);
-        });
+        }, false);
     }
 
     /**
      * Connects to OpenCode global event stream and emits parsed raw events.
      *
+     * <p>{@code onError} is called once when the stream fails or ends (end of stream is reported as an
+     * {@link IllegalStateException}), unless the returned handle was closed first.
+     *
      * @param onEvent callback invoked per event
-     * @param onError callback invoked when stream setup or parsing fails
+     * @param onError callback invoked when stream setup or parsing fails, or when the stream ends
+     * @return handle that stops the stream; after closing it {@code onError} is not called
      */
-    public void connectEvents(Consumer<OpenCodeRawEvent> onEvent, Consumer<Throwable> onError) {
-        Objects.requireNonNull(onEvent, "onEvent");
-        Objects.requireNonNull(onError, "onError");
-        Thread.ofVirtual().name("opencode-events").start(() -> {
-            try {
-                streamEvents(onEvent);
-            } catch (Throwable throwable) {
-                onError.accept(throwable);
-            }
-        });
+    public EventStream connectEvents(Consumer<OpenCodeRawEvent> onEvent, Consumer<Throwable> onError) {
+        return startEventStream(onEvent, onError, true);
     }
 
-    private void streamEvents(Consumer<OpenCodeRawEvent> onEvent) {
+    private EventStream startEventStream(Consumer<OpenCodeRawEvent> onEvent,
+                                         Consumer<Throwable> onError,
+                                         boolean reportEndOfStream) {
+        Objects.requireNonNull(onEvent, "onEvent");
+        Objects.requireNonNull(onError, "onError");
+        StreamHandle handle = new StreamHandle();
+        Thread thread = Thread.ofVirtual().name("opencode-events").unstarted(() -> {
+            try {
+                streamEvents(onEvent, handle);
+                if (reportEndOfStream && !handle.closed) {
+                    onError.accept(new IllegalStateException("OpenCode event stream ended"));
+                }
+            } catch (Throwable throwable) {
+                if (!handle.closed) {
+                    onError.accept(throwable);
+                }
+            }
+        });
+        handle.thread = thread;
+        thread.start();
+        return handle;
+    }
+
+    private void streamEvents(Consumer<OpenCodeRawEvent> onEvent, StreamHandle handle) {
         try {
             HttpResponse<java.io.InputStream> response = openEventStreamResponse();
+            if (!handle.attach(response.body())) {
+                return;
+            }
             if (response.statusCode() != 200) {
                 throw new IllegalStateException("Failed to connect OpenCode events: HTTP " + response.statusCode());
             }
 
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
-                parseSseEvents(reader, onEvent);
+                parseSseEvents(reader, event -> {
+                    if (!handle.closed) {
+                        onEvent.accept(event);
+                    }
+                });
             }
         } catch (IOException e) {
             throw new IllegalStateException("Failed to stream OpenCode events", e);
@@ -304,9 +373,66 @@ public final class OpenCodeAssistantClient {
         }
     }
 
+    /**
+     * Handle to a running OpenCode event stream.
+     */
+    public interface EventStream extends AutoCloseable {
+
+        /**
+         * Stops the stream. After this call the stream's error callback is not invoked.
+         */
+        @Override
+        void close();
+    }
+
+    private static final class StreamHandle implements EventStream {
+
+        private volatile boolean closed;
+        private volatile Thread thread;
+        private java.io.InputStream body;
+
+        /**
+         * Registers the response body; returns false (and closes it) if the handle is already closed.
+         */
+        synchronized boolean attach(java.io.InputStream responseBody) {
+            if (closed) {
+                closeQuietly(responseBody);
+                return false;
+            }
+            body = responseBody;
+            return true;
+        }
+
+        @Override
+        public void close() {
+            java.io.InputStream toClose;
+            synchronized (this) {
+                if (closed) {
+                    return;
+                }
+                closed = true;
+                toClose = body;
+            }
+            if (toClose != null) {
+                closeQuietly(toClose);
+            } else if (thread != null) {
+                // Still connecting: interrupt the pending send so the thread exits promptly.
+                thread.interrupt();
+            }
+        }
+
+        private static void closeQuietly(java.io.InputStream stream) {
+            try {
+                stream.close();
+            } catch (IOException ignored) {
+                // Closing is best effort.
+            }
+        }
+    }
+
     private HttpResponse<java.io.InputStream> openEventStreamResponse() throws IOException, InterruptedException {
         HttpResponse<java.io.InputStream> primaryResponse = httpClient.send(
-                eventStreamRequest(baseUrl + "/event"),
+                eventStreamRequest("/event"),
                 HttpResponse.BodyHandlers.ofInputStream());
 
         int primaryStatusCode = primaryResponse.statusCode();
@@ -317,13 +443,12 @@ public final class OpenCodeAssistantClient {
         primaryResponse.body().close();
 
         return httpClient.send(
-                eventStreamRequest(baseUrl + "/global/event"),
+                eventStreamRequest("/global/event"),
                 HttpResponse.BodyHandlers.ofInputStream());
     }
 
-    private HttpRequest eventStreamRequest(String endpoint) {
-        return HttpRequest.newBuilder()
-                .uri(URI.create(endpoint))
+    private HttpRequest eventStreamRequest(String path) {
+        return request(path)
                 .header("Accept", "text/event-stream")
                 .GET()
                 .timeout(Duration.ofMinutes(30))
@@ -394,8 +519,7 @@ public final class OpenCodeAssistantClient {
     }
 
     private JsonNode getJson(String path) {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + path))
+        HttpRequest request = request(path)
                 .GET()
                 .timeout(Duration.ofSeconds(30))
                 .build();
@@ -415,8 +539,7 @@ public final class OpenCodeAssistantClient {
     }
 
     private JsonNode postJson(String path, JsonNode body, int... okStatuses) {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + path))
+        HttpRequest request = request(path)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
                 .timeout(Duration.ofSeconds(30))

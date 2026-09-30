@@ -188,7 +188,8 @@ public interface InteractiveSessionDriverFactory {
                                 null,
                                 request.mcpServers().keySet(),
                                 request.systemPrompt(),
-                                resolveOpenCodeDefaultModel()));
+                                resolveOpenCodeDefaultModel(),
+                                request.sessionDirectory().resolve("raw-events.jsonl")));
             }
 
             return new ClaudeInteractiveSessionDriver(
