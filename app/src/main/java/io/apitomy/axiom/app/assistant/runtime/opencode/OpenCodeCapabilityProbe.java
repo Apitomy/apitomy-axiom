@@ -25,8 +25,12 @@ import java.util.concurrent.ConcurrentHashMap;
  * deleting that session again.</p>
  *
  * <p>The probe never sends a prompt, never replies to a permission and never aborts a session, so it has no
- * side effects on the runtime (apart from the short-lived fallback session). Passing results are cached per
- * runtime version reported by the health endpoint; failures and blank versions are never cached.</p>
+ * side effects on the runtime (apart from the short-lived fallback session).</p>
+ *
+ * <p>Passing results are cached per OpenCode version reported by the health endpoint, because the protocol
+ * surface is tied to the version; failures and blank versions are never cached. On a cache hit the live
+ * event-stream (SSE) check is skipped as well, so a broken event stream on a cached version is not caught
+ * here; it still surfaces when the driver connects to the event stream.</p>
  */
 public final class OpenCodeCapabilityProbe {
 

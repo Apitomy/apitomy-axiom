@@ -5,14 +5,24 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import io.apitomy.axiom.agents.opencode.OpenCodeServerManager;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -82,6 +92,29 @@ class OpenCodeCapabilityProbeTest {
 
             assertFalse(result.compatible());
             assertEquals("EVENT_STREAM_UNRELIABLE", result.code());
+            assertEquals(0, server.sessionPosts.get());
+            assertEquals(0, server.promptPosts.get());
+            assertEquals(0, server.permissionPosts.get());
+        }
+    }
+
+    @Test
+    void realOpenCodePassesProbeWithoutCreatingSessions(@TempDir Path workDir) throws Exception {
+        Assumptions.assumeTrue(OpenCodeServerManager.isOpenCodeAvailable());
+        OpenCodeCapabilityProbe.clearCache();
+        OpenCodeSessionServerProcess process = new OpenCodeSessionServerProcess(
+                "opencode", "127.0.0.1", 0, 30, Map.of(), workDir);
+        try {
+            process.start();
+            OpenCodeAssistantClient client = new OpenCodeAssistantClient(process.baseUrl());
+            int before = sessionCount(process.baseUrl());
+
+            OpenCodeCapabilityProbe.Result result = new OpenCodeCapabilityProbe().probe(client);
+
+            assertTrue(result.compatible(), String.valueOf(result));
+            assertEquals(before, sessionCount(process.baseUrl()));
+        } finally {
+            process.stop();
         }
     }
 
@@ -195,6 +228,20 @@ class OpenCodeCapabilityProbeTest {
             assertEquals(0, server.promptPosts.get());
             assertEquals(0, server.permissionPosts.get());
         }
+    }
+
+    private static int sessionCount(String baseUrl) throws Exception {
+        HttpClient http = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(Duration.ofSeconds(5))
+                .build();
+        HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + "/session"))
+                .timeout(Duration.ofSeconds(10))
+                .GET()
+                .build();
+        HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, response.statusCode(), response.body());
+        return MAPPER.readTree(response.body()).size();
     }
 
     private static OpenCodeCapabilityProbe.Result probe(FakeOpenCodeServer server) {
