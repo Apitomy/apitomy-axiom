@@ -265,6 +265,55 @@ class OpenCodeInteractiveSessionDriverTest {
     }
 
     @Test
+    void deliversToolUseBeforePermissionRequestForPendingToolPart() throws Exception {
+        CountDownLatch eventWritten = new CountDownLatch(1);
+        String part = "data: {\"type\":\"message.part.updated\",\"properties\":{\"sessionID\":\"session-1\","
+                + "\"part\":{\"id\":\"prt_1\",\"sessionID\":\"session-1\",\"messageID\":\"m1\",\"type\":\"tool\","
+                + "\"tool\":\"glob\",\"callID\":\"toolu_X\",\"state\":{\"status\":\"%s\",\"input\":%s}}}}\n\n";
+        String eventPayload = "event: message\n" + String.format(part, "pending", "{}")
+                + "event: message\n"
+                + "data: {\"type\":\"permission.asked\",\"properties\":{\"id\":\"per_Y\",\"sessionID\":\"session-1\","
+                + "\"permission\":\"glob\",\"patterns\":[\"*.txt\"],\"metadata\":{\"pattern\":\"*.txt\"},"
+                + "\"tool\":{\"messageID\":\"m1\",\"callID\":\"toolu_X\"}}}\n\n"
+                + "event: message\n" + String.format(part, "running", "{\"pattern\":\"*.txt\"}")
+                + "event: message\n" + String.format(part, "completed", "{\"pattern\":\"*.txt\"},\"output\":\"a.txt\"")
+                + "event: message\n"
+                + "data: {\"type\":\"session.idle\",\"properties\":{\"sessionID\":\"session-1\"}}\n\n";
+        EventResponder eventResponder = exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+            exchange.sendResponseHeaders(200, 0);
+            try (OutputStream outputStream = exchange.getResponseBody()) {
+                outputStream.write(eventPayload.getBytes(StandardCharsets.UTF_8));
+                outputStream.flush();
+                eventWritten.countDown();
+            }
+        };
+
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start(eventResponder)) {
+            List<String> ordered = new CopyOnWriteArrayList<>();
+            OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
+                    new FakeServerProcess(server.baseUrl()),
+                    client -> OpenCodeCapabilityProbe.Result.pass(),
+                    new OpenCodeEventNormalizer(),
+                    event -> ordered.add("event:" + event.type()),
+                    event -> ordered.add("approval:" + event.type()),
+                    "Axiom Session",
+                    "github-copilot/claude-sonnet-5",
+                    null
+            );
+
+            driver.start();
+
+            assertTrue(eventWritten.await(3, TimeUnit.SECONDS));
+            waitUntil(() -> ordered.contains("event:turn_complete"), Duration.ofSeconds(2));
+            assertEquals(List.of("event:tool_use", "approval:permission_request", "event:tool_result",
+                    "event:turn_complete"), ordered);
+
+            driver.destroy();
+        }
+    }
+
+    @Test
     void streamFailureTransitionsToError() throws Exception {
         CountDownLatch promptSubmitted = new CountDownLatch(1);
         EventResponder eventResponder = exchange -> {

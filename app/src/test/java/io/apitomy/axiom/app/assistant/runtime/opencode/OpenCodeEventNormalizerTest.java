@@ -312,7 +312,9 @@ class OpenCodeEventNormalizerTest {
     void permissionAskedWithoutKnownToolPartFallsBackToPermissionAndMetadata() {
         List<JsonNode> events = OpenCodeEventFixtures.load(TOOL_CALLS);
 
-        SseEvent event = normalize(first(events, PERMISSION_ASKED)).get(0);
+        List<SseEvent> out = normalize(first(events, PERMISSION_ASKED));
+        assertEquals(List.of("tool_use", "permission_request"), out.stream().map(SseEvent::type).toList());
+        SseEvent event = out.get(1);
 
         assertEquals("per_0eeeec345001lu7adnxbwsnqB7", event.data().path("requestId").asText());
         assertEquals("bash", event.data().path("toolName").asText());
@@ -360,7 +362,7 @@ class OpenCodeEventNormalizerTest {
         SseEvent event = normalizer.normalize("message", mapper.readTree("""
                 {"type":"permission.updated","properties":{"id":"per_2","sessionID":"s1","type":"bash",
                  "pattern":"ls","metadata":{"command":"ls"},"callID":"c9"}}
-                """)).get(0);
+                """)).get(1);
 
         assertEquals("permission_request", event.type());
         assertEquals("per_2", event.data().path("requestId").asText());
@@ -375,5 +377,43 @@ class OpenCodeEventNormalizerTest {
 
         assertTrue(normalize(first(events,
                 event -> "permission.replied".equals(event.path("type").asText()))).isEmpty());
+    }
+
+    @Test
+    void permissionAskedWhilePartPendingEmitsToolUseFirstAndOnlyOnce() throws Exception {
+        List<SseEvent> pending = normalizer.normalize("message", globPart("pending", "{}", ""));
+        assertTrue(pending.isEmpty());
+
+        List<SseEvent> permission = normalizer.normalize("message", mapper.readTree("""
+                {"type":"permission.asked","properties":{"id":"per_Y","sessionID":"s1","permission":"glob",
+                 "patterns":["*.txt"],"metadata":{"pattern":"*.txt"},"always":["*"],
+                 "tool":{"messageID":"m1","callID":"toolu_X"}}}
+                """));
+        assertEquals(2, permission.size());
+        assertEquals("tool_use", permission.get(0).type());
+        assertEquals("toolu_X", permission.get(0).data().path("id").asText());
+        assertEquals("glob", permission.get(0).data().path("name").asText());
+        assertEquals("*.txt", permission.get(0).data().path("input").path("pattern").asText());
+        assertEquals("permission_request", permission.get(1).type());
+        assertEquals("toolu_X", permission.get(1).data().path("toolUseId").asText());
+        assertEquals("glob", permission.get(1).data().path("toolName").asText());
+        assertEquals("per_Y", permission.get(1).data().path("requestId").asText());
+
+        List<SseEvent> running = normalizer.normalize("message",
+                globPart("running", "{\"pattern\":\"*.txt\"}", ""));
+        assertTrue(running.stream().noneMatch(event -> "tool_use".equals(event.type())));
+
+        List<SseEvent> completed = normalizer.normalize("message",
+                globPart("completed", "{\"pattern\":\"*.txt\"}", ",\"output\":\"a.txt\""));
+        assertEquals(1, completed.size());
+        assertEquals("tool_result", completed.get(0).type());
+        assertEquals("toolu_X", completed.get(0).data().path("toolUseId").asText());
+    }
+
+    private JsonNode globPart(String status, String input, String extra) throws Exception {
+        return mapper.readTree("{\"type\":\"message.part.updated\",\"properties\":{\"sessionID\":\"s1\","
+                + "\"part\":{\"id\":\"prt_1\",\"sessionID\":\"s1\",\"messageID\":\"m1\",\"type\":\"tool\","
+                + "\"tool\":\"glob\",\"callID\":\"toolu_X\",\"state\":{\"status\":\"" + status
+                + "\",\"input\":" + input + extra + "}}}}");
     }
 }

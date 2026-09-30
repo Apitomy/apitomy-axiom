@@ -69,7 +69,7 @@ public class OpenCodeEventNormalizer {
 
         return switch (resolvedType) {
             case "message.part.updated" -> mapMessagePart(eventData, safePayload);
-            case "permission.asked", "permission.updated" -> List.of(permission(eventData));
+            case "permission.asked", "permission.updated" -> permission(eventData);
             case "session.turn.completed", "session.idle" -> List.of(turnComplete(eventData));
             case "session.error" -> List.of(sessionError(eventData));
             default -> IGNORED_EVENT_TYPES.contains(resolvedType)
@@ -178,7 +178,11 @@ public class OpenCodeEventNormalizer {
         return eventName;
     }
 
-    private SseEvent permission(JsonNode payload) {
+    /**
+     * Maps a permission request. When OpenCode asks before the tool part left {@code pending} (e.g. glob), no
+     * {@code tool_use} has been emitted yet, so one is emitted first so the UI can attach the permission to it.
+     */
+    private List<SseEvent> permission(JsonNode payload) {
         String callId = firstNonBlank(payload.path("tool").path("callID").asText(""),
                 payload.path("callID").asText(""));
         ToolCall call = callId.isEmpty() ? null : toolCalls.get(callId);
@@ -194,10 +198,19 @@ public class OpenCodeEventNormalizer {
         } else {
             data.set("toolInput", JsonNodeFactory.instance.objectNode());
         }
-        if (!callId.isEmpty()) {
-            data.put("toolUseId", callId);
+        SseEvent request = new SseEvent("permission_request", data);
+        if (callId.isEmpty()) {
+            return List.of(request);
         }
-        return new SseEvent("permission_request", data);
+        data.put("toolUseId", callId);
+        if (!toolUsesEmitted.add(callId)) {
+            return List.of(request);
+        }
+        ObjectNode toolUse = JsonNodeFactory.instance.objectNode();
+        toolUse.put("id", callId);
+        toolUse.put("name", data.path("toolName").asText(""));
+        toolUse.set("input", data.path("toolInput"));
+        return List.of(new SseEvent("tool_use", toolUse), request);
     }
 
     private SseEvent turnComplete(JsonNode payload) {
