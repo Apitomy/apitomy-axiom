@@ -15,6 +15,15 @@ import {
 import { sseClient } from "../../config/sse";
 import { randomThinkingMessage } from "./thinkingMessages";
 
+/** Session error names that are informational notices and do not end the current turn. */
+const NON_TERMINAL_SESSION_ERRORS = new Set([
+    "McpServerUnavailable",
+    "ModelUnavailable",
+    "MessageNotDelivered",
+    "InterruptFailed",
+    "EventStreamReconnected",
+]);
+
 export type SessionMode = "normal" | "plan";
 
 interface AssistantChatPanelProps {
@@ -120,7 +129,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                 setMessages((prev) =>
                     prev.map((m) =>
                         m.type === "tool_use" && m.toolUseId === data.toolUseId
-                            ? { ...m, toolResult: (data.stdout || data.stderr || "") as string, isError: !!data.stderr && !data.stdout }
+                            ? { ...m, toolResult: (data.stdout || data.stderr || "") as string, isError: typeof data.isError === "boolean" ? data.isError : (!!data.stderr && !data.stdout) }
                             : m
                     )
                 );
@@ -473,7 +482,9 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
 
             case "session_error":
                 addMessage({ type: "system", content: (data.message as string) || "Session error" });
-                setIsProcessing(false);
+                if (!NON_TERMINAL_SESSION_ERRORS.has(data.name as string)) {
+                    setIsProcessing(false);
+                }
                 break;
         }
     }, [addMessage]);

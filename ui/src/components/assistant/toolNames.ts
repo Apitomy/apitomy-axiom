@@ -38,7 +38,7 @@ export function mcpServer(toolName: string,
         const sep = rest.indexOf("__");
         return sep > 0 ? rest.substring(0, sep) : rest || null;
     }
-    if (toolName in BUILTIN_KINDS || NON_MCP_NAMES.has(toolName)) return null;
+    if (Object.hasOwn(BUILTIN_KINDS, toolName) || NON_MCP_NAMES.has(toolName)) return null;
     const known = [...knownServers]
         .sort((a, b) => b.length - a.length)
         .find((s) => toolName.startsWith(`${s}_`));
@@ -54,8 +54,7 @@ export function mcpServer(toolName: string,
  * @returns the engine-neutral tool kind
  */
 export function toolKind(toolName: string): ToolKind {
-    const builtin = BUILTIN_KINDS[toolName];
-    if (builtin) return builtin;
+    if (Object.hasOwn(BUILTIN_KINDS, toolName)) return BUILTIN_KINDS[toolName];
     if (mcpServer(toolName) !== null) return "mcp";
     return "other";
 }

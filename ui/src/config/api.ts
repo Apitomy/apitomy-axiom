@@ -1272,6 +1272,7 @@ export interface AssistantSessionInfo {
     projectId?: number;
     projectName?: string;
     allowAll?: boolean;
+    engine?: string;
 }
 
 export interface AssistantItem {

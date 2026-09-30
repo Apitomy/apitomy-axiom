@@ -7,6 +7,7 @@ import {
     HelperTextItem,
     TextInput,
 } from "@patternfly/react-core";
+import { engineDisplayName } from "./engineNames";
 
 export interface AiConfigValues {
     engine?: string;
@@ -15,12 +16,6 @@ export interface AiConfigValues {
     maxBudgetUsd?: number;
     timeoutSeconds?: number;
 }
-
-const ENGINE_LABELS: Record<string, string> = {
-    "claude-code": "Claude Code",
-    "opencode": "OpenCode",
-    "copilot": "GitHub Copilot CLI",
-};
 
 /**
  * Shared AI configuration form fields used by Action Types,
@@ -52,7 +47,7 @@ export function AiConfigTab({ values, onChange, availableEngines, availableModel
                             <FormSelectOption
                                 key={e}
                                 value={e}
-                                label={ENGINE_LABELS[e] || e}
+                                label={engineDisplayName(e) ?? e}
                             />
                         ))}
                     </FormSelect>
