@@ -29,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OpenCodeInteractiveSessionDriverTest {
@@ -93,6 +94,7 @@ class OpenCodeInteractiveSessionDriverTest {
             driver.start();
             driver.sendUserMessage("first");
 
+            // "Busy" = no turn_complete received yet (what the old guard rejected); opencode queueing verified manually.
             assertDoesNotThrow(() -> driver.sendUserMessage("second while busy"));
             assertEquals(2, server.promptCallCount());
             JsonNode second = new ObjectMapper().readTree(server.promptBodies().get(1));
@@ -311,6 +313,33 @@ class OpenCodeInteractiveSessionDriverTest {
             assertNotNull(driver.getErrorMessage());
             assertEquals(1, server.promptCallCount());
             assertNotNull(terminal.get());
+
+            driver.destroy();
+        }
+    }
+
+    @Test
+    void sendUserMessageWrapsPromptFailureWithCauseMessage() throws Exception {
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start()) {
+            OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
+                    new FakeServerProcess(server.baseUrl()),
+                    client -> OpenCodeCapabilityProbe.Result.pass(),
+                    new OpenCodeEventNormalizer(),
+                    event -> {
+                    },
+                    event -> {
+                    },
+                    "Axiom Session",
+                    "github-copilot/claude-sonnet-5",
+                    null
+            );
+
+            driver.start();
+            IOException error = assertThrows(IOException.class, () -> driver.sendUserMessage("FAIL_WITH_500"));
+            assertTrue(error.getMessage().startsWith("Failed to submit OpenCode prompt: "), error.getMessage());
+            assertNotNull(error.getCause());
+            assertTrue(error.getMessage().contains(error.getCause().getMessage()), error.getMessage());
+            assertTrue(error.getMessage().length() > "Failed to submit OpenCode prompt: ".length());
 
             driver.destroy();
         }
@@ -818,6 +847,15 @@ class OpenCodeInteractiveSessionDriverTest {
                 String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
                 fakeOpenCodeServer.lastPromptBody.set(body);
                 fakeOpenCodeServer.promptBodies.add(body);
+                if (body.contains("FAIL_WITH_500")) {
+                    byte[] payload = "{\"name\":\"UnknownError\",\"data\":{\"message\":\"boom from server\"}}"
+                            .getBytes(StandardCharsets.UTF_8);
+                    exchange.getResponseHeaders().add("Content-Type", "application/json");
+                    exchange.sendResponseHeaders(500, payload.length);
+                    exchange.getResponseBody().write(payload);
+                    exchange.close();
+                    return;
+                }
                 if (body.contains("\"tools\":{\"allowed\"")) {
                     byte[] payload = "{\"name\":\"BadRequest\",\"data\":{\"message\":\"Expected boolean\",\"kind\":\"Payload\"}}"
                             .getBytes(StandardCharsets.UTF_8);

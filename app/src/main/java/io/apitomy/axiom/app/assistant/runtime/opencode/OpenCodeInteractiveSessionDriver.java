@@ -257,12 +257,18 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
     @Override
     public void sendUserMessage(String message) throws IOException {
         // OpenCode queues prompts natively: a prompt posted while the session is busy is answered after the
-        // current turn (verified on opencode 1.18.33), so no client-side turn guard is needed.
+        // current turn (verified on opencode 1.18.33), so no client-side turn guard is needed. Aborting the
+        // session discards prompts that are still queued: they are stored but never answered, and opencode
+        // emits one session.idle per aborted/discarded turn (also verified on opencode 1.18.33).
         ensureRunning();
         try {
             client.sendPromptAsync(openCodeSessionId, message, model, tools, systemPrompt);
         } catch (RuntimeException e) {
-            throw new IOException("Failed to submit OpenCode prompt", e);
+            String detail = e.getMessage();
+            if (detail == null || detail.isBlank()) {
+                detail = e.getClass().getSimpleName();
+            }
+            throw new IOException("Failed to submit OpenCode prompt: " + detail, e);
         }
     }
 
