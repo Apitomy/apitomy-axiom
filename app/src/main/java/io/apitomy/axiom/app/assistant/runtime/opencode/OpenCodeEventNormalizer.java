@@ -46,6 +46,11 @@ public class OpenCodeEventNormalizer {
     private final Set<String> toolResultsEmitted = ConcurrentHashMap.newKeySet();
     private final Set<String> reasoningPartsSeen = ConcurrentHashMap.newKeySet();
     private final Map<String, String> lastTextByPart = new ConcurrentHashMap<>();
+    private final Map<String, ToolCall> toolCalls = new ConcurrentHashMap<>();
+
+    /** Tool name and input recorded from a tool part, keyed by call ID. */
+    private record ToolCall(String name, JsonNode input) {
+    }
 
     /**
      * Converts a single OpenCode event into zero or more normalized assistant events.
@@ -64,8 +69,7 @@ public class OpenCodeEventNormalizer {
 
         return switch (resolvedType) {
             case "message.part.updated" -> mapMessagePart(eventData, safePayload);
-            case "session.permission.requested", "permission.asked", "permission.v2.asked" ->
-                    List.of(permission(eventData));
+            case "permission.asked", "permission.updated" -> List.of(permission(eventData));
             case "session.turn.completed", "session.idle" -> List.of(turnComplete(eventData));
             case "session.error" -> List.of(sessionError(eventData));
             default -> IGNORED_EVENT_TYPES.contains(resolvedType)
@@ -112,6 +116,15 @@ public class OpenCodeEventNormalizer {
     private List<SseEvent> mapToolPart(JsonNode part) {
         String callId = firstNonBlank(part.path("callID").asText(""), part.path("id").asText(""));
         JsonNode state = part.path("state");
+        if (!callId.isEmpty()) {
+            JsonNode input = state.path("input");
+            ToolCall previous = toolCalls.get(callId);
+            boolean hasInput = input.isObject() && input.size() > 0;
+            if (previous == null || hasInput) {
+                toolCalls.put(callId, new ToolCall(part.path("tool").asText(""),
+                        hasInput ? input : JsonNodeFactory.instance.objectNode()));
+            }
+        }
         String status = state.path("status").asText("");
         if (callId.isEmpty() || "pending".equals(status)) {
             return Collections.emptyList();
@@ -163,21 +176,23 @@ public class OpenCodeEventNormalizer {
     }
 
     private SseEvent permission(JsonNode payload) {
+        String callId = firstNonBlank(payload.path("tool").path("callID").asText(""),
+                payload.path("callID").asText(""));
+        ToolCall call = callId.isEmpty() ? null : toolCalls.get(callId);
+        String permissionKey = firstNonBlank(payload.path("permission").asText(""),
+                payload.path("type").asText(""));
         ObjectNode data = JsonNodeFactory.instance.objectNode();
-        String requestId = firstNonBlank(
-                payload.path("requestId").asText(""),
-                payload.path("requestID").asText(""),
-                payload.path("permissionId").asText(""),
-                payload.path("permissionID").asText("")
-        );
-        data.put("requestId", requestId);
-        data.put("toolName", payload.path("toolName").asText(""));
-        data.set("toolInput", payload.path("toolInput"));
-        if (!payload.path("subagentToolUseId").asText("").isEmpty()) {
-            data.put("subagentToolUseId", payload.path("subagentToolUseId").asText(""));
+        data.put("requestId", payload.path("id").asText(""));
+        data.put("toolName", call != null && !call.name().isEmpty() ? call.name() : permissionKey);
+        if (call != null && call.input().size() > 0) {
+            data.set("toolInput", call.input());
+        } else if (payload.path("metadata").isObject()) {
+            data.set("toolInput", payload.path("metadata"));
+        } else {
+            data.set("toolInput", JsonNodeFactory.instance.objectNode());
         }
-        if (!payload.path("agentId").asText("").isEmpty()) {
-            data.put("agentId", payload.path("agentId").asText(""));
+        if (!callId.isEmpty()) {
+            data.put("toolUseId", callId);
         }
         return new SseEvent("permission_request", data);
     }
