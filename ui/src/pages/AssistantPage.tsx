@@ -38,6 +38,7 @@ import {
     type AssistantSessionInfo,
 } from "../config/api";
 import { CreateSessionModal } from "../components/assistant/CreateSessionModal";
+import { engineColor, engineDisplayName } from "../components/engineNames";
 import "./AssistantPage.css";
 
 const STATUS_COLORS: Record<string, "blue" | "green" | "red" | "grey"> = {
@@ -245,6 +246,11 @@ export function AssistantPage() {
                                     Created {new Date(s.createdAt).toLocaleString()}
                                 </div>
                             </div>
+                            {engineDisplayName(s.engine) && (
+                                <Label isCompact color={engineColor(s.engine)}>
+                                    {engineDisplayName(s.engine)}
+                                </Label>
+                            )}
                             <Label isCompact color={STATUS_COLORS[s.status] || "grey"}>
                                 {s.status}
                             </Label>

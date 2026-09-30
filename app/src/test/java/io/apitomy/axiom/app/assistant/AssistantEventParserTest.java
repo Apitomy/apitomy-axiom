@@ -122,6 +122,32 @@ class AssistantEventParserTest {
     }
 
     @Test
+    void parseUserToolResultSuccessHasIsErrorFalse() {
+        String line = """
+                {"type":"user","tool_use_result":{"stdout":"ok","stderr":"","interrupted":false},"message":{"content":[{"type":"tool_result","tool_use_id":"tu-1"}]}}""";
+
+        List<SseEvent> events = parser.parse(line);
+
+        assertEquals(1, events.size());
+        assertTrue(events.get(0).data().has("isError"));
+        assertFalse(events.get(0).data().path("isError").asBoolean(true));
+    }
+
+    @Test
+    void parseUserToolResultErrorWithStringResult() {
+        String line = """
+                {"type":"user","tool_use_result":"Error: File does not exist","message":{"content":[{"type":"tool_result","tool_use_id":"tu_1","is_error":true,"content":"File does not exist"}]}}""";
+
+        List<SseEvent> events = parser.parse(line);
+
+        assertEquals(1, events.size());
+        assertEquals("tool_result", events.get(0).type());
+        assertEquals("tu_1", events.get(0).data().path("toolUseId").asText());
+        assertTrue(events.get(0).data().path("isError").asBoolean(false));
+        assertTrue(events.get(0).data().path("stderr").asText().contains("File does not exist"));
+    }
+
+    @Test
     void parseUserWithoutToolResultIsIgnored() {
         String line = """
                 {"type":"user","message":{"content":[{"type":"text","text":"hello"}]}}""";

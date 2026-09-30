@@ -138,6 +138,8 @@ class OpenCodeEventNormalizerTest {
         assertEquals("captured\n", out.get(0).data().path("stdout").asText());
         assertEquals("", out.get(0).data().path("stderr").asText());
         assertFalse(out.get(0).data().path("interrupted").asBoolean(true));
+        assertTrue(out.get(0).data().has("isError"));
+        assertFalse(out.get(0).data().path("isError").asBoolean(true));
     }
 
     @Test
@@ -153,6 +155,7 @@ class OpenCodeEventNormalizerTest {
         assertEquals("", out.get(0).data().path("stdout").asText());
         assertEquals("File not found: /tmp/opencode/cap/does-not-exist.txt",
                 out.get(0).data().path("stderr").asText());
+        assertTrue(out.get(0).data().path("isError").asBoolean(false));
     }
 
     @Test

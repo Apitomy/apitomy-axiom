@@ -15,9 +15,11 @@ import {
 import {
     createAssistantSession,
     fetchAssistantTemplates,
+    fetchSystemConfig,
     type AssistantSessionInfo,
     type SessionTemplate,
 } from "../../config/api";
+import { engineColor, engineDisplayName } from "../engineNames";
 import "../../pages/AssistantPage.css";
 
 const FUN_WORDS = [
@@ -56,6 +58,7 @@ export function CreateSessionModal({
     const [newName, setNewName] = useState("");
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState("");
+    const [defaultEngine, setDefaultEngine] = useState<string | null>(null);
     const createButtonRef = useRef<HTMLButtonElement>(null);
 
     useEffect(() => {
@@ -66,6 +69,21 @@ export function CreateSessionModal({
             setTemplateFilter("");
         }
     }, [isOpen]);
+
+    useEffect(() => {
+        if (isOpen && defaultEngine === null) {
+            fetchSystemConfig()
+                .then((c) => setDefaultEngine(c.defaultEngine || c.engine || ""))
+                .catch(console.error);
+        }
+    }, [isOpen, defaultEngine]);
+
+    const templateEngineLabel = (t: SessionTemplate): string | null => {
+        const explicit = engineDisplayName(t.engine);
+        if (explicit) return explicit;
+        const fallback = engineDisplayName(defaultEngine);
+        return fallback ? `Default (${fallback})` : null;
+    };
 
     useEffect(() => {
         if (isNameModalOpen) {
@@ -146,6 +164,12 @@ export function CreateSessionModal({
                                         {t.builtIn && (
                                             <Label className="axiom-assistant-page__template-item__badge"
                                                 isCompact>Built-in</Label>
+                                        )}
+                                        {templateEngineLabel(t) && (
+                                            <Label className="axiom-assistant-page__template-item__badge"
+                                                color={engineColor(t.engine || defaultEngine)} isCompact>
+                                                {templateEngineLabel(t)}
+                                            </Label>
                                         )}
                                     </div>
                                     {t.description && (

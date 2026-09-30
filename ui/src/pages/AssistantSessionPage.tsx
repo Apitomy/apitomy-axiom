@@ -38,6 +38,7 @@ import {
     type AutoApprovalRule,
     type AssistantApplyResult,
 } from "../config/api";
+import { engineColor, engineDisplayName } from "../components/engineNames";
 import "./AssistantSessionPage.css";
 
 export function AssistantSessionPage() {
@@ -301,6 +302,12 @@ export function AssistantSessionPage() {
                             Plan Mode
                         </Label>
                     )}
+                    {engineDisplayName(session.engine) && (
+                        <Label color={engineColor(session.engine)} isCompact
+                            className="axiom-session-page__header-label">
+                            {engineDisplayName(session.engine)}
+                        </Label>
+                    )}
                     {sessionModel && (
                         <Label color="grey" isCompact className="axiom-session-page__header-label">
                             {sessionModel}
@@ -312,6 +319,15 @@ export function AssistantSessionPage() {
                         }>
                             <Label color="grey" isCompact className="axiom-session-page__header-label">
                                 ${sessionCost.toFixed(4)}
+                            </Label>
+                        </Tooltip>
+                    )}
+                    {sessionCost <= 0 && sessionInputTokens + sessionOutputTokens > 0 && (
+                        <Tooltip content={
+                            `Tokens in: ${sessionInputTokens.toLocaleString()} / out: ${sessionOutputTokens.toLocaleString()}`
+                        }>
+                            <Label color="grey" isCompact className="axiom-session-page__header-label">
+                                {`${(sessionInputTokens + sessionOutputTokens).toLocaleString()} tokens`}
                             </Label>
                         </Tooltip>
                     )}

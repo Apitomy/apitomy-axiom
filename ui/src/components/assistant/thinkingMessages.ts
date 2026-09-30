@@ -1,5 +1,5 @@
 export const THINKING_MESSAGES = [
-    "Claude is working...",
+    "Working...",
     "Pondering the mysteries of code...",
     "Consulting the silicon oracle...",
     "Rummaging through the codebase...",
@@ -12,7 +12,7 @@ export const THINKING_MESSAGES = [
     "I'll be back... with an answer...",
     "Using the Force...",
     "Phoning home for help...",
-    "Nobody puts Claude in a corner...",
+    "Thinking it through...",
     "Making it so...",
     "Feeling the need... the need for speed...",
     "Living long and processing...",
