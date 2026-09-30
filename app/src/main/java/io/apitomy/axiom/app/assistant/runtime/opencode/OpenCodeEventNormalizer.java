@@ -265,6 +265,7 @@ public class OpenCodeEventNormalizer {
     }
 
     private SseEvent turnComplete(JsonNode payload) {
+        // Both session.idle and the session.turn.completed alias use the collected usage, not payload fields.
         List<MessageUsage> usages = new ArrayList<>(turnUsage.values());
         double turnCost = usages.stream().mapToDouble(MessageUsage::cost).sum();
         sessionCostUsd += turnCost;

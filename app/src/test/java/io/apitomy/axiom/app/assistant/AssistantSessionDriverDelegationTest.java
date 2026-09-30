@@ -104,6 +104,21 @@ class AssistantSessionDriverDelegationTest {
         assertEquals(3, session.getTurnCount());
     }
 
+    @Test
+    void sessionCostCarriesAcrossConversationReset() throws Exception {
+        AssistantSession session = new AssistantSession(
+                "test", "general-assistant", Path.of("/tmp/s"), Path.of("/tmp/w"),
+                List.of(), Map.of(), "claude-code", null, null, new RecordingDriver());
+        session.start();
+
+        session.handleDriverEvent(turnComplete(0.0291675, 10, 20, 100));
+        session.handleDriverEvent(new SseEvent("conversation_reset", JsonNodeFactory.instance.objectNode()));
+        session.handleDriverEvent(turnComplete(0.0, 0, 0, 0));
+        session.handleDriverEvent(turnComplete(0.0133689, 5, 6, 50));
+
+        assertEquals(0.0291675 + 0.0133689, session.getTotalCostUsd(), 1e-9);
+    }
+
     private static SseEvent turnComplete(double cost, long in, long out, long durationMs) {
         ObjectNode data = JsonNodeFactory.instance.objectNode();
         data.put("costUsd", cost);
