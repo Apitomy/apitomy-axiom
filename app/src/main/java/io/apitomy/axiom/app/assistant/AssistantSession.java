@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.DoubleAdder;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -53,7 +53,7 @@ public class AssistantSession {
     private volatile Instant lastActivityAt;
     private final Instant createdAt;
 
-    private final DoubleAdder totalCostUsd = new DoubleAdder();
+    private final AtomicReference<Double> totalCostUsd = new AtomicReference<>(0.0);
     private final AtomicLong totalInputTokens = new AtomicLong();
     private final AtomicLong totalOutputTokens = new AtomicLong();
     private final AtomicLong totalDurationMs = new AtomicLong();
@@ -393,7 +393,7 @@ public class AssistantSession {
 
     /** Returns the accumulated cost in USD across all turns. */
     public double getTotalCostUsd() {
-        return totalCostUsd.sum();
+        return totalCostUsd.get();
     }
 
     /** Returns the accumulated input token count across all turns. */
@@ -624,8 +624,14 @@ public class AssistantSession {
         return true;
     }
 
+    /**
+     * Accumulates usage from a {@code turn_complete} event. Tokens, duration and turn count are per-turn and
+     * are summed. {@code costUsd} is the cumulative session cost (Claude's {@code total_cost_usd}; the
+     * OpenCode normalizer matches it), so the running maximum is recorded instead of a sum.
+     */
     private void accumulateCost(SseEvent event) {
-        totalCostUsd.add(event.data().path("costUsd").asDouble(0));
+        double turnCost = event.data().path("costUsd").asDouble(0);
+        totalCostUsd.accumulateAndGet(turnCost, (a, b) -> Math.max(a, b));
         totalInputTokens.addAndGet(event.data().path("inputTokens").asLong(0));
         totalOutputTokens.addAndGet(event.data().path("outputTokens").asLong(0));
         totalDurationMs.addAndGet(event.data().path("durationMs").asLong(0));

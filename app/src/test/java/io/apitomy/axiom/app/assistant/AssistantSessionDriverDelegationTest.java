@@ -2,6 +2,7 @@ package io.apitomy.axiom.app.assistant;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
 import io.apitomy.axiom.app.assistant.runtime.InteractiveSessionDriver;
 import org.junit.jupiter.api.Test;
@@ -83,6 +84,33 @@ class AssistantSessionDriverDelegationTest {
         List<SseEvent> history = session.getEventHistory();
         assertEquals("Message was not delivered: IllegalStateException",
                 history.get(history.size() - 1).data().path("message").asText());
+    }
+
+    @Test
+    void sessionCostUsesCumulativeTurnCostAndSumsTokens() throws Exception {
+        AssistantSession session = new AssistantSession(
+                "test", "general-assistant", Path.of("/tmp/s"), Path.of("/tmp/w"),
+                List.of(), Map.of(), "claude-code", null, null, new RecordingDriver());
+        session.start();
+
+        session.handleDriverEvent(turnComplete(0.0293125, 10, 198, 4511));
+        session.handleDriverEvent(turnComplete(0.03579, 22660, 44, 1419));
+        session.handleDriverEvent(turnComplete(0.0, 0, 0, 0));
+
+        assertEquals(0.03579, session.getTotalCostUsd(), 1e-9);
+        assertEquals(22670, session.getTotalInputTokens());
+        assertEquals(242, session.getTotalOutputTokens());
+        assertEquals(5930, session.getTotalDurationMs());
+        assertEquals(3, session.getTurnCount());
+    }
+
+    private static SseEvent turnComplete(double cost, long in, long out, long durationMs) {
+        ObjectNode data = JsonNodeFactory.instance.objectNode();
+        data.put("costUsd", cost);
+        data.put("inputTokens", in);
+        data.put("outputTokens", out);
+        data.put("durationMs", durationMs);
+        return new SseEvent("turn_complete", data);
     }
 
     static class RecordingDriver implements InteractiveSessionDriver {
