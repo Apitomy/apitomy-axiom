@@ -2,6 +2,7 @@ package io.apitomy.axiom.app.assistant.runtime.opencode;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
 
@@ -39,6 +40,9 @@ public class OpenCodeEventNormalizer {
             "todo.updated");
 
     /** Message part types that are understood but not surfaced to the UI. */
+    /** Permission keys that guard a tool call rather than name a tool (e.g. directory access). */
+    private static final Set<String> GUARD_PERMISSIONS = Set.of("external_directory", "doom_loop");
+
     private static final Set<String> IGNORED_PART_TYPES = Set.of(
             "step-start", "step-finish", "snapshot", "patch", "file", "agent", "retry", "compaction", "subtask");
 
@@ -46,6 +50,11 @@ public class OpenCodeEventNormalizer {
     private final Set<String> toolResultsEmitted = ConcurrentHashMap.newKeySet();
     private final Set<String> reasoningPartsSeen = ConcurrentHashMap.newKeySet();
     private final Map<String, String> lastTextByPart = new ConcurrentHashMap<>();
+    private final Map<String, ToolCall> toolCalls = new ConcurrentHashMap<>();
+
+    /** Tool name and input recorded from a tool part, keyed by call ID. */
+    private record ToolCall(String name, JsonNode input) {
+    }
 
     /**
      * Converts a single OpenCode event into zero or more normalized assistant events.
@@ -64,8 +73,7 @@ public class OpenCodeEventNormalizer {
 
         return switch (resolvedType) {
             case "message.part.updated" -> mapMessagePart(eventData, safePayload);
-            case "session.permission.requested", "permission.asked", "permission.v2.asked" ->
-                    List.of(permission(eventData));
+            case "permission.asked", "permission.updated" -> permission(eventData);
             case "session.turn.completed", "session.idle" -> List.of(turnComplete(eventData));
             case "session.error" -> List.of(sessionError(eventData));
             default -> IGNORED_EVENT_TYPES.contains(resolvedType)
@@ -112,6 +120,15 @@ public class OpenCodeEventNormalizer {
     private List<SseEvent> mapToolPart(JsonNode part) {
         String callId = firstNonBlank(part.path("callID").asText(""), part.path("id").asText(""));
         JsonNode state = part.path("state");
+        if (!callId.isEmpty()) {
+            JsonNode input = state.path("input");
+            ToolCall previous = toolCalls.get(callId);
+            boolean hasInput = input.isObject() && input.size() > 0;
+            if (previous == null || hasInput) {
+                toolCalls.put(callId, new ToolCall(part.path("tool").asText(""),
+                        hasInput ? input : JsonNodeFactory.instance.objectNode()));
+            }
+        }
         String status = state.path("status").asText("");
         if (callId.isEmpty() || "pending".equals(status)) {
             return Collections.emptyList();
@@ -139,6 +156,9 @@ public class OpenCodeEventNormalizer {
             data.put("interrupted", false);
             events.add(new SseEvent("tool_result", data));
         }
+        if ("completed".equals(status) || "error".equals(status)) {
+            toolCalls.remove(callId);
+        }
         return events;
     }
 
@@ -162,24 +182,56 @@ public class OpenCodeEventNormalizer {
         return eventName;
     }
 
-    private SseEvent permission(JsonNode payload) {
+    /**
+     * Maps a permission request. When OpenCode asks before the tool part left {@code pending} (e.g. glob), no
+     * {@code tool_use} has been emitted yet, so one is emitted first so the UI can attach the permission to it.
+     */
+    private List<SseEvent> permission(JsonNode payload) {
+        String callId = firstNonBlank(payload.path("tool").path("callID").asText(""),
+                payload.path("callID").asText(""));
+        ToolCall call = callId.isEmpty() ? null : toolCalls.get(callId);
+        String permissionKey = firstNonBlank(payload.path("permission").asText(""),
+                payload.path("type").asText(""));
+        String callName = call != null && !call.name().isEmpty() ? call.name() : permissionKey;
+        ArrayNode patterns = JsonNodeFactory.instance.arrayNode();
+        if (payload.path("patterns").isArray()) {
+            payload.path("patterns").forEach(patterns::add);
+        } else if (payload.path("pattern").isTextual()) {
+            patterns.add(payload.path("pattern").asText());
+        }
         ObjectNode data = JsonNodeFactory.instance.objectNode();
-        String requestId = firstNonBlank(
-                payload.path("requestId").asText(""),
-                payload.path("requestID").asText(""),
-                payload.path("permissionId").asText(""),
-                payload.path("permissionID").asText("")
-        );
-        data.put("requestId", requestId);
-        data.put("toolName", payload.path("toolName").asText(""));
-        data.set("toolInput", payload.path("toolInput"));
-        if (!payload.path("subagentToolUseId").asText("").isEmpty()) {
-            data.put("subagentToolUseId", payload.path("subagentToolUseId").asText(""));
+        data.put("requestId", payload.path("id").asText(""));
+        data.put("permission", permissionKey);
+        data.set("patterns", patterns);
+        boolean guard = GUARD_PERMISSIONS.contains(permissionKey);
+        data.put("toolName", guard ? permissionKey : callName);
+        if (guard) {
+            ObjectNode guardInput = JsonNodeFactory.instance.objectNode();
+            guardInput.set("patterns", patterns.deepCopy());
+            if (payload.path("metadata").isObject()) {
+                guardInput.setAll((ObjectNode) payload.path("metadata"));
+            }
+            data.set("toolInput", guardInput);
+        } else if (call != null && call.input().size() > 0) {
+            data.set("toolInput", call.input());
+        } else if (payload.path("metadata").isObject()) {
+            data.set("toolInput", payload.path("metadata"));
+        } else {
+            data.set("toolInput", JsonNodeFactory.instance.objectNode());
         }
-        if (!payload.path("agentId").asText("").isEmpty()) {
-            data.put("agentId", payload.path("agentId").asText(""));
+        SseEvent request = new SseEvent("permission_request", data);
+        if (callId.isEmpty()) {
+            return List.of(request);
         }
-        return new SseEvent("permission_request", data);
+        data.put("toolUseId", callId);
+        if (!toolUsesEmitted.add(callId)) {
+            return List.of(request);
+        }
+        ObjectNode toolUse = JsonNodeFactory.instance.objectNode();
+        toolUse.put("id", callId);
+        toolUse.put("name", callName);
+        toolUse.set("input", data.path("toolInput"));
+        return List.of(new SseEvent("tool_use", toolUse), request);
     }
 
     private SseEvent turnComplete(JsonNode payload) {

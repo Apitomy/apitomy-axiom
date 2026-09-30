@@ -30,6 +30,8 @@ export interface ChatMessage {
     permissionId?: string;
     permissionResolved?: boolean;
     permissionAllowed?: boolean;
+    permissionType?: string;
+    permissionPatterns?: string[];
     elapsedSeconds?: number;
     rawPayload?: string;
 }
@@ -151,6 +153,8 @@ const MessageItem = memo(function MessageItem({
                         permissionId={msg.permissionId}
                         permissionResolved={msg.permissionResolved}
                         permissionAllowed={msg.permissionAllowed}
+                        permissionType={msg.permissionType}
+                        permissionPatterns={msg.permissionPatterns}
                         onPermissionRespond={onPermissionRespond}
                         onCreateAutoApproval={onCreateAutoApproval}
                         onSubagentClick={onSubagentClick}

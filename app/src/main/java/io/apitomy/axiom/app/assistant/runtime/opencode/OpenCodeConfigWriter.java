@@ -13,8 +13,8 @@ import java.util.Map;
 
 /**
  * Builds and writes the per-session OpenCode configuration file. The file is passed to
- * {@code opencode serve} via the {@code OPENCODE_CONFIG} environment variable and currently
- * contains the session's MCP servers.
+ * {@code opencode serve} via the {@code OPENCODE_CONFIG} environment variable and contains the
+ * session's MCP servers and, when the session has allowed tools, its permission rules.
  */
 public final class OpenCodeConfigWriter {
 
@@ -34,18 +34,33 @@ public final class OpenCodeConfigWriter {
      * @return the config document
      */
     public static ObjectNode buildConfig(Map<String, McpServerConfig> servers) {
+        return buildConfig(servers, null);
+    }
+
+    /**
+     * Builds an OpenCode config document containing an {@code mcp} block for the given servers and,
+     * when non-null, a {@code permission} block.
+     *
+     * @param servers MCP servers keyed by server name; may be null
+     * @param permission OpenCode permission block; may be null
+     * @return the config document
+     */
+    public static ObjectNode buildConfig(Map<String, McpServerConfig> servers, ObjectNode permission) {
         ObjectNode root = MAPPER.createObjectNode();
         root.put("$schema", SCHEMA_URL);
         ObjectNode mcp = root.putObject("mcp");
-        if (servers == null) {
-            return root;
+        if (servers != null) {
+            servers.forEach((String name, McpServerConfig config) -> mcp.set(name, toServerNode(config)));
         }
-        servers.forEach((String name, McpServerConfig config) -> mcp.set(name, toServerNode(config)));
+        if (permission != null) {
+            root.set("permission", permission);
+        }
         return root;
     }
 
     /**
-     * Writes {@value #CONFIG_FILE_NAME} into the session directory when there are MCP servers.
+     * Writes {@value #CONFIG_FILE_NAME} into the session directory when there are MCP servers, without a
+     * {@code permission} block (equivalent to {@code writeConfig(sessionDirectory, servers, null)}).
      * The file may contain secrets (server environment), so it is made owner-readable only where
      * POSIX permissions are supported.
      *
@@ -56,11 +71,27 @@ public final class OpenCodeConfigWriter {
      */
     public static Path writeConfig(Path sessionDirectory, Map<String, McpServerConfig> servers)
             throws IOException {
-        if (servers == null || servers.isEmpty()) {
+        return writeConfig(sessionDirectory, servers, null);
+    }
+
+    /**
+     * Writes {@value #CONFIG_FILE_NAME} into the session directory when there are MCP servers or a
+     * permission block. The file may contain secrets (server environment), so it is made
+     * owner-readable only where POSIX permissions are supported.
+     *
+     * @param sessionDirectory Axiom session directory
+     * @param servers MCP servers keyed by server name; may be null
+     * @param permission OpenCode permission block; may be null
+     * @return path of the written file, or {@code null} if there were no servers and no permission block
+     * @throws IOException if the file cannot be written
+     */
+    public static Path writeConfig(Path sessionDirectory, Map<String, McpServerConfig> servers,
+                                   ObjectNode permission) throws IOException {
+        if ((servers == null || servers.isEmpty()) && permission == null) {
             return null;
         }
         Path file = sessionDirectory.resolve(CONFIG_FILE_NAME);
-        Files.writeString(file, buildConfig(servers).toPrettyString());
+        Files.writeString(file, buildConfig(servers, permission).toPrettyString());
         try {
             Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("rw-------"));
         } catch (UnsupportedOperationException e) {

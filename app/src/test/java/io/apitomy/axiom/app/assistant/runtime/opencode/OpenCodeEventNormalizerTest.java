@@ -30,21 +30,6 @@ class OpenCodeEventNormalizerTest {
     }
 
     @Test
-    void mapsPermissionRequestEvent() throws Exception {
-        JsonNode payload = mapper.readTree("""
-                {"requestId":"perm-1","toolName":"Bash","toolInput":{"command":"ls"}}
-                """);
-
-        List<SseEvent> out = normalizer.normalize("session.permission.requested", payload);
-
-        assertEquals(1, out.size());
-        assertEquals("permission_request", out.get(0).type());
-        assertEquals("perm-1", out.get(0).data().path("requestId").asText());
-        assertEquals("Bash", out.get(0).data().path("toolName").asText());
-        assertEquals("ls", out.get(0).data().path("toolInput").path("command").asText());
-    }
-
-    @Test
     void mapsTurnCompletionEvent() throws Exception {
         JsonNode payload = mapper.readTree("""
                 {"sessionID":"s1","costUsd":0.02,"inputTokens":11,"outputTokens":7,"success":true}
@@ -70,20 +55,6 @@ class OpenCodeEventNormalizerTest {
         List<SseEvent> out = normalizer.normalize(null, payload);
 
         assertTrue(out.isEmpty());
-    }
-
-    @Test
-    void mapsEnvelopePermissionAskedEvent() throws Exception {
-        JsonNode payload = mapper.readTree("""
-                {"type":"permission.asked","properties":{"requestID":"per_1","toolName":"Bash","toolInput":{"command":"ls"}}}
-                """);
-
-        List<SseEvent> out = normalizer.normalize("message", payload);
-
-        assertEquals(1, out.size());
-        assertEquals("permission_request", out.get(0).type());
-        assertEquals("per_1", out.get(0).data().path("requestId").asText());
-        assertEquals("Bash", out.get(0).data().path("toolName").asText());
     }
 
     @Test
@@ -316,5 +287,199 @@ class OpenCodeEventNormalizerTest {
         assertEquals(1, out.size());
         assertEquals("unhandled_event", out.get(0).type());
         assertEquals("message.part.updated:hologram", out.get(0).data().path("rawType").asText());
+    }
+
+    private static final java.util.function.Predicate<JsonNode> PERMISSION_ASKED =
+            event -> "permission.asked".equals(event.path("type").asText());
+
+    @Test
+    void permissionAskedUsesIdAndToolFromPrecedingToolPart() {
+        List<JsonNode> events = OpenCodeEventFixtures.load(TOOL_CALLS);
+        normalize(first(events, toolPart("bash", "running")));
+
+        List<SseEvent> out = normalize(first(events, PERMISSION_ASKED));
+
+        assertEquals(1, out.size());
+        SseEvent event = out.get(0);
+        assertEquals("permission_request", event.type());
+        assertEquals("per_0eeeec345001lu7adnxbwsnqB7", event.data().path("requestId").asText());
+        assertEquals("bash", event.data().path("toolName").asText());
+        assertEquals("echo captured", event.data().path("toolInput").path("command").asText());
+        assertEquals("toolu_01LG86GQEhToDrjJWeL12dQw", event.data().path("toolUseId").asText());
+    }
+
+    @Test
+    void permissionAskedWithoutKnownToolPartFallsBackToPermissionAndMetadata() {
+        List<JsonNode> events = OpenCodeEventFixtures.load(TOOL_CALLS);
+
+        List<SseEvent> out = normalize(first(events, PERMISSION_ASKED));
+        assertEquals(List.of("tool_use", "permission_request"), out.stream().map(SseEvent::type).toList());
+        SseEvent event = out.get(1);
+
+        assertEquals("per_0eeeec345001lu7adnxbwsnqB7", event.data().path("requestId").asText());
+        assertEquals("bash", event.data().path("toolName").asText());
+        assertEquals("echo captured", event.data().path("toolInput").path("command").asText());
+    }
+
+    @Test
+    void permissionForEditUsesToolPartNameNotPermissionKey() throws Exception {
+        normalizer.normalize("message", mapper.readTree("""
+                {"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","sessionID":"s1",
+                 "messageID":"m1","type":"tool","tool":"write","callID":"c1",
+                 "state":{"status":"running","input":{"filePath":"/w/tools/x.json","content":"{}"}}}}}
+                """));
+
+        SseEvent event = normalizer.normalize("message", mapper.readTree("""
+                {"type":"permission.asked","properties":{"id":"per_1","sessionID":"s1","permission":"edit",
+                 "patterns":["tools/x.json"],"metadata":{"filepath":"/w/tools/x.json"},
+                 "tool":{"messageID":"m1","callID":"c1"}}}
+                """)).get(0);
+
+        assertEquals("write", event.data().path("toolName").asText());
+        assertEquals("/w/tools/x.json", event.data().path("toolInput").path("filePath").asText());
+        assertEquals("c1", event.data().path("toolUseId").asText());
+    }
+
+    @Test
+    void completedToolPartForgetsToolCallForLaterPermissions() throws Exception {
+        normalizer.normalize("message", mapper.readTree("""
+                {"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","sessionID":"s1",
+                 "messageID":"m1","type":"tool","tool":"write","callID":"c1",
+                 "state":{"status":"completed","input":{"filePath":"/w/x.json"},"output":"ok"}}}}
+                """));
+
+        SseEvent event = normalizer.normalize("message", mapper.readTree("""
+                {"type":"permission.asked","properties":{"id":"per_1","sessionID":"s1","permission":"edit",
+                 "metadata":{"filepath":"/w/other.json"},"tool":{"messageID":"m1","callID":"c1"}}}
+                """)).get(0);
+
+        assertEquals("edit", event.data().path("toolName").asText());
+        assertEquals("/w/other.json", event.data().path("toolInput").path("filepath").asText());
+    }
+
+    @Test
+    void legacyPermissionUpdatedEventIsMappedLikeAsked() throws Exception {
+        SseEvent event = normalizer.normalize("message", mapper.readTree("""
+                {"type":"permission.updated","properties":{"id":"per_2","sessionID":"s1","type":"bash",
+                 "pattern":"ls","metadata":{"command":"ls"},"callID":"c9"}}
+                """)).get(1);
+
+        assertEquals("permission_request", event.type());
+        assertEquals("per_2", event.data().path("requestId").asText());
+        assertEquals("bash", event.data().path("toolName").asText());
+        assertEquals("ls", event.data().path("toolInput").path("command").asText());
+        assertEquals("c9", event.data().path("toolUseId").asText());
+    }
+
+    @Test
+    void permissionRepliedEmitsNothing() {
+        List<JsonNode> events = OpenCodeEventFixtures.load(TOOL_CALLS);
+
+        assertTrue(normalize(first(events,
+                event -> "permission.replied".equals(event.path("type").asText()))).isEmpty());
+    }
+
+    @Test
+    void permissionAskedWhilePartPendingEmitsToolUseFirstAndOnlyOnce() throws Exception {
+        List<SseEvent> pending = normalizer.normalize("message", globPart("pending", "{}", ""));
+        assertTrue(pending.isEmpty());
+
+        List<SseEvent> permission = normalizer.normalize("message", mapper.readTree("""
+                {"type":"permission.asked","properties":{"id":"per_Y","sessionID":"s1","permission":"glob",
+                 "patterns":["*.txt"],"metadata":{"pattern":"*.txt"},"always":["*"],
+                 "tool":{"messageID":"m1","callID":"toolu_X"}}}
+                """));
+        assertEquals(2, permission.size());
+        assertEquals("tool_use", permission.get(0).type());
+        assertEquals("toolu_X", permission.get(0).data().path("id").asText());
+        assertEquals("glob", permission.get(0).data().path("name").asText());
+        assertEquals("*.txt", permission.get(0).data().path("input").path("pattern").asText());
+        assertEquals("permission_request", permission.get(1).type());
+        assertEquals("toolu_X", permission.get(1).data().path("toolUseId").asText());
+        assertEquals("glob", permission.get(1).data().path("toolName").asText());
+        assertEquals("per_Y", permission.get(1).data().path("requestId").asText());
+
+        List<SseEvent> running = normalizer.normalize("message",
+                globPart("running", "{\"pattern\":\"*.txt\"}", ""));
+        assertTrue(running.stream().noneMatch(event -> "tool_use".equals(event.type())));
+
+        List<SseEvent> completed = normalizer.normalize("message",
+                globPart("completed", "{\"pattern\":\"*.txt\"}", ",\"output\":\"a.txt\""));
+        assertEquals(1, completed.size());
+        assertEquals("tool_result", completed.get(0).type());
+        assertEquals("toolu_X", completed.get(0).data().path("toolUseId").asText());
+    }
+
+    @Test
+    void externalDirectoryPermissionAfterToolPermissionUsesGuardKeyAndSameToolUseId() throws Exception {
+        assertTrue(normalizer.normalize("message", globPart("pending", "{}", "")).isEmpty());
+
+        List<SseEvent> first = normalizer.normalize("message", mapper.readTree("""
+                {"type":"permission.asked","properties":{"id":"P1","sessionID":"s1","permission":"glob",
+                 "patterns":["**/*.java"],"metadata":{"pattern":"**/*.java"},
+                 "tool":{"messageID":"m1","callID":"toolu_X"}}}
+                """));
+        assertEquals(List.of("tool_use", "permission_request"), first.stream().map(SseEvent::type).toList());
+        assertEquals("glob", first.get(0).data().path("name").asText());
+        JsonNode p1 = first.get(1).data();
+        assertEquals("glob", p1.path("toolName").asText());
+        assertEquals("glob", p1.path("permission").asText());
+        assertEquals("**/*.java", p1.path("patterns").path(0).asText());
+        assertEquals(1, p1.path("patterns").size());
+        assertEquals("toolu_X", p1.path("toolUseId").asText());
+
+        assertTrue(normalizer.normalize("message",
+                globPart("running", "{\"pattern\":\"**/*.java\",\"path\":\"/home/u/other\"}", "")).isEmpty());
+
+        List<SseEvent> second = normalizer.normalize("message", mapper.readTree("""
+                {"type":"permission.asked","properties":{"id":"P2","sessionID":"s1",
+                 "permission":"external_directory","patterns":["/home/u/other/*"],
+                 "metadata":{"filepath":"/home/u/other","parentDir":"/home/u/other"},
+                 "tool":{"messageID":"m1","callID":"toolu_X"}}}
+                """));
+        assertEquals(1, second.size());
+        JsonNode p2 = second.get(0).data();
+        assertEquals("permission_request", second.get(0).type());
+        assertEquals("P2", p2.path("requestId").asText());
+        assertEquals("external_directory", p2.path("toolName").asText());
+        assertEquals("external_directory", p2.path("permission").asText());
+        assertEquals("toolu_X", p2.path("toolUseId").asText());
+        assertEquals("/home/u/other/*", p2.path("toolInput").path("patterns").path(0).asText());
+        assertEquals("/home/u/other", p2.path("toolInput").path("filepath").asText());
+
+        List<SseEvent> completed = normalizer.normalize("message",
+                globPart("completed", "{\"pattern\":\"**/*.java\"}", ",\"output\":\"a.java\""));
+        assertEquals(List.of("tool_result"), completed.stream().map(SseEvent::type).toList());
+        assertEquals("toolu_X", completed.get(0).data().path("toolUseId").asText());
+    }
+
+    @Test
+    void guardPermissionForUnseenCallSynthesizesToolUseWithPermissionKey() throws Exception {
+        List<SseEvent> out = normalizer.normalize("message", mapper.readTree("""
+                {"type":"permission.asked","properties":{"id":"P3","sessionID":"s1",
+                 "permission":"external_directory","patterns":["/x/*"],"tool":{"messageID":"m1","callID":"c5"}}}
+                """));
+        assertEquals(List.of("tool_use", "permission_request"), out.stream().map(SseEvent::type).toList());
+        assertEquals("external_directory", out.get(0).data().path("name").asText());
+        assertEquals("c5", out.get(1).data().path("toolUseId").asText());
+    }
+
+    @Test
+    void legacyPermissionPatternBecomesSingleElementPatterns() throws Exception {
+        SseEvent event = normalizer.normalize("message", mapper.readTree("""
+                {"type":"permission.updated","properties":{"id":"per_2","sessionID":"s1","type":"bash",
+                 "pattern":"ls","metadata":{"command":"ls"},"callID":"c9"}}
+                """)).get(1);
+
+        assertEquals("bash", event.data().path("permission").asText());
+        assertEquals(1, event.data().path("patterns").size());
+        assertEquals("ls", event.data().path("patterns").path(0).asText());
+    }
+
+    private JsonNode globPart(String status, String input, String extra) throws Exception {
+        return mapper.readTree("{\"type\":\"message.part.updated\",\"properties\":{\"sessionID\":\"s1\","
+                + "\"part\":{\"id\":\"prt_1\",\"sessionID\":\"s1\",\"messageID\":\"m1\",\"type\":\"tool\","
+                + "\"tool\":\"glob\",\"callID\":\"toolu_X\",\"state\":{\"status\":\"" + status
+                + "\",\"input\":" + input + extra + "}}}}");
     }
 }

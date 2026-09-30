@@ -37,6 +37,15 @@ specific project. You can also create your own templates to define custom workfl
     project-level `opencode.json` settings are applied after Axiom's generated config and can override
     them (for example MCP servers or permissions).
 
+    For OpenCode sessions, the template's **Allowed Tools** are written as OpenCode permission rules:
+    listed tools (for example `Read(*)`, `Bash(ls *)` or `mcp__axiom__axiom_list_tools`) run without
+    asking, and any other tool asks for approval in the chat. Auto-approval rules apply to these
+    requests. Denying a request makes that tool call fail and ends the current reply; send a new
+    message to continue. When a template has no allowed tools, OpenCode's default permissions apply.
+    With `Read(*)` allowed, `.env` files are read without prompting (the same as Claude Code).
+    OpenCode may ask a second time for the same tool call, for example to access a directory outside
+    the session working directory; this prompt appears on the same tool block.
+
     The template's system prompt, including project context for project sessions, is applied to both engines.
     Claude Code receives it with `--append-system-prompt`; OpenCode receives it as the system prompt of every
     message, added to OpenCode's own system prompt.

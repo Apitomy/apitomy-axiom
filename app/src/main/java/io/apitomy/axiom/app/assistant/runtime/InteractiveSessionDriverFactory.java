@@ -7,6 +7,7 @@ import io.apitomy.axiom.app.assistant.runtime.opencode.OpenCodeConfigWriter;
 import io.apitomy.axiom.app.assistant.runtime.opencode.OpenCodeEventNormalizer;
 import io.apitomy.axiom.app.assistant.runtime.opencode.OpenCodeInteractiveSessionDriver;
 import io.apitomy.axiom.app.assistant.runtime.opencode.OpenCodeSessionServerProcess;
+import io.apitomy.axiom.app.assistant.runtime.opencode.OpenCodeSessionPermissions;
 import io.quarkus.arc.Unremovable;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -48,6 +49,8 @@ public interface InteractiveSessionDriverFactory {
      * @param mcpServers resolved MCP servers for the session, keyed by name
      * @param systemPrompt final system prompt for the session (template prompt plus project context);
      *        applied by the OpenCode driver. The Claude driver receives it through {@code command}.
+     * @param allowedTools resolved allowed tools, in Claude Code format; enforced for OpenCode through its
+     *        permission config
      */
     record DriverRequest(String engineType,
                          String templateId,
@@ -63,13 +66,15 @@ public interface InteractiveSessionDriverFactory {
                          com.fasterxml.jackson.databind.JsonNode tools,
                          String sessionTitle,
                          Map<String, AssistantContextBuilder.McpServerConfig> mcpServers,
-                         String systemPrompt) {
+                         String systemPrompt,
+                         List<String> allowedTools) {
 
         /**
-         * Normalizes a null MCP server map to an empty map.
+         * Normalizes a null MCP server map and a null allowed-tools list to empty collections.
          */
         public DriverRequest {
             mcpServers = mcpServers != null ? mcpServers : Map.of();
+            allowedTools = allowedTools != null ? List.copyOf(allowedTools) : List.of();
         }
     }
 
@@ -139,7 +144,8 @@ public interface InteractiveSessionDriverFactory {
             String engineType = request.engineType();
             if ("opencode".equalsIgnoreCase(engineType)) {
                 Path openCodeConfig = OpenCodeConfigWriter.writeConfig(
-                        request.sessionDirectory(), request.mcpServers());
+                        request.sessionDirectory(), request.mcpServers(),
+                        OpenCodeSessionPermissions.fromAllowedTools(request.allowedTools()));
                 Map<String, String> serverEnvironment =
                         buildOpenCodeEnvironment(request.environment(), openCodeConfig);
                 OpenCodeSessionServerProcess openCodeSessionServerProcess =
@@ -163,7 +169,7 @@ public interface InteractiveSessionDriverFactory {
                         new OpenCodeInteractiveSessionDriver.SessionSettings(
                                 sessionTitle,
                                 request.model(),
-                                request.tools(),
+                                null,
                                 request.mcpServers().keySet(),
                                 request.systemPrompt()));
             }
