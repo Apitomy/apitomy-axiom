@@ -50,6 +50,11 @@ specific project. You can also create your own templates to define custom workfl
     Claude Code receives it with `--append-system-prompt`; OpenCode receives it as the system prompt of every
     message, added to OpenCode's own system prompt.
 
+    OpenCode sessions use the template's model (in `provider/model` form, for example
+    `github-copilot/claude-sonnet-5`), or `axiom.agent.opencode.model` when the template has none. The model is
+    checked against the providers OpenCode has configured; if it is not available, the chat shows a warning and
+    the session falls back to the default model.
+
 ---
 
 ## Accessing the Assistant

@@ -112,6 +112,22 @@ public interface InteractiveSessionDriverFactory {
         @ConfigProperty(name = "axiom.assistant.opencode.startup-timeout-seconds", defaultValue = "30")
         int openCodeServerStartupTimeoutSeconds;
 
+        @ConfigProperty(name = "axiom.agent.opencode.model")
+        Optional<String> openCodeDefaultModel;
+
+        /**
+         * Resolves the configured default OpenCode model used when a template has no model or its model
+         * is unavailable.
+         *
+         * @return the trimmed configured model, or null when none is configured
+         */
+        String resolveOpenCodeDefaultModel() {
+            if (openCodeDefaultModel == null) {
+                return null;
+            }
+            return openCodeDefaultModel.map(String::trim).filter(v -> !v.isEmpty()).orElse(null);
+        }
+
         /**
          * Builds the extra environment for a session's {@code opencode serve} process: the session's
          * template/project environment, overridden by the Axiom-managed {@code OPENCODE_CONFIG} when Axiom wrote
@@ -172,7 +188,7 @@ public interface InteractiveSessionDriverFactory {
                                 null,
                                 request.mcpServers().keySet(),
                                 request.systemPrompt(),
-                                null));
+                                resolveOpenCodeDefaultModel()));
             }
 
             return new ClaudeInteractiveSessionDriver(

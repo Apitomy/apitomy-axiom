@@ -167,6 +167,19 @@ class InteractiveSessionDriverFactoryTest {
     }
 
     @Test
+    void createDriverUsesConfiguredDefaultModelAsFallback(@TempDir Path sessionDir) throws Exception {
+        InteractiveSessionDriver driver = defaultFactory().createDriver(
+                new InteractiveSessionDriverFactory.DriverRequest(
+                        "opencode", "axiom-config-assistant", sessionDir, sessionDir.resolve("work"),
+                        List.of(), Map.of(), null, null, event -> {
+                        }, event -> {
+                        }, null, null, "Session", Map.of(), null, List.of()));
+
+        assertNull(getField(driver, "templateModel"));
+        assertEquals("github-copilot/gpt-5.4", getField(driver, "fallbackModel"));
+    }
+
+    @Test
     void createDriverSkipsOpenCodeConfigWhenNoMcpServers(@TempDir Path sessionDir) throws Exception {
         InteractiveSessionDriver driver = defaultFactory().createDriver(
                 new InteractiveSessionDriverFactory.DriverRequest(
@@ -278,6 +291,7 @@ class InteractiveSessionDriverFactoryTest {
         setField(factory, "assistantOpenCodeServerPort", Optional.empty());
         setField(factory, "openCodeServerHostname", "127.0.0.1");
         setField(factory, "openCodeServerPort", 0);
+        setField(factory, "openCodeDefaultModel", Optional.of("github-copilot/gpt-5.4"));
         return factory;
     }
 
