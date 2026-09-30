@@ -40,7 +40,17 @@ let messageIdCounter = 0;
 
 export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, onAutoApprovalCountChange, onAllowAllChanged, onModelDetected, onCostUpdate }: AssistantChatPanelProps) {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
-    const [isProcessing, setIsProcessing] = useState(false);
+    const [isProcessing, setIsProcessingState] = useState(false);
+    // Synchronous mirror of isProcessing, readable inside event handlers.
+    const processingRef = useRef(false);
+    // Whether a turn was already running before the most recent user message was submitted.
+    const processingBeforeLastUserMessageRef = useRef(false);
+    // Content of a locally-sent message awaiting its user_message echo.
+    const pendingLocalUserMessageRef = useRef<string | null>(null);
+    const setIsProcessing = useCallback((value: boolean) => {
+        processingRef.current = value;
+        setIsProcessingState(value);
+    }, []);
     const [processingText, setProcessingText] = useState("");
     const [slashCommands, setSlashCommands] = useState<string[]>([]);
     const [subagentCards, setSubagentCards] = useState<Map<string, SubagentCardData>>(new Map());
@@ -104,6 +114,12 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                         }
                         return [...prev, { id: String(++messageIdCounter), type: "user", content: data.content as string }];
                     });
+                    if (pendingLocalUserMessageRef.current === data.content) {
+                        // Echo of a local send: the pre-send state was already captured in sendMessage.
+                        pendingLocalUserMessageRef.current = null;
+                    } else {
+                        processingBeforeLastUserMessageRef.current = processingRef.current;
+                    }
                     setIsProcessing(true);
                 }
                 break;
@@ -482,7 +498,10 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
 
             case "session_error":
                 addMessage({ type: "system", content: (data.message as string) || "Session error" });
-                if (!NON_TERMINAL_SESSION_ERRORS.has(data.name as string)) {
+                if (data.name === "MessageNotDelivered") {
+                    // The message never reached the engine: restore the state from before it was submitted.
+                    setIsProcessing(processingBeforeLastUserMessageRef.current);
+                } else if (!NON_TERMINAL_SESSION_ERRORS.has(data.name as string)) {
                     setIsProcessing(false);
                 }
                 break;
@@ -600,6 +619,8 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
             setBackgroundTaskCards(new Map());
             setIsProcessing(false);
         } else {
+            processingBeforeLastUserMessageRef.current = processingRef.current;
+            pendingLocalUserMessageRef.current = message;
             addMessage({ type: "user", content: message });
             setProcessingText(randomThinkingMessage());
             setIsProcessing(true);
@@ -609,6 +630,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
         } catch (err) {
             console.error("Failed to send message:", err);
             addMessage({ type: "system", content: "Failed to send message. Please try again." });
+            pendingLocalUserMessageRef.current = null;
             setIsProcessing(false);
         }
     }, [sessionId, addMessage]);
