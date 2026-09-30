@@ -171,7 +171,8 @@ public interface InteractiveSessionDriverFactory {
                                 request.model(),
                                 null,
                                 request.mcpServers().keySet(),
-                                request.systemPrompt()));
+                                request.systemPrompt(),
+                                null));
             }
 
             return new ClaudeInteractiveSessionDriver(

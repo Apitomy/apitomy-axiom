@@ -89,7 +89,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     },
                     new OpenCodeInteractiveSessionDriver.SessionSettings(
                             "Axiom Session", "github-copilot/claude-sonnet-5", null, Set.of(),
-                            "You are the Axiom Configuration Assistant."));
+                            "You are the Axiom Configuration Assistant.", null));
 
             driver.start();
             driver.sendUserMessage("first");
@@ -159,7 +159,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     process,
                     client -> OpenCodeCapabilityProbe.Result.pass(),
                     new OpenCodeEventNormalizer(),
-                    events::add,
+                    event -> addUnlessSessionInit(events, event),
                     events::add,
                     "Axiom Session",
                     "github-copilot/claude-sonnet-5",
@@ -200,7 +200,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     process,
                     client -> OpenCodeCapabilityProbe.Result.pass(),
                     new OpenCodeEventNormalizer(),
-                    events::add,
+                    event -> addUnlessSessionInit(events, event),
                     events::add,
                     "Axiom Session",
                     "github-copilot/claude-sonnet-5",
@@ -246,7 +246,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     process,
                     client -> OpenCodeCapabilityProbe.Result.pass(),
                     new OpenCodeEventNormalizer(),
-                    events::add,
+                    event -> addUnlessSessionInit(events, event),
                     events::add,
                     "Axiom Session",
                     "github-copilot/claude-sonnet-5",
@@ -295,7 +295,11 @@ class OpenCodeInteractiveSessionDriverTest {
                     new FakeServerProcess(server.baseUrl()),
                     client -> OpenCodeCapabilityProbe.Result.pass(),
                     new OpenCodeEventNormalizer(),
-                    event -> ordered.add("event:" + event.type()),
+                    event -> {
+                        if (!"session_init".equals(event.type())) {
+                            ordered.add("event:" + event.type());
+                        }
+                    },
                     event -> ordered.add("approval:" + event.type()),
                     "Axiom Session",
                     "github-copilot/claude-sonnet-5",
@@ -643,7 +647,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     },
                     new OpenCodeInteractiveSessionDriver.SessionSettings(
                             "Axiom Session", "github-copilot/claude-sonnet-5", null, Set.of(),
-                            "You are the Axiom Configuration Assistant."));
+                            "You are the Axiom Configuration Assistant.", null));
             driver.start();
 
             driver.sendUserMessage("hello");
@@ -694,7 +698,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     event -> {
                     },
                     new OpenCodeInteractiveSessionDriver.SessionSettings(
-                            "Axiom Session", "github-copilot/claude-sonnet-5", null, Set.of(), systemPrompt));
+                            "Axiom Session", "github-copilot/claude-sonnet-5", null, Set.of(), systemPrompt, null));
             driver.start();
 
             driver.sendUserMessage("first");
@@ -740,10 +744,136 @@ class OpenCodeInteractiveSessionDriverTest {
         }
     }
 
+    private static void addUnlessSessionInit(List<SseEvent> events, SseEvent event) {
+        if (!"session_init".equals(event.type())) {
+            events.add(event);
+        }
+    }
+
+    private static final String DEFAULT_PROVIDERS = "{\"providers\":[{\"id\":\"github-copilot\","
+            + "\"models\":{\"claude-sonnet-5\":{},\"gpt-5.4\":{}}}],"
+            + "\"default\":{\"github-copilot\":\"gpt-5.4\"}}";
+
+    @Test
+    void validTemplateModelIsUsedWithoutError() throws Exception {
+        ModelRun run = runWithModels(200, DEFAULT_PROVIDERS, "github-copilot/claude-sonnet-5",
+                "github-copilot/gpt-5.4");
+
+        assertTrue(run.modelErrors().isEmpty());
+        assertEquals("github-copilot/claude-sonnet-5", run.sessionInit().path("model").asText());
+        assertEquals("opencode", run.sessionInit().path("engine").asText());
+        assertPromptModel(run.prompt(), "github-copilot", "claude-sonnet-5");
+    }
+
+    @Test
+    void blankTemplateModelFallsBackToConfiguredDefaultWithoutError() throws Exception {
+        ModelRun run = runWithModels(200, DEFAULT_PROVIDERS, null, "github-copilot/gpt-5.4");
+
+        assertTrue(run.modelErrors().isEmpty());
+        assertEquals("github-copilot/gpt-5.4", run.sessionInit().path("model").asText());
+        assertPromptModel(run.prompt(), "github-copilot", "gpt-5.4");
+    }
+
+    @Test
+    void unknownTemplateModelEmitsErrorAndFallsBack() throws Exception {
+        ModelRun run = runWithModels(200, DEFAULT_PROVIDERS, "github-copilot/nope", "github-copilot/gpt-5.4");
+
+        assertEquals(1, run.modelErrors().size());
+        String message = run.modelErrors().get(0).path("message").asText();
+        assertTrue(message.contains("github-copilot/nope"), message);
+        assertTrue(message.contains("github-copilot/gpt-5.4"), message);
+        assertPromptModel(run.prompt(), "github-copilot", "gpt-5.4");
+        assertEquals("github-copilot/gpt-5.4", run.sessionInit().path("model").asText());
+        assertEquals(AssistantSession.Status.RUNNING, run.status());
+    }
+
+    @Test
+    void templateModelWithoutSlashEmitsErrorAndFallsBack() throws Exception {
+        ModelRun run = runWithModels(200, DEFAULT_PROVIDERS, "sonnet", "github-copilot/gpt-5.4");
+
+        assertEquals(1, run.modelErrors().size());
+        String message = run.modelErrors().get(0).path("message").asText();
+        assertTrue(message.contains("sonnet"), message);
+        assertTrue(message.contains("github-copilot/gpt-5.4"), message);
+        assertPromptModel(run.prompt(), "github-copilot", "gpt-5.4");
+        assertEquals(AssistantSession.Status.RUNNING, run.status());
+    }
+
+    @Test
+    void neitherModelValidUsesOpenCodeDefault() throws Exception {
+        ModelRun run = runWithModels(200, DEFAULT_PROVIDERS, "x/y", "a/b");
+
+        assertEquals(1, run.modelErrors().size());
+        String message = run.modelErrors().get(0).path("message").asText();
+        assertTrue(message.contains("x/y"), message);
+        assertTrue(message.contains("a/b"), message);
+        assertTrue(message.contains("OpenCode's default model"), message);
+        assertFalse(run.prompt().has("model"));
+        assertEquals("", run.sessionInit().path("model").asText("missing"));
+        assertEquals(AssistantSession.Status.RUNNING, run.status());
+    }
+
+    @Test
+    void unreadableProvidersSkipsValidation() throws Exception {
+        ModelRun run = runWithModels(500, "{\"error\":\"boom\"}", "github-copilot/whatever",
+                "github-copilot/gpt-5.4");
+
+        assertTrue(run.modelErrors().isEmpty());
+        assertPromptModel(run.prompt(), "github-copilot", "whatever");
+        assertEquals("github-copilot/whatever", run.sessionInit().path("model").asText());
+    }
+
+    private record ModelRun(List<SseEvent> events, JsonNode prompt, AssistantSession.Status status) {
+
+        List<JsonNode> modelErrors() {
+            return events.stream()
+                    .filter(event -> "session_error".equals(event.type()))
+                    .map(SseEvent::data)
+                    .filter(data -> "ModelUnavailable".equals(data.path("name").asText()))
+                    .toList();
+        }
+
+        JsonNode sessionInit() {
+            List<JsonNode> inits = events.stream()
+                    .filter(event -> "session_init".equals(event.type()))
+                    .map(SseEvent::data)
+                    .toList();
+            assertEquals(1, inits.size());
+            return inits.get(0);
+        }
+    }
+
+    private static ModelRun runWithModels(int providersStatus, String providersBody,
+                                          String templateModel, String fallbackModel) throws Exception {
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.startWithProviders(providersStatus, providersBody)) {
+            List<SseEvent> events = new CopyOnWriteArrayList<>();
+            OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
+                    new FakeServerProcess(server.baseUrl()),
+                    client -> OpenCodeCapabilityProbe.Result.pass(),
+                    new OpenCodeEventNormalizer(),
+                    events::add,
+                    event -> {
+                    },
+                    new OpenCodeInteractiveSessionDriver.SessionSettings(
+                            "Axiom Session", templateModel, null, Set.of(), null, fallbackModel));
+            driver.start();
+            AssistantSession.Status status = driver.getStatus();
+            driver.sendUserMessage("hello");
+            JsonNode prompt = new ObjectMapper().readTree(server.lastPromptBody());
+            driver.destroy();
+            return new ModelRun(List.copyOf(events), prompt, status);
+        }
+    }
+
+    private static void assertPromptModel(JsonNode prompt, String providerId, String modelId) {
+        assertEquals(providerId, prompt.path("model").path("providerID").asText());
+        assertEquals(modelId, prompt.path("model").path("modelID").asText());
+    }
+
     @Test
     void sessionSettingsNormalizesExpectedMcpServers() {
         OpenCodeInteractiveSessionDriver.SessionSettings settings =
-                new OpenCodeInteractiveSessionDriver.SessionSettings("t", null, null, null, null);
+                new OpenCodeInteractiveSessionDriver.SessionSettings("t", null, null, null, null, null);
 
         assertEquals(Set.of(), settings.expectedMcpServers());
     }
@@ -774,7 +904,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     new FakeServerProcess(server.baseUrl()),
                     client -> OpenCodeCapabilityProbe.Result.pass(),
                     new OpenCodeEventNormalizer(),
-                    events::add,
+                    event -> addUnlessSessionInit(events, event),
                     permissionEvents::add,
                     "Axiom Session",
                     "github-copilot/claude-sonnet-5",
@@ -873,6 +1003,13 @@ class OpenCodeInteractiveSessionDriverTest {
                                         CountDownLatch promptSubmitted,
                                         String mcpResponse) throws IOException {
             return start(eventResponder, promptSubmitted, 200, mcpResponse);
+        }
+
+        static FakeOpenCodeServer startWithProviders(int providersStatusCode, String providersResponse)
+                throws IOException {
+            FakeOpenCodeServer fake = start(exchange -> new EventHandler().handle(exchange), null, 200, "{}");
+            fake.server.createContext("/config/providers", new JsonHandler(providersStatusCode, providersResponse));
+            return fake;
         }
 
         static FakeOpenCodeServer start(EventResponder eventResponder,
