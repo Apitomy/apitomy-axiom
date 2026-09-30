@@ -49,6 +49,8 @@ interface AssistantToolUseBlockProps {
     permissionId?: string;
     permissionResolved?: boolean;
     permissionAllowed?: boolean;
+    permissionType?: string;
+    permissionPatterns?: string[];
     onPermissionRespond?: (permissionId: string, allow: boolean, toolInput?: Record<string, unknown>) => void;
     onCreateAutoApproval?: (toolName: string, fieldName: string | undefined,
         pattern: string | undefined, permissionId: string) => void;
@@ -58,8 +60,8 @@ interface AssistantToolUseBlockProps {
 
 export const AssistantToolUseBlock = memo(function AssistantToolUseBlock({
     toolName, toolUseId, input, result, isError, elapsedSeconds,
-    permissionId, permissionResolved, permissionAllowed, onPermissionRespond,
-    onCreateAutoApproval, onSubagentClick, highlighted,
+    permissionId, permissionResolved, permissionAllowed, permissionType, permissionPatterns,
+    onPermissionRespond, onCreateAutoApproval, onSubagentClick, highlighted,
 }: AssistantToolUseBlockProps) {
     const effectiveTheme = useEffectiveTheme();
     const syntaxStyle = effectiveTheme === "dark" ? stackoverflowDark : stackoverflowLight;
@@ -69,6 +71,12 @@ export const AssistantToolUseBlock = memo(function AssistantToolUseBlock({
     const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
 
     const needsPermission = permissionId && !permissionResolved;
+    const isGuardPermission = !!permissionType && permissionType !== toolName;
+    const guardPatterns = (permissionPatterns || []).join(", ");
+    const guardSummary = !isGuardPermission ? undefined
+        : permissionType === "external_directory"
+            ? `Access outside the working directory: ${guardPatterns}`
+            : `${permissionType}: ${guardPatterns}`;
     const isAskUser = toolName === "AskUserQuestion";
     const isPlanApproval = toolName === "ExitPlanMode";
     const borderVariant = needsPermission
@@ -262,6 +270,11 @@ export const AssistantToolUseBlock = memo(function AssistantToolUseBlock({
                             <div className="axiom-tool-use__permission-title">
                                 Permission required
                             </div>
+                            {guardSummary && (
+                                <div className="axiom-tool-use__context-summary">
+                                    {guardSummary}
+                                </div>
+                            )}
                             {contextSummary && (
                                 <div className="axiom-tool-use__context-summary">
                                     {contextSummary}
@@ -280,7 +293,7 @@ export const AssistantToolUseBlock = memo(function AssistantToolUseBlock({
                                         Deny
                                     </Button>
                                 </FlexItem>
-                                {onCreateAutoApproval && (
+                                {onCreateAutoApproval && !isGuardPermission && (
                                     <FlexItem>
                                         <Button variant="link" size="sm"
                                             onClick={() => setShowPatternUI(!showPatternUI)}>
@@ -289,7 +302,7 @@ export const AssistantToolUseBlock = memo(function AssistantToolUseBlock({
                                     </FlexItem>
                                 )}
                             </Flex>
-                            {showPatternUI && onCreateAutoApproval && (
+                            {showPatternUI && onCreateAutoApproval && !isGuardPermission && (
                                 <div className="axiom-tool-use__pattern-ui">
                                     <div className="axiom-tool-use__pattern-hint">
                                         Auto-approve future {toolName} calls matching a pattern:

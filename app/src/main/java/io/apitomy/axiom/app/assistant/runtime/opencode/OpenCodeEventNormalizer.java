@@ -2,6 +2,7 @@ package io.apitomy.axiom.app.assistant.runtime.opencode;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
 
@@ -39,6 +40,9 @@ public class OpenCodeEventNormalizer {
             "todo.updated");
 
     /** Message part types that are understood but not surfaced to the UI. */
+    /** Permission keys that guard a tool call rather than name a tool (e.g. directory access). */
+    private static final Set<String> GUARD_PERMISSIONS = Set.of("external_directory", "doom_loop");
+
     private static final Set<String> IGNORED_PART_TYPES = Set.of(
             "step-start", "step-finish", "snapshot", "patch", "file", "agent", "retry", "compaction", "subtask");
 
@@ -188,10 +192,27 @@ public class OpenCodeEventNormalizer {
         ToolCall call = callId.isEmpty() ? null : toolCalls.get(callId);
         String permissionKey = firstNonBlank(payload.path("permission").asText(""),
                 payload.path("type").asText(""));
+        String callName = call != null && !call.name().isEmpty() ? call.name() : permissionKey;
+        ArrayNode patterns = JsonNodeFactory.instance.arrayNode();
+        if (payload.path("patterns").isArray()) {
+            payload.path("patterns").forEach(patterns::add);
+        } else if (payload.path("pattern").isTextual()) {
+            patterns.add(payload.path("pattern").asText());
+        }
         ObjectNode data = JsonNodeFactory.instance.objectNode();
         data.put("requestId", payload.path("id").asText(""));
-        data.put("toolName", call != null && !call.name().isEmpty() ? call.name() : permissionKey);
-        if (call != null && call.input().size() > 0) {
+        data.put("permission", permissionKey);
+        data.set("patterns", patterns);
+        boolean guard = GUARD_PERMISSIONS.contains(permissionKey);
+        data.put("toolName", guard ? permissionKey : callName);
+        if (guard) {
+            ObjectNode guardInput = JsonNodeFactory.instance.objectNode();
+            guardInput.set("patterns", patterns.deepCopy());
+            if (payload.path("metadata").isObject()) {
+                guardInput.setAll((ObjectNode) payload.path("metadata"));
+            }
+            data.set("toolInput", guardInput);
+        } else if (call != null && call.input().size() > 0) {
             data.set("toolInput", call.input());
         } else if (payload.path("metadata").isObject()) {
             data.set("toolInput", payload.path("metadata"));
@@ -208,7 +229,7 @@ public class OpenCodeEventNormalizer {
         }
         ObjectNode toolUse = JsonNodeFactory.instance.objectNode();
         toolUse.put("id", callId);
-        toolUse.put("name", data.path("toolName").asText(""));
+        toolUse.put("name", callName);
         toolUse.set("input", data.path("toolInput"));
         return List.of(new SseEvent("tool_use", toolUse), request);
     }

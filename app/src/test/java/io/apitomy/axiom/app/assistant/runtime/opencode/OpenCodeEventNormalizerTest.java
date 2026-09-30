@@ -410,6 +410,72 @@ class OpenCodeEventNormalizerTest {
         assertEquals("toolu_X", completed.get(0).data().path("toolUseId").asText());
     }
 
+    @Test
+    void externalDirectoryPermissionAfterToolPermissionUsesGuardKeyAndSameToolUseId() throws Exception {
+        assertTrue(normalizer.normalize("message", globPart("pending", "{}", "")).isEmpty());
+
+        List<SseEvent> first = normalizer.normalize("message", mapper.readTree("""
+                {"type":"permission.asked","properties":{"id":"P1","sessionID":"s1","permission":"glob",
+                 "patterns":["**/*.java"],"metadata":{"pattern":"**/*.java"},
+                 "tool":{"messageID":"m1","callID":"toolu_X"}}}
+                """));
+        assertEquals(List.of("tool_use", "permission_request"), first.stream().map(SseEvent::type).toList());
+        assertEquals("glob", first.get(0).data().path("name").asText());
+        JsonNode p1 = first.get(1).data();
+        assertEquals("glob", p1.path("toolName").asText());
+        assertEquals("glob", p1.path("permission").asText());
+        assertEquals("**/*.java", p1.path("patterns").path(0).asText());
+        assertEquals(1, p1.path("patterns").size());
+        assertEquals("toolu_X", p1.path("toolUseId").asText());
+
+        assertTrue(normalizer.normalize("message",
+                globPart("running", "{\"pattern\":\"**/*.java\",\"path\":\"/home/u/other\"}", "")).isEmpty());
+
+        List<SseEvent> second = normalizer.normalize("message", mapper.readTree("""
+                {"type":"permission.asked","properties":{"id":"P2","sessionID":"s1",
+                 "permission":"external_directory","patterns":["/home/u/other/*"],
+                 "metadata":{"filepath":"/home/u/other","parentDir":"/home/u/other"},
+                 "tool":{"messageID":"m1","callID":"toolu_X"}}}
+                """));
+        assertEquals(1, second.size());
+        JsonNode p2 = second.get(0).data();
+        assertEquals("permission_request", second.get(0).type());
+        assertEquals("P2", p2.path("requestId").asText());
+        assertEquals("external_directory", p2.path("toolName").asText());
+        assertEquals("external_directory", p2.path("permission").asText());
+        assertEquals("toolu_X", p2.path("toolUseId").asText());
+        assertEquals("/home/u/other/*", p2.path("toolInput").path("patterns").path(0).asText());
+        assertEquals("/home/u/other", p2.path("toolInput").path("filepath").asText());
+
+        List<SseEvent> completed = normalizer.normalize("message",
+                globPart("completed", "{\"pattern\":\"**/*.java\"}", ",\"output\":\"a.java\""));
+        assertEquals(List.of("tool_result"), completed.stream().map(SseEvent::type).toList());
+        assertEquals("toolu_X", completed.get(0).data().path("toolUseId").asText());
+    }
+
+    @Test
+    void guardPermissionForUnseenCallSynthesizesToolUseWithPermissionKey() throws Exception {
+        List<SseEvent> out = normalizer.normalize("message", mapper.readTree("""
+                {"type":"permission.asked","properties":{"id":"P3","sessionID":"s1",
+                 "permission":"external_directory","patterns":["/x/*"],"tool":{"messageID":"m1","callID":"c5"}}}
+                """));
+        assertEquals(List.of("tool_use", "permission_request"), out.stream().map(SseEvent::type).toList());
+        assertEquals("external_directory", out.get(0).data().path("name").asText());
+        assertEquals("c5", out.get(1).data().path("toolUseId").asText());
+    }
+
+    @Test
+    void legacyPermissionPatternBecomesSingleElementPatterns() throws Exception {
+        SseEvent event = normalizer.normalize("message", mapper.readTree("""
+                {"type":"permission.updated","properties":{"id":"per_2","sessionID":"s1","type":"bash",
+                 "pattern":"ls","metadata":{"command":"ls"},"callID":"c9"}}
+                """)).get(1);
+
+        assertEquals("bash", event.data().path("permission").asText());
+        assertEquals(1, event.data().path("patterns").size());
+        assertEquals("ls", event.data().path("patterns").path(0).asText());
+    }
+
     private JsonNode globPart(String status, String input, String extra) throws Exception {
         return mapper.readTree("{\"type\":\"message.part.updated\",\"properties\":{\"sessionID\":\"s1\","
                 + "\"part\":{\"id\":\"prt_1\",\"sessionID\":\"s1\",\"messageID\":\"m1\",\"type\":\"tool\","

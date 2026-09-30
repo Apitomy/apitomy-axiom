@@ -165,6 +165,28 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                     });
                 } else {
                     setMessages((prev) => {
+                        const toolUseId = data.toolUseId;
+                        if (typeof toolUseId === "string" && toolUseId !== "") {
+                            const idIdx = prev.findLastIndex(
+                                (m) => m.type === "tool_use" && m.toolUseId === toolUseId
+                            );
+                            if (idIdx >= 0) {
+                                const target = prev[idIdx];
+                                const updated = [...prev];
+                                updated[idIdx] = {
+                                    ...target,
+                                    permissionId: data.requestId as string,
+                                    permissionResolved: false,
+                                    permissionAllowed: undefined,
+                                    permissionType: data.permission as string | undefined,
+                                    permissionPatterns: data.patterns as string[] | undefined,
+                                    toolInput: data.toolName === target.toolName && data.toolInput
+                                        ? data.toolInput as Record<string, unknown>
+                                        : target.toolInput,
+                                };
+                                return updated;
+                            }
+                        }
                         const lastToolIdx = prev.findLastIndex(
                             (m) => m.type === "tool_use" && m.toolName === data.toolName && !m.permissionId
                         );
