@@ -227,7 +227,6 @@ public class AssistantSessionManager {
 
             List<String> command = buildCommand(workDir, sessionDir, systemPrompt,
                     template.model(), resolvedAllowedTools, mcpConfig != null);
-            JsonNode openCodeTools = buildOpenCodeTools(resolvedAllowedTools);
 
             AtomicReference<AssistantSession> sessionRef = new AtomicReference<>();
             Consumer<AssistantEventParser.SseEvent> eventSink = event -> {
@@ -255,10 +254,11 @@ public class AssistantSessionManager {
                             eventSink,
                             autoApprovalSink,
                             template.model(),
-                            openCodeTools,
+                            null,
                             sessionName,
                             mcpConfigs,
-                            systemPrompt));
+                            systemPrompt,
+                            resolvedAllowedTools));
 
             AssistantSession session = new AssistantSession(sessionName, templateId, sessionDir,
                     workDir, command, resolvedEnv, agent.getType(), projectId, projectName, driver);
@@ -705,25 +705,6 @@ public class AssistantSessionManager {
         }
 
         return cmd;
-    }
-
-    private JsonNode buildOpenCodeTools(List<String> allowedTools) {
-        if (allowedTools == null || allowedTools.isEmpty()) {
-            return null;
-        }
-
-        ObjectNode tools = objectMapper.createObjectNode();
-        ArrayNode allowed = objectMapper.createArrayNode();
-        for (String tool : allowedTools) {
-            if (tool != null && !tool.isBlank()) {
-                allowed.add(tool.trim());
-            }
-        }
-        if (allowed.isEmpty()) {
-            return null;
-        }
-        tools.set("allowed", allowed);
-        return tools;
     }
 
     private java.util.function.Consumer<SseEvent> createValidationListener(

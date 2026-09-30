@@ -2,6 +2,7 @@ package io.apitomy.axiom.app.assistant.runtime.opencode;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.app.assistant.AssistantContextBuilder.McpServerConfig;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -76,5 +77,23 @@ class OpenCodeConfigWriterTest {
         assertNull(OpenCodeConfigWriter.writeConfig(sessionDir, Map.of()));
         assertNull(OpenCodeConfigWriter.writeConfig(sessionDir, null));
         assertFalse(Files.exists(sessionDir.resolve("opencode.json")));
+    }
+
+    @Test
+    void writesPermissionBlockEvenWithoutMcpServers(@TempDir Path sessionDir) throws Exception {
+        ObjectNode permission = OpenCodeSessionPermissions.fromAllowedTools(List.of("Read(*)", "Bash(ls *)"));
+
+        Path written = OpenCodeConfigWriter.writeConfig(sessionDir, Map.of(), permission);
+
+        JsonNode parsed = MAPPER.readTree(Files.readString(written));
+        assertEquals("ask", parsed.path("permission").path("*").asText());
+        assertEquals("allow", parsed.path("permission").path("read").asText());
+        assertEquals("allow", parsed.path("permission").path("bash").path("ls *").asText());
+    }
+
+    @Test
+    void omitsPermissionBlockWhenNull() {
+        assertFalse(OpenCodeConfigWriter.buildConfig(
+                Map.of("remote", McpServerConfig.http("http://x/mcp")), null).has("permission"));
     }
 }

@@ -1,5 +1,6 @@
 package io.apitomy.axiom.app.assistant.runtime.opencode;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.agents.opencode.OpenCodeServerManager;
 import io.apitomy.axiom.app.assistant.AssistantContextBuilder.McpServerConfig;
@@ -106,6 +107,29 @@ class OpenCodeSessionServerProcessTest {
 
             String directory = new ObjectMapper().readTree(response.body()).path("directory").asText();
             assertEquals(workDir.toRealPath().toString(), Path.of(directory).toRealPath().toString());
+        } finally {
+            process.stop();
+        }
+    }
+
+    @Test
+    void realOpenCodeLoadsSessionPermissionsFromGeneratedConfig(@TempDir Path sessionDir) throws Exception {
+        Assumptions.assumeTrue(OpenCodeServerManager.isOpenCodeAvailable());
+        Path config = OpenCodeConfigWriter.writeConfig(sessionDir, Map.of(),
+                OpenCodeSessionPermissions.fromAllowedTools(List.of("Read(*)", "Bash(ls *)")));
+        OpenCodeSessionServerProcess process = new OpenCodeSessionServerProcess(
+                "opencode", "127.0.0.1", 0, 30, Map.of("OPENCODE_CONFIG", config.toString()), sessionDir);
+        try {
+            process.start();
+            HttpClient client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
+            HttpResponse<String> response = client.send(
+                    HttpRequest.newBuilder(URI.create(process.baseUrl() + "/config")).GET().build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, response.statusCode(), response.body());
+            JsonNode permission = new ObjectMapper().readTree(response.body()).path("permission");
+            assertEquals("ask", permission.path("*").asText(), response.body());
+            assertEquals("allow", permission.path("read").asText(), response.body());
+            assertEquals("allow", permission.path("bash").path("ls *").asText(), response.body());
         } finally {
             process.stop();
         }

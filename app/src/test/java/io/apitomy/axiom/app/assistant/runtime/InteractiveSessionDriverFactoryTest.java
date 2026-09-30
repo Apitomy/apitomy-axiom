@@ -1,5 +1,7 @@
 package io.apitomy.axiom.app.assistant.runtime;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.app.assistant.AssistantContextBuilder;
 import io.apitomy.axiom.app.assistant.AssistantEventParser;
 import org.junit.jupiter.api.Test;
@@ -15,6 +17,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class InteractiveSessionDriverFactoryTest {
@@ -49,7 +52,8 @@ class InteractiveSessionDriverFactoryTest {
                 null,
                 "Session",
                 Map.of(),
-                null
+                null,
+                List.of()
         ));
 
         Object process = extractProcess(driver);
@@ -87,7 +91,8 @@ class InteractiveSessionDriverFactoryTest {
                 null,
                 "Session",
                 Map.of(),
-                null
+                null,
+                List.of()
         ));
 
         Object process = extractProcess(driver);
@@ -126,7 +131,8 @@ class InteractiveSessionDriverFactoryTest {
                 null,
                 "Session",
                 Map.of(),
-                null
+                null,
+                List.of()
         ));
 
         Object process = extractProcess(driver);
@@ -143,7 +149,7 @@ class InteractiveSessionDriverFactoryTest {
                 }, event -> {
                 }, "github-copilot/claude-sonnet-5", null, "Session",
                 Map.of("axiom", AssistantContextBuilder.McpServerConfig.stdio("node", List.of("server.js"), Map.of())),
-                null));
+                null, List.of()));
 
         Path configFile = sessionDir.resolve("opencode.json");
         assertTrue(Files.exists(configFile));
@@ -167,7 +173,7 @@ class InteractiveSessionDriverFactoryTest {
                         "opencode", "general-assistant", sessionDir, sessionDir, List.of(), Map.of(),
                         null, null, event -> {
                         }, event -> {
-                        }, "github-copilot/claude-sonnet-5", null, "Session", Map.of(), null));
+                        }, "github-copilot/claude-sonnet-5", null, "Session", Map.of(), null, List.of()));
 
         assertFalse(Files.exists(sessionDir.resolve("opencode.json")));
         Object process = extractProcess(driver);
@@ -187,7 +193,7 @@ class InteractiveSessionDriverFactoryTest {
                         Map.of("AXIOM_PROJECT_ID", "42", "TEMPLATE_SECRET", "s3cr3t"),
                         42L, "demo", event -> {
                         }, event -> {
-                        }, "github-copilot/claude-sonnet-5", null, "Session", Map.of(), null));
+                        }, "github-copilot/claude-sonnet-5", null, "Session", Map.of(), null, List.of()));
 
         Object process = extractProcess(driver);
         assertEquals(workDir, getField(process, "workingDirectory"));
@@ -206,9 +212,24 @@ class InteractiveSessionDriverFactoryTest {
                         null, null, event -> {
                         }, event -> {
                         }, "github-copilot/claude-sonnet-5", null, "Session", Map.of(),
-                        "You are the Axiom Configuration Assistant."));
+                        "You are the Axiom Configuration Assistant.", List.of()));
 
         assertEquals("You are the Axiom Configuration Assistant.", getField(driver, "systemPrompt"));
+    }
+
+    @Test
+    void createDriverWritesPermissionsAndStopsSendingPromptTools(@TempDir Path sessionDir) throws Exception {
+        InteractiveSessionDriver driver = defaultFactory().createDriver(
+                new InteractiveSessionDriverFactory.DriverRequest(
+                        "opencode", "axiom-config-assistant", sessionDir, sessionDir, List.of(), Map.of(),
+                        null, null, event -> {
+                        }, event -> {
+                        }, "github-copilot/claude-sonnet-5", null, "Session", Map.of(), null,
+                        List.of("Read(*)", "mcp__axiom__axiom_list_tools")));
+
+        JsonNode config = new ObjectMapper().readTree(Files.readString(sessionDir.resolve("opencode.json")));
+        assertEquals("allow", config.path("permission").path("axiom_axiom_list_tools").asText());
+        assertNull(getField(driver, "tools"));
     }
 
     @Test
