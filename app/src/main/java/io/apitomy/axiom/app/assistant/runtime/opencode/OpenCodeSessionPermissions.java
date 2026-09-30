@@ -15,6 +15,10 @@ import java.util.Map;
  *
  * <p>Listed tools are allowed without prompting and every other tool asks the user, mirroring Claude Code's
  * {@code --allowedTools}. Unlike the unattended task path ({@link OpenCodePermissionMapper}), nothing is denied.
+ *
+ * <p>A whole-server MCP entry such as {@code mcp__github} becomes the wildcard key {@code github_*}. OpenCode
+ * matches such keys by prefix, so {@code github_*} also matches tools of a server named
+ * {@code github_enterprise}.
  */
 public final class OpenCodeSessionPermissions {
 
@@ -46,8 +50,9 @@ public final class OpenCodeSessionPermissions {
      * Builds the OpenCode permission block for a session.
      *
      * @param allowedTools the template's resolved allowed tools; may be null
-     * @return the permission block (first key {@code "*": "ask"}), or null when there are no allowed tools, in
-     *         which case OpenCode's default permissions apply
+     * @return the permission block (first key {@code "*": "ask"}), or null when there are no non-blank allowed
+     *         tools, in which case OpenCode's default permissions apply. When entries exist but none maps to
+     *         an OpenCode key, the block is just {@code {"*": "ask"}} so the session fails closed
      */
     public static ObjectNode fromAllowedTools(List<String> allowedTools) {
         if (allowedTools == null) {
@@ -63,11 +68,15 @@ public final class OpenCodeSessionPermissions {
             String entry = raw.trim();
             if (entry.startsWith("mcp__")) {
                 String remainder = entry.substring(5);
+                any = true;
+                if (remainder.isEmpty() || "*".equals(remainder) || remainder.startsWith("__")) {
+                    LOG.debugf("Degenerate MCP allowed tool '%s'; skipping", entry);
+                    continue;
+                }
                 String key = !remainder.contains("__") || remainder.endsWith("__*")
                         ? remainder.replace("__*", "") + "_*"
                         : OpenCodePermissionMapper.mapMcpToolName(entry);
                 permission.put(key, ALLOW);
-                any = true;
                 continue;
             }
             String name = entry;
@@ -80,6 +89,7 @@ public final class OpenCodeSessionPermissions {
             String key = TOOL_KEYS.get(name);
             if (key == null) {
                 LOG.debugf("No OpenCode permission key for allowed tool '%s'; skipping", entry);
+                any = true;
                 continue;
             }
             any = true;

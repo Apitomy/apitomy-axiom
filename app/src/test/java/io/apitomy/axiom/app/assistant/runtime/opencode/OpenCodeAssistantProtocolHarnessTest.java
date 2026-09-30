@@ -115,10 +115,10 @@ class OpenCodeAssistantProtocolHarnessTest {
 
         eventTap.firstEventFromIndex(startIndex,
                         event -> eventMatchesSession(event, sessionId)
-                                && "session.permission.requested".equals(eventType(event))
-                                && !event.payload().path("requestId").asText("").isBlank())
+                                && isPermissionRequest(eventType(event))
+                                && !permissionId(event).isBlank())
                 .ifPresent(permission -> {
-                    String requestId = permission.payload().path("requestId").asText("");
+                    String requestId = permissionId(permission);
                     if (!requestId.isBlank()) {
                         client.respondPermission(sessionId, requestId, true);
                     }
@@ -133,6 +133,17 @@ class OpenCodeAssistantProtocolHarnessTest {
         assertTrue(reachedTerminalState,
                 () -> "Abort should produce deterministic terminal signal. Events: "
                         + eventTap.describeFromIndex(abortIndex));
+    }
+
+    private static boolean isPermissionRequest(String type) {
+        return "permission.asked".equals(type) || "permission.updated".equals(type);
+    }
+
+    private static String permissionId(OpenCodeAssistantClient.OpenCodeRawEvent event) {
+        JsonNode properties = event.payload().path("properties");
+        return properties.isObject()
+                ? properties.path("id").asText("")
+                : event.payload().path("id").asText("");
     }
 
     private static boolean hasAssistantEvent(List<OpenCodeAssistantClient.OpenCodeRawEvent> events,
@@ -181,7 +192,7 @@ class OpenCodeAssistantProtocolHarnessTest {
                 return false;
             }
             String type = eventType(event);
-            return "session.permission.requested".equals(type)
+            return isPermissionRequest(type)
                     || type.contains("tool")
                     || type.startsWith("session.status")
                     || type.startsWith("message.part.");

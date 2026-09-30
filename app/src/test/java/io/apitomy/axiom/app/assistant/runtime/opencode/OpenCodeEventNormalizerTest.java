@@ -339,6 +339,23 @@ class OpenCodeEventNormalizerTest {
     }
 
     @Test
+    void completedToolPartForgetsToolCallForLaterPermissions() throws Exception {
+        normalizer.normalize("message", mapper.readTree("""
+                {"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","sessionID":"s1",
+                 "messageID":"m1","type":"tool","tool":"write","callID":"c1",
+                 "state":{"status":"completed","input":{"filePath":"/w/x.json"},"output":"ok"}}}}
+                """));
+
+        SseEvent event = normalizer.normalize("message", mapper.readTree("""
+                {"type":"permission.asked","properties":{"id":"per_1","sessionID":"s1","permission":"edit",
+                 "metadata":{"filepath":"/w/other.json"},"tool":{"messageID":"m1","callID":"c1"}}}
+                """)).get(0);
+
+        assertEquals("edit", event.data().path("toolName").asText());
+        assertEquals("/w/other.json", event.data().path("toolInput").path("filepath").asText());
+    }
+
+    @Test
     void legacyPermissionUpdatedEventIsMappedLikeAsked() throws Exception {
         SseEvent event = normalizer.normalize("message", mapper.readTree("""
                 {"type":"permission.updated","properties":{"id":"per_2","sessionID":"s1","type":"bash",

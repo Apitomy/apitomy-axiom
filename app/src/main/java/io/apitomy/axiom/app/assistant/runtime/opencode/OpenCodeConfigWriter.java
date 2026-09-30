@@ -59,7 +59,8 @@ public final class OpenCodeConfigWriter {
     }
 
     /**
-     * Writes {@value #CONFIG_FILE_NAME} into the session directory when there are MCP servers.
+     * Writes {@value #CONFIG_FILE_NAME} into the session directory when there are MCP servers, without a
+     * {@code permission} block (equivalent to {@code writeConfig(sessionDirectory, servers, null)}).
      * The file may contain secrets (server environment), so it is made owner-readable only where
      * POSIX permissions are supported.
      *

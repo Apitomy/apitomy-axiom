@@ -678,7 +678,7 @@ git commit -m "feat(assistant): enforce allowed tools for OpenCode sessions via 
 Start a Configuration Assistant session on `opencode`.
 1. Ask it to list the configured tools. `axiom_axiom_list_tools` runs with no prompt.
 2. Ask it to "use glob to find json files". An approval prompt appears on the `glob` block. **Allow** runs it;
-   **Deny** in a second attempt makes the tool fail and the assistant carries on.
+   **Deny** in a second attempt makes the tool fail and ends the current reply.
 3. Add an auto-approval rule for `glob` and repeat. It is approved automatically.
 
 ---

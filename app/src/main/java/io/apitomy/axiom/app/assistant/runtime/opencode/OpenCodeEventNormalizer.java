@@ -152,6 +152,9 @@ public class OpenCodeEventNormalizer {
             data.put("interrupted", false);
             events.add(new SseEvent("tool_result", data));
         }
+        if ("completed".equals(status) || "error".equals(status)) {
+            toolCalls.remove(callId);
+        }
         return events;
     }
 

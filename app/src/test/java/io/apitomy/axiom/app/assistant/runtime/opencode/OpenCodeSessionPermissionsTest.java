@@ -81,4 +81,35 @@ class OpenCodeSessionPermissionsTest {
         assertFalse(permission.has("StructuredOutput"));
         assertEquals("allow", permission.path("read").asText());
     }
+
+    @Test
+    void onlyUnknownToolsFailClosedToAsk() {
+        JsonNode permission = OpenCodeSessionPermissions.fromAllowedTools(List.of("StructuredOutput"));
+
+        assertEquals(1, permission.size());
+        assertEquals("ask", permission.path("*").asText());
+    }
+
+    @Test
+    void bareMcpPrefixIsSkipped() {
+        JsonNode permission = OpenCodeSessionPermissions.fromAllowedTools(List.of("mcp__", "Read"));
+
+        assertEquals(2, permission.size());
+        assertFalse(permission.has("_*"));
+        assertEquals("allow", permission.path("read").asText());
+    }
+
+    @Test
+    void emptyParenthesesAllowWholeTool() {
+        JsonNode permission = OpenCodeSessionPermissions.fromAllowedTools(List.of("Read()"));
+
+        assertEquals("allow", permission.path("read").asText());
+    }
+
+    @Test
+    void mcpServerNameWithUnderscoreMapsToolKey() {
+        JsonNode permission = OpenCodeSessionPermissions.fromAllowedTools(List.of("mcp__my_srv__tool"));
+
+        assertEquals("allow", permission.path("my_srv_tool").asText());
+    }
 }
