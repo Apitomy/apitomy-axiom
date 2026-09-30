@@ -271,9 +271,9 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
 
             case "turn_complete":
                 setIsProcessing(false);
-                if (data.costUsd != null) {
+                if (data.sessionCostUsd != null || data.costUsd != null) {
                     onCostUpdateRef.current?.(
-                        data.costUsd as number,
+                        (data.sessionCostUsd ?? data.costUsd) as number,
                         (data.inputTokens ?? 0) as number,
                         (data.outputTokens ?? 0) as number
                     );

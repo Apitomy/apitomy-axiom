@@ -550,6 +550,7 @@ public class AssistantSession {
         }
         if ("turn_complete".equals(event.type())) {
             accumulateCost(event);
+            event = withSessionCost(event);
         } else if ("conversation_reset".equals(event.type())) {
             synchronized (costLock) {
                 costBaselineUsd += costSegmentMaxUsd;
@@ -652,6 +653,22 @@ public class AssistantSession {
         totalOutputTokens.addAndGet(event.data().path("outputTokens").asLong(0));
         totalDurationMs.addAndGet(event.data().path("durationMs").asLong(0));
         turnCount.incrementAndGet();
+    }
+
+    /**
+     * Returns a copy of a {@code turn_complete} event with a {@code sessionCostUsd} field holding the session's
+     * total cost, including spend from conversation segments before any {@code conversation_reset}. The
+     * engine-reported {@code costUsd} is left unchanged.
+     *
+     * @param event the turn_complete event
+     * @return the event with {@code sessionCostUsd} added
+     */
+    private SseEvent withSessionCost(SseEvent event) {
+        ObjectNode data = event.data() instanceof ObjectNode obj
+                ? obj.deepCopy()
+                : com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
+        data.put("sessionCostUsd", getTotalCostUsd());
+        return new SseEvent(event.type(), data);
     }
 
 }

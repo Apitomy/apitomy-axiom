@@ -119,6 +119,37 @@ class AssistantSessionDriverDelegationTest {
         assertEquals(0.0291675 + 0.0133689, session.getTotalCostUsd(), 1e-9);
     }
 
+    @Test
+    void turnCompleteEventsCarrySessionCostAcrossConversationReset() throws Exception {
+        AssistantSession session = new AssistantSession(
+                "test", "general-assistant", Path.of("/tmp/s"), Path.of("/tmp/w"),
+                List.of(), Map.of(), "claude-code", null, null, new RecordingDriver());
+        session.start();
+        List<SseEvent> seen = new java.util.ArrayList<>();
+        session.addListener(e -> {
+            if ("turn_complete".equals(e.type())) {
+                seen.add(e);
+            }
+        });
+
+        session.handleDriverEvent(turnComplete(0.0291675, 10, 20, 100));
+        session.handleDriverEvent(new SseEvent("conversation_reset", JsonNodeFactory.instance.objectNode()));
+        session.handleDriverEvent(turnComplete(0.0, 0, 0, 0));
+        session.handleDriverEvent(turnComplete(0.0133689, 5, 6, 50));
+
+        assertEquals(3, seen.size());
+        assertEquals(0.0291675, seen.get(0).data().path("sessionCostUsd").asDouble(-1), 1e-9);
+        assertEquals(0.0291675, seen.get(0).data().path("costUsd").asDouble(-1), 1e-9);
+        assertEquals(0.0291675 + 0.0133689, seen.get(2).data().path("sessionCostUsd").asDouble(-1), 1e-9);
+        assertEquals(0.0133689, seen.get(2).data().path("costUsd").asDouble(-1), 1e-9);
+
+        List<SseEvent> history = session.getEventHistory();
+        SseEvent lastTurn = history.stream().filter(e -> "turn_complete".equals(e.type()))
+                .reduce((a, b) -> b).orElseThrow();
+        assertEquals(0.0291675 + 0.0133689, lastTurn.data().path("sessionCostUsd").asDouble(-1), 1e-9);
+        assertEquals(0.0133689, lastTurn.data().path("costUsd").asDouble(-1), 1e-9);
+    }
+
     private static SseEvent turnComplete(double cost, long in, long out, long durationMs) {
         ObjectNode data = JsonNodeFactory.instance.objectNode();
         data.put("costUsd", cost);
