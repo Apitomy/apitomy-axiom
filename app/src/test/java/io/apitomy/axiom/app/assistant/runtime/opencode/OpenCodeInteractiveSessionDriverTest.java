@@ -1,5 +1,9 @@
 package io.apitomy.axiom.app.assistant.runtime.opencode;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
@@ -319,9 +323,9 @@ class OpenCodeInteractiveSessionDriverTest {
         try (FakeOpenCodeServer server = FakeOpenCodeServer.start()) {
             FakeServerProcess process = new FakeServerProcess(server.baseUrl());
 
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            com.fasterxml.jackson.databind.node.ObjectNode tools = mapper.createObjectNode();
-            com.fasterxml.jackson.databind.node.ArrayNode allowed = tools.putArray("allowed");
+            ObjectMapper mapper = new ObjectMapper();
+            ObjectNode tools = mapper.createObjectNode();
+            ArrayNode allowed = tools.putArray("allowed");
             allowed.add("Read(*)");
             allowed.add("Write(*)");
 
@@ -578,8 +582,8 @@ class OpenCodeInteractiveSessionDriverTest {
 
             driver.sendUserMessage("hello");
 
-            com.fasterxml.jackson.databind.JsonNode body =
-                    new com.fasterxml.jackson.databind.ObjectMapper().readTree(server.lastPromptBody());
+            JsonNode body =
+                    new ObjectMapper().readTree(server.lastPromptBody());
             assertEquals("You are the Axiom Configuration Assistant.", body.path("system").asText());
             assertEquals("hello", body.path("parts").get(0).path("text").asText());
             driver.destroy();
@@ -641,9 +645,9 @@ class OpenCodeInteractiveSessionDriverTest {
 
             List<String> bodies = server.promptBodies();
             assertEquals(2, bodies.size());
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            com.fasterxml.jackson.databind.JsonNode first = mapper.readTree(bodies.get(0));
-            com.fasterxml.jackson.databind.JsonNode second = mapper.readTree(bodies.get(1));
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode first = mapper.readTree(bodies.get(0));
+            JsonNode second = mapper.readTree(bodies.get(1));
             assertEquals(systemPrompt, first.path("system").asText());
             assertEquals("first", first.path("parts").get(0).path("text").asText());
             assertEquals(systemPrompt, second.path("system").asText());
@@ -671,8 +675,8 @@ class OpenCodeInteractiveSessionDriverTest {
 
             driver.sendUserMessage("hello");
 
-            com.fasterxml.jackson.databind.JsonNode body =
-                    new com.fasterxml.jackson.databind.ObjectMapper().readTree(server.lastPromptBody());
+            JsonNode body =
+                    new ObjectMapper().readTree(server.lastPromptBody());
             assertFalse(body.has("system"));
             driver.destroy();
         }
@@ -688,14 +692,14 @@ class OpenCodeInteractiveSessionDriverTest {
 
     private static EventResponder replayFixture(String fixture) {
         return exchange -> {
-            List<com.fasterxml.jackson.databind.JsonNode> events = OpenCodeEventFixtures.load(fixture);
+            List<JsonNode> events = OpenCodeEventFixtures.load(fixture);
             String capturedSessionId = OpenCodeEventFixtures.first(events,
                             event -> "session.created".equals(event.path("type").asText()))
                     .path("properties").path("info").path("id").asText();
             exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
             exchange.sendResponseHeaders(200, 0);
             try (OutputStream outputStream = exchange.getResponseBody()) {
-                for (com.fasterxml.jackson.databind.JsonNode event : events) {
+                for (JsonNode event : events) {
                     String line = event.toString().replace(capturedSessionId, "session-1");
                     outputStream.write(("data: " + line + "\n\n").getBytes(StandardCharsets.UTF_8));
                 }
@@ -720,6 +724,8 @@ class OpenCodeInteractiveSessionDriverTest {
             driver.start();
             waitUntil(() -> events.stream().anyMatch(event -> "turn_complete".equals(event.type())),
                     Duration.ofSeconds(5));
+            assertTrue(events.stream().anyMatch(event -> "turn_complete".equals(event.type())),
+                    "No turn_complete received; events: " + events);
             driver.destroy();
         }
         return events;
@@ -732,7 +738,6 @@ class OpenCodeInteractiveSessionDriverTest {
         List<SseEvent> events = replayThroughDriver("1.18.33-tool-calls.jsonl", permissionEvents);
 
         List<String> summary = events.stream()
-                .filter(event -> !"session_error".equals(event.type()))
                 .map(event -> switch (event.type()) {
                     case "tool_use" -> "tool_use:" + event.data().path("name").asText() + ":"
                             + event.data().path("id").asText();

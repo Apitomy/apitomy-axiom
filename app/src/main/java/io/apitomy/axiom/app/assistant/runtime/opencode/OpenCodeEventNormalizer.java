@@ -15,8 +15,11 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Normalizes OpenCode runtime events into assistant SSE events consumed by the UI.
  *
- * <p>Instances are stateful (they de-duplicate tool calls, text and reasoning parts across the repeated
- * {@code message.part.updated} events OpenCode sends), so use one instance per session.
+ * <p>Instances are per-session and single-reader: each driver creates one instance and calls it only from its
+ * SSE reader thread. Instances are stateful - they de-duplicate tool calls, text and reasoning parts across the
+ * repeated {@code message.part.updated} events OpenCode sends. Because OpenCode call IDs and part IDs are globally
+ * unique, the de-dup state is kept for the whole session lifetime (it is not reset at turn end), so late part
+ * updates arriving after {@code session.idle} are not re-emitted.
  */
 public class OpenCodeEventNormalizer {
 
@@ -63,10 +66,7 @@ public class OpenCodeEventNormalizer {
             case "message.part.updated" -> mapMessagePart(eventData, safePayload);
             case "session.permission.requested", "permission.asked", "permission.v2.asked" ->
                     List.of(permission(eventData));
-            case "session.turn.completed", "session.idle" -> {
-                clearTurnState();
-                yield List.of(turnComplete(eventData));
-            }
+            case "session.turn.completed", "session.idle" -> List.of(turnComplete(eventData));
             case "session.error" -> List.of(sessionError(eventData));
             default -> IGNORED_EVENT_TYPES.contains(resolvedType)
                     ? Collections.emptyList()
@@ -149,14 +149,6 @@ public class OpenCodeEventNormalizer {
         return new SseEvent("unhandled_event", data);
     }
 
-    private void clearTurnState() {
-        toolUsesEmitted.clear();
-        toolResultsEmitted.clear();
-        reasoningPartsSeen.clear();
-        lastTextByPart.clear();
-    }
-
-
     private JsonNode eventData(JsonNode payload) {
         JsonNode properties = payload.path("properties");
         return properties.isObject() ? properties : payload;
@@ -170,7 +162,7 @@ public class OpenCodeEventNormalizer {
         return eventName;
     }
 
-                private SseEvent permission(JsonNode payload) {
+    private SseEvent permission(JsonNode payload) {
         ObjectNode data = JsonNodeFactory.instance.objectNode();
         String requestId = firstNonBlank(
                 payload.path("requestId").asText(""),

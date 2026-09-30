@@ -192,6 +192,48 @@ class OpenCodeEventNormalizerTest {
     }
 
     @Test
+    void lateToolPartAfterIdleIsNotReEmitted() throws Exception {
+        List<JsonNode> events = OpenCodeEventFixtures.load(TOOL_CALLS);
+        JsonNode completed = first(events, toolPart("read", "completed"));
+        normalize(first(events, toolPart("read", "running")));
+        normalize(completed);
+        normalize(idleEvent());
+
+        assertTrue(normalize(completed).isEmpty());
+    }
+
+    @Test
+    void lateTextPartAfterIdleIsNotReEmitted() throws Exception {
+        List<JsonNode> events = OpenCodeEventFixtures.load(TOOL_CALLS);
+        JsonNode done = first(events, partOfType("text")
+                .and(event -> "DONE".equals(event.path("properties").path("part").path("text").asText())));
+        assertEquals(1, normalize(done).size());
+        normalize(idleEvent());
+
+        assertTrue(normalize(done).isEmpty());
+    }
+
+    @Test
+    void toolPartWithoutCallIdFallsBackToPartId() throws Exception {
+        JsonNode payload = mapper.readTree("""
+                {"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"prt_x",\
+                "sessionID":"s1","messageID":"m1","type":"tool","tool":"read","state":{"status":"completed",\
+                "input":{"filePath":"a.txt"},"output":"ok"}}}}
+                """);
+
+        List<SseEvent> out = normalize(payload);
+
+        assertEquals(List.of("tool_use", "tool_result"), out.stream().map(SseEvent::type).toList());
+        assertEquals("prt_x", out.get(0).data().path("id").asText());
+        assertEquals("prt_x", out.get(1).data().path("toolUseId").asText());
+        assertEquals("ok", out.get(1).data().path("stdout").asText());
+    }
+
+    private JsonNode idleEvent() throws Exception {
+        return mapper.readTree("{\"type\":\"session.idle\",\"properties\":{\"sessionID\":\"s1\"}}");
+    }
+
+    @Test
     void reasoningPartEmitsThinkingOncePerPart() {
         List<JsonNode> events = OpenCodeEventFixtures.load(TOOL_CALLS);
 
