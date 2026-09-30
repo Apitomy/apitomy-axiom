@@ -160,20 +160,35 @@ public class AssistantSession {
     }
 
     /**
-     * Sends a user message to the runtime. The message is recorded in event history so it can be
-     * replayed on reconnect.
+     * Sends a user message to the runtime. The message is recorded in event history (so it can be replayed on
+     * reconnect) before it is handed to the driver. If the driver cannot deliver it, a {@code session_error}
+     * event named {@code MessageNotDelivered} is recorded after it and the driver's exception is rethrown.
      *
      * @param message the user's message text
      * @throws IOException if the message cannot be written
      */
     public void sendMessage(String message) throws IOException {
-        // Record the user message in event history for replay
         ObjectNode userData = MAPPER.createObjectNode();
         userData.put("content", message);
         addEvent(new SseEvent("user_message", userData));
 
-        driver.sendUserMessage(message);
+        try {
+            driver.sendUserMessage(message);
+        } catch (IOException | RuntimeException e) {
+            recordUndeliveredMessage(e);
+            throw e;
+        }
         lastActivityAt = Instant.now();
+    }
+
+    private void recordUndeliveredMessage(Exception failure) {
+        String reason = failure.getMessage() == null || failure.getMessage().isBlank()
+                ? failure.getClass().getSimpleName()
+                : failure.getMessage();
+        ObjectNode errorData = MAPPER.createObjectNode();
+        errorData.put("name", "MessageNotDelivered");
+        errorData.put("message", "Message was not delivered: " + reason);
+        addEvent(new SseEvent("session_error", errorData));
     }
 
     /**
