@@ -1,8 +1,9 @@
 package io.apitomy.axiom.app.assistant.runtime.opencode;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.app.assistant.runtime.SessionCompatibilityException;
+import org.jboss.logging.Logger;
 
 import java.io.IOException;
 import java.net.URI;
@@ -12,14 +13,26 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Performs a fail-closed capability probe against an OpenCode runtime.
+ * Performs a fail-closed, side-effect-free capability probe against an OpenCode runtime.
+ *
+ * <p>The probe checks runtime health, then reads the runtime's OpenAPI document from {@code GET /doc} and
+ * verifies that the session, prompt, permission, abort and event-stream operations are declared. It then
+ * performs a live check that the event stream answers with {@code text/event-stream}. When {@code /doc} is
+ * unavailable (older runtimes), it falls back to creating a probe session, checking the event stream and
+ * deleting that session again.</p>
+ *
+ * <p>The probe never sends a prompt, never replies to a permission and never aborts a session, so it has no
+ * side effects on the runtime (apart from the short-lived fallback session). Passing results are cached per
+ * runtime version reported by the health endpoint; failures and blank versions are never cached.</p>
  */
 public final class OpenCodeCapabilityProbe {
 
+    private static final Logger LOG = Logger.getLogger(OpenCodeCapabilityProbe.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final String PROBE_PERMISSION_ID = "per_probe_permission_id";
+    private static final Map<String, Result> PASS_CACHE = new ConcurrentHashMap<>();
 
     private final HttpClient httpClient;
 
@@ -38,6 +51,13 @@ public final class OpenCodeCapabilityProbe {
     }
 
     /**
+     * Clears the per-version cache of passing results. Intended for tests.
+     */
+    static void clearCache() {
+        PASS_CACHE.clear();
+    }
+
+    /**
      * Probes OpenCode runtime capabilities required for interactive assistant sessions.
      *
      * @param client OpenCode HTTP client
@@ -52,13 +72,88 @@ public final class OpenCodeCapabilityProbe {
                     "OpenCode runtime health check failed");
         }
 
+        String version = healthStatus.version();
+        boolean cacheable = version != null && !version.isBlank();
+        if (cacheable) {
+            Result cached = PASS_CACHE.get(version);
+            if (cached != null) {
+                return cached;
+            }
+        }
+
+        JsonNode spec = fetchSpec(client.baseUrl());
+        Result result;
+        if (spec != null) {
+            Result specFailure = checkSpec(spec);
+            result = specFailure != null ? specFailure : checkEventStream(client.baseUrl());
+        } else {
+            result = fallbackProbe(client);
+        }
+
+        if (result.compatible() && cacheable) {
+            PASS_CACHE.put(version, result);
+        }
+        return result;
+    }
+
+    private JsonNode fetchSpec(String baseUrl) {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/doc"))
+                .header("Accept", "application/json")
+                .GET()
+                .timeout(Duration.ofSeconds(10))
+                .build();
+        try {
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                return null;
+            }
+            JsonNode spec = MAPPER.readTree(response.body());
+            return spec != null && spec.isObject() ? spec : null;
+        } catch (IOException e) {
+            return null;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
+    }
+
+    private static Result checkSpec(JsonNode spec) {
+        if (!hasOperation(spec, "post", "/session")) {
+            return Result.fail(SessionCompatibilityException.SESSION_PROTOCOL_UNSUPPORTED,
+                    "OpenCode API does not declare the session creation endpoint");
+        }
+        if (!hasOperation(spec, "post", "/session/{sessionID}/prompt_async")) {
+            return Result.fail(SessionCompatibilityException.PROMPT_PROTOCOL_UNSUPPORTED,
+                    "OpenCode API does not declare the prompt endpoint");
+        }
+        if (!hasOperation(spec, "post", "/session/{sessionID}/permissions/{permissionID}")) {
+            return Result.fail(SessionCompatibilityException.PERMISSION_PROTOCOL_UNSUPPORTED,
+                    "OpenCode API does not declare the permission endpoint");
+        }
+        if (!hasOperation(spec, "post", "/session/{sessionID}/abort")) {
+            return Result.fail(SessionCompatibilityException.INTERRUPT_PROTOCOL_UNSUPPORTED,
+                    "OpenCode API does not declare the abort endpoint");
+        }
+        if (!hasOperation(spec, "get", "/event") && !hasOperation(spec, "get", "/global/event")) {
+            return Result.fail(SessionCompatibilityException.EVENT_STREAM_UNRELIABLE,
+                    "OpenCode API does not declare an event stream endpoint");
+        }
+        return null;
+    }
+
+    private static boolean hasOperation(JsonNode spec, String method, String path) {
+        return spec.path("paths").path(path).has(method);
+    }
+
+    private Result fallbackProbe(OpenCodeAssistantClient client) {
         String sessionId;
         try {
             sessionId = client.createSession("Axiom capability probe");
         } catch (RuntimeException e) {
             return Result.fail(SessionCompatibilityException.SESSION_PROTOCOL_UNSUPPORTED,
                     "OpenCode session creation endpoint is unavailable",
-                    Map.of("cause", e.getMessage()));
+                    Map.of("cause", String.valueOf(e.getMessage())));
         }
 
         if (sessionId == null || sessionId.isBlank()) {
@@ -66,7 +161,18 @@ public final class OpenCodeCapabilityProbe {
                     "OpenCode session creation did not return an id");
         }
 
-        String baseUrl = client.baseUrl();
+        try {
+            return checkEventStream(client.baseUrl());
+        } finally {
+            try {
+                client.deleteSession(sessionId);
+            } catch (RuntimeException e) {
+                LOG.debugf(e, "Failed to delete OpenCode capability probe session %s", sessionId);
+            }
+        }
+    }
+
+    private Result checkEventStream(String baseUrl) {
         SseEndpointStatus eventEndpointStatus = checkSseEndpoint(baseUrl + "/event");
         if (eventEndpointStatus == SseEndpointStatus.UNMAPPED) {
             SseEndpointStatus globalEventEndpointStatus = checkSseEndpoint(baseUrl + "/global/event");
@@ -78,30 +184,6 @@ public final class OpenCodeCapabilityProbe {
             return Result.fail(SessionCompatibilityException.EVENT_STREAM_UNRELIABLE,
                     "No supported SSE endpoint for assistant runtime");
         }
-
-        try {
-            client.sendPromptAsync(sessionId, "capability-probe", null, null);
-        } catch (RuntimeException e) {
-            return Result.fail(SessionCompatibilityException.PROMPT_PROTOCOL_UNSUPPORTED,
-                    "OpenCode prompt endpoint is unavailable",
-                    Map.of("sessionId", sessionId, "cause", e.getMessage()));
-        }
-
-        PermissionEndpointStatus permissionEndpointStatus = checkPermissionEndpoint(baseUrl, sessionId);
-        if (permissionEndpointStatus != PermissionEndpointStatus.SUPPORTED) {
-            return Result.fail(SessionCompatibilityException.PERMISSION_PROTOCOL_UNSUPPORTED,
-                    "OpenCode permission endpoint is unavailable",
-                    Map.of("sessionId", sessionId));
-        }
-
-        try {
-            client.abort(sessionId);
-        } catch (RuntimeException e) {
-            return Result.fail(SessionCompatibilityException.INTERRUPT_PROTOCOL_UNSUPPORTED,
-                    "OpenCode abort endpoint is unavailable",
-                    Map.of("sessionId", sessionId, "cause", e.getMessage()));
-        }
-
         return Result.pass();
     }
 
@@ -143,68 +225,10 @@ public final class OpenCodeCapabilityProbe {
         }
     }
 
-    private PermissionEndpointStatus checkPermissionEndpoint(String baseUrl, String sessionId) {
-        String permissionEndpoint = baseUrl + "/session/" + sessionId + "/permissions/" + PROBE_PERMISSION_ID;
-        ObjectNode body = MAPPER.createObjectNode();
-        body.put("response", "once");
-
-        int postStatusCode = sendJsonPost(permissionEndpoint, body.toString());
-        if (postStatusCode == 200) {
-            return PermissionEndpointStatus.SUPPORTED;
-        }
-        if (postStatusCode != 404) {
-            return PermissionEndpointStatus.UNSUPPORTED;
-        }
-
-        int optionsStatusCode = sendOptions(permissionEndpoint);
-        if (optionsStatusCode == 200 || optionsStatusCode == 204 || optionsStatusCode == 405) {
-            return PermissionEndpointStatus.SUPPORTED;
-        }
-        return PermissionEndpointStatus.UNSUPPORTED;
-    }
-
-    private int sendJsonPost(String endpoint, String body) {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(endpoint))
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(body))
-                .timeout(Duration.ofSeconds(3))
-                .build();
-        return sendStatusCode(request);
-    }
-
-    private int sendOptions(String endpoint) {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(endpoint))
-                .method("OPTIONS", HttpRequest.BodyPublishers.noBody())
-                .timeout(Duration.ofSeconds(3))
-                .build();
-        return sendStatusCode(request);
-    }
-
-    private int sendStatusCode(HttpRequest request) {
-        try {
-            HttpResponse<java.io.InputStream> response =
-                    httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
-            response.body().close();
-            return response.statusCode();
-        } catch (IOException e) {
-            return 0;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return 0;
-        }
-    }
-
     private enum SseEndpointStatus {
         SUPPORTED,
         UNMAPPED,
         UNRELIABLE
-    }
-
-    private enum PermissionEndpointStatus {
-        SUPPORTED,
-        UNSUPPORTED
     }
 
     /**
