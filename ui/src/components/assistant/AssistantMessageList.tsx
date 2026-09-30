@@ -243,7 +243,7 @@ export function AssistantMessageList({ messages, onPermissionRespond, onCreateAu
             {isProcessing && (
                 <div className="axiom-message-list__processing">
                     <Spinner size="md" />
-                    <span>{processingText || "Claude is working..."}</span>
+                    <span>{processingText || "Working..."}</span>
                 </div>
             )}
             <div ref={endRef} />

@@ -22,6 +22,7 @@ import { stackoverflowDark } from "react-syntax-highlighter/dist/esm/styles/hljs
 import { useEffectiveTheme } from "../../hooks/useTheme";
 import { markdownMermaidComponents } from "../MermaidBlock";
 import { AssistantAskUserQuestion } from "./AssistantAskUserQuestion";
+import { filePathField, mcpServer, toolKind } from "./toolNames";
 import "../../axiom-markdown.css";
 import "./AssistantToolUseBlock.css";
 
@@ -31,11 +32,15 @@ SyntaxHighlighter.registerLanguage("bash", bash);
 type LabelColor = "blue" | "green" | "purple" | "teal" | "orange" | "grey" | "red";
 
 function getToolColor(toolName: string): LabelColor {
-    if (toolName === "AskUserQuestion") return "teal";
-    if (toolName === "EnterPlanMode" || toolName === "Agent") return "orange";
-    if (toolName.startsWith("mcp__axiom-sdk__") || toolName.startsWith("mcp__axiom__")) return "green";
-    if (toolName.startsWith("mcp__axiom-tools__")) return "purple";
-    if (toolName.startsWith("mcp__")) return "grey";
+    const kind = toolKind(toolName);
+    if (kind === "askUser") return "teal";
+    if (kind === "enterPlanMode" || kind === "agent") return "orange";
+    if (kind === "mcp") {
+        const server = mcpServer(toolName);
+        if (server === "axiom" || server === "axiom-sdk") return "green";
+        if (server === "axiom-tools") return "purple";
+        return "grey";
+    }
     return "blue";
 }
 
@@ -88,6 +93,7 @@ export const AssistantToolUseBlock = memo(function AssistantToolUseBlock({
         : "";
 
     const contextSummary = getContextSummary(toolName, input);
+    const isAgent = toolKind(toolName) === "agent";
 
     return (
         <div className="axiom-tool-use" data-border={borderVariant || undefined}
@@ -99,10 +105,10 @@ export const AssistantToolUseBlock = memo(function AssistantToolUseBlock({
                             <Label
                                 isCompact
                                 color={isError ? "red" : getToolColor(toolName)}
-                                onClick={toolName === "Agent" && onSubagentClick && toolUseId
+                                onClick={isAgent && onSubagentClick && toolUseId
                                     ? (e) => { e.stopPropagation(); onSubagentClick(toolUseId); }
                                     : undefined}
-                                style={toolName === "Agent" && onSubagentClick ? { cursor: "pointer" } : undefined}
+                                style={isAgent && onSubagentClick ? { cursor: "pointer" } : undefined}
                             >
                                 {toolName}
                             </Label>
@@ -333,7 +339,7 @@ export const AssistantToolUseBlock = memo(function AssistantToolUseBlock({
                                             <Button variant="primary" size="sm"
                                                 isDisabled={!customPattern.trim()}
                                                 onClick={() => {
-                                                    const info = getFieldInfo(toolName);
+                                                    const info = getFieldInfo(toolName, input);
                                                     onCreateAutoApproval(
                                                         toolName, info.fieldName,
                                                         customPattern.trim(), permissionId);
@@ -362,17 +368,25 @@ export const AssistantToolUseBlock = memo(function AssistantToolUseBlock({
 
 function getContextSummary(toolName: string, input?: Record<string, unknown>): string | null {
     if (!input) return null;
-    switch (toolName) {
-        case "Bash":
+    const pathKey = filePathField(input);
+    const filePath = (pathKey && input[pathKey]) || "unknown file";
+    switch (toolKind(toolName)) {
+        case "bash":
             return input.command as string || null;
-        case "Write":
-            return `Write to: ${input.file_path || "unknown file"}`;
-        case "Edit":
-            return `Edit: ${input.file_path || "unknown file"}`;
-        case "Read":
-            return `Read: ${input.file_path || "unknown file"}`;
-        case "Agent":
+        case "write":
+            return `Write to: ${filePath}`;
+        case "edit":
+            return `Edit: ${filePath}`;
+        case "read":
+            return `Read: ${filePath}`;
+        case "agent":
             return `Agent: ${input.description || input.prompt || ""}`.substring(0, 200);
+        case "glob":
+        case "grep":
+            if (!input.pattern) return null;
+            return input.path ? `${input.pattern} in ${input.path}` : String(input.pattern);
+        case "webfetch":
+            return input.url as string || null;
         default:
             if (typeof input === "object" && Object.keys(input).length > 0) {
                 return JSON.stringify(input, null, 2).substring(0, 200);
@@ -408,10 +422,11 @@ interface PatternSuggestion {
     pattern: string | undefined;
 }
 
-function getFieldInfo(toolName: string): { fieldName: string | undefined } {
-    switch (toolName) {
-        case "Bash": return { fieldName: "command" };
-        case "Read": case "Write": case "Edit": return { fieldName: "file_path" };
+function getFieldInfo(toolName: string,
+    input?: Record<string, unknown>): { fieldName: string | undefined } {
+    switch (toolKind(toolName)) {
+        case "bash": return { fieldName: "command" };
+        case "read": case "write": case "edit": return { fieldName: filePathField(input) };
         default: return { fieldName: undefined };
     }
 }
@@ -419,7 +434,9 @@ function getFieldInfo(toolName: string): { fieldName: string | undefined } {
 function getSuggestedPatterns(toolName: string, input?: Record<string, unknown>): PatternSuggestion[] {
     const suggestions: PatternSuggestion[] = [];
 
-    if (toolName === "Bash" && input?.command) {
+    const kind = toolKind(toolName);
+    const pathKey = filePathField(input);
+    if (kind === "bash" && input?.command) {
         const command = input.command as string;
         const firstWord = command.split(/\s+/)[0];
         if (firstWord) {
@@ -429,9 +446,9 @@ function getSuggestedPatterns(toolName: string, input?: Record<string, unknown>)
                 pattern: `^${escapeRegex(firstWord)} `,
             });
         }
-    } else if ((toolName === "Read" || toolName === "Write" || toolName === "Edit")
-            && input?.file_path) {
-        const filePath = input.file_path as string;
+    } else if ((kind === "read" || kind === "write" || kind === "edit")
+            && pathKey && input?.[pathKey]) {
+        const filePath = input[pathKey] as string;
         const dir = filePath.substring(0, filePath.lastIndexOf("/"));
         suggestions.push({
             label: `Allow all ${toolName}`,
@@ -441,7 +458,7 @@ function getSuggestedPatterns(toolName: string, input?: Record<string, unknown>)
         if (dir) {
             suggestions.push({
                 label: `${dir}/...`,
-                fieldName: "file_path",
+                fieldName: pathKey,
                 pattern: `^${escapeRegex(dir)}/`,
             });
         }

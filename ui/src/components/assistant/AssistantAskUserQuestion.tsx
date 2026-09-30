@@ -115,7 +115,7 @@ export function AssistantAskUserQuestion({
                         )}
                         {!resolved && (
                             <span style={{ fontSize: "13px" }}>
-                                Claude has a question
+                                The assistant has a question
                             </span>
                         )}
                     </span>

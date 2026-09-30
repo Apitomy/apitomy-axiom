@@ -11,7 +11,8 @@ import { BrowseToolsModal } from "./BrowseToolsModal";
 import { fetchSdkToolValues } from "../config/sdkTools";
 
 /**
- * Well-known Claude Code built-in tools available for autocomplete.
+ * Well-known built-in tools available for autocomplete. These are engine-neutral allowed tool names
+ * (Claude Code format), which are translated to OpenCode permissions for OpenCode sessions.
  */
 const BUILTIN_TOOLS = [
     "Read",
