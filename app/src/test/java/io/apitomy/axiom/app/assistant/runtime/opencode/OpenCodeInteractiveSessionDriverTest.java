@@ -29,7 +29,6 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OpenCodeInteractiveSessionDriverTest {
@@ -68,7 +67,7 @@ class OpenCodeInteractiveSessionDriverTest {
     }
 
     @Test
-    void rejectsSecondPromptWhileTurnActive() throws Exception {
+    void acceptsSecondPromptWhileTurnActive() throws Exception {
         CountDownLatch promptSubmitted = new CountDownLatch(1);
         EventResponder eventResponder = exchange -> {
             exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
@@ -79,26 +78,26 @@ class OpenCodeInteractiveSessionDriverTest {
         };
 
         try (FakeOpenCodeServer server = FakeOpenCodeServer.start(eventResponder, promptSubmitted)) {
-            FakeServerProcess process = new FakeServerProcess(server.baseUrl());
-
             OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
-                    process,
+                    new FakeServerProcess(server.baseUrl()),
                     client -> OpenCodeCapabilityProbe.Result.pass(),
                     new OpenCodeEventNormalizer(),
                     event -> {
                     },
                     event -> {
                     },
-                    "Axiom Session",
-                    "github-copilot/claude-sonnet-5",
-                    null
-            );
+                    new OpenCodeInteractiveSessionDriver.SessionSettings(
+                            "Axiom Session", "github-copilot/claude-sonnet-5", null, Set.of(),
+                            "You are the Axiom Configuration Assistant."));
 
             driver.start();
             driver.sendUserMessage("first");
 
-            assertThrows(IllegalStateException.class, () -> driver.sendUserMessage("second"));
-            assertEquals(1, server.promptCallCount());
+            assertDoesNotThrow(() -> driver.sendUserMessage("second while busy"));
+            assertEquals(2, server.promptCallCount());
+            JsonNode second = new ObjectMapper().readTree(server.promptBodies().get(1));
+            assertEquals("second while busy", second.path("parts").get(0).path("text").asText());
+            assertEquals("You are the Axiom Configuration Assistant.", second.path("system").asText());
 
             driver.destroy();
         }
@@ -264,7 +263,7 @@ class OpenCodeInteractiveSessionDriverTest {
     }
 
     @Test
-    void streamFailureTransitionsToErrorAndClearsInFlightPrompt() throws Exception {
+    void streamFailureTransitionsToError() throws Exception {
         CountDownLatch promptSubmitted = new CountDownLatch(1);
         EventResponder eventResponder = exchange -> {
             exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
@@ -310,7 +309,6 @@ class OpenCodeInteractiveSessionDriverTest {
 
             assertEquals(AssistantSession.Status.ERROR, driver.getStatus());
             assertNotNull(driver.getErrorMessage());
-            assertFalse(isTurnInFlight(driver));
             assertEquals(1, server.promptCallCount());
             assertNotNull(terminal.get());
 
@@ -420,16 +418,6 @@ class OpenCodeInteractiveSessionDriverTest {
         int startCalls() {
             return startCalls.get();
         }
-    }
-
-    private static boolean isTurnInFlight(OpenCodeInteractiveSessionDriver driver) throws Exception {
-        java.lang.reflect.Field field = OpenCodeInteractiveSessionDriver.class.getDeclaredField("turnInFlight");
-        field.setAccessible(true);
-        Object object = field.get(driver);
-        if (object instanceof java.util.concurrent.atomic.AtomicBoolean atomicBoolean) {
-            return atomicBoolean.get();
-        }
-        return false;
     }
 
     private static void waitUntil(BooleanSupplier condition, Duration timeout) throws Exception {
@@ -632,14 +620,6 @@ class OpenCodeInteractiveSessionDriverTest {
             driver.start();
 
             driver.sendUserMessage("first");
-            waitUntil(() -> {
-                try {
-                    return !isTurnInFlight(driver);
-                } catch (Exception e) {
-                    throw new IllegalStateException(e);
-                }
-            }, Duration.ofSeconds(3));
-            assertFalse(isTurnInFlight(driver));
 
             driver.sendUserMessage("second");
 
