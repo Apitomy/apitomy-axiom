@@ -814,6 +814,27 @@ class OpenCodeInteractiveSessionDriverTest {
     }
 
     @Test
+    void invalidModelsReportNoModelEvenWhenProviderHasDefault() throws Exception {
+        ModelRun run = runWithModels(200, DEFAULT_PROVIDERS, "github-copilot/nope", "a/b");
+
+        assertEquals(1, run.modelErrors().size());
+        assertTrue(run.modelErrors().get(0).path("message").asText().contains("OpenCode's default model"));
+        assertEquals("", run.sessionInit().path("model").asText("missing"));
+        assertFalse(run.prompt().has("model"));
+    }
+
+    @Test
+    void sameInvalidTemplateAndFallbackIsListedOnce() throws Exception {
+        ModelRun run = runWithModels(200, DEFAULT_PROVIDERS, "x/y", "x/y");
+
+        assertEquals(1, run.modelErrors().size());
+        String message = run.modelErrors().get(0).path("message").asText();
+        assertEquals(message.indexOf("x/y"), message.lastIndexOf("x/y"), message);
+        assertTrue(message.contains("OpenCode's default model"), message);
+        assertFalse(run.prompt().has("model"));
+    }
+
+    @Test
     void unreadableProvidersSkipsValidation() throws Exception {
         ModelRun run = runWithModels(500, "{\"error\":\"boom\"}", "github-copilot/whatever",
                 "github-copilot/gpt-5.4");

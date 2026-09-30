@@ -203,6 +203,8 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                     this::handleStreamFailure
             );
             status.compareAndSet(AssistantSession.Status.STARTING, AssistantSession.Status.RUNNING);
+            // The model is resolved right after RUNNING; callers only send prompts once start() has returned,
+            // so every prompt sees the effective model.
             resolveModelSafely();
             reportMcpServerStatus();
         } catch (SessionCompatibilityException e) {
@@ -231,7 +233,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
             catalog = client.providerCatalog();
         } catch (RuntimeException e) {
             LOG.warnf(e, "Unable to read OpenCode providers; using model '%s' without validation", preferred);
-            model = isBlank(preferred) ? null : preferred;
+            model = isBlank(preferred) ? null : preferred.trim();
             emitSessionInit(model);
             return;
         }
@@ -253,7 +255,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                     + " not available in OpenCode (expected provider/model from the configured providers); using "
                     + using + ".");
         }
-        emitSessionInit(effective != null ? effective : openCodeDefault(rejected, catalog));
+        emitSessionInit(effective);
     }
 
     private List<String> modelCandidates() {
@@ -265,20 +267,6 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
             candidates.add(fallbackModel.trim());
         }
         return candidates;
-    }
-
-    private static String openCodeDefault(List<String> rejected, OpenCodeAssistantClient.ProviderCatalog catalog) {
-        for (String candidate : rejected) {
-            int slash = candidate.indexOf('/');
-            if (slash > 0) {
-                String provider = candidate.substring(0, slash);
-                String defaultModel = catalog.defaults().get(provider);
-                if (!isBlank(defaultModel)) {
-                    return provider + "/" + defaultModel;
-                }
-            }
-        }
-        return null;
     }
 
     private void emitSessionInit(String displayedModel) {
