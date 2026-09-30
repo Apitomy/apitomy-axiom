@@ -7,8 +7,10 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.nio.file.Path;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -18,6 +20,9 @@ import java.util.concurrent.TimeUnit;
 public final class OpenCodeSessionServerProcess {
 
     private static final Logger LOG = Logger.getLogger(OpenCodeSessionServerProcess.class);
+    private static final String PASSWORD_ENV = "OPENCODE_SERVER_PASSWORD";
+    private static final SecureRandom RANDOM = new SecureRandom();
+    static final int MAX_START_ATTEMPTS = 3;
 
     private final String executable;
     private final String hostname;
@@ -25,6 +30,7 @@ public final class OpenCodeSessionServerProcess {
     private final int startupTimeoutSeconds;
     private final Map<String, String> environment;
     private final Path workingDirectory;
+    private final String password;
 
     private volatile Process process;
     private volatile int resolvedPort;
@@ -85,6 +91,7 @@ public final class OpenCodeSessionServerProcess {
         this.startupTimeoutSeconds = startupTimeoutSeconds;
         this.environment = environment != null ? Map.copyOf(environment) : Map.of();
         this.workingDirectory = workingDirectory;
+        this.password = generatePassword();
     }
 
     /**
@@ -95,6 +102,35 @@ public final class OpenCodeSessionServerProcess {
             return;
         }
 
+        for (int attempt = 1; ; attempt++) {
+            try {
+                startOnce();
+                return;
+            } catch (RuntimeException e) {
+                if (!shouldRetry(e, attempt, configuredPort)) {
+                    throw e;
+                }
+                LOG.infof("OpenCode server exited during startup on port %d (attempt %d of %d); retrying "
+                        + "with a new port", resolvedPort, attempt, MAX_START_ATTEMPTS);
+            }
+        }
+    }
+
+    /**
+     * Decides whether a failed start attempt should be retried with a new ephemeral port.
+     *
+     * @param e failure of the attempt
+     * @param attempt 1-based attempt number that failed
+     * @param configuredPort configured port; only ephemeral ({@code 0}) ports are retried
+     * @return true to retry
+     */
+    static boolean shouldRetry(RuntimeException e, int attempt, int configuredPort) {
+        return configuredPort == 0
+                && attempt < MAX_START_ATTEMPTS
+                && e instanceof StartupExitException;
+    }
+
+    private void startOnce() {
         resolvedPort = configuredPort == 0 ? resolveEphemeralPort() : configuredPort;
 
         ProcessBuilder processBuilder = createProcessBuilder(resolvedPort);
@@ -102,7 +138,7 @@ public final class OpenCodeSessionServerProcess {
         try {
             process = processBuilder.start();
             drainOutput(process);
-            client = new OpenCodeAssistantClient(baseUrl());
+            client = new OpenCodeAssistantClient(baseUrl(), password);
             waitForHealthy();
         } catch (IOException e) {
             stop();
@@ -113,6 +149,22 @@ public final class OpenCodeSessionServerProcess {
         }
     }
 
+    /**
+     * Returns the password protecting this server. Intended only for building the driver's
+     * {@link OpenCodeAssistantClient}; never log it or include it in messages or events.
+     *
+     * @return server password
+     */
+    public String password() {
+        return password;
+    }
+
+    private static String generatePassword() {
+        byte[] bytes = new byte[32];
+        RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
     ProcessBuilder createProcessBuilder(int port) {
         ProcessBuilder processBuilder = new ProcessBuilder(
                 executable,
@@ -121,6 +173,7 @@ public final class OpenCodeSessionServerProcess {
                 "--port", String.valueOf(port)
         );
         processBuilder.environment().putAll(environment);
+        processBuilder.environment().put(PASSWORD_ENV, password);
         if (workingDirectory != null) {
             processBuilder.directory(workingDirectory.toFile());
         }
@@ -190,7 +243,7 @@ public final class OpenCodeSessionServerProcess {
         Instant deadline = Instant.now().plusSeconds(startupTimeoutSeconds);
         while (Instant.now().isBefore(deadline)) {
             if (!localProcess.isAlive()) {
-                throw new IllegalStateException(
+                throw new StartupExitException(
                         "OpenCode server exited during startup with code " + localProcess.exitValue());
             }
 
@@ -222,5 +275,15 @@ public final class OpenCodeSessionServerProcess {
                 LOG.debugf("OpenCode output stream closed: %s", e.getMessage());
             }
         });
+    }
+
+    /**
+     * Thrown when the server process exits before becoming healthy (typically a port bind failure).
+     */
+    static final class StartupExitException extends IllegalStateException {
+
+        StartupExitException(String message) {
+            super(message);
+        }
     }
 }

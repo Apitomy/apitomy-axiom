@@ -182,7 +182,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
 
         try {
             serverProcess.start();
-            client = new OpenCodeAssistantClient(serverProcess.baseUrl());
+            client = new OpenCodeAssistantClient(serverProcess.baseUrl(), serverProcess.password());
             OpenCodeCapabilityProbe.Result result = capabilityProbe.probe(client);
             if (!result.compatible()) {
                 status.set(AssistantSession.Status.ERROR);
@@ -596,6 +596,15 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
          * @return session server base URL
          */
         String baseUrl();
+
+        /**
+         * Returns the password protecting the server, used only to authenticate the driver's client.
+         *
+         * @return password, or {@code null} when the server is unprotected
+         */
+        default String password() {
+            return null;
+        }
     }
 
     /**
@@ -630,6 +639,11 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
         @Override
         public String baseUrl() {
             return delegate.baseUrl();
+        }
+
+        @Override
+        public String password() {
+            return delegate.password();
         }
     }
 }

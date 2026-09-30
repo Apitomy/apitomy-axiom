@@ -85,11 +85,11 @@ public final class OpenCodeCapabilityProbe {
             }
         }
 
-        JsonNode spec = fetchSpec(client.baseUrl());
+        JsonNode spec = fetchSpec(client);
         Result result;
         if (spec != null) {
             Result specFailure = checkSpec(spec);
-            result = specFailure != null ? specFailure : checkEventStream(client.baseUrl());
+            result = specFailure != null ? specFailure : checkEventStream(client);
         } else {
             result = fallbackProbe(client);
         }
@@ -100,9 +100,9 @@ public final class OpenCodeCapabilityProbe {
         return result;
     }
 
-    private JsonNode fetchSpec(String baseUrl) {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/doc"))
+    private JsonNode fetchSpec(OpenCodeAssistantClient client) {
+        HttpRequest request = authorized(HttpRequest.newBuilder(), client)
+                .uri(URI.create(client.baseUrl() + "/doc"))
                 .header("Accept", "application/json")
                 .GET()
                 .timeout(Duration.ofSeconds(10))
@@ -120,6 +120,11 @@ public final class OpenCodeCapabilityProbe {
             Thread.currentThread().interrupt();
             return null;
         }
+    }
+
+    private static HttpRequest.Builder authorized(HttpRequest.Builder builder, OpenCodeAssistantClient client) {
+        client.authorizationHeader().ifPresent(value -> builder.header("Authorization", value));
+        return builder;
     }
 
     private static Result checkSpec(JsonNode spec) {
@@ -166,7 +171,7 @@ public final class OpenCodeCapabilityProbe {
         }
 
         try {
-            return checkEventStream(client.baseUrl());
+            return checkEventStream(client);
         } finally {
             try {
                 client.deleteSession(sessionId);
@@ -176,10 +181,10 @@ public final class OpenCodeCapabilityProbe {
         }
     }
 
-    private Result checkEventStream(String baseUrl) {
-        SseEndpointStatus eventEndpointStatus = checkSseEndpoint(baseUrl + "/event");
+    private Result checkEventStream(OpenCodeAssistantClient client) {
+        SseEndpointStatus eventEndpointStatus = checkSseEndpoint(client, "/event");
         if (eventEndpointStatus == SseEndpointStatus.UNMAPPED) {
-            SseEndpointStatus globalEventEndpointStatus = checkSseEndpoint(baseUrl + "/global/event");
+            SseEndpointStatus globalEventEndpointStatus = checkSseEndpoint(client, "/global/event");
             if (globalEventEndpointStatus != SseEndpointStatus.SUPPORTED) {
                 return Result.fail(SessionCompatibilityException.EVENT_STREAM_UNRELIABLE,
                         "No supported SSE endpoint for assistant runtime");
@@ -191,9 +196,9 @@ public final class OpenCodeCapabilityProbe {
         return Result.pass();
     }
 
-    private SseEndpointStatus checkSseEndpoint(String endpoint) {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(endpoint))
+    private SseEndpointStatus checkSseEndpoint(OpenCodeAssistantClient client, String path) {
+        HttpRequest request = authorized(HttpRequest.newBuilder(), client)
+                .uri(URI.create(client.baseUrl() + path))
                 .header("Accept", "text/event-stream")
                 .GET()
                 .timeout(Duration.ofSeconds(3))

@@ -48,14 +48,14 @@ class OpenCodeAssistantProtocolHarnessTest {
 
         try {
             String baseUrl = serverProcess.baseUrl();
-            OpenCodeAssistantClient client = new OpenCodeAssistantClient(baseUrl);
+            OpenCodeAssistantClient client = new OpenCodeAssistantClient(baseUrl, serverProcess.password());
             verifyRuntimeHealth(client);
 
             String sessionId = client.createSession("Axiom protocol harness");
             assertNotNull(sessionId);
             assertFalse(sessionId.isBlank());
 
-            try (EventStreamTap eventTap = EventStreamTap.start(baseUrl)) {
+            try (EventStreamTap eventTap = EventStreamTap.start(baseUrl, client.authorizationHeader().orElse(null))) {
                 verifyPromptAndCoreEvents(client, eventTap, sessionId);
                 verifyAbortFlow(client, eventTap, sessionId);
             }
@@ -313,8 +313,11 @@ class OpenCodeAssistantProtocolHarnessTest {
             this.closed = new AtomicBoolean(false);
         }
 
-        static EventStreamTap start(String baseUrl) {
+        private volatile String authorization;
+
+        static EventStreamTap start(String baseUrl, String authorization) {
             EventStreamTap tap = new EventStreamTap();
+            tap.authorization = authorization;
             tap.connect(baseUrl, "/event");
             tap.connect(baseUrl, "/global/event");
             return tap;
@@ -328,11 +331,14 @@ class OpenCodeAssistantProtocolHarnessTest {
 
         private void stream(String endpointUrl) {
             HttpClient httpClient = HttpClient.newBuilder().build();
-            HttpRequest request = HttpRequest.newBuilder()
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
                     .uri(URI.create(endpointUrl))
                     .header("Accept", "text/event-stream")
-                    .GET()
-                    .build();
+                    .GET();
+            if (authorization != null) {
+                builder.header("Authorization", authorization);
+            }
+            HttpRequest request = builder.build();
 
             try {
                 HttpResponse<java.io.InputStream> response =

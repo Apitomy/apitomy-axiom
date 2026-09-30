@@ -21,9 +21,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -61,6 +63,31 @@ class OpenCodeCapabilityProbeTest {
             assertEquals(0, server.promptPosts.get());
             assertEquals(0, server.permissionPosts.get());
             assertEquals(0, server.deletes.get());
+        }
+    }
+
+    @Test
+    void sendsAuthorizationOnDocAndEventStreamWhenClientHasPassword() throws Exception {
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start(ServerConfig.defaults())) {
+            OpenCodeAssistantClient client = new OpenCodeAssistantClient(server.baseUrl(), "pw");
+
+            OpenCodeCapabilityProbe.Result result = new OpenCodeCapabilityProbe().probe(client);
+
+            String expected = "Basic " + Base64.getEncoder()
+                    .encodeToString("opencode:pw".getBytes(StandardCharsets.UTF_8));
+            assertTrue(result.compatible());
+            assertEquals(expected, server.authByPath.get("/doc"));
+            assertEquals(expected, server.authByPath.get("/event"));
+        }
+    }
+
+    @Test
+    void sendsNoAuthorizationWhenClientHasNoPassword() throws Exception {
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start(ServerConfig.defaults())) {
+            assertTrue(probe(server).compatible());
+
+            assertEquals("<none>", server.authByPath.get("/doc"));
+            assertEquals("<none>", server.authByPath.get("/event"));
         }
     }
 
@@ -106,13 +133,13 @@ class OpenCodeCapabilityProbeTest {
                 "opencode", "127.0.0.1", 0, 30, Map.of(), workDir);
         try {
             process.start();
-            OpenCodeAssistantClient client = new OpenCodeAssistantClient(process.baseUrl());
-            int before = sessionCount(process.baseUrl());
+            OpenCodeAssistantClient client = new OpenCodeAssistantClient(process.baseUrl(), process.password());
+            int before = sessionCount(client);
 
             OpenCodeCapabilityProbe.Result result = new OpenCodeCapabilityProbe().probe(client);
 
             assertTrue(result.compatible(), String.valueOf(result));
-            assertEquals(before, sessionCount(process.baseUrl()));
+            assertEquals(before, sessionCount(client));
         } finally {
             process.stop();
         }
@@ -230,15 +257,16 @@ class OpenCodeCapabilityProbeTest {
         }
     }
 
-    private static int sessionCount(String baseUrl) throws Exception {
+    private static int sessionCount(OpenCodeAssistantClient client) throws Exception {
         HttpClient http = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofSeconds(5))
                 .build();
-        HttpRequest request = HttpRequest.newBuilder(URI.create(baseUrl + "/session"))
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(client.baseUrl() + "/session"))
                 .timeout(Duration.ofSeconds(10))
-                .GET()
-                .build();
+                .GET();
+        client.authorizationHeader().ifPresent(value -> builder.header("Authorization", value));
+        HttpRequest request = builder.build();
         HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
         assertEquals(200, response.statusCode(), response.body());
         return MAPPER.readTree(response.body()).size();
@@ -280,6 +308,7 @@ class OpenCodeCapabilityProbeTest {
         private final AtomicInteger permissionPosts = new AtomicInteger();
         private final AtomicInteger deletes = new AtomicInteger();
         private volatile String lastDeletePath;
+        private final Map<String, String> authByPath = new ConcurrentHashMap<>();
 
         private FakeOpenCodeServer(HttpServer server) {
             this.server = server;
@@ -291,18 +320,28 @@ class OpenCodeCapabilityProbeTest {
             httpServer.createContext("/global/health", new JsonHandler(200,
                     "{\"healthy\":true,\"version\":\"" + config.version() + "\"}"));
             httpServer.createContext("/doc", exchange -> {
+                fake.recordAuth(exchange);
                 fake.docHits.incrementAndGet();
                 new JsonHandler(config.docStatus(), config.docBody()).handle(exchange);
             });
             httpServer.createContext("/session", exchange -> fake.handleSession(exchange));
             if (config.primaryEvent() != null) {
-                httpServer.createContext("/event", new EndpointHandler(config.primaryEvent()));
+                EndpointHandler primary = new EndpointHandler(config.primaryEvent());
+                httpServer.createContext("/event", exchange -> {
+                    fake.recordAuth(exchange);
+                    primary.handle(exchange);
+                });
             }
             if (config.globalEvent() != null) {
                 httpServer.createContext("/global/event", new EndpointHandler(config.globalEvent()));
             }
             httpServer.start();
             return fake;
+        }
+
+        private void recordAuth(HttpExchange exchange) {
+            String header = exchange.getRequestHeaders().getFirst("Authorization");
+            authByPath.put(exchange.getRequestURI().getPath(), header == null ? "<none>" : header);
         }
 
         private void handleSession(HttpExchange exchange) throws IOException {
