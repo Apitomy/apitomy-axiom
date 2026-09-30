@@ -23,6 +23,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class InteractiveSessionDriverFactoryTest {
 
     @Test
+    void createDriverConfiguresOpenCodeRawEventsFile(@TempDir Path sessionDir) throws Exception {
+        InteractiveSessionDriverFactory.DefaultInteractiveSessionDriverFactory factory = defaultFactory();
+
+        InteractiveSessionDriver driver = factory.createDriver(new InteractiveSessionDriverFactory.DriverRequest(
+                "opencode", "general-assistant", sessionDir, sessionDir, List.of(), Map.of(), null, null,
+                event -> {
+                },
+                event -> {
+                },
+                null, null, "Session", Map.of(), null, List.of()));
+
+        assertEquals(sessionDir.resolve("raw-events.jsonl"), getField(driver, "rawEventsFile"));
+    }
+
+    @Test
     void createDriverPrefersAssistantOpenCodeKeysWhenPresent() throws Exception {
         InteractiveSessionDriverFactory.DefaultInteractiveSessionDriverFactory factory =
                 new InteractiveSessionDriverFactory.DefaultInteractiveSessionDriverFactory();

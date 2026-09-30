@@ -9,7 +9,12 @@ import io.apitomy.axiom.app.assistant.runtime.InteractiveSessionDriver;
 import io.apitomy.axiom.app.assistant.runtime.SessionCompatibilityException;
 import org.jboss.logging.Logger;
 
+import java.io.BufferedWriter;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -44,6 +49,11 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
     private final JsonNode tools;
     private final Set<String> expectedMcpServers;
     private final String systemPrompt;
+    private final Path rawEventsFile;
+
+    /** Guards {@link #rawEventsWriter}; reconnects may briefly overlap. */
+    private final Object rawEventsLock = new Object();
+    private BufferedWriter rawEventsWriter;
 
     private final AtomicReference<String> errorMessage = new AtomicReference<>();
     private final AtomicReference<AssistantSession.Status> status;
@@ -112,7 +122,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                                             JsonNode tools,
                                             Set<String> expectedMcpServers) {
         this(serverProcess, capabilityProbe, normalizer, eventSink, autoApprovalSink,
-                new SessionSettings(sessionTitle, model, tools, expectedMcpServers, null, null));
+                new SessionSettings(sessionTitle, model, tools, expectedMcpServers, null, null, null));
     }
 
     /** Canonical constructor; all other constructors delegate here (package-private for test injection). */
@@ -160,7 +170,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                                      JsonNode tools,
                                      Set<String> expectedMcpServers) {
         this(serverProcess, capabilityProbe, normalizer, eventSink, autoApprovalSink, eventStreamConnector,
-                new SessionSettings(sessionTitle, model, tools, expectedMcpServers, null, null));
+                new SessionSettings(sessionTitle, model, tools, expectedMcpServers, null, null, null));
     }
 
     OpenCodeInteractiveSessionDriver(ServerProcessHandle serverProcess,
@@ -184,6 +194,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
         this.tools = settings.tools();
         this.expectedMcpServers = settings.expectedMcpServers();
         this.systemPrompt = settings.systemPrompt();
+        this.rawEventsFile = settings.rawEventsFile();
         this.status = new AtomicReference<>(AssistantSession.Status.STARTING);
     }
 
@@ -212,6 +223,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                 throw new IOException("OpenCode session creation did not return an id");
             }
 
+            openRawEventsLog();
             connectEventStream();
             status.compareAndSet(AssistantSession.Status.STARTING, AssistantSession.Status.RUNNING);
             // The model is resolved right after RUNNING; callers only send prompts once start() has returned,
@@ -401,6 +413,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                 LOG.debugf(e, "Ignoring OpenCode event stream close failure");
             }
         }
+        closeRawEventsLog();
         OpenCodeAssistantClient localClient = client;
         String localSessionId = openCodeSessionId;
         if (localClient != null && localSessionId != null && !localSessionId.isBlank()) {
@@ -554,6 +567,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                 client,
                 raw -> {
                     if (isCurrentStream(generation)) {
+                        writeRawEvent(raw.payload());
                         handleRawEvent(raw.eventName(), raw.payload());
                     }
                 },
@@ -613,6 +627,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
         String message = throwable != null && throwable.getMessage() != null
                 ? throwable.getMessage()
                 : "OpenCode event stream failed";
+        closeRawEventsLog();
         status.set(AssistantSession.Status.ERROR);
         errorMessage.set(message);
 
@@ -620,6 +635,62 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
         terminalData.put("status", AssistantSession.Status.ERROR.name());
         terminalData.put("message", message);
         eventSink.accept(new SseEvent("session_ended", terminalData));
+    }
+
+    private void openRawEventsLog() {
+        if (rawEventsFile == null) {
+            return;
+        }
+        synchronized (rawEventsLock) {
+            closeRawEventsLogLocked();
+            try {
+                Path parent = rawEventsFile.getParent();
+                if (parent != null) {
+                    Files.createDirectories(parent);
+                }
+                rawEventsWriter = Files.newBufferedWriter(rawEventsFile, StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                LOG.warnf(e, "Unable to open OpenCode raw event log %s; raw event logging disabled", rawEventsFile);
+                rawEventsWriter = null;
+            }
+        }
+    }
+
+    private void writeRawEvent(JsonNode payload) {
+        synchronized (rawEventsLock) {
+            if (rawEventsWriter == null) {
+                return;
+            }
+            try {
+                ObjectNode entry = JsonNodeFactory.instance.objectNode();
+                entry.put("ts", Instant.now().toString());
+                entry.set("raw", payload);
+                rawEventsWriter.write(entry.toString());
+                rawEventsWriter.newLine();
+                rawEventsWriter.flush();
+            } catch (IOException e) {
+                LOG.warnf(e, "Failed to write OpenCode raw event log; raw event logging disabled");
+                closeRawEventsLogLocked();
+            }
+        }
+    }
+
+    private void closeRawEventsLog() {
+        synchronized (rawEventsLock) {
+            closeRawEventsLogLocked();
+        }
+    }
+
+    private void closeRawEventsLogLocked() {
+        if (rawEventsWriter == null) {
+            return;
+        }
+        try {
+            rawEventsWriter.close();
+        } catch (IOException e) {
+            LOG.debugf(e, "Ignoring OpenCode raw event log close failure");
+        }
+        rawEventsWriter = null;
     }
 
     private void ensureRunning() {
@@ -639,13 +710,15 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
      * @param systemPrompt system prompt sent with every prompt, or null/blank for none
      * @param fallbackModel configured default model in provider/model format, used when {@code model} is blank or
      *                      unavailable; null for none
+     * @param rawEventsFile file receiving every raw OpenCode event as JSON lines, or null to disable the log
      */
     public record SessionSettings(String sessionTitle,
                                   String model,
                                   JsonNode tools,
                                   Set<String> expectedMcpServers,
                                   String systemPrompt,
-                                  String fallbackModel) {
+                                  String fallbackModel,
+                                  Path rawEventsFile) {
 
         /**
          * Normalizes a null MCP server set to an empty set and copies non-null sets.
@@ -664,6 +737,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
     }
 
     private void safeStopServer() {
+        closeRawEventsLog();
         try {
             serverProcess.stop();
         } catch (RuntimeException e) {

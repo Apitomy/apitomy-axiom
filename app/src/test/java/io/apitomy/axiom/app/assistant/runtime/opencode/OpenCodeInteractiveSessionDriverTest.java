@@ -10,11 +10,14 @@ import com.sun.net.httpserver.HttpServer;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
 import io.apitomy.axiom.app.assistant.AssistantSession;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -89,7 +92,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     },
                     new OpenCodeInteractiveSessionDriver.SessionSettings(
                             "Axiom Session", "github-copilot/claude-sonnet-5", null, Set.of(),
-                            "You are the Axiom Configuration Assistant.", null));
+                            "You are the Axiom Configuration Assistant.", null, null));
 
             driver.start();
             driver.sendUserMessage("first");
@@ -660,7 +663,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     },
                     new OpenCodeInteractiveSessionDriver.SessionSettings(
                             "Axiom Session", "github-copilot/claude-sonnet-5", null, Set.of(),
-                            "You are the Axiom Configuration Assistant.", null));
+                            "You are the Axiom Configuration Assistant.", null, null));
             driver.start();
 
             driver.sendUserMessage("hello");
@@ -711,7 +714,8 @@ class OpenCodeInteractiveSessionDriverTest {
                     event -> {
                     },
                     new OpenCodeInteractiveSessionDriver.SessionSettings(
-                            "Axiom Session", "github-copilot/claude-sonnet-5", null, Set.of(), systemPrompt, null));
+                            "Axiom Session", "github-copilot/claude-sonnet-5", null, Set.of(), systemPrompt, null,
+                            null));
             driver.start();
 
             driver.sendUserMessage("first");
@@ -1067,7 +1071,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     event -> {
                     },
                     new OpenCodeInteractiveSessionDriver.SessionSettings(
-                            "Axiom Session", templateModel, null, Set.of(), null, fallbackModel));
+                            "Axiom Session", templateModel, null, Set.of(), null, fallbackModel, null));
             driver.start();
             AssistantSession.Status status = driver.getStatus();
             driver.sendUserMessage("hello");
@@ -1085,7 +1089,7 @@ class OpenCodeInteractiveSessionDriverTest {
     @Test
     void sessionSettingsNormalizesExpectedMcpServers() {
         OpenCodeInteractiveSessionDriver.SessionSettings settings =
-                new OpenCodeInteractiveSessionDriver.SessionSettings("t", null, null, null, null, null);
+                new OpenCodeInteractiveSessionDriver.SessionSettings("t", null, null, null, null, null, null);
 
         assertEquals(Set.of(), settings.expectedMcpServers());
     }
@@ -1159,6 +1163,42 @@ class OpenCodeInteractiveSessionDriverTest {
         SseEvent turnComplete = events.get(events.size() - 1);
         assertEquals(0.0702413, turnComplete.data().path("costUsd").asDouble(), 1e-9);
         assertEquals(140, turnComplete.data().path("outputTokens").asLong());
+    }
+
+    @Test
+    void writesRawEventLogAndClosesItOnDestroy(@TempDir Path tempDir) throws Exception {
+        Path rawEventsFile = tempDir.resolve("raw-events.jsonl");
+        List<SseEvent> events = new CopyOnWriteArrayList<>();
+        List<JsonNode> fixtureEvents = OpenCodeEventFixtures.load("1.18.33-tool-calls.jsonl");
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start(replayFixture("1.18.33-tool-calls.jsonl"))) {
+            OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
+                    new FakeServerProcess(server.baseUrl()),
+                    client -> OpenCodeCapabilityProbe.Result.pass(),
+                    new OpenCodeEventNormalizer(),
+                    events::add,
+                    event -> {
+                    },
+                    new OpenCodeInteractiveSessionDriver.SessionSettings(
+                            "Axiom Session", "github-copilot/claude-sonnet-5", null, Set.of(), null, null,
+                            rawEventsFile));
+            driver.start();
+            waitUntil(() -> events.stream().anyMatch(event -> "turn_complete".equals(event.type())),
+                    Duration.ofSeconds(5));
+            driver.destroy();
+        }
+
+        List<String> lines = Files.readAllLines(rawEventsFile, StandardCharsets.UTF_8);
+        assertEquals(fixtureEvents.size(), lines.size());
+        ObjectMapper mapper = new ObjectMapper();
+        for (String line : lines) {
+            JsonNode entry = mapper.readTree(line);
+            assertNotNull(Instant.parse(entry.path("ts").asText()));
+            assertTrue(entry.path("raw").isObject(), line);
+            assertFalse(entry.path("raw").path("type").asText().isEmpty(), line);
+        }
+        long sizeAfterDestroy = Files.size(rawEventsFile);
+        Thread.sleep(100);
+        assertEquals(sizeAfterDestroy, Files.size(rawEventsFile));
     }
 
     @Test
