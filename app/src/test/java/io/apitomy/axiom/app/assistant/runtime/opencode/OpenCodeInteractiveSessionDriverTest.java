@@ -814,6 +814,9 @@ class OpenCodeInteractiveSessionDriverTest {
                 "turn_complete"), summary);
         assertEquals(1, permissionEvents.size());
         assertEquals("permission_request", permissionEvents.get(0).type());
+        SseEvent turnComplete = events.get(events.size() - 1);
+        assertEquals(0.0702413, turnComplete.data().path("costUsd").asDouble(), 1e-9);
+        assertEquals(140, turnComplete.data().path("outputTokens").asLong());
     }
 
     @Test
