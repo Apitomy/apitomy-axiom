@@ -10,6 +10,7 @@ import io.apitomy.axiom.app.assistant.runtime.SessionCompatibilityException;
 import org.jboss.logging.Logger;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -33,7 +34,8 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
     private final Consumer<SseEvent> autoApprovalSink;
     private final EventStreamConnector eventStreamConnector;
     private final String sessionTitle;
-    private final String model;
+    private final String templateModel;
+    private final String fallbackModel;
     private final JsonNode tools;
     private final Set<String> expectedMcpServers;
     private final String systemPrompt;
@@ -44,6 +46,8 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
 
     private volatile OpenCodeAssistantClient client;
     private volatile String openCodeSessionId;
+    /** Effective model resolved at start; null means OpenCode's own default. */
+    private volatile String model;
 
     /**
      * Creates an OpenCode interactive session driver without expected MCP servers.
@@ -93,7 +97,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                                             JsonNode tools,
                                             Set<String> expectedMcpServers) {
         this(serverProcess, capabilityProbe, normalizer, eventSink, autoApprovalSink,
-                new SessionSettings(sessionTitle, model, tools, expectedMcpServers, null));
+                new SessionSettings(sessionTitle, model, tools, expectedMcpServers, null, null));
     }
 
     /** Canonical constructor; all other constructors delegate here (package-private for test injection). */
@@ -141,7 +145,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                                      JsonNode tools,
                                      Set<String> expectedMcpServers) {
         this(serverProcess, capabilityProbe, normalizer, eventSink, autoApprovalSink, eventStreamConnector,
-                new SessionSettings(sessionTitle, model, tools, expectedMcpServers, null));
+                new SessionSettings(sessionTitle, model, tools, expectedMcpServers, null, null));
     }
 
     OpenCodeInteractiveSessionDriver(ServerProcessHandle serverProcess,
@@ -159,6 +163,8 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
         this.autoApprovalSink = Objects.requireNonNull(autoApprovalSink, "autoApprovalSink");
         this.eventStreamConnector = Objects.requireNonNull(eventStreamConnector, "eventStreamConnector");
         this.sessionTitle = settings.sessionTitle();
+        this.templateModel = settings.model();
+        this.fallbackModel = settings.fallbackModel();
         this.model = settings.model();
         this.tools = settings.tools();
         this.expectedMcpServers = settings.expectedMcpServers();
@@ -197,6 +203,9 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                     this::handleStreamFailure
             );
             status.compareAndSet(AssistantSession.Status.STARTING, AssistantSession.Status.RUNNING);
+            // The model is resolved right after RUNNING; callers only send prompts once start() has returned,
+            // so every prompt sees the effective model.
+            resolveModelSafely();
             reportMcpServerStatus();
         } catch (SessionCompatibilityException e) {
             safeStopServer();
@@ -207,6 +216,72 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
             safeStopServer();
             throw new IOException("Failed to start OpenCode interactive session", e);
         }
+    }
+
+    private void resolveModelSafely() {
+        try {
+            resolveModel();
+        } catch (RuntimeException e) {
+            LOG.warnf(e, "Failed to resolve OpenCode session model");
+        }
+    }
+
+    private void resolveModel() {
+        String preferred = isBlank(templateModel) ? fallbackModel : templateModel;
+        OpenCodeAssistantClient.ProviderCatalog catalog;
+        try {
+            catalog = client.providerCatalog();
+        } catch (RuntimeException e) {
+            LOG.warnf(e, "Unable to read OpenCode providers; using model '%s' without validation", preferred);
+            model = isBlank(preferred) ? null : preferred.trim();
+            emitSessionInit(model);
+            return;
+        }
+        List<String> rejected = new ArrayList<>();
+        String effective = null;
+        for (String candidate : modelCandidates()) {
+            if (catalog.contains(candidate)) {
+                effective = candidate;
+                break;
+            }
+            rejected.add(candidate);
+        }
+        model = effective;
+        if (!rejected.isEmpty()) {
+            String using = effective != null ? "'" + effective + "'" : "OpenCode's default model";
+            String subject = rejected.size() == 1 ? "Model " : "Models ";
+            String verb = rejected.size() == 1 ? " is" : " are";
+            emitWarning("ModelUnavailable", subject + String.join(", ", quote(rejected)) + verb
+                    + " not available in OpenCode (expected provider/model from the configured providers); using "
+                    + using + ".");
+        }
+        emitSessionInit(effective);
+    }
+
+    private List<String> modelCandidates() {
+        List<String> candidates = new ArrayList<>();
+        if (!isBlank(templateModel)) {
+            candidates.add(templateModel.trim());
+        }
+        if (!isBlank(fallbackModel) && !candidates.contains(fallbackModel.trim())) {
+            candidates.add(fallbackModel.trim());
+        }
+        return candidates;
+    }
+
+    private void emitSessionInit(String displayedModel) {
+        ObjectNode data = JsonNodeFactory.instance.objectNode();
+        data.put("model", displayedModel == null ? "" : displayedModel);
+        data.put("engine", "opencode");
+        eventSink.accept(new SseEvent("session_init", data));
+    }
+
+    private static List<String> quote(List<String> values) {
+        return values.stream().map(value -> "'" + value + "'").toList();
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private void reportMcpServerStatus() {
@@ -229,27 +304,27 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
             String reason = e.getMessage() == null || e.getMessage().isBlank()
                     ? e.getClass().getSimpleName()
                     : e.getMessage();
-            emitMcpWarning("Unable to verify MCP server status: " + reason);
+            emitWarning("McpServerUnavailable", "Unable to verify MCP server status: " + reason);
             return;
         }
         for (String name : new TreeSet<>(expectedMcpServers)) {
             OpenCodeAssistantClient.McpServerStatus serverStatus = statuses.get(name);
             if (serverStatus == null) {
-                emitMcpWarning("MCP server '" + name + "' was not loaded by OpenCode");
+                emitWarning("McpServerUnavailable", "MCP server '" + name + "' was not loaded by OpenCode");
             } else if (!serverStatus.connected()) {
                 String message = "MCP server '" + name + "' is unavailable (" + serverStatus.status() + ")";
                 if (serverStatus.error() != null && !serverStatus.error().isBlank()) {
                     message += ": " + serverStatus.error();
                 }
-                emitMcpWarning(message);
+                emitWarning("McpServerUnavailable", message);
             }
         }
     }
 
-    private void emitMcpWarning(String message) {
+    private void emitWarning(String name, String message) {
         LOG.warn(message);
         ObjectNode data = JsonNodeFactory.instance.objectNode();
-        data.put("name", "McpServerUnavailable");
+        data.put("name", name);
         data.put("message", message);
         eventSink.accept(new SseEvent("session_error", data));
     }
@@ -448,12 +523,15 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
      * @param expectedMcpServers names of MCP servers configured for the session; a warning is emitted for each one
      *                           that OpenCode does not report as connected
      * @param systemPrompt system prompt sent with every prompt, or null/blank for none
+     * @param fallbackModel configured default model in provider/model format, used when {@code model} is blank or
+     *                      unavailable; null for none
      */
     public record SessionSettings(String sessionTitle,
                                   String model,
                                   JsonNode tools,
                                   Set<String> expectedMcpServers,
-                                  String systemPrompt) {
+                                  String systemPrompt,
+                                  String fallbackModel) {
 
         /**
          * Normalizes a null MCP server set to an empty set and copies non-null sets.

@@ -15,10 +15,13 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Consumer;
 
 /**
@@ -207,6 +210,50 @@ public final class OpenCodeAssistantClient {
                     value.hasNonNull("error") ? value.path("error").asText() : null));
         }
         return statuses;
+    }
+
+    /**
+     * Returns the providers and models configured in the OpenCode server ({@code GET /config/providers}).
+     *
+     * @return model ids per provider id and default model id per provider id, both in insertion order
+     * @throws IllegalStateException if the request fails or the response has an unexpected shape
+     */
+    public ProviderCatalog providerCatalog() {
+        JsonNode body = getJson("/config/providers");
+        JsonNode providers = body.path("providers");
+        if (!providers.isArray()) {
+            throw new IllegalStateException("OpenCode /config/providers response has no providers array");
+        }
+        Map<String, Set<String>> models = new LinkedHashMap<>();
+        for (JsonNode provider : providers) {
+            String providerId = provider.path("id").asText("");
+            if (providerId.isBlank()) {
+                continue;
+            }
+            Set<String> modelIds = new LinkedHashSet<>();
+            JsonNode providerModels = provider.path("models");
+            if (providerModels.isObject()) {
+                providerModels.fieldNames().forEachRemaining(modelIds::add);
+            } else if (providerModels.isArray()) {
+                for (JsonNode providerModel : providerModels) {
+                    String modelId = providerModel.path("id").asText("");
+                    if (!modelId.isBlank()) {
+                        modelIds.add(modelId);
+                    }
+                }
+            }
+            models.put(providerId, Collections.unmodifiableSet(modelIds));
+        }
+        Map<String, String> defaults = new LinkedHashMap<>();
+        JsonNode defaultNode = body.path("default");
+        if (defaultNode.isObject()) {
+            defaultNode.fields().forEachRemaining(field -> {
+                if (field.getValue().isTextual()) {
+                    defaults.put(field.getKey(), field.getValue().asText());
+                }
+            });
+        }
+        return new ProviderCatalog(Collections.unmodifiableMap(models), Collections.unmodifiableMap(defaults));
     }
 
     /**
@@ -403,6 +450,33 @@ public final class OpenCodeAssistantClient {
      * @param version server version
      */
     public record HealthStatus(boolean healthy, String version) {
+    }
+
+    /**
+     * Providers and models configured in the OpenCode server, as reported by {@code GET /config/providers}.
+     *
+     * @param models model ids keyed by provider id
+     * @param defaults default model id keyed by provider id
+     */
+    public record ProviderCatalog(Map<String, Set<String>> models, Map<String, String> defaults) {
+
+        /**
+         * Checks whether a {@code provider/model} string names a model known to this catalog.
+         *
+         * @param model model in provider/model format
+         * @return true when the provider exists and lists the model id
+         */
+        public boolean contains(String model) {
+            if (model == null) {
+                return false;
+            }
+            int slash = model.indexOf('/');
+            if (slash <= 0 || slash == model.length() - 1) {
+                return false;
+            }
+            Set<String> providerModels = models.get(model.substring(0, slash));
+            return providerModels != null && providerModels.contains(model.substring(slash + 1));
+        }
     }
 
     /**

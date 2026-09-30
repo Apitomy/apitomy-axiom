@@ -90,6 +90,24 @@ class OpenCodeSessionServerProcessTest {
     }
 
     @Test
+    void realOpenCodeReportsProviderCatalog(@TempDir Path workDir) throws Exception {
+        Assumptions.assumeTrue(OpenCodeServerManager.isOpenCodeAvailable());
+        OpenCodeSessionServerProcess process = new OpenCodeSessionServerProcess(
+                "opencode", "127.0.0.1", 0, 30, Map.of(), workDir);
+        try {
+            process.start();
+            OpenCodeAssistantClient.ProviderCatalog catalog =
+                    new OpenCodeAssistantClient(process.baseUrl()).providerCatalog();
+
+            assertFalse(catalog.models().isEmpty());
+            catalog.models().forEach((provider, models) ->
+                    assertFalse(models.isEmpty(), "provider has no models: " + provider));
+        } finally {
+            process.stop();
+        }
+    }
+
+    @Test
     void realOpenCodeUsesProcessWorkingDirectory(@TempDir Path workDir) throws Exception {
         Assumptions.assumeTrue(OpenCodeServerManager.isOpenCodeAvailable());
         OpenCodeSessionServerProcess process = new OpenCodeSessionServerProcess(
