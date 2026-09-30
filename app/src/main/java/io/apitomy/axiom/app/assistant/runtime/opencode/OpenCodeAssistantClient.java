@@ -150,6 +150,33 @@ public final class OpenCodeAssistantClient {
     }
 
     /**
+     * Deletes a session.
+     *
+     * @param sessionId session identifier
+     * @throws IllegalStateException if the request fails or returns a status other than 200 or 204
+     */
+    public void deleteSession(String sessionId) {
+        String path = "/session/" + sessionId;
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + path))
+                .DELETE()
+                .timeout(Duration.ofSeconds(30))
+                .build();
+        try {
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            int statusCode = response.statusCode();
+            if (statusCode != 200 && statusCode != 204) {
+                throw new IllegalStateException("OpenCode request failed: " + path + " -> HTTP " + statusCode);
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("OpenCode request failed: " + path, e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted during OpenCode request: " + path, e);
+        }
+    }
+
+    /**
      * Responds to a pending permission request.
      *
      * @param sessionId session identifier
