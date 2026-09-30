@@ -607,11 +607,18 @@ public class AssistantResourceImpl implements AssistantResource {
         }
     }
 
-    private AssistantSessionInfo toSessionInfo(AssistantSession session) {
+    /**
+     * Maps an internal assistant session to its REST representation.
+     *
+     * @param session the internal session
+     * @return the session info bean
+     */
+    AssistantSessionInfo toSessionInfo(AssistantSession session) {
         AssistantSessionInfo info = new AssistantSessionInfo();
         info.setId(session.getId());
         info.setName(session.getName());
         info.setTemplateId(session.getTemplateId());
+        info.setEngine(session.getEngineType());
         info.setStatus(AssistantSessionInfo.Status.fromValue(
                 session.getStatus().name().toLowerCase()));
         info.setCreatedAt(Date.from(session.getCreatedAt()));

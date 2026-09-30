@@ -7656,6 +7656,10 @@
             "description": "User-visible session name",
             "type": "string"
           },
+          "engine": {
+            "description": "Interactive engine running the session (e.g. claude-code, opencode)",
+            "type": "string"
+          },
           "status": {
             "description": "Session status (starting, running, stopped, error)",
             "enum": [

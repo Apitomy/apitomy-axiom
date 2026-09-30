@@ -186,6 +186,21 @@ public class AssistantEventParser {
         return events;
     }
 
+    private static String blockContentText(JsonNode content) {
+        if (content.isTextual()) {
+            return content.asText();
+        }
+        StringBuilder sb = new StringBuilder();
+        if (content.isArray()) {
+            for (JsonNode part : content) {
+                if (part.path("text").isTextual()) {
+                    sb.append(part.path("text").asText());
+                }
+            }
+        }
+        return sb.toString();
+    }
+
     private List<SseEvent> parseUser(JsonNode root) {
         String parentToolUseId = root.path("parent_tool_use_id").asText("");
         if (!parentToolUseId.isEmpty()) {
@@ -197,18 +212,27 @@ public class AssistantEventParser {
         }
         JsonNode content = root.path("message").path("content");
         String toolUseId = "";
+        boolean isError = false;
+        String blockText = "";
         if (content.isArray()) {
             for (JsonNode block : content) {
                 if ("tool_result".equals(block.path("type").asText())) {
                     toolUseId = block.path("tool_use_id").asText();
+                    isError = block.path("is_error").asBoolean(false);
+                    blockText = blockContentText(block.path("content"));
                     break;
                 }
             }
         }
+        String stderr = toolResult.path("stderr").asText("");
+        if (isError && !toolResult.isObject() && stderr.isEmpty()) {
+            stderr = !blockText.isEmpty() ? blockText : toolResult.asText("");
+        }
         ObjectNode data = JsonNodeFactory.instance.objectNode();
         data.put("toolUseId", toolUseId);
         data.put("stdout", toolResult.path("stdout").asText(""));
-        data.put("stderr", toolResult.path("stderr").asText(""));
+        data.put("stderr", stderr);
+        data.put("isError", isError);
         data.put("interrupted", toolResult.path("interrupted").asBoolean(false));
         return List.of(new SseEvent("tool_result", data));
     }

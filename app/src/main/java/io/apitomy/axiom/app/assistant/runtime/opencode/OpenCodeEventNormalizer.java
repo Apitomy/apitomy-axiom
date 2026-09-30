@@ -167,6 +167,7 @@ public class OpenCodeEventNormalizer {
                 data.put("stderr", firstNonBlank(state.path("error").asText(""), "Tool failed"));
             }
             data.put("interrupted", false);
+            data.put("isError", "error".equals(status));
             events.add(new SseEvent("tool_result", data));
         }
         if ("completed".equals(status) || "error".equals(status)) {
