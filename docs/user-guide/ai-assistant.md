@@ -53,7 +53,8 @@ specific project. You can also create your own templates to define custom workfl
     OpenCode sessions use the template's model (in `provider/model` form, for example
     `github-copilot/claude-sonnet-5`), or `axiom.agent.opencode.model` when the template has none. The model is
     checked against the providers OpenCode has configured; if it is not available, the chat shows a warning and
-    the session falls back to the default model.
+    the session falls back to `axiom.agent.opencode.model`, or to OpenCode's own default model if that is also
+    unavailable (in which case the session header shows no model).
 
 ---
 

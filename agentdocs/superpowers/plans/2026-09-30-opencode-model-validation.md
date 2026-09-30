@@ -71,8 +71,8 @@ This covers GitHub issue #377, part of epic #387.
   (template, else fallback) as it is, and log a WARN. No user-facing error is shown, so a transient failure can't
   block a session.
 - **`session_init`** is always emitted after `RUNNING`, as `{"model": <effective or "">,
-  "engine": "opencode"}`. When opencode's default is used, `model` is `"<providerID>/<modelID>"`, taken from the
-  `default` map of the model's provider if one can be derived, otherwise `""`.
+  "engine": "opencode"}`. When opencode's default is used, `model` is `""`, because the provider opencode will
+  pick can't be known reliably.
 
 ## Global Constraints
 
@@ -140,8 +140,7 @@ Driver tests (add `/config/providers` to `FakeOpenCodeServer`, with a configurab
 5. **Neither model valid:** template `x/y`, fallback `a/b`.
    - Exactly one `ModelUnavailable` error mentioning both values and "OpenCode's default model".
    - The prompt body has **no** `model` field.
-   - `session_init.model` is `""`, or the provider default as defined in the Rulings. Since providers `x` and `a`
-     don't exist, expect `""`.
+   - `session_init.model` is `""` (opencode's own default is used).
 6. **`/config/providers` returns 500:** template `github-copilot/whatever`.
    - No `ModelUnavailable` error.
    - The prompt uses `github-copilot/whatever`.
@@ -270,6 +269,7 @@ columns), add:
 
 - [ ] **Step 7: Manual (human)**
   1. **Invalid model:** set a template's model to `github-copilot/does-not-exist`. Starting a session shows a
-     warning, and the header shows the default model.
+     warning. The header shows the configured default model when it is valid, and no model when OpenCode's
+     own default is used.
   2. **No model:** clear the template model. The header shows `axiom.agent.opencode.model` and there is no
      warning.
