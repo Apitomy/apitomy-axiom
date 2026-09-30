@@ -287,7 +287,8 @@ you can switch between the main window and the breakout at any time.
 The session toolbar displays a running cost for the current session (e.g.,
 `$0.0342`). This accumulates in real time as the assistant processes each turn,
 tracking input tokens, output tokens, and duration. Use this to monitor how much a
-session is consuming, especially for long or complex conversations.
+session is consuming, especially for long or complex conversations. The displayed cost is the
+session's total, including spend from before any `/clear`.
 
 ---
 

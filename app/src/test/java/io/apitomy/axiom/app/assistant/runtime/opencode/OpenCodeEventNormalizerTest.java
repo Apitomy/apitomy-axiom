@@ -40,9 +40,9 @@ class OpenCodeEventNormalizerTest {
         assertEquals(1, out.size());
         assertEquals("turn_complete", out.get(0).type());
         assertEquals("s1", out.get(0).data().path("sessionId").asText());
-        assertEquals(0.02, out.get(0).data().path("costUsd").asDouble(), 0.0001);
-        assertEquals(11, out.get(0).data().path("inputTokens").asLong());
-        assertEquals(7, out.get(0).data().path("outputTokens").asLong());
+        assertEquals(0, out.get(0).data().path("costUsd").asDouble(), 0.0001);
+        assertEquals(0, out.get(0).data().path("inputTokens").asLong());
+        assertEquals(0, out.get(0).data().path("outputTokens").asLong());
         assertTrue(out.get(0).data().path("success").asBoolean());
     }
 
@@ -68,6 +68,9 @@ class OpenCodeEventNormalizerTest {
         assertEquals(1, out.size());
         assertEquals("turn_complete", out.get(0).type());
         assertEquals("s1", out.get(0).data().path("sessionId").asText());
+        assertEquals(0, out.get(0).data().path("costUsd").asDouble(), 0.0001);
+        assertEquals(0, out.get(0).data().path("inputTokens").asLong());
+        assertEquals(0, out.get(0).data().path("outputTokens").asLong());
         assertTrue(out.get(0).data().path("success").asBoolean(false));
     }
 
@@ -481,5 +484,74 @@ class OpenCodeEventNormalizerTest {
                 + "\"part\":{\"id\":\"prt_1\",\"sessionID\":\"s1\",\"messageID\":\"m1\",\"type\":\"tool\","
                 + "\"tool\":\"glob\",\"callID\":\"toolu_X\",\"state\":{\"status\":\"" + status
                 + "\",\"input\":" + input + extra + "}}}}");
+    }
+
+    private SseEvent replayUntilTurnComplete(OpenCodeEventNormalizer target, List<JsonNode> events) {
+        SseEvent turnComplete = null;
+        for (JsonNode event : events) {
+            for (SseEvent out : target.normalize(event.path("type").asText(), event)) {
+                if ("turn_complete".equals(out.type())) {
+                    turnComplete = out;
+                }
+            }
+        }
+        return turnComplete;
+    }
+
+    private JsonNode payload(String json) {
+        try {
+            return mapper.readTree(json);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    @Test
+    void turnCompleteCarriesCostTokensAndDurationFromAssistantMessages() {
+        SseEvent turnComplete = replayUntilTurnComplete(normalizer, OpenCodeEventFixtures.load(TOOL_CALLS));
+
+        assertEquals(0.0702413, turnComplete.data().path("costUsd").asDouble(), 1e-9);
+        assertEquals(50771, turnComplete.data().path("inputTokens").asLong());
+        assertEquals(140, turnComplete.data().path("outputTokens").asLong());
+        assertEquals(3895, turnComplete.data().path("durationMs").asLong());
+    }
+
+    @Test
+    void costIsCumulativeAcrossTurnsWhileTokensArePerTurn() {
+        replayUntilTurnComplete(normalizer, OpenCodeEventFixtures.load(TOOL_CALLS));
+
+        SseEvent second = replayUntilTurnComplete(normalizer, OpenCodeEventFixtures.load(TOOL_ERROR));
+
+        assertEquals(0.0702413 + 0.0146099, second.data().path("costUsd").asDouble(), 1e-9);
+        assertEquals(50611, second.data().path("inputTokens").asLong());
+        assertEquals(72, second.data().path("outputTokens").asLong());
+    }
+
+    @Test
+    void messageUpdatedEmitsNoUiEvents() {
+        List<JsonNode> events = OpenCodeEventFixtures.load(TOOL_CALLS);
+
+        assertTrue(events.stream()
+                .filter(event -> "message.updated".equals(event.path("type").asText()))
+                .allMatch(event -> normalize(event).isEmpty()));
+    }
+
+    @Test
+    void lateAssistantUpdateAfterIdleIsNotCountedAgain() {
+        List<JsonNode> events = OpenCodeEventFixtures.load(TOOL_CALLS);
+        replayUntilTurnComplete(normalizer, events);
+        JsonNode lateUpdate = OpenCodeEventFixtures.first(events,
+                event -> "message.updated".equals(event.path("type").asText())
+                        && "assistant".equals(event.path("properties").path("info").path("role").asText())
+                        && event.path("properties").path("info").path("cost").asDouble() > 0);
+        normalize(lateUpdate);
+
+        SseEvent next = normalizer.normalize("message",
+                payload("{\"type\":\"session.idle\",\"properties\":{\"sessionID\":\"s1\"}}")).get(0);
+
+        assertEquals(0.0702413, next.data().path("costUsd").asDouble(), 1e-9);
+        assertEquals(0, next.data().path("inputTokens").asLong());
+        assertEquals(0, next.data().path("outputTokens").asLong());
+        assertEquals(0, next.data().path("durationMs").asLong());
     }
 }

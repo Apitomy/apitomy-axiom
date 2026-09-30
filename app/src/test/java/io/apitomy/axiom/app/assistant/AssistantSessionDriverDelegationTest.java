@@ -2,6 +2,7 @@ package io.apitomy.axiom.app.assistant;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
 import io.apitomy.axiom.app.assistant.runtime.InteractiveSessionDriver;
 import org.junit.jupiter.api.Test;
@@ -83,6 +84,79 @@ class AssistantSessionDriverDelegationTest {
         List<SseEvent> history = session.getEventHistory();
         assertEquals("Message was not delivered: IllegalStateException",
                 history.get(history.size() - 1).data().path("message").asText());
+    }
+
+    @Test
+    void sessionCostUsesCumulativeTurnCostAndSumsTokens() throws Exception {
+        AssistantSession session = new AssistantSession(
+                "test", "general-assistant", Path.of("/tmp/s"), Path.of("/tmp/w"),
+                List.of(), Map.of(), "claude-code", null, null, new RecordingDriver());
+        session.start();
+
+        session.handleDriverEvent(turnComplete(0.0293125, 10, 198, 4511));
+        session.handleDriverEvent(turnComplete(0.03579, 22660, 44, 1419));
+        session.handleDriverEvent(turnComplete(0.0, 0, 0, 0));
+
+        assertEquals(0.03579, session.getTotalCostUsd(), 1e-9);
+        assertEquals(22670, session.getTotalInputTokens());
+        assertEquals(242, session.getTotalOutputTokens());
+        assertEquals(5930, session.getTotalDurationMs());
+        assertEquals(3, session.getTurnCount());
+    }
+
+    @Test
+    void sessionCostCarriesAcrossConversationReset() throws Exception {
+        AssistantSession session = new AssistantSession(
+                "test", "general-assistant", Path.of("/tmp/s"), Path.of("/tmp/w"),
+                List.of(), Map.of(), "claude-code", null, null, new RecordingDriver());
+        session.start();
+
+        session.handleDriverEvent(turnComplete(0.0291675, 10, 20, 100));
+        session.handleDriverEvent(new SseEvent("conversation_reset", JsonNodeFactory.instance.objectNode()));
+        session.handleDriverEvent(turnComplete(0.0, 0, 0, 0));
+        session.handleDriverEvent(turnComplete(0.0133689, 5, 6, 50));
+
+        assertEquals(0.0291675 + 0.0133689, session.getTotalCostUsd(), 1e-9);
+    }
+
+    @Test
+    void turnCompleteEventsCarrySessionCostAcrossConversationReset() throws Exception {
+        AssistantSession session = new AssistantSession(
+                "test", "general-assistant", Path.of("/tmp/s"), Path.of("/tmp/w"),
+                List.of(), Map.of(), "claude-code", null, null, new RecordingDriver());
+        session.start();
+        List<SseEvent> seen = new java.util.ArrayList<>();
+        session.addListener(e -> {
+            if ("turn_complete".equals(e.type())) {
+                seen.add(e);
+            }
+        });
+
+        session.handleDriverEvent(turnComplete(0.0291675, 10, 20, 100));
+        session.handleDriverEvent(new SseEvent("conversation_reset", JsonNodeFactory.instance.objectNode()));
+        session.handleDriverEvent(turnComplete(0.0, 0, 0, 0));
+        session.handleDriverEvent(turnComplete(0.0133689, 5, 6, 50));
+
+        assertEquals(3, seen.size());
+        assertEquals(0.0291675, seen.get(0).data().path("sessionCostUsd").asDouble(-1), 1e-9);
+        assertEquals(0.0291675, seen.get(0).data().path("costUsd").asDouble(-1), 1e-9);
+        assertEquals(0.0291675 + 0.0133689, seen.get(2).data().path("sessionCostUsd").asDouble(-1), 1e-9);
+        assertEquals(0.0133689, seen.get(2).data().path("costUsd").asDouble(-1), 1e-9);
+
+        List<SseEvent> history = session.getEventHistory();
+        SseEvent lastTurn = history.stream().filter(e -> "turn_complete".equals(e.type()))
+                .reduce((a, b) -> b).orElseThrow();
+        assertEquals(0.0291675 + 0.0133689, lastTurn.data().path("sessionCostUsd").asDouble(-1), 1e-9);
+        assertEquals(0.0133689, lastTurn.data().path("costUsd").asDouble(-1), 1e-9);
+    }
+
+    private static SseEvent turnComplete(double cost, long in, long out, long durationMs) {
+        ObjectNode data = JsonNodeFactory.instance.objectNode();
+        data.put("costUsd", cost);
+        data.put("inputTokens", in);
+        data.put("outputTokens", out);
+        data.put("durationMs", durationMs);
+        return new SseEvent("turn_complete", data);
     }
 
     static class RecordingDriver implements InteractiveSessionDriver {

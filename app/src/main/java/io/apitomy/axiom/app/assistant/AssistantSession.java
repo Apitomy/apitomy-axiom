@@ -19,7 +19,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.DoubleAdder;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -53,7 +52,9 @@ public class AssistantSession {
     private volatile Instant lastActivityAt;
     private final Instant createdAt;
 
-    private final DoubleAdder totalCostUsd = new DoubleAdder();
+    private final Object costLock = new Object();
+    private double costBaselineUsd;
+    private double costSegmentMaxUsd;
     private final AtomicLong totalInputTokens = new AtomicLong();
     private final AtomicLong totalOutputTokens = new AtomicLong();
     private final AtomicLong totalDurationMs = new AtomicLong();
@@ -391,9 +392,16 @@ public class AssistantSession {
         return engineType;
     }
 
-    /** Returns the accumulated cost in USD across all turns. */
+    /**
+     * Returns the session's total cost in USD, derived from the cumulative per-turn {@code costUsd} and
+     * carried across conversation resets (which restart the engine's cumulative counter).
+     *
+     * @return the total session cost in USD
+     */
     public double getTotalCostUsd() {
-        return totalCostUsd.sum();
+        synchronized (costLock) {
+            return costBaselineUsd + costSegmentMaxUsd;
+        }
     }
 
     /** Returns the accumulated input token count across all turns. */
@@ -542,6 +550,12 @@ public class AssistantSession {
         }
         if ("turn_complete".equals(event.type())) {
             accumulateCost(event);
+            event = withSessionCost(event);
+        } else if ("conversation_reset".equals(event.type())) {
+            synchronized (costLock) {
+                costBaselineUsd += costSegmentMaxUsd;
+                costSegmentMaxUsd = 0;
+            }
         }
         synchronized (eventLock) {
             if ("conversation_reset".equals(event.type())) {
@@ -624,12 +638,37 @@ public class AssistantSession {
         return true;
     }
 
+    /**
+     * Accumulates usage from a {@code turn_complete} event. Tokens, duration and turn count are per-turn and
+     * are summed. {@code costUsd} is the cumulative session cost (Claude's {@code total_cost_usd}; the
+     * OpenCode normalizer matches it), so the running maximum within the current conversation segment is
+     * recorded instead of a sum; a {@code conversation_reset} folds that maximum into a baseline.
+     */
     private void accumulateCost(SseEvent event) {
-        totalCostUsd.add(event.data().path("costUsd").asDouble(0));
+        double turnCost = event.data().path("costUsd").asDouble(0);
+        synchronized (costLock) {
+            costSegmentMaxUsd = Math.max(costSegmentMaxUsd, turnCost);
+        }
         totalInputTokens.addAndGet(event.data().path("inputTokens").asLong(0));
         totalOutputTokens.addAndGet(event.data().path("outputTokens").asLong(0));
         totalDurationMs.addAndGet(event.data().path("durationMs").asLong(0));
         turnCount.incrementAndGet();
+    }
+
+    /**
+     * Returns a copy of a {@code turn_complete} event with a {@code sessionCostUsd} field holding the session's
+     * total cost, including spend from conversation segments before any {@code conversation_reset}. The
+     * engine-reported {@code costUsd} is left unchanged.
+     *
+     * @param event the turn_complete event
+     * @return the event with {@code sessionCostUsd} added
+     */
+    private SseEvent withSessionCost(SseEvent event) {
+        ObjectNode data = event.data() instanceof ObjectNode obj
+                ? obj.deepCopy()
+                : com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
+        data.put("sessionCostUsd", getTotalCostUsd());
+        return new SseEvent(event.type(), data);
     }
 
 }

@@ -21,12 +21,16 @@ import java.util.concurrent.ConcurrentHashMap;
  * repeated {@code message.part.updated} events OpenCode sends. Because OpenCode call IDs and part IDs are globally
  * unique, the de-dup state is kept for the whole session lifetime (it is not reset at turn end), so late part
  * updates arriving after {@code session.idle} are not re-emitted.
+ *
+ * <p>Usage is collected from assistant {@code message.updated} events (which emit no UI events). On
+ * {@code turn_complete}, {@code costUsd} is the cumulative session cost, while {@code inputTokens},
+ * {@code outputTokens} and {@code durationMs} are per turn. Messages counted in a finished turn are never counted
+ * again, even if late updates for them arrive.
  */
 public class OpenCodeEventNormalizer {
 
     /** Session events that are understood but not (yet) surfaced to the UI. */
     private static final Set<String> IGNORED_EVENT_TYPES = Set.of(
-            "message.updated",
             "message.removed",
             "message.part.delta",
             "message.part.removed",
@@ -56,6 +60,14 @@ public class OpenCodeEventNormalizer {
     private record ToolCall(String name, JsonNode input) {
     }
 
+    /** Usage reported by one assistant message, keyed by message ID. */
+    private record MessageUsage(double cost, long inputTokens, long outputTokens, long created, long completed) {
+    }
+
+    private final Map<String, MessageUsage> turnUsage = new ConcurrentHashMap<>();
+    private final Set<String> settledMessages = ConcurrentHashMap.newKeySet();
+    private double sessionCostUsd;
+
     /**
      * Converts a single OpenCode event into zero or more normalized assistant events.
      *
@@ -73,6 +85,7 @@ public class OpenCodeEventNormalizer {
 
         return switch (resolvedType) {
             case "message.part.updated" -> mapMessagePart(eventData, safePayload);
+            case "message.updated" -> trackUsage(eventData);
             case "permission.asked", "permission.updated" -> permission(eventData);
             case "session.turn.completed", "session.idle" -> List.of(turnComplete(eventData));
             case "session.error" -> List.of(sessionError(eventData));
@@ -234,15 +247,48 @@ public class OpenCodeEventNormalizer {
         return List.of(new SseEvent("tool_use", toolUse), request);
     }
 
+    private List<SseEvent> trackUsage(JsonNode eventData) {
+        JsonNode info = eventData.path("info");
+        String messageId = info.path("id").asText("");
+        if (!"assistant".equals(info.path("role").asText("")) || messageId.isEmpty()
+                || settledMessages.contains(messageId)) {
+            return Collections.emptyList();
+        }
+        JsonNode tokens = info.path("tokens");
+        long input = tokens.path("input").asLong(0)
+                + tokens.path("cache").path("read").asLong(0)
+                + tokens.path("cache").path("write").asLong(0);
+        long output = tokens.path("output").asLong(0) + tokens.path("reasoning").asLong(0);
+        turnUsage.put(messageId, new MessageUsage(info.path("cost").asDouble(0), input, output,
+                info.path("time").path("created").asLong(0), info.path("time").path("completed").asLong(0)));
+        return Collections.emptyList();
+    }
+
     private SseEvent turnComplete(JsonNode payload) {
+        // Both session.idle and the session.turn.completed alias use the collected usage, not payload fields.
+        List<MessageUsage> usages = new ArrayList<>(turnUsage.values());
+        double turnCost = usages.stream().mapToDouble(MessageUsage::cost).sum();
+        sessionCostUsd += turnCost;
+        long inputTokens = usages.stream().mapToLong(MessageUsage::inputTokens).sum();
+        long outputTokens = usages.stream().mapToLong(MessageUsage::outputTokens).sum();
+        List<MessageUsage> timed = usages.stream()
+                .filter(usage -> usage.created() > 0 && usage.completed() > 0)
+                .toList();
+        long durationMs = timed.isEmpty() ? 0
+                : timed.stream().mapToLong(MessageUsage::completed).max().getAsLong()
+                        - timed.stream().mapToLong(MessageUsage::created).min().getAsLong();
+        settledMessages.addAll(turnUsage.keySet());
+        turnUsage.clear();
+
         ObjectNode data = JsonNodeFactory.instance.objectNode();
         data.put("sessionId", firstNonBlank(
                 payload.path("sessionID").asText(""),
                 payload.path("sessionId").asText(""),
                 payload.path("session_id").asText("")));
-        data.put("costUsd", payload.path("costUsd").asDouble(0));
-        data.put("inputTokens", payload.path("inputTokens").asLong(0));
-        data.put("outputTokens", payload.path("outputTokens").asLong(0));
+        data.put("costUsd", sessionCostUsd);
+        data.put("inputTokens", inputTokens);
+        data.put("outputTokens", outputTokens);
+        data.put("durationMs", durationMs);
         data.put("success", payload.path("success").asBoolean(true));
         return new SseEvent("turn_complete", data);
     }
