@@ -728,6 +728,7 @@ public class AssistantSessionManager {
 
     private java.util.function.Consumer<SseEvent> createValidationListener(
             AssistantSession session) {
+        ValidationFeedbackTracker tracker = new ValidationFeedbackTracker();
         return event -> {
             // Listen for tool_result events — they fire after Write/Edit completes.
             // We check the working directory for changed JSON files.
@@ -740,15 +741,15 @@ public class AssistantSessionManager {
             // specific file path from event data.
             Path workDir = session.getWorkingDirectory();
             try {
-                validateAndFeedback(workDir, "tools", session);
-                validateAndFeedback(workDir, "action-types", session);
-                validateAndFeedback(workDir, "report-definitions", session);
-                validateAndFeedback(workDir, "toolsets", session);
-                validateAndFeedback(workDir, "session-templates", session);
-                validateAndFeedback(workDir, "connections", session);
-                validateAndFeedback(workDir, "subscriptions", session);
-                validateAndFeedback(workDir, "workflows", session);
-                validateAndFeedback(workDir, "scheduled-jobs", session);
+                validateAndFeedback(workDir, "tools", session, tracker);
+                validateAndFeedback(workDir, "action-types", session, tracker);
+                validateAndFeedback(workDir, "report-definitions", session, tracker);
+                validateAndFeedback(workDir, "toolsets", session, tracker);
+                validateAndFeedback(workDir, "session-templates", session, tracker);
+                validateAndFeedback(workDir, "connections", session, tracker);
+                validateAndFeedback(workDir, "subscriptions", session, tracker);
+                validateAndFeedback(workDir, "workflows", session, tracker);
+                validateAndFeedback(workDir, "scheduled-jobs", session, tracker);
             } catch (Exception e) {
                 LOG.warnf(e, "Validation listener error in session %s",
                         session.getId());
@@ -757,7 +758,8 @@ public class AssistantSessionManager {
     }
 
     private void validateAndFeedback(Path workDir, String subdir,
-                                      AssistantSession session) throws IOException {
+                                      AssistantSession session,
+                                      ValidationFeedbackTracker tracker) throws IOException {
         Path dir = workDir.resolve(subdir);
         if (!Files.isDirectory(dir)) {
             return;
@@ -781,6 +783,9 @@ public class AssistantSessionManager {
                             if (!result.errors().isEmpty()) {
                                 feedback.append("\nPlease fix the errors above.");
                             }
+                            if (!tracker.shouldSend(f, feedback.toString())) {
+                                return;
+                            }
                             try {
                                 session.sendMessage(feedback.toString());
                                 LOG.infof("Sent validation feedback for %s in session %s",
@@ -788,6 +793,8 @@ public class AssistantSessionManager {
                             } catch (IOException e) {
                                 LOG.warnf(e, "Failed to send validation feedback");
                             }
+                        } else {
+                            tracker.markValid(f);
                         }
                     });
         }

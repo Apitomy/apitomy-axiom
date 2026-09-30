@@ -217,6 +217,10 @@ The chat panel is a conversation interface where you interact with the assistant
     - Orange — plan/agent operations
     - Teal — AskUser interactions
 
+You can send another message while the assistant is still working; it is queued and answered after the current
+reply. If a message cannot be delivered, the chat shows a "Message was not delivered" notice. Stopping or
+interrupting the assistant also discards any messages that are still queued.
+
 #### Slash Commands
 
 Type `/` in the chat input to see available slash commands. Use arrow keys to navigate

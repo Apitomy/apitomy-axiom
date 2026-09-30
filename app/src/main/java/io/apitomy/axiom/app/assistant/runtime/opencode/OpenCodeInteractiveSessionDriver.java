@@ -16,7 +16,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -39,7 +38,6 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
     private final Set<String> expectedMcpServers;
     private final String systemPrompt;
 
-    private final AtomicBoolean turnInFlight = new AtomicBoolean(false);
     private final AtomicReference<String> errorMessage = new AtomicReference<>();
     private final AtomicReference<AssistantSession.Status> status;
     private final Set<String> userMessageIds = ConcurrentHashMap.newKeySet();
@@ -258,16 +256,19 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
 
     @Override
     public void sendUserMessage(String message) throws IOException {
+        // OpenCode queues prompts natively: a prompt posted while the session is busy is answered after the
+        // current turn (verified on opencode 1.18.33), so no client-side turn guard is needed. Aborting the
+        // session discards prompts that are still queued: they are stored but never answered, and opencode
+        // emits one session.idle per aborted/discarded turn (also verified on opencode 1.18.33).
         ensureRunning();
-        if (!turnInFlight.compareAndSet(false, true)) {
-            throw new IllegalStateException("A turn is already in flight");
-        }
-
         try {
             client.sendPromptAsync(openCodeSessionId, message, model, tools, systemPrompt);
         } catch (RuntimeException e) {
-            turnInFlight.set(false);
-            throw new IOException("Failed to submit OpenCode prompt", e);
+            String detail = e.getMessage();
+            if (detail == null || detail.isBlank()) {
+                detail = e.getClass().getSimpleName();
+            }
+            throw new IOException("Failed to submit OpenCode prompt: " + detail, e);
         }
     }
 
@@ -290,7 +291,6 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
         }
         try {
             localClient.abort(localSessionId);
-            turnInFlight.set(false);
         } catch (RuntimeException e) {
             status.set(AssistantSession.Status.ERROR);
             errorMessage.set(e.getMessage());
@@ -300,7 +300,6 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
 
     @Override
     public synchronized void destroy() {
-        turnInFlight.set(false);
         userMessageIds.clear();
         openCodeSessionId = null;
         safeStopServer();
@@ -337,9 +336,6 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
 
         List<SseEvent> normalizedEvents = normalizer.normalize(eventName, payload);
         for (SseEvent normalizedEvent : normalizedEvents) {
-            if ("turn_complete".equals(normalizedEvent.type())) {
-                turnInFlight.set(false);
-            }
             if ("permission_request".equals(normalizedEvent.type())) {
                 autoApprovalSink.accept(normalizedEvent);
             } else {
@@ -429,7 +425,6 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                 : "OpenCode event stream failed";
         status.set(AssistantSession.Status.ERROR);
         errorMessage.set(message);
-        turnInFlight.set(false);
 
         com.fasterxml.jackson.databind.node.ObjectNode terminalData =
                 com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();

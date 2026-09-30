@@ -68,7 +68,7 @@ class OpenCodeInteractiveSessionDriverTest {
     }
 
     @Test
-    void rejectsSecondPromptWhileTurnActive() throws Exception {
+    void acceptsSecondPromptWhileTurnActive() throws Exception {
         CountDownLatch promptSubmitted = new CountDownLatch(1);
         EventResponder eventResponder = exchange -> {
             exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
@@ -79,26 +79,27 @@ class OpenCodeInteractiveSessionDriverTest {
         };
 
         try (FakeOpenCodeServer server = FakeOpenCodeServer.start(eventResponder, promptSubmitted)) {
-            FakeServerProcess process = new FakeServerProcess(server.baseUrl());
-
             OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
-                    process,
+                    new FakeServerProcess(server.baseUrl()),
                     client -> OpenCodeCapabilityProbe.Result.pass(),
                     new OpenCodeEventNormalizer(),
                     event -> {
                     },
                     event -> {
                     },
-                    "Axiom Session",
-                    "github-copilot/claude-sonnet-5",
-                    null
-            );
+                    new OpenCodeInteractiveSessionDriver.SessionSettings(
+                            "Axiom Session", "github-copilot/claude-sonnet-5", null, Set.of(),
+                            "You are the Axiom Configuration Assistant."));
 
             driver.start();
             driver.sendUserMessage("first");
 
-            assertThrows(IllegalStateException.class, () -> driver.sendUserMessage("second"));
-            assertEquals(1, server.promptCallCount());
+            // "Busy" = no turn_complete received yet (what the old guard rejected); opencode queueing verified manually.
+            assertDoesNotThrow(() -> driver.sendUserMessage("second while busy"));
+            assertEquals(2, server.promptCallCount());
+            JsonNode second = new ObjectMapper().readTree(server.promptBodies().get(1));
+            assertEquals("second while busy", second.path("parts").get(0).path("text").asText());
+            assertEquals("You are the Axiom Configuration Assistant.", second.path("system").asText());
 
             driver.destroy();
         }
@@ -264,7 +265,7 @@ class OpenCodeInteractiveSessionDriverTest {
     }
 
     @Test
-    void streamFailureTransitionsToErrorAndClearsInFlightPrompt() throws Exception {
+    void streamFailureTransitionsToError() throws Exception {
         CountDownLatch promptSubmitted = new CountDownLatch(1);
         EventResponder eventResponder = exchange -> {
             exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
@@ -310,9 +311,35 @@ class OpenCodeInteractiveSessionDriverTest {
 
             assertEquals(AssistantSession.Status.ERROR, driver.getStatus());
             assertNotNull(driver.getErrorMessage());
-            assertFalse(isTurnInFlight(driver));
             assertEquals(1, server.promptCallCount());
             assertNotNull(terminal.get());
+
+            driver.destroy();
+        }
+    }
+
+    @Test
+    void sendUserMessageWrapsPromptFailureWithCauseMessage() throws Exception {
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start()) {
+            OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
+                    new FakeServerProcess(server.baseUrl()),
+                    client -> OpenCodeCapabilityProbe.Result.pass(),
+                    new OpenCodeEventNormalizer(),
+                    event -> {
+                    },
+                    event -> {
+                    },
+                    "Axiom Session",
+                    "github-copilot/claude-sonnet-5",
+                    null
+            );
+
+            driver.start();
+            IOException error = assertThrows(IOException.class, () -> driver.sendUserMessage("FAIL_WITH_500"));
+            assertTrue(error.getMessage().startsWith("Failed to submit OpenCode prompt: "), error.getMessage());
+            assertNotNull(error.getCause());
+            assertTrue(error.getMessage().contains(error.getCause().getMessage()), error.getMessage());
+            assertTrue(error.getMessage().length() > "Failed to submit OpenCode prompt: ".length());
 
             driver.destroy();
         }
@@ -420,16 +447,6 @@ class OpenCodeInteractiveSessionDriverTest {
         int startCalls() {
             return startCalls.get();
         }
-    }
-
-    private static boolean isTurnInFlight(OpenCodeInteractiveSessionDriver driver) throws Exception {
-        java.lang.reflect.Field field = OpenCodeInteractiveSessionDriver.class.getDeclaredField("turnInFlight");
-        field.setAccessible(true);
-        Object object = field.get(driver);
-        if (object instanceof java.util.concurrent.atomic.AtomicBoolean atomicBoolean) {
-            return atomicBoolean.get();
-        }
-        return false;
     }
 
     private static void waitUntil(BooleanSupplier condition, Duration timeout) throws Exception {
@@ -632,14 +649,6 @@ class OpenCodeInteractiveSessionDriverTest {
             driver.start();
 
             driver.sendUserMessage("first");
-            waitUntil(() -> {
-                try {
-                    return !isTurnInFlight(driver);
-                } catch (Exception e) {
-                    throw new IllegalStateException(e);
-                }
-            }, Duration.ofSeconds(3));
-            assertFalse(isTurnInFlight(driver));
 
             driver.sendUserMessage("second");
 
@@ -838,6 +847,15 @@ class OpenCodeInteractiveSessionDriverTest {
                 String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
                 fakeOpenCodeServer.lastPromptBody.set(body);
                 fakeOpenCodeServer.promptBodies.add(body);
+                if (body.contains("FAIL_WITH_500")) {
+                    byte[] payload = "{\"name\":\"UnknownError\",\"data\":{\"message\":\"boom from server\"}}"
+                            .getBytes(StandardCharsets.UTF_8);
+                    exchange.getResponseHeaders().add("Content-Type", "application/json");
+                    exchange.sendResponseHeaders(500, payload.length);
+                    exchange.getResponseBody().write(payload);
+                    exchange.close();
+                    return;
+                }
                 if (body.contains("\"tools\":{\"allowed\"")) {
                     byte[] payload = "{\"name\":\"BadRequest\",\"data\":{\"message\":\"Expected boolean\",\"kind\":\"Payload\"}}"
                             .getBytes(StandardCharsets.UTF_8);
