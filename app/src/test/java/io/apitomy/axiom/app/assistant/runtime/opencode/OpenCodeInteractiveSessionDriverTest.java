@@ -137,6 +137,7 @@ class OpenCodeInteractiveSessionDriverTest {
     @Test
     void ignoresEventWithMissingSessionId() throws Exception {
         CountDownLatch eventWritten = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
         String eventPayload = "event: message\n"
                 + "data: {\"type\":\"message.part.updated\",\"properties\":{\"part\":"
                 + "{\"id\":\"prt_1\",\"messageID\":\"msg_1\",\"type\":\"text\",\"text\":\"hello\"}}}\n\n";
@@ -147,6 +148,8 @@ class OpenCodeInteractiveSessionDriverTest {
                 outputStream.write(eventPayload.getBytes(StandardCharsets.UTF_8));
                 outputStream.flush();
                 eventWritten.countDown();
+                // Keep the stream open so the test observes filtering only, not a reconnect.
+                release.await(5, TimeUnit.SECONDS);
             }
         };
 
@@ -172,6 +175,7 @@ class OpenCodeInteractiveSessionDriverTest {
             waitUntil(() -> !events.isEmpty(), Duration.ofMillis(500));
             assertTrue(events.isEmpty());
 
+            release.countDown();
             driver.destroy();
         }
     }
@@ -357,6 +361,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     null
             );
 
+            driver.setReconnectBackoffs(ZERO_BACKOFFS);
             driver.start();
             driver.sendUserMessage("first");
 
@@ -448,12 +453,16 @@ class OpenCodeInteractiveSessionDriverTest {
                     },
                     event -> {
                     },
-                    (openCodeAssistantClient, onEvent, onError) ->
-                            onError.accept(new IllegalStateException("synthetic stream failure")),
+                    (openCodeAssistantClient, onEvent, onError) -> {
+                        onError.accept(new IllegalStateException("synthetic stream failure"));
+                        return () -> {
+                        };
+                    },
                     "Axiom Session",
                     "github-copilot/claude-sonnet-5",
                     null
             );
+            driver.setReconnectBackoffs(ZERO_BACKOFFS);
 
             driver.start();
 
@@ -499,6 +508,10 @@ class OpenCodeInteractiveSessionDriverTest {
 
         int startCalls() {
             return startCalls.get();
+        }
+
+        void setAlive(boolean alive) {
+            this.alive = alive;
         }
     }
 
@@ -741,6 +754,184 @@ class OpenCodeInteractiveSessionDriverTest {
                     new ObjectMapper().readTree(server.lastPromptBody());
             assertFalse(body.has("system"));
             driver.destroy();
+        }
+    }
+
+    private static final List<Duration> ZERO_BACKOFFS = List.of(Duration.ZERO, Duration.ZERO, Duration.ZERO);
+    private static final List<Duration> TINY_BACKOFFS =
+            List.of(Duration.ofMillis(10), Duration.ofMillis(10), Duration.ofMillis(10));
+    private static final String IDLE_EVENT = "event: message\n"
+            + "data: {\"type\":\"session.idle\",\"properties\":{\"sessionID\":\"session-1\"}}\n\n";
+
+    private static OpenCodeInteractiveSessionDriver newDriver(FakeServerProcess process, List<SseEvent> events) {
+        return new OpenCodeInteractiveSessionDriver(
+                process,
+                client -> OpenCodeCapabilityProbe.Result.pass(),
+                new OpenCodeEventNormalizer(),
+                events::add,
+                event -> {
+                },
+                "Axiom Session",
+                "github-copilot/claude-sonnet-5",
+                null);
+    }
+
+    private static List<SseEvent> sessionErrors(List<SseEvent> events, String name) {
+        return events.stream()
+                .filter(event -> "session_error".equals(event.type()))
+                .filter(event -> name.equals(event.data().path("name").asText()))
+                .toList();
+    }
+
+    private static long countType(List<SseEvent> events, String type) {
+        return events.stream().filter(event -> type.equals(event.type())).count();
+    }
+
+    @Test
+    void interruptFailureKeepsSessionRunningAndEmitsInterruptFailed() throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        EventResponder openStream = exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+            exchange.sendResponseHeaders(200, 0);
+            release.await(5, TimeUnit.SECONDS);
+        };
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start(openStream)) {
+            server.setAbortStatus(500);
+            List<SseEvent> events = new CopyOnWriteArrayList<>();
+            OpenCodeInteractiveSessionDriver driver = newDriver(new FakeServerProcess(server.baseUrl()), events);
+            driver.start();
+
+            driver.interrupt();
+
+            assertEquals(1, server.abortCallCount());
+            assertEquals(AssistantSession.Status.RUNNING, driver.getStatus());
+            List<SseEvent> failures = sessionErrors(events, "InterruptFailed");
+            assertEquals(1, failures.size());
+            assertTrue(failures.get(0).data().path("message").asText()
+                    .startsWith("Could not stop the current reply: "), failures.get(0).toString());
+            assertTrue(driver.isAlive());
+            release.countDown();
+            driver.destroy();
+        }
+    }
+
+    @Test
+    void eventStreamReconnectsAfterDrop() throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger connection = new AtomicInteger();
+        EventResponder responder = exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+            exchange.sendResponseHeaders(200, 0);
+            if (connection.incrementAndGet() == 1) {
+                exchange.getResponseBody().close();
+                return;
+            }
+            OutputStream outputStream = exchange.getResponseBody();
+            outputStream.write(IDLE_EVENT.getBytes(StandardCharsets.UTF_8));
+            outputStream.flush();
+            release.await(5, TimeUnit.SECONDS);
+        };
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start(responder)) {
+            List<SseEvent> events = new CopyOnWriteArrayList<>();
+            OpenCodeInteractiveSessionDriver driver = newDriver(new FakeServerProcess(server.baseUrl()), events);
+            driver.setReconnectBackoffs(TINY_BACKOFFS);
+            driver.start();
+
+            waitUntil(() -> !sessionErrors(events, "EventStreamReconnected").isEmpty(), Duration.ofSeconds(3));
+            waitUntil(() -> countType(events, "turn_complete") > 0, Duration.ofSeconds(3));
+
+            assertEquals(1, sessionErrors(events, "EventStreamReconnected").size());
+            assertEquals(2, server.eventConnectionCount());
+            assertEquals(AssistantSession.Status.RUNNING, driver.getStatus());
+            assertEquals(0, countType(events, "session_ended"));
+            assertTrue(driver.isAlive());
+            release.countDown();
+            driver.destroy();
+        }
+    }
+
+    @Test
+    void eventStreamReconnectExhaustedTransitionsToError() throws Exception {
+        EventResponder closing = exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+            exchange.sendResponseHeaders(200, 0);
+            exchange.getResponseBody().close();
+        };
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start(closing)) {
+            List<SseEvent> events = new CopyOnWriteArrayList<>();
+            OpenCodeInteractiveSessionDriver driver = newDriver(new FakeServerProcess(server.baseUrl()), events);
+            driver.setReconnectBackoffs(TINY_BACKOFFS);
+            driver.start();
+
+            waitUntil(() -> countType(events, "session_ended") > 0, Duration.ofSeconds(3));
+            Thread.sleep(100);
+
+            assertEquals(4, server.eventConnectionCount());
+            assertEquals(AssistantSession.Status.ERROR, driver.getStatus());
+            assertEquals(1, countType(events, "session_ended"));
+            assertFalse(driver.isAlive());
+            driver.destroy();
+        }
+    }
+
+    @Test
+    void eventStreamDropWithDeadServerDoesNotReconnect() throws Exception {
+        CountDownLatch serverDead = new CountDownLatch(1);
+        EventResponder closing = exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+            exchange.sendResponseHeaders(200, 0);
+            serverDead.await(5, TimeUnit.SECONDS);
+            exchange.getResponseBody().close();
+        };
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start(closing)) {
+            List<SseEvent> events = new CopyOnWriteArrayList<>();
+            FakeServerProcess process = new FakeServerProcess(server.baseUrl());
+            OpenCodeInteractiveSessionDriver driver = newDriver(process, events);
+            driver.setReconnectBackoffs(TINY_BACKOFFS);
+            driver.start();
+
+            process.setAlive(false);
+            serverDead.countDown();
+            waitUntil(() -> countType(events, "session_ended") > 0, Duration.ofSeconds(3));
+            Thread.sleep(100);
+
+            assertEquals(1, server.eventConnectionCount());
+            assertEquals(AssistantSession.Status.ERROR, driver.getStatus());
+            assertEquals(1, countType(events, "session_ended"));
+            assertTrue(sessionErrors(events, "EventStreamReconnected").isEmpty());
+            assertFalse(driver.isAlive());
+            driver.destroy();
+        }
+    }
+
+    @Test
+    void destroyClosesStreamDeletesSessionAndDoesNotReconnect() throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        EventResponder openStream = exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+            exchange.sendResponseHeaders(200, 0);
+            release.await(5, TimeUnit.SECONDS);
+        };
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start(openStream)) {
+            List<SseEvent> events = new CopyOnWriteArrayList<>();
+            FakeServerProcess process = new FakeServerProcess(server.baseUrl());
+            OpenCodeInteractiveSessionDriver driver = newDriver(process, events);
+            driver.setReconnectBackoffs(TINY_BACKOFFS);
+            driver.start();
+            waitUntil(() -> server.eventConnectionCount() == 1, Duration.ofSeconds(3));
+
+            driver.destroy();
+            release.countDown();
+            int connectionsAfterDestroy = server.eventConnectionCount();
+            Thread.sleep(200);
+
+            assertEquals(List.of("/session/session-1"), server.deletedPaths());
+            assertEquals(connectionsAfterDestroy, server.eventConnectionCount());
+            assertEquals(1, server.eventConnectionCount());
+            assertEquals(0, countType(events, "session_ended"));
+            assertEquals(AssistantSession.Status.STOPPED, driver.getStatus());
+            assertFalse(process.isAlive());
+            assertFalse(driver.isAlive());
         }
     }
 
@@ -998,6 +1189,9 @@ class OpenCodeInteractiveSessionDriverTest {
         private final AtomicInteger abortCalls = new AtomicInteger();
         private final AtomicReference<String> lastPromptBody = new AtomicReference<>();
         private final List<String> promptBodies = new CopyOnWriteArrayList<>();
+        private final AtomicInteger eventConnections = new AtomicInteger();
+        private final List<String> deletedPaths = new CopyOnWriteArrayList<>();
+        private volatile int abortStatus = 200;
 
         private FakeOpenCodeServer(HttpServer server) {
             this.server = server;
@@ -1039,8 +1233,18 @@ class OpenCodeInteractiveSessionDriverTest {
                                         String mcpResponse) throws IOException {
             HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             FakeOpenCodeServer fakeOpenCodeServer = new FakeOpenCodeServer(server);
-            server.createContext("/session", new JsonHandler(201, "{\"id\":\"" + SESSION_ID + "\"}"));
+            JsonHandler sessionCreated = new JsonHandler(201, "{\"id\":\"" + SESSION_ID + "\"}");
+            server.createContext("/session", exchange -> {
+                if ("DELETE".equals(exchange.getRequestMethod())) {
+                    fakeOpenCodeServer.deletedPaths.add(exchange.getRequestURI().getPath());
+                    exchange.sendResponseHeaders(200, -1);
+                    exchange.close();
+                    return;
+                }
+                sessionCreated.handle(exchange);
+            });
             server.createContext("/event", exchange -> {
+                fakeOpenCodeServer.eventConnections.incrementAndGet();
                 try {
                     eventResponder.handle(exchange);
                 } catch (Exception e) {
@@ -1080,7 +1284,7 @@ class OpenCodeInteractiveSessionDriverTest {
             });
             server.createContext("/session/" + SESSION_ID + "/abort", exchange -> {
                 fakeOpenCodeServer.abortCalls.incrementAndGet();
-                exchange.sendResponseHeaders(200, -1);
+                exchange.sendResponseHeaders(fakeOpenCodeServer.abortStatus, -1);
                 exchange.close();
             });
             server.createContext("/session/" + SESSION_ID + "/permissions/perm-1", exchange -> {
@@ -1112,6 +1316,18 @@ class OpenCodeInteractiveSessionDriverTest {
 
         int abortCallCount() {
             return abortCalls.get();
+        }
+
+        int eventConnectionCount() {
+            return eventConnections.get();
+        }
+
+        List<String> deletedPaths() {
+            return deletedPaths;
+        }
+
+        void setAbortStatus(int abortStatus) {
+            this.abortStatus = abortStatus;
         }
 
         @Override

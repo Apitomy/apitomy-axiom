@@ -192,10 +192,21 @@ public final class OpenCodeAssistantClient {
      * @throws IllegalStateException if the request fails or returns a status other than 200 or 204
      */
     public void deleteSession(String sessionId) {
+        deleteSession(sessionId, Duration.ofSeconds(30));
+    }
+
+    /**
+     * Deletes a session with a request timeout.
+     *
+     * @param sessionId session identifier
+     * @param timeout request timeout
+     * @throws IllegalStateException if the request fails or returns a status other than 200 or 204
+     */
+    public void deleteSession(String sessionId, Duration timeout) {
         String path = "/session/" + sessionId;
         HttpRequest request = request(path)
                 .DELETE()
-                .timeout(Duration.ofSeconds(30))
+                .timeout(timeout)
                 .build();
         try {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
@@ -294,45 +305,128 @@ public final class OpenCodeAssistantClient {
      * @param onEvent callback invoked per event
      */
     public void connectEvents(Consumer<OpenCodeRawEvent> onEvent) {
-        connectEvents(onEvent, throwable -> {
+        startEventStream(onEvent, throwable -> {
             throw new IllegalStateException("OpenCode event stream terminated", throwable);
-        });
+        }, false);
     }
 
     /**
      * Connects to OpenCode global event stream and emits parsed raw events.
      *
+     * <p>{@code onError} is called once when the stream fails or ends (end of stream is reported as an
+     * {@link IllegalStateException}), unless the returned handle was closed first.
+     *
      * @param onEvent callback invoked per event
-     * @param onError callback invoked when stream setup or parsing fails
+     * @param onError callback invoked when stream setup or parsing fails, or when the stream ends
+     * @return handle that stops the stream; after closing it {@code onError} is not called
      */
-    public void connectEvents(Consumer<OpenCodeRawEvent> onEvent, Consumer<Throwable> onError) {
-        Objects.requireNonNull(onEvent, "onEvent");
-        Objects.requireNonNull(onError, "onError");
-        Thread.ofVirtual().name("opencode-events").start(() -> {
-            try {
-                streamEvents(onEvent);
-            } catch (Throwable throwable) {
-                onError.accept(throwable);
-            }
-        });
+    public EventStream connectEvents(Consumer<OpenCodeRawEvent> onEvent, Consumer<Throwable> onError) {
+        return startEventStream(onEvent, onError, true);
     }
 
-    private void streamEvents(Consumer<OpenCodeRawEvent> onEvent) {
+    private EventStream startEventStream(Consumer<OpenCodeRawEvent> onEvent,
+                                         Consumer<Throwable> onError,
+                                         boolean reportEndOfStream) {
+        Objects.requireNonNull(onEvent, "onEvent");
+        Objects.requireNonNull(onError, "onError");
+        StreamHandle handle = new StreamHandle();
+        Thread thread = Thread.ofVirtual().name("opencode-events").unstarted(() -> {
+            try {
+                streamEvents(onEvent, handle);
+                if (reportEndOfStream && !handle.closed) {
+                    onError.accept(new IllegalStateException("OpenCode event stream ended"));
+                }
+            } catch (Throwable throwable) {
+                if (!handle.closed) {
+                    onError.accept(throwable);
+                }
+            }
+        });
+        handle.thread = thread;
+        thread.start();
+        return handle;
+    }
+
+    private void streamEvents(Consumer<OpenCodeRawEvent> onEvent, StreamHandle handle) {
         try {
             HttpResponse<java.io.InputStream> response = openEventStreamResponse();
+            if (!handle.attach(response.body())) {
+                return;
+            }
             if (response.statusCode() != 200) {
                 throw new IllegalStateException("Failed to connect OpenCode events: HTTP " + response.statusCode());
             }
 
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
-                parseSseEvents(reader, onEvent);
+                parseSseEvents(reader, event -> {
+                    if (!handle.closed) {
+                        onEvent.accept(event);
+                    }
+                });
             }
         } catch (IOException e) {
             throw new IllegalStateException("Failed to stream OpenCode events", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while streaming OpenCode events", e);
+        }
+    }
+
+    /**
+     * Handle to a running OpenCode event stream.
+     */
+    public interface EventStream extends AutoCloseable {
+
+        /**
+         * Stops the stream. After this call the stream's error callback is not invoked.
+         */
+        @Override
+        void close();
+    }
+
+    private static final class StreamHandle implements EventStream {
+
+        private volatile boolean closed;
+        private volatile Thread thread;
+        private java.io.InputStream body;
+
+        /**
+         * Registers the response body; returns false (and closes it) if the handle is already closed.
+         */
+        synchronized boolean attach(java.io.InputStream responseBody) {
+            if (closed) {
+                closeQuietly(responseBody);
+                return false;
+            }
+            body = responseBody;
+            return true;
+        }
+
+        @Override
+        public void close() {
+            java.io.InputStream toClose;
+            synchronized (this) {
+                if (closed) {
+                    return;
+                }
+                closed = true;
+                toClose = body;
+            }
+            if (toClose != null) {
+                closeQuietly(toClose);
+            } else if (thread != null) {
+                // Still connecting: interrupt the pending send so the thread exits promptly.
+                thread.interrupt();
+            }
+        }
+
+        private static void closeQuietly(java.io.InputStream stream) {
+            try {
+                stream.close();
+            } catch (IOException ignored) {
+                // Closing is best effort.
+            }
         }
     }
 
