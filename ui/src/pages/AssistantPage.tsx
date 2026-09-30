@@ -38,7 +38,7 @@ import {
     type AssistantSessionInfo,
 } from "../config/api";
 import { CreateSessionModal } from "../components/assistant/CreateSessionModal";
-import { engineDisplayName } from "../components/engineNames";
+import { engineColor, engineDisplayName } from "../components/engineNames";
 import "./AssistantPage.css";
 
 const STATUS_COLORS: Record<string, "blue" | "green" | "red" | "grey"> = {
@@ -247,7 +247,7 @@ export function AssistantPage() {
                                 </div>
                             </div>
                             {engineDisplayName(s.engine) && (
-                                <Label isCompact color="grey">
+                                <Label isCompact color={engineColor(s.engine)}>
                                     {engineDisplayName(s.engine)}
                                 </Label>
                             )}

@@ -38,7 +38,7 @@ import {
     type AutoApprovalRule,
     type AssistantApplyResult,
 } from "../config/api";
-import { engineDisplayName } from "../components/engineNames";
+import { engineColor, engineDisplayName } from "../components/engineNames";
 import "./AssistantSessionPage.css";
 
 export function AssistantSessionPage() {
@@ -303,7 +303,8 @@ export function AssistantSessionPage() {
                         </Label>
                     )}
                     {engineDisplayName(session.engine) && (
-                        <Label color="blue" isCompact className="axiom-session-page__header-label">
+                        <Label color={engineColor(session.engine)} isCompact
+                            className="axiom-session-page__header-label">
                             {engineDisplayName(session.engine)}
                         </Label>
                     )}

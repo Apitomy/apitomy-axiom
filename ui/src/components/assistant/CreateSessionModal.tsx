@@ -19,7 +19,7 @@ import {
     type AssistantSessionInfo,
     type SessionTemplate,
 } from "../../config/api";
-import { engineDisplayName } from "../engineNames";
+import { engineColor, engineDisplayName } from "../engineNames";
 import "../../pages/AssistantPage.css";
 
 const FUN_WORDS = [
@@ -167,7 +167,9 @@ export function CreateSessionModal({
                                         )}
                                         {templateEngineLabel(t) && (
                                             <Label className="axiom-assistant-page__template-item__badge"
-                                                color="grey" isCompact>{templateEngineLabel(t)}</Label>
+                                                color={engineColor(t.engine || defaultEngine)} isCompact>
+                                                {templateEngineLabel(t)}
+                                            </Label>
                                         )}
                                     </div>
                                     {t.description && (
