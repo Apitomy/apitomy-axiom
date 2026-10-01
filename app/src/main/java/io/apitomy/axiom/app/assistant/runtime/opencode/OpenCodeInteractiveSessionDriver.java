@@ -633,7 +633,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
     /**
      * Routes events of child (subagent) sessions. The normalizer owns the set of known children: it learns them from
      * parent {@code task} parts, and this method registers them from {@code session.created} events whose
-     * {@code info.parentID} is the current session.
+     * {@code info.parentID} is the current session or (for nested subagents) a known child session.
      *
      * @return true when the event belonged to a child session and was handled here
      */
@@ -652,6 +652,13 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                 && currentSessionId.equals(payload.path("properties").path("info").path("parentID").asText(""))) {
             currentNormalizer.registerChildSession(eventSessionId);
             return true;
+        }
+        if ("session.created".equals(payloadType)) {
+            String parentId = payload.path("properties").path("info").path("parentID").asText("");
+            if (!parentId.isEmpty() && currentNormalizer.childSessionIds().contains(parentId)) {
+                currentNormalizer.registerNestedSession(eventSessionId, parentId);
+                return true;
+            }
         }
         if (!currentNormalizer.childSessionIds().contains(eventSessionId)) {
             return false;

@@ -84,6 +84,8 @@ public class OpenCodeEventNormalizer {
     private final Map<String, Set<String>> childToolCallIds = new ConcurrentHashMap<>();
     private final Map<String, ToolCall> childToolCalls = new ConcurrentHashMap<>();
     private final Set<String> childProgressEmitted = ConcurrentHashMap.newKeySet();
+    /** Nested (grandchild and deeper) session id to the id of the child session that spawned it. */
+    private final Map<String, String> parentSessionByNested = new ConcurrentHashMap<>();
 
     /**
      * Registers a child (subagent) session of the current session, e.g. from its {@code session.created} event.
@@ -94,6 +96,37 @@ public class OpenCodeEventNormalizer {
         if (childSessionId != null && !childSessionId.isBlank()) {
             childSessions.add(childSessionId);
         }
+    }
+
+    /**
+     * Registers a nested subagent session (a session spawned by a known child session). Nested sessions are treated
+     * as children and are attributed to the same top-level parent {@code task} call as their ancestor child session,
+     * including when that mapping only becomes known later.
+     *
+     * @param nestedSessionId nested session id
+     * @param parentSessionId id of the known child session that created it
+     */
+    public void registerNestedSession(String nestedSessionId, String parentSessionId) {
+        if (nestedSessionId == null || nestedSessionId.isBlank() || parentSessionId == null
+                || parentSessionId.isBlank() || nestedSessionId.equals(parentSessionId)) {
+            return;
+        }
+        parentSessionByNested.put(nestedSessionId, parentSessionId);
+        childSessions.add(nestedSessionId);
+    }
+
+    /** Resolves a (possibly nested) child session to its top-level child session. */
+    private String rootChildSession(String sessionId) {
+        String current = sessionId;
+        Set<String> seen = new java.util.HashSet<>();
+        while (current != null && seen.add(current)) {
+            String parent = parentSessionByNested.get(current);
+            if (parent == null) {
+                return current;
+            }
+            current = parent;
+        }
+        return sessionId;
     }
 
     /**
@@ -124,10 +157,11 @@ public class OpenCodeEventNormalizer {
         JsonNode safePayload = payload == null ? JsonNodeFactory.instance.objectNode() : payload;
         JsonNode eventData = eventData(safePayload);
         String resolvedType = resolvedEventType(eventName, safePayload);
-        String parentCallId = childSessionId == null ? null : parentCallByChild.get(childSessionId);
+        String rootChildId = childSessionId == null ? null : rootChildSession(childSessionId);
+        String parentCallId = rootChildId == null ? null : parentCallByChild.get(rootChildId);
         return switch (resolvedType) {
             case "message.part.updated" -> "tool".equals(eventData.path("part").path("type").asText(""))
-                    ? childToolProgress(eventData.path("part"), childSessionId, parentCallId)
+                    ? childToolProgress(eventData.path("part"), rootChildId, parentCallId)
                     : Collections.emptyList();
             case "permission.asked", "permission.updated" -> {
                 ObjectNode data = permissionData(eventData, childToolCalls);
@@ -230,6 +264,7 @@ public class OpenCodeEventNormalizer {
             case "permission.asked", "permission.updated" -> permission(eventData);
             case "session.turn.completed", "session.idle" -> List.of(turnComplete(eventData));
             case "session.error" -> List.of(sessionError(eventData));
+            // Retry notices may repeat: one is emitted per session.status retry event.
             case "session.status" -> sessionStatus(eventData);
             case "todo.updated" -> todos(eventData);
             default -> IGNORED_EVENT_TYPES.contains(resolvedType)

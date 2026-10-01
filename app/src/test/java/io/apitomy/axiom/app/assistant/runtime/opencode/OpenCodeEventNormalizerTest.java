@@ -63,6 +63,36 @@ class OpenCodeEventNormalizerTest {
     }
 
     @Test
+    void grandchildPermissionCarriesTopLevelTaskCallId() throws Exception {
+        normalizer.registerChildSession("child-1");
+        normalizer.registerNestedSession("grandchild-1", "child-1");
+        // The parent task call mapping becomes known after the grandchild was registered.
+        normalizer.normalize("message", mapper.readTree("""
+                {"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","type":"tool",
+                "tool":"task","callID":"task-call-1","state":{"status":"running","input":{"description":"d",
+                "subagent_type":"general"},"metadata":{"sessionId":"child-1"}}}}}
+                """));
+        JsonNode permission = mapper.readTree("""
+                {"type":"permission.asked","properties":{"id":"per_9","sessionID":"grandchild-1",
+                "permission":"bash","patterns":["ls"],"metadata":{},"tool":{"messageID":"m1","callID":"c9"}}}
+                """);
+        JsonNode tool = mapper.readTree("""
+                {"type":"message.part.updated","properties":{"sessionID":"grandchild-1","part":{"id":"p9",
+                "type":"tool","tool":"bash","callID":"c9","state":{"status":"running","input":{"command":"ls"}}}}}
+                """);
+
+        assertTrue(normalizer.childSessionIds().contains("grandchild-1"));
+        List<SseEvent> progress = normalizer.normalizeChild("message", tool, "grandchild-1");
+        assertEquals(1, progress.size());
+        assertEquals("subagent_progress", progress.get(0).type());
+        assertEquals("task-call-1", progress.get(0).data().path("toolUseId").asText());
+        List<SseEvent> out = normalizer.normalizeChild("message", permission, "grandchild-1");
+        assertEquals(1, out.size());
+        assertEquals("permission_request", out.get(0).type());
+        assertEquals("task-call-1", out.get(0).data().path("subagentToolUseId").asText());
+    }
+
+    @Test
     void childIdleAndTextAreIgnored() throws Exception {
         normalizer.registerChildSession("child-1");
         JsonNode idle = mapper.readTree("""
