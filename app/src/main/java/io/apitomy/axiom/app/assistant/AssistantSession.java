@@ -224,13 +224,33 @@ public class AssistantSession {
     public void respondToPermission(String permissionId, boolean allow,
                                       com.fasterxml.jackson.databind.JsonNode toolInput)
             throws IOException {
+        respondToPermission(permissionId, allow, false, toolInput);
+    }
+
+    /**
+     * Responds to a runtime permission prompt, optionally approving matching future
+     * requests for the remainder of the session (where the runtime supports it).
+     *
+     * @param permissionId the permission request ID
+     * @param allow whether to allow (true) or deny (false) the tool call
+     * @param always when allowing, also approve matching future requests in this session
+     * @param toolInput runtime tool input payload associated with the permission request
+     * @throws IOException if the response cannot be written
+     */
+    public void respondToPermission(String permissionId, boolean allow, boolean always,
+                                      com.fasterxml.jackson.databind.JsonNode toolInput)
+            throws IOException {
+        boolean alwaysAllow = allow && always;
         // Record the resolution in event history for replay
         ObjectNode resolvedData = MAPPER.createObjectNode();
         resolvedData.put("permissionId", permissionId);
         resolvedData.put("allow", allow);
+        if (alwaysAllow) {
+            resolvedData.put("always", true);
+        }
         addEvent(new SseEvent("permission_resolved", resolvedData));
 
-        driver.respondToPermission(permissionId, allow, toolInput);
+        driver.respondToPermission(permissionId, allow, alwaysAllow, toolInput);
         lastActivityAt = Instant.now();
     }
 

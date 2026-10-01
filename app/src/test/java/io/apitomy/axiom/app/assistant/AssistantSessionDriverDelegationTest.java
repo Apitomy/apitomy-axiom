@@ -49,6 +49,39 @@ class AssistantSessionDriverDelegationTest {
     }
 
     @Test
+    void alwaysAllowIsDelegatedAndRecorded() throws Exception {
+        RecordingDriver driver = new RecordingDriver();
+        AssistantSession session = new AssistantSession(
+                "test", "general-assistant", Path.of("/tmp/s"), Path.of("/tmp/w"),
+                List.of(), Map.of(), "opencode", null, null, driver);
+        session.start();
+
+        session.respondToPermission("p1", true, true, null);
+
+        assertTrue(driver.lastPermissionAllow);
+        assertEquals(Boolean.TRUE, driver.lastPermissionAlways);
+        SseEvent resolved = session.getEventHistory().stream()
+                .filter(e -> "permission_resolved".equals(e.type())).reduce((a, b) -> b).orElseThrow();
+        assertTrue(resolved.data().path("always").asBoolean());
+    }
+
+    @Test
+    void alwaysIsIgnoredWhenDenying() throws Exception {
+        RecordingDriver driver = new RecordingDriver();
+        AssistantSession session = new AssistantSession(
+                "test", "general-assistant", Path.of("/tmp/s"), Path.of("/tmp/w"),
+                List.of(), Map.of(), "opencode", null, null, driver);
+        session.start();
+
+        session.respondToPermission("p1", false, true, null);
+
+        assertEquals(Boolean.FALSE, driver.lastPermissionAlways);
+        SseEvent resolved = session.getEventHistory().stream()
+                .filter(e -> "permission_resolved".equals(e.type())).reduce((a, b) -> b).orElseThrow();
+        assertTrue(resolved.data().path("always").isMissingNode());
+    }
+
+    @Test
     void failedDeliveryRecordsMessageNotDeliveredAfterUserMessage() throws Exception {
         RecordingDriver driver = new RecordingDriver();
         driver.sendFailure = new IOException("connection refused");
@@ -166,6 +199,7 @@ class AssistantSessionDriverDelegationTest {
         String lastMessage;
         String lastPermissionId;
         boolean lastPermissionAllow;
+        Boolean lastPermissionAlways;
         JsonNode lastPermissionToolInput;
         Exception sendFailure;
 
@@ -190,6 +224,13 @@ class AssistantSessionDriverDelegationTest {
             lastPermissionId = permissionId;
             lastPermissionAllow = allow;
             lastPermissionToolInput = toolInput;
+        }
+
+        @Override
+        public void respondToPermission(String permissionId, boolean allow, boolean always,
+                                        JsonNode toolInput) {
+            respondToPermission(permissionId, allow, toolInput);
+            lastPermissionAlways = always;
         }
 
         @Override

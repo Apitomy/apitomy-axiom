@@ -7771,6 +7771,10 @@
             "description": "Whether to allow (true) or deny (false) the tool call",
             "type": "boolean"
           },
+          "always": {
+            "description": "When allowing, also approve matching future requests for the rest of the session. Only honored by engines that support it (OpenCode); otherwise treated as a one-time allow. Ignored when allow is false.",
+            "type": "boolean"
+          },
           "updatedInput": {
             "description": "The original tool input to echo back when allowing",
             "type": "object",

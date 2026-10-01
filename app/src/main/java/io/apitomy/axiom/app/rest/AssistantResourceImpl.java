@@ -357,7 +357,8 @@ public class AssistantResourceImpl implements AssistantResource {
                     ? objectMapper.valueToTree(data.getUpdatedInput())
                     : null;
             session.respondToPermission(
-                    data.getPermissionId(), data.getAllow(), toolInput);
+                    data.getPermissionId(), data.getAllow(),
+                    Boolean.TRUE.equals(data.getAlways()), toolInput);
         } catch (IOException e) {
             throw new WebApplicationException(
                     "Failed to respond to permission: " + e.getMessage(), 500);

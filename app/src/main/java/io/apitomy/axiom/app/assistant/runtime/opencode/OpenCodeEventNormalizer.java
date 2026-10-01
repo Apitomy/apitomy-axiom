@@ -438,6 +438,12 @@ public class OpenCodeEventNormalizer {
         data.put("requestId", payload.path("id").asText(""));
         data.put("permission", permissionKey);
         data.set("patterns", patterns);
+        // Patterns OpenCode will approve for the rest of the session on an "always" reply.
+        ArrayNode always = JsonNodeFactory.instance.arrayNode();
+        if (payload.path("always").isArray()) {
+            payload.path("always").forEach(always::add);
+        }
+        data.set("alwaysPatterns", always);
         boolean guard = GUARD_PERMISSIONS.contains(permissionKey);
         data.put("toolName", guard ? permissionKey : callName);
         if (guard) {

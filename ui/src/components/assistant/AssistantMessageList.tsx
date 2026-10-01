@@ -32,6 +32,10 @@ export interface ChatMessage {
     permissionAllowed?: boolean;
     permissionType?: string;
     permissionPatterns?: string[];
+    /** Patterns the runtime would approve for the rest of the session on an "always" reply. */
+    permissionAlwaysPatterns?: string[];
+    /** True when the permission was resolved with "always allow". */
+    permissionAlways?: boolean;
     elapsedSeconds?: number;
     rawPayload?: string;
     thinkingId?: string;
@@ -93,7 +97,8 @@ interface MessageItemProps {
     msg: ChatMessage;
     isCopied: boolean;
     onCopyMarkdown: (msgId: string, content: string) => void;
-    onPermissionRespond: (permissionId: string, allow: boolean, toolInput?: Record<string, unknown>) => void;
+    onPermissionRespond: (permissionId: string, allow: boolean, toolInput?: Record<string, unknown>,
+        always?: boolean) => void;
     onCreateAutoApproval?: (toolName: string, fieldName: string | undefined,
         pattern: string | undefined, permissionId: string) => void;
     onSubagentClick?: (toolUseId: string) => void;
@@ -171,6 +176,8 @@ const MessageItem = memo(function MessageItem({
                         permissionAllowed={msg.permissionAllowed}
                         permissionType={msg.permissionType}
                         permissionPatterns={msg.permissionPatterns}
+                        permissionAlwaysPatterns={msg.permissionAlwaysPatterns}
+                        permissionAlways={msg.permissionAlways}
                         onPermissionRespond={onPermissionRespond}
                         onCreateAutoApproval={onCreateAutoApproval}
                         onSubagentClick={onSubagentClick}
@@ -197,6 +204,7 @@ const MessageItem = memo(function MessageItem({
                     input={msg.toolInput}
                     onRespond={onPermissionRespond}
                     resolved={msg.permissionResolved}
+                    alwaysPatterns={msg.permissionAlwaysPatterns}
                 />
             );
 
@@ -207,7 +215,8 @@ const MessageItem = memo(function MessageItem({
 
 interface AssistantMessageListProps {
     messages: ChatMessage[];
-    onPermissionRespond: (permissionId: string, allow: boolean, toolInput?: Record<string, unknown>) => void;
+    onPermissionRespond: (permissionId: string, allow: boolean, toolInput?: Record<string, unknown>,
+        always?: boolean) => void;
     onCreateAutoApproval?: (toolName: string, fieldName: string | undefined,
         pattern: string | undefined, permissionId: string) => void;
     isProcessing?: boolean;

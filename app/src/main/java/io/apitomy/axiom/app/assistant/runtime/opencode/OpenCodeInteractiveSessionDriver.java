@@ -486,9 +486,15 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
 
     @Override
     public void respondToPermission(String permissionId, boolean allow, JsonNode toolInput) throws IOException {
+        respondToPermission(permissionId, allow, false, toolInput);
+    }
+
+    @Override
+    public void respondToPermission(String permissionId, boolean allow, boolean always,
+                                    JsonNode toolInput) throws IOException {
         ensureRunning();
         try {
-            client.respondPermission(openCodeSessionId, permissionId, allow);
+            client.respondPermission(openCodeSessionId, permissionId, allow, always);
         } catch (RuntimeException e) {
             throw new IOException("Failed to respond to OpenCode permission request", e);
         }

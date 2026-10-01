@@ -227,8 +227,21 @@ public final class OpenCodeAssistantClient {
      * @param allow true for allow, false for deny
      */
     public void respondPermission(String sessionId, String permissionId, boolean allow) {
+        respondPermission(sessionId, permissionId, allow, false);
+    }
+
+    /**
+     * Responds to a pending permission request. When {@code always} is set (and the request
+     * is allowed), OpenCode approves matching requests for the rest of the session.
+     *
+     * @param sessionId session identifier
+     * @param permissionId permission identifier
+     * @param allow true for allow, false for deny
+     * @param always when allowing, reply {@code "always"} instead of {@code "once"}
+     */
+    public void respondPermission(String sessionId, String permissionId, boolean allow, boolean always) {
         ObjectNode body = MAPPER.createObjectNode();
-        body.put("response", allow ? "once" : "reject");
+        body.put("response", !allow ? "reject" : (always ? "always" : "once"));
         postJson("/session/" + sessionId + "/permissions/" + permissionId, body, 200);
     }
 

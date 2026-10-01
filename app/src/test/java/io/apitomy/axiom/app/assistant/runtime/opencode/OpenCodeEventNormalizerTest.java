@@ -47,6 +47,36 @@ class OpenCodeEventNormalizerTest {
     }
 
     @Test
+    void permissionRequestCarriesAlwaysPatterns() throws Exception {
+        JsonNode payload = mapper.readTree("""
+                {"type":"permission.asked","properties":{"id":"per_a","sessionID":"s1","permission":"bash",
+                "patterns":["echo captured"],"metadata":{"command":"echo captured"},"always":["echo *"]}}
+                """);
+
+        List<SseEvent> out = normalizer.normalize("message", payload);
+
+        assertEquals(1, out.size());
+        assertEquals("permission_request", out.get(0).type());
+        JsonNode always = out.get(0).data().path("alwaysPatterns");
+        assertEquals(1, always.size());
+        assertEquals("echo *", always.get(0).asText());
+    }
+
+    @Test
+    void permissionRequestWithoutAlwaysHasEmptyAlwaysPatterns() throws Exception {
+        JsonNode payload = mapper.readTree("""
+                {"type":"permission.asked","properties":{"id":"per_b","sessionID":"s1","permission":"bash",
+                "patterns":["ls"],"metadata":{}}}
+                """);
+
+        List<SseEvent> out = normalizer.normalize("message", payload);
+
+        assertEquals(1, out.size());
+        assertTrue(out.get(0).data().path("alwaysPatterns").isArray());
+        assertEquals(0, out.get(0).data().path("alwaysPatterns").size());
+    }
+
+    @Test
     void childPermissionForUnknownChildHasNoSubagentToolUseId() throws Exception {
         JsonNode payload = mapper.readTree("""
                 {"type":"permission.asked","properties":{"id":"per_1","sessionID":"child-1","permission":"bash",

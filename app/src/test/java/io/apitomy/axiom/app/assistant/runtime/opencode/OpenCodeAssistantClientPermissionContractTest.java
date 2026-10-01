@@ -33,6 +33,28 @@ class OpenCodeAssistantClientPermissionContractTest {
     }
 
     @Test
+    void respondPermissionAlwaysSendsAlwaysResponse() throws Exception {
+        assertEquals("{\"response\":\"always\"}", permissionBody(true, true));
+    }
+
+    @Test
+    void respondPermissionDenySendsRejectEvenWhenAlwaysRequested() throws Exception {
+        assertEquals("{\"response\":\"reject\"}", permissionBody(false, false));
+        assertEquals("{\"response\":\"reject\"}", permissionBody(false, true));
+    }
+
+    private static String permissionBody(boolean allow, boolean always) throws Exception {
+        RecordingPermissionServer recordingServer = RecordingPermissionServer.start();
+        try {
+            new OpenCodeAssistantClient(recordingServer.baseUrl())
+                    .respondPermission(SESSION_ID, PERMISSION_ID, allow, always);
+            return recordingServer.body();
+        } finally {
+            recordingServer.close();
+        }
+    }
+
+    @Test
     void sendPromptAsyncSendsOnlyTextPartWithoutModelOrSystem() throws Exception {
         RecordingPermissionServer recordingServer = RecordingPermissionServer.start();
         try {

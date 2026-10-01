@@ -1342,12 +1342,12 @@ export async function sendAssistantMessage(sessionId: string, message: string): 
 
 export async function respondToAssistantPermission(
     sessionId: string, permissionId: string, allow: boolean,
-    updatedInput?: Record<string, unknown>
+    updatedInput?: Record<string, unknown>, always?: boolean
 ): Promise<void> {
     const response = await fetch(`${API}/assistant/sessions/${sessionId}/permissions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ permissionId, allow, updatedInput }),
+        body: JSON.stringify({ permissionId, allow, updatedInput, ...(always ? { always: true } : {}) }),
     });
     if (!response.ok) throw new Error(`Failed to respond to permission: ${response.status}`);
 }
