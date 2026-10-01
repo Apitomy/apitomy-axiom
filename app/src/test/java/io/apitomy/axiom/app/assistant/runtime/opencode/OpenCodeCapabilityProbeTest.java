@@ -8,6 +8,7 @@ import com.sun.net.httpserver.HttpServer;
 import io.apitomy.axiom.agents.opencode.OpenCodeServerManager;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -126,6 +127,7 @@ class OpenCodeCapabilityProbeTest {
     }
 
     @Test
+    @Tag("live-cli")
     void realOpenCodePassesProbeWithoutCreatingSessions(@TempDir Path workDir) throws Exception {
         Assumptions.assumeTrue(OpenCodeServerManager.isOpenCodeAvailable());
         OpenCodeCapabilityProbe.clearCache();

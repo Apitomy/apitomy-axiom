@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.apitomy.axiom.agents.opencode.OpenCodeServerManager;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.BufferedReader;
@@ -30,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusTest
+@Tag("live-cli")
 class OpenCodeAssistantProtocolHarnessTest {
 
     private static final Duration EVENT_TIMEOUT = Duration.ofSeconds(45);
