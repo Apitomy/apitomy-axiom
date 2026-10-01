@@ -47,3 +47,9 @@
     overflow-y: auto;
     padding: 8px;
 }
+
+.axiom-subagent-panel__empty {
+    padding: 12px;
+    color: var(--pf-t--global--text--color--subtle, #6a6e73);
+    font-size: 13px;
+}

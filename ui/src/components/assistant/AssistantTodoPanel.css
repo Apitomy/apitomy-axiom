@@ -1,9 +1,7 @@
 .axiom-todo-panel {
-    flex: none;
-    max-height: 35vh;
+    flex: 1 1 0;
     overflow-y: auto;
-    padding: 4px 12px;
-    border-bottom: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+    padding: 8px 12px;
 }
 
 .axiom-todo-panel__list {

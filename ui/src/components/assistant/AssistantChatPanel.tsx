@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { AssistantMessageList, type ChatMessage } from "./AssistantMessageList";
 import { AssistantMessageInput } from "./AssistantMessageInput";
 import { AssistantSubagentPanel } from "./AssistantSubagentPanel";
-import { AssistantTodoPanel, type AssistantTodo } from "./AssistantTodoPanel";
+import { type AssistantTodo } from "./AssistantTodoPanel";
 import type { SubagentCardData, SubagentActivityEntry, SubagentPermission } from "./AssistantSubagentCard";
 import type { BackgroundTaskCardData } from "./AssistantBackgroundTaskCard";
 import {
@@ -820,7 +820,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
         () => Array.from(backgroundTaskCards.values()).filter(c => !c.dismissed),
         [backgroundTaskCards]
     );
-    const hasSidePanel = visibleSubagentCards.length > 0 || visibleBgTaskCards.length > 0;
+    const hasSidePanel = visibleSubagentCards.length > 0 || visibleBgTaskCards.length > 0 || todos.length > 0;
 
     return (
         <div style={{
@@ -835,7 +835,6 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                 minWidth: 0,
                 minHeight: 0,
             }}>
-                <AssistantTodoPanel todos={todos} />
                 <AssistantMessageList
                     messages={messages}
                     onPermissionRespond={handlePermissionRespond}
@@ -855,6 +854,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                 <AssistantSubagentPanel
                     subagentCards={visibleSubagentCards}
                     backgroundTaskCards={visibleBgTaskCards}
+                    todos={todos}
                     onDismissSubagent={handleDismissCard}
                     onDismissBackgroundTask={handleDismissCard}
                     onDismissAllCompleted={handleDismissAllCompleted}

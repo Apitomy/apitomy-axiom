@@ -1,5 +1,3 @@
-import { useState } from "react";
-import { ExpandableSection } from "@patternfly/react-core";
 import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
 import InProgressIcon from "@patternfly/react-icons/dist/esm/icons/in-progress-icon";
 import OutlinedCircleIcon from "@patternfly/react-icons/dist/esm/icons/outlined-circle-icon";
@@ -41,36 +39,40 @@ function statusIcon(status: string) {
 }
 
 /**
- * Collapsible panel showing the assistant's current todo list. Renders nothing when the list is empty.
+ * Returns how many todos are completed, for tab titles and summaries.
+ *
+ * @param todos the current todo list
+ * @returns the number of completed items
+ */
+export function completedTodoCount(todos: AssistantTodo[]): number {
+    return todos.filter(t => t.status === "completed").length;
+}
+
+/**
+ * Lists the assistant's current todo items with their status. Renders nothing when the list is empty.
  */
 export function AssistantTodoPanel({ todos }: { todos: AssistantTodo[] }) {
-    const [expanded, setExpanded] = useState(true);
     if (todos.length === 0) {
         return null;
     }
-    const done: number = todos.filter(t => t.status === "completed").length;
     return (
         <div className="axiom-todo-panel">
-            <ExpandableSection
-                toggleText={`Todos (${done}/${todos.length} done)`}
-                isExpanded={expanded}
-                onToggle={(_e, value) => setExpanded(value)}
-            >
-                <ul className="axiom-todo-panel__list">
-                    {todos.map((todo, idx) => {
-                        const label: string = todo.status === "in_progress" && todo.activeForm
-                            ? todo.activeForm : todo.content;
-                        return (
-                            <li key={`${idx}-${todo.content}`}
-                                className={`axiom-todo-panel__item axiom-todo-panel__item--${todo.status}`}>
-                                <span className="axiom-todo-panel__icon">{statusIcon(todo.status)}</span>
-                                <span className="pf-v6-screen-reader">{statusLabel(todo.status)}</span>
-                                <span className="axiom-todo-panel__text">{label}</span>
-                            </li>
-                        );
-                    })}
-                </ul>
-            </ExpandableSection>
+            <ul className="axiom-todo-panel__list" aria-label="Assistant todo list">
+                {todos.map((todo, idx) => {
+                    const label: string = todo.status === "in_progress" && todo.activeForm
+                        ? todo.activeForm : todo.content;
+                    return (
+                        <li key={`${idx}-${todo.content}`}
+                            className={`axiom-todo-panel__item axiom-todo-panel__item--${todo.status}`}>
+                            <span className="axiom-todo-panel__icon" aria-hidden="true">
+                                {statusIcon(todo.status)}
+                            </span>
+                            <span className="pf-v6-screen-reader">{statusLabel(todo.status)}</span>
+                            <span className="axiom-todo-panel__text">{label}</span>
+                        </li>
+                    );
+                })}
+            </ul>
         </div>
     );
 }
