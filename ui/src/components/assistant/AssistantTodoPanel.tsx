@@ -16,6 +16,17 @@ export interface AssistantTodo {
     activeForm?: string;
 }
 
+const STATUS_LABELS: Record<string, string> = {
+    pending: "Pending",
+    in_progress: "In progress",
+    completed: "Completed",
+    cancelled: "Cancelled",
+};
+
+function statusLabel(status: string): string {
+    return STATUS_LABELS[status] ?? status;
+}
+
 function statusIcon(status: string) {
     switch (status) {
         case "completed":
@@ -50,9 +61,10 @@ export function AssistantTodoPanel({ todos }: { todos: AssistantTodo[] }) {
                         const label: string = todo.status === "in_progress" && todo.activeForm
                             ? todo.activeForm : todo.content;
                         return (
-                            <li key={idx}
+                            <li key={`${idx}-${todo.content}`}
                                 className={`axiom-todo-panel__item axiom-todo-panel__item--${todo.status}`}>
                                 <span className="axiom-todo-panel__icon">{statusIcon(todo.status)}</span>
+                                <span className="pf-v6-screen-reader">{statusLabel(todo.status)}</span>
                                 <span className="axiom-todo-panel__text">{label}</span>
                             </li>
                         );
