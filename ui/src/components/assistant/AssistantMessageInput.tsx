@@ -1,15 +1,24 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { TextArea, Button, Flex, FlexItem } from "@patternfly/react-core";
 import PaperPlaneIcon from "@patternfly/react-icons/dist/esm/icons/paper-plane-icon";
+import StopIcon from "@patternfly/react-icons/dist/esm/icons/stop-icon";
 import "./AssistantMessageInput.css";
 
 interface AssistantMessageInputProps {
     onSend: (message: string) => void;
     disabled?: boolean;
+    /** When true, a Stop button is shown next to the Send button. */
+    isProcessing?: boolean;
+    /** True while a stop request is in flight; disables the Stop button. */
+    isStopping?: boolean;
+    /** Called when the user clicks Stop to interrupt the current reply. */
+    onStop?: () => void;
     slashCommands?: string[];
 }
 
-export function AssistantMessageInput({ onSend, disabled, slashCommands = [] }: AssistantMessageInputProps) {
+export function AssistantMessageInput({
+    onSend, disabled, slashCommands = [], isProcessing = false, isStopping = false, onStop,
+}: AssistantMessageInputProps) {
     const [value, setValue] = useState("");
     const [selectedIndex, setSelectedIndex] = useState(0);
     const textAreaRef = useRef<HTMLTextAreaElement>(null);
@@ -142,6 +151,21 @@ export function AssistantMessageInput({ onSend, disabled, slashCommands = [] }: 
                         isDisabled={disabled}
                     />
                 </FlexItem>
+                {isProcessing && onStop && (
+                    <FlexItem alignSelf={{ default: "alignSelfFlexEnd" }}>
+                        <Button
+                            variant="danger"
+                            onClick={onStop}
+                            isDisabled={isStopping}
+                            isLoading={isStopping}
+                            aria-label="Stop the current reply"
+                            title="Stop the current reply"
+                            icon={isStopping ? undefined : <StopIcon />}
+                        >
+                            Stop
+                        </Button>
+                    </FlexItem>
+                )}
                 <FlexItem alignSelf={{ default: "alignSelfFlexEnd" }}>
                     <Button
                         variant="primary"

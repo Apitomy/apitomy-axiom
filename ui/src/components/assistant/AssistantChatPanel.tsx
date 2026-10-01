@@ -12,6 +12,7 @@ import {
     dismissAssistantCard,
     fetchAssistantSessionHistory,
     setSubagentAllowAll,
+    interruptAssistantSession,
 } from "../../config/api";
 import { sseClient } from "../../config/sse";
 import { randomThinkingMessage } from "./thinkingMessages";
@@ -54,6 +55,8 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
         setIsProcessingState(value);
     }, []);
     const [processingText, setProcessingText] = useState("");
+    // True while an interrupt request is in flight or until the interrupted turn completes.
+    const [isStopping, setIsStopping] = useState(false);
     const [slashCommands, setSlashCommands] = useState<string[]>([]);
     const [subagentCards, setSubagentCards] = useState<Map<string, SubagentCardData>>(new Map());
     const [backgroundTaskCards, setBackgroundTaskCards] = useState<Map<string, BackgroundTaskCardData>>(new Map());
@@ -523,6 +526,10 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
 
             case "session_error":
                 addMessage({ type: "system", content: (data.message as string) || "Session error" });
+                if (data.name === "InterruptFailed") {
+                    // The stop request failed in the engine; let the user try again.
+                    setIsStopping(false);
+                }
                 if (data.name === "MessageNotDelivered") {
                     // The message never reached the engine: restore the state from before it was submitted.
                     setIsProcessing(processingBeforeLastUserMessageRef.current);
@@ -632,6 +639,26 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
             unsubReconnect();
         };
     }, [sessionId, processEvent]);
+
+    const handleStop = useCallback(async () => {
+        setIsStopping(true);
+        try {
+            await interruptAssistantSession(sessionId);
+        } catch (e) {
+            setIsStopping(false);
+            addMessage({
+                type: "system",
+                content: `Could not stop the current reply: ${e instanceof Error ? e.message : String(e)}`,
+            });
+        }
+    }, [sessionId, addMessage]);
+
+    // The interrupted turn ends with a turn_complete / session event, which clears processing.
+    useEffect(() => {
+        if (!isProcessing) {
+            setIsStopping(false);
+        }
+    }, [isProcessing]);
 
     const handleSend = useCallback(async (message: string) => {
         if (message.trim() === "/clear") {
@@ -847,6 +874,9 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                 <AssistantMessageInput
                     onSend={handleSend}
                     disabled={isProcessing}
+                    isProcessing={isProcessing}
+                    isStopping={isStopping}
+                    onStop={handleStop}
                     slashCommands={slashCommands}
                 />
             </div>

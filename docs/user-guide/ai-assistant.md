@@ -238,8 +238,11 @@ The chat panel is a conversation interface where you interact with the assistant
     - Teal — AskUser interactions
 
 You can send another message while the assistant is still working; it is queued and answered after the current
-reply. If a message cannot be delivered, the chat shows a "Message was not delivered" notice. Stopping or
-interrupting the assistant also discards any messages that are still queued.
+reply. If a message cannot be delivered, the chat shows a "Message was not delivered" notice. When you stop the
+assistant, OpenCode discards messages that are still queued, while Claude Code answers them after stopping.
+
+While the assistant is working, a **Stop** button appears next to **Send**. It stops the current reply without
+ending the session, so you can continue the conversation. If the reply can't be stopped, the chat shows a notice.
 
 #### Slash Commands
 

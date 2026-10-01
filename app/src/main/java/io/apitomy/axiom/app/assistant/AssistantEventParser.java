@@ -70,6 +70,8 @@ public class AssistantEventParser {
                 case "control_request" -> parseControlRequest(node);
                 case "conversation_reset" -> parseConversationReset(node);
                 case "tool_progress" -> parseToolProgress(node);
+                // Acknowledgements of control requests we sent (e.g. interrupt); nothing to show.
+                case "control_response" -> Collections.emptyList();
                 default -> {
                     ObjectNode data = JsonNodeFactory.instance.objectNode();
                     data.put("rawType", type);

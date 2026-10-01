@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -137,15 +138,31 @@ public final class ClaudeInteractiveSessionDriver implements InteractiveSessionD
         writeLine(MAPPER.writeValueAsString(root));
     }
 
+    /**
+     * Stops the current turn by sending a stream-json interrupt control request. Claude Code ignores SIGINT in
+     * this mode. The turn ends with an {@code error_during_execution} result and the session stays alive; queued
+     * messages are still answered. If the request cannot be written, an {@code InterruptFailed} session error is
+     * emitted.
+     */
     @Override
     public void interrupt() {
-        if (process != null && process.isAlive()) {
-            long pid = process.pid();
-            try {
-                new ProcessBuilder("kill", "-INT", String.valueOf(pid)).start().waitFor();
-            } catch (Exception e) {
-                LOG.warnf(e, "Failed to send SIGINT to Claude runtime pid %d", pid);
-            }
+        // Claude Code's stream-json mode ignores SIGINT; an interrupt control request stops the current
+        // turn (it ends with an error_during_execution result) while keeping the session alive.
+        if (process == null || !process.isAlive()) {
+            return;
+        }
+        ObjectNode request = MAPPER.createObjectNode();
+        request.put("type", "control_request");
+        request.put("request_id", "interrupt-" + UUID.randomUUID());
+        request.putObject("request").put("subtype", "interrupt");
+        try {
+            writeLine(request.toString());
+        } catch (IOException e) {
+            LOG.warnf(e, "Failed to send interrupt to Claude runtime");
+            ObjectNode data = MAPPER.createObjectNode();
+            data.put("name", "InterruptFailed");
+            data.put("message", "Could not stop the current reply: " + e.getMessage());
+            eventSink.accept(new SseEvent("session_error", data));
         }
     }
 

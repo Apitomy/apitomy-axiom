@@ -464,6 +464,16 @@ class AssistantEventParserTest {
         assertTrue(events.isEmpty());
     }
 
+    // ── Control responses ───────────────────────────────────────────
+
+    @Test
+    void parseControlResponseProducesNoEvents() {
+        String line = """
+                {"type":"control_response","response":{"subtype":"success","request_id":"int-1","response":{"still_queued":[]}}}""";
+
+        assertTrue(parser.parse(line).isEmpty());
+    }
+
     // ── Unknown types ───────────────────────────────────────────────
 
     @Test
