@@ -47,6 +47,38 @@ class OpenCodeEventNormalizerTest {
     }
 
     @Test
+    void childPermissionForUnknownChildHasNoSubagentToolUseId() throws Exception {
+        JsonNode payload = mapper.readTree("""
+                {"type":"permission.asked","properties":{"id":"per_1","sessionID":"child-1","permission":"bash",
+                "patterns":["echo hi"],"metadata":{"command":"echo hi"},"tool":{"messageID":"m1","callID":"c1"}}}
+                """);
+
+        List<SseEvent> out = normalizer.normalizeChild("message", payload, "child-1");
+
+        assertEquals(1, out.size());
+        assertEquals("permission_request", out.get(0).type());
+        assertEquals("per_1", out.get(0).data().path("requestId").asText());
+        assertEquals("bash", out.get(0).data().path("toolName").asText());
+        assertTrue(out.get(0).data().path("subagentToolUseId").isMissingNode());
+    }
+
+    @Test
+    void childIdleAndTextAreIgnored() throws Exception {
+        normalizer.registerChildSession("child-1");
+        JsonNode idle = mapper.readTree("""
+                {"type":"session.idle","properties":{"sessionID":"child-1"}}
+                """);
+        JsonNode text = mapper.readTree("""
+                {"type":"message.part.updated","properties":{"sessionID":"child-1",
+                "part":{"id":"p1","type":"text","text":"hello"}}}
+                """);
+
+        assertTrue(normalizer.normalizeChild("message", idle, "child-1").isEmpty());
+        assertTrue(normalizer.normalizeChild("message", text, "child-1").isEmpty());
+        assertTrue(normalizer.childSessionIds().contains("child-1"));
+    }
+
+    @Test
     void mapsRetryStatusToProviderRetryNotice() throws Exception {
         JsonNode payload = mapper.readTree("""
                 {"type":"session.status","properties":{"sessionID":"s1","status":{"type":"retry","attempt":2,

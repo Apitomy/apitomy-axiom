@@ -13,6 +13,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Normalizes OpenCode runtime events into assistant SSE events consumed by the UI.
@@ -67,6 +69,145 @@ public class OpenCodeEventNormalizer {
     private final Map<String, MessageUsage> turnUsage = new ConcurrentHashMap<>();
     private final Set<String> settledMessages = ConcurrentHashMap.newKeySet();
     private double sessionCostUsd;
+
+    /** Maximum length of a subagent summary taken from the raw task output. */
+    private static final int MAX_SUMMARY_LENGTH = 2000;
+    private static final Pattern TASK_RESULT = Pattern.compile("<task_result>\\s*(.*?)\\s*</task_result>",
+            Pattern.DOTALL);
+
+    /** Known child (subagent) session ids. This normalizer is the single owner of this set. */
+    private final Set<String> childSessions = ConcurrentHashMap.newKeySet();
+    private final Map<String, String> parentCallByChild = new ConcurrentHashMap<>();
+    private final Map<String, String> childByParentCall = new ConcurrentHashMap<>();
+    private final Map<String, Long> subagentStartMillis = new ConcurrentHashMap<>();
+    private final Set<String> subagentsCompleted = ConcurrentHashMap.newKeySet();
+    private final Map<String, Set<String>> childToolCallIds = new ConcurrentHashMap<>();
+    private final Map<String, ToolCall> childToolCalls = new ConcurrentHashMap<>();
+    private final Set<String> childProgressEmitted = ConcurrentHashMap.newKeySet();
+
+    /**
+     * Registers a child (subagent) session of the current session, e.g. from its {@code session.created} event.
+     *
+     * @param childSessionId child session id
+     */
+    public void registerChildSession(String childSessionId) {
+        if (childSessionId != null && !childSessionId.isBlank()) {
+            childSessions.add(childSessionId);
+        }
+    }
+
+    /**
+     * Returns the known child (subagent) session ids, learned from parent {@code task} parts and from
+     * {@link #registerChildSession(String)}.
+     *
+     * @return read-only view of the child session ids
+     */
+    public Set<String> childSessionIds() {
+        return Collections.unmodifiableSet(childSessions);
+    }
+
+    /**
+     * Converts an event of a child (subagent) session. Child tool parts become {@code subagent_progress} and child
+     * permission requests become {@code permission_request} (with {@code subagentToolUseId} when the parent task
+     * call is known). Every other child event is ignored, so a child never ends the parent turn or adds text,
+     * todos or cost.
+     *
+     * @param eventName OpenCode event name
+     * @param payload OpenCode event payload
+     * @param childSessionId the child session the event belongs to
+     * @return normalized assistant events (empty when the event is ignored)
+     */
+    public List<SseEvent> normalizeChild(String eventName, JsonNode payload, String childSessionId) {
+        if (eventName == null || eventName.isBlank()) {
+            return Collections.emptyList();
+        }
+        JsonNode safePayload = payload == null ? JsonNodeFactory.instance.objectNode() : payload;
+        JsonNode eventData = eventData(safePayload);
+        String resolvedType = resolvedEventType(eventName, safePayload);
+        String parentCallId = childSessionId == null ? null : parentCallByChild.get(childSessionId);
+        return switch (resolvedType) {
+            case "message.part.updated" -> "tool".equals(eventData.path("part").path("type").asText(""))
+                    ? childToolProgress(eventData.path("part"), childSessionId, parentCallId)
+                    : Collections.emptyList();
+            case "permission.asked", "permission.updated" -> {
+                ObjectNode data = permissionData(eventData, childToolCalls);
+                if (parentCallId != null) {
+                    data.put("subagentToolUseId", parentCallId);
+                }
+                yield List.of(new SseEvent("permission_request", data));
+            }
+            default -> Collections.emptyList();
+        };
+    }
+
+    private List<SseEvent> childToolProgress(JsonNode part, String childSessionId, String parentCallId) {
+        String callId = firstNonBlank(part.path("callID").asText(""), part.path("id").asText(""));
+        if (callId.isEmpty()) {
+            return Collections.emptyList();
+        }
+        JsonNode state = part.path("state");
+        String tool = part.path("tool").asText("");
+        JsonNode input = state.path("input");
+        if (input.isObject() && input.size() > 0) {
+            childToolCalls.put(callId, new ToolCall(tool, input));
+        } else {
+            childToolCalls.putIfAbsent(callId, new ToolCall(tool, JsonNodeFactory.instance.objectNode()));
+        }
+        Set<String> calls = childToolCallIds.computeIfAbsent(childSessionId, key -> ConcurrentHashMap.newKeySet());
+        calls.add(callId);
+        if ("pending".equals(state.path("status").asText("")) || parentCallId == null
+                || !childProgressEmitted.add(callId)) {
+            return Collections.emptyList();
+        }
+        Long start = subagentStartMillis.get(parentCallId);
+        ObjectNode data = JsonNodeFactory.instance.objectNode();
+        data.put("toolUseId", parentCallId);
+        data.put("taskId", childSessionId);
+        data.put("description", firstNonBlank(state.path("title").asText(""),
+                input.path("description").asText(""), tool));
+        data.put("lastToolName", tool);
+        data.put("toolCount", calls.size());
+        data.put("durationMs", start == null ? 0 : Math.max(0, System.currentTimeMillis() - start));
+        return List.of(new SseEvent("subagent_progress", data));
+    }
+
+    /** Emits subagent lifecycle events for a parent {@code task} tool part. */
+    private void subagentLifecycle(String callId, JsonNode state, String status, List<SseEvent> events) {
+        String childSessionId = firstNonBlank(state.path("metadata").path("sessionId").asText(""),
+                childByParentCall.getOrDefault(callId, ""));
+        if (childSessionId.isEmpty()) {
+            return;
+        }
+        if (childByParentCall.putIfAbsent(callId, childSessionId) == null) {
+            childSessions.add(childSessionId);
+            parentCallByChild.put(childSessionId, callId);
+            subagentStartMillis.put(callId, System.currentTimeMillis());
+            JsonNode input = state.path("input");
+            ObjectNode data = JsonNodeFactory.instance.objectNode();
+            data.put("toolUseId", callId);
+            data.put("taskId", childSessionId);
+            data.put("description", firstNonBlank(input.path("description").asText(""),
+                    state.path("title").asText("")));
+            data.put("subagentType", input.path("subagent_type").asText(""));
+            events.add(new SseEvent("subagent_started", data));
+        }
+        if (("completed".equals(status) || "error".equals(status)) && subagentsCompleted.add(callId)) {
+            ObjectNode data = JsonNodeFactory.instance.objectNode();
+            data.put("toolUseId", callId);
+            data.put("taskId", childSessionId);
+            data.put("status", "completed".equals(status) ? "completed" : "failed");
+            data.put("summary", subagentSummary("completed".equals(status)
+                    ? state.path("output").asText("")
+                    : firstNonBlank(state.path("error").asText(""), "Subagent failed")));
+            events.add(new SseEvent("subagent_completed", data));
+        }
+    }
+
+    private static String subagentSummary(String output) {
+        Matcher matcher = TASK_RESULT.matcher(output);
+        String summary = matcher.find() ? matcher.group(1) : output;
+        return summary.length() > MAX_SUMMARY_LENGTH ? summary.substring(0, MAX_SUMMARY_LENGTH) : summary;
+    }
 
     /**
      * Converts a single OpenCode event into zero or more normalized assistant events.
@@ -192,6 +333,9 @@ public class OpenCodeEventNormalizer {
             data.put("isError", "error".equals(status));
             events.add(new SseEvent("tool_result", data));
         }
+        if ("task".equals(part.path("tool").asText(""))) {
+            subagentLifecycle(callId, state, status, events);
+        }
         if ("completed".equals(status) || "error".equals(status)) {
             toolCalls.remove(callId);
         }
@@ -223,9 +367,29 @@ public class OpenCodeEventNormalizer {
      * {@code tool_use} has been emitted yet, so one is emitted first so the UI can attach the permission to it.
      */
     private List<SseEvent> permission(JsonNode payload) {
+        ObjectNode data = permissionData(payload, toolCalls);
+        SseEvent request = new SseEvent("permission_request", data);
+        String callId = data.path("toolUseId").asText("");
+        if (callId.isEmpty()) {
+            return List.of(request);
+        }
+        if (!toolUsesEmitted.add(callId)) {
+            return List.of(request);
+        }
+        ToolCall call = toolCalls.get(callId);
+        String callName = call != null && !call.name().isEmpty() ? call.name() : data.path("permission").asText("");
+        ObjectNode toolUse = JsonNodeFactory.instance.objectNode();
+        toolUse.put("id", callId);
+        toolUse.put("name", callName);
+        toolUse.set("input", data.path("toolInput"));
+        return List.of(new SseEvent("tool_use", toolUse), request);
+    }
+
+    /** Builds {@code permission_request} data, looking the tool call up in {@code calls}. */
+    private ObjectNode permissionData(JsonNode payload, Map<String, ToolCall> calls) {
         String callId = firstNonBlank(payload.path("tool").path("callID").asText(""),
                 payload.path("callID").asText(""));
-        ToolCall call = callId.isEmpty() ? null : toolCalls.get(callId);
+        ToolCall call = callId.isEmpty() ? null : calls.get(callId);
         String permissionKey = firstNonBlank(payload.path("permission").asText(""),
                 payload.path("type").asText(""));
         String callName = call != null && !call.name().isEmpty() ? call.name() : permissionKey;
@@ -255,19 +419,10 @@ public class OpenCodeEventNormalizer {
         } else {
             data.set("toolInput", JsonNodeFactory.instance.objectNode());
         }
-        SseEvent request = new SseEvent("permission_request", data);
-        if (callId.isEmpty()) {
-            return List.of(request);
+        if (!callId.isEmpty()) {
+            data.put("toolUseId", callId);
         }
-        data.put("toolUseId", callId);
-        if (!toolUsesEmitted.add(callId)) {
-            return List.of(request);
-        }
-        ObjectNode toolUse = JsonNodeFactory.instance.objectNode();
-        toolUse.put("id", callId);
-        toolUse.put("name", callName);
-        toolUse.set("input", data.path("toolInput"));
-        return List.of(new SseEvent("tool_use", toolUse), request);
+        return data;
     }
 
     private List<SseEvent> trackUsage(JsonNode eventData) {
@@ -344,7 +499,7 @@ public class OpenCodeEventNormalizer {
         return new SseEvent("session_error", data);
     }
 
-    private String firstNonBlank(String... values) {
+    private static String firstNonBlank(String... values) {
         for (String value : values) {
             if (value != null && !value.isBlank()) {
                 return value;

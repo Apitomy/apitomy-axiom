@@ -1147,7 +1147,8 @@ class OpenCodeInteractiveSessionDriverTest {
         return exchange -> {
             List<JsonNode> events = OpenCodeEventFixtures.load(fixture);
             String capturedSessionId = OpenCodeEventFixtures.first(events,
-                            event -> "session.created".equals(event.path("type").asText()))
+                            event -> "session.created".equals(event.path("type").asText())
+                                    && event.path("properties").path("info").path("parentID").isMissingNode())
                     .path("properties").path("info").path("id").asText();
             exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
             exchange.sendResponseHeaders(200, 0);
@@ -1261,6 +1262,75 @@ class OpenCodeInteractiveSessionDriverTest {
                 results.get(0).data().path("stderr").asText());
         assertTrue(events.stream().noneMatch(event -> "unhandled_event".equals(event.type())));
         assertEquals("turn_complete", events.get(events.size() - 1).type());
+    }
+
+    private static final String SUBAGENT_TASK_CALL = "toolu_016XsHbPPK6xzDdLx8p3DHqo";
+    private static final String SUBAGENT_CHILD_SESSION = "ses_f085d8f98ffe3qJr2GIBJDhMMd";
+
+    @Test
+    void replaysRealSubagentStreamIntoSubagentEvents() throws Exception {
+        List<SseEvent> permissionEvents = new CopyOnWriteArrayList<>();
+
+        List<SseEvent> events = replayThroughDriver("1.18.33-subagent.jsonl", permissionEvents);
+
+        List<SseEvent> subagentEvents = events.stream()
+                .filter(event -> event.type().startsWith("subagent_"))
+                .toList();
+        assertTrue(subagentEvents.size() >= 3, "subagent events: " + subagentEvents);
+        SseEvent started = subagentEvents.get(0);
+        assertEquals("subagent_started", started.type());
+        assertEquals(SUBAGENT_TASK_CALL, started.data().path("toolUseId").asText());
+        assertEquals(SUBAGENT_CHILD_SESSION, started.data().path("taskId").asText());
+        assertEquals("Find txt files", started.data().path("description").asText());
+        assertEquals("explore", started.data().path("subagentType").asText());
+
+        List<SseEvent> progress = subagentEvents.subList(1, subagentEvents.size() - 1);
+        assertFalse(progress.isEmpty());
+        for (SseEvent event : progress) {
+            assertEquals("subagent_progress", event.type());
+            assertEquals(SUBAGENT_TASK_CALL, event.data().path("toolUseId").asText());
+            assertEquals(SUBAGENT_CHILD_SESSION, event.data().path("taskId").asText());
+            assertEquals("bash", event.data().path("lastToolName").asText());
+        }
+        assertEquals(1, progress.get(progress.size() - 1).data().path("toolCount").asInt());
+
+        SseEvent completed = subagentEvents.get(subagentEvents.size() - 1);
+        assertEquals("subagent_completed", completed.type());
+        assertEquals(SUBAGENT_TASK_CALL, completed.data().path("toolUseId").asText());
+        assertEquals("completed", completed.data().path("status").asText());
+        assertEquals("/tmp/opencode/cap/hello.txt", completed.data().path("summary").asText());
+
+        assertTrue(events.stream().anyMatch(event -> "tool_use".equals(event.type())
+                && SUBAGENT_TASK_CALL.equals(event.data().path("id").asText())
+                && "task".equals(event.data().path("name").asText())));
+        assertTrue(events.stream().anyMatch(event -> "tool_result".equals(event.type())
+                && SUBAGENT_TASK_CALL.equals(event.data().path("toolUseId").asText())));
+        assertTrue(events.stream().noneMatch(event -> "tool_use".equals(event.type())
+                && "bash".equals(event.data().path("name").asText())), "child tool leaked: " + events);
+        assertEquals(1, events.stream().filter(event -> "turn_complete".equals(event.type())).count());
+        assertTrue(events.stream().noneMatch(event -> "unhandled_event".equals(event.type())));
+        List<String> texts = events.stream()
+                .filter(event -> "assistant_text".equals(event.type()))
+                .map(event -> event.data().path("text").asText())
+                .toList();
+        assertEquals(List.of("DONE"), texts);
+        assertTrue(events.stream().noneMatch(event -> "todos".equals(event.type())));
+    }
+
+    @Test
+    void routesRealSubagentPermissionToAutoApprovalSinkWithParentCall() throws Exception {
+        List<SseEvent> permissionEvents = new CopyOnWriteArrayList<>();
+
+        List<SseEvent> events = replayThroughDriver("1.18.33-subagent-permission.jsonl", permissionEvents);
+
+        assertEquals(1, permissionEvents.size(), "permissions: " + permissionEvents);
+        SseEvent request = permissionEvents.get(0);
+        assertEquals("permission_request", request.type());
+        assertEquals("toolu_01HNoyD6rMHtENZTjeJK1bJR", request.data().path("subagentToolUseId").asText());
+        assertEquals("bash", request.data().path("toolName").asText());
+        assertEquals("per_0f7a30e2f001dHA7irvf3pZGyZ", request.data().path("requestId").asText());
+        assertTrue(events.stream().noneMatch(event -> "permission_request".equals(event.type())));
+        assertEquals(1, events.stream().filter(event -> "turn_complete".equals(event.type())).count());
     }
 
     private static final String COMMANDS = "[{\"name\":\"init\",\"template\":\"t\"},{\"name\":\"review\",\"template\":\"t\"}]";

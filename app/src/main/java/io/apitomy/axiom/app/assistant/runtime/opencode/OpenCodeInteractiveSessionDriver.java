@@ -574,7 +574,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
             emitWarning("EventStreamReconnected",
                     "Reconnected to OpenCode; some updates during the interruption may be missing.");
         }
-        if (!isCurrentSessionEvent(payload)) {
+        if (handleChildSessionEvent(eventName, payload) || !isCurrentSessionEvent(payload)) {
             return;
         }
 
@@ -583,14 +583,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
             return;
         }
 
-        List<SseEvent> normalizedEvents = normalizer.normalize(eventName, payload);
-        for (SseEvent normalizedEvent : normalizedEvents) {
-            if ("permission_request".equals(normalizedEvent.type())) {
-                autoApprovalSink.accept(normalizedEvent);
-            } else {
-                eventSink.accept(normalizedEvent);
-            }
-        }
+        dispatch(normalizer.normalize(eventName, payload));
     }
 
     private void rememberUserMessageId(String eventName, JsonNode payload) {
@@ -629,14 +622,58 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
     }
 
     private boolean isCurrentSessionEvent(JsonNode payload) {
-        if (payload == null || payload.isNull()) {
-            return false;
-        }
         String currentSessionId = openCodeSessionId;
         if (currentSessionId == null || currentSessionId.isBlank()) {
             return false;
         }
+        String eventSessionId = eventSessionId(payload);
+        return !eventSessionId.isEmpty() && currentSessionId.equals(eventSessionId);
+    }
 
+    /**
+     * Routes events of child (subagent) sessions. The normalizer owns the set of known children: it learns them from
+     * parent {@code task} parts, and this method registers them from {@code session.created} events whose
+     * {@code info.parentID} is the current session.
+     *
+     * @return true when the event belonged to a child session and was handled here
+     */
+    private boolean handleChildSessionEvent(String eventName, JsonNode payload) {
+        String currentSessionId = openCodeSessionId;
+        if (payload == null || payload.isNull() || currentSessionId == null || currentSessionId.isBlank()) {
+            return false;
+        }
+        String eventSessionId = eventSessionId(payload);
+        if (eventSessionId.isEmpty() || currentSessionId.equals(eventSessionId)) {
+            return false;
+        }
+        OpenCodeEventNormalizer currentNormalizer = normalizer;
+        String payloadType = payload.path("type").asText(eventName == null ? "" : eventName);
+        if ("session.created".equals(payloadType)
+                && currentSessionId.equals(payload.path("properties").path("info").path("parentID").asText(""))) {
+            currentNormalizer.registerChildSession(eventSessionId);
+            return true;
+        }
+        if (!currentNormalizer.childSessionIds().contains(eventSessionId)) {
+            return false;
+        }
+        dispatch(currentNormalizer.normalizeChild(eventName, payload, eventSessionId));
+        return true;
+    }
+
+    private void dispatch(List<SseEvent> normalizedEvents) {
+        for (SseEvent normalizedEvent : normalizedEvents) {
+            if ("permission_request".equals(normalizedEvent.type())) {
+                autoApprovalSink.accept(normalizedEvent);
+            } else {
+                eventSink.accept(normalizedEvent);
+            }
+        }
+    }
+
+    private static String eventSessionId(JsonNode payload) {
+        if (payload == null || payload.isNull()) {
+            return "";
+        }
         String eventSessionId = payload.path("sessionID").asText("");
         if (eventSessionId.isEmpty()) {
             eventSessionId = payload.path("sessionId").asText("");
@@ -662,10 +699,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                 }
             }
         }
-        if (eventSessionId.isEmpty()) {
-            return false;
-        }
-        return currentSessionId.equals(eventSessionId);
+        return eventSessionId;
     }
 
     /**
