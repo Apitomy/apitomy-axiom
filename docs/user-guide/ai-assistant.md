@@ -61,6 +61,12 @@ specific project. You can also create your own templates to define custom workfl
     notice that some updates may be missing. If stopping a reply fails, a notice is shown and the session keeps
     running.
 
+    OpenCode sessions support slash commands: type `/` to list OpenCode's commands (for example `/init`).
+    Commands run without the template's system prompt, because OpenCode's command endpoint cannot carry one.
+    `/clear` starts a fresh OpenCode conversation in the same session. When OpenCode runs a subagent (its
+    `task` tool), the subagent appears as a subagent card with its progress, and its permission requests
+    appear on that card.
+
 ---
 
 ## Accessing the Assistant
