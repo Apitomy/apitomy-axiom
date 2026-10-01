@@ -15,11 +15,13 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -32,6 +34,7 @@ import java.util.function.Consumer;
 public final class OpenCodeAssistantClient {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final Duration COMMAND_TIMEOUT = Duration.ofMinutes(10);
 
     private final String baseUrl;
     private final HttpClient httpClient;
@@ -300,6 +303,67 @@ public final class OpenCodeAssistantClient {
     }
 
     /**
+     * Returns the names of the commands known to the OpenCode server ({@code GET /command}).
+     *
+     * @return command names without the leading slash, in server order
+     * @throws IllegalStateException if the request fails or the response is not an array
+     */
+    public List<String> listCommands() {
+        JsonNode body = getJson("/command");
+        if (!body.isArray()) {
+            throw new IllegalStateException("OpenCode /command response is not an array");
+        }
+        List<String> names = new ArrayList<>();
+        for (JsonNode command : body) {
+            String name = command.path("name").asText("");
+            if (!name.isBlank()) {
+                names.add(name);
+            }
+        }
+        return List.copyOf(names);
+    }
+
+    /**
+     * Returns the ids of the built-in tools known to the OpenCode server ({@code GET /experimental/tool/ids}).
+     *
+     * @return tool ids in server order
+     * @throws IllegalStateException if the request fails or the response is not an array
+     */
+    public List<String> toolIds() {
+        JsonNode body = getJson("/experimental/tool/ids");
+        if (!body.isArray()) {
+            throw new IllegalStateException("OpenCode /experimental/tool/ids response is not an array");
+        }
+        List<String> ids = new ArrayList<>();
+        for (JsonNode id : body) {
+            if (id.isTextual() && !id.asText().isBlank()) {
+                ids.add(id.asText());
+            }
+        }
+        return List.copyOf(ids);
+    }
+
+    /**
+     * Runs an OpenCode command in a session ({@code POST /session/{id}/command}). The call is synchronous: it
+     * returns when the command's turn has finished, or fails after 10 minutes.
+     *
+     * @param sessionId session identifier
+     * @param command command name without the leading slash
+     * @param arguments command arguments (may be empty)
+     * @param model provider/model string, or null to omit it
+     * @throws IllegalStateException if the request fails or returns a non-200 status
+     */
+    public void runCommand(String sessionId, String command, String arguments, String model) {
+        ObjectNode body = MAPPER.createObjectNode();
+        body.put("command", command);
+        body.put("arguments", arguments == null ? "" : arguments);
+        if (model != null && !model.isBlank()) {
+            body.put("model", model);
+        }
+        postJson("/session/" + sessionId + "/command", body, COMMAND_TIMEOUT, 200);
+    }
+
+    /**
      * Connects to OpenCode global event stream and emits parsed raw events.
      *
      * @param onEvent callback invoked per event
@@ -539,10 +603,14 @@ public final class OpenCodeAssistantClient {
     }
 
     private JsonNode postJson(String path, JsonNode body, int... okStatuses) {
+        return postJson(path, body, Duration.ofSeconds(30), okStatuses);
+    }
+
+    private JsonNode postJson(String path, JsonNode body, Duration timeout, int... okStatuses) {
         HttpRequest request = request(path)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
-                .timeout(Duration.ofSeconds(30))
+                .timeout(timeout)
                 .build();
 
         try {

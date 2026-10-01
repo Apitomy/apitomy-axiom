@@ -38,7 +38,6 @@ public class OpenCodeEventNormalizer {
             "session.created",
             "session.updated",
             "session.deleted",
-            "session.status",
             "session.diff",
             "session.compacted",
             "permission.replied");
@@ -90,6 +89,7 @@ public class OpenCodeEventNormalizer {
             case "permission.asked", "permission.updated" -> permission(eventData);
             case "session.turn.completed", "session.idle" -> List.of(turnComplete(eventData));
             case "session.error" -> List.of(sessionError(eventData));
+            case "session.status" -> sessionStatus(eventData);
             case "todo.updated" -> todos(eventData);
             default -> IGNORED_EVENT_TYPES.contains(resolvedType)
                     ? Collections.emptyList()
@@ -314,6 +314,20 @@ public class OpenCodeEventNormalizer {
         data.put("durationMs", durationMs);
         data.put("success", payload.path("success").asBoolean(true));
         return new SseEvent("turn_complete", data);
+    }
+
+    /** Maps a provider retry status to a non-terminal notice; busy and idle are ignored. */
+    private List<SseEvent> sessionStatus(JsonNode payload) {
+        JsonNode status = payload.path("status");
+        if (!"retry".equals(status.path("type").asText(""))) {
+            return Collections.emptyList();
+        }
+        String attempt = status.path("attempt").isMissingNode() ? "?" : status.path("attempt").asText("?");
+        String reason = firstNonBlank(status.path("message").asText(""), "provider error");
+        ObjectNode data = JsonNodeFactory.instance.objectNode();
+        data.put("name", "ProviderRetry");
+        data.put("message", "Retrying (attempt " + attempt + "): " + reason);
+        return List.of(new SseEvent("session_error", data));
     }
 
     private SseEvent sessionError(JsonNode payload) {

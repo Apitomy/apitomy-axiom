@@ -47,6 +47,33 @@ class OpenCodeEventNormalizerTest {
     }
 
     @Test
+    void mapsRetryStatusToProviderRetryNotice() throws Exception {
+        JsonNode payload = mapper.readTree("""
+                {"type":"session.status","properties":{"sessionID":"s1","status":{"type":"retry","attempt":2,
+                "message":"rate limited","next":1790000000000}}}
+                """);
+
+        List<SseEvent> out = normalizer.normalize("message", payload);
+
+        assertEquals(1, out.size());
+        assertEquals("session_error", out.get(0).type());
+        assertEquals("ProviderRetry", out.get(0).data().path("name").asText());
+        String message = out.get(0).data().path("message").asText();
+        assertTrue(message.contains("attempt 2"), message);
+        assertTrue(message.contains("rate limited"), message);
+    }
+
+    @Test
+    void ignoresBusyAndIdleStatus() throws Exception {
+        for (String type : List.of("busy", "idle")) {
+            JsonNode payload = mapper.readTree("{\"type\":\"session.status\",\"properties\":{\"sessionID\":\"s1\","
+                    + "\"status\":{\"type\":\"" + type + "\"}}}");
+
+            assertTrue(normalizer.normalize("message", payload).isEmpty(), type);
+        }
+    }
+
+    @Test
     void ignoresNullEventName() throws Exception {
         JsonNode payload = mapper.readTree("""
                 {"sessionID":"s1","part":{"type":"text","text":"hello"}}

@@ -1,6 +1,7 @@
 package io.apitomy.axiom.app.assistant.runtime.opencode;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
@@ -26,6 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * Interactive session driver for OpenCode-backed assistant sessions.
@@ -36,10 +38,13 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
     private static final List<Duration> DEFAULT_RECONNECT_BACKOFFS =
             List.of(Duration.ofMillis(250), Duration.ofSeconds(1), Duration.ofSeconds(2));
     private static final Duration DELETE_SESSION_TIMEOUT = Duration.ofSeconds(3);
+    private static final String CLEAR_COMMAND = "/clear";
 
     private final ServerProcessHandle serverProcess;
     private final CapabilityProbe capabilityProbe;
-    private final OpenCodeEventNormalizer normalizer;
+    private final Supplier<OpenCodeEventNormalizer> normalizerFactory = OpenCodeEventNormalizer::new;
+    /** Replaced by {@code /clear} so per-session normalizer state starts fresh. */
+    private volatile OpenCodeEventNormalizer normalizer;
     private final Consumer<SseEvent> eventSink;
     private final Consumer<SseEvent> autoApprovalSink;
     private final EventStreamConnector eventStreamConnector;
@@ -61,6 +66,12 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
 
     private volatile OpenCodeAssistantClient client;
     private volatile String openCodeSessionId;
+    /** OpenCode command names (without the slash) fetched at start; empty when unavailable. */
+    private volatile Set<String> commandNames = Set.of();
+    /** Command names reported in {@code session_init}; null when the command list could not be read. */
+    private volatile List<String> slashCommands;
+    /** Tool ids reported in {@code session_init}; null when the tool list could not be read. */
+    private volatile List<String> toolIds;
     /** Effective model resolved at start; null means OpenCode's own default. */
     private volatile String model;
 
@@ -231,6 +242,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
             status.compareAndSet(AssistantSession.Status.STARTING, AssistantSession.Status.RUNNING);
             // The model is resolved right after RUNNING; callers only send prompts once start() has returned,
             // so every prompt sees the effective model.
+            loadCommandsAndToolsSafely();
             resolveModelSafely();
             reportMcpServerStatus();
         } catch (SessionCompatibilityException e) {
@@ -241,6 +253,21 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
             errorMessage.set(e.getMessage());
             safeStopServer();
             throw new IOException("Failed to start OpenCode interactive session", e);
+        }
+    }
+
+    private void loadCommandsAndToolsSafely() {
+        try {
+            List<String> commands = client.listCommands();
+            slashCommands = commands;
+            commandNames = Set.copyOf(commands);
+        } catch (RuntimeException e) {
+            LOG.warnf(e, "Unable to read OpenCode commands; slash commands are unavailable");
+        }
+        try {
+            toolIds = client.toolIds().stream().filter(id -> !"invalid".equals(id)).toList();
+        } catch (RuntimeException e) {
+            LOG.warnf(e, "Unable to read OpenCode tool ids");
         }
     }
 
@@ -299,6 +326,16 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
         ObjectNode data = JsonNodeFactory.instance.objectNode();
         data.put("model", displayedModel == null ? "" : displayedModel);
         data.put("engine", "opencode");
+        List<String> commands = slashCommands;
+        if (commands != null) {
+            ArrayNode commandsNode = data.putArray("slashCommands");
+            commands.forEach(commandsNode::add);
+        }
+        List<String> tools = toolIds;
+        if (tools != null) {
+            ArrayNode toolsNode = data.putArray("tools");
+            tools.forEach(toolsNode::add);
+        }
         eventSink.accept(new SseEvent("session_init", data));
     }
 
@@ -362,6 +399,20 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
         // session discards prompts that are still queued: they are stored but never answered, and opencode
         // emits one session.idle per aborted/discarded turn (also verified on opencode 1.18.33).
         ensureRunning();
+        String trimmed = message == null ? "" : message.trim();
+        if (CLEAR_COMMAND.equals(trimmed)) {
+            clearConversation();
+            return;
+        }
+        if (trimmed.startsWith("/")) {
+            int space = indexOfWhitespace(trimmed);
+            String name = trimmed.substring(1, space < 0 ? trimmed.length() : space);
+            if (commandNames.contains(name)) {
+                String arguments = space < 0 ? "" : trimmed.substring(space).trim();
+                runCommandAsync(name, arguments);
+                return;
+            }
+        }
         try {
             client.sendPromptAsync(openCodeSessionId, message, model, tools, systemPrompt);
         } catch (RuntimeException e) {
@@ -370,6 +421,65 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                 detail = e.getClass().getSimpleName();
             }
             throw new IOException("Failed to submit OpenCode prompt: " + detail, e);
+        }
+    }
+
+    private static int indexOfWhitespace(String value) {
+        for (int i = 0; i < value.length(); i++) {
+            if (Character.isWhitespace(value.charAt(i))) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Runs an OpenCode command off the caller's thread; the endpoint only returns when the command's turn ends.
+     * Its events still arrive through the event stream. Commands carry their own template, so they run without
+     * the session system prompt (the endpoint has no {@code system} field).
+     */
+    private void runCommandAsync(String name, String arguments) {
+        OpenCodeAssistantClient localClient = client;
+        String localSessionId = openCodeSessionId;
+        String localModel = model;
+        Thread.ofVirtual().name("opencode-command").start(() -> {
+            try {
+                localClient.runCommand(localSessionId, name, arguments, localModel);
+            } catch (RuntimeException e) {
+                if (destroyed) {
+                    return;
+                }
+                String reason = e.getMessage() == null || e.getMessage().isBlank()
+                        ? e.getClass().getSimpleName()
+                        : e.getMessage();
+                emitWarning("CommandFailed", "Command /" + name + " failed: " + reason);
+            }
+        });
+    }
+
+    /**
+     * Starts a fresh OpenCode session, resets per-session state, emits {@code conversation_reset} and deletes the
+     * old session (best effort). No prompt is sent.
+     */
+    private synchronized void clearConversation() throws IOException {
+        String oldSessionId = openCodeSessionId;
+        String newSessionId;
+        try {
+            newSessionId = client.createSession(sessionTitle);
+        } catch (RuntimeException e) {
+            throw new IOException("Failed to start a new OpenCode session: " + e.getMessage(), e);
+        }
+        if (newSessionId == null || newSessionId.isBlank()) {
+            throw new IOException("OpenCode session creation did not return an id");
+        }
+        openCodeSessionId = newSessionId;
+        normalizer = normalizerFactory.get();
+        userMessageIds.clear();
+        eventSink.accept(new SseEvent("conversation_reset", JsonNodeFactory.instance.objectNode()));
+        try {
+            client.deleteSession(oldSessionId, DELETE_SESSION_TIMEOUT);
+        } catch (RuntimeException e) {
+            LOG.debugf(e, "Ignoring delete failure for replaced OpenCode session %s", oldSessionId);
         }
     }
 
