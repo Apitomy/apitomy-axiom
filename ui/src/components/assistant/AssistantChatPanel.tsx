@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { AssistantMessageList, type ChatMessage } from "./AssistantMessageList";
 import { AssistantMessageInput } from "./AssistantMessageInput";
 import { AssistantSubagentPanel } from "./AssistantSubagentPanel";
+import { type AssistantTodo } from "./AssistantTodoPanel";
 import type { SubagentCardData, SubagentActivityEntry, SubagentPermission } from "./AssistantSubagentCard";
 import type { BackgroundTaskCardData } from "./AssistantBackgroundTaskCard";
 import {
@@ -40,6 +41,7 @@ let messageIdCounter = 0;
 
 export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, onAutoApprovalCountChange, onAllowAllChanged, onModelDetected, onCostUpdate }: AssistantChatPanelProps) {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [todos, setTodos] = useState<AssistantTodo[]>([]);
     const [isProcessing, setIsProcessingState] = useState(false);
     // Synchronous mirror of isProcessing, readable inside event handlers.
     const processingRef = useRef(false);
@@ -55,7 +57,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
     const [slashCommands, setSlashCommands] = useState<string[]>([]);
     const [subagentCards, setSubagentCards] = useState<Map<string, SubagentCardData>>(new Map());
     const [backgroundTaskCards, setBackgroundTaskCards] = useState<Map<string, BackgroundTaskCardData>>(new Map());
-    const [panelWidth, setPanelWidth] = useState(320);
+    const [panelWidth, setPanelWidth] = useState(390);
     const sessionEndedRef = useRef(false);
     const lastSeenIndexRef = useRef(-1);
     const pendingSubagentPermissionsRef = useRef<Map<string, SubagentPermission[]>>(new Map());
@@ -124,8 +126,30 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                 }
                 break;
 
-            case "thinking":
+            case "thinking": {
                 setProcessingText(randomThinkingMessage());
+                const thinkingText: unknown = data.text;
+                const thinkingId: string | undefined = typeof data.id === "string" ? data.id : undefined;
+                if (typeof thinkingText === "string" && thinkingText.length > 0) {
+                    setMessages(prev => {
+                        if (thinkingId !== undefined
+                                && prev.some(m => m.type === "thinking" && m.thinkingId === thinkingId)) {
+                            return prev.map(m => m.type === "thinking" && m.thinkingId === thinkingId
+                                ? { ...m, content: thinkingText } : m);
+                        }
+                        return [...prev, {
+                            id: String(++messageIdCounter),
+                            type: "thinking",
+                            content: thinkingText,
+                            thinkingId,
+                        }];
+                    });
+                }
+                break;
+            }
+
+            case "todos":
+                setTodos(Array.isArray(data.todos) ? data.todos as AssistantTodo[] : []);
                 break;
 
             case "tool_use":
@@ -316,6 +340,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                     type: "system",
                     content: "Conversation cleared.",
                 }]);
+                setTodos([]);
                 setSubagentCards(new Map());
                 setBackgroundTaskCards(new Map());
                 pendingSubagentPermissionsRef.current.clear();
@@ -795,7 +820,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
         () => Array.from(backgroundTaskCards.values()).filter(c => !c.dismissed),
         [backgroundTaskCards]
     );
-    const hasSidePanel = visibleSubagentCards.length > 0 || visibleBgTaskCards.length > 0;
+    const hasSidePanel = visibleSubagentCards.length > 0 || visibleBgTaskCards.length > 0 || todos.length > 0;
 
     return (
         <div style={{
@@ -829,6 +854,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                 <AssistantSubagentPanel
                     subagentCards={visibleSubagentCards}
                     backgroundTaskCards={visibleBgTaskCards}
+                    todos={todos}
                     onDismissSubagent={handleDismissCard}
                     onDismissBackgroundTask={handleDismissCard}
                     onDismissAllCompleted={handleDismissAllCompleted}

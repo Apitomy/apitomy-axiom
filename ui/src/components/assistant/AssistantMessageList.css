@@ -112,3 +112,14 @@
     color: var(--pf-t--global--text--color--subtle, #6a6e73);
 }
 
+/* Thinking blocks with content */
+.axiom-message-list__thinking-block {
+    margin: 4px 0;
+    font-size: 13px;
+    color: var(--pf-t--global--text--color--subtle, #6a6e73);
+}
+
+.axiom-message-list__thinking-text {
+    font-style: italic;
+    white-space: pre-wrap;
+}

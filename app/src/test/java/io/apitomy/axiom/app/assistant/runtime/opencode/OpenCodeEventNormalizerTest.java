@@ -557,4 +557,111 @@ class OpenCodeEventNormalizerTest {
         assertEquals(0, next.data().path("outputTokens").asLong());
         assertEquals(0, next.data().path("durationMs").asLong());
     }
+
+    // ── Todos and reasoning text (#382) ─────────────────────────────
+
+    private static final String TODOS = "1.18.33-todos.jsonl";
+
+    private List<SseEvent> replay(List<JsonNode> events) {
+        List<SseEvent> out = new java.util.ArrayList<>();
+        events.forEach(event -> out.addAll(normalize(event)));
+        return out;
+    }
+
+    @Test
+    void todoUpdatedFixtureEmitsSingleTodosEvent() {
+        List<SseEvent> out = replay(OpenCodeEventFixtures.load(TODOS));
+
+        List<SseEvent> todos = out.stream().filter(e -> "todos".equals(e.type())).toList();
+        assertEquals(1, todos.size());
+        JsonNode items = todos.get(0).data().path("todos");
+        assertEquals(3, items.size());
+        assertEquals("plan", items.get(0).path("content").asText());
+        assertEquals("completed", items.get(0).path("status").asText());
+        assertEquals("high", items.get(0).path("priority").asText());
+        assertEquals("build", items.get(1).path("content").asText());
+        assertEquals("pending", items.get(1).path("status").asText());
+    }
+
+    @Test
+    void todowriteToolPartDoesNotEmitTodos() {
+        List<JsonNode> events = OpenCodeEventFixtures.load(TODOS);
+        List<JsonNode> toolParts = events.stream().filter(partOfType("tool")
+                .and(event -> "todowrite".equals(event.path("properties").path("part").path("tool").asText())))
+                .toList();
+        assertFalse(toolParts.isEmpty());
+
+        List<SseEvent> out = replay(toolParts);
+
+        assertTrue(out.stream().noneMatch(e -> "todos".equals(e.type())));
+    }
+
+    @Test
+    void todosFixtureHasNoUnhandledSessionEvents() {
+        List<JsonNode> events = OpenCodeEventFixtures.load(TODOS).stream()
+                .filter(OpenCodeEventFixtures::isSessionScoped).toList();
+
+        List<SseEvent> out = replay(events);
+
+        assertTrue(out.stream().noneMatch(e -> "unhandled_event".equals(e.type())),
+                () -> out.stream().filter(e -> "unhandled_event".equals(e.type()))
+                        .map(e -> e.data().path("rawType").asText()).toList().toString());
+    }
+
+    @Test
+    void reasoningPartEmitsIdThenFinalTextOnce() throws Exception {
+        JsonNode started = mapper.readTree("""
+                {"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1",\
+                "sessionID":"s1","messageID":"m1","type":"reasoning","text":"","time":{"start":1}}}}
+                """);
+        JsonNode finished = mapper.readTree("""
+                {"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1",\
+                "sessionID":"s1","messageID":"m1","type":"reasoning","text":"Reasoning about X",\
+                "time":{"start":1,"end":2}}}}
+                """);
+
+        List<SseEvent> first = normalize(started);
+        List<SseEvent> second = normalize(finished);
+        List<SseEvent> third = normalize(finished);
+
+        assertEquals(1, first.size());
+        assertEquals("thinking", first.get(0).type());
+        assertEquals("p1", first.get(0).data().path("id").asText());
+        assertFalse(first.get(0).data().has("text"));
+        assertEquals(1, second.size());
+        assertEquals("thinking", second.get(0).type());
+        assertEquals("p1", second.get(0).data().path("id").asText());
+        assertEquals("Reasoning about X", second.get(0).data().path("text").asText());
+        assertTrue(third.isEmpty());
+    }
+
+    @Test
+    void reasoningPartFinishedWithTextOnFirstSightingEmitsOnlyTextEvent() throws Exception {
+        JsonNode finished = mapper.readTree("""
+                {"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p2",\
+                "sessionID":"s1","messageID":"m1","type":"reasoning","text":"Done thinking",\
+                "time":{"start":1,"end":2}}}}
+                """);
+
+        List<SseEvent> out = normalize(finished);
+
+        assertEquals(1, out.size());
+        assertEquals("p2", out.get(0).data().path("id").asText());
+        assertEquals("Done thinking", out.get(0).data().path("text").asText());
+        assertTrue(normalize(finished).isEmpty());
+    }
+
+    @Test
+    void reasoningPartEndingWithEmptyTextEmitsOnlyIdEvent() {
+        List<JsonNode> reasoning = OpenCodeEventFixtures.load(TODOS).stream()
+                .filter(partOfType("reasoning")).toList();
+        assertFalse(reasoning.isEmpty());
+
+        List<SseEvent> out = replay(reasoning);
+
+        assertEquals(1, out.size());
+        assertEquals("thinking", out.get(0).type());
+        assertFalse(out.get(0).data().path("id").asText().isEmpty());
+        assertFalse(out.get(0).data().has("text"));
+    }
 }

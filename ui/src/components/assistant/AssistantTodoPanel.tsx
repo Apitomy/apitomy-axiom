@@ -1,0 +1,78 @@
+import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
+import InProgressIcon from "@patternfly/react-icons/dist/esm/icons/in-progress-icon";
+import OutlinedCircleIcon from "@patternfly/react-icons/dist/esm/icons/outlined-circle-icon";
+import TimesCircleIcon from "@patternfly/react-icons/dist/esm/icons/times-circle-icon";
+import "./AssistantTodoPanel.css";
+
+/**
+ * A single item in the assistant's todo list, as carried by the `todos` SSE event.
+ */
+export interface AssistantTodo {
+    content: string;
+    status: string;
+    priority?: string;
+    activeForm?: string;
+}
+
+const STATUS_LABELS: Record<string, string> = {
+    pending: "Pending",
+    in_progress: "In progress",
+    completed: "Completed",
+    cancelled: "Cancelled",
+};
+
+function statusLabel(status: string): string {
+    return STATUS_LABELS[status] ?? status;
+}
+
+function statusIcon(status: string) {
+    switch (status) {
+        case "completed":
+            return <CheckCircleIcon />;
+        case "in_progress":
+            return <InProgressIcon />;
+        case "cancelled":
+            return <TimesCircleIcon />;
+        default:
+            return <OutlinedCircleIcon />;
+    }
+}
+
+/**
+ * Returns how many todos are completed, for tab titles and summaries.
+ *
+ * @param todos the current todo list
+ * @returns the number of completed items
+ */
+export function completedTodoCount(todos: AssistantTodo[]): number {
+    return todos.filter(t => t.status === "completed").length;
+}
+
+/**
+ * Lists the assistant's current todo items with their status. Renders nothing when the list is empty.
+ */
+export function AssistantTodoPanel({ todos }: { todos: AssistantTodo[] }) {
+    if (todos.length === 0) {
+        return null;
+    }
+    return (
+        <div className="axiom-todo-panel">
+            <ul className="axiom-todo-panel__list" aria-label="Assistant todo list">
+                {todos.map((todo, idx) => {
+                    const label: string = todo.status === "in_progress" && todo.activeForm
+                        ? todo.activeForm : todo.content;
+                    return (
+                        <li key={`${idx}-${todo.content}`}
+                            className={`axiom-todo-panel__item axiom-todo-panel__item--${todo.status}`}>
+                            <span className="axiom-todo-panel__icon" aria-hidden="true">
+                                {statusIcon(todo.status)}
+                            </span>
+                            <span className="pf-v6-screen-reader">{statusLabel(todo.status)}</span>
+                            <span className="axiom-todo-panel__text">{label}</span>
+                        </li>
+                    );
+                })}
+            </ul>
+        </div>
+    );
+}

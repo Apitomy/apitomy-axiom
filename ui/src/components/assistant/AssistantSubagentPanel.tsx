@@ -8,11 +8,17 @@ import {
     AssistantBackgroundTaskCard,
     type BackgroundTaskCardData,
 } from "./AssistantBackgroundTaskCard";
+import {
+    AssistantTodoPanel,
+    completedTodoCount,
+    type AssistantTodo,
+} from "./AssistantTodoPanel";
 import "./AssistantSubagentPanel.css";
 
 interface AssistantSubagentPanelProps {
     subagentCards: SubagentCardData[];
     backgroundTaskCards: BackgroundTaskCardData[];
+    todos: AssistantTodo[];
     onDismissSubagent: (id: string) => void;
     onDismissBackgroundTask: (id: string) => void;
     onDismissAllCompleted: () => void;
@@ -28,12 +34,17 @@ const MIN_WIDTH = 200;
 const MAX_WIDTH = 500;
 
 export function AssistantSubagentPanel({
-    subagentCards, backgroundTaskCards,
+    subagentCards, backgroundTaskCards, todos,
     onDismissSubagent, onDismissBackgroundTask, onDismissAllCompleted,
     onNavigateToAgent, onPermissionRespond, onAllowAll,
     highlightedCardId, width, onWidthChange,
 }: AssistantSubagentPanelProps) {
-    const [activeTab, setActiveTab] = useState<string | number>("subagents");
+    // Open on whichever tab has content when the panel first appears.
+    const [activeTab, setActiveTab] = useState<string | number>(() => {
+        if (subagentCards.length > 0) return "subagents";
+        if (backgroundTaskCards.length > 0) return "background";
+        return todos.length > 0 ? "todos" : "subagents";
+    });
     const draggingRef = useRef(false);
     const startXRef = useRef(0);
     const startWidthRef = useRef(0);
@@ -88,6 +99,10 @@ export function AssistantSubagentPanel({
                     eventKey="background"
                     title={<TabTitleText>Background ({backgroundTaskCards.length})</TabTitleText>}
                 />
+                <Tab
+                    eventKey="todos"
+                    title={<TabTitleText>Todos ({completedTodoCount(todos)}/{todos.length})</TabTitleText>}
+                />
             </Tabs>
             <div className="axiom-subagent-panel__tab-content">
                 {activeTab === "subagents" && (
@@ -113,6 +128,11 @@ export function AssistantSubagentPanel({
                             ))}
                         </div>
                     </>
+                )}
+                {activeTab === "todos" && (
+                    todos.length > 0
+                        ? <AssistantTodoPanel todos={todos} />
+                        : <div className="axiom-subagent-panel__empty">No todos yet.</div>
                 )}
                 {activeTab === "background" && (
                     <>

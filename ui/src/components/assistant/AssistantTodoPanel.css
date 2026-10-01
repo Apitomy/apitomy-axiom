@@ -1,0 +1,40 @@
+.axiom-todo-panel {
+    flex: 1 1 0;
+    overflow-y: auto;
+    padding: 8px 12px;
+}
+
+.axiom-todo-panel__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.axiom-todo-panel__item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 2px 0;
+    font-size: 13px;
+}
+
+.axiom-todo-panel__icon {
+    flex: none;
+}
+
+.axiom-todo-panel__item--in_progress .axiom-todo-panel__icon {
+    color: var(--pf-t--global--icon--color--status--info--default, #2b9af3);
+}
+
+.axiom-todo-panel__item--completed .axiom-todo-panel__icon {
+    color: var(--pf-t--global--icon--color--status--success--default, #3e8635);
+}
+
+.axiom-todo-panel__item--completed,
+.axiom-todo-panel__item--cancelled {
+    color: var(--pf-t--global--text--color--subtle, #6a6e73);
+}
+
+.axiom-todo-panel__item--completed .axiom-todo-panel__text {
+    text-decoration: line-through;
+}
