@@ -33,23 +33,16 @@ class OpenCodeAssistantClientPermissionContractTest {
     }
 
     @Test
-    void sendPromptAsyncConvertsAllowedToolsArrayToBooleanMap() throws Exception {
+    void sendPromptAsyncSendsOnlyTextPartWithoutModelOrSystem() throws Exception {
         RecordingPermissionServer recordingServer = RecordingPermissionServer.start();
         try {
             OpenCodeAssistantClient client = new OpenCodeAssistantClient(recordingServer.baseUrl());
 
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            com.fasterxml.jackson.databind.node.ObjectNode tools = mapper.createObjectNode();
-            com.fasterxml.jackson.databind.node.ArrayNode allowed = tools.putArray("allowed");
-            allowed.add("Read(*)");
-            allowed.add("Write(*)");
-
-            client.sendPromptAsync(SESSION_ID, "hello", null, tools);
+            client.sendPromptAsync(SESSION_ID, "hello", null);
 
             assertEquals("POST", recordingServer.method());
             assertEquals("/session/" + SESSION_ID + "/prompt_async", recordingServer.path());
-            assertEquals("{\"parts\":[{\"type\":\"text\",\"text\":\"hello\"}],\"tools\":{\"Read(*)\":true,\"Write(*)\":true}}",
-                    recordingServer.body());
+            assertEquals("{\"parts\":[{\"type\":\"text\",\"text\":\"hello\"}]}", recordingServer.body());
         } finally {
             recordingServer.close();
         }
@@ -61,7 +54,7 @@ class OpenCodeAssistantClientPermissionContractTest {
         try {
             OpenCodeAssistantClient client = new OpenCodeAssistantClient(recordingServer.baseUrl());
 
-            client.sendPromptAsync(SESSION_ID, "hello", null, null, "You are the Axiom Configuration Assistant.");
+            client.sendPromptAsync(SESSION_ID, "hello", null, "You are the Axiom Configuration Assistant.");
 
             com.fasterxml.jackson.databind.JsonNode body =
                     new com.fasterxml.jackson.databind.ObjectMapper().readTree(recordingServer.rawBody());
@@ -78,7 +71,7 @@ class OpenCodeAssistantClientPermissionContractTest {
         try {
             OpenCodeAssistantClient client = new OpenCodeAssistantClient(recordingServer.baseUrl());
 
-            client.sendPromptAsync(SESSION_ID, "hello", null, null, "   ");
+            client.sendPromptAsync(SESSION_ID, "hello", null, "   ");
 
             assertEquals("{\"parts\":[{\"type\":\"text\",\"text\":\"hello\"}]}", recordingServer.body());
         } finally {

@@ -51,7 +51,6 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
     private final String sessionTitle;
     private final String templateModel;
     private final String fallbackModel;
-    private final JsonNode tools;
     private final Set<String> expectedMcpServers;
     private final String systemPrompt;
     private final Path rawEventsFile;
@@ -98,7 +97,6 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
      * @param autoApprovalSink sink for permission_request events
      * @param sessionTitle title used when creating OpenCode sessions
      * @param model model in provider/model format
-     * @param tools optional tools payload for prompt submissions
      */
     public OpenCodeInteractiveSessionDriver(ServerProcessHandle serverProcess,
                                             CapabilityProbe capabilityProbe,
@@ -106,10 +104,9 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                                             Consumer<SseEvent> eventSink,
                                             Consumer<SseEvent> autoApprovalSink,
                                             String sessionTitle,
-                                            String model,
-                                            JsonNode tools) {
+                                            String model) {
         this(serverProcess, capabilityProbe, normalizer, eventSink, autoApprovalSink,
-                sessionTitle, model, tools, Set.of());
+                sessionTitle, model, Set.of());
     }
 
     /**
@@ -122,7 +119,6 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
      * @param autoApprovalSink sink for permission_request events
      * @param sessionTitle title used when creating OpenCode sessions
      * @param model model in provider/model format
-     * @param tools optional tools payload for prompt submissions
      * @param expectedMcpServers names of MCP servers configured for the session; a warning is emitted
      *                           for each one that OpenCode does not report as connected
      */
@@ -133,10 +129,9 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                                             Consumer<SseEvent> autoApprovalSink,
                                             String sessionTitle,
                                             String model,
-                                            JsonNode tools,
                                             Set<String> expectedMcpServers) {
         this(serverProcess, capabilityProbe, normalizer, eventSink, autoApprovalSink,
-                new SessionSettings(sessionTitle, model, tools, expectedMcpServers, null, null, null));
+                new SessionSettings(sessionTitle, model, expectedMcpServers, null, null, null));
     }
 
     /** Canonical constructor; all other constructors delegate here (package-private for test injection). */
@@ -167,10 +162,9 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                                      Consumer<SseEvent> autoApprovalSink,
                                      EventStreamConnector eventStreamConnector,
                                      String sessionTitle,
-                                     String model,
-                                     JsonNode tools) {
+                                     String model) {
         this(serverProcess, capabilityProbe, normalizer, eventSink, autoApprovalSink,
-                eventStreamConnector, sessionTitle, model, tools, Set.of());
+                eventStreamConnector, sessionTitle, model, Set.of());
     }
 
     OpenCodeInteractiveSessionDriver(ServerProcessHandle serverProcess,
@@ -181,10 +175,9 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                                      EventStreamConnector eventStreamConnector,
                                      String sessionTitle,
                                      String model,
-                                     JsonNode tools,
                                      Set<String> expectedMcpServers) {
         this(serverProcess, capabilityProbe, normalizer, eventSink, autoApprovalSink, eventStreamConnector,
-                new SessionSettings(sessionTitle, model, tools, expectedMcpServers, null, null, null));
+                new SessionSettings(sessionTitle, model, expectedMcpServers, null, null, null));
     }
 
     OpenCodeInteractiveSessionDriver(ServerProcessHandle serverProcess,
@@ -205,7 +198,6 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
         this.templateModel = settings.model();
         this.fallbackModel = settings.fallbackModel();
         this.model = settings.model();
-        this.tools = settings.tools();
         this.expectedMcpServers = settings.expectedMcpServers();
         this.systemPrompt = settings.systemPrompt();
         this.rawEventsFile = settings.rawEventsFile();
@@ -415,7 +407,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
         }
         String sessionId = openCodeSessionId;
         try {
-            client.sendPromptAsync(sessionId, message, model, tools, systemPrompt);
+            client.sendPromptAsync(sessionId, message, model, systemPrompt);
         } catch (RuntimeException e) {
             String detail = e.getMessage();
             if (detail == null || detail.isBlank()) {
@@ -872,7 +864,6 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
      *
      * @param sessionTitle title used when creating the OpenCode session
      * @param model model in provider/model format, or null for OpenCode's default
-     * @param tools optional tools payload for prompt submissions
      * @param expectedMcpServers names of MCP servers configured for the session; a warning is emitted for each one
      *                           that OpenCode does not report as connected
      * @param systemPrompt system prompt sent with every prompt, or null/blank for none
@@ -882,7 +873,6 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
      */
     public record SessionSettings(String sessionTitle,
                                   String model,
-                                  JsonNode tools,
                                   Set<String> expectedMcpServers,
                                   String systemPrompt,
                                   String fallbackModel,

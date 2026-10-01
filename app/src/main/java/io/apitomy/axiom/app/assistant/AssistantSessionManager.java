@@ -254,7 +254,6 @@ public class AssistantSessionManager {
                             eventSink,
                             autoApprovalSink,
                             template.model(),
-                            null,
                             sessionName,
                             mcpConfigs,
                             systemPrompt,

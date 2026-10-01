@@ -63,7 +63,6 @@ public interface InteractiveSessionDriverFactory {
                          Consumer<AssistantEventParser.SseEvent> eventSink,
                          Consumer<AssistantEventParser.SseEvent> autoApprovalSink,
                          String model,
-                         com.fasterxml.jackson.databind.JsonNode tools,
                          String sessionTitle,
                          Map<String, AssistantContextBuilder.McpServerConfig> mcpServers,
                          String systemPrompt,
@@ -185,7 +184,6 @@ public interface InteractiveSessionDriverFactory {
                         new OpenCodeInteractiveSessionDriver.SessionSettings(
                                 sessionTitle,
                                 request.model(),
-                                null,
                                 request.mcpServers().keySet(),
                                 request.systemPrompt(),
                                 resolveOpenCodeDefaultModel(),
