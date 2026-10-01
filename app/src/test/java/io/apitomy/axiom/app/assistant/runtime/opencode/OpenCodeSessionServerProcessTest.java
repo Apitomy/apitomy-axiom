@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.agents.opencode.OpenCodeServerManager;
 import io.apitomy.axiom.app.assistant.AssistantContextBuilder.McpServerConfig;
 import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -32,6 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class OpenCodeSessionServerProcessTest {
 
     @Test
+    @Tag("live-cli")
     void startsAndStopsSessionScopedOpenCodeServer() {
         Assumptions.assumeTrue(OpenCodeServerManager.isOpenCodeAvailable());
         OpenCodeSessionServerProcess process = new OpenCodeSessionServerProcess("opencode", "127.0.0.1", 0, 30);
@@ -59,6 +61,7 @@ class OpenCodeSessionServerProcessTest {
     }
 
     @Test
+    @Tag("live-cli")
     void realOpenCodeLoadsMcpServersFromGeneratedConfig(@TempDir Path sessionDir) throws Exception {
         Assumptions.assumeTrue(OpenCodeServerManager.isOpenCodeAvailable());
         Path config = OpenCodeConfigWriter.writeConfig(sessionDir, Map.of(
@@ -98,6 +101,7 @@ class OpenCodeSessionServerProcessTest {
     }
 
     @Test
+    @Tag("live-cli")
     void realOpenCodeReportsProviderCatalog(@TempDir Path workDir) throws Exception {
         Assumptions.assumeTrue(OpenCodeServerManager.isOpenCodeAvailable());
         OpenCodeSessionServerProcess process = new OpenCodeSessionServerProcess(
@@ -116,6 +120,7 @@ class OpenCodeSessionServerProcessTest {
     }
 
     @Test
+    @Tag("live-cli")
     void realOpenCodeUsesProcessWorkingDirectory(@TempDir Path workDir) throws Exception {
         Assumptions.assumeTrue(OpenCodeServerManager.isOpenCodeAvailable());
         OpenCodeSessionServerProcess process = new OpenCodeSessionServerProcess(
@@ -139,6 +144,7 @@ class OpenCodeSessionServerProcessTest {
     }
 
     @Test
+    @Tag("live-cli")
     void realOpenCodeLoadsSessionPermissionsFromGeneratedConfig(@TempDir Path sessionDir) throws Exception {
         Assumptions.assumeTrue(OpenCodeServerManager.isOpenCodeAvailable());
         Path config = OpenCodeConfigWriter.writeConfig(sessionDir, Map.of(),
@@ -183,6 +189,7 @@ class OpenCodeSessionServerProcessTest {
     }
 
     @Test
+    @Tag("live-cli")
     void realOpenCodeRequiresPassword(@TempDir Path workDir) throws Exception {
         Assumptions.assumeTrue(OpenCodeServerManager.isOpenCodeAvailable());
         OpenCodeSessionServerProcess process = new OpenCodeSessionServerProcess(
@@ -202,6 +209,7 @@ class OpenCodeSessionServerProcessTest {
     }
 
     @Test
+    @Tag("live-cli")
     void retriesStartWhenProcessExitsDuringStartup(@TempDir Path tempDir) throws Exception {
         Assumptions.assumeTrue(OpenCodeServerManager.isOpenCodeAvailable());
         Assumptions.assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"));

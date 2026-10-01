@@ -53,6 +53,19 @@ Only the selected engine's binary needs to be installed. Both can coexist for te
 ./build-release.sh
 ```
 
+### Live CLI tests
+
+Some tests launch a real `opencode` CLI and may consume LLM tokens. These are tagged
+`@Tag("live-cli")` and are **excluded from the default build**. To run them, enable the
+`live-cli-tests` profile (requires the `opencode` CLI installed and authenticated):
+
+```bash
+mvn test -Plive-cli-tests
+```
+
+When adding a test that invokes a real `opencode` or `claude` CLI, annotate it with
+`@Tag("live-cli")` so it stays out of the standard build.
+
 ## Development
 
 The `dev.sh` script builds all modules and starts both the Quarkus backend and the Vite UI
