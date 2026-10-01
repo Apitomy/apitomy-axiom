@@ -241,6 +241,9 @@ You can send another message while the assistant is still working; it is queued 
 reply. If a message cannot be delivered, the chat shows a "Message was not delivered" notice. Stopping or
 interrupting the assistant also discards any messages that are still queued.
 
+While the assistant is working, a **Stop** button appears next to **Send**. It stops the current reply without
+ending the session, so you can continue the conversation. If the reply can't be stopped, the chat shows a notice.
+
 #### Slash Commands
 
 Type `/` in the chat input to see available slash commands. Use arrow keys to navigate
