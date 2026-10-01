@@ -24,6 +24,7 @@ const NON_TERMINAL_SESSION_ERRORS = new Set([
     "MessageNotDelivered",
     "InterruptFailed",
     "EventStreamReconnected",
+    "ProviderRetry",
 ]);
 
 export type SessionMode = "normal" | "plan";

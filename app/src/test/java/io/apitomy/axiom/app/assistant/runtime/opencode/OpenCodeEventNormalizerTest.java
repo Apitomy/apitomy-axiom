@@ -47,6 +47,95 @@ class OpenCodeEventNormalizerTest {
     }
 
     @Test
+    void childPermissionForUnknownChildHasNoSubagentToolUseId() throws Exception {
+        JsonNode payload = mapper.readTree("""
+                {"type":"permission.asked","properties":{"id":"per_1","sessionID":"child-1","permission":"bash",
+                "patterns":["echo hi"],"metadata":{"command":"echo hi"},"tool":{"messageID":"m1","callID":"c1"}}}
+                """);
+
+        List<SseEvent> out = normalizer.normalizeChild("message", payload, "child-1");
+
+        assertEquals(1, out.size());
+        assertEquals("permission_request", out.get(0).type());
+        assertEquals("per_1", out.get(0).data().path("requestId").asText());
+        assertEquals("bash", out.get(0).data().path("toolName").asText());
+        assertTrue(out.get(0).data().path("subagentToolUseId").isMissingNode());
+    }
+
+    @Test
+    void grandchildPermissionCarriesTopLevelTaskCallId() throws Exception {
+        normalizer.registerChildSession("child-1");
+        normalizer.registerNestedSession("grandchild-1", "child-1");
+        // The parent task call mapping becomes known after the grandchild was registered.
+        normalizer.normalize("message", mapper.readTree("""
+                {"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","type":"tool",
+                "tool":"task","callID":"task-call-1","state":{"status":"running","input":{"description":"d",
+                "subagent_type":"general"},"metadata":{"sessionId":"child-1"}}}}}
+                """));
+        JsonNode permission = mapper.readTree("""
+                {"type":"permission.asked","properties":{"id":"per_9","sessionID":"grandchild-1",
+                "permission":"bash","patterns":["ls"],"metadata":{},"tool":{"messageID":"m1","callID":"c9"}}}
+                """);
+        JsonNode tool = mapper.readTree("""
+                {"type":"message.part.updated","properties":{"sessionID":"grandchild-1","part":{"id":"p9",
+                "type":"tool","tool":"bash","callID":"c9","state":{"status":"running","input":{"command":"ls"}}}}}
+                """);
+
+        assertTrue(normalizer.childSessionIds().contains("grandchild-1"));
+        List<SseEvent> progress = normalizer.normalizeChild("message", tool, "grandchild-1");
+        assertEquals(1, progress.size());
+        assertEquals("subagent_progress", progress.get(0).type());
+        assertEquals("task-call-1", progress.get(0).data().path("toolUseId").asText());
+        List<SseEvent> out = normalizer.normalizeChild("message", permission, "grandchild-1");
+        assertEquals(1, out.size());
+        assertEquals("permission_request", out.get(0).type());
+        assertEquals("task-call-1", out.get(0).data().path("subagentToolUseId").asText());
+    }
+
+    @Test
+    void childIdleAndTextAreIgnored() throws Exception {
+        normalizer.registerChildSession("child-1");
+        JsonNode idle = mapper.readTree("""
+                {"type":"session.idle","properties":{"sessionID":"child-1"}}
+                """);
+        JsonNode text = mapper.readTree("""
+                {"type":"message.part.updated","properties":{"sessionID":"child-1",
+                "part":{"id":"p1","type":"text","text":"hello"}}}
+                """);
+
+        assertTrue(normalizer.normalizeChild("message", idle, "child-1").isEmpty());
+        assertTrue(normalizer.normalizeChild("message", text, "child-1").isEmpty());
+        assertTrue(normalizer.childSessionIds().contains("child-1"));
+    }
+
+    @Test
+    void mapsRetryStatusToProviderRetryNotice() throws Exception {
+        JsonNode payload = mapper.readTree("""
+                {"type":"session.status","properties":{"sessionID":"s1","status":{"type":"retry","attempt":2,
+                "message":"rate limited","next":1790000000000}}}
+                """);
+
+        List<SseEvent> out = normalizer.normalize("message", payload);
+
+        assertEquals(1, out.size());
+        assertEquals("session_error", out.get(0).type());
+        assertEquals("ProviderRetry", out.get(0).data().path("name").asText());
+        String message = out.get(0).data().path("message").asText();
+        assertTrue(message.contains("attempt 2"), message);
+        assertTrue(message.contains("rate limited"), message);
+    }
+
+    @Test
+    void ignoresBusyAndIdleStatus() throws Exception {
+        for (String type : List.of("busy", "idle")) {
+            JsonNode payload = mapper.readTree("{\"type\":\"session.status\",\"properties\":{\"sessionID\":\"s1\","
+                    + "\"status\":{\"type\":\"" + type + "\"}}}");
+
+            assertTrue(normalizer.normalize("message", payload).isEmpty(), type);
+        }
+    }
+
+    @Test
     void ignoresNullEventName() throws Exception {
         JsonNode payload = mapper.readTree("""
                 {"sessionID":"s1","part":{"type":"text","text":"hello"}}

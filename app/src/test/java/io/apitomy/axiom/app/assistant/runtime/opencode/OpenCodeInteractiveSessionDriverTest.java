@@ -1147,7 +1147,8 @@ class OpenCodeInteractiveSessionDriverTest {
         return exchange -> {
             List<JsonNode> events = OpenCodeEventFixtures.load(fixture);
             String capturedSessionId = OpenCodeEventFixtures.first(events,
-                            event -> "session.created".equals(event.path("type").asText()))
+                            event -> "session.created".equals(event.path("type").asText())
+                                    && event.path("properties").path("info").path("parentID").isMissingNode())
                     .path("properties").path("info").path("id").asText();
             exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
             exchange.sendResponseHeaders(200, 0);
@@ -1263,6 +1264,239 @@ class OpenCodeInteractiveSessionDriverTest {
         assertEquals("turn_complete", events.get(events.size() - 1).type());
     }
 
+    private static final String SUBAGENT_TASK_CALL = "toolu_016XsHbPPK6xzDdLx8p3DHqo";
+    private static final String SUBAGENT_CHILD_SESSION = "ses_f085d8f98ffe3qJr2GIBJDhMMd";
+
+    @Test
+    void replaysRealSubagentStreamIntoSubagentEvents() throws Exception {
+        List<SseEvent> permissionEvents = new CopyOnWriteArrayList<>();
+
+        List<SseEvent> events = replayThroughDriver("1.18.33-subagent.jsonl", permissionEvents);
+
+        List<SseEvent> subagentEvents = events.stream()
+                .filter(event -> event.type().startsWith("subagent_"))
+                .toList();
+        assertTrue(subagentEvents.size() >= 3, "subagent events: " + subagentEvents);
+        SseEvent started = subagentEvents.get(0);
+        assertEquals("subagent_started", started.type());
+        assertEquals(SUBAGENT_TASK_CALL, started.data().path("toolUseId").asText());
+        assertEquals(SUBAGENT_CHILD_SESSION, started.data().path("taskId").asText());
+        assertEquals("Find txt files", started.data().path("description").asText());
+        assertEquals("explore", started.data().path("subagentType").asText());
+
+        List<SseEvent> progress = subagentEvents.subList(1, subagentEvents.size() - 1);
+        assertFalse(progress.isEmpty());
+        for (SseEvent event : progress) {
+            assertEquals("subagent_progress", event.type());
+            assertEquals(SUBAGENT_TASK_CALL, event.data().path("toolUseId").asText());
+            assertEquals(SUBAGENT_CHILD_SESSION, event.data().path("taskId").asText());
+            assertEquals("bash", event.data().path("lastToolName").asText());
+        }
+        assertEquals(1, progress.get(progress.size() - 1).data().path("toolCount").asInt());
+
+        SseEvent completed = subagentEvents.get(subagentEvents.size() - 1);
+        assertEquals("subagent_completed", completed.type());
+        assertEquals(SUBAGENT_TASK_CALL, completed.data().path("toolUseId").asText());
+        assertEquals("completed", completed.data().path("status").asText());
+        assertEquals("/tmp/opencode/cap/hello.txt", completed.data().path("summary").asText());
+
+        assertTrue(events.stream().anyMatch(event -> "tool_use".equals(event.type())
+                && SUBAGENT_TASK_CALL.equals(event.data().path("id").asText())
+                && "task".equals(event.data().path("name").asText())));
+        assertTrue(events.stream().anyMatch(event -> "tool_result".equals(event.type())
+                && SUBAGENT_TASK_CALL.equals(event.data().path("toolUseId").asText())));
+        assertTrue(events.stream().noneMatch(event -> "tool_use".equals(event.type())
+                && "bash".equals(event.data().path("name").asText())), "child tool leaked: " + events);
+        assertEquals(1, events.stream().filter(event -> "turn_complete".equals(event.type())).count());
+        assertTrue(events.stream().noneMatch(event -> "unhandled_event".equals(event.type())));
+        List<String> texts = events.stream()
+                .filter(event -> "assistant_text".equals(event.type()))
+                .map(event -> event.data().path("text").asText())
+                .toList();
+        assertEquals(List.of("DONE"), texts);
+        assertTrue(events.stream().noneMatch(event -> "todos".equals(event.type())));
+    }
+
+    @Test
+    void routesRealSubagentPermissionToAutoApprovalSinkWithParentCall() throws Exception {
+        List<SseEvent> permissionEvents = new CopyOnWriteArrayList<>();
+
+        List<SseEvent> events = replayThroughDriver("1.18.33-subagent-permission.jsonl", permissionEvents);
+
+        assertEquals(1, permissionEvents.size(), "permissions: " + permissionEvents);
+        SseEvent request = permissionEvents.get(0);
+        assertEquals("permission_request", request.type());
+        assertEquals("toolu_01HNoyD6rMHtENZTjeJK1bJR", request.data().path("subagentToolUseId").asText());
+        assertEquals("bash", request.data().path("toolName").asText());
+        assertEquals("per_0f7a30e2f001dHA7irvf3pZGyZ", request.data().path("requestId").asText());
+        assertTrue(events.stream().noneMatch(event -> "permission_request".equals(event.type())));
+        assertEquals(1, events.stream().filter(event -> "turn_complete".equals(event.type())).count());
+    }
+
+    private static final String COMMANDS = "[{\"name\":\"init\",\"template\":\"t\"},{\"name\":\"review\",\"template\":\"t\"}]";
+    private static final String TOOL_IDS = "[\"invalid\",\"question\",\"bash\",\"read\"]";
+
+    private record CommandRun(FakeOpenCodeServer server, OpenCodeInteractiveSessionDriver driver,
+                              List<SseEvent> events, CountDownLatch release) implements AutoCloseable {
+
+        @Override
+        public void close() {
+            release.countDown();
+            driver.destroy();
+            server.close();
+        }
+    }
+
+    private static CommandRun startCommandRun(int commandsStatus, int commandStatus) throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        EventResponder openStream = exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+            exchange.sendResponseHeaders(200, 0);
+            release.await(10, TimeUnit.SECONDS);
+        };
+        FakeOpenCodeServer server = FakeOpenCodeServer.start(openStream);
+        server.serveCommands(commandsStatus, COMMANDS, TOOL_IDS, commandStatus);
+        List<SseEvent> events = new CopyOnWriteArrayList<>();
+        OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
+                new FakeServerProcess(server.baseUrl()),
+                client -> OpenCodeCapabilityProbe.Result.pass(),
+                new OpenCodeEventNormalizer(),
+                events::add,
+                event -> {
+                },
+                new OpenCodeInteractiveSessionDriver.SessionSettings(
+                        "Axiom Session", "github-copilot/claude-sonnet-5", null, Set.of(),
+                        "You are the Axiom Configuration Assistant.", null, null));
+        driver.start();
+        return new CommandRun(server, driver, events, release);
+    }
+
+    private static JsonNode onlySessionInit(List<SseEvent> events) {
+        List<JsonNode> inits = events.stream()
+                .filter(event -> "session_init".equals(event.type()))
+                .map(SseEvent::data)
+                .toList();
+        assertEquals(1, inits.size());
+        return inits.get(0);
+    }
+
+    @Test
+    void sessionInitIncludesSlashCommandsAndTools() throws Exception {
+        try (CommandRun run = startCommandRun(200, 200)) {
+            JsonNode init = onlySessionInit(run.events());
+
+            List<String> commands = new java.util.ArrayList<>();
+            init.path("slashCommands").forEach(node -> commands.add(node.asText()));
+            List<String> toolIds = new java.util.ArrayList<>();
+            init.path("tools").forEach(node -> toolIds.add(node.asText()));
+            assertEquals(List.of("init", "review"), commands);
+            assertEquals(List.of("question", "bash", "read"), toolIds);
+            assertEquals("opencode", init.path("engine").asText());
+        }
+    }
+
+    @Test
+    void sessionInitOmitsSlashCommandsWhenCommandListFails() throws Exception {
+        try (CommandRun run = startCommandRun(500, 200)) {
+            JsonNode init = onlySessionInit(run.events());
+
+            assertFalse(init.has("slashCommands"));
+            assertTrue(init.path("tools").isArray());
+            assertEquals(AssistantSession.Status.RUNNING, run.driver().getStatus());
+        }
+    }
+
+    @Test
+    void knownSlashCommandRunsCommandInsteadOfPrompt() throws Exception {
+        try (CommandRun run = startCommandRun(200, 200)) {
+            run.driver().sendUserMessage("/review   main ");
+
+            waitUntil(() -> !run.server().commandBodies().isEmpty(), Duration.ofSeconds(3));
+            assertEquals(1, run.server().commandBodies().size());
+            JsonNode body = new ObjectMapper().readTree(run.server().commandBodies().get(0));
+            assertEquals("review", body.path("command").asText());
+            assertEquals("main", body.path("arguments").asText());
+            assertEquals("github-copilot/claude-sonnet-5", body.path("model").asText());
+            assertEquals(0, run.server().promptCallCount());
+        }
+    }
+
+    @Test
+    void unknownSlashCommandIsSentAsPrompt() throws Exception {
+        try (CommandRun run = startCommandRun(200, 200)) {
+            run.driver().sendUserMessage("/unknown x");
+
+            assertEquals(1, run.server().promptCallCount());
+            JsonNode body = new ObjectMapper().readTree(run.server().lastPromptBody());
+            assertEquals("/unknown x", body.path("parts").get(0).path("text").asText());
+            assertEquals("You are the Axiom Configuration Assistant.", body.path("system").asText());
+            assertTrue(run.server().commandBodies().isEmpty());
+        }
+    }
+
+    @Test
+    void clearStartsNewSessionAndEmitsConversationReset() throws Exception {
+        try (CommandRun run = startCommandRun(200, 200)) {
+            run.driver().sendUserMessage(" /clear ");
+
+            assertEquals(2, run.server().sessionCreateCount());
+            assertEquals(List.of("/session/session-1"), run.server().deletedPaths());
+            assertEquals(1, countType(run.events(), "conversation_reset"));
+            assertEquals(0, run.server().promptCallCount());
+            assertTrue(run.server().commandBodies().isEmpty());
+
+            run.driver().sendUserMessage("hi");
+
+            assertEquals(List.of("/session/session-2/prompt_async"), run.server().promptPaths());
+            JsonNode body = new ObjectMapper().readTree(run.server().lastPromptBody());
+            assertEquals("hi", body.path("parts").get(0).path("text").asText());
+            assertEquals("You are the Axiom Configuration Assistant.", body.path("system").asText());
+        }
+    }
+
+    @Test
+    void clearAbortsOldSessionBeforeDeletingIt() throws Exception {
+        try (CommandRun run = startCommandRun(200, 200)) {
+            run.driver().sendUserMessage("/clear");
+
+            assertEquals(1, run.server().abortCallCount());
+            assertEquals(List.of("/session/session-1"), run.server().deletedPaths());
+        }
+    }
+
+    @Test
+    void commandFailingAfterClearEmitsNoCommandFailed() throws Exception {
+        CountDownLatch gate = new CountDownLatch(1);
+        try (CommandRun run = startCommandRun(200, 500)) {
+            run.server().setCommandGate(gate);
+            run.driver().sendUserMessage("/review main");
+            waitUntil(() -> !run.server().commandBodies().isEmpty(), Duration.ofSeconds(3));
+            assertEquals(1, run.server().commandBodies().size());
+
+            run.driver().sendUserMessage("/clear");
+            gate.countDown();
+            Thread.sleep(500);
+
+            assertTrue(sessionErrors(run.events(), "CommandFailed").isEmpty(), run.events().toString());
+            assertEquals(1, countType(run.events(), "conversation_reset"));
+        }
+    }
+
+    @Test
+    void failedCommandEmitsSingleCommandFailed() throws Exception {
+        try (CommandRun run = startCommandRun(200, 500)) {
+            run.driver().sendUserMessage("/init");
+
+            waitUntil(() -> !sessionErrors(run.events(), "CommandFailed").isEmpty(), Duration.ofSeconds(3));
+            Thread.sleep(200);
+
+            List<SseEvent> failures = sessionErrors(run.events(), "CommandFailed");
+            assertEquals(1, failures.size());
+            assertFalse(failures.get(0).data().path("message").asText().isBlank());
+            assertEquals(AssistantSession.Status.RUNNING, run.driver().getStatus());
+        }
+    }
+
     @FunctionalInterface
     private interface EventResponder {
 
@@ -1280,7 +1514,12 @@ class OpenCodeInteractiveSessionDriverTest {
         private final List<String> promptBodies = new CopyOnWriteArrayList<>();
         private final AtomicInteger eventConnections = new AtomicInteger();
         private final List<String> deletedPaths = new CopyOnWriteArrayList<>();
+        private final List<String> promptPaths = new CopyOnWriteArrayList<>();
+        private final List<String> commandBodies = new CopyOnWriteArrayList<>();
+        private final AtomicInteger sessionCreates = new AtomicInteger();
         private volatile int abortStatus = 200;
+        /** When set, the command endpoint waits for it before responding. */
+        private volatile CountDownLatch commandGate;
 
         private FakeOpenCodeServer(HttpServer server) {
             this.server = server;
@@ -1322,7 +1561,6 @@ class OpenCodeInteractiveSessionDriverTest {
                                         String mcpResponse) throws IOException {
             HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             FakeOpenCodeServer fakeOpenCodeServer = new FakeOpenCodeServer(server);
-            JsonHandler sessionCreated = new JsonHandler(201, "{\"id\":\"" + SESSION_ID + "\"}");
             server.createContext("/session", exchange -> {
                 if ("DELETE".equals(exchange.getRequestMethod())) {
                     fakeOpenCodeServer.deletedPaths.add(exchange.getRequestURI().getPath());
@@ -1330,7 +1568,18 @@ class OpenCodeInteractiveSessionDriverTest {
                     exchange.close();
                     return;
                 }
-                sessionCreated.handle(exchange);
+                int created = fakeOpenCodeServer.sessionCreates.incrementAndGet();
+                String id = created == 1 ? SESSION_ID : "session-" + created;
+                new JsonHandler(201, "{\"id\":\"" + id + "\"}").handle(exchange);
+            });
+            server.createContext("/session/session-2/prompt_async", exchange -> {
+                fakeOpenCodeServer.promptCalls.incrementAndGet();
+                String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+                fakeOpenCodeServer.lastPromptBody.set(body);
+                fakeOpenCodeServer.promptBodies.add(body);
+                fakeOpenCodeServer.promptPaths.add(exchange.getRequestURI().getPath());
+                exchange.sendResponseHeaders(204, -1);
+                exchange.close();
             });
             server.createContext("/event", exchange -> {
                 fakeOpenCodeServer.eventConnections.incrementAndGet();
@@ -1350,6 +1599,7 @@ class OpenCodeInteractiveSessionDriverTest {
                 String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
                 fakeOpenCodeServer.lastPromptBody.set(body);
                 fakeOpenCodeServer.promptBodies.add(body);
+                fakeOpenCodeServer.promptPaths.add(exchange.getRequestURI().getPath());
                 if (body.contains("FAIL_WITH_500")) {
                     byte[] payload = "{\"name\":\"UnknownError\",\"data\":{\"message\":\"boom from server\"}}"
                             .getBytes(StandardCharsets.UTF_8);
@@ -1413,6 +1663,43 @@ class OpenCodeInteractiveSessionDriverTest {
 
         List<String> deletedPaths() {
             return deletedPaths;
+        }
+
+        List<String> promptPaths() {
+            return promptPaths;
+        }
+
+        List<String> commandBodies() {
+            return commandBodies;
+        }
+
+        int sessionCreateCount() {
+            return sessionCreates.get();
+        }
+
+        /**
+         * Serves the command list, the tool ids and the session-1 command endpoint.
+         */
+        void serveCommands(int commandsStatus, String commandsBody, String toolIdsBody, int commandStatus) {
+            server.createContext("/command", new JsonHandler(commandsStatus, commandsBody));
+            server.createContext("/experimental/tool/ids", new JsonHandler(200, toolIdsBody));
+            server.createContext("/session/" + SESSION_ID + "/command", exchange -> {
+                commandBodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+                CountDownLatch gate = commandGate;
+                if (gate != null) {
+                    try {
+                        gate.await(5, TimeUnit.SECONDS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+                new JsonHandler(commandStatus, commandStatus == 200 ? "{}" : "{\"name\":\"UnknownError\"}")
+                        .handle(exchange);
+            });
+        }
+
+        void setCommandGate(CountDownLatch commandGate) {
+            this.commandGate = commandGate;
         }
 
         void setAbortStatus(int abortStatus) {
