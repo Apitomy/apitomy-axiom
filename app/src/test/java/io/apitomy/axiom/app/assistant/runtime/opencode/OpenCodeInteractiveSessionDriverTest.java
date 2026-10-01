@@ -1385,6 +1385,34 @@ class OpenCodeInteractiveSessionDriverTest {
     }
 
     @Test
+    void clearAbortsOldSessionBeforeDeletingIt() throws Exception {
+        try (CommandRun run = startCommandRun(200, 200)) {
+            run.driver().sendUserMessage("/clear");
+
+            assertEquals(1, run.server().abortCallCount());
+            assertEquals(List.of("/session/session-1"), run.server().deletedPaths());
+        }
+    }
+
+    @Test
+    void commandFailingAfterClearEmitsNoCommandFailed() throws Exception {
+        CountDownLatch gate = new CountDownLatch(1);
+        try (CommandRun run = startCommandRun(200, 500)) {
+            run.server().setCommandGate(gate);
+            run.driver().sendUserMessage("/review main");
+            waitUntil(() -> !run.server().commandBodies().isEmpty(), Duration.ofSeconds(3));
+            assertEquals(1, run.server().commandBodies().size());
+
+            run.driver().sendUserMessage("/clear");
+            gate.countDown();
+            Thread.sleep(500);
+
+            assertTrue(sessionErrors(run.events(), "CommandFailed").isEmpty(), run.events().toString());
+            assertEquals(1, countType(run.events(), "conversation_reset"));
+        }
+    }
+
+    @Test
     void failedCommandEmitsSingleCommandFailed() throws Exception {
         try (CommandRun run = startCommandRun(200, 500)) {
             run.driver().sendUserMessage("/init");
@@ -1420,6 +1448,8 @@ class OpenCodeInteractiveSessionDriverTest {
         private final List<String> commandBodies = new CopyOnWriteArrayList<>();
         private final AtomicInteger sessionCreates = new AtomicInteger();
         private volatile int abortStatus = 200;
+        /** When set, the command endpoint waits for it before responding. */
+        private volatile CountDownLatch commandGate;
 
         private FakeOpenCodeServer(HttpServer server) {
             this.server = server;
@@ -1585,9 +1615,21 @@ class OpenCodeInteractiveSessionDriverTest {
             server.createContext("/experimental/tool/ids", new JsonHandler(200, toolIdsBody));
             server.createContext("/session/" + SESSION_ID + "/command", exchange -> {
                 commandBodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+                CountDownLatch gate = commandGate;
+                if (gate != null) {
+                    try {
+                        gate.await(5, TimeUnit.SECONDS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
                 new JsonHandler(commandStatus, commandStatus == 200 ? "{}" : "{\"name\":\"UnknownError\"}")
                         .handle(exchange);
             });
+        }
+
+        void setCommandGate(CountDownLatch commandGate) {
+            this.commandGate = commandGate;
         }
 
         void setAbortStatus(int abortStatus) {

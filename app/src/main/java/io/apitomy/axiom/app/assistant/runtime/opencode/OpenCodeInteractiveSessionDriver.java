@@ -413,8 +413,9 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
                 return;
             }
         }
+        String sessionId = openCodeSessionId;
         try {
-            client.sendPromptAsync(openCodeSessionId, message, model, tools, systemPrompt);
+            client.sendPromptAsync(sessionId, message, model, tools, systemPrompt);
         } catch (RuntimeException e) {
             String detail = e.getMessage();
             if (detail == null || detail.isBlank()) {
@@ -446,7 +447,9 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
             try {
                 localClient.runCommand(localSessionId, name, arguments, localModel);
             } catch (RuntimeException e) {
-                if (destroyed) {
+                if (destroyed || !localSessionId.equals(openCodeSessionId)) {
+                    // The session was destroyed or replaced by /clear; the failure is stale.
+                    LOG.debugf(e, "Ignoring failure of command /%s in replaced OpenCode session", name);
                     return;
                 }
                 String reason = e.getMessage() == null || e.getMessage().isBlank()
@@ -472,10 +475,16 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
         if (newSessionId == null || newSessionId.isBlank()) {
             throw new IOException("OpenCode session creation did not return an id");
         }
-        openCodeSessionId = newSessionId;
         normalizer = normalizerFactory.get();
         userMessageIds.clear();
+        openCodeSessionId = newSessionId;
         eventSink.accept(new SseEvent("conversation_reset", JsonNodeFactory.instance.objectNode()));
+        try {
+            // Stop a turn that may still be running before the session is deleted.
+            client.abort(oldSessionId);
+        } catch (RuntimeException e) {
+            LOG.debugf(e, "Ignoring abort failure for replaced OpenCode session %s", oldSessionId);
+        }
         try {
             client.deleteSession(oldSessionId, DELETE_SESSION_TIMEOUT);
         } catch (RuntimeException e) {
