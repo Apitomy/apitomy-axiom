@@ -526,6 +526,10 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
 
             case "session_error":
                 addMessage({ type: "system", content: (data.message as string) || "Session error" });
+                if (data.name === "InterruptFailed") {
+                    // The stop request failed in the engine; let the user try again.
+                    setIsStopping(false);
+                }
                 if (data.name === "MessageNotDelivered") {
                     // The message never reached the engine: restore the state from before it was submitted.
                     setIsProcessing(processingBeforeLastUserMessageRef.current);

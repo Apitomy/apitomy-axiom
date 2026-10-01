@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ClaudeInteractiveSessionDriverTest {
@@ -72,7 +73,7 @@ class ClaudeInteractiveSessionDriverTest {
             JsonNode request = new ObjectMapper().readTree(content.lines().findFirst().orElseThrow());
             assertEquals("control_request", request.path("type").asText());
             assertEquals("interrupt", request.path("request").path("subtype").asText());
-            assertTrue(!request.path("request_id").asText().isBlank(), content);
+            assertFalse(request.path("request_id").asText().isBlank(), content);
             assertTrue(driver.isAlive(), "interrupt must not kill the Claude process");
         } finally {
             driver.destroy();
@@ -87,8 +88,9 @@ class ClaudeInteractiveSessionDriverTest {
                 new AssistantEventParser(), events::add, event -> { });
         driver.start();
         try {
-            Thread.sleep(300);
-            for (int i = 0; i < 3 && events.isEmpty(); i++) {
+            Instant deadline = Instant.now().plus(Duration.ofSeconds(4));
+            while (Instant.now().isBefore(deadline) && events.stream().noneMatch(
+                    e -> "InterruptFailed".equals(e.data().path("name").asText()))) {
                 driver.interrupt();
                 Thread.sleep(100);
             }

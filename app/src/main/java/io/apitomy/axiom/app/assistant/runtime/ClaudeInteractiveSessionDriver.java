@@ -138,6 +138,12 @@ public final class ClaudeInteractiveSessionDriver implements InteractiveSessionD
         writeLine(MAPPER.writeValueAsString(root));
     }
 
+    /**
+     * Stops the current turn by sending a stream-json interrupt control request. Claude Code ignores SIGINT in
+     * this mode. The turn ends with an {@code error_during_execution} result and the session stays alive; queued
+     * messages are still answered. If the request cannot be written, an {@code InterruptFailed} session error is
+     * emitted.
+     */
     @Override
     public void interrupt() {
         // Claude Code's stream-json mode ignores SIGINT; an interrupt control request stops the current
