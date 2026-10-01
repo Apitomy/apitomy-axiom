@@ -32,7 +32,7 @@ class InteractiveSessionDriverFactoryTest {
                 },
                 event -> {
                 },
-                null, null, "Session", Map.of(), null, List.of()));
+                null, "Session", Map.of(), null, List.of()));
 
         assertEquals(sessionDir.resolve("raw-events.jsonl"), getField(driver, "rawEventsFile"));
     }
@@ -64,7 +64,6 @@ class InteractiveSessionDriverFactoryTest {
                 event -> {
                 },
                 "github-copilot/claude-sonnet-5",
-                null,
                 "Session",
                 Map.of(),
                 null,
@@ -103,7 +102,6 @@ class InteractiveSessionDriverFactoryTest {
                 event -> {
                 },
                 "github-copilot/claude-sonnet-5",
-                null,
                 "Session",
                 Map.of(),
                 null,
@@ -143,7 +141,6 @@ class InteractiveSessionDriverFactoryTest {
                 event -> {
                 },
                 "github-copilot/claude-sonnet-5",
-                null,
                 "Session",
                 Map.of(),
                 null,
@@ -162,7 +159,7 @@ class InteractiveSessionDriverFactoryTest {
                 "opencode", "axiom-config-assistant", sessionDir, sessionDir.resolve("work"),
                 List.of(), Map.of(), null, null, event -> {
                 }, event -> {
-                }, "github-copilot/claude-sonnet-5", null, "Session",
+                }, "github-copilot/claude-sonnet-5", "Session",
                 Map.of("axiom", AssistantContextBuilder.McpServerConfig.stdio("node", List.of("server.js"), Map.of())),
                 null, List.of()));
 
@@ -188,7 +185,7 @@ class InteractiveSessionDriverFactoryTest {
                         "opencode", "axiom-config-assistant", sessionDir, sessionDir.resolve("work"),
                         List.of(), Map.of(), null, null, event -> {
                         }, event -> {
-                        }, null, null, "Session", Map.of(), null, List.of()));
+                        }, null, "Session", Map.of(), null, List.of()));
 
         assertNull(getField(driver, "templateModel"));
         assertEquals("github-copilot/gpt-5.4", getField(driver, "fallbackModel"));
@@ -201,7 +198,7 @@ class InteractiveSessionDriverFactoryTest {
                         "opencode", "general-assistant", sessionDir, sessionDir, List.of(), Map.of(),
                         null, null, event -> {
                         }, event -> {
-                        }, "github-copilot/claude-sonnet-5", null, "Session", Map.of(), null, List.of()));
+                        }, "github-copilot/claude-sonnet-5", "Session", Map.of(), null, List.of()));
 
         assertFalse(Files.exists(sessionDir.resolve("opencode.json")));
         Object process = extractProcess(driver);
@@ -221,7 +218,7 @@ class InteractiveSessionDriverFactoryTest {
                         Map.of("AXIOM_PROJECT_ID", "42", "TEMPLATE_SECRET", "s3cr3t"),
                         42L, "demo", event -> {
                         }, event -> {
-                        }, "github-copilot/claude-sonnet-5", null, "Session", Map.of(), null, List.of()));
+                        }, "github-copilot/claude-sonnet-5", "Session", Map.of(), null, List.of()));
 
         Object process = extractProcess(driver);
         assertEquals(workDir, getField(process, "workingDirectory"));
@@ -239,25 +236,24 @@ class InteractiveSessionDriverFactoryTest {
                         "opencode", "axiom-config-assistant", sessionDir, sessionDir, List.of(), Map.of(),
                         null, null, event -> {
                         }, event -> {
-                        }, "github-copilot/claude-sonnet-5", null, "Session", Map.of(),
+                        }, "github-copilot/claude-sonnet-5", "Session", Map.of(),
                         "You are the Axiom Configuration Assistant.", List.of()));
 
         assertEquals("You are the Axiom Configuration Assistant.", getField(driver, "systemPrompt"));
     }
 
     @Test
-    void createDriverWritesPermissionsAndStopsSendingPromptTools(@TempDir Path sessionDir) throws Exception {
-        InteractiveSessionDriver driver = defaultFactory().createDriver(
+    void createDriverWritesPermissionsToOpenCodeConfig(@TempDir Path sessionDir) throws Exception {
+        defaultFactory().createDriver(
                 new InteractiveSessionDriverFactory.DriverRequest(
                         "opencode", "axiom-config-assistant", sessionDir, sessionDir, List.of(), Map.of(),
                         null, null, event -> {
                         }, event -> {
-                        }, "github-copilot/claude-sonnet-5", null, "Session", Map.of(), null,
+                        }, "github-copilot/claude-sonnet-5", "Session", Map.of(), null,
                         List.of("Read(*)", "mcp__axiom__axiom_list_tools")));
 
         JsonNode config = new ObjectMapper().readTree(Files.readString(sessionDir.resolve("opencode.json")));
         assertEquals("allow", config.path("permission").path("axiom_axiom_list_tools").asText());
-        assertNull(getField(driver, "tools"));
     }
 
     @Test

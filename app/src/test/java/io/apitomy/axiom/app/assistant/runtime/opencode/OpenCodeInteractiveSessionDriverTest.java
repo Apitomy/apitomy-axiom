@@ -2,8 +2,6 @@ package io.apitomy.axiom.app.assistant.runtime.opencode;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
@@ -55,8 +53,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     event -> {
                     },
                     "Axiom Session",
-                    "github-copilot/claude-sonnet-5",
-                    null
+                    "github-copilot/claude-sonnet-5"
             );
 
             driver.start();
@@ -91,7 +88,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     event -> {
                     },
                     new OpenCodeInteractiveSessionDriver.SessionSettings(
-                            "Axiom Session", "github-copilot/claude-sonnet-5", null, Set.of(),
+                            "Axiom Session", "github-copilot/claude-sonnet-5", Set.of(),
                             "You are the Axiom Configuration Assistant.", null, null));
 
             driver.start();
@@ -122,8 +119,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     event -> {
                     },
                     "Axiom Session",
-                    "github-copilot/claude-sonnet-5",
-                    null
+                    "github-copilot/claude-sonnet-5"
             );
 
             driver.start();
@@ -168,8 +164,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     event -> addUnlessSessionInit(events, event),
                     events::add,
                     "Axiom Session",
-                    "github-copilot/claude-sonnet-5",
-                    null
+                    "github-copilot/claude-sonnet-5"
             );
 
             driver.start();
@@ -210,8 +205,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     event -> addUnlessSessionInit(events, event),
                     events::add,
                     "Axiom Session",
-                    "github-copilot/claude-sonnet-5",
-                    null
+                    "github-copilot/claude-sonnet-5"
             );
 
             driver.start();
@@ -256,8 +250,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     event -> addUnlessSessionInit(events, event),
                     events::add,
                     "Axiom Session",
-                    "github-copilot/claude-sonnet-5",
-                    null
+                    "github-copilot/claude-sonnet-5"
             );
 
             driver.start();
@@ -309,8 +302,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     },
                     event -> ordered.add("approval:" + event.type()),
                     "Axiom Session",
-                    "github-copilot/claude-sonnet-5",
-                    null
+                    "github-copilot/claude-sonnet-5"
             );
 
             driver.start();
@@ -360,8 +352,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     },
                     events::add,
                     "Axiom Session",
-                    "github-copilot/claude-sonnet-5",
-                    null
+                    "github-copilot/claude-sonnet-5"
             );
 
             driver.setReconnectBackoffs(ZERO_BACKOFFS);
@@ -408,8 +399,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     },
                     event -> { },
                     "Axiom Session",
-                    "github-copilot/claude-sonnet-5",
-                    null
+                    "github-copilot/claude-sonnet-5"
             );
             driverRef.set(driver);
 
@@ -440,8 +430,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     event -> {
                     },
                     "Axiom Session",
-                    "github-copilot/claude-sonnet-5",
-                    null
+                    "github-copilot/claude-sonnet-5"
             );
 
             driver.start();
@@ -450,38 +439,6 @@ class OpenCodeInteractiveSessionDriverTest {
             assertNotNull(error.getCause());
             assertTrue(error.getMessage().contains(error.getCause().getMessage()), error.getMessage());
             assertTrue(error.getMessage().length() > "Failed to submit OpenCode prompt: ".length());
-
-            driver.destroy();
-        }
-    }
-
-    @Test
-    void sendUserMessageAcceptsAllowedToolsArrayPayload() throws Exception {
-        try (FakeOpenCodeServer server = FakeOpenCodeServer.start()) {
-            FakeServerProcess process = new FakeServerProcess(server.baseUrl());
-
-            ObjectMapper mapper = new ObjectMapper();
-            ObjectNode tools = mapper.createObjectNode();
-            ArrayNode allowed = tools.putArray("allowed");
-            allowed.add("Read(*)");
-            allowed.add("Write(*)");
-
-            OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
-                    process,
-                    client -> OpenCodeCapabilityProbe.Result.pass(),
-                    new OpenCodeEventNormalizer(),
-                    event -> {
-                    },
-                    event -> {
-                    },
-                    "Axiom Session",
-                    "github-copilot/claude-sonnet-5",
-                    tools
-            );
-
-            driver.start();
-            assertDoesNotThrow(() -> driver.sendUserMessage("first"));
-            assertEquals(1, server.promptCallCount());
 
             driver.destroy();
         }
@@ -511,8 +468,7 @@ class OpenCodeInteractiveSessionDriverTest {
                         };
                     },
                     "Axiom Session",
-                    "github-copilot/claude-sonnet-5",
-                    null
+                    "github-copilot/claude-sonnet-5"
             );
             driver.setReconnectBackoffs(ZERO_BACKOFFS);
 
@@ -599,7 +555,6 @@ class OpenCodeInteractiveSessionDriverTest {
                     },
                     "Axiom Session",
                     "github-copilot/claude-sonnet-5",
-                    null,
                     Set.of("axiom", "broken", "missing"));
 
             driver.start();
@@ -631,7 +586,6 @@ class OpenCodeInteractiveSessionDriverTest {
                     },
                     "Axiom Session",
                     "github-copilot/claude-sonnet-5",
-                    null,
                     Set.of("axiom"));
 
             driver.start();
@@ -656,7 +610,6 @@ class OpenCodeInteractiveSessionDriverTest {
                     },
                     "Axiom Session",
                     "github-copilot/claude-sonnet-5",
-                    null,
                     Set.of("axiom"));
 
             driver.start();
@@ -689,7 +642,6 @@ class OpenCodeInteractiveSessionDriverTest {
                     },
                     "Axiom Session",
                     "github-copilot/claude-sonnet-5",
-                    null,
                     Set.of("axiom"));
 
             driver.start();
@@ -711,7 +663,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     event -> {
                     },
                     new OpenCodeInteractiveSessionDriver.SessionSettings(
-                            "Axiom Session", "github-copilot/claude-sonnet-5", null, Set.of(),
+                            "Axiom Session", "github-copilot/claude-sonnet-5", Set.of(),
                             "You are the Axiom Configuration Assistant.", null, null));
             driver.start();
 
@@ -763,7 +715,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     event -> {
                     },
                     new OpenCodeInteractiveSessionDriver.SessionSettings(
-                            "Axiom Session", "github-copilot/claude-sonnet-5", null, Set.of(), systemPrompt, null,
+                            "Axiom Session", "github-copilot/claude-sonnet-5", Set.of(), systemPrompt, null,
                             null));
             driver.start();
 
@@ -797,8 +749,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     event -> {
                     },
                     "Axiom Session",
-                    "github-copilot/claude-sonnet-5",
-                    null);
+                    "github-copilot/claude-sonnet-5");
             driver.start();
 
             driver.sendUserMessage("hello");
@@ -825,8 +776,7 @@ class OpenCodeInteractiveSessionDriverTest {
                 event -> {
                 },
                 "Axiom Session",
-                "github-copilot/claude-sonnet-5",
-                null);
+                "github-copilot/claude-sonnet-5");
     }
 
     private static List<SseEvent> sessionErrors(List<SseEvent> events, String name) {
@@ -1120,7 +1070,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     event -> {
                     },
                     new OpenCodeInteractiveSessionDriver.SessionSettings(
-                            "Axiom Session", templateModel, null, Set.of(), null, fallbackModel, null));
+                            "Axiom Session", templateModel, Set.of(), null, fallbackModel, null));
             driver.start();
             AssistantSession.Status status = driver.getStatus();
             driver.sendUserMessage("hello");
@@ -1138,7 +1088,7 @@ class OpenCodeInteractiveSessionDriverTest {
     @Test
     void sessionSettingsNormalizesExpectedMcpServers() {
         OpenCodeInteractiveSessionDriver.SessionSettings settings =
-                new OpenCodeInteractiveSessionDriver.SessionSettings("t", null, null, null, null, null, null);
+                new OpenCodeInteractiveSessionDriver.SessionSettings("t", null, null, null, null, null);
 
         assertEquals(Set.of(), settings.expectedMcpServers());
     }
@@ -1173,8 +1123,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     event -> addUnlessSessionInit(events, event),
                     permissionEvents::add,
                     "Axiom Session",
-                    "github-copilot/claude-sonnet-5",
-                    null);
+                    "github-copilot/claude-sonnet-5");
             driver.start();
             waitUntil(() -> events.stream().anyMatch(event -> "turn_complete".equals(event.type())),
                     Duration.ofSeconds(5));
@@ -1229,7 +1178,7 @@ class OpenCodeInteractiveSessionDriverTest {
                     event -> {
                     },
                     new OpenCodeInteractiveSessionDriver.SessionSettings(
-                            "Axiom Session", "github-copilot/claude-sonnet-5", null, Set.of(), null, null,
+                            "Axiom Session", "github-copilot/claude-sonnet-5", Set.of(), null, null,
                             rawEventsFile));
             driver.start();
             waitUntil(() -> events.stream().anyMatch(event -> "turn_complete".equals(event.type())),
@@ -1365,7 +1314,7 @@ class OpenCodeInteractiveSessionDriverTest {
                 event -> {
                 },
                 new OpenCodeInteractiveSessionDriver.SessionSettings(
-                        "Axiom Session", "github-copilot/claude-sonnet-5", null, Set.of(),
+                        "Axiom Session", "github-copilot/claude-sonnet-5", Set.of(),
                         "You are the Axiom Configuration Assistant.", null, null));
         driver.start();
         return new CommandRun(server, driver, events, release);

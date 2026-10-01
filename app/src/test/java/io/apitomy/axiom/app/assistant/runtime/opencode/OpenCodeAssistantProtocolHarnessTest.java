@@ -76,7 +76,7 @@ class OpenCodeAssistantProtocolHarnessTest {
                                            EventStreamTap eventTap,
                                            String sessionId) {
         int startIndex = eventTap.size();
-        client.sendPromptAsync(sessionId, "Reply with exactly HARNESS-READY.", null, null);
+        client.sendPromptAsync(sessionId, "Reply with exactly HARNESS-READY.", null);
 
         boolean sawAssistantEvent = eventTap.awaitFromIndex(startIndex,
                 events -> hasAssistantEvent(events, sessionId),
@@ -106,7 +106,6 @@ class OpenCodeAssistantProtocolHarnessTest {
         int startIndex = eventTap.size();
         client.sendPromptAsync(sessionId,
                 "Use any available tool to perform a 20 second wait before responding.",
-                null,
                 null);
 
         boolean sawProgressSignal = eventTap.awaitFromIndex(startIndex,

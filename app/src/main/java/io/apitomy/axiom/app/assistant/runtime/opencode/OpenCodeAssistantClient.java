@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.node.TextNode;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -140,10 +139,9 @@ public final class OpenCodeAssistantClient {
      * @param sessionId session identifier
      * @param prompt prompt text
      * @param model provider/model string or null
-     * @param tools optional tools object
      */
-    public void sendPromptAsync(String sessionId, String prompt, String model, JsonNode tools) {
-        sendPromptAsync(sessionId, prompt, model, tools, null);
+    public void sendPromptAsync(String sessionId, String prompt, String model) {
+        sendPromptAsync(sessionId, prompt, model, null);
     }
 
     /**
@@ -152,11 +150,10 @@ public final class OpenCodeAssistantClient {
      * @param sessionId session identifier
      * @param prompt prompt text
      * @param model provider/model string or null
-     * @param tools optional tools object
      * @param system system prompt added to OpenCode's own system prompt for this message; omitted when null or
      *               blank. OpenCode stores it per message, so callers must pass it on every prompt.
      */
-    public void sendPromptAsync(String sessionId, String prompt, String model, JsonNode tools, String system) {
+    public void sendPromptAsync(String sessionId, String prompt, String model, String system) {
         ObjectNode body = MAPPER.createObjectNode();
         ArrayNode parts = body.putArray("parts");
         ObjectNode textPart = parts.addObject();
@@ -168,9 +165,6 @@ public final class OpenCodeAssistantClient {
             ObjectNode modelNode = body.putObject("model");
             modelNode.put("providerID", split[0]);
             modelNode.put("modelID", split[1]);
-        }
-        if (tools != null && !tools.isNull()) {
-            body.set("tools", normalizePromptTools(tools));
         }
         if (system != null && !system.isBlank()) {
             body.put("system", system);
@@ -562,24 +556,6 @@ public final class OpenCodeAssistantClient {
             return value.substring(1);
         }
         return value;
-    }
-
-    private JsonNode normalizePromptTools(JsonNode tools) {
-        JsonNode allowed = tools.path("allowed");
-        if (!allowed.isArray()) {
-            return tools;
-        }
-
-        ObjectNode normalized = MAPPER.createObjectNode();
-        for (JsonNode entry : allowed) {
-            if (entry instanceof TextNode textNode) {
-                String toolName = textNode.asText("").trim();
-                if (!toolName.isEmpty()) {
-                    normalized.put(toolName, true);
-                }
-            }
-        }
-        return normalized;
     }
 
     private JsonNode getJson(String path) {
