@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.apitomy.axiom.app.assistant.AssistantEventParser;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
 
 import java.util.ArrayList;
@@ -40,8 +41,7 @@ public class OpenCodeEventNormalizer {
             "session.status",
             "session.diff",
             "session.compacted",
-            "permission.replied",
-            "todo.updated");
+            "permission.replied");
 
     /** Message part types that are understood but not surfaced to the UI. */
     /** Permission keys that guard a tool call rather than name a tool (e.g. directory access). */
@@ -53,6 +53,7 @@ public class OpenCodeEventNormalizer {
     private final Set<String> toolUsesEmitted = ConcurrentHashMap.newKeySet();
     private final Set<String> toolResultsEmitted = ConcurrentHashMap.newKeySet();
     private final Set<String> reasoningPartsSeen = ConcurrentHashMap.newKeySet();
+    private final Set<String> reasoningTextEmitted = ConcurrentHashMap.newKeySet();
     private final Map<String, String> lastTextByPart = new ConcurrentHashMap<>();
     private final Map<String, ToolCall> toolCalls = new ConcurrentHashMap<>();
 
@@ -89,6 +90,7 @@ public class OpenCodeEventNormalizer {
             case "permission.asked", "permission.updated" -> permission(eventData);
             case "session.turn.completed", "session.idle" -> List.of(turnComplete(eventData));
             case "session.error" -> List.of(sessionError(eventData));
+            case "todo.updated" -> todos(eventData);
             default -> IGNORED_EVENT_TYPES.contains(resolvedType)
                     ? Collections.emptyList()
                     : List.of(unhandled(resolvedType, safePayload));
@@ -124,10 +126,30 @@ public class OpenCodeEventNormalizer {
 
     private List<SseEvent> mapReasoningPart(JsonNode part) {
         String partId = part.path("id").asText("");
-        if (!partId.isEmpty() && !reasoningPartsSeen.add(partId)) {
+        if (partId.isEmpty()) {
+            return List.of(new SseEvent("thinking", JsonNodeFactory.instance.objectNode()));
+        }
+        boolean firstSighting = reasoningPartsSeen.add(partId);
+        String text = part.path("text").asText("");
+        boolean finished = !part.path("time").path("end").isMissingNode() && !part.path("time").path("end").isNull();
+        ObjectNode data = JsonNodeFactory.instance.objectNode();
+        data.put("id", partId);
+        if (finished && !text.isBlank() && reasoningTextEmitted.add(partId)) {
+            data.put("text", text);
+            return List.of(new SseEvent("thinking", data));
+        }
+        return firstSighting ? List.of(new SseEvent("thinking", data)) : Collections.emptyList();
+    }
+
+    /** Maps {@code todo.updated} to a {@code todos} event carrying the full (replacement) todo list. */
+    private List<SseEvent> todos(JsonNode eventData) {
+        JsonNode todos = eventData.path("todos");
+        if (!todos.isArray()) {
             return Collections.emptyList();
         }
-        return List.of(new SseEvent("thinking", JsonNodeFactory.instance.objectNode()));
+        ObjectNode data = JsonNodeFactory.instance.objectNode();
+        data.set("todos", AssistantEventParser.normalizeTodos(todos));
+        return List.of(new SseEvent("todos", data));
     }
 
     private List<SseEvent> mapToolPart(JsonNode part) {

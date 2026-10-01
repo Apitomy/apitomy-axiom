@@ -2,6 +2,7 @@ package io.apitomy.axiom.app.assistant;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.jboss.logging.Logger;
@@ -29,6 +30,7 @@ import java.util.List;
  *   <li>{@code system} (subtype task_updated) → {@code subagent_status}</li>
  *   <li>{@code system} (subtype task_notification) → {@code subagent_completed}</li>
  *   <li>{@code assistant} → {@code assistant_text}, {@code tool_use}, {@code thinking}</li>
+ *   <li>{@code assistant} {@code TodoWrite} tool_use → {@code tool_use} followed by {@code todos}</li>
  *   <li>{@code assistant} with non-null {@code parent_tool_use_id} → suppressed</li>
  *   <li>{@code user} (with tool_use_result) → {@code tool_result}</li>
  *   <li>{@code user} with non-null {@code parent_tool_use_id} → suppressed</li>
@@ -176,14 +178,47 @@ public class AssistantEventParser {
                     data.put("name", block.path("name").asText());
                     data.set("input", block.path("input"));
                     events.add(new SseEvent("tool_use", data));
+                    JsonNode todos = block.path("input").path("todos");
+                    if ("TodoWrite".equals(block.path("name").asText()) && todos.isArray()) {
+                        ObjectNode todosData = JsonNodeFactory.instance.objectNode();
+                        todosData.set("todos", normalizeTodos(todos));
+                        events.add(new SseEvent("todos", todosData));
+                    }
                 }
                 case "thinking" -> {
                     ObjectNode data = JsonNodeFactory.instance.objectNode();
+                    String thinking = block.path("thinking").asText("");
+                    if (!thinking.isBlank()) {
+                        data.put("text", thinking);
+                    }
                     events.add(new SseEvent("thinking", data));
                 }
             }
         }
         return events;
+    }
+
+    /**
+     * Copies a todo list into the normalised {@code todos} item shape: {@code content}, {@code status}, and
+     * {@code priority} / {@code activeForm} when present.
+     *
+     * @param todos the raw todo array (from Claude {@code TodoWrite} input or opencode {@code todo.updated})
+     * @return a new array of normalised todo items
+     */
+    public static ArrayNode normalizeTodos(JsonNode todos) {
+        ArrayNode items = JsonNodeFactory.instance.arrayNode();
+        for (JsonNode todo : todos) {
+            ObjectNode item = JsonNodeFactory.instance.objectNode();
+            item.put("content", todo.path("content").asText(""));
+            item.put("status", todo.path("status").asText(""));
+            for (String optional : List.of("priority", "activeForm")) {
+                if (todo.path(optional).isTextual()) {
+                    item.put(optional, todo.path(optional).asText());
+                }
+            }
+            items.add(item);
+        }
+        return items;
     }
 
     private static String blockContentText(JsonNode content) {
@@ -329,7 +364,7 @@ public class AssistantEventParser {
      *             tool_use, tool_result, tool_progress, turn_complete,
      *             permission_request, thinking, conversation_reset,
      *             subagent_started, subagent_progress, subagent_status,
-     *             subagent_completed, background_task_started)
+     *             subagent_completed, background_task_started, todos)
      * @param data the extracted/transformed JSON data
      */
     public record SseEvent(String type, JsonNode data) {

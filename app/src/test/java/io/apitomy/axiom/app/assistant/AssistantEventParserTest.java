@@ -1,5 +1,6 @@
 package io.apitomy.axiom.app.assistant;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -523,5 +524,51 @@ class AssistantEventParserTest {
         String json = events.get(0).toJson();
         assertNotNull(json);
         assertTrue(json.contains("\"sessionId\""));
+    }
+
+    // ── Todos and thinking text (#382) ──────────────────────────────
+
+    @Test
+    void todoWriteToolUseAlsoEmitsTodosEvent() {
+        String line = """
+                {"type":"assistant","message":{"content":[{"type":"tool_use","id":"tu1","name":"TodoWrite",\
+                "input":{"todos":[{"content":"Write tests","status":"completed","activeForm":"Writing tests"},\
+                {"content":"Implement","status":"in_progress","activeForm":"Implementing"}]}}]}}""";
+
+        List<SseEvent> events = parser.parse(line);
+
+        assertEquals(List.of("tool_use", "todos"), events.stream().map(SseEvent::type).toList());
+        assertEquals("TodoWrite", events.get(0).data().path("name").asText());
+        JsonNode todos = events.get(1).data().path("todos");
+        assertEquals(events.get(0).data().path("input").path("todos"), todos);
+        assertEquals(2, todos.size());
+        assertEquals("Implement", todos.get(1).path("content").asText());
+        assertEquals("in_progress", todos.get(1).path("status").asText());
+        assertEquals("Implementing", todos.get(1).path("activeForm").asText());
+    }
+
+    @Test
+    void thinkingBlockCarriesText() {
+        String line = """
+                {"type":"assistant","message":{"content":[{"type":"thinking","thinking":"Let me check the file."}]}}""";
+
+        List<SseEvent> events = parser.parse(line);
+
+        assertEquals(1, events.size());
+        assertEquals("thinking", events.get(0).type());
+        assertEquals("Let me check the file.", events.get(0).data().path("text").asText());
+        assertFalse(events.get(0).data().has("id"));
+    }
+
+    @Test
+    void emptyThinkingBlockHasNoText() {
+        String line = """
+                {"type":"assistant","message":{"content":[{"type":"thinking","thinking":""}]}}""";
+
+        List<SseEvent> events = parser.parse(line);
+
+        assertEquals(1, events.size());
+        assertEquals("thinking", events.get(0).type());
+        assertFalse(events.get(0).data().has("text"));
     }
 }

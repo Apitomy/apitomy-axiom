@@ -7,6 +7,7 @@ JSON object per line. They are used by `OpenCodeEventNormalizerTest` and `OpenCo
 |---|---|
 | `1.18.33-tool-calls.jsonl` | Read `hello.txt`, run `echo captured` (bash set to `ask`, answered `once`), reply `DONE` |
 | `1.18.33-tool-error.jsonl` | Read `does-not-exist.txt` (fails), reply `DONE` |
+| `1.18.33-todos.jsonl` | Think first, create a 3-item todo list (`plan`, `build`, `test`) with `todowrite`, mark `plan` completed, reply `DONE` |
 
 To capture streams for a new opencode version, run `python3 capture.py`. It needs `opencode` on the `PATH` and a
 working `github-copilot` provider, and it makes one short model call. Edit `OUT` and the prompt in the script as
