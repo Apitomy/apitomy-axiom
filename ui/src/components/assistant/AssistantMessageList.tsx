@@ -34,6 +34,22 @@ export interface ChatMessage {
     permissionPatterns?: string[];
     elapsedSeconds?: number;
     rawPayload?: string;
+    thinkingId?: string;
+}
+
+function ThinkingBlock({ text }: { text: string }) {
+    const [expanded, setExpanded] = useState(false);
+    return (
+        <div className="axiom-message-list__thinking-block">
+            <ExpandableSection
+                toggleText="Thinking"
+                isExpanded={expanded}
+                onToggle={(_e, value) => setExpanded(value)}
+            >
+                <div className="axiom-message-list__thinking-text">{text}</div>
+            </ExpandableSection>
+        </div>
+    );
 }
 
 function formatPayload(raw: string): string {
@@ -164,6 +180,9 @@ const MessageItem = memo(function MessageItem({
             );
 
         case "thinking":
+            if (msg.content) {
+                return <ThinkingBlock text={msg.content} />;
+            }
             return (
                 <div className="axiom-message-list__thinking">
                     Thinking...
