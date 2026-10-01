@@ -37,6 +37,22 @@ public interface InteractiveSessionDriver {
             throws IOException;
 
     /**
+     * Responds to a pending permission request, optionally approving matching future
+     * requests for the rest of the session. Runtimes without native "always allow"
+     * support fall back to a one-time response.
+     *
+     * @param permissionId permission request identifier
+     * @param allow true to approve the request; false to deny
+     * @param always when allowing, also approve matching future requests in this session
+     * @param toolInput optional tool input payload
+     * @throws IOException if the response cannot be delivered
+     */
+    default void respondToPermission(String permissionId, boolean allow, boolean always,
+                                     JsonNode toolInput) throws IOException {
+        respondToPermission(permissionId, allow, toolInput);
+    }
+
+    /**
      * Interrupts current runtime activity while keeping the session alive.
      */
     void interrupt();

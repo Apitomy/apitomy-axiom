@@ -233,6 +233,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                                     permissionAllowed: undefined,
                                     permissionType: data.permission as string | undefined,
                                     permissionPatterns: data.patterns as string[] | undefined,
+                                    permissionAlwaysPatterns: data.alwaysPatterns as string[] | undefined,
                                     toolInput: data.toolName === target.toolName && data.toolInput
                                         ? data.toolInput as Record<string, unknown>
                                         : target.toolInput,
@@ -249,6 +250,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                                 ...updated[lastToolIdx],
                                 permissionId: data.requestId as string,
                                 permissionResolved: false,
+                                permissionAlwaysPatterns: data.alwaysPatterns as string[] | undefined,
                                 toolInput: (data.toolInput as Record<string, unknown>) || updated[lastToolIdx].toolInput,
                             };
                             return updated;
@@ -259,6 +261,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                             permissionId: data.requestId as string,
                             toolName: data.toolName as string,
                             toolInput: data.toolInput as Record<string, unknown>,
+                            permissionAlwaysPatterns: data.alwaysPatterns as string[] | undefined,
                         }];
                     });
                 }
@@ -297,7 +300,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                     }
                     return prev.map((m) =>
                         m.permissionId === data.permissionId
-                            ? { ...m, permissionResolved: true, permissionAllowed: data.allow as boolean }
+                            ? { ...m, permissionResolved: true, permissionAllowed: data.allow as boolean, permissionAlways: data.always === true }
                             : m
                     );
                 });
@@ -689,12 +692,12 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
     }, [sessionId, addMessage]);
 
     const handlePermissionRespond = useCallback(async (
-        permissionId: string, allow: boolean, toolInput?: Record<string, unknown>
+        permissionId: string, allow: boolean, toolInput?: Record<string, unknown>, always?: boolean
     ) => {
         setMessages((prev) =>
             prev.map((m) =>
                 m.permissionId === permissionId
-                    ? { ...m, permissionResolved: true, permissionAllowed: allow }
+                    ? { ...m, permissionResolved: true, permissionAllowed: allow, permissionAlways: allow && !!always }
                     : m
             )
         );
@@ -713,7 +716,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
         });
         setIsProcessing(true);
         try {
-            await respondToAssistantPermission(sessionId, permissionId, allow, toolInput);
+            await respondToAssistantPermission(sessionId, permissionId, allow, toolInput, always);
         } catch (err) {
             console.error("Failed to respond to permission:", err);
             addMessage({ type: "system", content: "Failed to submit permission response. Please try again." });

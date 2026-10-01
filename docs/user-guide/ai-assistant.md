@@ -263,6 +263,12 @@ When the assistant needs to use a tool, a permission prompt appears with **Allow
 **Deny** buttons. You can also click **Allow Pattern...** to create an auto-approval
 rule so similar requests are approved automatically in the future.
 
+With the OpenCode engine, an **Always Allow** button also appears when OpenCode provides
+"always" patterns for the request (for example `echo *` for a bash command). It approves
+the request and tells OpenCode to approve matching requests for the rest of the session.
+Hover over the button to see the patterns. Claude Code does not offer this, so the button
+does not appear there.
+
 Special permission types have dedicated UX:
 
 - **AskUserQuestion** — renders structured multi-choice options

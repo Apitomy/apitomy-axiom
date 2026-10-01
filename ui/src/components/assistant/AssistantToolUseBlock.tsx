@@ -10,6 +10,7 @@ import {
     ModalBody,
     ModalHeader,
     TextInput,
+    Tooltip,
 } from "@patternfly/react-core";
 import SearchPlusIcon from "@patternfly/react-icons/dist/esm/icons/search-plus-icon";
 import Markdown from "react-markdown";
@@ -56,7 +57,12 @@ interface AssistantToolUseBlockProps {
     permissionAllowed?: boolean;
     permissionType?: string;
     permissionPatterns?: string[];
-    onPermissionRespond?: (permissionId: string, allow: boolean, toolInput?: Record<string, unknown>) => void;
+    /** Patterns the runtime approves for the rest of the session on "Always Allow". */
+    permissionAlwaysPatterns?: string[];
+    /** True when the permission was resolved with "Always Allow". */
+    permissionAlways?: boolean;
+    onPermissionRespond?: (permissionId: string, allow: boolean, toolInput?: Record<string, unknown>,
+        always?: boolean) => void;
     onCreateAutoApproval?: (toolName: string, fieldName: string | undefined,
         pattern: string | undefined, permissionId: string) => void;
     onSubagentClick?: (toolUseId: string) => void;
@@ -66,6 +72,7 @@ interface AssistantToolUseBlockProps {
 export const AssistantToolUseBlock = memo(function AssistantToolUseBlock({
     toolName, toolUseId, input, result, isError, elapsedSeconds,
     permissionId, permissionResolved, permissionAllowed, permissionType, permissionPatterns,
+    permissionAlwaysPatterns, permissionAlways,
     onPermissionRespond, onCreateAutoApproval, onSubagentClick, highlighted,
 }: AssistantToolUseBlockProps) {
     const effectiveTheme = useEffectiveTheme();
@@ -82,6 +89,7 @@ export const AssistantToolUseBlock = memo(function AssistantToolUseBlock({
         : permissionType === "external_directory"
             ? `Access outside the working directory: ${guardPatterns}`
             : `${permissionType}: ${guardPatterns}`;
+    const alwaysPatterns = permissionAlwaysPatterns || [];
     const isAskUser = toolName === "AskUserQuestion";
     const isPlanApproval = toolName === "ExitPlanMode";
     const borderVariant = needsPermission
@@ -293,6 +301,16 @@ export const AssistantToolUseBlock = memo(function AssistantToolUseBlock({
                                         Allow
                                     </Button>
                                 </FlexItem>
+                                {alwaysPatterns.length > 0 && (
+                                    <FlexItem>
+                                        <Tooltip content={`Allow for the rest of this session: ${alwaysPatterns.join(", ")}`}>
+                                            <Button variant="secondary" size="sm"
+                                                onClick={() => onPermissionRespond?.(permissionId, true, input, true)}>
+                                                Always Allow
+                                            </Button>
+                                        </Tooltip>
+                                    </FlexItem>
+                                )}
                                 <FlexItem>
                                     <Button variant="secondary" size="sm"
                                         onClick={() => onPermissionRespond?.(permissionId, false, input)}>
@@ -357,7 +375,9 @@ export const AssistantToolUseBlock = memo(function AssistantToolUseBlock({
                         <span className={permissionAllowed
                             ? "axiom-tool-use__permission-status--granted"
                             : "axiom-tool-use__permission-status--denied"}>
-                            {permissionAllowed ? "Permission granted" : "Permission denied"}
+                            {permissionAllowed
+                                ? (permissionAlways ? "Permission granted for this session" : "Permission granted")
+                                : "Permission denied"}
                         </span>
                     )}
                 </div>
