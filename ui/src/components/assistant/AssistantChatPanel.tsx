@@ -57,7 +57,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
     const [slashCommands, setSlashCommands] = useState<string[]>([]);
     const [subagentCards, setSubagentCards] = useState<Map<string, SubagentCardData>>(new Map());
     const [backgroundTaskCards, setBackgroundTaskCards] = useState<Map<string, BackgroundTaskCardData>>(new Map());
-    const [panelWidth, setPanelWidth] = useState(320);
+    const [panelWidth, setPanelWidth] = useState(390);
     const sessionEndedRef = useRef(false);
     const lastSeenIndexRef = useRef(-1);
     const pendingSubagentPermissionsRef = useRef<Map<string, SubagentPermission[]>>(new Map());
