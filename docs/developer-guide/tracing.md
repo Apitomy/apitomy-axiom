@@ -93,7 +93,18 @@ The `entityType` field determines which entity table the `entityId` references:
 | `tool-execution` | `ToolExecutionEntity` | Full JSON input and output |
 | `ai-usage` | `AiUsageEntity` | Token counts, cost, model |
 | `report` | `ReportEntity` | Report metadata and content |
-| `workflow-run` | `WorkflowRunEntity` | Workflow run state and current node |
+| `workflow-run` | `WorkflowRunEntity` | Run status, current node, times, definition and project names |
+| `workflow-wait` | `WorkflowWaitEntity` | Wait type, resume time, status (`waiting`/`resolved`/`cancelled`), run |
+| `workflow-event-subscription` | `WorkflowEventSubscriptionEntity` | Awaited event type, status, run, project |
+| `scheduled-job-run` | `ScheduledJobRunEntity` | Run status, trigger, execution log, job name |
+
+`GET /traces/{traceId}/nodes/{nodeId}` resolves these into the node's `detail` object (see
+`TraceResourceImpl.resolveDetail`). An unknown entity type, a malformed ID or a deleted record yields the
+node with a null `detail`. The one exception is workflow waits and event subscriptions: their rows are
+deleted when the parked node resumes, so the detail is rebuilt from the trace node and its workflow run,
+with status `resolved` (node completed) or `cancelled`. The event that satisfied a subscription is not
+recorded, so `matchedEventId` is always null. The `workflow-run` detail omits the engine's
+`instanceState`. Scheduled job traces reference their `scheduled-job-run` from the root node.
 
 ### ToolExecutionEntity
 

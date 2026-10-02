@@ -38,7 +38,18 @@ export const STATUS_COLORS: Record<string, LabelProps["color"]> = {
     "failed": "red",
     "failure": "red",
     "skipped": "grey",
+    "waiting": "orange",
+    "resolved": "green",
+    "cancelled": "grey",
 };
+
+/**
+ * Looks up the label colour for a status, ignoring case (workflow run and scheduled-job
+ * statuses are capitalised, e.g. "Completed").
+ */
+export function statusColor(status: string | null | undefined): LabelProps["color"] {
+    return status ? STATUS_COLORS[status.toLowerCase()] : undefined;
+}
 
 export function formatDuration(ms: number): string {
     if (ms < 1000) return `${ms}ms`;
@@ -60,7 +71,7 @@ export function TraceGraphNode({ data }: { data: TraceNode }) {
 
             <div className="axiom-trace-graph-node__header">
                 <NodeTypeIcon nodeType={data.nodeType} />
-                <Label isCompact color={STATUS_COLORS[data.status]}>
+                <Label isCompact color={statusColor(data.status)}>
                     {data.status}
                 </Label>
             </div>
