@@ -108,6 +108,14 @@ rather than executed automatically.
 | `axiom.stream-pipeline.retry-initial-delay` | `30s` | Delay before the first retry of a failed entry; each later retry doubles it (exponential backoff). Quarkus duration format (`30s`, `5m`, `PT30S`) |
 | `axiom.stream-pipeline.retry-max-delay` | `1h` | Upper bound of the delay between two attempts |
 
+Startup fails with an error naming the property if `max-attempts` is less than 1, `retry-initial-delay` is
+not greater than zero, or `retry-max-delay` is less than `retry-initial-delay` (values are not clamped).
+
+**Upgrading:** the V69 migration cannot read the configuration, so it assumes the old default cap of 3:
+ledger entries that had already failed 3 or more times become `exhausted`, even if `max-attempts` is
+higher. They can be retried manually from the event detail page (one more attempt each) or with
+`POST /api/v1/stream/events/{eventId}/processing/{ledgerId}/retry`.
+
 ### Scheduled Jobs
 
 Scheduled Jobs run on a configurable CRON-style schedule.

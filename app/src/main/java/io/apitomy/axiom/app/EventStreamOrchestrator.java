@@ -22,10 +22,12 @@ import io.apitomy.axiom.core.tracing.TraceContext;
 import io.apitomy.axiom.manager.ManagerDecision;
 import io.apitomy.axiom.manager.ManagerEvaluationResult;
 import io.apitomy.axiom.manager.ManagerService;
+import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
+import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -117,6 +119,39 @@ public class EventStreamOrchestrator {
 
     private volatile boolean shuttingDown = false;
     private volatile boolean startupRecoveryDone = false;
+
+    /**
+     * Fails startup when the retry configuration is invalid (rather than clamping it, so a
+     * misconfiguration is never silently replaced by different behavior).
+     */
+    void onStart(@Observes StartupEvent event) {
+        validateRetryConfig(maxAttempts, retryInitialDelay, retryMaxDelay);
+    }
+
+    /**
+     * Validates the retry configuration.
+     *
+     * @param maxAttempts  {@code axiom.stream-pipeline.max-attempts}, at least 1
+     * @param initialDelay {@code axiom.stream-pipeline.retry-initial-delay}, greater than zero
+     * @param maxDelay     {@code axiom.stream-pipeline.retry-max-delay}, at least the initial delay
+     * @throws IllegalStateException naming the first invalid property
+     */
+    static void validateRetryConfig(int maxAttempts, Duration initialDelay, Duration maxDelay) {
+        if (maxAttempts < 1) {
+            throw new IllegalStateException("axiom.stream-pipeline.max-attempts must be at least 1, was "
+                    + maxAttempts);
+        }
+        if (initialDelay == null || initialDelay.isZero() || initialDelay.isNegative()) {
+            throw new IllegalStateException(
+                    "axiom.stream-pipeline.retry-initial-delay must be greater than zero, was "
+                    + initialDelay);
+        }
+        if (maxDelay == null || maxDelay.compareTo(initialDelay) < 0) {
+            throw new IllegalStateException("axiom.stream-pipeline.retry-max-delay (" + maxDelay
+                    + ") must not be less than axiom.stream-pipeline.retry-initial-delay ("
+                    + initialDelay + ")");
+        }
+    }
 
     @PreDestroy
     void onShutdown() {
@@ -410,19 +445,22 @@ public class EventStreamOrchestrator {
     /**
      * Starts a retry attempt: the entry becomes {@code pending} (so a crash during the
      * attempt is recovered on startup), its attempt count is incremented and its last
-     * attempt time set.
+     * attempt time set. This is a single conditional update, so it only succeeds while the
+     * entry is still {@code failed}: a concurrent manual retry or another node that started
+     * the attempt first makes it change no row.
      *
+     * @param ledgerId the ledger entry
      * @return the number of the new attempt, or null if the entry is no longer failed
      */
-    private Integer beginAttempt(Long ledgerId) {
+    Integer beginAttempt(Long ledgerId) {
         return QuarkusTransaction.requiringNew().call(() -> {
+            int updated = EventProcessingLedgerEntity.update(
+                    "status = 'pending', attemptCount = attemptCount + 1, lastAttemptAt = ?1, "
+                    + "nextAttemptAt = null where id = ?2 and status = 'failed'",
+                    Instant.now(), ledgerId);
+            if (updated == 0) return null;
             EventProcessingLedgerEntity entry = EventProcessingLedgerEntity.findById(ledgerId);
-            if (entry == null || !"failed".equals(entry.status)) return null;
-            entry.status = "pending";
-            entry.attemptCount++;
-            entry.lastAttemptAt = Instant.now();
-            entry.nextAttemptAt = null;
-            return entry.attemptCount;
+            return entry != null ? entry.attemptCount : null;
         });
     }
 
@@ -486,14 +524,17 @@ public class EventStreamOrchestrator {
      */
     public EventProcessingLedgerEntity retryNow(Long ledgerId) {
         return QuarkusTransaction.requiringNew().call(() -> {
+            // A single conditional update: an attempt started concurrently (status pending)
+            // is never made due again nor has its attempt count rolled back.
+            int updated = EventProcessingLedgerEntity.update(
+                    "status = 'failed', nextAttemptAt = ?1 where id = ?2 "
+                    + "and status in ('failed', 'exhausted')", Instant.now(), ledgerId);
             EventProcessingLedgerEntity entry = EventProcessingLedgerEntity.findById(ledgerId);
             if (entry == null) return null;
-            if (!"failed".equals(entry.status) && !"exhausted".equals(entry.status)) {
+            if (updated == 0) {
                 throw new IllegalStateException("Ledger entry " + ledgerId + " is "
                         + entry.status + "; only failed or exhausted entries can be retried");
             }
-            entry.status = "failed";
-            entry.nextAttemptAt = Instant.now();
             LOG.infof("Manual retry requested for event %s / subscription %d (after %d attempts)",
                     entry.eventId, entry.subscriptionId, entry.attemptCount);
             return entry;

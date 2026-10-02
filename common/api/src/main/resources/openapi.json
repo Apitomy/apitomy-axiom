@@ -5575,6 +5575,9 @@
               }
             }
           },
+          "400": {
+            "description": "Invalid event ID"
+          },
           "404": {
             "description": "Event or processing entry not found"
           },

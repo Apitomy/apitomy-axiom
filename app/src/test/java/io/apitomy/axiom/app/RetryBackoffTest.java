@@ -360,7 +360,116 @@ class RetryBackoffTest {
         assertEquals(2, entry.attemptCount);
     }
 
+
+    @Test
+    void manualRetryRejectsAPendingEntry() {
+        UUID eventId = createEventAndSubscription();
+        Long ledgerId = insertLedger(eventId, "pending", 1);
+
+        given().when()
+                .post("/api/v1/stream/events/" + eventId + "/processing/" + ledgerId + "/retry")
+                .then().statusCode(409);
+        assertEquals("pending", ledger(eventId).status);
+    }
+
+    @Test
+    void beginAttemptSkipsAnEntryThatIsNoLongerFailed() {
+        UUID eventId = createEventAndSubscription();
+        Long ledgerId = insertLedger(eventId, "pending", 1);
+
+        assertNull(orchestrator.beginAttempt(ledgerId), "Conditional update changes no row");
+        EventProcessingLedgerEntity entry = ledger(eventId);
+        assertEquals("pending", entry.status);
+        assertEquals(1, entry.attemptCount);
+    }
+
+    @Test
+    void manualRetryDoesNotOverwriteAnAttemptStartedConcurrently() throws Exception {
+        UUID eventId = createEventAndSubscription();
+        Long ledgerId = insertLedger(eventId, "failed", 1);
+
+        // A tick starts an attempt (status pending, attempt 2) in a transaction that is still
+        // open while the manual retry runs.
+        Object[] retryResult = new Object[1];
+        runWhileRowIsLocked(ledgerId,
+                "status = 'pending', attemptCount = attemptCount + 1, nextAttemptAt = null",
+                () -> {
+                    try {
+                        retryResult[0] = orchestrator.retryNow(ledgerId);
+                    } catch (RuntimeException e) {
+                        retryResult[0] = e;
+                    }
+                });
+
+        assertTrue(retryResult[0] instanceof IllegalStateException,
+                "The manual retry must be rejected, got " + retryResult[0]);
+        EventProcessingLedgerEntity entry = ledger(eventId);
+        assertEquals("pending", entry.status, "The running attempt must not be made due again");
+        assertEquals(2, entry.attemptCount, "The attempt count must not be rolled back");
+        assertNull(entry.nextAttemptAt);
+    }
+
+    @Test
+    void beginAttemptDoesNotOverwriteAConcurrentStatusChange() throws Exception {
+        UUID eventId = createEventAndSubscription();
+        Long ledgerId = insertLedger(eventId, "failed", 1);
+
+        // Another node starts the attempt first, in a transaction still open while this
+        // node's retry pass picks up the same entry.
+        Integer[] attempt = new Integer[1];
+        runWhileRowIsLocked(ledgerId,
+                "status = 'pending', attemptCount = attemptCount + 1, nextAttemptAt = null",
+                () -> attempt[0] = orchestrator.beginAttempt(ledgerId));
+
+        assertNull(attempt[0], "Only one node may start the attempt");
+        assertEquals(2, ledger(eventId).attemptCount, "The attempt is counted once");
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────
+
+    private Long insertLedger(UUID eventId, String status, int attempts) {
+        return QuarkusTransaction.requiringNew().call(() -> {
+            EventProcessingLedgerEntity entry = new EventProcessingLedgerEntity();
+            entry.eventId = eventId;
+            entry.subscriptionId = EventSubscriptionEntity.<EventSubscriptionEntity>findAll()
+                    .firstResult().id;
+            entry.status = status;
+            entry.attemptCount = attempts;
+            entry.lastAttemptAt = Instant.now().minusSeconds(60);
+            entry.nextAttemptAt = "failed".equals(status) ? Instant.now().minusSeconds(1) : null;
+            entry.createdOn = Instant.now().minusSeconds(60);
+            entry.persist();
+            return entry.id;
+        });
+    }
+
+    /**
+     * Applies {@code change} to the ledger row in a transaction on another thread, runs
+     * {@code action} on a third thread while that transaction still holds the row, then
+     * commits the change and waits for the action.
+     */
+    private static void runWhileRowIsLocked(Long ledgerId, String change, Runnable action)
+            throws Exception {
+        java.util.concurrent.CountDownLatch locked = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+        Thread holder = new Thread(() -> QuarkusTransaction.requiringNew().run(() -> {
+            EventProcessingLedgerEntity.update(change + " where id = ?1", ledgerId);
+            locked.countDown();
+            try {
+                release.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }));
+        holder.start();
+        locked.await();
+        Thread actor = new Thread(action);
+        actor.start();
+        Thread.sleep(300);
+        release.countDown();
+        holder.join(10000);
+        actor.join(10000);
+    }
 
     private void failManager() {
         Mockito.when(managerService.evaluateStreamEvent(ArgumentMatchers.any(), ArgumentMatchers.any()))

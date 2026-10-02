@@ -120,12 +120,18 @@ Each `(event_id, subscription_id)` pair gets a ledger entry with one of four sta
   only `failed` entries whose `next_attempt_at` has passed (index on `(status, next_attempt_at)`), and
   never an entry attempted since the tick started, so the first pass and the retry pass cannot both run
   an entry in one tick. A retry marks the entry `pending`, increments `attempt_count` and sets
-  `last_attempt_at` before routing. When the attempt that reaches `axiom.stream-pipeline.max-attempts`
-  (default 3) fails, the entry becomes `exhausted` (a distinct status rather than `failed` with a null
+  `last_attempt_at` before routing, in one conditional update (`... where id = ? and status =
+  'failed'`). If it changes no row, a manual retry or another node got the entry first and it is skipped,
+  so two nodes can never start the same attempt. A retry that re-evaluates the filter (see below) and
+  marks the entry `skipped` still counts as an attempt. When the attempt that reaches
+  `axiom.stream-pipeline.max-attempts` (default 3) fails, the entry becomes `exhausted` (a distinct status rather than `failed` with a null
   `next_attempt_at`, so lists, filters and the UI can tell "will retry" from "gave up" by status alone),
   "(giving up after N attempts)" is appended to its error message and a WARN is logged once.
 - **Manual retry:** `POST /stream/events/{eventId}/processing/{ledgerId}/retry` (the retry button on the
-  event detail page) makes a `failed` or `exhausted` entry `failed` and due immediately. It does not reset
+  event detail page) makes a `failed` or `exhausted` entry `failed` and due immediately, with one
+  conditional update (`... where status in ('failed', 'exhausted')`); it returns 409 for any other status,
+  including an attempt in progress (`pending`), so it can never make a running attempt due again or roll
+  back its attempt count. It does not reset
   `attempt_count`, so attempt numbers keep increasing and an exhausted entry gets exactly one more attempt:
   if it fails it is exhausted again.
 - **Attempt history:** Every `routing_outcome` records its `attempt_number`, so the outcomes of an entry
@@ -133,6 +139,12 @@ Each `(event_id, subscription_id)` pair gets a ledger entry with one of four sta
   configured maximum. V69 backfills `attempt_number` (1 + failed outcomes recorded before it) and
   `attempt_count` (failed outcomes, plus one for a `completed` entry), marks failed entries with 3 or more
   attempts (the old default cap) `exhausted` and makes the other failed entries due immediately.
+- **Upgrade:** the V69 backfill assumes the old default cap of 3, since a migration cannot read the
+  configuration. Failed entries with 3 or more attempts therefore become `exhausted` even when
+  `axiom.stream-pipeline.max-attempts` is set higher; retry them manually if needed.
+- **Configuration validation:** startup fails with a message naming the property when
+  `max-attempts` < 1, `retry-initial-delay` <= 0 or `retry-max-delay` < `retry-initial-delay`. Invalid
+  values are rejected rather than clamped, so a misconfiguration is never silently replaced.
 - **No replay on retry:** A retry skips routing rules that already have a `completed` outcome for the
   ledger entry, so a later rule's failure does not re-create tasks or workflows, or re-dispatch the
   event. Outcomes do not store the rule's position, so the k-th rule of a routing type is matched to the
