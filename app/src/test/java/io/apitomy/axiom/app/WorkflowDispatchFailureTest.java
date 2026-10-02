@@ -86,6 +86,43 @@ class WorkflowDispatchFailureTest {
         assertTrue(item.errorMessage.contains("resume exploded"), item.errorMessage);
     }
 
+    @Test
+    void completedDispatchWithFailedResumeIsNotReDispatchedOnRetry() {
+        Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(),
+                ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Optional.empty());
+        String awaitedType = "dispatch-fail-" + UUID.randomUUID();
+        long[] ids = setup(awaitedType);
+        QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(ids[0], ids[1]));
+        Mockito.doThrow(new IllegalStateException("resume exploded"))
+                .when(workflowExecutionService).onEventReceived(ArgumentMatchers.anyLong(),
+                        ArgumentMatchers.anyString(), ArgumentMatchers.any(),
+                        ArgumentMatchers.any(), ArgumentMatchers.any());
+        // The dispatch completes (with a failed item); the next rule fails the ledger entry.
+        createEventAndSubscription(awaitedType,
+                "[{\"type\":\"workflow-dispatch\"},{\"type\":\"invoke-action\",\"actionTypeId\":-1}]");
+
+        orchestrator.processNewEvents();
+        QuarkusTransaction.requiringNew().run(() -> EventProcessingLedgerEntity.update(
+                "nextAttemptAt = ?1 where nextAttemptAt is not null", Instant.now().minusSeconds(1)));
+        orchestrator.processNewEvents();
+
+        Mockito.verify(workflowExecutionService, Mockito.times(1)).onEventReceived(
+                ArgumentMatchers.anyLong(), ArgumentMatchers.anyString(), ArgumentMatchers.any(),
+                ArgumentMatchers.any(), ArgumentMatchers.any());
+        List<RoutingOutcomeEntity> dispatch = QuarkusTransaction.requiringNew().call(() ->
+                RoutingOutcomeEntity.<RoutingOutcomeEntity>list("routingType",
+                        "workflow-dispatch"));
+        assertEquals(1, dispatch.size(), "The completed dispatch must be skipped on retry");
+        assertEquals(Integer.valueOf(1), dispatch.get(0).attemptNumber);
+        List<RoutingOutcomeEntity> failed = QuarkusTransaction.requiringNew().call(() ->
+                RoutingOutcomeEntity.<RoutingOutcomeEntity>list(
+                        "routingType = ?1 order by id", "invoke-action"));
+        assertEquals(2, failed.size());
+        assertEquals(Integer.valueOf(1), failed.get(0).attemptNumber);
+        assertEquals(Integer.valueOf(2), failed.get(1).attemptNumber);
+    }
+
     private long[] setup(String awaitedType) {
         String content = """
             {
@@ -136,6 +173,10 @@ class WorkflowDispatchFailureTest {
     }
 
     private void createEventAndSubscription(String eventType) {
+        createEventAndSubscription(eventType, "[{\"type\":\"workflow-dispatch\"}]");
+    }
+
+    private void createEventAndSubscription(String eventType, String routing) {
         UUID eventId = UUID.randomUUID();
         QuarkusTransaction.requiringNew().run(() -> {
             StreamEventEntity event = new StreamEventEntity();
@@ -154,7 +195,7 @@ class WorkflowDispatchFailureTest {
             EventSubscriptionEntity sub = new EventSubscriptionEntity();
             sub.name = "dispatch-fail-" + UUID.randomUUID();
             sub.enabled = true;
-            sub.routing = "[{\"type\":\"workflow-dispatch\"}]";
+            sub.routing = routing;
             sub.createdOn = Instant.now();
             sub.modifiedOn = Instant.now();
             sub.persist();

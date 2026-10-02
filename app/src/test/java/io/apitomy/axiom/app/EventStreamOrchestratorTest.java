@@ -278,7 +278,11 @@ class EventStreamOrchestratorTest {
         });
         assertEquals("failed", status, "Should be failed due to missing action type");
 
-        // Second run: retry is attempted (but will fail again since action type still doesn't exist)
+        // Second run, once the retry is due: retry is attempted (but will fail again since
+        // action type still doesn't exist)
+        QuarkusTransaction.requiringNew().run(() -> EventProcessingLedgerEntity.update(
+                "nextAttemptAt = ?1 where nextAttemptAt is not null",
+                Instant.now().minusSeconds(1)));
         orchestrator.processNewEvents();
 
         // Verify the entry still exists and is still failed (with potentially updated processedOn)
@@ -287,6 +291,7 @@ class EventStreamOrchestratorTest {
                 .find("eventId = ?1 and subscriptionId = ?2", eventId, subId).firstResult();
             assertNotNull(entry, "Ledger entry should still exist after retry");
             assertEquals("failed", entry.status, "Should still be failed");
+            assertEquals(2, entry.attemptCount, "The retry was attempted");
             assertNotNull(entry.errorMessage, "Should have error message");
         });
     }

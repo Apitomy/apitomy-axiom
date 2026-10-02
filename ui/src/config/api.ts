@@ -2391,6 +2391,11 @@ export async function fetchStreamEvent(eventId: string): Promise<StreamEvent> {
 }
 
 export interface EventProcessingOutcome {
+    /** completed or failed. */
+    status?: string;
+    /** Ledger attempt (1-based) that recorded this outcome. */
+    attemptNumber?: number;
+    errorMessage?: string;
     type: string;
     summary: string;
     projectId?: number;
@@ -2427,6 +2432,22 @@ export interface EventProcessingEntry {
     outcomes?: EventProcessingOutcome[];
     createdOn?: string;
     processedOn?: string;
+    /** Routing attempts made so far, the first try included. */
+    attemptCount?: number;
+    /** Configured maximum attempts (axiom.stream-pipeline.max-attempts). */
+    maxAttempts?: number;
+    lastAttemptAt?: string;
+    /** When a failed entry is retried next; absent for every other status. */
+    nextAttemptAt?: string;
+}
+
+/** Makes a failed or exhausted processing entry due for retry (one more attempt if exhausted). */
+export async function retryEventProcessing(eventId: string, ledgerId: number): Promise<EventProcessingEntry> {
+    const response = await fetch(
+        `${API}/stream/events/${encodeURIComponent(eventId)}/processing/${ledgerId}/retry`,
+        { method: "POST" });
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to retry event processing"));
+    return response.json();
 }
 
 export async function fetchEventProcessing(eventId: string): Promise<{

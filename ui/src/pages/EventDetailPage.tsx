@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
+    Alert,
     Breadcrumb,
     BreadcrumbItem,
+    Button,
     DataList,
     DataListCell,
     DataListContent,
@@ -36,18 +38,20 @@ import {
     fetchStreamEvent,
     fetchEventProcessing,
     fetchTraces,
+    retryEventProcessing,
 } from "../config/api";
-import { STATUS_COLORS as TRACE_STATUS_COLORS } from "../components/TraceGraphNode";
+import { statusColor as traceStatusColor } from "../components/TraceGraphNode";
 
 const SOURCE_COLORS: Record<string, "blue" | "green" | "orange" | "grey"> = {
     github: "blue",
     jira: "green",
 };
 
-const STATUS_COLORS: Record<string, "green" | "grey" | "red" | "yellow"> = {
+const STATUS_COLORS: Record<string, "green" | "grey" | "red" | "yellow" | "orange"> = {
     completed: "green",
     skipped: "grey",
-    failed: "red",
+    failed: "orange",
+    exhausted: "red",
     pending: "yellow",
 };
 
@@ -187,8 +191,10 @@ export function EventDetailPage() {
                     <TabContent id="processing-tab" eventKey={1} activeKey={activeTab}
                         style={{ marginTop: "24px" }}>
                         <ProcessingTab
+                            eventId={event.id}
                             entries={processing}
                             loading={processingLoading}
+                            onRetried={loadProcessing}
                         />
                         <DryRunEvaluations traces={dryRuns} totalCount={dryRunTotal} error={dryRunError} />
                     </TabContent>
@@ -276,11 +282,62 @@ function OutcomeItems({ items }: { items: EventProcessingOutcomeItem[] }) {
     );
 }
 
-function ProcessingTab({ entries, loading }: {
+/** Whether outcome {@code i} is the first one of its attempt (outcomes are ordered by attempt). */
+function startsAttempt(outcomes: EventProcessingOutcome[], i: number): boolean {
+    const attempt = outcomes[i].attemptNumber;
+    return attempt != null && (i === 0 || outcomes[i - 1].attemptNumber !== attempt);
+}
+
+/** Attempt count, last attempt and next retry (or "gave up") of a processing entry. */
+function AttemptSummary({ entry, retrying, onRetry }: {
+    entry: EventProcessingEntry;
+    retrying: boolean;
+    onRetry: () => void;
+}) {
+    const canRetry = entry.status === "failed" || entry.status === "exhausted";
+    let next = "---";
+    if (entry.status === "exhausted") next = "Gave up";
+    else if (entry.nextAttemptAt) next = new Date(entry.nextAttemptAt).toLocaleString();
+    return (
+        <div style={{ display: "flex", gap: "24px", alignItems: "center", flexWrap: "wrap",
+            padding: "8px 16px" }}>
+            <span>
+                <strong>Attempts:</strong> {entry.attemptCount ?? 0}
+                {entry.maxAttempts != null && ` of ${entry.maxAttempts}`}
+            </span>
+            <span>
+                <strong>Last attempt:</strong>{" "}
+                {entry.lastAttemptAt ? new Date(entry.lastAttemptAt).toLocaleString() : "---"}
+            </span>
+            {canRetry && <span><strong>Next retry:</strong> {next}</span>}
+            {canRetry && (
+                <Button variant="secondary" size="sm" isLoading={retrying} isDisabled={retrying}
+                    onClick={onRetry}>
+                    {entry.status === "exhausted" ? "Retry once more" : "Retry now"}
+                </Button>
+            )}
+        </div>
+    );
+}
+
+function ProcessingTab({ eventId, entries, loading, onRetried }: {
+    eventId: string;
     entries: EventProcessingEntry[];
     loading: boolean;
+    onRetried: () => void;
 }) {
     const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
+    const [retryingId, setRetryingId] = useState<number | null>(null);
+    const [retryError, setRetryError] = useState<string | null>(null);
+
+    const retry = (ledgerId: number) => {
+        setRetryingId(ledgerId);
+        setRetryError(null);
+        retryEventProcessing(eventId, ledgerId)
+            .then(onRetried)
+            .catch((err: unknown) => setRetryError(err instanceof Error ? err.message : String(err)))
+            .finally(() => setRetryingId(null));
+    };
 
     const toggleItem = (id: number) => {
         const next = new Set(expandedItems);
@@ -301,12 +358,15 @@ function ProcessingTab({ entries, loading }: {
     }
 
     return (
+        <>
+        {retryError && <Alert variant="danger" isInline title={retryError} style={{ marginBottom: "16px" }} />}
         <DataList aria-label="Event Processing Audit Trail" isCompact>
             {entries.map((entry) => {
                 const isExpanded = expandedItems.has(entry.id);
                 const hasOutcomes = entry.outcomes && entry.outcomes.length > 0;
-                const hasFailed = entry.status === "failed";
-                const isExpandable = hasOutcomes || hasFailed;
+                const hasFailed = entry.status === "failed" || entry.status === "exhausted";
+                const hasAttempts = (entry.attemptCount ?? 0) > 0;
+                const isExpandable = hasOutcomes || hasFailed || hasAttempts;
 
                 return (
                     <DataListItem
@@ -361,6 +421,10 @@ function ProcessingTab({ entries, loading }: {
                                 isHidden={!isExpanded}
                                 hasNoPadding={false}
                             >
+                                {hasAttempts && (
+                                    <AttemptSummary entry={entry} retrying={retryingId === entry.id}
+                                        onRetry={() => retry(entry.id)} />
+                                )}
                                 {hasFailed && entry.errorMessage && (
                                     <div style={{
                                         padding: "8px 16px",
@@ -376,19 +440,25 @@ function ProcessingTab({ entries, loading }: {
                                                 display: "flex",
                                                 alignItems: "flex-start",
                                                 gap: "12px",
+                                                flexWrap: "wrap",
                                                 marginBottom: i < entry.outcomes!.length - 1 ? "12px" : 0,
                                                 padding: "8px 0",
                                                 borderBottom: i < entry.outcomes!.length - 1
                                                     ? "1px solid var(--pf-v6-global--BorderColor--100)"
                                                     : "none",
                                             }}>
+                                                {startsAttempt(entry.outcomes!, i) && (
+                                                    <div style={{ flexBasis: "100%" }}>
+                                                        <strong>Attempt {o.attemptNumber}</strong>
+                                                    </div>
+                                                )}
                                                 <div style={{ flexShrink: 0 }}>
                                                     <Label isCompact color="blue">
                                                         {ROUTING_LABELS[o.type] || o.type}
                                                     </Label>
                                                 </div>
                                                 <div style={{ flexShrink: 0, marginTop: "2px" }}>
-                                                    {o.summary && !o.summary.toLowerCase().includes("failed") ? (
+                                                    {o.status !== "failed" && o.summary && !o.summary.toLowerCase().includes("failed") ? (
                                                         <CheckCircleIcon color="var(--pf-v6-global--success-color--100)" />
                                                     ) : (
                                                         <TimesCircleIcon color="var(--pf-v6-global--danger-color--100)" />
@@ -396,6 +466,11 @@ function ProcessingTab({ entries, loading }: {
                                                 </div>
                                                 <div style={{ flex: 1 }}>
                                                     <div>{o.summary}</div>
+                                                    {o.errorMessage && (
+                                                        <div style={{ color: "var(--pf-v6-global--danger-color--100)" }}>
+                                                            Error: {o.errorMessage}
+                                                        </div>
+                                                    )}
                                                     <div style={{
                                                         display: "flex",
                                                         gap: "12px",
@@ -434,6 +509,7 @@ function ProcessingTab({ entries, loading }: {
                 );
             })}
         </DataList>
+        </>
     );
 }
 
@@ -462,7 +538,7 @@ function DryRunEvaluations({ traces, totalCount, error }: {
                         <DataListItemRow>
                             <DataListItemCells dataListCells={[
                                 <DataListCell key="status" isFilled={false}>
-                                    <Label isCompact color={TRACE_STATUS_COLORS[t.status]}>
+                                    <Label isCompact color={traceStatusColor(t.status)}>
                                         {t.status}
                                     </Label>
                                 </DataListCell>,

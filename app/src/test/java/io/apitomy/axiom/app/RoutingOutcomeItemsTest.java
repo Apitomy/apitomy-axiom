@@ -279,17 +279,18 @@ class RoutingOutcomeItemsTest {
         stubEvaluation(ManagerEvaluationResult.success(List.of(
                 decision("ignore", "retry ignore"),
                 decision("escalate", "retry escalate")), null));
+        makeDue();
         orchestrator.processNewEvents();
 
-        // A tick runs the first pass and then the retry pass, so the first tick records two
-        // failed attempts; the second tick's retry succeeds.
+        // An entry runs at most once per tick (#422): the first tick records one failed
+        // attempt and the second tick's retry succeeds.
         List<RoutingOutcomeEntity> outcomes = outcomes("manager");
-        assertEquals(3, outcomes.size());
-        RoutingOutcomeEntity succeeded = outcomes.get(2);
+        assertEquals(2, outcomes.size());
+        RoutingOutcomeEntity succeeded = outcomes.get(1);
         assertEquals("completed", succeeded.status);
         assertEquals(2, items(succeeded.id).size(),
                 "Only the successful attempt's results are on its outcome");
-        for (RoutingOutcomeEntity failed : outcomes.subList(0, 2)) {
+        for (RoutingOutcomeEntity failed : outcomes.subList(0, 1)) {
             assertEquals("failed", failed.status);
             assertEquals(0, items(failed.id).size(), "A failed attempt produced no results");
         }
@@ -306,6 +307,7 @@ class RoutingOutcomeItemsTest {
 
         for (int i = 0; i < 5; i++) {
             orchestrator.processNewEvents();
+            makeDue();
         }
 
         assertEquals(1, outcomes("manager").size(), "Completed rule is not replayed");
@@ -324,6 +326,13 @@ class RoutingOutcomeItemsTest {
     }
 
     // ── Helpers ─────────────────────────────────────────────────────
+
+    /** Moves the next attempt of every waiting entry into the past (backoff, #422). */
+    private static void makeDue() {
+        QuarkusTransaction.requiringNew().run(() -> EventProcessingLedgerEntity.update(
+                "nextAttemptAt = ?1 where nextAttemptAt is not null",
+                Instant.now().minusSeconds(1)));
+    }
 
     private void stubEvaluation(ManagerEvaluationResult result) {
         Mockito.when(managerService.evaluateStreamEvent(ArgumentMatchers.any(), ArgumentMatchers.any()))

@@ -211,8 +211,9 @@ class ManagerTracingTest {
         assertEquals("failed", eval.status);
         assertEquals("77", eval.entityId);
 
-        // The failed ledger entry is retried (the retry pass runs on every tick)
+        // The failed ledger entry is retried once it is due
         long callsBefore = evaluationCalls();
+        makeDue();
         orchestrator.processNewEvents();
         long callsAfter = evaluationCalls();
         assertTrue(callsAfter > callsBefore, "Failed entry must be retried");
@@ -229,11 +230,12 @@ class ManagerTracingTest {
 
         for (int i = 0; i < 6; i++) {
             orchestrator.processNewEvents();
+            makeDue();
         }
 
         assertEquals(3, evaluationCalls(), "Default axiom.stream-pipeline.max-attempts is 3");
         EventProcessingLedgerEntity entry = ledger(eventId);
-        assertEquals("failed", entry.status);
+        assertEquals("exhausted", entry.status);
         assertTrue(entry.errorMessage.contains("giving up after 3 attempts"), entry.errorMessage);
     }
 
@@ -260,6 +262,7 @@ class ManagerTracingTest {
         try {
             for (int i = 0; i < 6; i++) {
                 orchestrator.processNewEvents();
+                makeDue();
             }
 
             assertEquals(3, evaluationCalls());
@@ -282,14 +285,22 @@ class ManagerTracingTest {
 
         for (int i = 0; i < 6; i++) {
             orchestrator.processNewEvents();
+            makeDue();
         }
 
         long attempts = QuarkusTransaction.requiringNew().call(() ->
                 RoutingOutcomeEntity.count("status = 'failed'"));
         assertEquals(3, attempts, "Every attempt must be counted");
         EventProcessingLedgerEntity entry = ledger(eventId);
-        assertEquals("failed", entry.status);
+        assertEquals("exhausted", entry.status);
         assertTrue(entry.errorMessage.contains("giving up after 3 attempts"), entry.errorMessage);
+    }
+
+    /** Moves the next attempt of every waiting entry into the past (backoff, #422). */
+    private static void makeDue() {
+        QuarkusTransaction.requiringNew().run(() -> EventProcessingLedgerEntity.update(
+                "nextAttemptAt = ?1 where nextAttemptAt is not null",
+                Instant.now().minusSeconds(1)));
     }
 
     private long evaluationCalls() {
