@@ -10,6 +10,9 @@ import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
+import io.apitomy.axiom.core.entities.TraceEntity;
+import io.apitomy.axiom.core.entities.TraceNodeEntity;
+import io.apitomy.axiom.agents.spi.AgentResult;
 import io.quarkus.arc.ClientProxy;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
@@ -36,6 +39,9 @@ class EventStreamOrchestratorTest {
 
     @Inject
     ObjectMapper objectMapper;
+
+    @Inject
+    TaskExecutionService taskExecutionService;
 
     @AfterEach
     @Transactional
@@ -406,6 +412,48 @@ class EventStreamOrchestratorTest {
             assertEquals("Pending", task.status);
             assertNotNull(task.projectId, "Task should be linked to a project");
         });
+    }
+
+    @Test
+    void invokeActionTraceCompletesOnlyWhenTaskFinishes() {
+        Long actionTypeId = QuarkusTransaction.requiringNew().call(() -> {
+            ActionTypeEntity at = new ActionTypeEntity();
+            at.name = "test-action";
+            at.description = "Test action for trace lifecycle";
+            at.executionMode = "agent";
+            at.managerTriggerable = false;
+            at.userTriggerable = false;
+            at.workflowEnabled = false;
+            at.emitsEvent = false;
+            at.persist();
+            return at.id;
+        });
+        insertStreamEvent("ev-trace-1", "issue.created", "conn-1",
+            "https://github.com/test-org/test-repo/issues/4242");
+        String routing = "[{\"type\":\"invoke-action\",\"actionTypeId\":" + actionTypeId + "}]";
+        insertSubscription("trace-test", null, true, routing);
+
+        orchestrator.processNewEvents();
+
+        TaskEntity task = QuarkusTransaction.requiringNew().call(() ->
+            TaskEntity.<TaskEntity>find("actionType = ?1 and createdBy = 'subscription'",
+                "test-action").firstResult());
+        assertNotNull(task);
+        assertNotNull(task.traceId);
+        UUID traceId = task.traceId;
+        assertEquals("in-progress", QuarkusTransaction.requiringNew().call(() ->
+                TraceEntity.<TraceEntity>findById(traceId).status),
+            "Trace must stay open while the task is pending");
+
+        taskExecutionService.onTaskCompleted(task.id, AgentResult.success("done"));
+
+        TraceEntity trace = QuarkusTransaction.requiringNew().call(() ->
+            TraceEntity.<TraceEntity>findById(traceId));
+        assertEquals("completed", trace.status);
+        assertNotNull(trace.completedOn);
+        long openNodes = QuarkusTransaction.requiringNew().call(() ->
+            TraceNodeEntity.count("traceId = ?1 and status = 'in-progress'", traceId));
+        assertEquals(0, openNodes, "Task node must be completed with the trace");
     }
 
     @Test

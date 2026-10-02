@@ -199,6 +199,15 @@ public class WorkflowExecutionService {
 
         if (instance.status() == InstanceStatus.WAITING) {
             createTasksForActiveBranches(workflow, instance, entity);
+        } else if (instance.status() == InstanceStatus.COMPLETED
+                || instance.status() == InstanceStatus.FAILED) {
+            // The run finished synchronously during start; close its trace now since
+            // no task/wait/event callback will ever do it.
+            if (entity.completedOn == null) {
+                entity.completedOn = Instant.now();
+            }
+            completeRunTrace(entity,
+                    instance.status() == InstanceStatus.COMPLETED ? "completed" : "failed");
         }
 
         logActivity(projectId, "workflow-started",

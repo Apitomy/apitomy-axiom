@@ -75,6 +75,9 @@ public class TaskExecutionService {
     TraceService traceService;
 
     @Inject
+    TaskTraceFinalizer taskTraceFinalizer;
+
+    @Inject
     WorkflowExecutionService workflowExecutionService;
 
     @Inject
@@ -497,26 +500,8 @@ public class TaskExecutionService {
             sseEvents.fire(SseEvent.inboxUpdated(taskId, "removed", inboxCount));
         }
 
-        // Complete the trace (async traces are finalized here)
-        if (task.traceId != null) {
-            try {
-                // Complete the task node with final status
-                TraceNodeEntity taskNode = TraceNodeEntity.find(
-                        "traceId = ?1 and nodeType = 'task' and entityType = 'task' and entityId = ?2",
-                        task.traceId, String.valueOf(task.id)).firstResult();
-                if (taskNode != null) {
-                    traceService.completeNode(taskNode.id, statusText);
-                }
-
-                // Workflow runs own their trace lifecycle: WorkflowExecutionService
-                // completes the trace when the run reaches a terminal state.
-                if (task.workflowRunId == null) {
-                    traceService.completeTrace(task.traceId, result.success() ? "completed" : "failed");
-                }
-            } catch (Exception e) {
-                LOG.warnf(e, "Failed to complete trace for task %d", task.id);
-            }
-        }
+        // Complete the task node and (when it was the last open task) the trace
+        taskTraceFinalizer.finalizeTaskTrace(task, statusText);
 
         // Clean up temporary MCP config files
         mcpConfigGenerator.cleanupTempFiles(task.id);
@@ -546,6 +531,11 @@ public class TaskExecutionService {
                     "Task failed: " + task.actionType + " — " + reason);
             addThreadEntry(task.projectId, "system", "result",
                     "Task failed: " + task.actionType + "\n\nError: " + reason);
+
+            sseEvents.fire(SseEvent.taskUpdated(task.projectId, taskId, task.status));
+
+            // Close the task's trace node (and the trace, for non-workflow tasks)
+            taskTraceFinalizer.finalizeTaskTrace(task, "failed");
 
             mcpConfigGenerator.cleanupTempFiles(taskId);
             updateProjectStatusAfterTask(task.projectId);
