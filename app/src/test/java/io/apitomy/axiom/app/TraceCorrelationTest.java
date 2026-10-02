@@ -9,6 +9,7 @@ import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
 import io.apitomy.axiom.core.entities.ReportEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
+import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
@@ -97,6 +98,7 @@ class TraceCorrelationTest {
     @AfterEach
     void cleanupEventStream() {
         QuarkusTransaction.requiringNew().run(() -> {
+            RoutingOutcomeItemEntity.deleteAll();
             RoutingOutcomeEntity.deleteAll();
             EventProcessingLedgerEntity.deleteAll();
             StreamEventEntity.deleteAll();

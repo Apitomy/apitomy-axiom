@@ -216,12 +216,12 @@ event-ingested             root, completed on creation
 - Each decision node's summary records the decision, action type, confidence and reasoning. Decisions
   below the confidence threshold are labelled `Escalated (low confidence)`. Tasks created by a decision
   carry the event ID and trace ID, and their `task` node is a child of the decision node.
-- If processing one decision fails (for example an unknown decision type), its node is closed as
-  `failed` with the error prefixed to the summary, any `task` node left open under it is closed as
-  `failed`, and the error is appended to the routing outcome summary. Other decisions still run, and the
-  ledger entry is not failed, so the decisions that succeeded are not repeated by a retry. The trace
-  therefore ends `completed` even though that decision node is `failed`. This is intended: failing the
-  trace and retrying would create duplicate tasks for the decisions that succeeded.
+- If processing one decision fails (for example an unknown decision type), its node is closed as `failed` with
+  the error prefixed to the summary, any `task` node left open under it is closed as `failed`, the error is
+  appended to the routing outcome summary, and the decision's routing outcome item is `failed` with the error.
+  Other decisions still run, and the ledger entry is not failed, so the decisions that succeeded are not
+  repeated by a retry. The trace therefore ends `completed` even though that decision node is `failed`. This
+  is intended: failing the trace and retrying would create duplicate tasks for the decisions that succeeded.
 - When the evaluation fails, the `manager-evaluation` node and the trace are closed as `failed`, the
   routing outcome is `failed` with the error (and keeps the trace ID), and the ledger entry is `failed`
   so `retryFailedEntries` retries it. Each retry creates a new trace. Retries are capped by
@@ -229,6 +229,10 @@ event-ingested             root, completed on creation
   failed `routing_outcome` rows linked to the ledger entry, and once the cap is reached the entry stays
   `failed` with "(giving up after N attempts)" appended to its error message.
 - An empty decision list is a success: outcome `completed` with summary `No decisions`, trace `completed`.
+- Each decision is recorded as a `routing_outcome_item` (task, ignored, escalated, or decision for an
+  unknown type) whose `trace_node_id` is the decision's `manager-decision` node, so the event detail page
+  lists every result of the evaluation (see the event sourcing design). An empty decision list or a failed
+  evaluation records no items.
 - When the decisions involve exactly one project (a created task's project, or the project an escalation
   was posted to), the trace's `projectId` is set, so it appears in `GET /projects/{id}/traces`.
 - Evaluation and decision nodes are always completed before `routeToManager` returns, so only `task`

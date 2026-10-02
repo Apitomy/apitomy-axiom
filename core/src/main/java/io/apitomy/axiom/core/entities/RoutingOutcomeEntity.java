@@ -4,13 +4,19 @@ import io.quarkus.hibernate.orm.panache.PanacheEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
  * Records what a single routing rule produced when processing an event
  * against a subscription. Linked to the processing ledger entry.
+ *
+ * <p>{@code projectId} and {@code taskId} hold only the first project and task (kept for
+ * backward compatibility); every result is stored as a {@link RoutingOutcomeItemEntity}.</p>
  */
 @Entity
 @Table(name = "routing_outcome")
@@ -42,4 +48,11 @@ public class RoutingOutcomeEntity extends PanacheEntity {
 
     @Column(name = "created_on", nullable = false)
     public Instant createdOn;
+
+    /**
+     * Items to persist with this outcome. Not mapped: filled by the routing code and
+     * written to {@code routing_outcome_item} after the outcome is persisted.
+     */
+    @Transient
+    public List<RoutingOutcomeItemEntity> pendingItems = new ArrayList<>();
 }
