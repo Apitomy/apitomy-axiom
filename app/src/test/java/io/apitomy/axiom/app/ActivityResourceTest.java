@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
@@ -20,6 +21,10 @@ class ActivityResourceTest {
 
     private static final String ACTIVITY_PATH = "/api/v1/activity";
 
+    private static final UUID EVENT_A = UUID.fromString("a1a1a1a1-0000-4000-8000-000000000100");
+    private static final UUID EVENT_B = UUID.fromString("b2b2b2b2-0000-4000-8000-000000000200");
+    private static final UUID EVENT_C = UUID.fromString("c3c3c3c3-0000-4000-8000-000000000300");
+
     @BeforeEach
     @Transactional
     void seedActivityEntries() {
@@ -28,14 +33,14 @@ class ActivityResourceTest {
             return;
         }
 
-        createEntry(1L, 10L, 100L, "task-completed", "FILTER-TEST task alpha completed");
-        createEntry(1L, 11L, 100L, "task-failed", "FILTER-TEST task beta failed");
-        createEntry(2L, 20L, 200L, "task-completed", "FILTER-TEST task gamma completed");
-        createEntry(null, null, 300L, "event-ignored", "FILTER-TEST event ignored");
+        createEntry(1L, 10L, EVENT_A, "task-completed", "FILTER-TEST task alpha completed");
+        createEntry(1L, 11L, EVENT_A, "task-failed", "FILTER-TEST task beta failed");
+        createEntry(2L, 20L, EVENT_B, "task-completed", "FILTER-TEST task gamma completed");
+        createEntry(null, null, EVENT_C, "event-ignored", "FILTER-TEST event ignored");
         createEntry(3L, 30L, null, "project-created", "FILTER-TEST project created");
     }
 
-    private void createEntry(Long projectId, Long taskId, Long eventId,
+    private void createEntry(Long projectId, Long taskId, UUID eventId,
                               String entryType, String summary) {
         ActivityLogEntity entry = new ActivityLogEntity();
         entry.projectId = projectId;
@@ -149,13 +154,24 @@ class ActivityResourceTest {
     @Test
     void testFilterByEventId() {
         given()
-            .queryParam("filterEventId", 200)
+            .queryParam("filterEventId", EVENT_B.toString())
             .when()
                 .get(ACTIVITY_PATH)
             .then()
                 .statusCode(200)
-                .body("items.size()", greaterThanOrEqualTo(1))
-                .body("items.eventId", everyItem(equalTo(200)));
+                .body("items.size()", equalTo(1))
+                .body("items[0].summary", containsString("gamma"))
+                .body("items.eventId", everyItem(equalTo(EVENT_B.toString())));
+    }
+
+    @Test
+    void testFilterByInvalidEventIdReturns400() {
+        given()
+            .queryParam("filterEventId", "200")
+            .when()
+                .get(ACTIVITY_PATH)
+            .then()
+                .statusCode(400);
     }
 
     // ── Combined filters ─────────────────────────────────────────────

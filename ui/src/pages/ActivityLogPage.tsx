@@ -95,7 +95,7 @@ export function ActivityLogPage() {
         setLoading(true);
         fetchActivityLog(
             page, perPage,
-            filterEventId ? Number(filterEventId) : undefined,
+            filterEventId?.trim() || undefined,
             filterSummary || undefined,
             filterProjectId ? Number(filterProjectId) : undefined,
             filterEntryTypes || undefined
@@ -214,11 +214,12 @@ export function ActivityLogPage() {
                                         {entry.eventId ? (
                                             <Label isCompact color="blue"
                                                 style={{ cursor: "pointer" }}
+                                                title={entry.eventId}
                                                 onClick={() => {
                                                     const eventIdType = FILTER_TYPES.find((t) => t.value === "eventId")!;
-                                                    onAddFilterCriteria({ filterBy: eventIdType, filterValue: String(entry.eventId) });
+                                                    onAddFilterCriteria({ filterBy: eventIdType, filterValue: entry.eventId! });
                                                 }}>
-                                                #{entry.eventId}
+                                                {entry.eventId.substring(0, 8)}
                                             </Label>
                                         ) : "—"}
                                     </Td>

@@ -6,6 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * Records a single AI invocation (Claude Code subprocess execution) with
@@ -36,7 +37,7 @@ public class AiUsageEntity extends PanacheEntity {
      * Event ID (set for manager evaluations, may also be set for tasks).
      */
     @Column(name = "event_id")
-    public Long eventId;
+    public UUID eventId;
 
     /**
      * Project ID (if associated with a project).

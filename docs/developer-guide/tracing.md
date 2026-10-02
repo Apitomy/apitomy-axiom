@@ -38,7 +38,9 @@ The root of a complete execution trace (table `trace`). It uses a UUID primary k
 ID doubles as the correlation identifier threaded through subprocess environment
 variables and API callbacks. Each trace has a `traceType` (see below), a status
 (`in-progress`, `completed`, or `failed`), a human-readable summary, optional
-`eventId`/`projectId`/`reportId` associations, and start/completion timestamps.
+`eventId`/`projectId`/`reportId` associations, and start/completion timestamps. `eventId` is the
+UUID of the originating `stream_event` row. It is a soft reference (no foreign key): stream events are
+purged by the event retention policy while traces are retained, so the UUID may outlive its event.
 
 Current trace types:
 
@@ -56,7 +58,8 @@ A single step/span within a trace tree (table `trace_node`). Nodes form a parent
 tree via `parentNodeId` (null for the root node). Each node has a `nodeType`, a status,
 a summary, start/completion timestamps with a computed `durationMs`, and an optional
 `entityType` + `entityId` pair that points to a more detailed record elsewhere in the
-system.
+system. `entityId` is stored as a string (`VARCHAR`) so it can hold either a numeric ID
+(e.g. `task`, `activity-log`) or a UUID (e.g. `event`, which references a stream event).
 
 #### Node Types
 
@@ -113,7 +116,7 @@ Creates a new trace and its root node in a single transaction, then fires an SSE
 public TraceContext createTrace(
     String traceType,        // e.g. "manager", "workflow", "scheduled-job-execution", "report-generation"
     String summary,          // human-readable trace description
-    Long eventId,            // associated event ID (nullable)
+    UUID eventId,            // associated stream event ID (nullable)
     Long projectId,          // associated project ID (nullable)
     Long reportId,           // associated report ID (nullable)
     String rootNodeType,     // node type for the root node
@@ -141,6 +144,14 @@ public Long addNode(
 ```
 
 Returns the new node's ID. The parent is determined by `ctx.currentParentNodeId()`.
+
+To reference a UUID-keyed entity (such as a stream event, `entityType="event"`), use
+`addUuidEntityNode()`, which has the same parameters except that `entityId` is a `UUID`:
+
+```java
+Long nodeId = traceService.addUuidEntityNode(traceCtx, "event-received", "completed",
+    "Event received: " + event.type, "event", event.id);
+```
 
 ### completeNode()
 
@@ -224,7 +235,7 @@ Returns a paginated list of traces with optional filtering.
 | `limit` | integer | 20 | Page size |
 | `filterTraceType` | string | — | Filter by trace type (e.g. `"manager"`, `"workflow"`, `"scheduled-job-execution"`, `"report-generation"`) |
 | `filterStatus` | string | — | Filter by status (comma-separated, e.g. `"in-progress,completed"`) |
-| `filterEventId` | integer | — | Filter by event ID |
+| `filterEventId` | string (UUID) | — | Filter by stream event ID (400 if not a valid UUID) |
 | `filterProjectId` | integer | — | Filter by project ID |
 | `filterReportId` | integer | — | Filter by report ID |
 
@@ -321,7 +332,7 @@ Returns a trace and all of its nodes.
       "completedOn": "2026-06-29T10:00:05Z",
       "durationMs": 2000,
       "entityType": "task",
-      "entityId": 15
+      "entityId": "15"
     }
   ]
 }
@@ -356,7 +367,7 @@ depends on the node's `entityType`.
     "summary": "Tool: github_list_issues",
     "durationMs": 1200,
     "entityType": "tool-execution",
-    "entityId": 7
+    "entityId": "7"
   },
   "detail": {
     "toolName": "github_list_issues",
@@ -455,9 +466,9 @@ If your code is the entry point for a new pipeline (like `EventStreamOrchestrato
 TraceContext traceCtx = traceService.createTrace(
     "my-pipeline",
     "Processing something: " + description,
-    eventId, projectId, reportId,
+    eventId, projectId, reportId,   // eventId is the stream event UUID (nullable)
     "my-root-node", "Root: " + description,
-    "event", eventId);
+    null, null);
 ```
 
 If your code runs within an existing trace (like `ManagerService`), receive the

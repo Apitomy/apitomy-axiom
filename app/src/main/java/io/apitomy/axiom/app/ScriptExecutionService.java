@@ -29,6 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
@@ -465,7 +466,7 @@ public class ScriptExecutionService {
                 // Complete the task node with final status
                 TraceNodeEntity taskNode = TraceNodeEntity.find(
                         "traceId = ?1 and nodeType = 'task' and entityType = 'task' and entityId = ?2",
-                        task.traceId, task.id).firstResult();
+                        task.traceId, String.valueOf(task.id)).firstResult();
                 if (taskNode != null) {
                     traceService.completeNode(taskNode.id, statusText);
                 }
@@ -506,7 +507,7 @@ public class ScriptExecutionService {
         }
     }
 
-    private void logActivity(Long projectId, Long taskId, Long eventId,
+    private void logActivity(Long projectId, Long taskId, UUID eventId,
                               String entryType, String summary) {
         ActivityLogEntity log = new ActivityLogEntity();
         log.projectId = projectId;

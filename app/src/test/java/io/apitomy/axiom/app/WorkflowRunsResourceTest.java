@@ -157,7 +157,7 @@ class WorkflowRunsResourceTest {
                 TraceNodeEntity.find("traceId = ?1 and nodeType = ?2", run.traceId, "task")
                         .firstResult());
         assertNotNull(traceNode, "Task trace node should exist");
-        assertEquals(task.id, traceNode.entityId,
+        assertEquals(String.valueOf(task.id), traceNode.entityId,
                 "Trace node entityId should match task id");
     }
 

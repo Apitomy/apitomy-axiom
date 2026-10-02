@@ -29,7 +29,7 @@ public class ActivityResourceImpl implements ActivityResource {
      */
     @Override
     public ActivityLogSearchResults listActivityLog(BigInteger page, BigInteger limit,
-                                                     BigInteger filterEventId, String filterSummary,
+                                                     String filterEventId, String filterSummary,
                                                      BigInteger filterProjectId, String filterEntryType,
                                                      String filterLabels) {
         int pageNum = page != null ? page.intValue() : 1;
@@ -38,9 +38,9 @@ public class ActivityResourceImpl implements ActivityResource {
         StringBuilder hql = new StringBuilder("1=1");
         Map<String, Object> params = new HashMap<>();
 
-        if (filterEventId != null) {
+        if (filterEventId != null && !filterEventId.isBlank()) {
             hql.append(" and eventId = :eventId");
-            params.put("eventId", filterEventId.longValue());
+            params.put("eventId", TraceResourceImpl.parseEventId(filterEventId));
         }
         if (filterSummary != null && !filterSummary.isBlank()) {
             hql.append(" and lower(summary) like :summary");

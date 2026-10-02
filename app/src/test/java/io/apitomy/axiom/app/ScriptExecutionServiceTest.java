@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -35,7 +36,7 @@ class ScriptExecutionServiceTest {
         TaskEntity task = new TaskEntity();
         task.id = id;
         task.projectId = projectId;
-        task.eventId = 55L;
+        task.eventId = UUID.fromString("00000000-0000-0000-0000-000000000055");
         task.input = input;
         return task;
     }

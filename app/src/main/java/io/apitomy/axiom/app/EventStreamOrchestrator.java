@@ -336,7 +336,7 @@ public class EventStreamOrchestrator {
             traceCtx = traceService.createTrace(
                     "manager",
                     "Manager evaluation: " + event.type + " — " + event.ref,
-                    null, null, null,
+                    event.id, null, null,
                     "manager-evaluation", "Manager evaluation: " + event.type,
                     null, null);
         } catch (Exception e) {
@@ -449,6 +449,7 @@ public class EventStreamOrchestrator {
         task.input = decision.inputContext();
         task.humanContext = decision.humanContext();
         task.outputSchema = decision.outputSchema();
+        task.eventId = event.id;
         task.createdOn = Instant.now();
         if (traceCtx != null) {
             task.traceId = traceCtx.traceId();
@@ -468,7 +469,7 @@ public class EventStreamOrchestrator {
         LOG.infof("Manager created task %d (%s) for project %d from stream event %s",
                 task.id, task.actionType, project.id, event.id);
 
-        logActivity(project.id, task.id, null, "task-created",
+        logActivity(project.id, task.id, event.id, "task-created",
                 "Manager created task: " + task.actionType + " — " + decision.reasoning());
         addThreadEntry(project.id, "manager", "decision",
                 "Created task: " + task.actionType + "\n\nReasoning: " + decision.reasoning());
@@ -490,14 +491,14 @@ public class EventStreamOrchestrator {
 
     private void handleIgnore(StreamEventEntity event, ManagerDecision decision) {
         LOG.infof("Manager ignored stream event %s: %s", event.id, decision.reasoning());
-        logActivity(null, null, null, "event-ignored",
+        logActivity(null, null, event.id, "event-ignored",
                 "Event ignored: " + event.type + " — " + decision.reasoning());
     }
 
     private void handleEscalation(StreamEventEntity event, ManagerDecision decision,
                                    String reason) {
         LOG.infof("Manager escalated stream event %s: %s", event.id, reason);
-        logActivity(null, null, null, "manager-escalation",
+        logActivity(null, null, event.id, "manager-escalation",
                 "Manager escalation: " + reason);
 
         // If we can find a project for this event, add to its thread
@@ -586,7 +587,7 @@ public class EventStreamOrchestrator {
             traceCtx = traceService.createTrace(
                     "invoke-action",
                     "Invoke action: " + actionType.name + " — " + event.ref,
-                    null, null, null,
+                    event.id, null, null,
                     "invoke-action", "Invoke action: " + actionType.name,
                     null, null);
         } catch (Exception e) {
@@ -607,6 +608,7 @@ public class EventStreamOrchestrator {
             task.createdBy = "subscription";
             task.status = "Pending";
             task.input = taskInput;
+            task.eventId = event.id;
             task.createdOn = Instant.now();
             if (finalTraceCtx != null) {
                 task.traceId = finalTraceCtx.traceId();
@@ -624,7 +626,7 @@ public class EventStreamOrchestrator {
             }
 
             // Log activity
-            logActivity(projectId, task.id, null, "task-created",
+            logActivity(projectId, task.id, event.id, "task-created",
                     "Subscription invoked action: " + task.actionType);
 
             LOG.infof("Created task for action '%s' from event %s",
@@ -736,7 +738,7 @@ public class EventStreamOrchestrator {
 
         LOG.infof("Auto-created project %d for %s", project.id, event.ref);
 
-        logActivity(project.id, null, null, "project-created",
+        logActivity(project.id, null, event.id, "project-created",
                 "Project auto-created from " + event.type + " event");
         addThreadEntry(project.id, "system", "message",
                 "Project created from " + event.source + " event: " + event.type);
@@ -822,7 +824,7 @@ public class EventStreamOrchestrator {
 
     // ── Activity and thread logging ────────────────────────────────
 
-    private void logActivity(Long projectId, Long taskId, Long eventId,
+    private void logActivity(Long projectId, Long taskId, UUID eventId,
                               String entryType, String summary) {
         ActivityLogEntity log = new ActivityLogEntity();
         log.projectId = projectId;

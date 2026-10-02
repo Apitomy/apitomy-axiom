@@ -411,7 +411,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
             try {
                 TraceNodeEntity taskNode = TraceNodeEntity.find(
                         "traceId = ?1 and nodeType = 'task' and entityType = 'task' and entityId = ?2",
-                        task.traceId, task.id).firstResult();
+                        task.traceId, String.valueOf(task.id)).firstResult();
                 if (taskNode != null) {
                     traceService.completeNode(taskNode.id, "failed");
                 }

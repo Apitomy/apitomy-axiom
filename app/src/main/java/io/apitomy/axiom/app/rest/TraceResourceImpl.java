@@ -54,7 +54,7 @@ public class TraceResourceImpl implements TracesResource {
     @Override
     public TraceSearchResults listTraces(BigInteger page, BigInteger limit,
             String filterTraceType, String filterStatus,
-            BigInteger filterEventId, BigInteger filterProjectId,
+            String filterEventId, BigInteger filterProjectId,
             BigInteger filterReportId) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
@@ -77,9 +77,9 @@ public class TraceResourceImpl implements TracesResource {
                 params.put("statuses", statuses);
             }
         }
-        if (filterEventId != null) {
+        if (filterEventId != null && !filterEventId.isBlank()) {
             hql.append(" and eventId = :eventId");
-            params.put("eventId", filterEventId.longValue());
+            params.put("eventId", parseEventId(filterEventId));
         }
         if (filterProjectId != null) {
             hql.append(" and projectId = :projectId");
@@ -167,7 +167,7 @@ public class TraceResourceImpl implements TracesResource {
             node.summary = "Tool: " + data.getToolName();
             node.startedOn = java.time.Instant.now();
             node.entityType = "tool-execution";
-            node.entityId = toolExec.id;
+            node.entityId = String.valueOf(toolExec.id);
             node.persist();
 
             ToolCallCreated result = new ToolCallCreated();
@@ -194,7 +194,8 @@ public class TraceResourceImpl implements TracesResource {
 
             if (node.entityType != null && "tool-execution".equals(node.entityType)
                     && node.entityId != null) {
-                ToolExecutionEntity toolExec = ToolExecutionEntity.findById(node.entityId);
+                ToolExecutionEntity toolExec = ToolExecutionEntity.findById(
+                        Long.valueOf(node.entityId));
                 if (toolExec != null) {
                     toolExec.toolOutput = data.getToolOutput();
                     toolExec.status = node.status;
@@ -210,22 +211,29 @@ public class TraceResourceImpl implements TracesResource {
 
     /**
      * Resolves the detail entity for a trace node based on its entityType.
+     * Stream events are keyed by UUID; all other entity types use numeric IDs.
      */
     @SuppressWarnings("unchecked")
-    private Detail resolveDetail(String entityType, Long entityId) {
-        if (entityType == null || entityId == null) {
+    private Detail resolveDetail(String entityType, String entityId) {
+        if (entityType == null || entityId == null || entityId.isBlank()) {
             return null;
         }
 
-        Object entity = switch (entityType) {
-            case "activity-log" -> ActivityLogEntity.findById(entityId);
-            case "event" -> StreamEventEntity.findById(UUID.fromString(String.valueOf(entityId)));
-            case "ai-usage" -> AiUsageEntity.findById(entityId);
-            case "tool-execution" -> ToolExecutionEntity.findById(entityId);
-            case "task" -> TaskEntity.findById(entityId);
-            case "report" -> ReportEntity.findById(entityId);
-            default -> null;
-        };
+        Object entity;
+        try {
+            entity = switch (entityType) {
+                case "activity-log" -> ActivityLogEntity.findById(Long.valueOf(entityId));
+                case "event" -> StreamEventEntity.findById(UUID.fromString(entityId));
+                case "ai-usage" -> AiUsageEntity.findById(Long.valueOf(entityId));
+                case "tool-execution" -> ToolExecutionEntity.findById(Long.valueOf(entityId));
+                case "task" -> TaskEntity.findById(Long.valueOf(entityId));
+                case "report" -> ReportEntity.findById(Long.valueOf(entityId));
+                default -> null;
+            };
+        } catch (IllegalArgumentException e) {
+            // Malformed entity reference (NumberFormatException is a subclass)
+            return null;
+        }
 
         if (entity == null) {
             return null;
@@ -233,6 +241,17 @@ public class TraceResourceImpl implements TracesResource {
 
         Map<String, Object> properties = objectMapper.convertValue(entity, Map.class);
         return new DynamicDetail(properties);
+    }
+
+    /**
+     * Parses a stream event UUID filter value, rejecting malformed input with 400.
+     */
+    static UUID parseEventId(String eventId) {
+        try {
+            return UUID.fromString(eventId.trim());
+        } catch (IllegalArgumentException e) {
+            throw new WebApplicationException("Invalid event ID: " + eventId, 400);
+        }
     }
 
     private Trace toTraceBean(TraceEntity entity) {

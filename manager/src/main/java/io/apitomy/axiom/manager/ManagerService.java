@@ -28,6 +28,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Service that invokes the AI Manager to evaluate events and produce decisions.
@@ -108,7 +109,7 @@ public class ManagerService {
         //   streamEvent.ref     → issueRef and repository (full URL)
         //   streamEvent.payload → payload
         return callManagerAI(ctx, streamEvent.source, streamEvent.type, streamEvent.ref,
-                streamEvent.ref, streamEvent.payload, null, null,
+                streamEvent.ref, streamEvent.payload, streamEvent.id, null,
                 String.valueOf(streamEvent.id));
     }
 
@@ -121,7 +122,7 @@ public class ManagerService {
      * @param issueRef       issue reference or URL
      * @param repository     repository identifier or URL
      * @param payload        raw event payload JSON
-     * @param eventId        legacy event ID for activity/usage logging (null for stream events)
+     * @param eventId        stream event ID for activity/usage logging (nullable)
      * @param evalNodeId     trace node ID (null if tracing is not active)
      * @param eventIdForLog  string representation of the event ID for log messages
      * @return list of Manager decisions
@@ -129,7 +130,7 @@ public class ManagerService {
     private List<ManagerDecision> callManagerAI(
             EvalContext ctx,
             String source, String eventType, String issueRef, String repository, String payload,
-            Long eventId, Long evalNodeId, String eventIdForLog) {
+            UUID eventId, Long evalNodeId, String eventIdForLog) {
 
         // Build prompts from detached context (no transaction needed)
         String systemPrompt = ManagerPromptBuilder.DEFAULT_SYSTEM_PROMPT;
@@ -330,13 +331,13 @@ public class ManagerService {
     /**
      * Logs a manager activity entry with optional execution log details.
      *
-     * @param eventId   the event ID
+     * @param eventId   the stream event ID (nullable)
      * @param entryType the activity log entry type
      * @param summary   a brief summary
      * @param details   the full execution log (may be null)
      * @return the persisted activity log entry ID
      */
-    Long logManagerActivity(Long eventId, String entryType, String summary, String details) {
+    Long logManagerActivity(UUID eventId, String entryType, String summary, String details) {
         return QuarkusTransaction.requiringNew().call(() -> {
             ActivityLogEntity log = new ActivityLogEntity();
             log.eventId = eventId;
@@ -351,7 +352,7 @@ public class ManagerService {
         });
     }
 
-    void recordAiUsage(Long eventId, Long projectId,
+    void recordAiUsage(UUID eventId, Long projectId,
                         Double costUsd, Long inputTokens, Long outputTokens,
                         String resultEngine, String resultModel) {
         String resolvedEngine = resultEngine != null && !resultEngine.isBlank()
