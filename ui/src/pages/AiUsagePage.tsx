@@ -24,6 +24,7 @@ import {
     ChipFilterInput,
     FilterChips,
 } from "@apitomy/common-ui-components";
+import { Link, useSearchParams } from "react-router-dom";
 import { type AiUsage, fetchUsage } from "../config/api";
 
 const TYPE_COLORS: Record<string, "blue" | "green"> = {
@@ -45,6 +46,7 @@ const FILTER_TYPES: ChipFilterType[] = [
     { value: "actionType", label: "Action Type", testId: "usage-filter-action" },
     { value: "engine", label: "Engine", testId: "usage-filter-engine" },
     { value: "model", label: "Model", testId: "usage-filter-model" },
+    { value: "traceId", label: "Trace ID", testId: "usage-filter-traceId" },
 ];
 
 export function AiUsagePage() {
@@ -54,7 +56,13 @@ export function AiUsagePage() {
     const [perPage, setPerPage] = useState(20);
     const [loading, setLoading] = useState(true);
 
-    const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
+    const [searchParams] = useSearchParams();
+    const [filters, setFilters] = useState<ChipFilterCriteria[]>(() => {
+        const initialTraceId = searchParams.get("traceId");
+        return initialTraceId
+            ? [{ filterBy: FILTER_TYPES.find((t) => t.value === "traceId")!, filterValue: initialTraceId }]
+            : [];
+    });
     const [filterDateFrom, setFilterDateFrom] = useState("");
     const [filterDateTo, setFilterDateTo] = useState("");
 
@@ -67,6 +75,7 @@ export function AiUsagePage() {
     const filterActionType = filters.find((f) => f.filterBy.value === "actionType")?.filterValue;
     const filterEngine = filters.find((f) => f.filterBy.value === "engine")?.filterValue;
     const filterModel = filters.find((f) => f.filterBy.value === "model")?.filterValue;
+    const filterTraceId = filters.find((f) => f.filterBy.value === "traceId")?.filterValue;
     const isFiltered = filters.length > 0 || !!filterDateFrom || !!filterDateTo;
 
     const loadData = useCallback(() => {
@@ -80,7 +89,8 @@ export function AiUsagePage() {
             filterDateTo || undefined,
             undefined,
             filterEngine || undefined,
-            filterModel || undefined
+            filterModel || undefined,
+            filterTraceId?.trim() || undefined
         )
             .then((results) => {
                 setRecords(results.items);
@@ -92,7 +102,7 @@ export function AiUsagePage() {
             .catch(console.error)
             .finally(() => setLoading(false));
     }, [page, perPage, filterInvocationType, filterActionType, filterDateFrom, filterDateTo,
-        filterEngine, filterModel]);
+        filterEngine, filterModel, filterTraceId]);
 
     useEffect(() => { loadData(); }, [loadData]);
 
@@ -246,6 +256,7 @@ export function AiUsagePage() {
                                 <Th>Engine</Th>
                                 <Th>Model</Th>
                                 <Th>Project</Th>
+                                <Th>Trace</Th>
                                 <Th>Cost</Th>
                                 <Th>Input Tokens</Th>
                                 <Th>Output Tokens</Th>
@@ -303,6 +314,13 @@ export function AiUsagePage() {
                                     </Td>
                                     <Td>
                                         {r.projectId ? `Project #${r.projectId}` : "—"}
+                                    </Td>
+                                    <Td>
+                                        {r.traceId ? (
+                                            <Link to={`/logs/traces/${r.traceId}`} title={r.traceId}>
+                                                {r.traceId.substring(0, 8)}
+                                            </Link>
+                                        ) : "—"}
                                     </Td>
                                     <Td>
                                         {r.costUsd != null

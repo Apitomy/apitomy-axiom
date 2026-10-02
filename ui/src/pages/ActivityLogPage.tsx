@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
     Button,
     EmptyState,
@@ -47,6 +47,7 @@ const ENTRY_TYPE_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "
 
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "eventId", label: "Event ID", testId: "activity-filter-eventId" },
+    { value: "traceId", label: "Trace ID", testId: "activity-filter-traceId" },
     { value: "entryType", label: "Entry Type", testId: "activity-filter-entryType" },
     { value: "summary", label: "Summary", testId: "activity-filter-summary" },
     { value: "projectId", label: "Project ID", testId: "activity-filter-projectId" },
@@ -60,7 +61,13 @@ export function ActivityLogPage() {
     const [perPage, setPerPage] = useState(20);
     const [loading, setLoading] = useState(true);
 
-    const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
+    const [searchParams] = useSearchParams();
+    const [filters, setFilters] = useState<ChipFilterCriteria[]>(() => {
+        const initialTraceId = searchParams.get("traceId");
+        return initialTraceId
+            ? [{ filterBy: FILTER_TYPES.find((t) => t.value === "traceId")!, filterValue: initialTraceId }]
+            : [];
+    });
 
     // Execution log modal state
     const [isLogModalOpen, setIsLogModalOpen] = useState(false);
@@ -83,6 +90,7 @@ export function ActivityLogPage() {
     };
 
     const filterEventId = filters.find((f) => f.filterBy.value === "eventId")?.filterValue;
+    const filterTraceId = filters.find((f) => f.filterBy.value === "traceId")?.filterValue;
     const filterSummary = filters.find((f) => f.filterBy.value === "summary")?.filterValue;
     const filterProjectId = filters.find((f) => f.filterBy.value === "projectId")?.filterValue;
     const filterEntryTypes = filters
@@ -98,7 +106,9 @@ export function ActivityLogPage() {
             filterEventId?.trim() || undefined,
             filterSummary || undefined,
             filterProjectId ? Number(filterProjectId) : undefined,
-            filterEntryTypes || undefined
+            filterEntryTypes || undefined,
+            undefined,
+            filterTraceId?.trim() || undefined
         )
             .then((results) => {
                 setEntries(results.items);
@@ -106,7 +116,7 @@ export function ActivityLogPage() {
             })
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [page, perPage, filterEventId, filterSummary, filterProjectId, filterEntryTypes]);
+    }, [page, perPage, filterEventId, filterSummary, filterProjectId, filterEntryTypes, filterTraceId]);
 
     useEffect(() => {
         loadData();
@@ -116,7 +126,8 @@ export function ActivityLogPage() {
         if (!criteria.filterValue) return;
         const updated = filters.filter((f) =>
             !(f.filterBy.value === criteria.filterBy.value && f.filterValue === criteria.filterValue));
-        if (criteria.filterBy.value === "eventId" || criteria.filterBy.value === "summary"
+        if (criteria.filterBy.value === "eventId" || criteria.filterBy.value === "traceId"
+                || criteria.filterBy.value === "summary"
                 || criteria.filterBy.value === "projectId") {
             const withoutSame = updated.filter((f) => f.filterBy.value !== criteria.filterBy.value);
             withoutSame.push(criteria);
@@ -199,6 +210,7 @@ export function ActivityLogPage() {
                             <Tr>
                                 <Th>Time</Th>
                                 <Th>Event</Th>
+                                <Th>Trace</Th>
                                 <Th>Type</Th>
                                 <Th>Summary</Th>
                                 <Th>Project</Th>
@@ -221,6 +233,13 @@ export function ActivityLogPage() {
                                                 }}>
                                                 {entry.eventId.substring(0, 8)}
                                             </Label>
+                                        ) : "—"}
+                                    </Td>
+                                    <Td>
+                                        {entry.traceId ? (
+                                            <Link to={`/logs/traces/${entry.traceId}`} title={entry.traceId}>
+                                                {entry.traceId.substring(0, 8)}
+                                            </Link>
                                         ) : "—"}
                                     </Td>
                                     <Td>
