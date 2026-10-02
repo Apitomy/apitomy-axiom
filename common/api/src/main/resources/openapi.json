@@ -9996,6 +9996,55 @@
             "type": "string",
             "format": "uuid",
             "description": "Trace ID linked to this outcome (for navigating to the trace detail page)"
+          },
+          "items": {
+            "type": "array",
+            "description": "Every result of this outcome (one per Manager decision, task or workflow run). Empty for outcomes recorded before items existed; projectId and taskId then hold the only (first) result.",
+            "items": {
+              "$ref": "#/components/schemas/EventProcessingOutcomeItem"
+            }
+          }
+        }
+      },
+      "EventProcessingOutcomeItem": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Kind of result: task, workflow-run, ignored, escalated, or decision (a Manager decision of an unknown type)"
+          },
+          "status": {
+            "type": "string",
+            "description": "completed or failed"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "errorMessage": {
+            "type": "string"
+          },
+          "projectId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "projectName": {
+            "type": "string"
+          },
+          "taskId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "taskStatus": {
+            "type": "string"
+          },
+          "workflowRunId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "traceNodeId": {
+            "format": "int64",
+            "type": "integer",
+            "description": "Trace node of the Manager decision that produced this result"
           }
         }
       },

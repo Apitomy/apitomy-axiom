@@ -8,9 +8,11 @@ import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
+import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
+import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.axiom.core.events.model.RoutingRule;
 import io.apitomy.axiom.core.filters.SubscriptionFilterEvaluator;
@@ -397,7 +399,7 @@ public class EventStreamOrchestrator {
                     outcome.ledgerId = ledgerId;
                     outcome.routingType = rule.type();
                     outcome.createdOn = Instant.now();
-                    QuarkusTransaction.requiringNew().run(() -> outcome.persist());
+                    QuarkusTransaction.requiringNew().run(() -> persistOutcome(outcome));
                 }
             } catch (Exception e) {
                 // Record failed outcome (routing types may supply a pre-filled one, e.g.
@@ -413,12 +415,52 @@ public class EventStreamOrchestrator {
                                 ? truncate(e.getMessage(), 2000) : "Unknown error";
                     }
                     failedOutcome.createdOn = Instant.now();
-                    failedOutcome.persist();
+                    persistOutcome(failedOutcome);
                 });
                 // Still throw to mark the ledger entry as failed
                 throw e;
             }
         }
+    }
+
+    /**
+     * Persists an outcome and its pending items, in the caller's transaction. Each routing
+     * attempt persists its own outcome, so an attempt's items always stay on that attempt's
+     * outcome. Items never affect the retry logic, which counts outcomes only.
+     */
+    private static void persistOutcome(RoutingOutcomeEntity outcome) {
+        outcome.persist();
+        for (RoutingOutcomeItemEntity item : outcome.pendingItems) {
+            item.outcomeId = outcome.id;
+            item.createdOn = outcome.createdOn;
+            item.persist();
+        }
+        outcome.pendingItems.clear();
+    }
+
+    private static RoutingOutcomeItemEntity newItem(String itemType, String status,
+                                                    String summary) {
+        RoutingOutcomeItemEntity item = new RoutingOutcomeItemEntity();
+        item.itemType = itemType;
+        item.status = status;
+        item.summary = truncate(summary, 2000);
+        return item;
+    }
+
+    /**
+     * Item type recorded for a Manager decision: a decision below the confidence threshold
+     * is escalated whatever it asked for.
+     */
+    private String decisionItemType(ManagerDecision decision) {
+        if (!managerService.meetsConfidenceThreshold(decision)) {
+            return RoutingOutcomeItemEntity.TYPE_ESCALATED;
+        }
+        return switch (decision.decision() != null ? decision.decision() : "") {
+            case "create_task", "script_action" -> RoutingOutcomeItemEntity.TYPE_TASK;
+            case "ignore" -> RoutingOutcomeItemEntity.TYPE_IGNORED;
+            case "escalate" -> RoutingOutcomeItemEntity.TYPE_ESCALATED;
+            default -> RoutingOutcomeItemEntity.TYPE_DECISION;
+        };
     }
 
     private RoutingOutcomeEntity routeToManager(StreamEventEntity event) {
@@ -482,6 +524,10 @@ public class EventStreamOrchestrator {
 
             Long decisionNodeId = addTraceNode(traceCtx, "manager-decision",
                     decisionNodeSummary(decision));
+            RoutingOutcomeItemEntity item = newItem(decisionItemType(decision), "completed",
+                    label + " — " + decision.reasoning());
+            item.traceNodeId = decisionNodeId;
+            outcome.pendingItems.add(item);
             if (traceCtx != null && decisionNodeId != null) {
                 traceCtx.push(decisionNodeId);
             }
@@ -490,6 +536,8 @@ public class EventStreamOrchestrator {
                 completeTraceNode(decisionNodeId, "completed",
                         result != null ? result.activityLogId() : null);
                 if (result != null) {
+                    item.projectId = result.projectId();
+                    item.taskId = result.taskId();
                     if (result.projectId() != null) {
                         projectIds.add(result.projectId());
                     }
@@ -505,6 +553,8 @@ public class EventStreamOrchestrator {
                 LOG.warnf(e, "Failed to process Manager decision '%s' for event %s",
                         decision.decision(), event.id);
                 failDecisionNode(traceCtx, decisionNodeId, error);
+                item.status = "failed";
+                item.errorMessage = truncate(error, 2000);
                 summaryBuilder.append(" failed: ").append(error);
             } finally {
                 if (traceCtx != null && decisionNodeId != null) {
@@ -832,8 +882,9 @@ public class EventStreamOrchestrator {
             LOG.warnf(e, "Failed to build event context for workflow creation");
         }
 
-        QuarkusTransaction.requiringNew().run(() ->
-                workflowExecutionService.triggerWorkflow(projectId, rule.workflowDefinitionId(), extraContext));
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(projectId, rule.workflowDefinitionId(),
+                        extraContext));
         LOG.infof("Created workflow (definition %d) for event %s on project %d",
                 rule.workflowDefinitionId(), event.id, projectId);
 
@@ -843,6 +894,11 @@ public class EventStreamOrchestrator {
         outcome.status = "completed";
         outcome.summary = "Created workflow from definition " + rule.workflowDefinitionId();
         outcome.projectId = projectId;
+        RoutingOutcomeItemEntity item = newItem(RoutingOutcomeItemEntity.TYPE_WORKFLOW_RUN,
+                "completed", "Workflow run from definition " + rule.workflowDefinitionId());
+        item.projectId = projectId;
+        item.workflowRunId = run != null ? run.id : null;
+        outcome.pendingItems.add(item);
         return outcome;
     }
 
@@ -900,6 +956,11 @@ public class EventStreamOrchestrator {
         outcome.summary = "Invoked action: " + actionType.name;
         outcome.projectId = projectId;
         outcome.taskId = taskId;
+        RoutingOutcomeItemEntity item = newItem(RoutingOutcomeItemEntity.TYPE_TASK, "completed",
+                "Task: " + actionType.name);
+        item.projectId = projectId;
+        item.taskId = taskId;
+        outcome.pendingItems.add(item);
         if (traceCtx != null) {
             outcome.traceId = traceCtx.traceId();
         }

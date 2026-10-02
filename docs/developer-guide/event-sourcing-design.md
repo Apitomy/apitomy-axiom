@@ -131,6 +131,33 @@ Each `(event_id, subscription_id)` pair gets a ledger entry with one of four sta
 - **Startup recovery:** Orphaned `pending` entries from a previous crash are bulk-updated
   to `failed` on the first tick, then retried normally.
 
+### Routing outcomes and items
+
+Each routing rule run records one `routing_outcome` row per attempt (routing type, status, summary,
+trace ID, error). Everything the rule produced is recorded as `routing_outcome_item` rows (V67, #418),
+children of the outcome deleted with it (`ON DELETE CASCADE`; `StreamEventCleanup` also deletes them
+explicitly):
+
+| Item type | Written by | Links |
+|-----------|------------|-------|
+| `task` | Manager `create_task` / `script_action` decision; `invoke-action` rule | `task_id`, `project_id` |
+| `workflow-run` | `create-workflow` rule | `workflow_run_id`, `project_id` |
+| `ignored` | Manager `ignore` decision | — |
+| `escalated` | Manager `escalate` decision, or any decision below the confidence threshold | `project_id` if the escalation was posted to a project |
+| `decision` | Manager decision of an unknown type (always `failed`) | — |
+
+Each item has a `status` (`completed` or `failed`), a `summary` and, when failed, an `error_message`.
+Manager items have one row per decision, including decisions that failed, and `trace_node_id` points to
+the decision's `manager-decision` trace node. `workflow-dispatch` rules write no items yet (#421).
+
+The outcome's own `project_id` and `task_id` columns are kept for backward compatibility. They still hold
+only the **first** project and task; readers should use the items. Outcomes recorded before V67 have no
+items.
+
+Items never affect retries: the attempt cap and the skip-on-retry rule count `routing_outcome` rows by
+status and routing type, not items. Each attempt persists its own outcome together with its items, so the
+items of an attempt stay on that attempt's outcome and never appear on a later attempt's outcome.
+
 ## REST API
 
 ### Connections

@@ -2382,6 +2382,21 @@ export interface EventProcessingOutcome {
     taskId?: number;
     taskStatus?: string;
     traceId?: string;
+    /** Every result of the outcome; empty for outcomes recorded before items existed. */
+    items?: EventProcessingOutcomeItem[];
+}
+
+export interface EventProcessingOutcomeItem {
+    type: string;
+    status: string;
+    summary?: string;
+    errorMessage?: string;
+    projectId?: number;
+    projectName?: string;
+    taskId?: number;
+    taskStatus?: string;
+    workflowRunId?: number;
+    traceNodeId?: number;
 }
 
 export interface EventProcessingEntry {

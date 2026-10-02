@@ -3,6 +3,8 @@ package io.apitomy.axiom.app;
 import io.apitomy.axiom.core.entities.ConnectionPollLogEntity;
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
+import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
+import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.annotation.PreDestroy;
@@ -64,6 +66,14 @@ public class StreamEventCleanup {
         }
 
         List<UUID> eventIds = staleEvents.stream().map(e -> e.id).toList();
+
+        // Delete routing outcome items and outcomes explicitly. The Flyway schema cascades
+        // these from the ledger, but a schema generated from the entities has no cascade.
+        RoutingOutcomeItemEntity.delete("outcomeId in (select o.id from RoutingOutcomeEntity o "
+                + "where o.ledgerId in (select l.id from EventProcessingLedgerEntity l "
+                + "where l.eventId in ?1))", eventIds);
+        RoutingOutcomeEntity.delete("ledgerId in (select l.id from EventProcessingLedgerEntity l "
+                + "where l.eventId in ?1)", eventIds);
 
         // Delete associated ledger entries first (FK constraint)
         long ledgerDeleted = EventProcessingLedgerEntity

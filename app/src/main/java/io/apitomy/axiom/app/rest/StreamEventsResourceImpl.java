@@ -5,6 +5,7 @@ import io.apitomy.axiom.api.StreamResource;
 import io.apitomy.axiom.api.beans.Actor;
 import io.apitomy.axiom.api.beans.EventProcessingEntry;
 import io.apitomy.axiom.api.beans.EventProcessingOutcome;
+import io.apitomy.axiom.api.beans.EventProcessingOutcomeItem;
 import io.apitomy.axiom.api.beans.EventProcessingSearchResults;
 import io.apitomy.axiom.api.beans.Payload;
 import io.apitomy.axiom.api.beans.SourceData;
@@ -14,6 +15,7 @@ import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
+import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.quarkus.panache.common.Page;
@@ -152,13 +154,27 @@ public class StreamEventsResourceImpl implements StreamResource {
             }
         }
 
-        // Load project names for outcome project IDs
+        // Load the items of those outcomes
+        List<Long> outcomeIds = outcomesByLedger.values().stream()
+                .flatMap(List::stream).map(o -> o.id).toList();
+        Map<Long, List<RoutingOutcomeItemEntity>> itemsByOutcome = new HashMap<>();
+        if (!outcomeIds.isEmpty()) {
+            RoutingOutcomeItemEntity.<RoutingOutcomeItemEntity>list(
+                    "outcomeId IN ?1 ORDER BY id ASC", outcomeIds)
+                    .forEach(i -> itemsByOutcome
+                            .computeIfAbsent(i.outcomeId, k -> new java.util.ArrayList<>()).add(i));
+        }
+
+        // Load project names for outcome and item project IDs
         java.util.Set<Long> outcomeProjectIds = new java.util.HashSet<>();
         for (List<RoutingOutcomeEntity> ocs : outcomesByLedger.values()) {
             for (RoutingOutcomeEntity o : ocs) {
                 if (o.projectId != null) outcomeProjectIds.add(o.projectId);
             }
         }
+        itemsByOutcome.values().stream().flatMap(List::stream)
+                .filter(i -> i.projectId != null)
+                .forEach(i -> outcomeProjectIds.add(i.projectId));
         Map<Long, String> projectNames = new HashMap<>();
         if (!outcomeProjectIds.isEmpty()) {
             List<ProjectEntity> projects = ProjectEntity
@@ -175,6 +191,9 @@ public class StreamEventsResourceImpl implements StreamResource {
                 if (o.taskId != null) outcomeTaskIds.add(o.taskId);
             }
         }
+        itemsByOutcome.values().stream().flatMap(List::stream)
+                .filter(i -> i.taskId != null)
+                .forEach(i -> outcomeTaskIds.add(i.taskId));
         Map<Long, String> taskStatuses = new HashMap<>();
         if (!outcomeTaskIds.isEmpty()) {
             List<TaskEntity> tasks = TaskEntity
@@ -219,6 +238,9 @@ public class StreamEventsResourceImpl implements StreamResource {
                 outcome.setTaskId(o.taskId);
                 if (o.taskId != null) outcome.setTaskStatus(taskStatuses.get(o.taskId));
                 outcome.setTraceId(o.traceId);
+                outcome.setItems(itemsByOutcome.getOrDefault(o.id, List.of()).stream()
+                        .map(i -> toItemBean(i, projectNames, taskStatuses))
+                        .toList());
                 return outcome;
             }).toList();
             if (!outcomes.isEmpty()) {
@@ -232,6 +254,23 @@ public class StreamEventsResourceImpl implements StreamResource {
         results.setItems(items);
         results.setTotalCount((long) items.size());
         return results;
+    }
+
+    private static EventProcessingOutcomeItem toItemBean(RoutingOutcomeItemEntity i,
+                                                         Map<Long, String> projectNames,
+                                                         Map<Long, String> taskStatuses) {
+        EventProcessingOutcomeItem item = new EventProcessingOutcomeItem();
+        item.setType(i.itemType);
+        item.setStatus(i.status);
+        item.setSummary(i.summary);
+        item.setErrorMessage(i.errorMessage);
+        item.setProjectId(i.projectId);
+        if (i.projectId != null) item.setProjectName(projectNames.get(i.projectId));
+        item.setTaskId(i.taskId);
+        if (i.taskId != null) item.setTaskStatus(taskStatuses.get(i.taskId));
+        item.setWorkflowRunId(i.workflowRunId);
+        item.setTraceNodeId(i.traceNodeId);
+        return item;
     }
 
     private StreamEvent toBean(StreamEventEntity entity) {

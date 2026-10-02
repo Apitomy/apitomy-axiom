@@ -30,6 +30,8 @@ import { useEffectiveTheme } from "../hooks/useTheme";
 import {
     type StreamEvent,
     type EventProcessingEntry,
+    type EventProcessingOutcome,
+    type EventProcessingOutcomeItem,
     fetchStreamEvent,
     fetchEventProcessing,
 } from "../config/api";
@@ -187,6 +189,72 @@ const ROUTING_LABELS: Record<string, string> = {
     processing: "Event Processing",
 };
 
+const ITEM_LABELS: Record<string, string> = {
+    task: "Task",
+    "workflow-run": "Workflow Run",
+    ignored: "Ignored",
+    escalated: "Escalated",
+    decision: "Decision",
+};
+
+function hasItems(outcome: EventProcessingOutcome): boolean {
+    return !!outcome.items && outcome.items.length > 0;
+}
+
+function taskStatusColor(status?: string): "green" | "red" | "grey" {
+    return status === "Completed" ? "green" : status === "Failed" ? "red" : "grey";
+}
+
+/** Lists every result of a routing outcome, each linked to what it produced. */
+function OutcomeItems({ items }: { items: EventProcessingOutcomeItem[] }) {
+    return (
+        <ul style={{ listStyle: "none", padding: 0, margin: "8px 0 0 0" }}>
+            {items.map((item, i) => (
+                <li key={i} style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: "8px",
+                    padding: "4px 0",
+                    flexWrap: "wrap",
+                }}>
+                    {item.status === "failed" ? (
+                        <TimesCircleIcon color="var(--pf-v6-global--danger-color--100)" />
+                    ) : (
+                        <CheckCircleIcon color="var(--pf-v6-global--success-color--100)" />
+                    )}
+                    <Label isCompact color={item.status === "failed" ? "red" : "grey"}>
+                        {ITEM_LABELS[item.type] || item.type}: {item.status}
+                    </Label>
+                    {item.taskId && item.projectId && (
+                        <Link to={`/projects/${item.projectId}`}>Task #{item.taskId}</Link>
+                    )}
+                    {item.taskId && (
+                        <Label isCompact color={taskStatusColor(item.taskStatus)}>
+                            {item.taskStatus || "Pending"}
+                        </Label>
+                    )}
+                    {item.workflowRunId && (
+                        <Link to={`/logs/workflow-runs/${item.workflowRunId}`}>
+                            Workflow Run #{item.workflowRunId}
+                        </Link>
+                    )}
+                    {item.projectId && (
+                        <Link to={`/projects/${item.projectId}`}>
+                            {item.projectName || `Project #${item.projectId}`}
+                        </Link>
+                    )}
+                    {item.summary && <span>{item.summary}</span>}
+                    {item.errorMessage && (
+                        <span style={{ color: "var(--pf-v6-global--danger-color--100)" }}>
+                            Error: {item.errorMessage}
+                        </span>
+                    )}
+                </li>
+            ))}
+        </ul>
+    );
+}
+
 function ProcessingTab({ entries, loading }: {
     entries: EventProcessingEntry[];
     loading: boolean;
@@ -313,12 +381,12 @@ function ProcessingTab({ entries, loading }: {
                                                         marginTop: "4px",
                                                         flexWrap: "wrap",
                                                     }}>
-                                                        {o.projectId && (
+                                                        {!hasItems(o) && o.projectId && (
                                                             <Link to={`/projects/${o.projectId}`}>
                                                                 {o.projectName || `Project #${o.projectId}`}
                                                             </Link>
                                                         )}
-                                                        {o.taskId && (
+                                                        {!hasItems(o) && o.taskId && (
                                                             <Label isCompact
                                                                 color={o.taskStatus === "Completed" ? "green"
                                                                     : o.taskStatus === "Failed" ? "red"
@@ -333,6 +401,7 @@ function ProcessingTab({ entries, loading }: {
                                                             </Link>
                                                         )}
                                                     </div>
+                                                    {hasItems(o) && <OutcomeItems items={o.items!} />}
                                                 </div>
                                             </div>
                                         ))}

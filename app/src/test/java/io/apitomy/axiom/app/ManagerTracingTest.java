@@ -5,6 +5,7 @@ import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
+import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.TraceEntity;
@@ -62,6 +63,7 @@ class ManagerTracingTest {
     @AfterEach
     void cleanup() {
         QuarkusTransaction.requiringNew().run(() -> {
+            RoutingOutcomeItemEntity.deleteAll();
             RoutingOutcomeEntity.deleteAll();
             EventProcessingLedgerEntity.deleteAll();
             for (UUID id : eventIds) {
