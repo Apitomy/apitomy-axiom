@@ -166,6 +166,30 @@ CREATE INDEX IF NOT EXISTS idx_task_status ON task (status);
 
 ---
 
+## Configuration Versions of Jobs and Reports
+
+Scheduled job and report definitions are edited in place. To keep the configuration each run used (#426),
+`V71` adds `scheduled_job_version` and `report_definition_version`. Each row stores a canonical JSON snapshot
+(`config_snapshot`, sorted keys, unset fields omitted) of a definition's execution-relevant fields and its
+SHA-256 `config_hash`. A row is unique per `(definition, config_hash)`, so runs with identical configuration
+share one version. `scheduled_job_run.config_version_id` and `report.config_version_id` point at the version.
+
+- `ConfigSnapshotService` builds the snapshot and finds or creates the version. `ScheduledJobScheduler` and
+  `ReportScheduler` call it when they create the run or report row (scheduled and manual paths), in the same
+  transaction, because both paths load the definition there.
+- Environment values are redacted unless they are exactly a `${secret:NAME}` reference. Never add a field
+  that can hold a secret value without redacting it.
+- `GET /scheduled-jobs/runs/{runId}/config` and `GET /reports/{reportId}/config` return the snapshot,
+  compared field by field with the current definition; `changed` compares the hashes. They return 404 for
+  rows created before V71 (`config_version_id` is null).
+- Retention: versions belong to their definition. The delete endpoints remove runs/reports, then versions,
+  then the definition. In Flyway-managed databases the FKs also cascade from the definition and set
+  `config_version_id` to null if a version is removed. Deleting a single report keeps its version.
+- Adding a field to the snapshot changes the hash of every definition, so the next run gets a new version
+  and older runs show as changed.
+
+---
+
 ## Development Tips
 
 - In **dev mode** (default), Hibernate recreates the schema on every restart. You

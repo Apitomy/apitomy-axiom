@@ -36,6 +36,9 @@ public class ScheduledJobScheduler {
     @Inject
     Event<SseEvent> sseEvents;
 
+    @Inject
+    ConfigSnapshotService configSnapshots;
+
     private volatile boolean shuttingDown = false;
 
     @PreDestroy
@@ -88,6 +91,7 @@ public class ScheduledJobScheduler {
                 run.trigger = "scheduled";
                 run.triggeredBy = "scheduler";
                 run.createdOn = Instant.now();
+                run.configVersionId = configSnapshots.recordJobVersion(job);
                 run.persist();
 
                 job.lastRunAt = Instant.now();
@@ -132,6 +136,7 @@ public class ScheduledJobScheduler {
         run.triggeredBy = "manual";
         run.triggeredByTraceId = callerTraceId;
         run.createdOn = Instant.now();
+        run.configVersionId = configSnapshots.recordJobVersion(job);
         run.persist();
 
         job.lastRunAt = Instant.now();

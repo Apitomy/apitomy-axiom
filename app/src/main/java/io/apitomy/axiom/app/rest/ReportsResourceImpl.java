@@ -4,6 +4,7 @@ import io.apitomy.axiom.api.ReportsResource;
 import io.apitomy.axiom.api.beans.Trace;
 import io.apitomy.axiom.core.entities.TraceEntity;
 import io.apitomy.axiom.api.beans.NewReportDefinition;
+import io.apitomy.axiom.api.beans.ConfigurationSnapshot;
 import io.apitomy.axiom.api.beans.Report;
 import io.apitomy.axiom.api.beans.ReportAiEditRequest;
 import io.apitomy.axiom.api.beans.ReportAiEditResponse;
@@ -12,11 +13,13 @@ import io.apitomy.axiom.api.beans.ReportSearchResults;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.beans.Environment;
+import io.apitomy.axiom.app.ConfigSnapshotService;
 import io.apitomy.axiom.app.ReportAiService;
 import io.apitomy.axiom.app.ReportQueueConsumer;
 import io.apitomy.axiom.app.ReportScheduler;
 import io.apitomy.axiom.core.SdkFunctionRegistry;
 import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
+import io.apitomy.axiom.core.entities.ReportDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.ReportEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
@@ -59,6 +62,9 @@ public class ReportsResourceImpl implements ReportsResource {
 
     @Inject
     CallerTraceContext callerTraceContext;
+
+    @Inject
+    ConfigSnapshotService configSnapshots;
 
     @Inject
     ReportQueueConsumer reportQueuePoller;
@@ -151,6 +157,7 @@ public class ReportsResourceImpl implements ReportsResource {
         ReportDefinitionEntity entity = findDefinitionOrThrow(definitionId);
         // Delete associated reports
         ReportEntity.delete("definitionId", definitionId);
+        ReportDefinitionVersionEntity.delete("definitionId", definitionId);
         entity.delete();
     }
 
@@ -449,5 +456,23 @@ public class ReportsResourceImpl implements ReportsResource {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public ConfigurationSnapshot getReportConfig(long reportId) {
+        ReportEntity report = ReportEntity.findById(reportId);
+        if (report == null) {
+            throw new WebApplicationException("Report not found: " + reportId, 404);
+        }
+        ReportDefinitionVersionEntity version = report.configVersionId == null
+                ? null : ReportDefinitionVersionEntity.findById(report.configVersionId);
+        if (version == null) {
+            throw new WebApplicationException(
+                    "No configuration was recorded for report: " + reportId, 404);
+        }
+        return configSnapshots.toBean(version, ReportDefinitionEntity.findById(report.definitionId));
     }
 }

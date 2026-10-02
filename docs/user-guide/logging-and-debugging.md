@@ -55,6 +55,7 @@ the pipeline things went wrong and examining the logs at that stage.
 | Report failed | Report detail page > **View Log** |
 | Report content is wrong or incomplete | Report detail page > **View Log** — check tool output |
 | Scheduled job failed | Scheduled job detail page > Runs tab > **View Log** |
+| A run or report behaves differently from the current definition | Run or report detail > **Configuration used** |
 | Scheduled job never runs | Scheduled job detail page — check **Enabled** and **Schedule** settings |
 | Workflow run stuck | **Logs > Workflow Runs** — check current node and status |
 | No agent picks up a task/report/job | **Configuration > Agents** — confirm an enabled agent's capabilities match |
@@ -205,6 +206,33 @@ did (or tried to do).
 
 ---
 
+## Configuration Used by a Run or Report
+
+Scheduled job and report definitions can be edited at any time, so a run or report may have used a different
+prompt, model, tool list or script than the definition has now. Axiom records the execution configuration each
+scheduled job run and report was created with, both for scheduled and **Run Now** triggers.
+
+- **Scheduled jobs:** open the job, go to the **Runs** tab and expand a run.
+- **Reports:** open the report detail page.
+
+The **Configuration used** section shows a label: **Matches current definition**, or **Changed since this
+run/report**. Expand it to see each field. When the definition has changed, a second column shows the current
+value, changed fields are marked, and **Only changed fields** hides the rest.
+
+Recorded fields:
+
+| Definition | Fields |
+|------------|--------|
+| Scheduled job | execution mode, prompt template, script template, engine, model, allowed tools, max steps, max budget, timeout, environment |
+| Report | prompt template, title template, time window, engine, model, allowed tools, max steps, max budget, timeout, environment |
+
+Names, descriptions, schedules, the enabled flag and labels are not recorded: they do not change what a run
+does. Secret values are never stored. In the environment, a value that is exactly a `${secret:NAME}` reference
+is shown as is; every other value is shown as `[redacted]`, so a change to a literal environment value is not
+detected. Runs and reports created before this feature have no recorded configuration.
+
+---
+
 ## Tracing Reports
 
 ### Step 1: Check the Report Status
@@ -235,6 +263,8 @@ This shows:
 - **Wrong data in the report** — check the tool output in the execution log. The tool
   may be returning unexpected data, or the prompt template may need to be more specific
   about how to interpret the data.
+- **Definition edited since the report ran** — see
+  [Configuration Used by a Run or Report](#configuration-used-by-a-run-or-report).
 - **Report stuck Pending** — check **Configuration > Agents** for an enabled agent whose
   capabilities match `report:<definition-slug>`.
 - **Report never runs** — check the report definition: is it **Enabled**? Is the

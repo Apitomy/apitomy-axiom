@@ -32,6 +32,7 @@ import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { AiConfigTab } from "../components/AiConfigTab";
 import { EnvironmentTab } from "../components/EnvironmentTab";
+import { ConfigurationUsed } from "../components/ConfigurationUsed";
 import { ToolListEditor } from "../components/ToolListEditor";
 import { LabelInput } from "../components/LabelInput";
 import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
@@ -46,6 +47,7 @@ import {
     deleteScheduledJob,
     runScheduledJob,
     fetchScheduledJobRuns,
+    fetchScheduledJobRunConfig,
     fetchModels,
     fetchEngines,
 } from "../config/api";
@@ -601,6 +603,7 @@ function RunDetail({ run }: { run: ScheduledJobRun }) {
                     No output or error details available for this run.
                 </p>
             )}
+            <ConfigurationUsed noun="run" load={() => fetchScheduledJobRunConfig(run.id)} />
         </div>
     );
 }

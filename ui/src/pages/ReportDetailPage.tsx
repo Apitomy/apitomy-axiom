@@ -26,6 +26,7 @@ import {
     fetchReportDefinition,
     deleteReport,
     updateReportLabels,
+    fetchReportConfig,
 } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 import { RenderedReport } from "../components/RenderedReport";
@@ -33,6 +34,7 @@ import { ExecutionLogModal } from "../components/ExecutionLogModal";
 import { LabelDisplay } from "../components/LabelDisplay";
 import { EditLabelsModal } from "../components/EditLabelsModal";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
+import { ConfigurationUsed } from "../components/ConfigurationUsed";
 import {If} from "@apitomy/common-ui-components";
 
 export function ReportDetailPage() {
@@ -217,6 +219,10 @@ export function ReportDetailPage() {
                             </DescriptionListDescription>
                         </DescriptionListGroup>
                     </DescriptionList>
+                    <div style={{ marginTop: "16px" }}>
+                        <ConfigurationUsed key={report.id} noun="report"
+                            load={() => fetchReportConfig(report.id)} />
+                    </div>
                 </CardBody>
             </Card>
 

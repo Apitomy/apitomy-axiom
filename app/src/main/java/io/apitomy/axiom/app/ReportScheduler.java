@@ -37,6 +37,9 @@ public class ReportScheduler {
     @Inject
     Event<SseEvent> sseEvents;
 
+    @Inject
+    ConfigSnapshotService configSnapshots;
+
     private volatile boolean shuttingDown = false;
 
     @PreDestroy
@@ -92,6 +95,7 @@ public class ReportScheduler {
                 report.triggeredBy = "scheduler";
                 report.createdOn = Instant.now();
                 report.labels.addAll(definition.initialLabels);
+                report.configVersionId = configSnapshots.recordReportVersion(definition);
                 report.persist();
 
                 definition.lastRunAt = Instant.now();
@@ -142,6 +146,7 @@ public class ReportScheduler {
         report.triggeredByTraceId = callerTraceId;
         report.createdOn = Instant.now();
         report.labels.addAll(definition.initialLabels);
+        report.configVersionId = configSnapshots.recordReportVersion(definition);
         report.persist();
 
         // Update the definition's scheduling

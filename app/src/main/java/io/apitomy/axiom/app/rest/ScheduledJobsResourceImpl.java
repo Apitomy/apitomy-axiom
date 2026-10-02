@@ -1,6 +1,7 @@
 package io.apitomy.axiom.app.rest;
 
 import io.apitomy.axiom.api.ScheduledResource;
+import io.apitomy.axiom.api.beans.ConfigurationSnapshot;
 import io.apitomy.axiom.api.beans.Environment;
 import io.apitomy.axiom.api.beans.NewScheduledJob;
 import io.apitomy.axiom.api.beans.ScheduledJob;
@@ -8,11 +9,13 @@ import io.apitomy.axiom.api.beans.ScheduledJobRun;
 import io.apitomy.axiom.api.beans.ScheduledJobRunSearchResults;
 import io.apitomy.axiom.api.beans.ToolValidationMessage;
 import io.apitomy.axiom.api.beans.ToolValidationResult;
+import io.apitomy.axiom.app.ConfigSnapshotService;
 import io.apitomy.axiom.app.ScheduledJobQueueConsumer;
 import io.apitomy.axiom.app.ScheduledJobScheduler;
 import io.apitomy.axiom.core.SdkFunctionRegistry;
 import io.apitomy.axiom.core.entities.ScheduledJobEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
+import io.apitomy.axiom.core.entities.ScheduledJobVersionEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
@@ -57,6 +60,9 @@ public class ScheduledJobsResourceImpl implements ScheduledResource {
 
     @Inject
     ScheduledJobQueueConsumer queueConsumer;
+
+    @Inject
+    ConfigSnapshotService configSnapshots;
 
     // ── Scheduled Jobs CRUD ─────────────────────────────────────────
 
@@ -115,6 +121,7 @@ public class ScheduledJobsResourceImpl implements ScheduledResource {
     public void deleteScheduledJob(long jobId) {
         ScheduledJobEntity entity = findOrThrow(jobId);
         ScheduledJobRunEntity.delete("jobId", jobId);
+        ScheduledJobVersionEntity.delete("jobId", jobId);
         entity.delete();
     }
 
@@ -446,5 +453,20 @@ public class ScheduledJobsResourceImpl implements ScheduledResource {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public ConfigurationSnapshot getScheduledJobRunConfig(long runId) {
+        ScheduledJobRunEntity run = findRunOrThrow(runId);
+        ScheduledJobVersionEntity version = run.configVersionId == null
+                ? null : ScheduledJobVersionEntity.findById(run.configVersionId);
+        if (version == null) {
+            throw new WebApplicationException(
+                    "No configuration was recorded for scheduled job run: " + runId, 404);
+        }
+        return configSnapshots.toBean(version, ScheduledJobEntity.findById(run.jobId));
     }
 }
