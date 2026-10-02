@@ -20,6 +20,7 @@ import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Polls for report definitions that are due and triggers report generation.
@@ -87,6 +88,8 @@ public class ReportScheduler {
                 report.definitionId = definition.id;
                 report.status = "Pending";
                 report.title = definition.name;
+                report.trigger = "scheduled";
+                report.triggeredBy = "scheduler";
                 report.createdOn = Instant.now();
                 report.labels.addAll(definition.initialLabels);
                 report.persist();
@@ -107,18 +110,36 @@ public class ReportScheduler {
     }
 
     /**
-     * Creates a pending report entity and advances the definition's next run time.
+     * Creates a pending, manually triggered report entity and advances the definition's next
+     * run time.
      *
      * @param definition the report definition
      * @return the created report entity ID
      */
     @Transactional
     public Long createReportAndScheduleNext(ReportDefinitionEntity definition) {
+        return createReportAndScheduleNext(definition, null);
+    }
+
+    /**
+     * Creates a pending, manually triggered report entity and advances the definition's next
+     * run time.
+     *
+     * @param definition    the report definition
+     * @param callerTraceId trace of the caller (e.g. an agent) that triggered the report, or null
+     * @return the created report entity ID
+     */
+    @Transactional
+    public Long createReportAndScheduleNext(ReportDefinitionEntity definition,
+            UUID callerTraceId) {
         // Create the report entity
         ReportEntity report = new ReportEntity();
         report.definitionId = definition.id;
         report.status = "Pending";
         report.title = definition.name;
+        report.trigger = "manual";
+        report.triggeredBy = "manual";
+        report.triggeredByTraceId = callerTraceId;
         report.createdOn = Instant.now();
         report.labels.addAll(definition.initialLabels);
         report.persist();

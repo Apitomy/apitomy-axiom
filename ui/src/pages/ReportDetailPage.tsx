@@ -176,14 +176,39 @@ export function ReportDetailPage() {
                                 </DescriptionListDescription>
                             </DescriptionListGroup>
                         )}
-                        {report.costUsd != null && (
-                            <DescriptionListGroup>
-                                <DescriptionListTerm>AI Cost</DescriptionListTerm>
-                                <DescriptionListDescription>
-                                    ${report.costUsd.toFixed(4)}
-                                </DescriptionListDescription>
-                            </DescriptionListGroup>
-                        )}
+                        <DescriptionListGroup>
+                            <DescriptionListTerm>Triggered</DescriptionListTerm>
+                            <DescriptionListDescription data-testid="report-trigger">
+                                {report.trigger
+                                    ? `${report.trigger}${report.triggeredBy
+                                        && report.triggeredBy !== report.trigger
+                                        ? ` (by ${report.triggeredBy})` : ""}`
+                                    : "Unknown"}
+                                {report.triggeredByTraceId && (
+                                    <>
+                                        {" — "}
+                                        <Link to={`/logs/traces/${report.triggeredByTraceId}`}>
+                                            caller trace
+                                        </Link>
+                                    </>
+                                )}
+                            </DescriptionListDescription>
+                        </DescriptionListGroup>
+                        <DescriptionListGroup>
+                            <DescriptionListTerm>AI Cost</DescriptionListTerm>
+                            <DescriptionListDescription data-testid="report-ai-cost">
+                                {report.costUsd != null ? `$${report.costUsd.toFixed(4)}` : "—"}
+                                {" ("}
+                                <Link to={`/metrics/ai-usage?reportId=${report.id}`}>
+                                    AI usage
+                                </Link>
+                                {" | "}
+                                <Link to={`/logs/activity?reportId=${report.id}`}>
+                                    activity
+                                </Link>
+                                {")"}
+                            </DescriptionListDescription>
+                        </DescriptionListGroup>
                         <DescriptionListGroup>
                             <DescriptionListTerm>Labels</DescriptionListTerm>
                             <DescriptionListDescription>

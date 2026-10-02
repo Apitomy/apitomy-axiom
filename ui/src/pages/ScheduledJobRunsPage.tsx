@@ -218,7 +218,23 @@ export function ScheduledJobRunsPage() {
                                             {run.jobName || `Job #${run.jobId}`}
                                         </Link>
                                     </Td>
-                                    <Td>{run.trigger}</Td>
+                                    <Td>
+                                        {run.trigger}
+                                        {run.triggeredBy && run.triggeredBy !== run.trigger && (
+                                            <div style={{ fontSize: "0.85em", color: "var(--pf-t--global--text--color--subtle)" }}>
+                                                by {run.triggeredBy}
+                                                {run.triggeredByTraceId && (
+                                                    <>
+                                                        {" "}(
+                                                        <Link to={`/logs/traces/${run.triggeredByTraceId}`}>
+                                                            caller trace
+                                                        </Link>
+                                                        )
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+                                    </Td>
                                     <Td style={{ whiteSpace: "nowrap" }}>
                                         {run.startedAt
                                             ? new Date(run.startedAt).toLocaleString()
@@ -231,11 +247,23 @@ export function ScheduledJobRunsPage() {
                                     <Td>{formatCost(run.costUsd)}</Td>
                                     <Td>
                                         {run.traceId && (
-                                            <Link to={`/logs/traces/${run.traceId}`}>
-                                                View Trace
-                                            </Link>
+                                            <>
+                                                <Link to={`/logs/traces/${run.traceId}`}>
+                                                    View Trace
+                                                </Link>
+                                                {" | "}
+                                            </>
                                         )}
-                                        {run.traceId && run.executionLog
+                                        <Link to={`/metrics/ai-usage?scheduledJobRunId=${run.id}`}
+                                            data-testid={`run-usage-link-${run.id}`}>
+                                            AI Usage
+                                        </Link>
+                                        {" | "}
+                                        <Link to={`/logs/activity?scheduledJobRunId=${run.id}`}
+                                            data-testid={`run-activity-link-${run.id}`}>
+                                            Activity
+                                        </Link>
+                                        {run.executionLog
                                             && (run.status === "Completed"
                                                 || run.status === "Failed") && " | "}
                                         {(run.status === "Completed" || run.status === "Failed")

@@ -11,6 +11,7 @@ import io.apitomy.axiom.api.beans.ToolValidationResult;
 import io.apitomy.axiom.app.ScheduledJobQueueConsumer;
 import io.apitomy.axiom.app.ScheduledJobScheduler;
 import io.apitomy.axiom.core.SdkFunctionRegistry;
+import io.apitomy.axiom.core.tracing.TraceContext;
 import io.apitomy.axiom.core.entities.ScheduledJobEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
@@ -50,6 +51,9 @@ public class ScheduledJobsResourceImpl implements ScheduledResource {
 
     @Inject
     ScheduledJobScheduler scheduler;
+
+    @Inject
+    CallerTraceContext callerTraceContext;
 
     @Inject
     ScheduledJobQueueConsumer queueConsumer;
@@ -138,7 +142,8 @@ public class ScheduledJobsResourceImpl implements ScheduledResource {
     @Transactional
     Long createRunForManualTrigger(long jobId) {
         ScheduledJobEntity job = findOrThrow(jobId);
-        return scheduler.createRunForManualTrigger(job);
+        return scheduler.createRunForManualTrigger(job,
+                callerTraceContext.get().map(TraceContext::traceId).orElse(null));
     }
 
     // ── Cross-Job Run Listing ───────────────────────────────────────
@@ -408,6 +413,8 @@ public class ScheduledJobsResourceImpl implements ScheduledResource {
         bean.setJobId(entity.jobId);
         bean.setStatus(entity.status);
         bean.setTrigger(entity.trigger);
+        bean.setTriggeredBy(entity.triggeredBy);
+        bean.setTriggeredByTraceId(entity.triggeredByTraceId);
         if (entity.startedAt != null) bean.setStartedAt(Date.from(entity.startedAt));
         if (entity.completedAt != null) bean.setCompletedAt(Date.from(entity.completedAt));
         bean.setOutput(entity.output);

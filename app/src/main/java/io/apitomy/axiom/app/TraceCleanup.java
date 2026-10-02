@@ -72,6 +72,9 @@ public class TraceCleanup {
         TaskEntity.update("traceId = null where traceId in ?1", traceIds);
         ScheduledJobRunEntity.update("traceId = null where traceId in ?1", traceIds);
         ReportEntity.update("traceId = null where traceId in ?1", traceIds);
+        ScheduledJobRunEntity.update(
+                "triggeredByTraceId = null where triggeredByTraceId in ?1", traceIds);
+        ReportEntity.update("triggeredByTraceId = null where triggeredByTraceId in ?1", traceIds);
         ActivityLogEntity.update("traceId = null where traceId in ?1", traceIds);
         AiUsageEntity.update("traceId = null where traceId in ?1", traceIds);
 

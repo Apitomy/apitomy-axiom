@@ -75,8 +75,9 @@ enum, so treat this as the currently observed set rather than an exhaustive cont
 | `task` | A task was created and assigned | `task` |
 | `report-triggered` | Report generation started (root node of a `report-generation` trace) | `report` |
 | `report-ai-invoked` | AI agent launched for the report | `report` |
-| `scheduled-job-triggered` | Scheduled job run started (root node of a `scheduled-job-execution` trace) | — |
-| `scheduled-job-ai-invoked` | AI agent launched for the job run | — |
+| `scheduled-job-triggered` | Scheduled job run started (root node of a `scheduled-job-execution` trace) | `scheduled-job-run` |
+| `scheduled-job-ai-invoked` | AI agent launched for the job run (agent mode) | — |
+| `scheduled-job-script-executed` | Script launched for the job run (script mode) | — |
 | `workflow` | Workflow instance started (root node of a `workflow` trace) | `workflow-run` |
 | `workflow-wait` | Workflow parked at a `wait` or `receive-event` node | — |
 | `tool-execution` | An MCP tool was invoked | `tool-execution` |
@@ -195,7 +196,7 @@ Every unit of work ends with exactly one trace in a final state (`completed` or 
 
 | Work item | Who completes the trace | Early-exit behaviour |
 |---|---|---|
-| Scheduled job run | `ScheduledJobExecutionService` when the agent finishes | No agent / startup error: run is `Failed`, trace and AI node closed as `failed`, `run.traceId` still set |
+| Scheduled job run | `ScheduledJobExecutionService` when the agent or script finishes | No agent / startup error / missing script: run is `Failed`, trace and AI or script node closed as `failed`, `run.traceId` still set |
 | Report | `ReportExecutionService` when the agent finishes | No agent / startup error: report is `Failed` (not left `Pending`), trace closed as `failed`, `report.traceId` still set |
 | Invoke-action task | `TaskTraceFinalizer` when the task reaches a final state | Error before the task is created: trace closed as `failed` |
 | Manager evaluation | Last task created by the evaluation (`TaskTraceFinalizer`); the orchestrator only completes it when no task node is open | Manager failure (AI error or unparseable output): trace and `manager-evaluation` node closed as `failed`, outcome and ledger entry `failed` (retried with backoff up to `axiom.stream-pipeline.max-attempts`, then `exhausted`) |
@@ -205,6 +206,21 @@ Every unit of work ends with exactly one trace in a final state (`completed` or 
 completes the task's `task` node, never completes a workflow-owned trace, and completes any other trace only
 once no other `task` node in it is still `in-progress` — `failed` if any task node failed.
 
+
+### Scheduled job trace structure
+
+Agent-mode and script-mode runs produce the same `scheduled-job-execution` trace. The only difference is
+the child node: script-mode runs have a script node and no AI node.
+
+```
+scheduled-job-triggered          (root, entity scheduled-job-run = run ID)
+├── scheduled-job-ai-invoked     in-progress → completed | failed   (agent mode)
+└── scheduled-job-script-executed in-progress → completed | failed  (script mode; exit code 0 = completed)
+```
+
+`run.traceId` is set when the run starts (`markRunning`), so `GET /scheduled-jobs/runs/{id}` links to the
+trace and `GET /traces?filterScheduledJobRunId={id}` links back. Script-mode runs did not create a trace
+before #424.
 
 ### Manager trace structure
 
@@ -351,6 +367,7 @@ Returns a paginated list of traces with optional filtering.
 | `filterEventId` | string (UUID) | — | Filter by stream event ID (400 if not a valid UUID) |
 | `filterProjectId` | integer | — | Filter by project ID |
 | `filterReportId` | integer | — | Filter by report ID |
+| `filterScheduledJobRunId` | string (numeric) | — | The trace of a scheduled job run: the trace stored on the run, or whose root node references it (400 if not numeric) |
 
 **Response:** `TraceSearchResults`
 

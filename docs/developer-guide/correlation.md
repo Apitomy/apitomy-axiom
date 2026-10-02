@@ -18,7 +18,56 @@ the trace ID, so given one trace ID you can find everything that belongs to that
 | `ai_usage`          | Added in migration `V66`                  |
 
 All columns are nullable UUIDs with no foreign key. Trace data has a bounded lifetime: when `TraceCleanup`
-deletes a trace, it clears `trace_id` on `activity_log`, `ai_usage`, `task`, `scheduled_job_run` and `report`.
+deletes a trace, it clears `trace_id` on `activity_log`, `ai_usage`, `task`, `scheduled_job_run` and `report`,
+and `triggered_by_trace_id` on `scheduled_job_run` and `report`.
+
+## Scheduled Job Run and Report Columns
+
+Traces are deleted after the retention period, so scheduled job runs and reports are also linked to their AI
+usage and activity rows by ID (migration `V70`, #424 and #425). These links remain after the trace is
+deleted.
+
+| Table               | Column                  | Written by                                          |
+|---------------------|-------------------------|-----------------------------------------------------|
+| `ai_usage`          | `scheduled_job_run_id`  | `ScheduledJobExecutionService` (agent mode)         |
+| `ai_usage`          | `report_id`             | `ReportExecutionService`                            |
+| `activity_log`      | `scheduled_job_run_id`  | `ScheduledJobExecutionService` (agent and script)   |
+| `activity_log`      | `report_id`             | `ReportExecutionService`                            |
+| `activity_log`      | `report_definition_id`  | `ReportExecutionService`                            |
+
+All are nullable `BIGINT` columns with no foreign key. Rows written before `V70` have no value.
+
+- `GET /activity?filterScheduledJobRunId={id}` and `GET /usage/ai?filterScheduledJobRunId={id}` return the
+  rows of one run. `filterReportId` does the same for a report.
+- `GET /traces?filterScheduledJobRunId={id}` returns the run's trace. Reports already had
+  `GET /traces?filterReportId={id}`.
+- A malformed (non-numeric) value for any of these filters returns `400 Bad Request`. These filters are
+  typed as strings in OpenAPI for this reason. Integer-typed query parameters such as `filterProjectId`
+  return `404` for malformed values, which is standard JAX-RS behaviour.
+
+In the UI, each row of the Scheduled Job Runs page links to the run's trace, AI usage
+(`/metrics/ai-usage?scheduledJobRunId=`) and activity (`/logs/activity?scheduledJobRunId=`). The report
+detail page shows the report's AI cost with links to `/metrics/ai-usage?reportId=` and
+`/logs/activity?reportId=`. Both pages accept these query parameters as deep links, as with `?traceId=`.
+
+## Who Triggered a Run or Report
+
+`scheduled_job_run` and `report` record how and by whom they were triggered:
+
+| Column                  | Values                                                                        |
+|-------------------------|-------------------------------------------------------------------------------|
+| `run_trigger` / `report_trigger` | `scheduled` or `manual`                                              |
+| `triggered_by`          | `scheduler` for scheduled runs, `manual` for runs started through the REST API |
+| `triggered_by_trace_id` | For manual runs, the caller's trace if the request carried a valid caller trace |
+
+Axiom has no authentication, so `triggered_by` cannot hold a user identity. If authentication is added later,
+`triggered_by` is where the user should be recorded. `triggered_by_trace_id` is set when an agent triggers a
+run through `POST /scheduled-jobs/{id}/run` or `POST /reports/definitions/{id}/run` and its request carries
+the caller trace headers (see below). The new run still gets its own trace; it does not join the caller's.
+
+`V70` sets `triggered_by` on existing scheduled job runs from `run_trigger`. Existing reports keep `NULL` for
+all three columns, because their trigger was never recorded. The API exposes these as `trigger`,
+`triggeredBy` and `triggeredByTraceId` on `ScheduledJobRun` and `Report`.
 
 ## Finding All Records for a Trace
 
@@ -60,9 +109,10 @@ request when the matching environment variables are set:
 If any check fails, the headers are removed and ignored, and a debug log is written. A request never fails
 because of these headers.
 
-Only `POST /projects/{id}/tasks` acts on a valid caller trace: the new task joins the caller's trace and its
-task node is added under the caller's parent node, instead of a new `user-action` trace being created. The
-task's `createdBy` stays `user`. Other endpoints ignore the caller trace.
+`POST /projects/{id}/tasks` joins a valid caller trace: the new task joins the caller's trace and its task
+node is added under the caller's parent node, instead of a new `user-action` trace being created. The task's
+`createdBy` stays `user`. `POST /scheduled-jobs/{id}/run` and `POST /reports/definitions/{id}/run` only
+record the caller trace in `triggered_by_trace_id`. Other endpoints ignore the caller trace.
 
 ## Accepted Risk
 
@@ -78,5 +128,5 @@ belongs to the trace.
 - Tasks that join a report, scheduled-job or workflow trace never complete it; the owning service does. If
   the owner finishes first, its trace is marked complete while the joined task may still be running. The
   task's own node still completes when the task finishes.
-- Out of scope for now: MDC log correlation (#428), run and report ID columns (#424, #425), and the lineage
-  view (#430).
+- Script-mode scheduled job runs have no `ai_usage` row, because no AI is invoked.
+- Out of scope for now: MDC log correlation (#428) and the lineage view (#430).

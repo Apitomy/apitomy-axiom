@@ -47,7 +47,11 @@ const FILTER_TYPES: ChipFilterType[] = [
     { value: "engine", label: "Engine", testId: "usage-filter-engine" },
     { value: "model", label: "Model", testId: "usage-filter-model" },
     { value: "traceId", label: "Trace ID", testId: "usage-filter-traceId" },
+    { value: "scheduledJobRunId", label: "Job Run ID", testId: "usage-filter-scheduledJobRunId" },
+    { value: "reportId", label: "Report ID", testId: "usage-filter-reportId" },
 ];
+
+const DEEP_LINK_FILTERS = ["traceId", "scheduledJobRunId", "reportId"];
 
 export function AiUsagePage() {
     const [records, setRecords] = useState<AiUsage[]>([]);
@@ -58,10 +62,13 @@ export function AiUsagePage() {
 
     const [searchParams] = useSearchParams();
     const [filters, setFilters] = useState<ChipFilterCriteria[]>(() => {
-        const initialTraceId = searchParams.get("traceId");
-        return initialTraceId
-            ? [{ filterBy: FILTER_TYPES.find((t) => t.value === "traceId")!, filterValue: initialTraceId }]
-            : [];
+        // Deep links: ?traceId=, ?scheduledJobRunId= and ?reportId= preset the matching filter
+        return DEEP_LINK_FILTERS.flatMap((key) => {
+            const value = searchParams.get(key);
+            return value
+                ? [{ filterBy: FILTER_TYPES.find((t) => t.value === key)!, filterValue: value }]
+                : [];
+        });
     });
     const [filterDateFrom, setFilterDateFrom] = useState("");
     const [filterDateTo, setFilterDateTo] = useState("");
@@ -76,6 +83,8 @@ export function AiUsagePage() {
     const filterEngine = filters.find((f) => f.filterBy.value === "engine")?.filterValue;
     const filterModel = filters.find((f) => f.filterBy.value === "model")?.filterValue;
     const filterTraceId = filters.find((f) => f.filterBy.value === "traceId")?.filterValue;
+    const filterRunId = filters.find((f) => f.filterBy.value === "scheduledJobRunId")?.filterValue;
+    const filterReportId = filters.find((f) => f.filterBy.value === "reportId")?.filterValue;
     const isFiltered = filters.length > 0 || !!filterDateFrom || !!filterDateTo;
 
     const loadData = useCallback(() => {
@@ -90,7 +99,9 @@ export function AiUsagePage() {
             undefined,
             filterEngine || undefined,
             filterModel || undefined,
-            filterTraceId?.trim() || undefined
+            filterTraceId?.trim() || undefined,
+            filterRunId?.trim() || undefined,
+            filterReportId?.trim() || undefined
         )
             .then((results) => {
                 setRecords(results.items);
@@ -102,7 +113,7 @@ export function AiUsagePage() {
             .catch(console.error)
             .finally(() => setLoading(false));
     }, [page, perPage, filterInvocationType, filterActionType, filterDateFrom, filterDateTo,
-        filterEngine, filterModel, filterTraceId]);
+        filterEngine, filterModel, filterTraceId, filterRunId, filterReportId]);
 
     useEffect(() => { loadData(); }, [loadData]);
 

@@ -1658,6 +1658,26 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "filterScheduledJobRunId",
+            "in": "query",
+            "description": "Filter by scheduled job run ID (numeric; malformed values return 400)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          },
+          {
+            "name": "filterReportId",
+            "in": "query",
+            "description": "Filter by report ID (numeric; malformed values return 400)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
           }
         ],
         "responses": {
@@ -1885,6 +1905,26 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "filterScheduledJobRunId",
+            "in": "query",
+            "description": "Filter by scheduled job run ID (numeric; malformed values return 400)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            }
+          },
+          {
+            "name": "filterReportId",
+            "in": "query",
+            "description": "Filter by report ID (numeric; malformed values return 400)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
             }
           }
         ],
@@ -3485,6 +3525,16 @@
             "required": false,
             "schema": {
               "type": "integer"
+            }
+          },
+          {
+            "name": "filterScheduledJobRunId",
+            "in": "query",
+            "description": "Filter by scheduled job run ID (the run's trace) (numeric; malformed values return 400)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
             }
           }
         ],
@@ -6572,6 +6622,21 @@
           "createdOn": {
             "format": "date-time",
             "type": "string"
+          },
+          "scheduledJobRunId": {
+            "format": "int64",
+            "type": "integer",
+            "description": "Scheduled job run that wrote this entry"
+          },
+          "reportId": {
+            "format": "int64",
+            "type": "integer",
+            "description": "Report that wrote this entry"
+          },
+          "reportDefinitionId": {
+            "format": "int64",
+            "type": "integer",
+            "description": "Definition of the report that wrote this entry"
           }
         }
       },
@@ -6834,6 +6899,19 @@
           "traceId": {
             "format": "uuid",
             "type": "string"
+          },
+          "trigger": {
+            "type": "string",
+            "description": "How the report was triggered: scheduled or manual (absent for older reports)"
+          },
+          "triggeredBy": {
+            "type": "string",
+            "description": "Who triggered it: scheduler or manual (Axiom has no authentication, so no user identity is recorded)"
+          },
+          "triggeredByTraceId": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Trace of the caller (typically an agent) that triggered it manually, if known"
           }
         }
       },
@@ -6994,6 +7072,16 @@
           "createdOn": {
             "format": "date-time",
             "type": "string"
+          },
+          "scheduledJobRunId": {
+            "format": "int64",
+            "type": "integer",
+            "description": "Scheduled job run that made this invocation"
+          },
+          "reportId": {
+            "format": "int64",
+            "type": "integer",
+            "description": "Report that made this invocation"
           }
         }
       },
@@ -9253,6 +9341,15 @@
           "createdOn": {
             "format": "date-time",
             "type": "string"
+          },
+          "triggeredBy": {
+            "type": "string",
+            "description": "Who triggered it: scheduler or manual (Axiom has no authentication, so no user identity is recorded)"
+          },
+          "triggeredByTraceId": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Trace of the caller (typically an agent) that triggered it manually, if known"
           }
         }
       },
