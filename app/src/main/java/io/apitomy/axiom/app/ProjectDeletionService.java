@@ -7,6 +7,7 @@ import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
 import io.apitomy.axiom.core.entities.WorkflowEventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
+import io.apitomy.axiom.core.entities.WorkflowRunResumeEntity;
 import io.apitomy.axiom.core.entities.WorkflowWaitEntity;
 import io.apitomy.axiom.core.services.WorkspaceService;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -41,6 +42,8 @@ public class ProjectDeletionService {
         WorkflowWaitEntity.delete(
                 "runId in (select r.id from WorkflowRunEntity r where r.projectId = ?1)", projectId);
         WorkflowEventSubscriptionEntity.delete(
+                "runId in (select r.id from WorkflowRunEntity r where r.projectId = ?1)", projectId);
+        WorkflowRunResumeEntity.delete(
                 "runId in (select r.id from WorkflowRunEntity r where r.projectId = ?1)", projectId);
         WorkflowRunEntity.delete("projectId", projectId);
         workspaceService.deleteWorkspace(project);

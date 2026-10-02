@@ -12,8 +12,10 @@ import io.apitomy.axiom.core.entities.TraceEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
+import io.apitomy.axiom.core.entities.WorkflowEventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunResumeEntity;
+import io.apitomy.axiom.core.entities.WorkflowWaitEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -57,6 +59,12 @@ class EventWorkflowLinksTest {
 
     @Inject
     ObjectMapper objectMapper;
+
+    @Inject
+    WorkflowWaitScheduler waitScheduler;
+
+    @Inject
+    ProjectDeletionService projectDeletionService;
 
     @BeforeEach
     void setUp() {
@@ -238,7 +246,169 @@ class EventWorkflowLinksTest {
         assertNull(trace.eventId);
     }
 
+    @Test
+    void resumingOneParallelBranchCompletesAndRecordsThatBranchsNode() {
+        String typeA = "links-par-a-" + UUID.randomUUID();
+        String typeB = "links-par-b-" + UUID.randomUUID();
+        long definitionId = createDefinitionWithContent("Links Parallel WF",
+                parallelContent(
+                        "{\"id\": \"ra\", \"type\": \"receive-event\", \"name\": \"Await A\","
+                                + " \"config\": {\"eventType\": \"" + typeA + "\"},"
+                                + " \"position\": {\"x\": 50, \"y\": 200}}",
+                        "{\"id\": \"rb\", \"type\": \"receive-event\", \"name\": \"Await B\","
+                                + " \"config\": {\"eventType\": \"" + typeB + "\"},"
+                                + " \"position\": {\"x\": 150, \"y\": 200}}",
+                        "ra", "rb"));
+        long projectId = createProject("Links Parallel Project");
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(projectId, definitionId));
+        Long nodeA = parkedNodeId(run.traceId, "workflow-event-subscription",
+                subscriptionId(run.id, "ra"));
+        Long nodeB = parkedNodeId(run.traceId, "workflow-event-subscription",
+                subscriptionId(run.id, "rb"));
+
+        UUID eventId = createEventAndSubscription(typeB, "[{\"type\":\"workflow-dispatch\"}]");
+        orchestrator.processNewEvents();
+
+        RoutingOutcomeItemEntity item = items(singleOutcome("workflow-dispatch").id).get(0);
+        assertEquals(RoutingOutcomeItemEntity.TYPE_WORKFLOW_RESUMED, item.itemType);
+        assertEquals(nodeB, item.traceNodeId);
+        WorkflowRunResumeEntity resume = QuarkusTransaction.requiringNew().call(() ->
+                WorkflowRunResumeEntity.<WorkflowRunResumeEntity>find("runId", run.id)
+                        .firstResult());
+        assertEquals("rb", resume.nodeId);
+        assertEquals(nodeB, resume.traceNodeId);
+        TraceNodeEntity a = traceNode(nodeA);
+        TraceNodeEntity b = traceNode(nodeB);
+        assertEquals("in-progress", a.status, "The other branch's node must stay parked");
+        assertTrue(!a.summary.contains(eventId.toString()), a.summary);
+        assertEquals("completed", b.status);
+        assertTrue(b.summary.contains(eventId.toString()), b.summary);
+    }
+
+    @Test
+    void elapsingOneParallelWaitCompletesThatWaitsNode() {
+        long definitionId = createDefinitionWithContent("Links Parallel Wait WF",
+                parallelContent(
+                        "{\"id\": \"wa\", \"type\": \"wait\", \"name\": \"Wait A\","
+                                + " \"config\": {\"duration\": \"PT5M\"},"
+                                + " \"position\": {\"x\": 50, \"y\": 200}}",
+                        "{\"id\": \"wb\", \"type\": \"wait\", \"name\": \"Wait B\","
+                                + " \"config\": {\"duration\": \"PT10M\"},"
+                                + " \"position\": {\"x\": 150, \"y\": 200}}",
+                        "wa", "wb"));
+        long projectId = createProject("Links Parallel Wait Project");
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(projectId, definitionId));
+        long waitA = waitId(run.id, "wa");
+        long waitB = waitId(run.id, "wb");
+        Long nodeA = parkedNodeId(run.traceId, "workflow-wait", waitA);
+        Long nodeB = parkedNodeId(run.traceId, "workflow-wait", waitB);
+
+        QuarkusTransaction.requiringNew().run(() -> waitScheduler.resumeWait(waitB));
+
+        assertEquals("in-progress", traceNode(nodeA).status,
+                "The other branch's wait node must stay parked");
+        assertEquals("completed", traceNode(nodeB).status);
+    }
+
+    @Test
+    void deletingProjectDeletesItsResumeRows() {
+        long projectId = createProject("Links Delete Project");
+        long runId = createRunWithResume(projectId,
+                createDefinition("Links Delete WF", "links-await-" + UUID.randomUUID()));
+
+        QuarkusTransaction.requiringNew().run(() -> projectDeletionService.deleteProject(
+                ProjectEntity.<ProjectEntity>findById(projectId)));
+
+        assertEquals(0L, QuarkusTransaction.requiringNew().call(() ->
+                WorkflowRunResumeEntity.count("runId", runId)));
+    }
+
+    @Test
+    void deletingDefinitionDeletesItsRunsResumeRows() {
+        long definitionId = createDefinition("Links Delete Def WF",
+                "links-await-" + UUID.randomUUID());
+        long runId = createRunWithResume(createProject("Links Delete Def Project"), definitionId);
+
+        given()
+            .when()
+                .delete("/api/v1/workflow/definitions/" + definitionId)
+            .then()
+                .statusCode(204);
+
+        assertEquals(0L, QuarkusTransaction.requiringNew().call(() ->
+                WorkflowRunResumeEntity.count("runId", runId)));
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────
+
+    private long createRunWithResume(long projectId, long definitionId) {
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(projectId, definitionId));
+        QuarkusTransaction.requiringNew().run(() -> {
+            WorkflowRunResumeEntity resume = new WorkflowRunResumeEntity();
+            resume.runId = run.id;
+            resume.nodeId = "r1";
+            resume.eventId = UUID.randomUUID();
+            resume.resumedOn = Instant.now();
+            resume.persist();
+        });
+        return run.id;
+    }
+
+    private static String parallelContent(String nodeA, String nodeB, String idA, String idB) {
+        return """
+            {
+                "id": "links-par-wf",
+                "name": "Links Parallel WF",
+                "nodes": [
+                    {"id": "s1", "type": "start", "name": "Start",
+                     "config": {}, "position": {"x": 100, "y": 100}},
+                    %s,
+                    %s,
+                    {"id": "e1", "type": "end", "name": "End",
+                     "config": {}, "position": {"x": 100, "y": 300}}
+                ],
+                "edges": [
+                    {"id": "edge1", "source": "s1", "target": "%s",
+                     "priority": 0, "isDefault": false},
+                    {"id": "edge2", "source": "s1", "target": "%s",
+                     "priority": 1, "isDefault": false},
+                    {"id": "edge3", "source": "%s", "target": "e1",
+                     "priority": 0, "isDefault": true},
+                    {"id": "edge4", "source": "%s", "target": "e1",
+                     "priority": 0, "isDefault": true}
+                ]
+            }
+            """.formatted(nodeA, nodeB, idA, idB, idA, idB);
+    }
+
+    private long subscriptionId(long runId, String nodeId) {
+        return QuarkusTransaction.requiringNew().call(() ->
+                WorkflowEventSubscriptionEntity.<WorkflowEventSubscriptionEntity>find(
+                        "runId = ?1 and nodeId = ?2", runId, nodeId).firstResult().id);
+    }
+
+    private long waitId(long runId, String nodeId) {
+        return QuarkusTransaction.requiringNew().call(() ->
+                WorkflowWaitEntity.<WorkflowWaitEntity>find(
+                        "runId = ?1 and nodeId = ?2", runId, nodeId).firstResult().id);
+    }
+
+    private Long parkedNodeId(UUID traceId, String entityType, long entityId) {
+        TraceNodeEntity node = QuarkusTransaction.requiringNew().call(() ->
+                TraceNodeEntity.<TraceNodeEntity>find(
+                        "traceId = ?1 and entityType = ?2 and entityId = ?3",
+                        traceId, entityType, String.valueOf(entityId)).firstResult());
+        assertNotNull(node, entityType + " node " + entityId);
+        return node.id;
+    }
+
+    private TraceNodeEntity traceNode(Long id) {
+        return QuarkusTransaction.requiringNew().call(() ->
+                TraceNodeEntity.<TraceNodeEntity>findById(id));
+    }
 
     private static String receiveEventContent(String awaitedType) {
         return """
@@ -265,7 +435,10 @@ class EventWorkflowLinksTest {
     }
 
     private long createDefinition(String name, String awaitedType) {
-        String content = receiveEventContent(awaitedType);
+        return createDefinitionWithContent(name, receiveEventContent(awaitedType));
+    }
+
+    private long createDefinitionWithContent(String name, String content) {
         return QuarkusTransaction.requiringNew().call(() -> {
             WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
             def.name = name + " " + UUID.randomUUID();

@@ -805,12 +805,21 @@ public class EventStreamOrchestrator {
                     "No workflow run was waiting for a " + event.type + " event that matched"));
             return outcome;
         }
-        outcome.summary = "Resumed " + resumed.size() + " workflow run"
-                + (resumed.size() == 1 ? "" : "s");
+        // A run that matched but failed to resume is a failed item. The outcome itself stays
+        // completed: failing it would retry the rule and re-dispatch the event to every run.
+        long failedCount = resumed.stream().filter(ResumedRun::failed).count();
+        long resumedCount = resumed.size() - failedCount;
+        outcome.summary = "Resumed " + resumedCount + " workflow run"
+                + (resumedCount == 1 ? "" : "s")
+                + (failedCount > 0 ? "; " + failedCount + " failed to resume" : "");
         for (ResumedRun run : resumed) {
             RoutingOutcomeItemEntity item = newItem(RoutingOutcomeItemEntity.TYPE_WORKFLOW_RESUMED,
-                    "completed", "Resumed workflow run " + run.runId()
-                            + " at receive-event node " + run.nodeId());
+                    run.failed() ? "failed" : "completed",
+                    (run.failed() ? "Failed to resume workflow run " : "Resumed workflow run ")
+                            + run.runId() + " at receive-event node " + run.nodeId());
+            if (run.failed()) {
+                item.errorMessage = truncate(run.errorMessage(), 2000);
+            }
             item.projectId = run.projectId();
             item.workflowRunId = run.runId();
             item.traceNodeId = run.traceNodeId();

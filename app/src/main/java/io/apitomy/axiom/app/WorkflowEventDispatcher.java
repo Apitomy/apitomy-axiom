@@ -82,7 +82,8 @@ public class WorkflowEventDispatcher {
      * @param eventType the normalized event type string (e.g., "issue.created")
      * @param eventMap  the curated event map for EL evaluation and context merging
      * @param origin    the stream event (and ledger entry) being dispatched; may be null
-     * @return the resumed runs, in subscription order; empty if nothing matched
+     * @return the matched runs, in subscription order: resumed ones, and ones that matched but
+     *         failed to resume ({@link ResumedRun#failed()}); empty if nothing matched
      */
     public List<ResumedRun> dispatchStreamEvent(String eventType, Map<String, Object> eventMap,
                                                 EventOrigin origin) {
@@ -95,14 +96,23 @@ public class WorkflowEventDispatcher {
 
         List<ResumedRun> resumed = new ArrayList<>();
         for (Long subId : subscriptionIds) {
+            // Set once the event has matched, so a failure while resuming is reported against
+            // the matched run (the transaction rolls back, leaving the run parked).
+            MatchedSubscription[] matched = new MatchedSubscription[1];
             try {
                 ResumedRun run = QuarkusTransaction.requiringNew().call(() ->
-                        offerToSubscription(subId, eventMap, origin));
+                        offerToSubscription(subId, eventMap, origin, matched));
                 if (run != null) {
                     resumed.add(run);
                 }
             } catch (Exception e) {
                 LOG.errorf(e, "Failed to offer stream event to workflow subscription %d", subId);
+                if (matched[0] != null) {
+                    String error = e.getMessage() != null
+                            ? e.getMessage() : e.getClass().getSimpleName();
+                    resumed.add(new ResumedRun(matched[0].runId(), matched[0].projectId(),
+                            matched[0].nodeId(), null, null, error));
+                }
             }
         }
         return resumed;
@@ -130,7 +140,7 @@ public class WorkflowEventDispatcher {
      * consumed (deleted) subscription is silently skipped.
      */
     private ResumedRun offerToSubscription(long subscriptionId, Map<String, Object> eventMap,
-                                           EventOrigin origin) {
+                                           EventOrigin origin, MatchedSubscription[] matched) {
         WorkflowEventSubscriptionEntity sub =
                 WorkflowEventSubscriptionEntity.findById(subscriptionId);
         if (sub == null) {
@@ -154,12 +164,17 @@ public class WorkflowEventDispatcher {
 
         long runId = sub.runId;
         String nodeId = sub.nodeId;
+        matched[0] = new MatchedSubscription(runId, run.projectId, nodeId);
         sub.delete();
         ResumedRun resumed = workflowExecutionService.onEventReceived(runId, nodeId, eventMap,
-                origin);
+                origin, subscriptionId);
         LOG.infof("Event %s resumed workflow run %d at receive-event node %s",
                 origin != null ? origin.eventId() : "(unknown)", runId, nodeId);
         return resumed;
+    }
+
+    /** The run and node of a subscription that matched the event. */
+    private record MatchedSubscription(long runId, Long projectId, String nodeId) {
     }
 
     private Workflow loadWorkflowContent(long definitionId, int definitionVersion) {

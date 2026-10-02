@@ -152,7 +152,9 @@ Each item has a `status` (`completed` or `failed`), a `summary` and, when failed
 Manager items have one row per decision, including decisions that failed, and `trace_node_id` points to
 the decision's `manager-decision` trace node. A `workflow-dispatch` rule writes one `workflow-resumed`
 item per resumed run, or a single `no-match` item (outcome summary "No waiting workflow run matched the
-event") when nothing matched, so "nothing happened" is recorded explicitly. The processing API adds the
+event") when nothing matched, so "nothing happened" is recorded explicitly. A run that matched but
+failed to resume gets a `failed` `workflow-resumed` item with the error; the outcome stays `completed`
+so the rule is not retried (a retry would re-dispatch the event to every run). The processing API adds the
 run's `traceId` to `workflow-run` and `workflow-resumed` items, so the event page links to the run and its
 trace.
 

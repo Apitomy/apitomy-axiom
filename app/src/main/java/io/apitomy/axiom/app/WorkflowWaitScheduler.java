@@ -66,7 +66,7 @@ public class WorkflowWaitScheduler {
         wait.delete();
 
         try {
-            workflowExecutionService.onWaitElapsed(runId, nodeId);
+            workflowExecutionService.onWaitElapsed(runId, nodeId, waitId);
         } catch (Exception e) {
             LOG.errorf(e, "Failed to resume wait node %s for run %d", nodeId, runId);
             throw e;

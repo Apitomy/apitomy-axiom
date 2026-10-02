@@ -3,16 +3,16 @@ package io.apitomy.axiom.app;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
+import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
+import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.WorkflowEventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunResumeEntity;
 import io.apitomy.axiom.core.entities.WorkflowWaitEntity;
-import io.quarkus.narayana.jta.QuarkusTransaction;
-import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.services.ActionTypeIoValidator;
 import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.axiom.core.tracing.TraceService;
@@ -35,6 +35,7 @@ import io.apitomy.flow.spi.NodeExecutor;
 import io.apitomy.flow.spi.NodeExecutorProvider;
 import io.apitomy.flow.spi.NodeResult;
 import io.apitomy.flow.spi.NodeResultStatus;
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
@@ -312,6 +313,20 @@ public class WorkflowExecutionService {
      */
     @Transactional
     public void onWaitElapsed(long runId, String nodeId) {
+        onWaitElapsed(runId, nodeId, null);
+    }
+
+    /**
+     * Called when a workflow-spawned Wait node's duration has elapsed (see
+     * {@link #onWaitElapsed(long, String)}). The wait ID identifies the parked trace node to
+     * complete, so with parallel waits only this wait's node is completed.
+     *
+     * @param runId  the id of the run to advance
+     * @param nodeId the elapsed wait node's id
+     * @param waitId the elapsed {@link WorkflowWaitEntity}'s id; null if unknown
+     */
+    @Transactional
+    public void onWaitElapsed(long runId, String nodeId, Long waitId) {
         WorkflowRunEntity entity = WorkflowRunEntity.findById(runId);
         if (entity == null) {
             LOG.warnf("Workflow run %d not found for elapsed wait node %s",
@@ -319,7 +334,7 @@ public class WorkflowExecutionService {
             return;
         }
 
-        completeParkedTraceNode(entity, "workflow-wait");
+        completeParkedTraceNode(entity, "workflow-wait", waitId);
 
         Workflow workflow = loadWorkflowContent(
                 entity.definitionId, entity.definitionVersion);
@@ -343,7 +358,7 @@ public class WorkflowExecutionService {
      */
     @Transactional
     public void onEventReceived(long runId, String nodeId, Map<String, Object> eventMap) {
-        onEventReceived(runId, nodeId, eventMap, null);
+        onEventReceived(runId, nodeId, eventMap, null, null);
     }
 
     /**
@@ -356,11 +371,14 @@ public class WorkflowExecutionService {
      * @param nodeId   the parked receive-event node's id
      * @param eventMap the matched event
      * @param origin   the stream event that resumed the run; null if unknown
+     * @param subscriptionId the consumed {@link WorkflowEventSubscriptionEntity}'s id, which
+     *                       identifies the parked trace node (parallel branches each have
+     *                       their own); null if unknown
      * @return the run that was resumed, or null if the run was not found
      */
     @Transactional
     public ResumedRun onEventReceived(long runId, String nodeId, Map<String, Object> eventMap,
-                                      EventOrigin origin) {
+                                      EventOrigin origin, Long subscriptionId) {
         WorkflowRunEntity entity = WorkflowRunEntity.findById(runId);
         if (entity == null) {
             LOG.warnf("Workflow run %d not found for received event at node %s",
@@ -368,7 +386,8 @@ public class WorkflowExecutionService {
             return null;
         }
 
-        Long traceNodeId = completeParkedTraceNode(entity, "workflow-event-subscription");
+        Long traceNodeId = completeParkedTraceNode(entity, "workflow-event-subscription",
+                subscriptionId);
         if (origin != null && origin.eventId() != null) {
             recordResume(entity, nodeId, origin, traceNodeId);
         }
@@ -405,8 +424,8 @@ public class WorkflowExecutionService {
             // Own transaction, like TraceService's node updates (this transaction never
             // modifies the trace node, so it cannot overwrite this change).
             QuarkusTransaction.requiringNew().run(() -> {
-                io.apitomy.axiom.core.entities.TraceNodeEntity node =
-                        io.apitomy.axiom.core.entities.TraceNodeEntity.findById(traceNodeId);
+                TraceNodeEntity node =
+                        TraceNodeEntity.findById(traceNodeId);
                 if (node != null) {
                     String suffix = " \u2014 resumed by event " + origin.eventId();
                     String summary = node.summary != null ? node.summary : "";
@@ -511,8 +530,8 @@ public class WorkflowExecutionService {
         if (run.traceId == null) {
             return null;
         }
-        io.apitomy.axiom.core.entities.TraceNodeEntity root =
-                io.apitomy.axiom.core.entities.TraceNodeEntity.find(
+        TraceNodeEntity root =
+                TraceNodeEntity.find(
                         "traceId = ?1 and parentNodeId is null", run.traceId)
                         .firstResult();
         if (root == null) {
@@ -526,13 +545,23 @@ public class WorkflowExecutionService {
      * when the node resumes. Looks up the trace node by entity type and marks it
      * completed.
      */
-    private Long completeParkedTraceNode(WorkflowRunEntity entity, String entityType) {
+    /**
+     * Completes the run's in-progress parked trace node of the given entity type and returns
+     * its id. When the entity id (wait or subscription id) is known, only that entity's node
+     * matches, so parallel parked branches never complete each other's nodes.
+     */
+    private Long completeParkedTraceNode(WorkflowRunEntity entity, String entityType,
+                                         Long entityId) {
         if (entity.traceId == null) {
             return null;
         }
         try {
-            io.apitomy.axiom.core.entities.TraceNodeEntity node =
-                    io.apitomy.axiom.core.entities.TraceNodeEntity.find(
+            TraceNodeEntity node = entityId != null
+                    ? TraceNodeEntity.<TraceNodeEntity>find(
+                            "traceId = ?1 and entityType = ?2 and entityId = ?3"
+                                    + " and status = 'in-progress'",
+                            entity.traceId, entityType, String.valueOf(entityId)).firstResult()
+                    : TraceNodeEntity.<TraceNodeEntity>find(
                             "traceId = ?1 and entityType = ?2 and status = 'in-progress'",
                             entity.traceId, entityType).firstResult();
             if (node != null) {
@@ -937,8 +966,8 @@ public class WorkflowExecutionService {
             return;
         }
         try {
-            io.apitomy.axiom.core.entities.TraceNodeEntity taskNode =
-                    io.apitomy.axiom.core.entities.TraceNodeEntity.find(
+            TraceNodeEntity taskNode =
+                    TraceNodeEntity.find(
                             "traceId = ?1 and nodeType = 'task' and entityType = 'task' and entityId = ?2",
                             task.traceId, String.valueOf(task.id)).firstResult();
             if (taskNode != null) {

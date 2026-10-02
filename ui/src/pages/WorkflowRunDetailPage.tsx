@@ -178,8 +178,8 @@ export function WorkflowRunDetailPage() {
                         {run.resumedBy && run.resumedBy.length > 0 && (
                             <>
                                 <dt><strong>Resumed by</strong></dt>
-                                {run.resumedBy.map((r) => (
-                                    <dd key={`${r.eventId}-${r.nodeId}`}>
+                                {run.resumedBy.map((r, i) => (
+                                    <dd key={`${i}-${r.eventId}-${r.resumedOn}`}>
                                         <Link to={`/events/stream/${r.eventId}`}>
                                             Event {r.eventId}
                                         </Link>

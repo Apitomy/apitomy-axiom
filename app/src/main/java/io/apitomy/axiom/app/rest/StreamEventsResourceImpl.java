@@ -32,6 +32,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -206,7 +207,7 @@ public class StreamEventsResourceImpl implements StreamResource {
 
         // Load the traces of the workflow runs the items started or resumed
         List<Long> itemRunIds = itemsByOutcome.values().stream().flatMap(List::stream)
-                .map(i -> i.workflowRunId).filter(java.util.Objects::nonNull).distinct().toList();
+                .map(i -> i.workflowRunId).filter(Objects::nonNull).distinct().toList();
         Map<Long, UUID> runTraceIds = new HashMap<>();
         if (!itemRunIds.isEmpty()) {
             WorkflowRunEntity.<WorkflowRunEntity>list("id IN ?1", itemRunIds).stream()
