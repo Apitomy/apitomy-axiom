@@ -2106,6 +2106,20 @@ export interface WorkflowInstanceInfo {
     runId?: number;
     traceId?: string;
     activeBranches?: ActiveBranchInfo[];
+    /** Stream event whose create-workflow routing started this run, if any. */
+    triggerEventId?: string;
+    triggerLedgerId?: number;
+    /** Stream events that resumed this run at receive-event nodes, oldest first. */
+    resumedBy?: WorkflowRunResumeInfo[];
+}
+
+export interface WorkflowRunResumeInfo {
+    eventId: string;
+    ledgerId?: number;
+    nodeId: string;
+    nodeName?: string;
+    traceNodeId?: number;
+    resumedOn: string;
 }
 
 export interface HistoryEntryInfo {
@@ -2188,6 +2202,8 @@ export interface WorkflowRunSummary {
     status: string;
     currentNodeName?: string;
     traceId?: string;
+    triggerEventId?: string;
+    triggerLedgerId?: number;
     startedOn: string;
     completedOn?: string;
 }
@@ -2397,6 +2413,8 @@ export interface EventProcessingOutcomeItem {
     taskStatus?: string;
     workflowRunId?: number;
     traceNodeId?: number;
+    /** Trace of the workflow run (workflow-run and workflow-resumed items). */
+    traceId?: string;
 }
 
 export interface EventProcessingEntry {

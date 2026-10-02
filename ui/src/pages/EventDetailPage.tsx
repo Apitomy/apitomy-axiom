@@ -209,6 +209,8 @@ const ROUTING_LABELS: Record<string, string> = {
 const ITEM_LABELS: Record<string, string> = {
     task: "Task",
     "workflow-run": "Workflow Run",
+    "workflow-resumed": "Resumed Workflow Run",
+    "no-match": "No Match",
     ignored: "Ignored",
     escalated: "Escalated",
     decision: "Decision",
@@ -250,8 +252,12 @@ function OutcomeItems({ items }: { items: EventProcessingOutcomeItem[] }) {
                     )}
                     {item.workflowRunId && (
                         <Link to={`/logs/workflow-runs/${item.workflowRunId}`}>
+                            {item.type === "workflow-resumed" ? "Resumed" : "Started"}{" "}
                             Workflow Run #{item.workflowRunId}
                         </Link>
+                    )}
+                    {item.workflowRunId && item.traceId && (
+                        <Link to={`/logs/traces/${item.traceId}`}>View Trace</Link>
                     )}
                     {item.projectId && (
                         <Link to={`/projects/${item.projectId}`}>

@@ -20,6 +20,10 @@ public class RoutingOutcomeItemEntity extends PanacheEntity {
     public static final String TYPE_TASK = "task";
     /** A workflow run was started (create-workflow). */
     public static final String TYPE_WORKFLOW_RUN = "workflow-run";
+    /** A workflow run parked at a receive-event node was resumed (workflow-dispatch). */
+    public static final String TYPE_WORKFLOW_RESUMED = "workflow-resumed";
+    /** A workflow-dispatch found no waiting workflow run that matched the event. */
+    public static final String TYPE_NO_MATCH = "no-match";
     /** The Manager decided to ignore the event. */
     public static final String TYPE_IGNORED = "ignored";
     /** The Manager escalated the event (explicitly, or because of low confidence). */
