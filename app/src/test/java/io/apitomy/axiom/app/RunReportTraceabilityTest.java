@@ -233,6 +233,23 @@ class RunReportTraceabilityTest {
     }
 
     @Test
+    void tracesFilterByRunFallsBackToRootNodeWhenRunHasNoTrace() {
+        Long[] ids = createJobAndRun("agent", null, null);
+        TraceContext ctx = traceService.createTrace("scheduled-job-execution", "fallback",
+                null, null, null, "scheduled-job-triggered", "root", "scheduled-job-run", ids[1]);
+
+        given().queryParam("filterScheduledJobRunId", ids[1])
+                .when().get("/api/v1/traces")
+                .then().statusCode(200)
+                .body("totalCount", equalTo(1))
+                .body("items[0].traceId", equalTo(ctx.traceId().toString()));
+        given().queryParam("filterScheduledJobRunId", 999999999L)
+                .when().get("/api/v1/traces")
+                .then().statusCode(200)
+                .body("totalCount", equalTo(0));
+    }
+
+    @Test
     void malformedRunAndReportFiltersReturn400() {
         given().queryParam("filterScheduledJobRunId", "abc").when().get("/api/v1/activity")
                 .then().statusCode(400);

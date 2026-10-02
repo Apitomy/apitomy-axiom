@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { RunSourceLink } from "../components/RunSourceLink";
 import {
     Button,
     EmptyState,
@@ -225,6 +226,7 @@ export function ActivityLogPage() {
                                 <Th>Time</Th>
                                 <Th>Event</Th>
                                 <Th>Trace</Th>
+                                <Th>Source</Th>
                                 <Th>Type</Th>
                                 <Th>Summary</Th>
                                 <Th>Project</Th>
@@ -255,6 +257,10 @@ export function ActivityLogPage() {
                                                 {entry.traceId.substring(0, 8)}
                                             </Link>
                                         ) : "—"}
+                                    </Td>
+                                    <Td>
+                                        <RunSourceLink reportId={entry.reportId}
+                                            scheduledJobRunId={entry.scheduledJobRunId} />
                                     </Td>
                                     <Td>
                                         <Label

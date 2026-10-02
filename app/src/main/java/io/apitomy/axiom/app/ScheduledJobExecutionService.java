@@ -229,9 +229,9 @@ public class ScheduledJobExecutionService {
             }
         }
 
-        markRunning(runId, traceCtx != null ? traceCtx.traceId() : null);
-
         try {
+            markRunning(runId, traceCtx != null ? traceCtx.traceId() : null);
+
             if (job.scriptTemplate == null || job.scriptTemplate.isBlank()) {
                 failRun(runId, "No script template configured for scheduled job: " + job.name,
                         traceCtx, scriptNodeId);
@@ -295,8 +295,8 @@ public class ScheduledJobExecutionService {
                 }
                 finishScriptTrace(runId, traceCtx, scriptNodeId, exitCode == 0);
             } finally {
-                Files.deleteIfExists(scriptFile);
-                Files.deleteIfExists(outputFile);
+                deleteQuietly(scriptFile);
+                deleteQuietly(outputFile);
             }
         } catch (Exception e) {
             LOG.errorf(e, "Script execution failed for scheduled job run %d", runId);
@@ -501,6 +501,20 @@ public class ScheduledJobExecutionService {
             } catch (Exception e) {
                 LOG.warnf(e, "Failed to complete trace for failed run %d", runId);
             }
+        }
+    }
+
+    /**
+     * Deletes a temp file, logging instead of throwing on failure, so cleanup after a script run
+     * can never change the run's outcome or close its trace a second time.
+     *
+     * @param file the file to delete
+     */
+    static void deleteQuietly(Path file) {
+        try {
+            Files.deleteIfExists(file);
+        } catch (IOException e) {
+            LOG.warnf(e, "Failed to delete temp file %s", file);
         }
     }
 

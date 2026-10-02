@@ -99,15 +99,18 @@ public class TraceResourceImpl implements TracesResource {
 
         if (filterScheduledJobRunId != null && !filterScheduledJobRunId.isBlank()) {
             long runId = parseIdParam("filterScheduledJobRunId", filterScheduledJobRunId);
-            // A run's trace is the one whose root node references the run (#423), which is also
-            // the trace stored on the run itself.
-            hql.append(" and (traceId in (select r.traceId from ScheduledJobRunEntity r"
-                    + " where r.id = :scheduledJobRunId)"
-                    + " or traceId in (select n.traceId from TraceNodeEntity n"
-                    + " where n.parentNodeId is null and n.entityType = 'scheduled-job-run'"
-                    + " and n.entityId = :scheduledJobRunIdText))");
-            params.put("scheduledJobRunId", runId);
-            params.put("scheduledJobRunIdText", String.valueOf(runId));
+            ScheduledJobRunEntity run = ScheduledJobRunEntity.findById(runId);
+            if (run != null && run.traceId != null) {
+                hql.append(" and traceId = :runTraceId");
+                params.put("runTraceId", run.traceId);
+            } else {
+                // No trace stored on the run (yet): fall back to the trace whose root node
+                // references the run (#423).
+                hql.append(" and traceId in (select n.traceId from TraceNodeEntity n"
+                        + " where n.parentNodeId is null and n.entityType = 'scheduled-job-run'"
+                        + " and n.entityId = :runIdText)");
+                params.put("runIdText", String.valueOf(runId));
+            }
         }
 
         long totalCount = TraceEntity.count(hql.toString(), params);

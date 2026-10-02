@@ -220,18 +220,18 @@ export function ScheduledJobRunsPage() {
                                     </Td>
                                     <Td>
                                         {run.trigger}
-                                        {run.triggeredBy && run.triggeredBy !== run.trigger && (
+                                        {run.triggeredBy && run.triggeredBy !== run.trigger
+                                            && run.triggeredBy !== "scheduler" && (
                                             <div style={{ fontSize: "0.85em", color: "var(--pf-t--global--text--color--subtle)" }}>
                                                 by {run.triggeredBy}
-                                                {run.triggeredByTraceId && (
-                                                    <>
-                                                        {" "}(
-                                                        <Link to={`/logs/traces/${run.triggeredByTraceId}`}>
-                                                            caller trace
-                                                        </Link>
-                                                        )
-                                                    </>
-                                                )}
+                                            </div>
+                                        )}
+                                        {run.triggeredByTraceId && (
+                                            <div style={{ fontSize: "0.85em" }}>
+                                                <Link to={`/logs/traces/${run.triggeredByTraceId}`}
+                                                    data-testid={`run-caller-trace-${run.id}`}>
+                                                    caller trace
+                                                </Link>
                                             </div>
                                         )}
                                     </Td>

@@ -16,7 +16,6 @@ import io.apitomy.axiom.app.ReportAiService;
 import io.apitomy.axiom.app.ReportQueueConsumer;
 import io.apitomy.axiom.app.ReportScheduler;
 import io.apitomy.axiom.core.SdkFunctionRegistry;
-import io.apitomy.axiom.core.tracing.TraceContext;
 import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
 import io.apitomy.axiom.core.entities.ReportEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
@@ -35,6 +34,7 @@ import jakarta.ws.rs.core.Response;
 import io.apitomy.axiom.api.beans.ToolValidationResult;
 import io.apitomy.axiom.api.beans.ToolValidationMessage;
 import io.apitomy.axiom.core.services.ReportDefinitionValidator;
+import io.apitomy.axiom.core.tracing.TraceContext;
 
 import java.math.BigInteger;
 import java.time.Instant;

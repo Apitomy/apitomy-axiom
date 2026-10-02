@@ -25,6 +25,7 @@ import {
     FilterChips,
 } from "@apitomy/common-ui-components";
 import { Link, useSearchParams } from "react-router-dom";
+import { RunSourceLink } from "../components/RunSourceLink";
 import { type AiUsage, fetchUsage } from "../config/api";
 
 const TYPE_COLORS: Record<string, "blue" | "green"> = {
@@ -268,6 +269,7 @@ export function AiUsagePage() {
                                 <Th>Model</Th>
                                 <Th>Project</Th>
                                 <Th>Trace</Th>
+                                <Th>Source</Th>
                                 <Th>Cost</Th>
                                 <Th>Input Tokens</Th>
                                 <Th>Output Tokens</Th>
@@ -332,6 +334,10 @@ export function AiUsagePage() {
                                                 {r.traceId.substring(0, 8)}
                                             </Link>
                                         ) : "—"}
+                                    </Td>
+                                    <Td>
+                                        <RunSourceLink reportId={r.reportId}
+                                            scheduledJobRunId={r.scheduledJobRunId} />
                                     </Td>
                                     <Td>
                                         {r.costUsd != null

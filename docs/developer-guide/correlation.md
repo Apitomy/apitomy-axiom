@@ -37,6 +37,15 @@ deleted.
 
 All are nullable `BIGINT` columns with no foreign key. Rows written before `V70` have no value.
 
+Deleting a scheduled job, a report or a report definition intentionally keeps its `ai_usage` and
+`activity_log` rows, so cost and activity history survive. Their `scheduled_job_run_id`, `report_id` and
+`report_definition_id` values may then refer to rows that no longer exist; consumers must treat these IDs as
+possibly dangling.
+
+In the UI, the Activity log and AI usage pages have a **Source** column that links a row to its report
+(`/reports/:id`) or, for job runs, to the job runs page (`/logs/job-runs`). The rows carry only the run ID,
+not the job ID, and that page cannot yet be filtered or anchored to a single run.
+
 - `GET /activity?filterScheduledJobRunId={id}` and `GET /usage/ai?filterScheduledJobRunId={id}` return the
   rows of one run. `filterReportId` does the same for a report.
 - `GET /traces?filterScheduledJobRunId={id}` returns the run's trace. Reports already had
