@@ -8,6 +8,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
+import java.util.Set;
+
 /**
  * Finalizes the trace bookkeeping for a task that has reached a terminal state.
  *
@@ -15,6 +17,8 @@ import org.jboss.logging.Logger;
  * <ul>
  *   <li>The task's own {@code task} trace node is always completed with the task's final status.</li>
  *   <li>Workflow tasks never complete the trace: the workflow run owns its trace lifecycle.</li>
+ *   <li>Tasks that joined an owner-managed trace ({@link #OWNER_MANAGED_TRACE_TYPES}) never complete
+ *       it: the owning service does.</li>
  *   <li>Otherwise the trace is completed only once no other {@code task} node in the trace is still
  *       in progress (a Manager evaluation may create several tasks under one trace). The final status
  *       is {@code failed} if any task node in the trace failed.</li>
@@ -25,6 +29,15 @@ import org.jboss.logging.Logger;
 public class TaskTraceFinalizer {
 
     private static final Logger LOG = Logger.getLogger(TaskTraceFinalizer.class);
+
+    /**
+     * Trace types whose lifecycle is owned by another service. A task that joined one of these traces
+     * (e.g. via caller trace headers) completes only its own node; the owner
+     * ({@code ReportExecutionService}, {@code ScheduledJobExecutionService},
+     * {@code WorkflowExecutionService}) completes the trace.
+     */
+    static final Set<String> OWNER_MANAGED_TRACE_TYPES =
+            Set.of("report-generation", "scheduled-job-execution", "workflow");
 
     @Inject
     TraceService traceService;
@@ -68,6 +81,11 @@ public class TaskTraceFinalizer {
 
             TraceEntity trace = TraceEntity.findById(task.traceId);
             if (trace != null && !"in-progress".equals(trace.status)) {
+                return;
+            }
+            if (trace != null && OWNER_MANAGED_TRACE_TYPES.contains(trace.traceType)) {
+                LOG.debugf("Trace %s is owner-managed (%s); not completing from task %d",
+                        task.traceId, trace.traceType, task.id);
                 return;
             }
 

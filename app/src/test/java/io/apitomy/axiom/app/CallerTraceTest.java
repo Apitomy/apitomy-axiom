@@ -1,5 +1,6 @@
 package io.apitomy.axiom.app;
 
+import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.TraceEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.tracing.TraceContext;
@@ -33,6 +34,9 @@ class CallerTraceTest {
     @Inject
     TraceService traceService;
 
+    @Inject
+    TaskTraceFinalizer taskTraceFinalizer;
+
     @Test
     void taskJoinsCallerTraceUnderParentNode() {
         long projectId = createProject();
@@ -54,14 +58,51 @@ class CallerTraceTest {
     }
 
     @Test
-    void callerTraceStaysInProgressWhileTaskPending() {
+    void eventPipelineTraceStaysInProgressWhileJoinedTaskPending() {
         long projectId = createProject();
         TraceContext caller = createCallerTrace();
 
-        postTask(projectId, Map.of("X-Axiom-Trace-Id", caller.traceId().toString()));
+        Map<String, Object> task = postTask(projectId,
+                Map.of("X-Axiom-Trace-Id", caller.traceId().toString()));
 
+        assertEquals(caller.traceId().toString(), task.get("traceId"));
+        TraceNodeEntity node = findTaskNode(caller.traceId(), task.get("id"));
+        assertNotNull(node);
+        assertEquals("in-progress", node.status);
         TraceEntity trace = QuarkusTransaction.requiringNew().call(() ->
                 TraceEntity.findById(caller.traceId()));
+        assertEquals("in-progress", trace.status);
+    }
+
+    @Test
+    void joinedTaskDoesNotCompleteReportTrace() {
+        assertOwnerTraceNotCompletedByJoinedTask("report-generation");
+    }
+
+    @Test
+    void joinedTaskDoesNotCompleteScheduledJobTrace() {
+        assertOwnerTraceNotCompletedByJoinedTask("scheduled-job-execution");
+    }
+
+    private void assertOwnerTraceNotCompletedByJoinedTask(String traceType) {
+        long projectId = createProject();
+        TraceContext owner = QuarkusTransaction.requiringNew().call(() ->
+                traceService.createTrace(traceType, "owner trace", null, null, null,
+                        "owner-root", "owner root", null, null));
+
+        Map<String, Object> task = postTask(projectId,
+                Map.of("X-Axiom-Trace-Id", owner.traceId().toString()));
+        assertEquals(owner.traceId().toString(), task.get("traceId"));
+        long taskId = ((Number) task.get("id")).longValue();
+
+        QuarkusTransaction.requiringNew().run(() ->
+                taskTraceFinalizer.finalizeTaskTrace(TaskEntity.findById(taskId), "completed"));
+
+        TraceNodeEntity node = findTaskNode(owner.traceId(), taskId);
+        assertNotNull(node);
+        assertEquals("completed", node.status);
+        TraceEntity trace = QuarkusTransaction.requiringNew().call(() ->
+                TraceEntity.findById(owner.traceId()));
         assertEquals("in-progress", trace.status);
     }
 

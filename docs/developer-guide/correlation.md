@@ -10,7 +10,7 @@ the trace ID, so given one trace ID you can find everything that belongs to that
 | Table               | Notes                                     |
 |---------------------|-------------------------------------------|
 | `task`              | Trace the task runs in                    |
-| `report`            | Trace of the report generation           |
+| `report`            | Trace of the report generation            |
 | `workflow_run`      | Trace of the workflow run                 |
 | `scheduled_job_run` | Trace of the scheduled job run            |
 | `routing_outcome`   | Trace of the event that was routed        |
@@ -35,8 +35,8 @@ and a **Trace ID** filter. Both pages accept a `?traceId=` query parameter as a 
 
 ## Agent Calls: Joining the Caller's Trace
 
-When an agent calls Axiom APIs through the Axiom MCP server, `sdk-server.js` sends two headers on every request
-when the matching environment variables are set:
+When an agent calls Axiom APIs through the Axiom MCP server, `sdk-server.js` sends two headers on every
+request when the matching environment variables are set:
 
 | Header                   | Source variable         |
 |--------------------------|-------------------------|
@@ -60,13 +60,16 @@ task's `createdBy` stays `user`. Other endpoints ignore the caller trace.
 ## Accepted Risk
 
 An agent can keep its trace open by creating tasks that join it, because `TaskTraceFinalizer` keeps a trace
-open while any task node is in progress. This is accepted: agent-created tasks are deliberate work that belongs
-to the trace.
+open while any task node is in progress. This is accepted: agent-created tasks are deliberate work that
+belongs to the trace.
 
 ## Known Limitations
 
 - Any in-progress trace can be joined. There is no check that the caller belongs to the same project.
 - AI editor and assistant sessions (`ActionTypeAiService`, `ReportAiService`, `ScriptAiService`,
   `ToolAiService`, `AssistantSessionManager`) are not traced. Their AI usage rows have no trace ID.
+- Tasks that join a report, scheduled-job or workflow trace never complete it; the owning service does. If
+  the owner finishes first, its trace is marked complete while the joined task may still be running. The
+  task's own node still completes when the task finishes.
 - Out of scope for now: MDC log correlation (#428), run and report ID columns (#424, #425), and the lineage
   view (#430).
