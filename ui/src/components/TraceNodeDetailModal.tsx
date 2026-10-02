@@ -18,7 +18,7 @@ import {
 } from "@patternfly/react-core";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { fetchTraceNodeDetail, fetchTools, type TraceNode } from "../config/api";
-import { formatDuration, STATUS_COLORS } from "./TraceGraphNode";
+import { formatDuration, statusColor } from "./TraceGraphNode";
 
 interface TraceNodeDetailModalProps {
     isOpen: boolean;
@@ -55,7 +55,7 @@ export function TraceNodeDetailModal({ isOpen, traceId, node, onClose }: TraceNo
                     <DescriptionListGroup>
                         <DescriptionListTerm>Status</DescriptionListTerm>
                         <DescriptionListDescription>
-                            <Label isCompact color={STATUS_COLORS[node?.status || ""]}>
+                            <Label isCompact color={statusColor(node?.status)}>
                                 {node?.status}
                             </Label>
                         </DescriptionListDescription>
@@ -385,7 +385,7 @@ function StatusGroup({ label, status }: { label: string; status: unknown }) {
         <DescriptionListGroup>
             <DescriptionListTerm>{label}</DescriptionListTerm>
             <DescriptionListDescription>
-                <Label isCompact color={STATUS_COLORS[value]}>{value}</Label>
+                <Label isCompact color={statusColor(value)}>{value}</Label>
             </DescriptionListDescription>
         </DescriptionListGroup>
     );
@@ -509,14 +509,18 @@ function WorkflowEventSubscriptionDetail({ detail }: { detail: Record<string, un
 
 function ScheduledJobRunDetail({ detail }: { detail: Record<string, unknown> }) {
     const effectiveTheme = useEffectiveTheme();
-    const jobName = detail.jobName ? String(detail.jobName) : `Job #${detail.jobId}`;
+    const jobName = detail.jobName
+        ? String(detail.jobName)
+        : detail.jobId != null ? `Job #${detail.jobId}` : "—";
     return (
         <>
             <DescriptionList isHorizontal isCompact style={{ marginBottom: "12px" }}>
                 <DescriptionListGroup>
                     <DescriptionListTerm>Scheduled Job</DescriptionListTerm>
                     <DescriptionListDescription>
-                        <Link to={`/scheduled-jobs/${detail.jobId}`}>{jobName}</Link>
+                        {detail.jobId != null ? (
+                            <Link to={`/scheduled-jobs/${detail.jobId}`}>{jobName}</Link>
+                        ) : jobName}
                     </DescriptionListDescription>
                 </DescriptionListGroup>
                 <StatusGroup label="Run Status" status={detail.status} />

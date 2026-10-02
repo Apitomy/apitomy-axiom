@@ -237,6 +237,50 @@ class TraceResourceTest {
     }
 
     /**
+     * In-progress wait and subscription nodes whose rows were deleted (e.g. the run was
+     * cancelled) fall back to a cancelled status.
+     */
+    @Test
+    void deletedParkedRowsOnInProgressNodesReportCancelled() {
+        createWorkflowRun();
+        TraceContext ctx = workflowTrace();
+        Long waitNode = traceService.addNode(ctx, "task", "in-progress", "Wait (PT1H)",
+                "workflow-wait", 987654321L);
+        Long subNode = traceService.addNode(ctx, "task", "in-progress", "Receive event",
+                "workflow-event-subscription", 987654322L);
+
+        for (Long nodeId : new Long[] { waitNode, subNode }) {
+            given()
+                .when()
+                    .get(TRACES_PATH + "/" + ctx.traceId() + "/nodes/" + nodeId)
+                .then()
+                    .statusCode(200)
+                    .body("node.status", equalTo("in-progress"))
+                    .body("detail.status", equalTo("cancelled"))
+                    .body("detail.runId", equalTo(runId.intValue()));
+        }
+    }
+
+    /**
+     * An event node whose entity ID is not a valid UUID returns the node with null detail.
+     */
+    @Test
+    void malformedEventEntityIdReturnsNodeWithoutDetail() {
+        TraceContext ctx = traceService.createTrace("test", "malformed trace",
+                null, null, null, "root", "root", null, null);
+        Long nodeId = traceService.addNode(ctx, "event-received", "completed",
+                "Event", "event", 42L);
+
+        given()
+            .when()
+                .get(TRACES_PATH + "/" + ctx.traceId() + "/nodes/" + nodeId)
+            .then()
+                .statusCode(200)
+                .body("node.entityId", equalTo("42"))
+                .body("detail", nullValue());
+    }
+
+    /**
      * A workflow-event-subscription node resolves the awaited event type and status.
      */
     @Test
