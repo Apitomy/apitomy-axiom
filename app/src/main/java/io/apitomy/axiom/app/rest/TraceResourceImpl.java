@@ -14,12 +14,19 @@ import io.apitomy.axiom.api.beans.TraceNodeDetail;
 import io.apitomy.axiom.api.beans.TraceSearchResults;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
+import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.ScheduledJobEntity;
+import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.ReportEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ToolExecutionEntity;
 import io.apitomy.axiom.core.entities.TraceEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
+import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
+import io.apitomy.axiom.core.entities.WorkflowEventSubscriptionEntity;
+import io.apitomy.axiom.core.entities.WorkflowRunEntity;
+import io.apitomy.axiom.core.entities.WorkflowWaitEntity;
 import io.apitomy.axiom.core.events.SseEvent;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.panache.common.Page;
@@ -137,7 +144,7 @@ public class TraceResourceImpl implements TracesResource {
 
         TraceNodeDetail result = new TraceNodeDetail();
         result.setNode(toNodeBean(node));
-        result.setDetail(resolveDetail(node.entityType, node.entityId));
+        result.setDetail(resolveDetail(node));
         return result;
     }
 
@@ -210,37 +217,173 @@ public class TraceResourceImpl implements TracesResource {
     }
 
     /**
-     * Resolves the detail entity for a trace node based on its entityType.
+     * Resolves the detail record for a trace node based on its entityType.
      * Stream events are keyed by UUID; all other entity types use numeric IDs.
+     * Returns {@code null} for unknown entity types, malformed references and
+     * deleted entities, except for workflow waits and event subscriptions, whose
+     * rows are deleted when the parked node resumes: those still report a
+     * resolved status, derived from the trace node and its workflow run.
      */
     @SuppressWarnings("unchecked")
-    private Detail resolveDetail(String entityType, String entityId) {
+    private Detail resolveDetail(TraceNodeEntity node) {
+        String entityType = node.entityType;
+        String entityId = node.entityId;
         if (entityType == null || entityId == null || entityId.isBlank()) {
             return null;
         }
 
-        Object entity;
+        Map<String, Object> properties;
         try {
-            entity = switch (entityType) {
-                case "activity-log" -> ActivityLogEntity.findById(Long.valueOf(entityId));
-                case "event" -> StreamEventEntity.findById(UUID.fromString(entityId));
-                case "ai-usage" -> AiUsageEntity.findById(Long.valueOf(entityId));
-                case "tool-execution" -> ToolExecutionEntity.findById(Long.valueOf(entityId));
-                case "task" -> TaskEntity.findById(Long.valueOf(entityId));
-                case "report" -> ReportEntity.findById(Long.valueOf(entityId));
-                default -> null;
+            properties = switch (entityType) {
+                case "workflow-run" -> workflowRunDetail(Long.valueOf(entityId));
+                case "workflow-wait" -> workflowWaitDetail(node, Long.valueOf(entityId));
+                case "workflow-event-subscription" ->
+                        workflowEventSubscriptionDetail(node, Long.valueOf(entityId));
+                case "scheduled-job-run" -> scheduledJobRunDetail(Long.valueOf(entityId));
+                default -> {
+                    Object entity = switch (entityType) {
+                        case "activity-log" -> ActivityLogEntity.findById(Long.valueOf(entityId));
+                        case "event" -> StreamEventEntity.findById(UUID.fromString(entityId));
+                        case "ai-usage" -> AiUsageEntity.findById(Long.valueOf(entityId));
+                        case "tool-execution" -> ToolExecutionEntity.findById(Long.valueOf(entityId));
+                        case "task" -> TaskEntity.findById(Long.valueOf(entityId));
+                        case "report" -> ReportEntity.findById(Long.valueOf(entityId));
+                        default -> null;
+                    };
+                    yield entity != null ? objectMapper.convertValue(entity, Map.class) : null;
+                }
             };
         } catch (IllegalArgumentException e) {
             // Malformed entity reference (NumberFormatException is a subclass)
             return null;
         }
 
-        if (entity == null) {
+        return properties != null ? new DynamicDetail(properties) : null;
+    }
+
+    /**
+     * Builds the detail for a workflow run: the run's fields (without the bulky
+     * engine instance state) plus its definition and project names.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> workflowRunDetail(Long runId) {
+        WorkflowRunEntity run = WorkflowRunEntity.findById(runId);
+        if (run == null) {
             return null;
         }
+        Map<String, Object> properties = new HashMap<>(objectMapper.convertValue(run, Map.class));
+        properties.remove("instanceState");
+        addRunContext(properties, run);
+        return properties;
+    }
 
-        Map<String, Object> properties = objectMapper.convertValue(entity, Map.class);
-        return new DynamicDetail(properties);
+    /**
+     * Builds the detail for a workflow wait (timer). A wait row exists only while
+     * the node is parked, so a missing row means the wait has resolved (or the run
+     * ended); in that case the run is found through the node's trace.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> workflowWaitDetail(TraceNodeEntity node, Long waitId) {
+        WorkflowWaitEntity wait = WorkflowWaitEntity.findById(waitId);
+        Map<String, Object> properties;
+        WorkflowRunEntity run;
+        if (wait != null) {
+            properties = new HashMap<>(objectMapper.convertValue(wait, Map.class));
+            properties.put("status", "waiting");
+            run = WorkflowRunEntity.findById(wait.runId);
+        } else {
+            run = runForTrace(node.traceId);
+            if (run == null) {
+                return null;
+            }
+            properties = new HashMap<>();
+            properties.put("id", waitId);
+            properties.put("runId", run.id);
+            properties.put("status", parkedStatus(node));
+        }
+        properties.put("waitType", "duration");
+        addRunContext(properties, run);
+        addRunStatus(properties, run);
+        return properties;
+    }
+
+    /**
+     * Builds the detail for a workflow event subscription (receive-event node).
+     * Like waits, the row is deleted when the node resumes. The matching event is
+     * not recorded on the subscription, so {@code matchedEventId} is always null.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> workflowEventSubscriptionDetail(TraceNodeEntity node,
+            Long subscriptionId) {
+        WorkflowEventSubscriptionEntity sub =
+                WorkflowEventSubscriptionEntity.findById(subscriptionId);
+        Map<String, Object> properties;
+        WorkflowRunEntity run;
+        if (sub != null) {
+            properties = new HashMap<>(objectMapper.convertValue(sub, Map.class));
+            properties.put("status", "waiting");
+            run = WorkflowRunEntity.findById(sub.runId);
+        } else {
+            run = runForTrace(node.traceId);
+            if (run == null) {
+                return null;
+            }
+            properties = new HashMap<>();
+            properties.put("id", subscriptionId);
+            properties.put("runId", run.id);
+            properties.put("status", parkedStatus(node));
+        }
+        properties.put("matchedEventId", null);
+        addRunContext(properties, run);
+        addRunStatus(properties, run);
+        return properties;
+    }
+
+    /**
+     * Builds the detail for a scheduled job run, adding the job's name.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> scheduledJobRunDetail(Long jobRunId) {
+        ScheduledJobRunEntity jobRun = ScheduledJobRunEntity.findById(jobRunId);
+        if (jobRun == null) {
+            return null;
+        }
+        Map<String, Object> properties = new HashMap<>(objectMapper.convertValue(jobRun, Map.class));
+        ScheduledJobEntity job = ScheduledJobEntity.findById(jobRun.jobId);
+        properties.put("jobName", job != null ? job.name : null);
+        return properties;
+    }
+
+    /**
+     * Adds the run ID, run status, definition name and project name of a workflow run.
+     */
+    private void addRunContext(Map<String, Object> properties, WorkflowRunEntity run) {
+        if (run == null) {
+            return;
+        }
+        WorkflowDefinitionEntity definition = WorkflowDefinitionEntity.findById(run.definitionId);
+        ProjectEntity project = ProjectEntity.findById(run.projectId);
+        properties.put("runId", run.id);
+        properties.putIfAbsent("projectId", run.projectId);
+        properties.put("definitionName", definition != null ? definition.name : null);
+        properties.put("projectName", project != null ? project.name : null);
+    }
+
+    /** Adds the owning run's status as {@code runStatus} for parked-node details. */
+    private void addRunStatus(Map<String, Object> properties, WorkflowRunEntity run) {
+        if (run != null) {
+            properties.put("runStatus", run.status);
+        }
+    }
+
+    /** Finds the workflow run that owns a trace, or {@code null}. */
+    private WorkflowRunEntity runForTrace(UUID traceId) {
+        return WorkflowRunEntity.<WorkflowRunEntity>find("traceId", traceId).firstResult();
+    }
+
+    /** Status of a parked node whose wait or subscription row no longer exists. */
+    private String parkedStatus(TraceNodeEntity node) {
+        return "completed".equals(node.status) ? "resolved" : "cancelled";
     }
 
     /**

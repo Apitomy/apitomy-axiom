@@ -8224,7 +8224,7 @@
             "$ref": "#/components/schemas/TraceNode"
           },
           "detail": {
-            "description": "The referenced detail record, type depends on entityType",
+            "description": "The referenced detail record; its shape depends on the node's entityType. Supported types: event, activity-log, ai-usage, tool-execution, task, report, workflow-run (adds definitionName and projectName; omits instanceState), workflow-wait and workflow-event-subscription (add status, runId, runStatus, definitionName and projectName; waits add waitType, subscriptions add matchedEventId), scheduled-job-run (adds jobName). Null when the entity type is unknown or the referenced record no longer exists.",
             "type": "object"
           }
         }

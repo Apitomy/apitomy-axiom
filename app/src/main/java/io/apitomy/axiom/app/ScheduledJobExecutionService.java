@@ -114,7 +114,7 @@ public class ScheduledJobExecutionService {
                     "Executing scheduled job: " + job.name,
                     null, null, null,
                     "scheduled-job-triggered", "Scheduled job triggered: " + job.name,
-                    null, null);
+                    "scheduled-job-run", runId);
         } catch (Exception e) {
             LOG.warnf(e, "Failed to create trace for scheduled job run %d", runId);
         }
