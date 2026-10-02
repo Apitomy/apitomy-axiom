@@ -22,6 +22,9 @@ import static org.junit.jupiter.api.Assertions.*;
 @QuarkusTest
 class TraceServiceTest {
 
+    private static final UUID TEST_EVENT_ID =
+            UUID.fromString("6f1c2d3e-4b5a-4c6d-8e7f-901234567890");
+
     @Inject
     TraceService traceService;
 
@@ -35,7 +38,7 @@ class TraceServiceTest {
     @Test
     void createTraceCreatesTraceAndRootNode() {
         TraceContext ctx = traceService.createTrace("event-pipeline",
-                "Processing test event", 1L, null, null,
+                "Processing test event", TEST_EVENT_ID, null, null,
                 "event-ingested", "Event received: test-event",
                 null, null);
 
@@ -48,7 +51,7 @@ class TraceServiceTest {
         assertEquals("event-pipeline", trace.traceType);
         assertEquals("in-progress", trace.status);
         assertEquals("Processing test event", trace.summary);
-        assertEquals(1L, trace.eventId);
+        assertEquals(TEST_EVENT_ID, trace.eventId);
         assertNull(trace.projectId);
         assertNull(trace.reportId);
         assertNotNull(trace.startedOn);
@@ -85,7 +88,7 @@ class TraceServiceTest {
         assertEquals("in-progress", child.status);
         assertEquals("Evaluating event", child.summary);
         assertEquals("activity-log", child.entityType);
-        assertEquals(42L, child.entityId);
+        assertEquals("42", child.entityId);
         assertNotNull(child.startedOn);
         assertNull(child.completedOn);
     }
@@ -152,7 +155,7 @@ class TraceServiceTest {
         assertNotNull(node);
         assertEquals("completed", node.status);
         assertEquals("activity-log", node.entityType);
-        assertEquals(99L, node.entityId);
+        assertEquals("99", node.entityId);
         assertNotNull(node.completedOn);
     }
 
@@ -199,7 +202,7 @@ class TraceServiceTest {
     void fullPipelineFlow() {
         // Simulate a complete event pipeline trace
         TraceContext ctx = traceService.createTrace("event-pipeline",
-                "Processing event #1", 1L, null, null,
+                "Processing event #1", TEST_EVENT_ID, null, null,
                 "event-ingested", "Event received: issue-opened",
                 null, null);
 
@@ -233,7 +236,7 @@ class TraceServiceTest {
         assertEquals(root.id, eval.parentNodeId);
         assertEquals("manager-evaluation", eval.nodeType);
         assertEquals("activity-log", eval.entityType);
-        assertEquals(10L, eval.entityId);
+        assertEquals("10", eval.entityId);
 
         TraceNodeEntity decision = nodes.get(2);
         assertEquals(root.id, decision.parentNodeId);
@@ -243,7 +246,7 @@ class TraceServiceTest {
         assertEquals(decisionNodeId, taskCreated.parentNodeId);
         assertEquals("task-created", taskCreated.nodeType);
         assertEquals("task", taskCreated.entityType);
-        assertEquals(100L, taskCreated.entityId);
+        assertEquals("100", taskCreated.entityId);
 
         // Trace is still in-progress (async task) — use HQL query to bypass L1 cache
         assertEquals(1, TraceEntity.count("traceId = ?1 and status = 'in-progress'", ctx.traceId()));
@@ -267,5 +270,20 @@ class TraceServiceTest {
         TraceNodeEntity rootNode = TraceNodeEntity.findById(ctx.currentParentNodeId());
         assertTrue(rootNode.summary.length() <= 1024);
         assertTrue(rootNode.summary.endsWith("..."));
+    }
+
+    @Test
+    void addUuidEntityNodeStoresUuidAsEntityId() {
+        TraceContext ctx = traceService.createTrace("test", "test trace",
+                null, null, null, "root", "root node",
+                null, null);
+
+        Long nodeId = traceService.addUuidEntityNode(ctx, "event-received", "completed",
+                "Event received", "event", TEST_EVENT_ID);
+
+        TraceNodeEntity node = TraceNodeEntity.findById(nodeId);
+        assertNotNull(node);
+        assertEquals("event", node.entityType);
+        assertEquals(TEST_EVENT_ID.toString(), node.entityId);
     }
 }

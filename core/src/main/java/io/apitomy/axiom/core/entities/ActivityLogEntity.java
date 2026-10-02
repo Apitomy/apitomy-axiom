@@ -6,6 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * A global activity log entry.
@@ -21,7 +22,7 @@ public class ActivityLogEntity extends PanacheEntity {
     public Long taskId;
 
     @Column(name = "event_id")
-    public Long eventId;
+    public UUID eventId;
 
     @Column(name = "entry_type", nullable = false)
     public String entryType;

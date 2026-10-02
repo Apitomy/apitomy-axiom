@@ -45,5 +45,5 @@ public class TraceNodeEntity extends PanacheEntity {
     public String entityType;
 
     @Column(name = "entity_id")
-    public Long entityId;
+    public String entityId;
 }

@@ -110,7 +110,7 @@ export interface NewProject {
 export interface Task {
     id: number;
     projectId: number;
-    eventId?: number;
+    eventId?: string;
     actionType: string;
     createdBy: string;
     assignedAgent?: number;
@@ -139,7 +139,7 @@ export interface ActivityLogEntry {
     id: number;
     projectId?: number;
     taskId?: number;
-    eventId?: number;
+    eventId?: string;
     entryType: string;
     summary: string;
     details?: string;
@@ -1121,7 +1121,7 @@ export interface AiUsage {
     id: number;
     invocationType: string;
     taskId?: number;
-    eventId?: number;
+    eventId?: string;
     projectId?: number;
     agentId?: number;
     actionType?: string;
@@ -1197,14 +1197,14 @@ export async function fetchDiskUsage(
 
 export async function fetchActivityLog(
     page = 1, limit = 20,
-    filterEventId?: number, filterSummary?: string,
+    filterEventId?: string, filterSummary?: string,
     filterProjectId?: number, filterEntryType?: string,
     filterLabels?: string
 ): Promise<SearchResults<ActivityLogEntry>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
     params.set("limit", String(limit));
-    if (filterEventId != null) params.set("filterEventId", String(filterEventId));
+    if (filterEventId) params.set("filterEventId", String(filterEventId));
     if (filterSummary) params.set("filterSummary", filterSummary);
     if (filterProjectId != null) params.set("filterProjectId", String(filterProjectId));
     if (filterEntryType) params.set("filterEntryType", filterEntryType);
@@ -1539,7 +1539,7 @@ export interface Trace {
     traceType: string;
     status: string;
     summary: string;
-    eventId?: number;
+    eventId?: string;
     projectId?: number;
     reportId?: number;
     startedOn: string;
@@ -1557,7 +1557,7 @@ export interface TraceNode {
     completedOn?: string;
     durationMs?: number;
     entityType?: string;
-    entityId?: number;
+    entityId?: string;
 }
 
 export interface ToolExecution {
@@ -1584,7 +1584,7 @@ export interface TraceNodeDetailResponse {
 export async function fetchTraces(
     page = 1, limit = 20,
     filterTraceType?: string, filterStatus?: string,
-    filterEventId?: number, filterProjectId?: number,
+    filterEventId?: string, filterProjectId?: number,
     filterReportId?: number
 ): Promise<SearchResults<Trace>> {
     const params = new URLSearchParams();
@@ -1669,7 +1669,7 @@ export interface InboxItem {
     humanContext?: HumanContext;
     outputSchema?: OutputSchema;
     createdOn: string;
-    eventId?: number;
+    eventId?: string;
     traceId?: string;
 }
 

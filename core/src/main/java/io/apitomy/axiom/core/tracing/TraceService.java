@@ -32,7 +32,7 @@ public class TraceService {
      *
      * @param traceType       trace category (e.g. "event-pipeline")
      * @param summary         human-readable trace summary
-     * @param eventId         associated event ID (nullable)
+     * @param eventId         associated stream event ID (nullable)
      * @param projectId       associated project ID (nullable)
      * @param reportId        associated report ID (nullable)
      * @param rootNodeType       node type for the root node
@@ -42,7 +42,7 @@ public class TraceService {
      * @return a {@link TraceContext} with the root node on the stack
      */
     public TraceContext createTrace(String traceType, String summary,
-            Long eventId, Long projectId, Long reportId,
+            UUID eventId, Long projectId, Long reportId,
             String rootNodeType, String rootNodeSummary,
             String rootEntityType, Long rootEntityId) {
         TraceContext ctx = QuarkusTransaction.requiringNew().call(() -> {
@@ -69,7 +69,7 @@ public class TraceService {
             rootNode.completedOn = now;
             rootNode.durationMs = 0L;
             rootNode.entityType = rootEntityType;
-            rootNode.entityId = rootEntityId;
+            rootNode.entityId = toEntityRef(rootEntityId);
             rootNode.persist();
 
             LOG.debugf("Created trace %s (%s) with root node %d",
@@ -94,6 +94,31 @@ public class TraceService {
      */
     public Long addNode(TraceContext ctx, String nodeType, String status,
             String summary, String entityType, Long entityId) {
+        return addNodeInternal(ctx, nodeType, status, summary, entityType,
+                toEntityRef(entityId));
+    }
+
+    /**
+     * Adds a child node that references a UUID-keyed entity (e.g. a stream
+     * event, entity type {@code "event"}). The parent is determined by
+     * {@code ctx.currentParentNodeId()} (top of the context stack).
+     *
+     * @param ctx        current trace context
+     * @param nodeType   node type identifier
+     * @param status     initial status (e.g. "in-progress", "completed")
+     * @param summary    human-readable node summary
+     * @param entityType type of the referenced detail entity (nullable)
+     * @param entityId   UUID of the referenced detail entity (nullable)
+     * @return the new node's ID
+     */
+    public Long addUuidEntityNode(TraceContext ctx, String nodeType, String status,
+            String summary, String entityType, UUID entityId) {
+        return addNodeInternal(ctx, nodeType, status, summary, entityType,
+                toEntityRef(entityId));
+    }
+
+    private Long addNodeInternal(TraceContext ctx, String nodeType, String status,
+            String summary, String entityType, String entityId) {
         Long nodeId = QuarkusTransaction.requiringNew().call(() -> {
             TraceNodeEntity node = new TraceNodeEntity();
             node.traceId = ctx.traceId();
@@ -161,7 +186,7 @@ public class TraceService {
             node.durationMs = Duration.between(node.startedOn, now).toMillis();
             node.status = status;
             node.entityType = entityType;
-            node.entityId = entityId;
+            node.entityId = toEntityRef(entityId);
             return node.traceId;
         });
         if (traceId != null) {
@@ -188,6 +213,10 @@ public class TraceService {
             LOG.debugf("Completed trace %s with status %s", traceId, status);
         });
         sseEvents.fire(SseEvent.traceUpdated(traceId));
+    }
+
+    private static String toEntityRef(Object entityId) {
+        return entityId == null ? null : entityId.toString();
     }
 
     private static String truncate(String value, int maxLength) {

@@ -32,6 +32,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Orchestrates task execution. Resolves the appropriate Agent implementation
@@ -177,7 +178,7 @@ public class TaskExecutionService {
             try {
                 TraceNodeEntity taskNode = TraceNodeEntity.find(
                         "traceId = ?1 and nodeType = 'task' and entityType = 'task' and entityId = ?2",
-                        task.traceId, task.id).firstResult();
+                        task.traceId, String.valueOf(task.id)).firstResult();
                 if (taskNode != null) {
                     env.put("AXIOM_TRACE_ID", task.traceId.toString());
                     env.put("AXIOM_PARENT_NODE_ID", String.valueOf(taskNode.id));
@@ -502,7 +503,7 @@ public class TaskExecutionService {
                 // Complete the task node with final status
                 TraceNodeEntity taskNode = TraceNodeEntity.find(
                         "traceId = ?1 and nodeType = 'task' and entityType = 'task' and entityId = ?2",
-                        task.traceId, task.id).firstResult();
+                        task.traceId, String.valueOf(task.id)).firstResult();
                 if (taskNode != null) {
                     traceService.completeNode(taskNode.id, statusText);
                 }
@@ -582,7 +583,7 @@ public class TaskExecutionService {
         }
     }
 
-    private void logActivity(Long projectId, Long taskId, Long eventId,
+    private void logActivity(Long projectId, Long taskId, UUID eventId,
                               String entryType, String summary) {
         ActivityLogEntity log = new ActivityLogEntity();
         log.projectId = projectId;
@@ -607,7 +608,7 @@ public class TaskExecutionService {
         entry.persist();
     }
 
-    private void recordAiUsage(String invocationType, Long taskId, Long eventId,
+    private void recordAiUsage(String invocationType, Long taskId, UUID eventId,
                                 Long projectId, Long agentId, String actionType,
                                 String engine, String model,
                                 Double costUsd, Long inputTokens, Long outputTokens) {

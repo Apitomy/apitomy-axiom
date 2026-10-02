@@ -1811,7 +1811,8 @@
             "in": "query",
             "description": "Filter by exact event ID",
             "schema": {
-              "type": "integer"
+              "type": "string",
+              "format": "uuid"
             }
           },
           {
@@ -3415,7 +3416,8 @@
             "description": "Filter by event ID",
             "required": false,
             "schema": {
-              "type": "integer"
+              "type": "string",
+              "format": "uuid"
             }
           },
           {
@@ -6072,9 +6074,9 @@
             "type": "string"
           },
           "eventId": {
-            "format": "int64",
+            "format": "uuid",
             "description": "Originating event ID (correlation ID for tracing)",
-            "type": "integer"
+            "type": "string"
           },
           "sessionId": {
             "description": "Claude Code session ID",
@@ -6448,8 +6450,8 @@
             "type": "integer"
           },
           "eventId": {
-            "format": "int64",
-            "type": "integer"
+            "format": "uuid",
+            "type": "string"
           },
           "entryType": {
             "type": "string"
@@ -6840,8 +6842,8 @@
             "type": "integer"
           },
           "eventId": {
-            "format": "int64",
-            "type": "integer"
+            "format": "uuid",
+            "type": "string"
           },
           "projectId": {
             "format": "int64",
@@ -8006,8 +8008,8 @@
             "type": "string"
           },
           "eventId": {
-            "format": "int64",
-            "type": "integer"
+            "format": "uuid",
+            "type": "string"
           },
           "projectId": {
             "format": "int64",
@@ -8075,8 +8077,8 @@
             "type": "string"
           },
           "entityId": {
-            "format": "int64",
-            "type": "integer"
+            "description": "ID of the referenced detail entity (numeric ID or UUID, depending on entityType)",
+            "type": "string"
           }
         }
       },
@@ -8367,8 +8369,8 @@
             "type": "string"
           },
           "eventId": {
-            "format": "int64",
-            "type": "integer"
+            "format": "uuid",
+            "type": "string"
           },
           "traceId": {
             "format": "uuid",

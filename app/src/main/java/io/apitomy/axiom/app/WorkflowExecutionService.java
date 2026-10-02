@@ -842,7 +842,7 @@ public class WorkflowExecutionService {
             io.apitomy.axiom.core.entities.TraceNodeEntity taskNode =
                     io.apitomy.axiom.core.entities.TraceNodeEntity.find(
                             "traceId = ?1 and nodeType = 'task' and entityType = 'task' and entityId = ?2",
-                            task.traceId, task.id).firstResult();
+                            task.traceId, String.valueOf(task.id)).firstResult();
             if (taskNode != null) {
                 traceService.completeNode(taskNode.id, "failed");
             }

@@ -25,7 +25,7 @@ public class TaskEntity extends PanacheEntity {
     public String createdBy;
 
     @Column(name = "event_id")
-    public Long eventId;
+    public UUID eventId;
 
     @Column(name = "assigned_agent")
     public Long assignedAgent;

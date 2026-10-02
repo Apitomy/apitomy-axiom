@@ -175,8 +175,8 @@ export function ManagerDecisionsPage() {
                                     </Td>
                                     <Td>
                                         {entry.eventId ? (
-                                            <Label isCompact color="blue">
-                                                #{entry.eventId}
+                                            <Label isCompact color="blue" title={entry.eventId}>
+                                                {entry.eventId.substring(0, 8)}
                                             </Label>
                                         ) : "—"}
                                     </Td>
