@@ -26,6 +26,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import io.quarkus.narayana.jta.QuarkusTransaction;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.time.Instant;
@@ -82,6 +83,13 @@ public class EventStreamOrchestrator {
 
     @Inject
     io.apitomy.axiom.core.tracing.TraceService traceService;
+
+    /**
+     * Maximum routing attempts per ledger entry. Attempts are counted as the failed
+     * routing outcomes linked to the entry (no attempt column yet, see #422).
+     */
+    @ConfigProperty(name = "axiom.stream-pipeline.max-attempts", defaultValue = "3")
+    int maxAttempts;
 
     private volatile boolean shuttingDown = false;
     private volatile boolean startupRecoveryDone = false;
@@ -200,8 +208,13 @@ public class EventStreamOrchestrator {
      */
     private void retryFailedEntries(List<SubscriptionWithFilters> subscriptions) {
         List<EventProcessingLedgerEntity> failedEntries = QuarkusTransaction.requiringNew().call(() ->
+            // Exclude entries that used up their attempts in the query itself, so they
+            // can never fill the batch and starve retryable entries.
             EventProcessingLedgerEntity.<EventProcessingLedgerEntity>find(
-                "status = ?1 ORDER BY createdOn ASC", "failed")
+                "FROM EventProcessingLedgerEntity l WHERE l.status = ?1 AND "
+                        + "(SELECT COUNT(o) FROM RoutingOutcomeEntity o "
+                        + "WHERE o.ledgerId = l.id AND o.status = 'failed') < ?2 "
+                        + "ORDER BY l.createdOn ASC", "failed", (long) maxAttempts)
                 .page(0, BATCH_SIZE).list()
         );
 
@@ -272,15 +285,29 @@ public class EventStreamOrchestrator {
         });
     }
 
+    /**
+     * Marks a ledger entry failed. When this failure used up the last allowed attempt,
+     * the error message says retries are exhausted and a single WARN is logged (the
+     * retry query skips the entry from then on, so this happens only once).
+     */
     private void failLedgerEntry(Long ledgerId, String errorMessage) {
         QuarkusTransaction.requiringNew().run(() -> {
             EventProcessingLedgerEntity entry = EventProcessingLedgerEntity.findById(ledgerId);
             if (entry != null) {
+                long attempts = RoutingOutcomeEntity.count(
+                        "ledgerId = ?1 and status = 'failed'", ledgerId);
+                String suffix = attempts >= maxAttempts
+                        ? " (giving up after " + attempts + " attempts)" : "";
+                String message = errorMessage != null ? errorMessage : "Unknown error";
+                int room = 2000 - suffix.length();
                 entry.status = "failed";
-                entry.errorMessage = errorMessage != null
-                        ? errorMessage.substring(0, Math.min(errorMessage.length(), 2000))
-                        : null;
+                entry.errorMessage = message.substring(0, Math.min(message.length(), room))
+                        + suffix;
                 entry.processedOn = Instant.now();
+                if (!suffix.isEmpty()) {
+                    LOG.warnf("Giving up on event %s / subscription %d after %d failed attempts: %s",
+                            entry.eventId, entry.subscriptionId, attempts, message);
+                }
             }
         });
     }

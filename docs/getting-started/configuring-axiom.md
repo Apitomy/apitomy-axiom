@@ -104,6 +104,7 @@ rather than executed automatically.
 | Property | Default | Description |
 |----------|---------|--------------|
 | `axiom.stream-pipeline.poll-interval` | `5s` | How often the event stream orchestrator evaluates unprocessed (event, subscription) pairs |
+| `axiom.stream-pipeline.max-attempts` | `3` | Maximum routing attempts (first try plus retries) for an (event, subscription) pair; after that the ledger entry stays `failed` and is no longer retried |
 
 ### Scheduled Jobs
 

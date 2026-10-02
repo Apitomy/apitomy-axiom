@@ -112,7 +112,11 @@ Each `(event_id, subscription_id)` pair gets a ledger entry with one of four sta
   events whose `timestamp` is at or after that cutoff are ever evaluated against the
   subscription. Enabling a subscription does not retroactively evaluate events that
   occurred before its cutoff.
-- **Retry:** Failed entries are re-attempted every tick (5-second interval).
+- **Retry:** Failed entries are re-attempted every tick (5-second interval), up to
+  `axiom.stream-pipeline.max-attempts` attempts in total (default 3). Attempts are counted as the
+  failed `routing_outcome` rows for the entry; the retry query excludes entries at the cap. When the
+  last attempt fails, a WARN is logged once and "(giving up after N attempts)" is appended to the
+  entry's error message. There is no backoff yet (#422).
 - **Dedup:** Unique constraint on `(event_id, subscription_id)` prevents duplicate processing.
 - **Startup recovery:** Orphaned `pending` entries from a previous crash are bulk-updated
   to `failed` on the first tick, then retried normally.

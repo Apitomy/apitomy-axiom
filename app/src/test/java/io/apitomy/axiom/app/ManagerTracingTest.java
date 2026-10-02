@@ -219,6 +219,21 @@ class ManagerTracingTest {
         assertEquals("failed", ledger(eventId).status);
     }
 
+    @Test
+    void alwaysFailingManagerIsEvaluatedAtMostMaxAttemptsTimes() {
+        stubEvaluation(ManagerEvaluationResult.failure("still broken", null));
+        UUID eventId = createEventAndSubscription();
+
+        for (int i = 0; i < 6; i++) {
+            orchestrator.processNewEvents();
+        }
+
+        assertEquals(3, evaluationCalls(), "Default axiom.stream-pipeline.max-attempts is 3");
+        EventProcessingLedgerEntity entry = ledger(eventId);
+        assertEquals("failed", entry.status);
+        assertTrue(entry.errorMessage.contains("giving up after 3 attempts"), entry.errorMessage);
+    }
+
     private long evaluationCalls() {
         return Mockito.mockingDetails(managerService).getInvocations().stream()
                 .filter(i -> i.getMethod().getName().equals("evaluateStreamEvent"))
