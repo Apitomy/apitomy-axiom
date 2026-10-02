@@ -63,6 +63,7 @@ nav:
     - Workflow Input Contract: developer-guide/workflow-input-contract.md
     - Workflow Human-Task Nodes: developer-guide/workflow-human-task-nodes.md
     - Tracing: developer-guide/tracing.md
+    - Correlation: developer-guide/correlation.md
     - UI Development: developer-guide/ui-development.md
     - Extending Axiom: developer-guide/extending-axiom.md
 
