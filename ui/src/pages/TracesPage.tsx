@@ -22,6 +22,7 @@ import {
 } from "@apitomy/common-ui-components";
 import { type Trace, fetchTraces } from "../config/api";
 import { STATUS_COLORS, formatDuration } from "../components/TraceGraphNode";
+import { traceTypeColor, traceTypeLabel } from "../components/traceTypes";
 
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "traceType", label: "Type", testId: "trace-filter-type" },
@@ -162,7 +163,10 @@ export function TracesPage() {
                                         {trace.traceId.substring(0, 8)}...
                                     </Td>
                                     <Td>
-                                        <Label isCompact>{trace.traceType}</Label>
+                                        <Label isCompact
+                                            color={traceTypeColor(trace.traceType)}>
+                                            {traceTypeLabel(trace.traceType)}
+                                        </Label>
                                     </Td>
                                     <Td>
                                         <Label isCompact

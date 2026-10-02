@@ -36,7 +36,9 @@ and a **Trace ID** filter. Both pages accept a `?traceId=` query parameter as a 
 The Manager Decisions page links each evaluation to its event and its trace. Expanding a `manager-evaluated`
 row shows the decisions recorded in the trace (with their reasoning) and the tasks each decision created.
 The Manager's `manager-evaluated` / `manager-error` activity row and its `ai_usage` row carry both the event
-ID and the trace ID, so the AI cost of an evaluation can be found from either.
+ID and the trace ID, so the AI cost of an evaluation can be found from either. This includes manual
+evaluations through `POST /manager/evaluate/{eventId}`: their rows carry the ID of the `manager-dry-run`
+trace, which the endpoint returns in the `X-Axiom-Trace-Id` response header.
 
 ## Agent Calls: Joining the Caller's Trace
 

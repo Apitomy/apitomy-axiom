@@ -47,6 +47,7 @@ Current trace types:
 | Trace Type | Trigger |
 |------------|---------|
 | `manager` | A subscription routes an event to the Manager for evaluation |
+| `manager-dry-run` | A user runs a manual Manager evaluation (`POST /manager/evaluate/{eventId}`); the decisions are not acted on |
 | `workflow` | A workflow instance is triggered |
 | `scheduled-job-execution` | A scheduled job run starts |
 | `report-generation` | A report definition runs (scheduled or ad hoc) |
@@ -237,8 +238,33 @@ event-ingested             root, completed on creation
   was posted to), the trace's `projectId` is set, so it appears in `GET /projects/{id}/traces`.
 - Evaluation and decision nodes are always completed before `routeToManager` returns, so only `task`
   nodes can keep the trace open (see the lifecycle rules above).
-- The debug endpoint `POST /manager/evaluate/{eventId}` calls the Manager without a trace and still
-  returns a plain decision list (empty on failure).
+
+### Manager dry-run trace structure
+
+The debug endpoint `POST /manager/evaluate/{eventId}` (`ManagerResourceImpl.evaluateEvent`) runs the
+Manager but never acts on its decisions: it creates no tasks, routing outcome or ledger entry. Each call is
+recorded as a `manager-dry-run` trace with `eventId` set to the stream event, so it appears in
+`GET /traces?filterEventId=…` and in the **Dry-run evaluations** section of the event detail page's
+Processing tab. The tree reuses the Manager structure, without task nodes:
+
+```
+event-ingested             root, completed on creation   ("[dry run] Event: …")
+└── manager-evaluation     completed | failed   (activity-log: manager-evaluated / manager-error)
+    ├── manager-decision   completed            ("[dry run] Decision: …" with the reasoning)
+    └── manager-decision   ...
+```
+
+- Every node summary is prefixed with `[dry run]`. The trace summary is
+  `Manager dry run (manual): <event type> — <ref>`. Axiom has no authentication, so there is no user to
+  record as the trigger; `manual` marks it as user-triggered.
+- The trace ID is passed to `ManagerService.evaluateStreamEvent(event, traceId)`, so the
+  `manager-evaluated` / `manager-error` activity row and the `ai_usage` row carry it.
+- All nodes and the trace are completed before the endpoint returns. When the evaluation fails, the
+  `manager-evaluation` node and the trace are `failed`; the response is unchanged (`200` with `[]`).
+- The response body stays a plain decision list. The trace ID is returned in the `X-Axiom-Trace-Id`
+  response header (absent if the trace could not be created).
+- The node-building code (trace creation, evaluation and decision nodes, completion) is shared with
+  `EventStreamOrchestrator` through `ManagerTraceRecorder`.
 ---
 
 ## TraceContext
@@ -298,7 +324,7 @@ Returns a paginated list of traces with optional filtering.
 |-----------|------|---------|-------------|
 | `page` | integer | 1 | Page number (1-indexed) |
 | `limit` | integer | 20 | Page size |
-| `filterTraceType` | string | — | Filter by trace type (e.g. `"manager"`, `"workflow"`, `"scheduled-job-execution"`, `"report-generation"`) |
+| `filterTraceType` | string | — | Filter by trace type (e.g. `"manager"`, `"manager-dry-run"`, `"workflow"`, `"scheduled-job-execution"`, `"report-generation"`) |
 | `filterStatus` | string | — | Filter by status (comma-separated, e.g. `"in-progress,completed"`) |
 | `filterEventId` | string (UUID) | — | Filter by stream event ID (400 if not a valid UUID) |
 | `filterProjectId` | integer | — | Filter by project ID |

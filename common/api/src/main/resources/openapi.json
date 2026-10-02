@@ -1945,11 +1945,20 @@
           "Manager"
         ],
         "summary": "Evaluate an event with the AI Manager (debug)",
-        "description": "Invokes the AI Manager to evaluate a specific event and return its decisions. This is a debug/testing endpoint — in production, events are evaluated automatically via the pipeline.",
+        "description": "Invokes the AI Manager to evaluate a specific event and return its decisions. The decisions are not acted on (no tasks, routing outcome or ledger entry), but the evaluation is recorded as a manager-dry-run trace linked to the event; its ID is returned in the X-Axiom-Trace-Id header. This is a debug/testing endpoint — in production, events are evaluated automatically via the pipeline.",
         "operationId": "evaluateEvent",
         "responses": {
           "200": {
             "description": "Manager decisions",
+            "headers": {
+              "X-Axiom-Trace-Id": {
+                "description": "ID of the manager-dry-run trace recording this evaluation. Absent if the trace could not be created.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            },
             "content": {
               "application/json": {}
             }
