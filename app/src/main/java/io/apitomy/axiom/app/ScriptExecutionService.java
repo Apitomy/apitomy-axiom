@@ -425,7 +425,7 @@ public class ScriptExecutionService {
             }
 
             logActivity(task.projectId, taskId, task.eventId, "task-started",
-                    "Script task started: " + task.actionType);
+                    "Script task started: " + task.actionType, task.traceId);
             addThreadEntry(task.projectId, "system", "update",
                     "Script task started: " + task.actionType);
 
@@ -448,7 +448,7 @@ public class ScriptExecutionService {
         LOG.infof("Script task %d %s", taskId, statusText);
 
         logActivity(task.projectId, taskId, task.eventId, "task-" + statusText,
-                "Script task " + statusText + ": " + task.actionType);
+                "Script task " + statusText + ": " + task.actionType, task.traceId);
 
         String threadContent = "Script task " + statusText + ": " + task.actionType;
         if (output != null && !output.isBlank()) {
@@ -493,7 +493,7 @@ public class ScriptExecutionService {
     }
 
     private void logActivity(Long projectId, Long taskId, UUID eventId,
-                              String entryType, String summary) {
+                              String entryType, String summary, UUID traceId) {
         ActivityLogEntity log = new ActivityLogEntity();
         log.projectId = projectId;
         log.taskId = taskId;
@@ -503,6 +503,7 @@ public class ScriptExecutionService {
                 ? summary.substring(0, 1021) + "..."
                 : summary;
         log.createdOn = Instant.now();
+        log.traceId = traceId;
         log.persist();
     }
 

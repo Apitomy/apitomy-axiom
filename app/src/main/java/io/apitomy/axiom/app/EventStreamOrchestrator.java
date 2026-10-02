@@ -445,7 +445,7 @@ public class EventStreamOrchestrator {
             LOG.infof("Decision below confidence threshold (%.2f): %s — escalating",
                     decision.confidence(), decision.decision());
             QuarkusTransaction.requiringNew().run(() ->
-                handleEscalation(event, decision,
+                handleEscalation(event, decision, traceCtx,
                     "Low confidence (" + String.format("%.0f%%", decision.confidence() * 100)
                         + "): " + decision.reasoning()));
             return null;
@@ -456,12 +456,12 @@ public class EventStreamOrchestrator {
                     handleCreateTask(event, decision, traceCtx));
             case "ignore" -> {
                 QuarkusTransaction.requiringNew().run(() ->
-                        handleIgnore(event, decision));
+                        handleIgnore(event, decision, traceCtx));
                 yield null;
             }
             case "escalate" -> {
                 QuarkusTransaction.requiringNew().run(() ->
-                        handleEscalation(event, decision, decision.reasoning()));
+                        handleEscalation(event, decision, traceCtx, decision.reasoning()));
                 yield null;
             }
             default -> {
@@ -474,7 +474,8 @@ public class EventStreamOrchestrator {
     private ManagerDecisionResult handleCreateTask(StreamEventEntity event,
                                                      ManagerDecision decision,
                                                      io.apitomy.axiom.core.tracing.TraceContext traceCtx) {
-        ProjectEntity project = findOrCreateProjectForStreamEvent(event);
+        ProjectEntity project = findOrCreateProjectForStreamEvent(event,
+                traceCtx != null ? traceCtx.traceId() : null);
 
         TaskEntity task = new TaskEntity();
         task.projectId = project.id;
@@ -505,7 +506,8 @@ public class EventStreamOrchestrator {
                 task.id, task.actionType, project.id, event.id);
 
         logActivity(project.id, task.id, event.id, "task-created",
-                "Manager created task: " + task.actionType + " — " + decision.reasoning());
+                "Manager created task: " + task.actionType + " — " + decision.reasoning(),
+                task.traceId);
         addThreadEntry(project.id, "manager", "decision",
                 "Created task: " + task.actionType + "\n\nReasoning: " + decision.reasoning());
 
@@ -524,17 +526,21 @@ public class EventStreamOrchestrator {
         return new ManagerDecisionResult(project.id, task.id);
     }
 
-    private void handleIgnore(StreamEventEntity event, ManagerDecision decision) {
+    private void handleIgnore(StreamEventEntity event, ManagerDecision decision,
+                              io.apitomy.axiom.core.tracing.TraceContext traceCtx) {
         LOG.infof("Manager ignored stream event %s: %s", event.id, decision.reasoning());
         logActivity(null, null, event.id, "event-ignored",
-                "Event ignored: " + event.type + " — " + decision.reasoning());
+                "Event ignored: " + event.type + " — " + decision.reasoning(),
+                traceCtx != null ? traceCtx.traceId() : null);
     }
 
     private void handleEscalation(StreamEventEntity event, ManagerDecision decision,
+                                   io.apitomy.axiom.core.tracing.TraceContext traceCtx,
                                    String reason) {
         LOG.infof("Manager escalated stream event %s: %s", event.id, reason);
         logActivity(null, null, event.id, "manager-escalation",
-                "Manager escalation: " + reason);
+                "Manager escalation: " + reason,
+                traceCtx != null ? traceCtx.traceId() : null);
 
         // If we can find a project for this event, add to its thread
         ProjectEntity project = QuarkusTransaction.requiringNew().call(() ->
@@ -564,7 +570,7 @@ public class EventStreamOrchestrator {
             throw new IllegalStateException(
                     "create-workflow routing rule missing workflowDefinitionId");
         }
-        Long projectId = findOrCreateProjectForEvent(event);
+        Long projectId = findOrCreateProjectForEvent(event, null);
 
         // Build the event as a JsonNode so the workflow context can access
         // event fields via EL expressions (e.g., context.event.type,
@@ -633,7 +639,8 @@ public class EventStreamOrchestrator {
         Long projectId;
         Long taskId;
         try {
-            projectId = findOrCreateProjectForEvent(event);
+            projectId = findOrCreateProjectForEvent(event,
+                    traceCtx != null ? traceCtx.traceId() : null);
 
             // Build a structured input with a human-readable summary for {{managerInput}}
             // and the raw event payload for {{event}}
@@ -691,7 +698,7 @@ public class EventStreamOrchestrator {
 
             // Log activity
             logActivity(projectId, task.id, event.id, "task-created",
-                    "Subscription invoked action: " + task.actionType);
+                    "Subscription invoked action: " + task.actionType, task.traceId);
 
             LOG.infof("Created task for action '%s' from event %s",
                     actionType.name, event.id);
@@ -750,12 +757,13 @@ public class EventStreamOrchestrator {
         }
     }
 
-    private Long findOrCreateProjectForEvent(StreamEventEntity event) {
+    private Long findOrCreateProjectForEvent(StreamEventEntity event, UUID traceId) {
         return QuarkusTransaction.requiringNew().call(() ->
-                findOrCreateProjectForStreamEvent(event).id);
+                findOrCreateProjectForStreamEvent(event, traceId).id);
     }
 
-    private ProjectEntity findOrCreateProjectForStreamEvent(StreamEventEntity event) {
+    private ProjectEntity findOrCreateProjectForStreamEvent(StreamEventEntity event,
+                                                            UUID traceId) {
         // Try to find existing project by ref
         ProjectEntity project = ProjectEntity.find("ref", event.ref).firstResult();
         if (project != null) return project;
@@ -789,7 +797,7 @@ public class EventStreamOrchestrator {
         LOG.infof("Auto-created project %d for %s", project.id, event.ref);
 
         logActivity(project.id, null, event.id, "project-created",
-                "Project auto-created from " + event.type + " event");
+                "Project auto-created from " + event.type + " event", traceId);
         addThreadEntry(project.id, "system", "message",
                 "Project created from " + event.source + " event: " + event.type);
 
@@ -875,7 +883,7 @@ public class EventStreamOrchestrator {
     // ── Activity and thread logging ────────────────────────────────
 
     private void logActivity(Long projectId, Long taskId, UUID eventId,
-                              String entryType, String summary) {
+                              String entryType, String summary, UUID traceId) {
         ActivityLogEntity log = new ActivityLogEntity();
         log.projectId = projectId;
         log.taskId = taskId;
@@ -885,6 +893,7 @@ public class EventStreamOrchestrator {
                 ? summary.substring(0, 1021) + "..."
                 : summary;
         log.createdOn = Instant.now();
+        log.traceId = traceId;
         log.persist();
     }
 
