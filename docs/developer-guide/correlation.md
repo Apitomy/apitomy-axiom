@@ -33,6 +33,11 @@ In the UI, the Activity log and AI usage pages show a **Trace** column that link
 and a **Trace ID** filter. Both pages accept a `?traceId=` query parameter as a deep link, for example
 `/logs/activity?traceId=...`.
 
+The Manager Decisions page links each evaluation to its event and its trace. Expanding a `manager-evaluated`
+row shows the decisions recorded in the trace (with their reasoning) and the tasks each decision created.
+The Manager's `manager-evaluated` / `manager-error` activity row and its `ai_usage` row carry both the event
+ID and the trace ID, so the AI cost of an evaluation can be found from either.
+
 ## Agent Calls: Joining the Caller's Trace
 
 When an agent calls Axiom APIs through the Axiom MCP server, `sdk-server.js` sends two headers on every

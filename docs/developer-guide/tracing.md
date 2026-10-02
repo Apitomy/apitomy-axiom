@@ -68,7 +68,9 @@ enum, so treat this as the currently observed set rather than an exhaustive cont
 
 | Node Type | Meaning | Typical Entity Reference |
 |-----------|---------|--------------------------|
-| `manager-evaluation` | AI Manager was invoked (root node of a `manager` trace) | — |
+| `event-ingested` | The event routed to the Manager (root node of a `manager` trace) | — |
+| `manager-evaluation` | AI Manager was invoked for the event | `activity-log` (`manager-evaluated` / `manager-error`) |
+| `manager-decision` | One decision returned by the Manager; the summary holds the decision and its reasoning | `activity-log` (`event-ignored` / `manager-escalation`) |
 | `task` | A task was created and assigned | `task` |
 | `report-triggered` | Report generation started (root node of a `report-generation` trace) | `report` |
 | `report-ai-invoked` | AI agent launched for the report | `report` |
@@ -184,13 +186,50 @@ Every unit of work ends with exactly one trace in a final state (`completed` or 
 | Scheduled job run | `ScheduledJobExecutionService` when the agent finishes | No agent / startup error: run is `Failed`, trace and AI node closed as `failed`, `run.traceId` still set |
 | Report | `ReportExecutionService` when the agent finishes | No agent / startup error: report is `Failed` (not left `Pending`), trace closed as `failed`, `report.traceId` still set |
 | Invoke-action task | `TaskTraceFinalizer` when the task reaches a final state | Error before the task is created: trace closed as `failed` |
-| Manager evaluation | Last task created by the evaluation (`TaskTraceFinalizer`); the orchestrator only completes it when no task node is open | Manager error: trace closed as `failed` |
+| Manager evaluation | Last task created by the evaluation (`TaskTraceFinalizer`); the orchestrator only completes it when no task node is open | Manager failure (AI error or unparseable output): trace and `manager-evaluation` node closed as `failed`, outcome and ledger entry `failed` (retried) |
 | Workflow run | `WorkflowExecutionService` when the run is terminal (including runs that finish synchronously on start) | — |
 
 `TaskTraceFinalizer` is used by both the agent and script task paths (including `failTask`). It always
 completes the task's `task` node, never completes a workflow-owned trace, and completes any other trace only
 once no other `task` node in it is still `in-progress` — `failed` if any task node failed.
 
+
+### Manager trace structure
+
+`EventStreamOrchestrator.routeToManager` creates one `manager` trace per evaluation, with `eventId` set
+to the stream event. The tree is:
+
+```
+event-ingested             root, completed on creation
+└── manager-evaluation     completed | failed   (activity-log: manager-evaluated / manager-error)
+    ├── manager-decision   completed | failed   (activity-log: event-ignored / manager-escalation)
+    │   └── task           in-progress → completed | failed   (create_task / script_action only)
+    └── manager-decision   ...
+```
+
+- `ManagerService.evaluateStreamEvent(event, traceId)` returns a `ManagerEvaluationResult`
+  (`decisions`, `failed`, `errorMessage`, `activityLogId`). A failed evaluation (the AI call failed or its
+  output had no `decisions` array) is distinct from a successful one with an empty decision list.
+- The `manager-evaluated` / `manager-error` activity row and the Manager's `ai_usage` row carry the event
+  ID and trace ID. The `manager-evaluation` node references the activity row, which holds the execution
+  log.
+- Each decision node's summary records the decision, action type, confidence and reasoning. Decisions
+  below the confidence threshold are labelled `Escalated (low confidence)`. Tasks created by a decision
+  carry the event ID and trace ID, and their `task` node is a child of the decision node.
+- If processing one decision fails (for example an unknown decision type), its node is closed as
+  `failed` with the error prefixed to the summary, any `task` node left open under it is closed as
+  `failed`, and the error is appended to the routing outcome summary. Other decisions still run, and the
+  ledger entry is not failed, so the decisions that succeeded are not repeated by a retry.
+- When the evaluation fails, the `manager-evaluation` node and the trace are closed as `failed`, the
+  routing outcome is `failed` with the error (and keeps the trace ID), and the ledger entry is `failed`
+  so `retryFailedEntries` retries it. Each retry creates a new trace.
+- An empty decision list is a success: outcome `completed` with summary `No decisions`, trace `completed`.
+- When the decisions involve exactly one project (a created task's project, or the project an escalation
+  was posted to), the trace's `projectId` is set, so it appears in `GET /projects/{id}/traces`.
+- Evaluation and decision nodes are always completed before `routeToManager` returns, so only `task`
+  nodes can keep the trace open (see the lifecycle rules above).
+- The debug endpoint `POST /manager/evaluate/{eventId}` calls the Manager without a trace and still
+  returns a plain decision list (empty on failure).
 ---
 
 ## TraceContext

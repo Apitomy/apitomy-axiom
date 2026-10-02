@@ -19,6 +19,7 @@ import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.tracing.TraceContext;
 import io.apitomy.axiom.core.tracing.TraceService;
 import io.apitomy.axiom.manager.ManagerDecision;
+import io.apitomy.axiom.manager.ManagerEvaluationResult;
 import io.apitomy.axiom.manager.ManagerService;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.InjectMock;
@@ -257,9 +258,10 @@ class TraceCorrelationTest {
     void managerIgnoreActivityCarriesRoutingTrace() {
         Mockito.when(managerService.meetsConfidenceThreshold(ArgumentMatchers.any()))
                 .thenReturn(true);
-        Mockito.when(managerService.evaluateStreamEvent(ArgumentMatchers.any()))
-                .thenReturn(List.of(new ManagerDecision("ignore", null, null, null, 0.9,
-                        "not relevant", null, null)));
+        Mockito.when(managerService.evaluateStreamEvent(ArgumentMatchers.any(),
+                        ArgumentMatchers.any()))
+                .thenReturn(ManagerEvaluationResult.success(List.of(new ManagerDecision(
+                        "ignore", null, null, null, 0.9, "not relevant", null, null)), null));
 
         UUID eventId = UUID.randomUUID();
         QuarkusTransaction.requiringNew().run(() -> {
