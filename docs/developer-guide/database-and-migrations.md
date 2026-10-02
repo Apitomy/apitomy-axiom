@@ -175,13 +175,20 @@ SHA-256 `config_hash`. A row is unique per `(definition, config_hash)`, so runs 
 share one version. `scheduled_job_run.config_version_id` and `report.config_version_id` point at the version.
 
 - `ConfigSnapshotService` builds the snapshot and finds or creates the version. `ScheduledJobScheduler` and
-  `ReportScheduler` call it when they create the run or report row (scheduled and manual paths), in the same
-  transaction, because both paths load the definition there.
+  `ReportScheduler` call it when they create the run or report row (scheduled and manual paths), because
+  both paths load the definition there. The find-or-insert runs in its own transaction
+  (`QuarkusTransaction.requiringNew()`); a unique violation from a concurrent insert is resolved by
+  re-reading the version. The schedulers catch any failure, log a warning and leave `config_version_id`
+  null, so a snapshot problem never blocks run or report creation.
+- Snapshots are serialized with a private, fixed-configuration `ObjectMapper` (sorted keys) so application
+  ObjectMapper customizers cannot change hashes; `maxBudgetUsd` is stored as stripped decimal text.
+- Prompt and script templates are stored verbatim; only environment values are redacted.
 - Environment values are redacted unless they are exactly a `${secret:NAME}` reference. Never add a field
   that can hold a secret value without redacting it.
 - `GET /scheduled-jobs/runs/{runId}/config` and `GET /reports/{reportId}/config` return the snapshot,
-  compared field by field with the current definition; `changed` compares the hashes. They return 404 for
-  rows created before V71 (`config_version_id` is null).
+  compared field by field with the current definition; `changed` compares the hashes. They return 404 with
+  an `Error` body; the message starts with "No configuration was recorded" when the run or report exists but
+  has no snapshot (rows created before V71, or a failed recording).
 - Retention: versions belong to their definition. The delete endpoints remove runs/reports, then versions,
   then the definition. In Flyway-managed databases the FKs also cascade from the definition and set
   `config_version_id` to null if a version is removed. Deleting a single report keeps its version.

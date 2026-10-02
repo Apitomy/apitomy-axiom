@@ -4,6 +4,7 @@ import io.quarkus.hibernate.orm.panache.PanacheEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
 
@@ -14,7 +15,8 @@ import java.time.Instant;
  * secret values.
  */
 @Entity
-@Table(name = "scheduled_job_version")
+@Table(name = "scheduled_job_version", uniqueConstraints = @UniqueConstraint(
+        name = "uq_sjv_job_hash", columnNames = {"job_id", "config_hash"}))
 public class ScheduledJobVersionEntity extends PanacheEntity {
 
     @Column(name = "job_id", nullable = false)

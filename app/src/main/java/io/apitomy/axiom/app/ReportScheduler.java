@@ -95,7 +95,7 @@ public class ReportScheduler {
                 report.triggeredBy = "scheduler";
                 report.createdOn = Instant.now();
                 report.labels.addAll(definition.initialLabels);
-                report.configVersionId = configSnapshots.recordReportVersion(definition);
+                report.configVersionId = recordVersion(definition);
                 report.persist();
 
                 definition.lastRunAt = Instant.now();
@@ -146,7 +146,7 @@ public class ReportScheduler {
         report.triggeredByTraceId = callerTraceId;
         report.createdOn = Instant.now();
         report.labels.addAll(definition.initialLabels);
-        report.configVersionId = configSnapshots.recordReportVersion(definition);
+        report.configVersionId = recordVersion(definition);
         report.persist();
 
         // Update the definition's scheduling
@@ -158,6 +158,18 @@ public class ReportScheduler {
                 definition.name, report.id, definition.nextRunAt);
 
         return report.id;
+    }
+
+    /**
+     * Records the definition's configuration version; never fails report creation (#426).
+     */
+    private Long recordVersion(ReportDefinitionEntity definition) {
+        try {
+            return configSnapshots.recordReportVersion(definition);
+        } catch (RuntimeException e) {
+            LOG.warnf(e, "Could not record configuration snapshot for report '%s'", definition.name);
+            return null;
+        }
     }
 
     /**

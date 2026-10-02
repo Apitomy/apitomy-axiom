@@ -460,12 +460,15 @@ public class ScheduledJobsResourceImpl implements ScheduledResource {
      */
     @Override
     public ConfigurationSnapshot getScheduledJobRunConfig(long runId) {
-        ScheduledJobRunEntity run = findRunOrThrow(runId);
+        ScheduledJobRunEntity run = ScheduledJobRunEntity.findById(runId);
+        if (run == null) {
+            throw ConfigSnapshotErrors.notFound("Scheduled job run not found: " + runId);
+        }
         ScheduledJobVersionEntity version = run.configVersionId == null
                 ? null : ScheduledJobVersionEntity.findById(run.configVersionId);
         if (version == null) {
-            throw new WebApplicationException(
-                    "No configuration was recorded for scheduled job run: " + runId, 404);
+            throw ConfigSnapshotErrors.notFound(
+                    ConfigSnapshotErrors.NOT_RECORDED + "scheduled job run " + runId);
         }
         return configSnapshots.toBean(version, ScheduledJobEntity.findById(run.jobId));
     }

@@ -227,9 +227,15 @@ Recorded fields:
 | Report | prompt template, title template, time window, engine, model, allowed tools, max steps, max budget, timeout, environment |
 
 Names, descriptions, schedules, the enabled flag and labels are not recorded: they do not change what a run
-does. Secret values are never stored. In the environment, a value that is exactly a `${secret:NAME}` reference
-is shown as is; every other value is shown as `[redacted]`, so a change to a literal environment value is not
-detected. Runs and reports created before this feature have no recorded configuration.
+does. In the **environment**, a value that is exactly a `${secret:NAME}` reference is stored as is; every
+other value is stored as `[redacted]`, so a change to a literal environment value is not detected. **Prompt
+and script templates are stored verbatim.** Anything hard-coded in a template, such as a token, stays in the
+configuration history until the job or report definition is deleted, even after you remove it from the
+template. Use `${secret:NAME}` environment references for credentials instead.
+
+Runs and reports created before this feature have no recorded configuration; their detail view says so.
+If a snapshot cannot be recorded (for example because of a database error), the run or report is still
+created, without a recorded configuration, and a warning is logged.
 
 ---
 

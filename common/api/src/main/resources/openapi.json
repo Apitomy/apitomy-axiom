@@ -1577,7 +1577,14 @@
             }
           },
           "404": {
-            "$ref": "#/components/responses/NotFound"
+            "description": "The run or report does not exist, or no configuration was recorded for it (created before configuration tracking). The Error message starts with \"No configuration was recorded\" in the latter case.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       },
@@ -4727,7 +4734,14 @@
             }
           },
           "404": {
-            "$ref": "#/components/responses/NotFound"
+            "description": "The run or report does not exist, or no configuration was recorded for it (created before configuration tracking). The Error message starts with \"No configuration was recorded\" in the latter case.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       },

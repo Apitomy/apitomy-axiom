@@ -10,7 +10,7 @@ import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { type ConfigurationSnapshot } from "../config/api";
 
 interface ConfigurationUsedProps {
-    /** Loads the snapshot; resolves to null when none was recorded. */
+    /** Loads the snapshot; resolves to null only when none was recorded, rejects on other errors. */
     load: () => Promise<ConfigurationSnapshot | null>;
     /** What the configuration belongs to, used in messages ("run" or "report"). */
     noun: string;
@@ -39,7 +39,7 @@ export function ConfigurationUsed({ load, noun }: ConfigurationUsedProps) {
         let cancelled = false;
         load()
             .then((s) => { if (!cancelled) setSnapshot(s); })
-            .catch((e) => { if (!cancelled) setError(String(e)); });
+            .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)); });
         return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);

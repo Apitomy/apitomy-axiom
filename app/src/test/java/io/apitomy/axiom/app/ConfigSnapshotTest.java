@@ -6,6 +6,7 @@ import io.apitomy.axiom.core.entities.ReportEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobVersionEntity;
+import io.quarkus.arc.ClientProxy;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -52,6 +53,9 @@ class ConfigSnapshotTest {
 
     @Inject
     ReportScheduler reportScheduler;
+
+    @Inject
+    ConfigSnapshotService snapshots;
 
     @AfterEach
     void cleanup() {
@@ -188,6 +192,62 @@ class ConfigSnapshotTest {
             return run.id;
         });
         given().when().get("/api/v1/scheduled-jobs/runs/" + runId + "/config").then().statusCode(404);
+    }
+
+    @Test
+    void missingRunAndMissingSnapshotHaveDistinctMessages() {
+        given().when().get("/api/v1/scheduled-jobs/runs/999999999/config")
+                .then().statusCode(404).body("message", containsString("run not found"));
+        long jobId = createJob("Prompt", null);
+        long runId = QuarkusTransaction.requiringNew().call(() -> {
+            ScheduledJobRunEntity run = new ScheduledJobRunEntity();
+            run.jobId = jobId;
+            run.status = "Completed";
+            run.trigger = "manual";
+            run.createdOn = Instant.now();
+            run.persist();
+            return run.id;
+        });
+        given().when().get("/api/v1/scheduled-jobs/runs/" + runId + "/config")
+                .then().statusCode(404).body("message", containsString("No configuration was recorded"));
+        given().when().get("/api/v1/reports/999999999/config")
+                .then().statusCode(404).body("message", containsString("Report not found"));
+    }
+
+    @Test
+    void concurrentDuplicateVersionIsReused() {
+        long jobId = createJob("Racy prompt", null);
+        ScheduledJobEntity job = QuarkusTransaction.requiringNew()
+                .call(() -> ScheduledJobEntity.findById(jobId));
+        long[] racedId = new long[1];
+        // Hooks are fields of the bean instance, not of its client proxy.
+        ConfigSnapshotService service = ClientProxy.unwrap(snapshots);
+        service.beforeInsertHook = () -> QuarkusTransaction.requiringNew().run(() -> {
+            // A concurrent creator inserts the same (job, hash) between our find and insert.
+            service.beforeInsertHook = null;
+            racedId[0] = service.recordJobVersion(job);
+        });
+        try {
+            Long id = service.recordJobVersion(job);
+            assertNotEquals(0L, racedId[0], "the concurrent insert must have happened");
+            assertEquals(racedId[0], id.longValue());
+        } finally {
+            service.beforeInsertHook = null;
+        }
+        assertEquals(1L, (long) QuarkusTransaction.requiringNew()
+                .call(() -> ScheduledJobVersionEntity.count("jobId", jobId)));
+    }
+
+    @Test
+    void budgetIsSerializedStably() {
+        long jobId = createJob("Budget prompt", null);
+        ScheduledJobEntity job = QuarkusTransaction.requiringNew().call(() -> {
+            ScheduledJobEntity j = ScheduledJobEntity.findById(jobId);
+            j.maxBudgetUsd = 5.0;
+            return j;
+        });
+        String json = snapshots.canonicalJson(snapshots.jobConfig(job));
+        assertTrue(json.contains("\"maxBudgetUsd\":\"5\""), json);
     }
 
     // ── Reports ─────────────────────────────────────────────────────

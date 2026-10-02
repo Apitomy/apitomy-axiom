@@ -465,13 +465,12 @@ public class ReportsResourceImpl implements ReportsResource {
     public ConfigurationSnapshot getReportConfig(long reportId) {
         ReportEntity report = ReportEntity.findById(reportId);
         if (report == null) {
-            throw new WebApplicationException("Report not found: " + reportId, 404);
+            throw ConfigSnapshotErrors.notFound("Report not found: " + reportId);
         }
         ReportDefinitionVersionEntity version = report.configVersionId == null
                 ? null : ReportDefinitionVersionEntity.findById(report.configVersionId);
         if (version == null) {
-            throw new WebApplicationException(
-                    "No configuration was recorded for report: " + reportId, 404);
+            throw ConfigSnapshotErrors.notFound(ConfigSnapshotErrors.NOT_RECORDED + "report " + reportId);
         }
         return configSnapshots.toBean(version, ReportDefinitionEntity.findById(report.definitionId));
     }

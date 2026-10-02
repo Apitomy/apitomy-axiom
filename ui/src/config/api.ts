@@ -2604,10 +2604,16 @@ export interface ConfigurationSnapshot {
     fields: ConfigurationField[];
 }
 
+/** Message prefix of the 404 returned when the run or report exists but has no snapshot. */
+const CONFIG_NOT_RECORDED = "No configuration was recorded";
+
 async function fetchConfigSnapshot(url: string): Promise<ConfigurationSnapshot | null> {
     const response = await fetch(url);
-    if (response.status === 404) return null;
-    if (!response.ok) throw new Error(`Failed to fetch configuration: ${response.status}`);
+    if (!response.ok) {
+        const message = await extractErrorMessage(response, "Failed to fetch configuration");
+        if (response.status === 404 && message.startsWith(CONFIG_NOT_RECORDED)) return null;
+        throw new Error(message);
+    }
     return response.json();
 }
 

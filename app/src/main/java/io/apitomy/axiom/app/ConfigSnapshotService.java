@@ -2,7 +2,10 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import io.apitomy.axiom.api.beans.ConfigurationField;
 import io.apitomy.axiom.api.beans.ConfigurationSnapshot;
 import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
@@ -10,12 +13,14 @@ import io.apitomy.axiom.core.entities.ReportDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobVersionEntity;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-import jakarta.transaction.Transactional;
+import io.quarkus.narayana.jta.QuarkusTransaction;
+import jakarta.persistence.PersistenceException;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
@@ -26,6 +31,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 /**
@@ -48,60 +54,126 @@ public class ConfigSnapshotService {
 
     private static final Pattern SECRET_REF = Pattern.compile("\\$\\{secret:[^}]+}");
 
-    @Inject
-    ObjectMapper objectMapper;
+    /** Test hook run just before a version insert; null in production. */
+    volatile Runnable beforeInsertHook;
+
+    /**
+     * Private mapper with a fixed configuration, so customizers of the application's
+     * ObjectMapper can never change snapshot hashes.
+     */
+    private static final ObjectMapper CANONICAL = JsonMapper.builder()
+            .enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+            .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+            .build();
+
+    /**
+     * Serializes a configuration map to its canonical JSON form (the input of the hash).
+     *
+     * @param config the configuration
+     * @return canonical JSON
+     */
+    String canonicalJson(Map<String, Object> config) {
+        return toJson(config);
+    }
 
     /**
      * Returns the version row for the job's current configuration, creating it if needed.
-     * Must be called inside a transaction.
+     * The find-or-insert runs in its own transaction, so a failure never marks the caller's
+     * transaction for rollback. A concurrent insert of the same version (unique violation) is
+     * resolved by re-reading it. Callers should still treat any exception as "no snapshot".
      *
      * @param job the scheduled job
      * @return the version ID
      */
-    @Transactional(Transactional.TxType.MANDATORY)
     public Long recordJobVersion(ScheduledJobEntity job) {
-        String json = toJson(jobConfig(job));
+        String json = canonicalJson(jobConfig(job));
         String hash = sha256(json);
-        ScheduledJobVersionEntity existing = ScheduledJobVersionEntity
-                .<ScheduledJobVersionEntity>find("jobId = ?1 and configHash = ?2", job.id, hash)
-                .firstResult();
-        if (existing != null) {
-            return existing.id;
-        }
-        ScheduledJobVersionEntity version = new ScheduledJobVersionEntity();
-        version.jobId = job.id;
-        version.configHash = hash;
-        version.configSnapshot = json;
-        version.createdOn = Instant.now();
-        version.persist();
-        return version.id;
+        Long jobId = job.id;
+        return findOrInsert(
+                () -> findJobVersion(jobId, hash),
+                () -> {
+                    ScheduledJobVersionEntity version = new ScheduledJobVersionEntity();
+                    version.jobId = jobId;
+                    version.configHash = hash;
+                    version.configSnapshot = json;
+                    version.createdOn = Instant.now();
+                    version.persistAndFlush();
+                    return version.id;
+                });
     }
 
     /**
      * Returns the version row for the report definition's current configuration, creating it
-     * if needed. Must be called inside a transaction.
+     * if needed. Same transaction and concurrency behaviour as {@link #recordJobVersion}.
      *
      * @param definition the report definition
      * @return the version ID
      */
-    @Transactional(Transactional.TxType.MANDATORY)
     public Long recordReportVersion(ReportDefinitionEntity definition) {
-        String json = toJson(reportConfig(definition));
+        String json = canonicalJson(reportConfig(definition));
         String hash = sha256(json);
-        ReportDefinitionVersionEntity existing = ReportDefinitionVersionEntity
-                .<ReportDefinitionVersionEntity>find("definitionId = ?1 and configHash = ?2",
-                        definition.id, hash)
+        Long definitionId = definition.id;
+        return findOrInsert(
+                () -> findReportVersion(definitionId, hash),
+                () -> {
+                    ReportDefinitionVersionEntity version = new ReportDefinitionVersionEntity();
+                    version.definitionId = definitionId;
+                    version.configHash = hash;
+                    version.configSnapshot = json;
+                    version.createdOn = Instant.now();
+                    version.persistAndFlush();
+                    return version.id;
+                });
+    }
+
+    private static Long findJobVersion(Long jobId, String hash) {
+        ScheduledJobVersionEntity v = ScheduledJobVersionEntity
+                .<ScheduledJobVersionEntity>find("jobId = ?1 and configHash = ?2", jobId, hash)
                 .firstResult();
-        if (existing != null) {
-            return existing.id;
+        return v == null ? null : v.id;
+    }
+
+    private static Long findReportVersion(Long definitionId, String hash) {
+        ReportDefinitionVersionEntity v = ReportDefinitionVersionEntity
+                .<ReportDefinitionVersionEntity>find("definitionId = ?1 and configHash = ?2",
+                        definitionId, hash)
+                .firstResult();
+        return v == null ? null : v.id;
+    }
+
+    private Long findOrInsert(Supplier<Long> find, Supplier<Long> insert) {
+        try {
+            return QuarkusTransaction.requiringNew().call(() -> {
+                Long existing = find.get();
+                if (existing != null) {
+                    return existing;
+                }
+                Runnable hook = beforeInsertHook;
+                if (hook != null) {
+                    hook.run();
+                }
+                return insert.get();
+            });
+        } catch (RuntimeException e) {
+            if (!isPersistenceFailure(e)) {
+                throw e;
+            }
+            // Most likely a concurrent insert of the same (definition, hash): reuse it.
+            Long existing = QuarkusTransaction.requiringNew().call(find::get);
+            if (existing == null) {
+                throw e;
+            }
+            return existing;
         }
-        ReportDefinitionVersionEntity version = new ReportDefinitionVersionEntity();
-        version.definitionId = definition.id;
-        version.configHash = hash;
-        version.configSnapshot = json;
-        version.createdOn = Instant.now();
-        version.persist();
-        return version.id;
+    }
+
+    private static boolean isPersistenceFailure(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof PersistenceException || t instanceof SQLException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -144,7 +216,7 @@ public class ConfigSnapshotService {
         put(config, "model", job.model);
         put(config, "allowedTools", job.allowedTools);
         put(config, "maxSteps", job.maxSteps);
-        put(config, "maxBudgetUsd", job.maxBudgetUsd);
+        put(config, "maxBudgetUsd", formatBudget(job.maxBudgetUsd));
         put(config, "timeoutSeconds", job.timeoutSeconds);
         put(config, "environment", redactEnvironment(job.environment));
         return config;
@@ -165,10 +237,16 @@ public class ConfigSnapshotService {
         put(config, "model", definition.model);
         put(config, "allowedTools", definition.allowedTools);
         put(config, "maxSteps", definition.maxSteps);
-        put(config, "maxBudgetUsd", definition.maxBudgetUsd);
+        put(config, "maxBudgetUsd", formatBudget(definition.maxBudgetUsd));
         put(config, "timeoutSeconds", definition.timeoutSeconds);
         put(config, "environment", redactEnvironment(definition.environment));
         return config;
+    }
+
+    /** Stable decimal text for a budget: 5.0 and 5.00 both become "5". */
+    private static String formatBudget(Double budget) {
+        return budget == null ? null
+                : BigDecimal.valueOf(budget).stripTrailingZeros().toPlainString();
     }
 
     private static void put(Map<String, Object> config, String key, Object value) {
@@ -187,7 +265,7 @@ public class ConfigSnapshotService {
         }
         Map<String, Object> raw;
         try {
-            raw = objectMapper.readValue(environmentJson, new TypeReference<Map<String, Object>>() { });
+            raw = CANONICAL.readValue(environmentJson, new TypeReference<Map<String, Object>>() { });
         } catch (JsonProcessingException e) {
             Map<String, String> unreadable = new TreeMap<>();
             unreadable.put("(unparseable)", REDACTED);
@@ -249,7 +327,7 @@ public class ConfigSnapshotService {
 
     private String toJson(Object value) {
         try {
-            return objectMapper.writeValueAsString(value);
+            return CANONICAL.writeValueAsString(value);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Cannot serialize configuration snapshot", e);
         }
@@ -257,7 +335,7 @@ public class ConfigSnapshotService {
 
     private Map<String, Object> fromJson(String json) {
         try {
-            return objectMapper.readValue(json, new TypeReference<TreeMap<String, Object>>() { });
+            return CANONICAL.readValue(json, new TypeReference<TreeMap<String, Object>>() { });
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Cannot read configuration snapshot", e);
         }
