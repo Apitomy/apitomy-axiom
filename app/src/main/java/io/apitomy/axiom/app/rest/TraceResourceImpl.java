@@ -247,10 +247,21 @@ public class TraceResourceImpl implements TracesResource {
      * Parses a stream event UUID filter value, rejecting malformed input with 400.
      */
     static UUID parseEventId(String eventId) {
+        return parseUuidParam("event ID", eventId);
+    }
+
+    /**
+     * Parses a UUID query parameter, returning 400 if it is malformed.
+     *
+     * @param name  the parameter name used in the error message
+     * @param value the raw parameter value
+     * @return the parsed UUID
+     */
+    static UUID parseUuidParam(String name, String value) {
         try {
-            return UUID.fromString(eventId.trim());
+            return UUID.fromString(value.trim());
         } catch (IllegalArgumentException e) {
-            throw new WebApplicationException("Invalid event ID: " + eventId, 400);
+            throw new WebApplicationException("Invalid " + name + ": " + value, 400);
         }
     }
 

@@ -312,7 +312,7 @@ public class ScheduledJobExecutionService {
             ScheduledJobEntity job = ScheduledJobEntity.findById(run.jobId);
             String jobName = job != null ? job.name : "Job #" + run.jobId;
             logActivity("scheduled-job-running",
-                    "Scheduled job execution started: " + jobName);
+                    "Scheduled job execution started: " + jobName, traceId);
         }
     }
 
@@ -356,6 +356,7 @@ public class ScheduledJobExecutionService {
         usage.inputTokens = result.inputTokens();
         usage.outputTokens = result.outputTokens();
         usage.createdOn = Instant.now();
+        usage.traceId = traceCtx != null ? traceCtx.traceId() : run.traceId;
         usage.persist();
 
         String jobName = job != null ? job.name : "Job #" + jobId;
@@ -367,7 +368,8 @@ public class ScheduledJobExecutionService {
         if (result.costUsd() != null) {
             summary += String.format(" — $%.4f", result.costUsd());
         }
-        logActivity("scheduled-job-" + statusText, summary);
+        logActivity("scheduled-job-" + statusText, summary,
+                traceCtx != null ? traceCtx.traceId() : run.traceId);
         sseEvents.fire(SseEvent.scheduledJobRunUpdated(runId, run.status));
         mcpConfigGenerator.cleanupTempFiles(runId);
 
@@ -398,7 +400,8 @@ public class ScheduledJobExecutionService {
             String jobName = job != null ? job.name : "Job #" + run.jobId;
             logActivity("scheduled-job-completed",
                     String.format("Scheduled job completed: %s (%ds)", jobName,
-                            durationMs / 1000));
+                            durationMs / 1000),
+                    run.traceId);
             sseEvents.fire(SseEvent.scheduledJobRunUpdated(runId, "Completed"));
         }
     }
@@ -416,7 +419,7 @@ public class ScheduledJobExecutionService {
             ScheduledJobEntity job = ScheduledJobEntity.findById(run.jobId);
             String jobName = job != null ? job.name : "Job #" + run.jobId;
             logActivity("scheduled-job-failed",
-                    "Scheduled job failed: " + jobName);
+                    "Scheduled job failed: " + jobName, run.traceId);
             sseEvents.fire(SseEvent.scheduledJobRunUpdated(runId, "Failed"));
         }
     }
@@ -440,7 +443,8 @@ public class ScheduledJobExecutionService {
             ScheduledJobEntity job = ScheduledJobEntity.findById(run.jobId);
             String jobName = job != null ? job.name : "Job #" + run.jobId;
             logActivity("scheduled-job-failed",
-                    "Scheduled job failed: " + jobName + " — " + reason);
+                    "Scheduled job failed: " + jobName + " — " + reason,
+                    run.traceId);
             sseEvents.fire(SseEvent.scheduledJobRunUpdated(runId, "Failed"));
             mcpConfigGenerator.cleanupTempFiles(runId);
         }
@@ -550,13 +554,14 @@ public class ScheduledJobExecutionService {
         return log.toString();
     }
 
-    private void logActivity(String entryType, String summary) {
+    private void logActivity(String entryType, String summary, UUID traceId) {
         ActivityLogEntity log = new ActivityLogEntity();
         log.entryType = entryType;
         log.summary = summary != null && summary.length() > 1024
                 ? summary.substring(0, 1021) + "..."
                 : summary;
         log.createdOn = Instant.now();
+        log.traceId = traceId;
         log.persist();
     }
 }

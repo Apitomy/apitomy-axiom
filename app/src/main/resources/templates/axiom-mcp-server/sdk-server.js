@@ -18,10 +18,10 @@ const AXIOM_API_URL = process.env.AXIOM_API_URL || "http://localhost:9090/api/v1
 
 async function axiomApi(method, path, body, { contentType = "application/json", rawBody = false } = {}) {
     const url = `${AXIOM_API_URL}${path}`;
-    const opts = {
-        method,
-        headers: { "Content-Type": contentType, "Accept": "application/json" },
-    };
+    const headers = { "Content-Type": contentType, "Accept": "application/json" };
+    if (process.env.AXIOM_TRACE_ID) headers["X-Axiom-Trace-Id"] = process.env.AXIOM_TRACE_ID;
+    if (process.env.AXIOM_PARENT_NODE_ID) headers["X-Axiom-Parent-Node-Id"] = process.env.AXIOM_PARENT_NODE_ID;
+    const opts = { method, headers };
     if (body) opts.body = rawBody ? body : JSON.stringify(body);
     const resp = await fetch(url, opts);
     const text = await resp.text();

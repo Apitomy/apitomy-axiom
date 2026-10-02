@@ -140,6 +140,7 @@ export interface ActivityLogEntry {
     projectId?: number;
     taskId?: number;
     eventId?: string;
+    traceId?: string;
     entryType: string;
     summary: string;
     details?: string;
@@ -1122,6 +1123,7 @@ export interface AiUsage {
     invocationType: string;
     taskId?: number;
     eventId?: string;
+    traceId?: string;
     projectId?: number;
     agentId?: number;
     actionType?: string;
@@ -1146,7 +1148,7 @@ export async function fetchUsage(
     filterAgentId?: number, filterActionType?: string,
     filterDateFrom?: string, filterDateTo?: string,
     filterLabels?: string, filterEngine?: string,
-    filterModel?: string
+    filterModel?: string, filterTraceId?: string
 ): Promise<AiUsageSearchResults> {
     const params = new URLSearchParams();
     params.set("page", String(page));
@@ -1160,6 +1162,7 @@ export async function fetchUsage(
     if (filterLabels) params.set("filterLabels", filterLabels);
     if (filterEngine) params.set("filterEngine", filterEngine);
     if (filterModel) params.set("filterModel", filterModel);
+    if (filterTraceId) params.set("filterTraceId", filterTraceId);
     const response = await fetch(`${API}/usage/ai?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch usage: ${response.status}`);
     return response.json();
@@ -1199,7 +1202,7 @@ export async function fetchActivityLog(
     page = 1, limit = 20,
     filterEventId?: string, filterSummary?: string,
     filterProjectId?: number, filterEntryType?: string,
-    filterLabels?: string
+    filterLabels?: string, filterTraceId?: string
 ): Promise<SearchResults<ActivityLogEntry>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
@@ -1209,6 +1212,7 @@ export async function fetchActivityLog(
     if (filterProjectId != null) params.set("filterProjectId", String(filterProjectId));
     if (filterEntryType) params.set("filterEntryType", filterEntryType);
     if (filterLabels) params.set("filterLabels", filterLabels);
+    if (filterTraceId) params.set("filterTraceId", filterTraceId);
     const response = await fetch(`${API}/activity?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch activity log: ${response.status}`);
     return response.json();

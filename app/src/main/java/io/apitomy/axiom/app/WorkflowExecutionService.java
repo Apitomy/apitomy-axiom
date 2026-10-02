@@ -47,6 +47,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 @ApplicationScoped
 public class WorkflowExecutionService {
@@ -211,7 +212,7 @@ public class WorkflowExecutionService {
         }
 
         logActivity(projectId, "workflow-started",
-                "Workflow started: " + definition.name);
+                "Workflow started: " + definition.name, entity.traceId);
         sseEvents.fire(SseEvent.workflowUpdated(
                 entity.projectId, entity.id, entity.status));
 
@@ -353,12 +354,12 @@ public class WorkflowExecutionService {
             entity.completedOn = Instant.now();
             completeRunTrace(entity, "completed");
             logActivity(entity.projectId, "workflow-completed",
-                    "Workflow completed");
+                    "Workflow completed", entity.traceId);
         } else if (advanced.status() == InstanceStatus.FAILED) {
             entity.completedOn = Instant.now();
             completeRunTrace(entity, "failed");
             logActivity(entity.projectId, "workflow-failed",
-                    "Workflow failed: " + advanced.failureReason());
+                    "Workflow failed: " + advanced.failureReason(), entity.traceId);
             sseEvents.fire(SseEvent.notification(
                     "Workflow failed for project", "error"));
         }
@@ -409,7 +410,7 @@ public class WorkflowExecutionService {
             activeTask.completedOn = Instant.now();
         }
 
-        logActivity(projectId, "workflow-cancelled", "Workflow cancelled");
+        logActivity(projectId, "workflow-cancelled", "Workflow cancelled", entity.traceId);
         sseEvents.fire(SseEvent.workflowUpdated(
                 entity.projectId, entity.id, entity.status));
     }
@@ -874,12 +875,13 @@ public class WorkflowExecutionService {
     }
 
     private void logActivity(Long projectId, String entryType,
-            String summary) {
+            String summary, UUID traceId) {
         ActivityLogEntity log = new ActivityLogEntity();
         log.projectId = projectId;
         log.entryType = entryType;
         log.summary = summary;
         log.createdOn = Instant.now();
+        log.traceId = traceId;
         log.persist();
 
         sseEvents.fire(SseEvent.activity(entryType, summary));

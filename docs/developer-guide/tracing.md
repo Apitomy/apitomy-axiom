@@ -594,3 +594,9 @@ become children of the correct node in the tree.
 
 If the trace callback fails (network error, missing trace, etc.), the tool execution
 continues normally — tracing is best-effort and never blocks work.
+
+## Correlation
+
+The trace ID is also Axiom's correlation ID. Activity log rows, AI usage rows, tasks, runs and reports store
+the trace ID of the work that produced them, and agents can join their caller's trace through the
+`X-Axiom-Trace-Id` and `X-Axiom-Parent-Node-Id` headers. See [Correlation by Trace ID](correlation.md).

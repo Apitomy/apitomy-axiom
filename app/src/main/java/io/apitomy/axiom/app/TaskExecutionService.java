@@ -370,7 +370,7 @@ public class TaskExecutionService {
 
             // Log to activity
             logActivity(task.projectId, taskId, task.eventId, "task-started",
-                    "Task started: " + task.actionType + " (agent: " + agentName + ")");
+                    "Task started: " + task.actionType + " (agent: " + agentName + ")", task.traceId);
 
             // Log to thread
             addThreadEntry(task.projectId, "system", "update",
@@ -404,7 +404,7 @@ public class TaskExecutionService {
 
             // Log to activity
             logActivity(task.projectId, taskId, task.eventId, "task-awaiting-input",
-                    "Task awaiting human input: " + task.actionType);
+                    "Task awaiting human input: " + task.actionType, task.traceId);
 
             // Log to thread
             addThreadEntry(task.projectId, "system", "update",
@@ -468,11 +468,12 @@ public class TaskExecutionService {
         }
         recordAiUsage("task", taskId, task.eventId, task.projectId,
                 task.assignedAgent, task.actionType, engine, model,
-                result.costUsd(), result.inputTokens(), result.outputTokens());
+                result.costUsd(), result.inputTokens(), result.outputTokens(),
+                task.traceId);
 
         // Log to activity
         logActivity(task.projectId, taskId, task.eventId, "task-" + statusText,
-                "Task " + statusText + ": " + task.actionType);
+                "Task " + statusText + ": " + task.actionType, task.traceId);
 
         // Log to thread
         String threadContent = "Task " + statusText + ": " + task.actionType;
@@ -528,7 +529,7 @@ public class TaskExecutionService {
             task.completedOn = Instant.now();
 
             logActivity(task.projectId, taskId, task.eventId, "task-failed",
-                    "Task failed: " + task.actionType + " — " + reason);
+                    "Task failed: " + task.actionType + " — " + reason, task.traceId);
             addThreadEntry(task.projectId, "system", "result",
                     "Task failed: " + task.actionType + "\n\nError: " + reason);
 
@@ -574,7 +575,7 @@ public class TaskExecutionService {
     }
 
     private void logActivity(Long projectId, Long taskId, UUID eventId,
-                              String entryType, String summary) {
+                              String entryType, String summary, UUID traceId) {
         ActivityLogEntity log = new ActivityLogEntity();
         log.projectId = projectId;
         log.taskId = taskId;
@@ -584,6 +585,7 @@ public class TaskExecutionService {
                 ? summary.substring(0, 1021) + "..."
                 : summary;
         log.createdOn = Instant.now();
+        log.traceId = traceId;
         log.persist();
     }
 
@@ -601,7 +603,8 @@ public class TaskExecutionService {
     private void recordAiUsage(String invocationType, Long taskId, UUID eventId,
                                 Long projectId, Long agentId, String actionType,
                                 String engine, String model,
-                                Double costUsd, Long inputTokens, Long outputTokens) {
+                                Double costUsd, Long inputTokens, Long outputTokens,
+                                UUID traceId) {
         AiUsageEntity usage = new AiUsageEntity();
         usage.invocationType = invocationType;
         usage.taskId = taskId;
@@ -615,6 +618,7 @@ public class TaskExecutionService {
         usage.inputTokens = inputTokens;
         usage.outputTokens = outputTokens;
         usage.createdOn = Instant.now();
+        usage.traceId = traceId;
         usage.persist();
     }
 }

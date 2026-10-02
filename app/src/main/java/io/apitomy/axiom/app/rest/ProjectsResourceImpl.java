@@ -51,6 +51,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Implementation of the Projects REST API (includes tasks and threads).
@@ -84,6 +85,9 @@ public class ProjectsResourceImpl implements ProjectsResource {
 
     @Inject
     WorkflowRunBeanMapper runBeanMapper;
+
+    @Inject
+    CallerTraceContext callerTraceContext;
 
     // ── Projects ──────────────────────────────────────────────────────
 
@@ -275,18 +279,24 @@ public class ProjectsResourceImpl implements ProjectsResource {
      */
     @Override
     @Transactional
-    public Task createTask(long projectId, NewTask data) {
+    public Task createTask(long projectId, String xAxiomTraceId, Long xAxiomParentNodeId,
+                           NewTask data) {
         findProjectOrThrow(projectId);
 
-        TraceContext traceCtx = null;
-        try {
-            traceCtx = traceService.createTrace("user-action",
-                    "User action: " + data.getActionType(),
-                    null, projectId, null,
-                    "user-action-triggered", "User triggered action: " + data.getActionType(),
-                    null, null);
-        } catch (Exception e) {
-            LOG.warnf(e, "Failed to create trace for user action on project %d", projectId);
+        // The trace headers are validated by CallerTraceFilter, which is the source of truth;
+        // the raw header parameters are intentionally ignored here.
+        Optional<TraceContext> callerTrace = callerTraceContext.get();
+        TraceContext traceCtx = callerTrace.orElse(null);
+        if (traceCtx == null) {
+            try {
+                traceCtx = traceService.createTrace("user-action",
+                        "User action: " + data.getActionType(),
+                        null, projectId, null,
+                        "user-action-triggered", "User triggered action: " + data.getActionType(),
+                        null, null);
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to create trace for user action on project %d", projectId);
+            }
         }
 
         TaskEntity entity = new TaskEntity();

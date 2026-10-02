@@ -500,6 +500,28 @@
         ],
         "summary": "Create a task (user-initiated action)",
         "operationId": "createTask",
+        "parameters": [
+          {
+            "name": "X-Axiom-Trace-Id",
+            "in": "header",
+            "required": false,
+            "description": "Trace of the calling agent; the new task joins it",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Axiom-Parent-Node-Id",
+            "in": "header",
+            "required": false,
+            "description": "Trace node of the calling agent; the new task node is attached under it",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1627,6 +1649,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "filterTraceId",
+            "in": "query",
+            "description": "Filter by exact trace ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -1845,6 +1876,15 @@
             "description": "Comma-separated list of project labels to filter by (AND logic)",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "filterTraceId",
+            "in": "query",
+            "description": "Filter by exact trace ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -6437,6 +6477,11 @@
         ],
         "type": "object",
         "properties": {
+          "traceId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Trace (unit of work) that produced this record"
+          },
           "id": {
             "format": "int64",
             "type": "integer"
@@ -6830,6 +6875,11 @@
       "AiUsage": {
         "type": "object",
         "properties": {
+          "traceId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Trace (unit of work) that produced this record"
+          },
           "id": {
             "format": "int64",
             "type": "integer"
