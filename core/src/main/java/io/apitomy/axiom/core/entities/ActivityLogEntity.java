@@ -24,6 +24,9 @@ public class ActivityLogEntity extends PanacheEntity {
     @Column(name = "event_id")
     public UUID eventId;
 
+    @Column(name = "trace_id")
+    public UUID traceId;
+
     @Column(name = "entry_type", nullable = false)
     public String entryType;
 

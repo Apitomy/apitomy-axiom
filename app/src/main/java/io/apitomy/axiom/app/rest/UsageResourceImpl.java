@@ -51,7 +51,8 @@ public class UsageResourceImpl implements UsageResource {
                                            String filterDateTo,
                                            String filterLabels,
                                            String filterEngine,
-                                           String filterModel) {
+                                           String filterModel,
+                                           String filterTraceId) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
@@ -103,6 +104,11 @@ public class UsageResourceImpl implements UsageResource {
         if (filterModel != null && !filterModel.isBlank()) {
             hql.append(" and model = :model");
             params.put("model", filterModel);
+        }
+
+        if (filterTraceId != null && !filterTraceId.isBlank()) {
+            hql.append(" and traceId = :traceId");
+            params.put("traceId", TraceResourceImpl.parseUuidParam("filterTraceId", filterTraceId));
         }
 
         long totalCount = AiUsageEntity.count(hql.toString(), params);
@@ -219,6 +225,7 @@ public class UsageResourceImpl implements UsageResource {
         usage.setInvocationType(entity.invocationType);
         usage.setTaskId(entity.taskId);
         usage.setEventId(entity.eventId);
+        usage.setTraceId(entity.traceId);
         usage.setProjectId(entity.projectId);
         usage.setAgentId(entity.agentId);
         usage.setActionType(entity.actionType);

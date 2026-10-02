@@ -31,7 +31,7 @@ public class ActivityResourceImpl implements ActivityResource {
     public ActivityLogSearchResults listActivityLog(BigInteger page, BigInteger limit,
                                                      String filterEventId, String filterSummary,
                                                      BigInteger filterProjectId, String filterEntryType,
-                                                     String filterLabels) {
+                                                     String filterLabels, String filterTraceId) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
@@ -64,6 +64,11 @@ public class ActivityResourceImpl implements ActivityResource {
                     + " GROUP BY p.id HAVING COUNT(DISTINCT pl) = :labelCount)");
             params.put("labels", labels);
             params.put("labelCount", (long) labels.size());
+        }
+
+        if (filterTraceId != null && !filterTraceId.isBlank()) {
+            hql.append(" and traceId = :traceId");
+            params.put("traceId", TraceResourceImpl.parseUuidParam("filterTraceId", filterTraceId));
         }
 
         long totalCount = ActivityLogEntity.count(hql.toString(), params);
@@ -105,6 +110,7 @@ public class ActivityResourceImpl implements ActivityResource {
         entry.setProjectId(entity.projectId);
         entry.setTaskId(entity.taskId);
         entry.setEventId(entity.eventId);
+        entry.setTraceId(entity.traceId);
         entry.setEntryType(entity.entryType);
         entry.setSummary(entity.summary);
         entry.setDetails(entity.details);

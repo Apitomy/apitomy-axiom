@@ -1627,6 +1627,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "filterTraceId",
+            "in": "query",
+            "description": "Filter by exact trace ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -1845,6 +1854,15 @@
             "description": "Comma-separated list of project labels to filter by (AND logic)",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "filterTraceId",
+            "in": "query",
+            "description": "Filter by exact trace ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -6437,6 +6455,11 @@
         ],
         "type": "object",
         "properties": {
+          "traceId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Trace (unit of work) that produced this record"
+          },
           "id": {
             "format": "int64",
             "type": "integer"
@@ -6830,6 +6853,11 @@
       "AiUsage": {
         "type": "object",
         "properties": {
+          "traceId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Trace (unit of work) that produced this record"
+          },
           "id": {
             "format": "int64",
             "type": "integer"

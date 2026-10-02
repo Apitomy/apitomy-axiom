@@ -40,6 +40,12 @@ public class AiUsageEntity extends PanacheEntity {
     public UUID eventId;
 
     /**
+     * Trace (unit of work) that produced this usage record.
+     */
+    @Column(name = "trace_id")
+    public UUID traceId;
+
+    /**
      * Project ID (if associated with a project).
      */
     @Column(name = "project_id")

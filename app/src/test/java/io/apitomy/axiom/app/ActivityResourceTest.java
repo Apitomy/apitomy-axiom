@@ -24,6 +24,7 @@ class ActivityResourceTest {
     private static final UUID EVENT_A = UUID.fromString("a1a1a1a1-0000-4000-8000-000000000100");
     private static final UUID EVENT_B = UUID.fromString("b2b2b2b2-0000-4000-8000-000000000200");
     private static final UUID EVENT_C = UUID.fromString("c3c3c3c3-0000-4000-8000-000000000300");
+    private static final UUID TRACE_A = UUID.fromString("d4d4d4d4-0000-4000-8000-000000000400");
 
     @BeforeEach
     @Transactional
@@ -38,6 +39,18 @@ class ActivityResourceTest {
         createEntry(2L, 20L, EVENT_B, "task-completed", "FILTER-TEST task gamma completed");
         createEntry(null, null, EVENT_C, "event-ignored", "FILTER-TEST event ignored");
         createEntry(3L, 30L, null, "project-created", "FILTER-TEST project created");
+        createTracedEntry("FILTER-TEST traced");
+        createTracedEntry("TRACE-TEST traced second");
+    }
+
+    private void createTracedEntry(String summary) {
+        ActivityLogEntity entry = new ActivityLogEntity();
+        entry.projectId = 4L;
+        entry.entryType = "task-completed";
+        entry.summary = summary;
+        entry.traceId = TRACE_A;
+        entry.createdOn = Instant.now();
+        entry.persist();
     }
 
     private void createEntry(Long projectId, Long taskId, UUID eventId,
@@ -214,5 +227,23 @@ class ActivityResourceTest {
                 .statusCode(200)
                 .body("items.size()", equalTo(2))
                 .body("totalCount", greaterThanOrEqualTo(5));
+    }
+
+    // ── Trace ID filter ──────────────────────────────────────────────
+
+    @Test
+    void testFilterByTraceId() {
+        given().queryParam("filterTraceId", TRACE_A.toString())
+            .when().get(ACTIVITY_PATH)
+            .then().statusCode(200)
+                .body("items.size()", greaterThanOrEqualTo(1))
+                .body("items.traceId", everyItem(equalTo(TRACE_A.toString())));
+    }
+
+    @Test
+    void testFilterByMalformedTraceIdReturns400() {
+        given().queryParam("filterTraceId", "not-a-uuid")
+            .when().get(ACTIVITY_PATH)
+            .then().statusCode(400);
     }
 }
