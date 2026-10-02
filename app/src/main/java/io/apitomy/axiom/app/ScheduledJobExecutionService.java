@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -108,7 +109,6 @@ public class ScheduledJobExecutionService {
         LOG.infof("Executing scheduled job '%s' in agent mode (run ID: %d)", job.name, runId);
 
         TraceContext traceCtx = null;
-        Long aiNodeId = null;
         try {
             traceCtx = traceService.createTrace("scheduled-job-execution",
                     "Executing scheduled job: " + job.name,
@@ -119,19 +119,42 @@ public class ScheduledJobExecutionService {
             LOG.warnf(e, "Failed to create trace for scheduled job run %d", runId);
         }
 
+        Long aiNodeId = null;
+        if (traceCtx != null) {
+            try {
+                aiNodeId = traceService.addNode(traceCtx, "scheduled-job-ai-invoked",
+                        "in-progress",
+                        "Scheduled job execution (AI agent): " + job.name, null, null);
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to add AI invocation trace node for run %d", runId);
+            }
+        }
+
+        try {
+            launchAgent(job, runId, traceCtx, aiNodeId);
+        } catch (Exception e) {
+            // Any failure before the agent callbacks are wired must still finalize
+            // the run and close the trace; otherwise the trace stays in-progress.
+            LOG.errorf(e, "Failed to start scheduled job run %d", runId);
+            failRun(runId, "Failed to start agent: " + e.getMessage(), traceCtx,
+                    aiNodeId);
+        }
+    }
+
+    /**
+     * Prepares the agent request, leases an agent and starts execution. Any exception
+     * thrown from here is treated as a run failure by the caller.
+     */
+    private void launchAgent(ScheduledJobEntity job, Long runId, TraceContext traceCtx,
+                             Long aiNodeId) {
         String prompt = resolvePromptTemplate(job.promptTemplate, job);
         List<String> allowedTools = resolveAllowedTools(job);
         Map<String, String> env = buildEnvironment(job.environment);
 
         if (traceCtx != null) {
-            try {
-                env.put("AXIOM_TRACE_ID", traceCtx.traceId().toString());
-                aiNodeId = traceService.addNode(traceCtx, "scheduled-job-ai-invoked",
-                        "in-progress",
-                        "Scheduled job execution (AI agent): " + job.name, null, null);
+            env.put("AXIOM_TRACE_ID", traceCtx.traceId().toString());
+            if (aiNodeId != null) {
                 env.put("AXIOM_PARENT_NODE_ID", String.valueOf(aiNodeId));
-            } catch (Exception e) {
-                LOG.warnf(e, "Failed to add AI invocation trace node for run %d", runId);
             }
         }
 
@@ -174,7 +197,14 @@ public class ScheduledJobExecutionService {
         final TraceContext finalTraceCtx = traceCtx;
         final Long finalAiNodeId = aiNodeId;
 
-        lease.agent().execute(agentRequest)
+        CompletableFuture<AgentResult> future;
+        try {
+            future = lease.agent().execute(agentRequest);
+        } catch (RuntimeException e) {
+            agentPool.release(lease);
+            throw e;
+        }
+        future
                 .thenAccept(result -> {
                     Thread.currentThread().setContextClassLoader(contextCl);
                     agentPool.release(lease);
@@ -398,6 +428,11 @@ public class ScheduledJobExecutionService {
             run.status = "Failed";
             run.error = reason;
             run.completedAt = Instant.now();
+            if (traceCtx != null && run.traceId == null) {
+                // Early failures (e.g. no agent available) happen before markRunning;
+                // keep the trace linked to the run so the UI can show it.
+                run.traceId = traceCtx.traceId();
+            }
             if (run.startedAt != null) {
                 run.durationMs = Duration.between(run.startedAt, run.completedAt).toMillis();
             }

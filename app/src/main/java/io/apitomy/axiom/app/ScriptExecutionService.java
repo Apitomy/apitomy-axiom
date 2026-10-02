@@ -62,6 +62,9 @@ public class ScriptExecutionService {
     TraceService traceService;
 
     @Inject
+    TaskTraceFinalizer taskTraceFinalizer;
+
+    @Inject
     ObjectMapper objectMapper;
 
     @Inject
@@ -460,26 +463,8 @@ public class ScriptExecutionService {
                     "Script task failed: " + task.actionType, "error"));
         }
 
-        // Complete the trace (async traces are finalized here)
-        if (task.traceId != null) {
-            try {
-                // Complete the task node with final status
-                TraceNodeEntity taskNode = TraceNodeEntity.find(
-                        "traceId = ?1 and nodeType = 'task' and entityType = 'task' and entityId = ?2",
-                        task.traceId, String.valueOf(task.id)).firstResult();
-                if (taskNode != null) {
-                    traceService.completeNode(taskNode.id, statusText);
-                }
-
-                // Workflow runs own their trace lifecycle: WorkflowExecutionService
-                // completes the trace when the run reaches a terminal state.
-                if (task.workflowRunId == null) {
-                    traceService.completeTrace(task.traceId, success ? "completed" : "failed");
-                }
-            } catch (Exception e) {
-                LOG.warnf(e, "Failed to complete trace for script task %d", taskId);
-            }
-        }
+        // Complete the task node and (when it was the last open task) the trace
+        taskTraceFinalizer.finalizeTaskTrace(task, statusText);
 
         updateProjectStatusAfterTask(task.projectId);
 

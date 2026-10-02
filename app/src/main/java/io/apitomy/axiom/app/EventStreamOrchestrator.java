@@ -349,7 +349,13 @@ public class EventStreamOrchestrator {
             outcome.traceId = traceCtx.traceId();
         }
 
-        List<ManagerDecision> decisions = managerService.evaluateStreamEvent(event);
+        List<ManagerDecision> decisions;
+        try {
+            decisions = managerService.evaluateStreamEvent(event);
+        } catch (RuntimeException e) {
+            completeTrace(traceCtx, "failed");
+            throw e;
+        }
         if (decisions == null || decisions.isEmpty()) {
             LOG.debugf("Manager returned no decisions for stream event %s", event.id);
             outcome.summary = "No decisions";
@@ -383,8 +389,37 @@ public class EventStreamOrchestrator {
         }
         outcome.summary = summaryBuilder.toString();
 
-        completeTrace(traceCtx, "completed");
+        // Tasks created by the Manager share this trace; TaskTraceFinalizer completes it
+        // when the last of them finishes. Only complete it here if no task is open.
+        completeTraceIfNoOpenTasks(traceCtx);
         return outcome;
+    }
+
+    /**
+     * Completes the trace unless it still has in-progress task nodes (which will
+     * complete it when they finish) or has already been completed.
+     */
+    private void completeTraceIfNoOpenTasks(io.apitomy.axiom.core.tracing.TraceContext traceCtx) {
+        if (traceCtx == null) return;
+        try {
+            boolean hasOpenTasks = QuarkusTransaction.requiringNew().call(() ->
+                    io.apitomy.axiom.core.entities.TraceNodeEntity.count(
+                            "traceId = ?1 and nodeType = 'task' and status = 'in-progress'",
+                            traceCtx.traceId()) > 0);
+            if (hasOpenTasks) {
+                return;
+            }
+            String status = QuarkusTransaction.requiringNew().call(() -> {
+                io.apitomy.axiom.core.entities.TraceEntity trace =
+                        io.apitomy.axiom.core.entities.TraceEntity.findById(traceCtx.traceId());
+                return trace != null ? trace.status : null;
+            });
+            if ("in-progress".equals(status)) {
+                completeTrace(traceCtx, "completed");
+            }
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to complete trace %s", traceCtx.traceId());
+        }
     }
 
     private void completeTrace(io.apitomy.axiom.core.tracing.TraceContext traceCtx, String status) {
@@ -594,14 +629,43 @@ public class EventStreamOrchestrator {
             LOG.warnf(e, "Failed to create trace for invoke-action of event %s", event.id);
         }
 
-        Long projectId = findOrCreateProjectForEvent(event);
-
-        // Build a structured input with a human-readable summary for {{managerInput}}
-        // and the raw event payload for {{event}}
-        String taskInput = buildInvokeActionInput(event);
         final io.apitomy.axiom.core.tracing.TraceContext finalTraceCtx = traceCtx;
+        Long projectId;
+        Long taskId;
+        try {
+            projectId = findOrCreateProjectForEvent(event);
 
-        Long taskId = QuarkusTransaction.requiringNew().call(() -> {
+            // Build a structured input with a human-readable summary for {{managerInput}}
+            // and the raw event payload for {{event}}
+            String taskInput = buildInvokeActionInput(event);
+            taskId = createInvokeActionTask(event, actionType, projectId, taskInput,
+                    finalTraceCtx);
+        } catch (RuntimeException e) {
+            // The task was never created, so nothing else will close this trace.
+            completeTrace(traceCtx, "failed");
+            throw e;
+        }
+
+        // The trace is intentionally left in-progress: TaskExecutionService completes it
+        // (and the task node) when the task reaches a final state.
+        sseEvents.fire(SseEvent.taskUpdated(projectId, taskId, "Pending"));
+        sseEvents.fire(SseEvent.projectUpdated(projectId));
+
+        RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
+        outcome.status = "completed";
+        outcome.summary = "Invoked action: " + actionType.name;
+        outcome.projectId = projectId;
+        outcome.taskId = taskId;
+        if (traceCtx != null) {
+            outcome.traceId = traceCtx.traceId();
+        }
+        return outcome;
+    }
+
+    private Long createInvokeActionTask(StreamEventEntity event, ActionTypeEntity actionType,
+            Long projectId, String taskInput,
+            io.apitomy.axiom.core.tracing.TraceContext finalTraceCtx) {
+        return QuarkusTransaction.requiringNew().call(() -> {
             TaskEntity task = new TaskEntity();
             task.projectId = projectId;
             task.actionType = actionType.name;
@@ -633,20 +697,6 @@ public class EventStreamOrchestrator {
                     actionType.name, event.id);
             return task.id;
         });
-
-        completeTrace(traceCtx, "completed");
-        sseEvents.fire(SseEvent.taskUpdated(projectId, taskId, "Pending"));
-        sseEvents.fire(SseEvent.projectUpdated(projectId));
-
-        RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
-        outcome.status = "completed";
-        outcome.summary = "Invoked action: " + actionType.name;
-        outcome.projectId = projectId;
-        outcome.taskId = taskId;
-        if (traceCtx != null) {
-            outcome.traceId = traceCtx.traceId();
-        }
-        return outcome;
     }
 
     /**

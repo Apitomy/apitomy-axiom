@@ -174,6 +174,23 @@ Marks the trace itself as completed or failed.
 public void completeTrace(UUID traceId, String status)
 ```
 
+### Trace lifecycle rules
+
+Every unit of work ends with exactly one trace in a final state (`completed` or `failed`). No trace or
+`task` node may stay `in-progress` once its work item is final, and a trace is never completed twice.
+
+| Work item | Who completes the trace | Early-exit behaviour |
+|---|---|---|
+| Scheduled job run | `ScheduledJobExecutionService` when the agent finishes | No agent / startup error: run is `Failed`, trace and AI node closed as `failed`, `run.traceId` still set |
+| Report | `ReportExecutionService` when the agent finishes | No agent / startup error: report is `Failed` (not left `Pending`), trace closed as `failed`, `report.traceId` still set |
+| Invoke-action task | `TaskTraceFinalizer` when the task reaches a final state | Error before the task is created: trace closed as `failed` |
+| Manager evaluation | Last task created by the evaluation (`TaskTraceFinalizer`); the orchestrator only completes it when no task node is open | Manager error: trace closed as `failed` |
+| Workflow run | `WorkflowExecutionService` when the run is terminal (including runs that finish synchronously on start) | — |
+
+`TaskTraceFinalizer` is used by both the agent and script task paths (including `failTask`). It always
+completes the task's `task` node, never completes a workflow-owned trace, and completes any other trace only
+once no other `task` node in it is still `in-progress` — `failed` if any task node failed.
+
 ---
 
 ## TraceContext

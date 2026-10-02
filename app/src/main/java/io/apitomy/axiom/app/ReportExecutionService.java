@@ -31,6 +31,7 @@ import org.jboss.logging.Logger;
 
 import java.nio.file.Path;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -102,43 +103,68 @@ public class ReportExecutionService {
     public void generateReport(ReportDefinitionEntity definition, Long reportId) {
         LOG.infof("Generating report '%s' (ID: %d)", definition.name, reportId);
 
-        // Load DB-backed context (toolset resolution, repository lookup, trace
-        // creation) in a short independent transaction. generateReport() itself
+        // Load DB-backed context (toolset resolution, repository lookup) in a
+        // short independent transaction. generateReport() itself
         // is not @Transactional (it's called directly from the queue consumer's
         // worker loop, outside any request/transaction scope), so any Panache
         // queries here — like ToolsetResolver.resolve()'s ToolsetEntity.find()
         // — would otherwise silently run without an active Hibernate session.
-        GenerationContext genCtx = QuarkusTransaction.requiringNew().call(() -> {
-            TraceContext ctx = null;
-            Long nodeId = null;
-            try {
-                ctx = traceService.createTrace("report-generation",
-                        "Generating report: " + definition.name,
-                        null, null, reportId,
-                        "report-triggered", "Report triggered: " + definition.name,
-                        "report", reportId);
-            } catch (Exception e) {
-                LOG.warnf(e, "Failed to create trace for report %d", reportId);
-            }
+        // TraceService writes in its own requiringNew transactions, so the trace is
+        // created up front and survives any rollback of the context transaction below.
+        TraceContext createdTrace = null;
+        Long createdNodeId = null;
+        try {
+            createdTrace = traceService.createTrace("report-generation",
+                    "Generating report: " + definition.name,
+                    null, null, reportId,
+                    "report-triggered", "Report triggered: " + definition.name,
+                    "report", reportId);
+            createdNodeId = traceService.addNode(createdTrace, "report-ai-invoked",
+                    "in-progress", "Report execution (AI agent)", null, null);
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to create trace for report %d", reportId);
+        }
+        final TraceContext ctx = createdTrace;
+        final Long nodeId = createdNodeId;
 
-            String repos = resolveRepositories(definition);
-            List<String> tools = resolveAllowedTools(definition);
-            Map<String, String> resolvedEnv = buildEnvironment(definition.environment);
-
-            if (ctx != null) {
-                try {
+        GenerationContext genCtx;
+        try {
+            genCtx = QuarkusTransaction.requiringNew().call(() -> {
+                String repos = resolveRepositories(definition);
+                List<String> tools = resolveAllowedTools(definition);
+                Map<String, String> resolvedEnv = buildEnvironment(definition.environment);
+                if (ctx != null) {
                     resolvedEnv.put("AXIOM_TRACE_ID", ctx.traceId().toString());
-                    nodeId = traceService.addNode(ctx, "report-ai-invoked", "in-progress",
-                            "Report execution (AI agent)", null, null);
-                    resolvedEnv.put("AXIOM_PARENT_NODE_ID", String.valueOf(nodeId));
-                } catch (Exception e) {
-                    LOG.warnf(e, "Failed to add AI invocation trace node for report %d", reportId);
+                    if (nodeId != null) {
+                        resolvedEnv.put("AXIOM_PARENT_NODE_ID", String.valueOf(nodeId));
+                    }
                 }
-            }
+                return new GenerationContext(ctx, nodeId, repos, tools, resolvedEnv);
+            });
+        } catch (Exception e) {
+            LOG.errorf(e, "Failed to prepare report %d", reportId);
+            failReport(reportId, "Failed to prepare report: " + e.getMessage(), ctx, nodeId);
+            return;
+        }
 
-            return new GenerationContext(ctx, nodeId, repos, tools, resolvedEnv);
-        });
+        TraceContext traceCtx = genCtx.traceCtx();
+        Long aiNodeId = genCtx.aiNodeId();
+        try {
+            launchAgent(definition, reportId, genCtx);
+        } catch (Exception e) {
+            // Any failure before the agent callbacks are wired must still finalize the
+            // report and close its trace; otherwise the trace stays in-progress.
+            LOG.errorf(e, "Failed to start report generation %d", reportId);
+            failReport(reportId, "Failed to start agent: " + e.getMessage(), traceCtx, aiNodeId);
+        }
+    }
 
+    /**
+     * Builds the agent request, leases an agent and starts generation. Any exception
+     * thrown from here is treated as a report failure by the caller.
+     */
+    private void launchAgent(ReportDefinitionEntity definition, Long reportId,
+            GenerationContext genCtx) {
         TraceContext traceCtx = genCtx.traceCtx();
         Long aiNodeId = genCtx.aiNodeId();
         String repoList = genCtx.repoList();
@@ -203,7 +229,12 @@ public class ReportExecutionService {
         AgentLease lease = agentPool.tryLease(capability, null, "report", reportId)
                 .orElse(null);
         if (lease == null) {
-            LOG.warnf("All agents busy, report %d stays pending", reportId);
+            // Fail the report (and close its trace) rather than leaving it Pending with an
+            // in-progress trace: nothing re-enqueues Pending reports until restart, and
+            // the queue consumer would otherwise block waiting on it.
+            LOG.warnf("All agents busy, report %d cannot start", reportId);
+            failReport(reportId, "No agent available — all agents are busy",
+                    traceCtx, aiNodeId);
             return;
         }
 
@@ -219,7 +250,14 @@ public class ReportExecutionService {
         final TraceContext finalTraceCtx = traceCtx;
         final Long finalAiNodeId = aiNodeId;
 
-        lease.agent().execute(agentRequest)
+        CompletableFuture<AgentResult> future;
+        try {
+            future = lease.agent().execute(agentRequest);
+        } catch (RuntimeException e) {
+            agentPool.release(lease);
+            throw e;
+        }
+        future
                 .thenAccept(result -> {
                     Thread.currentThread().setContextClassLoader(contextCl);
                     agentPool.release(lease);
@@ -348,6 +386,10 @@ public class ReportExecutionService {
         if (report != null) {
             report.status = "Failed";
             report.content = reason;
+            if (traceCtx != null && report.traceId == null) {
+                // Early failures happen before markGenerating; keep the trace linked.
+                report.traceId = traceCtx.traceId();
+            }
             report.completedOn = Instant.now();
             report.durationMs = java.time.Duration.between(report.createdOn, report.completedOn).toMillis();
 
