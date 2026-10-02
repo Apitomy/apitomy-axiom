@@ -92,6 +92,9 @@ public class EventStreamOrchestrator {
     @Inject
     io.apitomy.axiom.core.tracing.TraceService traceService;
 
+    @Inject
+    ManagerTraceRecorder managerTraceRecorder;
+
     /**
      * Maximum routing attempts per ledger entry. Attempts are counted as the failed
      * routing outcomes linked to the entry (no attempt column yet, see #422).
@@ -466,18 +469,10 @@ public class EventStreamOrchestrator {
     private RoutingOutcomeEntity routeToManager(StreamEventEntity event) {
         // Trace structure: event-ingested (root) → manager-evaluation → manager-decision
         // (one per decision) → task (for create_task / script_action decisions)
-        TraceContext traceCtx = null;
-        try {
-            traceCtx = traceService.createTrace(
-                    "manager",
-                    "Manager evaluation: " + event.type + " — " + event.ref,
-                    event.id, null, null,
-                    "event-ingested", "Event: " + event.type + " — " + event.ref,
-                    null, null);
-        } catch (Exception e) {
-            LOG.warnf(e, "Failed to create trace for manager evaluation of event %s", event.id);
-        }
-        Long evalNodeId = addTraceNode(traceCtx, "manager-evaluation",
+        TraceContext traceCtx = managerTraceRecorder.startTrace("manager",
+                "Manager evaluation: " + event.type + " — " + event.ref,
+                "Event: " + event.type + " — " + event.ref, event);
+        Long evalNodeId = managerTraceRecorder.addNode(traceCtx, "manager-evaluation",
                 "Manager evaluation: " + event.type);
 
         RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
@@ -500,13 +495,13 @@ public class EventStreamOrchestrator {
             throw failManagerRouting(outcome, traceCtx, evalNodeId,
                     evaluation != null ? evaluation.activityLogId() : null, error, null);
         }
-        completeTraceNode(evalNodeId, "completed", evaluation.activityLogId());
+        managerTraceRecorder.completeNode(evalNodeId, "completed", evaluation.activityLogId());
 
         List<ManagerDecision> decisions = evaluation.decisions();
         if (decisions.isEmpty()) {
             LOG.debugf("Manager returned no decisions for stream event %s", event.id);
             outcome.summary = "No decisions";
-            completeTrace(traceCtx, "completed");
+            managerTraceRecorder.completeTrace(traceCtx, "completed");
             return outcome;
         }
 
@@ -518,12 +513,12 @@ public class EventStreamOrchestrator {
         Set<Long> projectIds = new LinkedHashSet<>();
         StringBuilder summaryBuilder = new StringBuilder();
         for (ManagerDecision decision : decisions) {
-            String label = decisionLabel(decision);
+            String label = ManagerTraceRecorder.decisionLabel(decision);
             if (summaryBuilder.length() > 0) summaryBuilder.append("; ");
             summaryBuilder.append(label);
 
-            Long decisionNodeId = addTraceNode(traceCtx, "manager-decision",
-                    decisionNodeSummary(decision));
+            Long decisionNodeId = managerTraceRecorder.addNode(traceCtx, "manager-decision",
+                    managerTraceRecorder.decisionNodeSummary(decision));
             RoutingOutcomeItemEntity item = newItem(decisionItemType(decision), "completed",
                     label + " — " + decision.reasoning());
             item.traceNodeId = decisionNodeId;
@@ -533,7 +528,7 @@ public class EventStreamOrchestrator {
             }
             try {
                 ManagerDecisionResult result = processManagerDecision(event, decision, traceCtx);
-                completeTraceNode(decisionNodeId, "completed",
+                managerTraceRecorder.completeNode(decisionNodeId, "completed",
                         result != null ? result.activityLogId() : null);
                 if (result != null) {
                     item.projectId = result.projectId();
@@ -591,15 +586,8 @@ public class EventStreamOrchestrator {
                                                       Long activityLogId, String error,
                                                       Throwable cause) {
         LOG.warnf("Manager evaluation failed: %s", error);
-        if (evalNodeId != null) {
-            try {
-                traceService.failNode(evalNodeId, error,
-                        activityLogId != null ? "activity-log" : null, activityLogId);
-            } catch (Exception e) {
-                LOG.warnf(e, "Failed to record error on trace node %d", evalNodeId);
-            }
-        }
-        completeTrace(traceCtx, "failed");
+        managerTraceRecorder.failNode(evalNodeId, error, activityLogId);
+        managerTraceRecorder.completeTrace(traceCtx, "failed");
         outcome.status = "failed";
         outcome.errorMessage = truncate(error, 2000);
         outcome.summary = "Manager evaluation failed";
@@ -624,43 +612,6 @@ public class EventStreamOrchestrator {
         } catch (Exception e) {
             LOG.warnf(e, "Failed to record decision failure on trace node %d", decisionNodeId);
         }
-    }
-
-    private Long addTraceNode(TraceContext traceCtx, String nodeType, String summary) {
-        if (traceCtx == null) return null;
-        try {
-            return traceService.addNode(traceCtx, nodeType, "in-progress", summary, null, null);
-        } catch (Exception e) {
-            LOG.warnf(e, "Failed to add %s trace node to trace %s", nodeType, traceCtx.traceId());
-            return null;
-        }
-    }
-
-    private void completeTraceNode(Long nodeId, String status, Long activityLogId) {
-        if (nodeId == null) return;
-        try {
-            if (activityLogId != null) {
-                traceService.completeNode(nodeId, status, "activity-log", activityLogId);
-            } else {
-                traceService.completeNode(nodeId, status);
-            }
-        } catch (Exception e) {
-            LOG.warnf(e, "Failed to complete trace node %d", nodeId);
-        }
-    }
-
-    private static String decisionLabel(ManagerDecision decision) {
-        return decision.actionType() != null
-                ? decision.decision() + "(" + decision.actionType() + ")"
-                : decision.decision();
-    }
-
-    private String decisionNodeSummary(ManagerDecision decision) {
-        String prefix = managerService.meetsConfidenceThreshold(decision)
-                ? "Decision: " : "Escalated (low confidence): ";
-        return prefix + decisionLabel(decision)
-                + String.format(" [confidence %.0f%%]", decision.confidence() * 100)
-                + " — " + decision.reasoning();
     }
 
     private static String truncate(String value, int maxLength) {
@@ -690,17 +641,8 @@ public class EventStreamOrchestrator {
                 return trace != null ? trace.status : null;
             });
             if ("in-progress".equals(status)) {
-                completeTrace(traceCtx, "completed");
+                managerTraceRecorder.completeTrace(traceCtx, "completed");
             }
-        } catch (Exception e) {
-            LOG.warnf(e, "Failed to complete trace %s", traceCtx.traceId());
-        }
-    }
-
-    private void completeTrace(TraceContext traceCtx, String status) {
-        if (traceCtx == null) return;
-        try {
-            traceService.completeTrace(traceCtx.traceId(), status);
         } catch (Exception e) {
             LOG.warnf(e, "Failed to complete trace %s", traceCtx.traceId());
         }
@@ -942,7 +884,7 @@ public class EventStreamOrchestrator {
                     finalTraceCtx);
         } catch (RuntimeException e) {
             // The task was never created, so nothing else will close this trace.
-            completeTrace(traceCtx, "failed");
+            managerTraceRecorder.completeTrace(traceCtx, "failed");
             throw e;
         }
 

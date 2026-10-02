@@ -32,9 +32,12 @@ import {
     type EventProcessingEntry,
     type EventProcessingOutcome,
     type EventProcessingOutcomeItem,
+    type Trace,
     fetchStreamEvent,
     fetchEventProcessing,
+    fetchTraces,
 } from "../config/api";
+import { STATUS_COLORS as TRACE_STATUS_COLORS } from "../components/TraceGraphNode";
 
 const SOURCE_COLORS: Record<string, "blue" | "green" | "orange" | "grey"> = {
     github: "blue",
@@ -56,6 +59,7 @@ export function EventDetailPage() {
     const [processing, setProcessing] = useState<EventProcessingEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [processingLoading, setProcessingLoading] = useState(false);
+    const [dryRuns, setDryRuns] = useState<Trace[]>([]);
     const [activeTab, setActiveTab] = useState(0);
 
     const loadEvent = useCallback(() => {
@@ -74,6 +78,9 @@ export function EventDetailPage() {
             .then((result) => setProcessing(result.items))
             .catch(console.error)
             .finally(() => setProcessingLoading(false));
+        fetchTraces(1, 50, "manager-dry-run", undefined, eventId)
+            .then((result) => setDryRuns(result.items))
+            .catch(console.error);
     }, [eventId]);
 
     useEffect(() => { loadEvent(); }, [loadEvent]);
@@ -174,6 +181,7 @@ export function EventDetailPage() {
                             entries={processing}
                             loading={processingLoading}
                         />
+                        <DryRunEvaluations traces={dryRuns} />
                     </TabContent>
                 </Tab>
             </Tabs>
@@ -411,5 +419,39 @@ function ProcessingTab({ entries, loading }: {
                 );
             })}
         </DataList>
+    );
+}
+
+/** Lists the manual (dry-run) Manager evaluations of the event, linking to their traces. */
+function DryRunEvaluations({ traces }: { traces: Trace[] }) {
+    if (traces.length === 0) return null;
+    return (
+        <div style={{ marginTop: "24px" }} data-testid="event-dry-run-evaluations">
+            <Title headingLevel="h2" size="md" style={{ marginBottom: "8px" }}>
+                Dry-run evaluations
+            </Title>
+            <DataList aria-label="Dry-run evaluations" isCompact>
+                {traces.map((t) => (
+                    <DataListItem key={t.traceId}>
+                        <DataListItemRow>
+                            <DataListItemCells dataListCells={[
+                                <DataListCell key="status" isFilled={false}>
+                                    <Label isCompact color={TRACE_STATUS_COLORS[t.status]}>
+                                        {t.status}
+                                    </Label>
+                                </DataListCell>,
+                                <DataListCell key="summary">{t.summary}</DataListCell>,
+                                <DataListCell key="started" isFilled={false}>
+                                    {new Date(t.startedOn).toLocaleString()}
+                                </DataListCell>,
+                                <DataListCell key="link" isFilled={false}>
+                                    <Link to={`/logs/traces/${t.traceId}`}>View Trace</Link>
+                                </DataListCell>,
+                            ]} />
+                        </DataListItemRow>
+                    </DataListItem>
+                ))}
+            </DataList>
+        </div>
     );
 }
