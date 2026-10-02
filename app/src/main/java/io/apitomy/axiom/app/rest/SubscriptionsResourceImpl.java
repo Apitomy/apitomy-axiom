@@ -220,6 +220,9 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
      */
     private Map<String, Object> buildEventMap(StreamEventEntity event) {
         Map<String, Object> map = new HashMap<>();
+        if (event.id != null) {
+            map.put("id", event.id.toString());
+        }
         map.put("type", event.type);
         map.put("source", event.source);
         map.put("connectionId", event.connectionId);

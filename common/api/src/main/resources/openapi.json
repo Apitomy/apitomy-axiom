@@ -9505,6 +9505,52 @@
           "traceId": {
             "format": "uuid",
             "type": "string"
+          },
+          "triggerEventId": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Stream event whose create-workflow routing started this run; absent for runs started any other way (e.g. manually)"
+          },
+          "triggerLedgerId": {
+            "format": "int64",
+            "type": "integer",
+            "description": "Processing ledger entry (event x subscription) that started this run"
+          },
+          "resumedBy": {
+            "type": "array",
+            "description": "Stream events that resumed this run at receive-event nodes, oldest first",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowRunResume"
+            }
+          }
+        }
+      },
+      "WorkflowRunResume": {
+        "description": "A stream event that resumed a workflow run parked at a receive-event node",
+        "type": "object",
+        "properties": {
+          "eventId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ledgerId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "nodeId": {
+            "type": "string"
+          },
+          "nodeName": {
+            "type": "string"
+          },
+          "traceNodeId": {
+            "format": "int64",
+            "type": "integer",
+            "description": "The receive-event trace node the event completed"
+          },
+          "resumedOn": {
+            "format": "date-time",
+            "type": "string"
           }
         }
       },
@@ -9554,6 +9600,16 @@
           "traceId": {
             "format": "uuid",
             "type": "string"
+          },
+          "triggerEventId": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Stream event whose create-workflow routing started this run; absent for runs started any other way (e.g. manually)"
+          },
+          "triggerLedgerId": {
+            "format": "int64",
+            "type": "integer",
+            "description": "Processing ledger entry (event x subscription) that started this run"
           },
           "startedOn": {
             "format": "date-time",
@@ -10020,7 +10076,7 @@
         "properties": {
           "type": {
             "type": "string",
-            "description": "Kind of result: task, workflow-run, ignored, escalated, or decision (a Manager decision of an unknown type)"
+            "description": "Kind of result: task, workflow-run, workflow-resumed (a waiting workflow run was resumed), no-match (a workflow-dispatch resumed no run), ignored, escalated, or decision (a Manager decision of an unknown type)"
           },
           "status": {
             "type": "string",
@@ -10053,7 +10109,12 @@
           "traceNodeId": {
             "format": "int64",
             "type": "integer",
-            "description": "Trace node of the Manager decision that produced this result"
+            "description": "Trace node of the Manager decision that produced this result, or (workflow-resumed) the receive-event node the event completed"
+          },
+          "traceId": {
+            "format": "uuid",
+            "type": "string",
+            "description": "Trace of the workflow run (workflow-run and workflow-resumed items)"
           }
         }
       },

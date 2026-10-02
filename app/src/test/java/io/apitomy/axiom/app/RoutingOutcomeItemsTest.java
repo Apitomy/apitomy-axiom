@@ -168,7 +168,8 @@ class RoutingOutcomeItemsTest {
         WorkflowRunEntity run = new WorkflowRunEntity();
         run.id = 987654L;
         Mockito.when(workflowExecutionService.triggerWorkflow(ArgumentMatchers.anyLong(),
-                ArgumentMatchers.anyLong(), ArgumentMatchers.any())).thenReturn(run);
+                ArgumentMatchers.anyLong(), ArgumentMatchers.any(), ArgumentMatchers.any()))
+                .thenReturn(run);
         createEventAndSubscription("[{\"type\":\"create-workflow\",\"workflowDefinitionId\":42}]");
 
         orchestrator.processNewEvents();

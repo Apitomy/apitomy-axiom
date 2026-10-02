@@ -167,6 +167,28 @@ export function WorkflowRunDetailPage() {
                                 </dd>
                             </>
                         )}
+                        <dt><strong>Triggered by</strong></dt>
+                        <dd>
+                            {run.triggerEventId ? (
+                                <Link to={`/events/stream/${run.triggerEventId}`}>
+                                    Event {run.triggerEventId}
+                                </Link>
+                            ) : "Started manually or by another means"}
+                        </dd>
+                        {run.resumedBy && run.resumedBy.length > 0 && (
+                            <>
+                                <dt><strong>Resumed by</strong></dt>
+                                {run.resumedBy.map((r) => (
+                                    <dd key={`${r.eventId}-${r.nodeId}`}>
+                                        <Link to={`/events/stream/${r.eventId}`}>
+                                            Event {r.eventId}
+                                        </Link>
+                                        {" "}at {r.nodeName || r.nodeId}
+                                        {" "}({new Date(r.resumedOn).toLocaleString()})
+                                    </dd>
+                                ))}
+                            </>
+                        )}
                     </dl>
                 )}
 

@@ -142,17 +142,42 @@ explicitly):
 |-----------|------------|-------|
 | `task` | Manager `create_task` / `script_action` decision; `invoke-action` rule | `task_id`, `project_id` |
 | `workflow-run` | `create-workflow` rule | `workflow_run_id`, `project_id` |
+| `workflow-resumed` | `workflow-dispatch` rule, one per run the event resumed | `workflow_run_id`, `project_id`, `trace_node_id` (the receive-event node) |
+| `no-match` | `workflow-dispatch` rule that resumed no run | — |
 | `ignored` | Manager `ignore` decision | — |
 | `escalated` | Manager `escalate` decision, or any decision below the confidence threshold | `project_id` if the escalation was posted to a project |
 | `decision` | Manager decision of an unknown type (always `failed`) | — |
 
 Each item has a `status` (`completed` or `failed`), a `summary` and, when failed, an `error_message`.
 Manager items have one row per decision, including decisions that failed, and `trace_node_id` points to
-the decision's `manager-decision` trace node. `workflow-dispatch` rules write no items yet (#421).
+the decision's `manager-decision` trace node. A `workflow-dispatch` rule writes one `workflow-resumed`
+item per resumed run, or a single `no-match` item (outcome summary "No waiting workflow run matched the
+event") when nothing matched, so "nothing happened" is recorded explicitly. The processing API adds the
+run's `traceId` to `workflow-run` and `workflow-resumed` items, so the event page links to the run and its
+trace.
 
 The outcome's own `project_id` and `task_id` columns are kept for backward compatibility. They still hold
 only the **first** project and task; readers should use the items. Outcomes recorded before V67 have no
 items.
+
+### Links between events and workflow runs
+
+Events and workflow runs are linked both ways (V68, #420, #421). None of these links are foreign keys:
+event retention deletes events and ledger entries while runs are kept.
+
+- **Started runs (`create-workflow`).** The run stores `trigger_event_id` and `trigger_ledger_id`; the
+  run's `workflow` trace has `eventId` set to the event; the run's context has the event ID as
+  `event.id`; and the outcome's `trace_id` is the run's trace. Runs started any other way (e.g.
+  `POST /projects/{id}/workflow`) have null trigger fields.
+- **Resumed runs (`workflow-dispatch`).** `WorkflowEventDispatcher.dispatchStreamEvent` returns the
+  runs it resumed (run, node, trace and receive-event trace node). The `workflow_event_subscription` row
+  is deleted when it is consumed, so each resumption is recorded as a `workflow_run_resume` row (run,
+  node, event, ledger entry, trace node; deleted with the run), and the receive-event trace node's
+  summary gets "resumed by event <id>". The event map passed to the run (`event` in its context)
+  includes the event ID as `id`.
+- **API.** `WorkflowInstance` and `WorkflowRunSummary` expose `triggerEventId` and `triggerLedgerId`;
+  `WorkflowInstance.resumedBy` lists the resuming events. The workflow run page shows "Triggered by"
+  and "Resumed by" links to `/events/stream/:id`.
 
 Items never affect retries: the attempt cap and the skip-on-retry rule count `routing_outcome` rows by
 status and routing type, not items. Each attempt persists its own outcome together with its items, so the

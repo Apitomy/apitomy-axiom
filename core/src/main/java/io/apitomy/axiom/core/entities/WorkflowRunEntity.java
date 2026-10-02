@@ -41,6 +41,17 @@ public class WorkflowRunEntity extends PanacheEntity {
     @Column(name = "trace_id")
     public UUID traceId;
 
+    /**
+     * The stream event whose create-workflow routing started this run; null for runs started
+     * any other way. Not a foreign key: event retention deletes events.
+     */
+    @Column(name = "trigger_event_id")
+    public UUID triggerEventId;
+
+    /** The ledger entry (event × subscription) that started this run; null if not event-started. */
+    @Column(name = "trigger_ledger_id")
+    public Long triggerLedgerId;
+
     @Column(name = "started_on", nullable = false)
     public Instant startedOn;
 

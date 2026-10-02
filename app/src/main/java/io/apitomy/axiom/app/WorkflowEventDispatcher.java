@@ -18,6 +18,7 @@ import jakarta.inject.Inject;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import org.jboss.logging.Logger;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -64,28 +65,47 @@ public class WorkflowEventDispatcher {
 
     /**
      * Dispatches a stream event to all candidate receive-event subscriptions.
-     * Unlike {@link #dispatchEvent(long)}, this method accepts a pre-built
+     * Unlike {@code dispatchEvent(long)}, this method accepts a pre-built
      * event map from the EventStreamOrchestrator, avoiding entity conversion.
      *
      * @param eventType the normalized event type string (e.g., "issue.created")
      * @param eventMap  the curated event map for EL evaluation and context merging
      */
     public void dispatchStreamEvent(String eventType, Map<String, Object> eventMap) {
+        dispatchStreamEvent(eventType, eventMap, null);
+    }
+
+    /**
+     * Dispatches a stream event to all candidate receive-event subscriptions and returns the
+     * runs it resumed. When the origin is given, each resumed run records the resuming event.
+     *
+     * @param eventType the normalized event type string (e.g., "issue.created")
+     * @param eventMap  the curated event map for EL evaluation and context merging
+     * @param origin    the stream event (and ledger entry) being dispatched; may be null
+     * @return the resumed runs, in subscription order; empty if nothing matched
+     */
+    public List<ResumedRun> dispatchStreamEvent(String eventType, Map<String, Object> eventMap,
+                                                EventOrigin origin) {
         List<Long> subscriptionIds = QuarkusTransaction.requiringNew()
                 .call(() -> planStreamDispatch(eventType, eventMap));
 
         if (subscriptionIds == null || subscriptionIds.isEmpty()) {
-            return;
+            return List.of();
         }
 
+        List<ResumedRun> resumed = new ArrayList<>();
         for (Long subId : subscriptionIds) {
             try {
-                QuarkusTransaction.requiringNew().run(() ->
-                        offerToSubscription(subId, eventMap));
+                ResumedRun run = QuarkusTransaction.requiringNew().call(() ->
+                        offerToSubscription(subId, eventMap, origin));
+                if (run != null) {
+                    resumed.add(run);
+                }
             } catch (Exception e) {
                 LOG.errorf(e, "Failed to offer stream event to workflow subscription %d", subId);
             }
         }
+        return resumed;
     }
 
     /**
@@ -109,33 +129,37 @@ public class WorkflowEventDispatcher {
      * is missing or terminal are cleaned up opportunistically; an already
      * consumed (deleted) subscription is silently skipped.
      */
-    private void offerToSubscription(long subscriptionId, Map<String, Object> eventMap) {
+    private ResumedRun offerToSubscription(long subscriptionId, Map<String, Object> eventMap,
+                                           EventOrigin origin) {
         WorkflowEventSubscriptionEntity sub =
                 WorkflowEventSubscriptionEntity.findById(subscriptionId);
         if (sub == null) {
-            return;
+            return null;
         }
         WorkflowRunEntity run = WorkflowRunEntity.findById(sub.runId);
         if (run == null || run.completedOn != null) {
             sub.delete();
-            return;
+            return null;
         }
 
         Workflow workflow = loadWorkflowContent(run.definitionId, run.definitionVersion);
         WorkflowInstance instance = deserializeInstance(run.instanceState);
         if (workflow == null || instance == null) {
-            return;
+            return null;
         }
 
         if (!workflowEngine.matchesEvent(workflow, instance, sub.nodeId, eventMap)) {
-            return;
+            return null;
         }
 
         long runId = sub.runId;
         String nodeId = sub.nodeId;
         sub.delete();
-        workflowExecutionService.onEventReceived(runId, nodeId, eventMap);
-        LOG.infof("Event resumed workflow run %d at receive-event node %s", runId, nodeId);
+        ResumedRun resumed = workflowExecutionService.onEventReceived(runId, nodeId, eventMap,
+                origin);
+        LOG.infof("Event %s resumed workflow run %d at receive-event node %s",
+                origin != null ? origin.eventId() : "(unknown)", runId, nodeId);
+        return resumed;
     }
 
     private Workflow loadWorkflowContent(long definitionId, int definitionVersion) {
