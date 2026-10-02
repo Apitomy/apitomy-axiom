@@ -40,7 +40,7 @@ import {
     fetchTraces,
     retryEventProcessing,
 } from "../config/api";
-import { STATUS_COLORS as TRACE_STATUS_COLORS } from "../components/TraceGraphNode";
+import { statusColor as traceStatusColor } from "../components/TraceGraphNode";
 
 const SOURCE_COLORS: Record<string, "blue" | "green" | "orange" | "grey"> = {
     github: "blue",
@@ -538,7 +538,7 @@ function DryRunEvaluations({ traces, totalCount, error }: {
                         <DataListItemRow>
                             <DataListItemCells dataListCells={[
                                 <DataListCell key="status" isFilled={false}>
-                                    <Label isCompact color={TRACE_STATUS_COLORS[t.status]}>
+                                    <Label isCompact color={traceStatusColor(t.status)}>
                                         {t.status}
                                     </Label>
                                 </DataListCell>,
