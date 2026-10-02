@@ -60,6 +60,8 @@ export function EventDetailPage() {
     const [loading, setLoading] = useState(true);
     const [processingLoading, setProcessingLoading] = useState(false);
     const [dryRuns, setDryRuns] = useState<Trace[]>([]);
+    const [dryRunTotal, setDryRunTotal] = useState(0);
+    const [dryRunError, setDryRunError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState(0);
 
     const loadEvent = useCallback(() => {
@@ -78,9 +80,16 @@ export function EventDetailPage() {
             .then((result) => setProcessing(result.items))
             .catch(console.error)
             .finally(() => setProcessingLoading(false));
+        setDryRunError(null);
         fetchTraces(1, 50, "manager-dry-run", undefined, eventId)
-            .then((result) => setDryRuns(result.items))
-            .catch(console.error);
+            .then((result) => {
+                setDryRuns(result.items);
+                setDryRunTotal(result.totalCount);
+            })
+            .catch((err: unknown) => {
+                console.error(err);
+                setDryRunError(err instanceof Error ? err.message : String(err));
+            });
     }, [eventId]);
 
     useEffect(() => { loadEvent(); }, [loadEvent]);
@@ -181,7 +190,7 @@ export function EventDetailPage() {
                             entries={processing}
                             loading={processingLoading}
                         />
-                        <DryRunEvaluations traces={dryRuns} />
+                        <DryRunEvaluations traces={dryRuns} totalCount={dryRunTotal} error={dryRunError} />
                     </TabContent>
                 </Tab>
             </Tabs>
@@ -423,7 +432,18 @@ function ProcessingTab({ entries, loading }: {
 }
 
 /** Lists the manual (dry-run) Manager evaluations of the event, linking to their traces. */
-function DryRunEvaluations({ traces }: { traces: Trace[] }) {
+function DryRunEvaluations({ traces, totalCount, error }: {
+    traces: Trace[];
+    totalCount: number;
+    error: string | null;
+}) {
+    if (error) {
+        return (
+            <div style={{ marginTop: "24px" }} data-testid="event-dry-run-evaluations-error">
+                Could not load dry-run evaluations: {error}
+            </div>
+        );
+    }
     if (traces.length === 0) return null;
     return (
         <div style={{ marginTop: "24px" }} data-testid="event-dry-run-evaluations">
@@ -452,6 +472,11 @@ function DryRunEvaluations({ traces }: { traces: Trace[] }) {
                     </DataListItem>
                 ))}
             </DataList>
+            {totalCount > traces.length && (
+                <div style={{ marginTop: "8px" }} data-testid="event-dry-run-evaluations-count">
+                    Showing {traces.length} of {totalCount}
+                </div>
+            )}
         </div>
     );
 }

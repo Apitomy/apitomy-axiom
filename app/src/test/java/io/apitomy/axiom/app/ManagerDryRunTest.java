@@ -14,7 +14,9 @@ import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.mockito.InjectSpy;
 import io.restassured.response.Response;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,6 +46,9 @@ class ManagerDryRunTest {
     @InjectMock
     AgentRegistry agentRegistry;
 
+    @InjectSpy
+    ManagerTraceRecorder traceRecorder;
+
     private final Agent agent = Mockito.mock(Agent.class);
     private UUID eventId;
 
@@ -70,6 +75,11 @@ class ManagerDryRunTest {
     @AfterEach
     void cleanup() {
         QuarkusTransaction.requiringNew().run(() -> {
+            for (TraceEntity trace : TraceEntity.<TraceEntity>list(
+                    "eventId = ?1 and traceType = 'manager-dry-run'", eventId)) {
+                TraceNodeEntity.delete("traceId", trace.traceId);
+                trace.delete();
+            }
             ActivityLogEntity.delete("eventId", eventId);
             AiUsageEntity.delete("eventId", eventId);
             StreamEventEntity.deleteById(eventId);
@@ -166,10 +176,27 @@ class ManagerDryRunTest {
         given().queryParam("filterEventId", eventId.toString())
                 .when().get("/api/v1/traces")
                 .then().statusCode(200)
-                .body("items.traceId", org.hamcrest.Matchers.hasItem(traceId))
+                .body("items.traceId", Matchers.hasItem(traceId))
                 .body("items.find { it.traceId == '" + traceId + "' }.traceType",
-                        org.hamcrest.Matchers.equalTo("manager-dry-run"));
+                        Matchers.equalTo("manager-dry-run"));
         assertFalse(traceId.isBlank());
+    }
+
+    @Test
+    void decisionNodesGoUnderRootWhenEvaluationNodeIsMissing() {
+        Mockito.doReturn(null).when(traceRecorder).addNode(ArgumentMatchers.any(),
+                ArgumentMatchers.eq("manager-evaluation"), ArgumentMatchers.any());
+        agentReturns(AgentResult.success(
+                "{\"decisions\":[{\"decision\":\"ignore\",\"confidence\":0.9,\"reasoning\":\"r\"}]}"));
+
+        UUID traceId = UUID.fromString(evaluate().header(TRACE_HEADER));
+
+        assertTrue(nodes(traceId, "manager-evaluation").isEmpty());
+        TraceNodeEntity root = singleNode(traceId, "event-ingested");
+        TraceNodeEntity decision = singleNode(traceId, "manager-decision");
+        assertEquals(root.id, decision.parentNodeId);
+        assertEquals("completed", decision.status);
+        assertEquals("completed", trace(traceId).status);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────

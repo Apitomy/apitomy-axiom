@@ -1,8 +1,8 @@
 package io.apitomy.axiom.app.rest;
 
 import io.apitomy.axiom.api.ManagerResource;
-import io.apitomy.axiom.app.ManagerTraceRecorder;
 import io.apitomy.axiom.api.beans.ManagerConfig;
+import io.apitomy.axiom.app.ManagerTraceRecorder;
 import io.apitomy.axiom.core.entities.ManagerConfigEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.tracing.TraceContext;
@@ -145,8 +145,12 @@ public class ManagerResourceImpl implements ManagerResource {
         }
         traceRecorder.completeNode(evalNodeId, "completed", evaluation.activityLogId());
 
-        if (traceCtx != null && evalNodeId != null) {
-            traceCtx.push(evalNodeId);
+        // Decision nodes are children of the evaluation node, or of the root if the
+        // evaluation node could not be created (as in the event pipeline).
+        if (traceCtx != null) {
+            if (evalNodeId != null) {
+                traceCtx.push(evalNodeId);
+            }
             try {
                 for (ManagerDecision decision : evaluation.decisions()) {
                     Long decisionNodeId = traceRecorder.addNode(traceCtx, "manager-decision",
@@ -154,7 +158,9 @@ public class ManagerResourceImpl implements ManagerResource {
                     traceRecorder.completeNode(decisionNodeId, "completed", null);
                 }
             } finally {
-                traceCtx.pop();
+                if (evalNodeId != null) {
+                    traceCtx.pop();
+                }
             }
         }
         traceRecorder.completeTrace(traceCtx, "completed");
