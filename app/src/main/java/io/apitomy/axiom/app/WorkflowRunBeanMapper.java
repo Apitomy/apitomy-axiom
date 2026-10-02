@@ -4,12 +4,14 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.beans.WorkflowContent;
 import io.apitomy.axiom.api.beans.WorkflowRunSearchResults;
+import io.apitomy.axiom.api.beans.WorkflowRunResume;
 import io.apitomy.axiom.api.beans.WorkflowRunSummary;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
+import io.apitomy.axiom.core.entities.WorkflowRunResumeEntity;
 import io.apitomy.flow.model.Workflow;
 import io.apitomy.flow.model.WorkflowInstance;
 import io.quarkus.panache.common.Page;
@@ -49,6 +51,12 @@ public class WorkflowRunBeanMapper {
         bean.setRunId(entity.id);
         if (entity.traceId != null) {
             bean.setTraceId(entity.traceId);
+        }
+        if (entity.triggerEventId != null) {
+            bean.setTriggerEventId(entity.triggerEventId);
+        }
+        if (entity.triggerLedgerId != null) {
+            bean.setTriggerLedgerId(entity.triggerLedgerId);
         }
         bean.setProjectId(entity.projectId);
         bean.setDefinitionId(entity.definitionId);
@@ -119,6 +127,27 @@ public class WorkflowRunBeanMapper {
             bean.setActiveBranches(List.of());
         }
 
+        Workflow workflowForResumes = workflow;
+        bean.setResumedBy(WorkflowRunResumeEntity
+                .<WorkflowRunResumeEntity>list("runId = ?1 order by resumedOn, id", entity.id)
+                .stream()
+                .map(r -> toResumeBean(r, workflowForResumes))
+                .toList());
+
+        return bean;
+    }
+
+    private static WorkflowRunResume toResumeBean(WorkflowRunResumeEntity resume,
+                                                  Workflow workflow) {
+        WorkflowRunResume bean = new WorkflowRunResume();
+        bean.setEventId(resume.eventId);
+        bean.setLedgerId(resume.ledgerId);
+        bean.setNodeId(resume.nodeId);
+        if (workflow != null) {
+            workflow.findNodeById(resume.nodeId).ifPresent(node -> bean.setNodeName(node.name()));
+        }
+        bean.setTraceNodeId(resume.traceNodeId);
+        bean.setResumedOn(Date.from(resume.resumedOn));
         return bean;
     }
 
@@ -252,6 +281,12 @@ public class WorkflowRunBeanMapper {
         summary.setStatus(run.status);
         if (run.traceId != null) {
             summary.setTraceId(run.traceId);
+        }
+        if (run.triggerEventId != null) {
+            summary.setTriggerEventId(run.triggerEventId);
+        }
+        if (run.triggerLedgerId != null) {
+            summary.setTriggerLedgerId(run.triggerLedgerId);
         }
         summary.setStartedOn(Date.from(run.startedOn));
         if (run.completedOn != null) {

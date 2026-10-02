@@ -250,6 +250,16 @@ event-ingested             root, completed on creation
 - Evaluation and decision nodes are always completed before `routeToManager` returns, so only `task`
   nodes can keep the trace open (see the lifecycle rules above).
 
+### Workflow traces and events
+
+- A run started by a `create-workflow` routing rule gets a `workflow` trace with `eventId` set to the
+  stream event, so the trace appears in `GET /traces?filterEventId=...` next to the event's Manager
+  traces. The routing outcome's `traceId` is the run's trace. Runs started manually have no `eventId`.
+- When a stream event resumes a run parked at a receive-event step, the receive-event `task` node
+  (entity type `workflow-event-subscription`) is completed and its summary gets
+  "— resumed by event <id>". The `workflow-resumed` routing outcome item's `trace_node_id` points to that
+  node, and a `workflow_run_resume` row records the event (see the event sourcing design).
+
 ### Manager dry-run trace structure
 
 The debug endpoint `POST /manager/evaluate/{eventId}` (`ManagerResourceImpl.evaluateEvent`) runs the

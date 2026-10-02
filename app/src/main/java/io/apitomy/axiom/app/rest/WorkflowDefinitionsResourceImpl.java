@@ -13,7 +13,10 @@ import io.apitomy.axiom.app.WorkflowRunBeanMapper;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
+import io.apitomy.axiom.core.entities.WorkflowEventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
+import io.apitomy.axiom.core.entities.WorkflowRunResumeEntity;
+import io.apitomy.axiom.core.entities.WorkflowWaitEntity;
 import io.apitomy.flow.model.Workflow;
 import io.apitomy.flow.model.WorkflowNode;
 import io.apitomy.flow.validation.ValidationProblem;
@@ -168,6 +171,10 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
         if (!runIds.isEmpty()) {
             // Delete human tasks belonging to the runs first (task.workflow_run_id FK).
             TaskEntity.delete("workflowRunId in ?1", runIds);
+            // And the rows that hang off the runs (resume records, parked waits/subscriptions).
+            WorkflowRunResumeEntity.delete("runId in ?1", runIds);
+            WorkflowWaitEntity.delete("runId in ?1", runIds);
+            WorkflowEventSubscriptionEntity.delete("runId in ?1", runIds);
             // Then delete the runs themselves.
             WorkflowRunEntity.delete("definitionId", workflowDefinitionId);
         }

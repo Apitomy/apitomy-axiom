@@ -389,8 +389,10 @@ public class EventStreamOrchestrator {
             try {
                 RoutingOutcomeEntity outcome = switch (rule.type()) {
                     case RoutingRule.TYPE_MANAGER -> routeToManager(event);
-                    case RoutingRule.TYPE_WORKFLOW_DISPATCH -> routeToWorkflowDispatch(event, eventMap);
-                    case RoutingRule.TYPE_CREATE_WORKFLOW -> routeToCreateWorkflow(event, rule);
+                    case RoutingRule.TYPE_WORKFLOW_DISPATCH ->
+                            routeToWorkflowDispatch(event, eventMap, ledgerId);
+                    case RoutingRule.TYPE_CREATE_WORKFLOW ->
+                            routeToCreateWorkflow(event, rule, ledgerId);
                     case RoutingRule.TYPE_INVOKE_ACTION -> routeToInvokeAction(event, rule);
                     default -> {
                         LOG.warnf("Unknown routing type '%s' in subscription %d",
@@ -784,17 +786,57 @@ public class EventStreamOrchestrator {
         return new ManagerDecisionResult(project != null ? project.id : null, null, logId);
     }
 
+    /**
+     * Offers the event to the workflow runs parked at receive-event nodes. Records one
+     * {@code workflow-resumed} item per resumed run, or a {@code no-match} item when the event
+     * resumed nothing.
+     */
     private RoutingOutcomeEntity routeToWorkflowDispatch(StreamEventEntity event,
-                                                          Map<String, Object> eventMap) {
-        workflowEventDispatcher.dispatchStreamEvent(event.type, eventMap);
+                                                          Map<String, Object> eventMap,
+                                                          Long ledgerId) {
+        List<ResumedRun> resumed = workflowEventDispatcher.dispatchStreamEvent(event.type,
+                eventMap, new EventOrigin(event.id, ledgerId));
 
         RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
         outcome.status = "completed";
-        outcome.summary = "Dispatched to workflow receive-event nodes";
+        if (resumed.isEmpty()) {
+            outcome.summary = "No waiting workflow run matched the event";
+            outcome.pendingItems.add(newItem(RoutingOutcomeItemEntity.TYPE_NO_MATCH, "completed",
+                    "No workflow run was waiting for a " + event.type + " event that matched"));
+            return outcome;
+        }
+        // A run that matched but failed to resume is a failed item. The outcome itself stays
+        // completed: failing it would retry the rule and re-dispatch the event to every run.
+        long failedCount = resumed.stream().filter(ResumedRun::failed).count();
+        long resumedCount = resumed.size() - failedCount;
+        outcome.summary = "Resumed " + resumedCount + " workflow run"
+                + (resumedCount == 1 ? "" : "s")
+                + (failedCount > 0 ? "; " + failedCount + " failed to resume" : "");
+        for (ResumedRun run : resumed) {
+            RoutingOutcomeItemEntity item = newItem(RoutingOutcomeItemEntity.TYPE_WORKFLOW_RESUMED,
+                    run.failed() ? "failed" : "completed",
+                    (run.failed() ? "Failed to resume workflow run " : "Resumed workflow run ")
+                            + run.runId() + " at receive-event node " + run.nodeId());
+            if (run.failed()) {
+                item.errorMessage = truncate(run.errorMessage(), 2000);
+            }
+            item.projectId = run.projectId();
+            item.workflowRunId = run.runId();
+            item.traceNodeId = run.traceNodeId();
+            outcome.pendingItems.add(item);
+            // Backward compatibility: the outcome holds the first project and trace
+            if (outcome.projectId == null) {
+                outcome.projectId = run.projectId();
+            }
+            if (outcome.traceId == null) {
+                outcome.traceId = run.traceId();
+            }
+        }
         return outcome;
     }
 
-    private RoutingOutcomeEntity routeToCreateWorkflow(StreamEventEntity event, RoutingRule rule) {
+    private RoutingOutcomeEntity routeToCreateWorkflow(StreamEventEntity event, RoutingRule rule,
+                                                        Long ledgerId) {
         if (rule.workflowDefinitionId() == null) {
             throw new IllegalStateException(
                     "create-workflow routing rule missing workflowDefinitionId");
@@ -808,6 +850,7 @@ public class EventStreamOrchestrator {
         Map<String, Object> extraContext = new HashMap<>();
         try {
             com.fasterxml.jackson.databind.node.ObjectNode eventNode = objectMapper.createObjectNode();
+            eventNode.put("id", event.id.toString());
             eventNode.put("type", event.type);
             eventNode.put("source", event.source);
             eventNode.put("connectionId", event.connectionId);
@@ -826,7 +869,7 @@ public class EventStreamOrchestrator {
 
         WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
                 workflowExecutionService.triggerWorkflow(projectId, rule.workflowDefinitionId(),
-                        extraContext));
+                        extraContext, new EventOrigin(event.id, ledgerId)));
         LOG.infof("Created workflow (definition %d) for event %s on project %d",
                 rule.workflowDefinitionId(), event.id, projectId);
 
@@ -836,6 +879,7 @@ public class EventStreamOrchestrator {
         outcome.status = "completed";
         outcome.summary = "Created workflow from definition " + rule.workflowDefinitionId();
         outcome.projectId = projectId;
+        outcome.traceId = run != null ? run.traceId : null;
         RoutingOutcomeItemEntity item = newItem(RoutingOutcomeItemEntity.TYPE_WORKFLOW_RUN,
                 "completed", "Workflow run from definition " + rule.workflowDefinitionId());
         item.projectId = projectId;
@@ -1063,6 +1107,9 @@ public class EventStreamOrchestrator {
 
     Map<String, Object> buildEventMap(StreamEventEntity event, JsonNode payloadNode) {
         Map<String, Object> map = new HashMap<>();
+        if (event.id != null) {
+            map.put("id", event.id.toString());
+        }
         map.put("type", event.type);
         map.put("source", event.source);
         map.put("connectionId", event.connectionId);

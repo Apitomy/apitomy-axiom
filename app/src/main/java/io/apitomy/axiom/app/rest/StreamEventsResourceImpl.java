@@ -18,6 +18,7 @@ import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
+import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -31,6 +32,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -203,6 +205,16 @@ public class StreamEventsResourceImpl implements StreamResource {
             }
         }
 
+        // Load the traces of the workflow runs the items started or resumed
+        List<Long> itemRunIds = itemsByOutcome.values().stream().flatMap(List::stream)
+                .map(i -> i.workflowRunId).filter(Objects::nonNull).distinct().toList();
+        Map<Long, UUID> runTraceIds = new HashMap<>();
+        if (!itemRunIds.isEmpty()) {
+            WorkflowRunEntity.<WorkflowRunEntity>list("id IN ?1", itemRunIds).stream()
+                    .filter(r -> r.traceId != null)
+                    .forEach(r -> runTraceIds.put(r.id, r.traceId));
+        }
+
         List<EventProcessingEntry> items = entries.stream().map(e -> {
             EventProcessingEntry entry = new EventProcessingEntry();
             entry.setId(e.id);
@@ -239,7 +251,7 @@ public class StreamEventsResourceImpl implements StreamResource {
                 if (o.taskId != null) outcome.setTaskStatus(taskStatuses.get(o.taskId));
                 outcome.setTraceId(o.traceId);
                 outcome.setItems(itemsByOutcome.getOrDefault(o.id, List.of()).stream()
-                        .map(i -> toItemBean(i, projectNames, taskStatuses))
+                        .map(i -> toItemBean(i, projectNames, taskStatuses, runTraceIds))
                         .toList());
                 return outcome;
             }).toList();
@@ -258,7 +270,8 @@ public class StreamEventsResourceImpl implements StreamResource {
 
     private static EventProcessingOutcomeItem toItemBean(RoutingOutcomeItemEntity i,
                                                          Map<Long, String> projectNames,
-                                                         Map<Long, String> taskStatuses) {
+                                                         Map<Long, String> taskStatuses,
+                                                         Map<Long, UUID> runTraceIds) {
         EventProcessingOutcomeItem item = new EventProcessingOutcomeItem();
         item.setType(i.itemType);
         item.setStatus(i.status);
@@ -269,6 +282,7 @@ public class StreamEventsResourceImpl implements StreamResource {
         item.setTaskId(i.taskId);
         if (i.taskId != null) item.setTaskStatus(taskStatuses.get(i.taskId));
         item.setWorkflowRunId(i.workflowRunId);
+        if (i.workflowRunId != null) item.setTraceId(runTraceIds.get(i.workflowRunId));
         item.setTraceNodeId(i.traceNodeId);
         return item;
     }
