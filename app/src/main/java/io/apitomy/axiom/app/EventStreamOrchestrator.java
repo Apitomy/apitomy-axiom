@@ -31,6 +31,7 @@ import io.quarkus.narayana.jta.QuarkusTransaction;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -50,7 +51,7 @@ import java.util.UUID;
  *   <li>Find stream events that have unprocessed subscriptions (no ledger entry)</li>
  *   <li>For each (event, subscription) pair without a ledger entry:
  *       evaluate the filter, create a ledger entry, route if matched</li>
- *   <li>Retry any "failed" ledger entries</li>
+ *   <li>Retry "failed" ledger entries whose backoff delay has passed</li>
  * </ol>
  */
 @ApplicationScoped
@@ -96,11 +97,23 @@ public class EventStreamOrchestrator {
     ManagerTraceRecorder managerTraceRecorder;
 
     /**
-     * Maximum routing attempts per ledger entry. Attempts are counted as the failed
-     * routing outcomes linked to the entry (no attempt column yet, see #422).
+     * Maximum routing attempts per ledger entry, the first try included. The entry is
+     * {@code exhausted} when the attempt that reaches this count fails.
      */
     @ConfigProperty(name = "axiom.stream-pipeline.max-attempts", defaultValue = "3")
     int maxAttempts;
+
+    /**
+     * Delay before the first retry; each later retry doubles it.
+     */
+    @ConfigProperty(name = "axiom.stream-pipeline.retry-initial-delay", defaultValue = "30s")
+    Duration retryInitialDelay;
+
+    /**
+     * Upper bound of the delay between two attempts.
+     */
+    @ConfigProperty(name = "axiom.stream-pipeline.retry-max-delay", defaultValue = "1h")
+    Duration retryMaxDelay;
 
     private volatile boolean shuttingDown = false;
     private volatile boolean startupRecoveryDone = false;
@@ -110,24 +123,59 @@ public class EventStreamOrchestrator {
         shuttingDown = true;
     }
 
+    /**
+     * Returns the configured maximum number of attempts per ledger entry.
+     *
+     * @return the value of {@code axiom.stream-pipeline.max-attempts}
+     */
+    public int maxAttempts() {
+        return maxAttempts;
+    }
+
+    /**
+     * Delay before the retry that follows failed attempt number {@code attempt}:
+     * {@code min(initialDelay * 2^(attempt - 1), maxDelay)}.
+     *
+     * @param attempt the 1-based number of the attempt that just failed
+     * @return the delay until the next attempt
+     */
+    Duration backoffDelay(int attempt) {
+        int doublings = Math.max(0, Math.min(attempt - 1, 30));
+        Duration delay;
+        try {
+            delay = retryInitialDelay.multipliedBy(1L << doublings);
+        } catch (ArithmeticException e) {
+            return retryMaxDelay;
+        }
+        return delay.compareTo(retryMaxDelay) > 0 ? retryMaxDelay : delay;
+    }
+
     @Scheduled(every = "${axiom.stream-pipeline.poll-interval:5s}",
                concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     void processNewEvents() {
         if (shuttingDown) return;
+        // Entries attempted during this tick (by the first pass) are never retried in it
+        Instant tickStart = Instant.now();
 
         // On first tick, recover orphaned "pending" ledger entries from a
-        // previous crash by marking them as "failed" so the retry loop
-        // picks them up.
+        // previous crash: the interrupted attempt counts, so an entry that was on its
+        // last attempt is exhausted and the others are due immediately.
         if (!startupRecoveryDone) {
             startupRecoveryDone = true;
             QuarkusTransaction.requiringNew().run(() -> {
+                String reason = "Recovered on startup: previous instance crashed before "
+                        + "completing routing";
+                long exhausted = EventProcessingLedgerEntity.update(
+                        "status = 'exhausted', nextAttemptAt = null, errorMessage = ?1 "
+                        + "where status = 'pending' and attemptCount >= ?2",
+                        reason + " (giving up after the last attempt)", maxAttempts);
                 long recovered = EventProcessingLedgerEntity.update(
-                        "status = 'failed', errorMessage = 'Recovered on startup: " +
-                        "previous instance crashed before completing routing' " +
-                        "where status = 'pending'");
-                if (recovered > 0) {
-                    LOG.infof("Recovered %d orphaned pending ledger entries on startup",
-                            recovered);
+                        "status = 'failed', nextAttemptAt = ?1, errorMessage = ?2 "
+                        + "where status = 'pending'", Instant.now(), reason);
+                if (recovered + exhausted > 0) {
+                    LOG.infof("Recovered %d orphaned pending ledger entries on startup "
+                            + "(%d of them on their last attempt)", recovered + exhausted,
+                            exhausted);
                 }
             });
         }
@@ -140,9 +188,9 @@ public class EventStreamOrchestrator {
         // Process new (event, subscription) pairs that have no ledger entry
         processUnledgeredPairs(subscriptions);
 
-        // Retry failed entries
+        // Retry failed entries that are due
         if (!shuttingDown) {
-            retryFailedEntries(subscriptions);
+            retryFailedEntries(subscriptions, tickStart);
         }
     }
 
@@ -158,6 +206,8 @@ public class EventStreamOrchestrator {
             // Use a NOT IN subquery for efficiency.
             // Filter by processEventsFrom against the event's timestamp (when it
             // occurred in the source system), not createdOn (when Axiom ingested it).
+            // Every failure creates a ledger entry, so a failing pair leaves this query
+            // and is retried (with backoff and a cap) by the retry pass only.
             List<StreamEventEntity> unprocessed = QuarkusTransaction.requiringNew().call(() ->
                 StreamEventEntity.<StreamEventEntity>find(
                     "timestamp >= ?1 AND id NOT IN (SELECT l.eventId FROM EventProcessingLedgerEntity l " +
@@ -175,29 +225,43 @@ public class EventStreamOrchestrator {
 
     /**
      * Evaluates a single event against a subscription, creates a ledger entry,
-     * and routes if matched. Each step runs in its own transaction.
+     * and routes if matched. Each step runs in its own transaction. A failure before the
+     * entry exists (building the event context, evaluating the filter) creates a failed
+     * entry, so it is retried with backoff and counts toward the cap like any other.
      */
     private void processEventForSubscription(StreamEventEntity event,
                                               SubscriptionWithFilters sub) {
+        Map<String, Object> eventMap;
+        boolean matched;
         try {
-            // Build event map for filter evaluation
-            Map<String, Object> eventMap = buildEventMap(event, parsePayload(event));
-
-            // Evaluate filter
-            boolean matched = filterEvaluator.matches(sub.filterExpression, eventMap);
-
+            eventMap = buildEventMap(event, parsePayload(event));
+            matched = filterEvaluator.matches(sub.filterExpression, eventMap);
+        } catch (Exception e) {
+            try {
+                Long ledgerId = createLedgerEntry(event.id, sub.id, "pending");
+                if (ledgerId != null) {
+                    failProcessing(ledgerId, 1, e);
+                }
+            } catch (Exception inner) {
+                LOG.errorf(inner, "Failed to record processing failure of event %s for "
+                        + "subscription %d", event.id, sub.id);
+            }
+            return;
+        }
+        try {
             if (!matched) {
                 // Create a "skipped" ledger entry so we don't re-evaluate
-                createLedgerEntry(event.id, sub.id, "skipped", null);
+                createLedgerEntry(event.id, sub.id, "skipped");
                 return;
             }
 
-            // Create a "pending" ledger entry
-            Long ledgerId = createLedgerEntry(event.id, sub.id, "pending", null);
+            // Create a "pending" ledger entry: this is attempt 1
+            Long ledgerId = createLedgerEntry(event.id, sub.id, "pending");
+            if (ledgerId == null) return; // Another entry already exists
 
             // Execute routing rules
             try {
-                routeEvent(event, sub, eventMap, ledgerId);
+                routeEvent(event, sub, eventMap, ledgerId, 1);
                 completeLedgerEntry(ledgerId);
             } catch (Exception e) {
                 failLedgerEntry(ledgerId, e.getMessage());
@@ -209,17 +273,17 @@ public class EventStreamOrchestrator {
     }
 
     /**
-     * Retries ledger entries with status "failed".
+     * Retries {@code failed} ledger entries whose next attempt is due. Entries attempted
+     * since {@code tickStart} (by this tick's first pass) are excluded, so an entry runs at
+     * most once per tick whatever the configured delay.
      */
-    private void retryFailedEntries(List<SubscriptionWithFilters> subscriptions) {
+    private void retryFailedEntries(List<SubscriptionWithFilters> subscriptions,
+                                    Instant tickStart) {
         List<EventProcessingLedgerEntity> failedEntries = QuarkusTransaction.requiringNew().call(() ->
-            // Exclude entries that used up their attempts in the query itself, so they
-            // can never fill the batch and starve retryable entries.
             EventProcessingLedgerEntity.<EventProcessingLedgerEntity>find(
-                "FROM EventProcessingLedgerEntity l WHERE l.status = ?1 AND "
-                        + "(SELECT COUNT(o) FROM RoutingOutcomeEntity o "
-                        + "WHERE o.ledgerId = l.id AND o.status = 'failed') < ?2 "
-                        + "ORDER BY l.createdOn ASC", "failed", (long) maxAttempts)
+                "status = ?1 AND nextAttemptAt <= ?2 "
+                        + "AND (lastAttemptAt IS NULL OR lastAttemptAt < ?3) "
+                        + "ORDER BY nextAttemptAt ASC", "failed", Instant.now(), tickStart)
                 .page(0, BATCH_SIZE).list()
         );
 
@@ -242,17 +306,27 @@ public class EventStreamOrchestrator {
                 continue;
             }
 
+            Integer attempt = beginAttempt(entry.id);
+            if (attempt == null) continue; // Changed concurrently (e.g. deleted)
+
             Map<String, Object> eventMap;
             try {
                 eventMap = buildEventMap(event, parsePayload(event));
+                // An entry that never ran a routing rule may have failed before its filter
+                // matched (a pre-ledger failure): evaluate the filter again.
+                if (!hasRuleOutcomes(entry.id) && !filterEvaluator.matches(sub.filterExpression, eventMap)) {
+                    skipLedgerEntry(entry.id);
+                    continue;
+                }
             } catch (Exception e) {
-                failProcessing(entry.id, e);
+                failProcessing(entry.id, attempt, e);
                 continue;
             }
             try {
-                routeEvent(event, sub, eventMap, entry.id);
+                routeEvent(event, sub, eventMap, entry.id, attempt);
                 completeLedgerEntry(entry.id);
-                LOG.infof("Retry succeeded for event %s / subscription %d", event.id, sub.id);
+                LOG.infof("Retry succeeded for event %s / subscription %d (attempt %d)",
+                        event.id, sub.id, attempt);
             } catch (Exception e) {
                 failLedgerEntry(entry.id, e.getMessage());
             }
@@ -275,10 +349,9 @@ public class EventStreamOrchestrator {
 
     /**
      * Records a failure that happened outside {@link #routeEvent} as a failed
-     * {@code processing} outcome, so it counts toward the attempt cap, then fails the
-     * ledger entry.
+     * {@code processing} outcome of the given attempt, then fails the ledger entry.
      */
-    private void failProcessing(Long ledgerId, Exception e) {
+    private void failProcessing(Long ledgerId, int attempt, Exception e) {
         String error = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
         LOG.warnf(e, "Event processing failed for ledger entry %d", ledgerId);
         QuarkusTransaction.requiringNew().run(() -> {
@@ -287,68 +360,114 @@ public class EventStreamOrchestrator {
             outcome.routingType = ROUTING_TYPE_PROCESSING;
             outcome.status = "failed";
             outcome.errorMessage = truncate(error, 2000);
+            outcome.attemptNumber = attempt;
             outcome.createdOn = Instant.now();
             outcome.persist();
         });
         failLedgerEntry(ledgerId, error);
     }
 
+    /**
+     * Whether a routing rule (not a {@code processing} failure) recorded an outcome for the
+     * entry, i.e. whether its filter is known to have matched.
+     */
+    private boolean hasRuleOutcomes(Long ledgerId) {
+        return QuarkusTransaction.requiringNew().call(() -> RoutingOutcomeEntity.count(
+                "ledgerId = ?1 and routingType <> ?2", ledgerId, ROUTING_TYPE_PROCESSING) > 0);
+    }
+
     // ── Ledger entry management ─────────────────────────────────
 
-    private Long createLedgerEntry(UUID eventId, long subscriptionId,
-                                    String status, String errorMessage) {
+    /**
+     * Creates a ledger entry. A {@code pending} entry starts attempt 1.
+     *
+     * @return the new entry's ID, or null if an entry already exists for the pair
+     */
+    private Long createLedgerEntry(UUID eventId, long subscriptionId, String status) {
         return QuarkusTransaction.requiringNew().call(() -> {
             // Check for existing entry (dedup)
-            EventProcessingLedgerEntity existing = EventProcessingLedgerEntity.find(
-                    "eventId = ?1 and subscriptionId = ?2", eventId, subscriptionId)
-                    .firstResult();
-            if (existing != null) return existing.id;
+            long existing = EventProcessingLedgerEntity.count(
+                    "eventId = ?1 and subscriptionId = ?2", eventId, subscriptionId);
+            if (existing > 0) return null;
 
+            Instant now = Instant.now();
             EventProcessingLedgerEntity entry = new EventProcessingLedgerEntity();
             entry.eventId = eventId;
             entry.subscriptionId = subscriptionId;
             entry.status = status;
-            entry.errorMessage = errorMessage;
-            entry.createdOn = Instant.now();
-            if ("completed".equals(status) || "skipped".equals(status)) {
-                entry.processedOn = Instant.now();
+            entry.createdOn = now;
+            if ("pending".equals(status)) {
+                entry.attemptCount = 1;
+                entry.lastAttemptAt = now;
+            } else {
+                entry.processedOn = now;
             }
             entry.persist();
             return entry.id;
         });
     }
 
+    /**
+     * Starts a retry attempt: the entry becomes {@code pending} (so a crash during the
+     * attempt is recovered on startup), its attempt count is incremented and its last
+     * attempt time set.
+     *
+     * @return the number of the new attempt, or null if the entry is no longer failed
+     */
+    private Integer beginAttempt(Long ledgerId) {
+        return QuarkusTransaction.requiringNew().call(() -> {
+            EventProcessingLedgerEntity entry = EventProcessingLedgerEntity.findById(ledgerId);
+            if (entry == null || !"failed".equals(entry.status)) return null;
+            entry.status = "pending";
+            entry.attemptCount++;
+            entry.lastAttemptAt = Instant.now();
+            entry.nextAttemptAt = null;
+            return entry.attemptCount;
+        });
+    }
+
     private void completeLedgerEntry(Long ledgerId) {
+        finishLedgerEntry(ledgerId, "completed");
+    }
+
+    private void skipLedgerEntry(Long ledgerId) {
+        finishLedgerEntry(ledgerId, "skipped");
+    }
+
+    private void finishLedgerEntry(Long ledgerId, String status) {
         QuarkusTransaction.requiringNew().run(() -> {
             EventProcessingLedgerEntity entry = EventProcessingLedgerEntity.findById(ledgerId);
             if (entry != null) {
-                entry.status = "completed";
+                entry.status = status;
                 entry.errorMessage = null;
+                entry.nextAttemptAt = null;
                 entry.processedOn = Instant.now();
             }
         });
     }
 
     /**
-     * Marks a ledger entry failed. When this failure used up the last allowed attempt,
-     * the error message says retries are exhausted and a single WARN is logged (the
-     * retry query skips the entry from then on, so this happens only once).
+     * Fails the current attempt of a ledger entry. Below the cap the entry is {@code failed}
+     * and due again after the backoff delay. When this was the last allowed attempt the
+     * entry is {@code exhausted}: the error message says retries gave up and a single WARN
+     * is logged (exhausted entries are never selected again).
      */
     private void failLedgerEntry(Long ledgerId, String errorMessage) {
         QuarkusTransaction.requiringNew().run(() -> {
             EventProcessingLedgerEntity entry = EventProcessingLedgerEntity.findById(ledgerId);
             if (entry != null) {
-                long attempts = RoutingOutcomeEntity.count(
-                        "ledgerId = ?1 and status = 'failed'", ledgerId);
-                String suffix = attempts >= maxAttempts
-                        ? " (giving up after " + attempts + " attempts)" : "";
+                int attempts = entry.attemptCount;
+                boolean exhausted = attempts >= maxAttempts;
+                String suffix = exhausted ? " (giving up after " + attempts + " attempts)" : "";
                 String message = errorMessage != null ? errorMessage : "Unknown error";
                 int room = 2000 - suffix.length();
-                entry.status = "failed";
+                Instant now = Instant.now();
+                entry.status = exhausted ? "exhausted" : "failed";
                 entry.errorMessage = message.substring(0, Math.min(message.length(), room))
                         + suffix;
-                entry.processedOn = Instant.now();
-                if (!suffix.isEmpty()) {
+                entry.processedOn = now;
+                entry.nextAttemptAt = exhausted ? null : now.plus(backoffDelay(attempts));
+                if (exhausted) {
                     LOG.warnf("Giving up on event %s / subscription %d after %d failed attempts: %s",
                             entry.eventId, entry.subscriptionId, attempts, message);
                 }
@@ -356,10 +475,35 @@ public class EventStreamOrchestrator {
         });
     }
 
+    /**
+     * Makes a {@code failed} or {@code exhausted} ledger entry due immediately. An exhausted
+     * entry gets exactly one more attempt: it is at the cap, so if that attempt fails it is
+     * exhausted again. Attempt numbers keep increasing, so the history stays intact.
+     *
+     * @param ledgerId the ledger entry to retry
+     * @return the updated entry, or null if it does not exist
+     * @throws IllegalStateException if the entry is neither failed nor exhausted
+     */
+    public EventProcessingLedgerEntity retryNow(Long ledgerId) {
+        return QuarkusTransaction.requiringNew().call(() -> {
+            EventProcessingLedgerEntity entry = EventProcessingLedgerEntity.findById(ledgerId);
+            if (entry == null) return null;
+            if (!"failed".equals(entry.status) && !"exhausted".equals(entry.status)) {
+                throw new IllegalStateException("Ledger entry " + ledgerId + " is "
+                        + entry.status + "; only failed or exhausted entries can be retried");
+            }
+            entry.status = "failed";
+            entry.nextAttemptAt = Instant.now();
+            LOG.infof("Manual retry requested for event %s / subscription %d (after %d attempts)",
+                    entry.eventId, entry.subscriptionId, entry.attemptCount);
+            return entry;
+        });
+    }
+
     // ── Routing ─────────────────────────────────────────────────
 
     private void routeEvent(StreamEventEntity event, SubscriptionWithFilters sub,
-                             Map<String, Object> eventMap, Long ledgerId) {
+                             Map<String, Object> eventMap, Long ledgerId, int attempt) {
         if (sub.routing == null || sub.routing.isEmpty()) {
             LOG.debugf("Event %s matched subscription '%s' but no routing rules configured",
                     event.id, sub.name);
@@ -402,6 +546,7 @@ public class EventStreamOrchestrator {
                 };
                 if (outcome != null) {
                     outcome.ledgerId = ledgerId;
+                    outcome.attemptNumber = attempt;
                     outcome.routingType = rule.type();
                     outcome.createdOn = Instant.now();
                     QuarkusTransaction.requiringNew().run(() -> persistOutcome(outcome));
@@ -413,6 +558,7 @@ public class EventStreamOrchestrator {
                     RoutingOutcomeEntity failedOutcome = e instanceof RoutingFailedException rfe
                             ? rfe.outcome() : new RoutingOutcomeEntity();
                     failedOutcome.ledgerId = ledgerId;
+                    failedOutcome.attemptNumber = attempt;
                     failedOutcome.routingType = rule.type();
                     failedOutcome.status = "failed";
                     if (failedOutcome.errorMessage == null) {

@@ -5556,6 +5556,56 @@
         }
       ]
     },
+    "/stream/events/{eventId}/processing/{ledgerId}/retry": {
+      "post": {
+        "tags": [
+          "StreamEvents"
+        ],
+        "summary": "Retry a failed or exhausted processing entry",
+        "description": "Makes the entry due immediately. An exhausted entry gets one more attempt; if it fails again it is exhausted again.",
+        "operationId": "retryEventProcessing",
+        "responses": {
+          "200": {
+            "description": "The entry, due for retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventProcessingEntry"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Event or processing entry not found"
+          },
+          "409": {
+            "description": "The entry is not failed or exhausted"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "eventId",
+          "in": "path",
+          "description": "Stream event ID",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        {
+          "name": "ledgerId",
+          "in": "path",
+          "description": "Processing (ledger) entry ID",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
     "/subscriptions": {
       "get": {
         "tags": [
@@ -10004,7 +10054,7 @@
           },
           "status": {
             "type": "string",
-            "description": "pending, completed, skipped, or failed"
+            "description": "pending (an attempt is in progress), completed, skipped, failed (the last attempt failed; retried at nextAttemptAt) or exhausted (the last allowed attempt failed; no more automatic retries)"
           },
           "errorMessage": {
             "type": "string"
@@ -10030,6 +10080,26 @@
           "processedOn": {
             "format": "date-time",
             "type": "string"
+          },
+          "attemptCount": {
+            "format": "int32",
+            "type": "integer",
+            "description": "Routing attempts made so far, the first try included"
+          },
+          "maxAttempts": {
+            "format": "int32",
+            "type": "integer",
+            "description": "Configured maximum attempts (axiom.stream-pipeline.max-attempts). A manual retry of an exhausted entry allows one attempt beyond it."
+          },
+          "lastAttemptAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "When the last attempt started"
+          },
+          "nextAttemptAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "When a failed entry is retried next; absent for every other status"
           }
         }
       },
@@ -10039,6 +10109,19 @@
           "type": {
             "type": "string",
             "description": "Routing type that produced this outcome: manager, workflow-dispatch, create-workflow, invoke-action, or processing (a failure outside any routing rule, e.g. building the event context)"
+          },
+          "status": {
+            "type": "string",
+            "description": "completed or failed"
+          },
+          "attemptNumber": {
+            "format": "int32",
+            "type": "integer",
+            "description": "Ledger attempt (1-based) that recorded this outcome"
+          },
+          "errorMessage": {
+            "type": "string",
+            "description": "Error of a failed outcome"
           },
           "summary": {
             "type": "string"

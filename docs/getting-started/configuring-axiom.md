@@ -104,7 +104,9 @@ rather than executed automatically.
 | Property | Default | Description |
 |----------|---------|--------------|
 | `axiom.stream-pipeline.poll-interval` | `5s` | How often the event stream orchestrator evaluates unprocessed (event, subscription) pairs |
-| `axiom.stream-pipeline.max-attempts` | `3` | Maximum routing attempts (first try plus retries) for an (event, subscription) pair; after that the ledger entry stays `failed` and is no longer retried. Each Manager retry is a full AI call, so a higher value multiplies the cost of a failing Manager |
+| `axiom.stream-pipeline.max-attempts` | `3` | Maximum routing attempts (first try plus retries) for an (event, subscription) pair; when the last allowed attempt fails the ledger entry becomes `exhausted` and is no longer retried automatically (it can be retried manually, which allows one more attempt). Each Manager retry is a full AI call, so a higher value multiplies the cost of a failing Manager |
+| `axiom.stream-pipeline.retry-initial-delay` | `30s` | Delay before the first retry of a failed entry; each later retry doubles it (exponential backoff). Quarkus duration format (`30s`, `5m`, `PT30S`) |
+| `axiom.stream-pipeline.retry-max-delay` | `1h` | Upper bound of the delay between two attempts |
 
 ### Scheduled Jobs
 

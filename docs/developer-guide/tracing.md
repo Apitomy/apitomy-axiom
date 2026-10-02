@@ -198,7 +198,7 @@ Every unit of work ends with exactly one trace in a final state (`completed` or 
 | Scheduled job run | `ScheduledJobExecutionService` when the agent finishes | No agent / startup error: run is `Failed`, trace and AI node closed as `failed`, `run.traceId` still set |
 | Report | `ReportExecutionService` when the agent finishes | No agent / startup error: report is `Failed` (not left `Pending`), trace closed as `failed`, `report.traceId` still set |
 | Invoke-action task | `TaskTraceFinalizer` when the task reaches a final state | Error before the task is created: trace closed as `failed` |
-| Manager evaluation | Last task created by the evaluation (`TaskTraceFinalizer`); the orchestrator only completes it when no task node is open | Manager failure (AI error or unparseable output): trace and `manager-evaluation` node closed as `failed`, outcome and ledger entry `failed` (retried up to `axiom.stream-pipeline.max-attempts`) |
+| Manager evaluation | Last task created by the evaluation (`TaskTraceFinalizer`); the orchestrator only completes it when no task node is open | Manager failure (AI error or unparseable output): trace and `manager-evaluation` node closed as `failed`, outcome and ledger entry `failed` (retried with backoff up to `axiom.stream-pipeline.max-attempts`, then `exhausted`) |
 | Workflow run | `WorkflowExecutionService` when the run is terminal (including runs that finish synchronously on start) | — |
 
 `TaskTraceFinalizer` is used by both the agent and script task paths (including `failTask`). It always
@@ -236,10 +236,11 @@ event-ingested             root, completed on creation
   is intended: failing the trace and retrying would create duplicate tasks for the decisions that succeeded.
 - When the evaluation fails, the `manager-evaluation` node and the trace are closed as `failed`, the
   routing outcome is `failed` with the error (and keeps the trace ID), and the ledger entry is `failed`
-  so `retryFailedEntries` retries it. Each retry creates a new trace. Retries are capped by
-  `axiom.stream-pipeline.max-attempts` (default 3, counting the first try): attempts are counted as the
-  failed `routing_outcome` rows linked to the ledger entry, and once the cap is reached the entry stays
-  `failed` with "(giving up after N attempts)" appended to its error message.
+  so `retryFailedEntries` retries it once its backoff delay has passed. Each retry creates a new trace,
+  and its routing outcome records the attempt number. Retries are capped by
+  `axiom.stream-pipeline.max-attempts` (default 3, counting the first try, tracked in the ledger's
+  `attempt_count`): when the last attempt fails the entry becomes `exhausted` with "(giving up after N
+  attempts)" appended to its error message. See the event sourcing design for the backoff.
 - An empty decision list is a success: outcome `completed` with summary `No decisions`, trace `completed`.
 - Each decision is recorded as a `routing_outcome_item` (task, ignored, escalated, or decision for an
   unknown type) whose `trace_node_id` is the decision's `manager-decision` node, so the event detail page

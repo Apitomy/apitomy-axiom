@@ -2,6 +2,7 @@ package io.apitomy.axiom.app.rest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.StreamResource;
+import io.apitomy.axiom.app.EventStreamOrchestrator;
 import io.apitomy.axiom.api.beans.Actor;
 import io.apitomy.axiom.api.beans.EventProcessingEntry;
 import io.apitomy.axiom.api.beans.EventProcessingOutcome;
@@ -47,6 +48,9 @@ public class StreamEventsResourceImpl implements StreamResource {
 
     @Inject
     ObjectMapper objectMapper;
+
+    @Inject
+    EventStreamOrchestrator orchestrator;
 
     @Override
     public StreamEventSearchResults listStreamEvents(BigInteger page, BigInteger limit,
@@ -131,6 +135,43 @@ public class StreamEventsResourceImpl implements StreamResource {
 
         List<EventProcessingLedgerEntity> entries = EventProcessingLedgerEntity
                 .find("eventId = ?1 ORDER BY createdOn ASC", uuid).list();
+        List<EventProcessingEntry> items = toProcessingEntries(entries);
+        EventProcessingSearchResults results = new EventProcessingSearchResults();
+        results.setItems(items);
+        results.setTotalCount((long) items.size());
+        return results;
+    }
+
+    @Override
+    public EventProcessingEntry retryEventProcessing(String eventId, long ledgerId) {
+        UUID uuid;
+        try {
+            uuid = UUID.fromString(eventId);
+        } catch (IllegalArgumentException e) {
+            throw new WebApplicationException("Invalid event ID: " + eventId, 400);
+        }
+        EventProcessingLedgerEntity existing = EventProcessingLedgerEntity.findById(ledgerId);
+        if (existing == null || !uuid.equals(existing.eventId)) {
+            throw new WebApplicationException("Processing entry " + ledgerId
+                    + " not found for event " + eventId, 404);
+        }
+        EventProcessingLedgerEntity retried;
+        try {
+            retried = orchestrator.retryNow(ledgerId);
+        } catch (IllegalStateException e) {
+            throw new WebApplicationException(e.getMessage(), 409);
+        }
+        if (retried == null) {
+            throw new WebApplicationException("Processing entry not found: " + ledgerId, 404);
+        }
+        return toProcessingEntries(List.of(retried)).get(0);
+    }
+
+    /**
+     * Converts ledger entries to API beans with their subscription, routing rules and the
+     * outcomes of every attempt.
+     */
+    private List<EventProcessingEntry> toProcessingEntries(List<EventProcessingLedgerEntity> entries) {
 
         // Load subscriptions in batch (for names and routing rules)
         List<Long> subIds = entries.stream().map(e -> e.subscriptionId).distinct().toList();
@@ -143,14 +184,12 @@ public class StreamEventsResourceImpl implements StreamResource {
             }
         }
 
-        // Load routing outcomes for completed entries
-        List<Long> completedLedgerIds = entries.stream()
-                .filter(e -> "completed".equals(e.status))
-                .map(e -> e.id).toList();
+        // Load the routing outcomes of every attempt of every entry
+        List<Long> ledgerIds = entries.stream().map(e -> e.id).toList();
         Map<Long, List<RoutingOutcomeEntity>> outcomesByLedger = new HashMap<>();
-        if (!completedLedgerIds.isEmpty()) {
+        if (!ledgerIds.isEmpty()) {
             List<RoutingOutcomeEntity> allOutcomes = RoutingOutcomeEntity
-                    .find("ledgerId IN ?1 ORDER BY createdOn ASC", completedLedgerIds).list();
+                    .find("ledgerId IN ?1 ORDER BY createdOn ASC, id ASC", ledgerIds).list();
             for (RoutingOutcomeEntity o : allOutcomes) {
                 outcomesByLedger.computeIfAbsent(o.ledgerId, k -> new java.util.ArrayList<>()).add(o);
             }
@@ -215,7 +254,7 @@ public class StreamEventsResourceImpl implements StreamResource {
                     .forEach(r -> runTraceIds.put(r.id, r.traceId));
         }
 
-        List<EventProcessingEntry> items = entries.stream().map(e -> {
+        return entries.stream().map(e -> {
             EventProcessingEntry entry = new EventProcessingEntry();
             entry.setId(e.id);
             entry.setSubscriptionId(e.subscriptionId);
@@ -225,6 +264,10 @@ public class StreamEventsResourceImpl implements StreamResource {
             entry.setErrorMessage(e.errorMessage);
             if (e.createdOn != null) entry.setCreatedOn(Date.from(e.createdOn));
             if (e.processedOn != null) entry.setProcessedOn(Date.from(e.processedOn));
+            entry.setAttemptCount(e.attemptCount);
+            entry.setMaxAttempts(orchestrator.maxAttempts());
+            if (e.lastAttemptAt != null) entry.setLastAttemptAt(Date.from(e.lastAttemptAt));
+            if (e.nextAttemptAt != null) entry.setNextAttemptAt(Date.from(e.nextAttemptAt));
 
             // Add routing rules from subscription
             if (sub != null && sub.routing != null && !sub.routing.isBlank()) {
@@ -244,6 +287,9 @@ public class StreamEventsResourceImpl implements StreamResource {
             List<EventProcessingOutcome> outcomes = entryOutcomes.stream().map(o -> {
                 EventProcessingOutcome outcome = new EventProcessingOutcome();
                 outcome.setType(o.routingType);
+                outcome.setStatus(o.status);
+                outcome.setAttemptNumber(o.attemptNumber);
+                outcome.setErrorMessage(o.errorMessage);
                 outcome.setSummary(o.summary);
                 outcome.setProjectId(o.projectId);
                 if (o.projectId != null) outcome.setProjectName(projectNames.get(o.projectId));
@@ -261,11 +307,6 @@ public class StreamEventsResourceImpl implements StreamResource {
 
             return entry;
         }).toList();
-
-        EventProcessingSearchResults results = new EventProcessingSearchResults();
-        results.setItems(items);
-        results.setTotalCount((long) items.size());
-        return results;
     }
 
     private static EventProcessingOutcomeItem toItemBean(RoutingOutcomeItemEntity i,

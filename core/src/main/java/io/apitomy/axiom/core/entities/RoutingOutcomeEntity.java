@@ -50,6 +50,13 @@ public class RoutingOutcomeEntity extends PanacheEntity {
     public Instant createdOn;
 
     /**
+     * Ledger attempt (1-based) that recorded this outcome; null only for outcomes whose
+     * attempt could not be derived.
+     */
+    @Column(name = "attempt_number")
+    public Integer attemptNumber;
+
+    /**
      * Items to persist with this outcome. Not mapped: filled by the routing code and
      * written to {@code routing_outcome_item} after the outcome is persisted.
      */
