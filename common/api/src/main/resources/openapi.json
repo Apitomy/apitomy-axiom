@@ -9973,7 +9973,7 @@
         "properties": {
           "type": {
             "type": "string",
-            "description": "Routing type that produced this outcome: manager, workflow-dispatch, create-workflow, invoke-action"
+            "description": "Routing type that produced this outcome: manager, workflow-dispatch, create-workflow, invoke-action, or processing (a failure outside any routing rule, e.g. building the event context)"
           },
           "summary": {
             "type": "string"

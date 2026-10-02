@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { Fragment, useState, useEffect, useCallback } from "react";
+import { Link } from "react-router-dom";
 import {
     Button,
     EmptyState,
@@ -11,7 +12,7 @@ import {
     ToolbarContent,
     ToolbarItem,
 } from "@patternfly/react-core";
-import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
+import { ExpandableRowContent, Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import {
     type ChipFilterCriteria,
@@ -19,7 +20,13 @@ import {
     ChipFilterInput,
     FilterChips,
 } from "@apitomy/common-ui-components";
-import { type ActivityLogEntry, fetchActivityLog } from "../config/api";
+import {
+    type ActivityLogEntry,
+    type TraceDetail,
+    fetchActivityLog,
+    fetchTraceDetail,
+} from "../config/api";
+import { STATUS_COLORS } from "../components/TraceGraphNode";
 import { ExecutionLogModal } from "../components/ExecutionLogModal";
 
 const MANAGER_ENTRY_TYPES = "manager-evaluated,manager-error,manager-skipped,manager-escalation,manager-no-decision";
@@ -95,6 +102,16 @@ export function ManagerDecisionsPage() {
         setPage(1);
     };
 
+    // Rows (activity IDs) whose trace decisions are expanded
+    const [expanded, setExpanded] = useState<Set<number>>(new Set());
+    const toggleExpanded = (id: number) => {
+        setExpanded((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    };
+
     const handleViewLog = (activityId: number) => {
         setLogActivityId(activityId);
         setIsLogModalOpen(true);
@@ -160,48 +177,86 @@ export function ManagerDecisionsPage() {
                     <Table aria-label="Manager Decisions" variant="compact">
                         <Thead>
                             <Tr>
+                                <Th screenReaderText="Show decisions" />
                                 <Th>Time</Th>
                                 <Th>Event</Th>
                                 <Th>Type</Th>
                                 <Th>Summary</Th>
+                                <Th>Trace</Th>
                                 <Th />
                             </Tr>
                         </Thead>
                         <Tbody>
-                            {entries.map((entry) => (
-                                <Tr key={entry.id}>
-                                    <Td style={{ whiteSpace: "nowrap" }}>
-                                        {new Date(entry.createdOn).toLocaleString()}
-                                    </Td>
-                                    <Td>
-                                        {entry.eventId ? (
-                                            <Label isCompact color="blue" title={entry.eventId}>
-                                                {entry.eventId.substring(0, 8)}
-                                            </Label>
-                                        ) : "—"}
-                                    </Td>
-                                    <Td>
-                                        <Label isCompact
-                                            color={ENTRY_TYPE_COLORS[entry.entryType] || "grey"}>
-                                            {entry.entryType}
-                                        </Label>
-                                    </Td>
-                                    <Td>
-                                        {entry.summary && entry.summary.length > 120
-                                            ? entry.summary.substring(0, 117) + "..."
-                                            : entry.summary}
-                                    </Td>
-                                    <Td>
-                                        {(entry.entryType === "manager-evaluated"
-                                                || entry.entryType === "manager-error") && (
-                                            <Button variant="link" isInline
-                                                onClick={() => handleViewLog(entry.id)}>
-                                                View Log
-                                            </Button>
+                            {entries.map((entry, rowIndex) => {
+                                const canExpand = entry.entryType === "manager-evaluated"
+                                    && !!entry.traceId;
+                                const isExpanded = expanded.has(entry.id);
+                                return (
+                                    <Fragment key={entry.id}>
+                                        <Tr>
+                                            <Td expand={canExpand ? {
+                                                rowIndex,
+                                                isExpanded,
+                                                onToggle: () => toggleExpanded(entry.id),
+                                            } : undefined} />
+                                            <Td style={{ whiteSpace: "nowrap" }}>
+                                                {new Date(entry.createdOn).toLocaleString()}
+                                            </Td>
+                                            <Td>
+                                                {entry.eventId ? (
+                                                    <Link to={`/events/stream/${entry.eventId}`}
+                                                        title={entry.eventId}>
+                                                        <Label isCompact color="blue">
+                                                            {entry.eventId.substring(0, 8)}
+                                                        </Label>
+                                                    </Link>
+                                                ) : "—"}
+                                            </Td>
+                                            <Td>
+                                                <Label isCompact
+                                                    color={ENTRY_TYPE_COLORS[entry.entryType] || "grey"}>
+                                                    {entry.entryType}
+                                                </Label>
+                                            </Td>
+                                            <Td>
+                                                {entry.summary && entry.summary.length > 120
+                                                    ? entry.summary.substring(0, 117) + "..."
+                                                    : entry.summary}
+                                            </Td>
+                                            <Td>
+                                                {entry.traceId ? (
+                                                    <Link to={`/logs/traces/${entry.traceId}`}
+                                                        title={entry.traceId}
+                                                        data-testid={`manager-trace-link-${entry.id}`}>
+                                                        {entry.traceId.substring(0, 8)}
+                                                    </Link>
+                                                ) : "—"}
+                                            </Td>
+                                            <Td>
+                                                {(entry.entryType === "manager-evaluated"
+                                                        || entry.entryType === "manager-error") && (
+                                                    <Button variant="link" isInline
+                                                        onClick={() => handleViewLog(entry.id)}>
+                                                        View Log
+                                                    </Button>
+                                                )}
+                                            </Td>
+                                        </Tr>
+                                        {canExpand && (
+                                            <Tr isExpanded={isExpanded}>
+                                                <Td colSpan={7}>
+                                                    <ExpandableRowContent>
+                                                        {isExpanded && entry.traceId && (
+                                                            <ManagerTraceDecisions
+                                                                traceId={entry.traceId} />
+                                                        )}
+                                                    </ExpandableRowContent>
+                                                </Td>
+                                            </Tr>
                                         )}
-                                    </Td>
-                                </Tr>
-                            ))}
+                                    </Fragment>
+                                );
+                            })}
                         </Tbody>
                     </Table>
                 )}
@@ -214,5 +269,62 @@ export function ManagerDecisionsPage() {
             />
 
         </PageSection>
+    );
+}
+
+/**
+ * Shows the decisions recorded in a Manager evaluation trace (one `manager-decision` node per
+ * decision, holding its reasoning) and the tasks each decision created.
+ */
+function ManagerTraceDecisions({ traceId }: { traceId: string }) {
+    const [detail, setDetail] = useState<TraceDetail | null>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        fetchTraceDetail(traceId)
+            .then(setDetail)
+            .catch((e: Error) => setError(e.message));
+    }, [traceId]);
+
+    if (error) return <div>Failed to load trace: {error}</div>;
+    if (!detail) return <div>Loading decisions...</div>;
+
+    const decisions = detail.nodes.filter((n) => n.nodeType === "manager-decision");
+    if (decisions.length === 0) {
+        return <div>No decisions recorded in this trace.</div>;
+    }
+    return (
+        <ul style={{ listStyle: "none", paddingLeft: 0, margin: 0 }}>
+            {decisions.map((d) => {
+                const tasks = detail.nodes.filter(
+                    (n) => n.parentNodeId === d.id && n.nodeType === "task");
+                return (
+                    <li key={d.id} style={{ marginBottom: "8px" }}
+                        data-testid={`manager-decision-${d.id}`}>
+                        <Label isCompact color={STATUS_COLORS[d.status] || "grey"}>
+                            {d.status}
+                        </Label>{" "}
+                        {d.summary}
+                        {tasks.map((t) => (
+                            <div key={t.id} style={{ marginLeft: "24px" }}>
+                                <Label isCompact color={STATUS_COLORS[t.status] || "grey"}>
+                                    {t.status}
+                                </Label>{" "}
+                                {t.summary}
+                                {t.entityId ? ` (task #${t.entityId})` : ""}
+                                {detail.trace.projectId && (
+                                    <>
+                                        {" — "}
+                                        <Link to={`/projects/${detail.trace.projectId}`}>
+                                            project #{detail.trace.projectId}
+                                        </Link>
+                                    </>
+                                )}
+                            </div>
+                        ))}
+                    </li>
+                );
+            })}
+        </ul>
     );
 }

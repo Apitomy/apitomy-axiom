@@ -195,6 +195,52 @@ public class TraceService {
     }
 
     /**
+     * Completes a trace node as {@code failed} and prefixes its summary with the error
+     * message, so the failure reason is visible on the node itself.
+     *
+     * @param nodeId       the node to fail
+     * @param errorMessage the failure reason (nullable)
+     */
+    public void failNode(Long nodeId, String errorMessage) {
+        failNode(nodeId, errorMessage, null, null);
+    }
+
+    /**
+     * Completes a trace node as {@code failed}, prefixes its summary with the error
+     * message and, if given, sets its entity reference, all in one update.
+     *
+     * @param nodeId       the node to fail
+     * @param errorMessage the failure reason (nullable)
+     * @param entityType   type of the referenced detail entity (nullable; kept if null)
+     * @param entityId     ID of the referenced detail entity (nullable)
+     */
+    public void failNode(Long nodeId, String errorMessage, String entityType, Long entityId) {
+        UUID traceId = QuarkusTransaction.requiringNew().call(() -> {
+            TraceNodeEntity node = TraceNodeEntity.findById(nodeId);
+            if (node == null) {
+                LOG.warnf("Trace node %d not found for failure", nodeId);
+                return null;
+            }
+            Instant now = Instant.now();
+            node.completedOn = now;
+            node.durationMs = Duration.between(node.startedOn, now).toMillis();
+            node.status = "failed";
+            if (entityType != null) {
+                node.entityType = entityType;
+                node.entityId = toEntityRef(entityId);
+            }
+            if (errorMessage != null && !errorMessage.isBlank()) {
+                // Error first so it survives truncation of long summaries
+                node.summary = truncate("Failed: " + errorMessage + " — " + node.summary, 1024);
+            }
+            return node.traceId;
+        });
+        if (traceId != null) {
+            sseEvents.fire(SseEvent.traceUpdated(traceId));
+        }
+    }
+
+    /**
      * Completes the trace itself by setting its completion timestamp and
      * final status.
      *
@@ -211,6 +257,25 @@ public class TraceService {
             trace.completedOn = Instant.now();
             trace.status = status;
             LOG.debugf("Completed trace %s with status %s", traceId, status);
+        });
+        sseEvents.fire(SseEvent.traceUpdated(traceId));
+    }
+
+    /**
+     * Associates a trace with a project after it was created (for example when the
+     * project only becomes known while the trace is running).
+     *
+     * @param traceId   the trace to update
+     * @param projectId the project ID to set
+     */
+    public void setProjectId(UUID traceId, Long projectId) {
+        QuarkusTransaction.requiringNew().run(() -> {
+            TraceEntity trace = TraceEntity.findById(traceId);
+            if (trace == null) {
+                LOG.warnf("Trace %s not found for project association", traceId);
+                return;
+            }
+            trace.projectId = projectId;
         });
         sseEvents.fire(SseEvent.traceUpdated(traceId));
     }

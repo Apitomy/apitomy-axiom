@@ -19,6 +19,7 @@ import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.tracing.TraceContext;
 import io.apitomy.axiom.core.tracing.TraceService;
 import io.apitomy.axiom.manager.ManagerDecision;
+import io.apitomy.axiom.manager.ManagerEvaluationResult;
 import io.apitomy.axiom.manager.ManagerService;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.InjectMock;
@@ -123,10 +124,13 @@ class TraceCorrelationTest {
         });
         traceService.addNode(ctx, "task", "in-progress", "Task", "task", taskId);
 
+        Instant start = Instant.now();
         taskExecutionService.onTaskCompleted(taskId, AgentResult.success("ok"));
 
+        // Scope to rows written here: other tests insert fixture rows with hard-coded task IDs
         List<ActivityLogEntity> rows = QuarkusTransaction.requiringNew().call(() ->
-                ActivityLogEntity.<ActivityLogEntity>list("taskId", taskId));
+                ActivityLogEntity.<ActivityLogEntity>list("taskId = ?1 and createdOn >= ?2",
+                        taskId, start));
         assertFalse(rows.isEmpty(), "Task completion must write an activity row");
         rows.forEach(r -> assertEquals(ctx.traceId(), r.traceId,
                 "Activity row " + r.entryType + " must carry the task trace"));
@@ -257,9 +261,10 @@ class TraceCorrelationTest {
     void managerIgnoreActivityCarriesRoutingTrace() {
         Mockito.when(managerService.meetsConfidenceThreshold(ArgumentMatchers.any()))
                 .thenReturn(true);
-        Mockito.when(managerService.evaluateStreamEvent(ArgumentMatchers.any()))
-                .thenReturn(List.of(new ManagerDecision("ignore", null, null, null, 0.9,
-                        "not relevant", null, null)));
+        Mockito.when(managerService.evaluateStreamEvent(ArgumentMatchers.any(),
+                        ArgumentMatchers.any()))
+                .thenReturn(ManagerEvaluationResult.success(List.of(new ManagerDecision(
+                        "ignore", null, null, null, 0.9, "not relevant", null, null)), null));
 
         UUID eventId = UUID.randomUUID();
         QuarkusTransaction.requiringNew().run(() -> {

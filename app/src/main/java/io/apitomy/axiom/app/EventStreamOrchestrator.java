@@ -16,7 +16,9 @@ import io.apitomy.axiom.core.events.model.RoutingRule;
 import io.apitomy.axiom.core.filters.SubscriptionFilterEvaluator;
 import io.apitomy.axiom.core.lifecycle.ProjectStatus;
 import io.apitomy.axiom.core.services.WorkspaceService;
+import io.apitomy.axiom.core.tracing.TraceContext;
 import io.apitomy.axiom.manager.ManagerDecision;
+import io.apitomy.axiom.manager.ManagerEvaluationResult;
 import io.apitomy.axiom.manager.ManagerService;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.annotation.PreDestroy;
@@ -24,12 +26,15 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import io.quarkus.narayana.jta.QuarkusTransaction;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -51,6 +56,12 @@ public class EventStreamOrchestrator {
 
     private static final Logger LOG = Logger.getLogger(EventStreamOrchestrator.class);
     private static final int BATCH_SIZE = 50;
+
+    /**
+     * Routing type of the failed outcome written when processing fails outside a routing
+     * rule (it is not a rule type, so it never matches a rule when skipping on retry).
+     */
+    static final String ROUTING_TYPE_PROCESSING = "processing";
 
     @Inject
     SubscriptionFilterEvaluator filterEvaluator;
@@ -78,6 +89,13 @@ public class EventStreamOrchestrator {
 
     @Inject
     io.apitomy.axiom.core.tracing.TraceService traceService;
+
+    /**
+     * Maximum routing attempts per ledger entry. Attempts are counted as the failed
+     * routing outcomes linked to the entry (no attempt column yet, see #422).
+     */
+    @ConfigProperty(name = "axiom.stream-pipeline.max-attempts", defaultValue = "3")
+    int maxAttempts;
 
     private volatile boolean shuttingDown = false;
     private volatile boolean startupRecoveryDone = false;
@@ -158,13 +176,7 @@ public class EventStreamOrchestrator {
                                               SubscriptionWithFilters sub) {
         try {
             // Build event map for filter evaluation
-            JsonNode payloadNode = null;
-            try {
-                payloadNode = objectMapper.readTree(event.payload);
-            } catch (Exception e) {
-                LOG.warnf("Failed to parse payload for event %s: %s", event.id, e.getMessage());
-            }
-            Map<String, Object> eventMap = buildEventMap(event, payloadNode);
+            Map<String, Object> eventMap = buildEventMap(event, parsePayload(event));
 
             // Evaluate filter
             boolean matched = filterEvaluator.matches(sub.filterExpression, eventMap);
@@ -196,8 +208,13 @@ public class EventStreamOrchestrator {
      */
     private void retryFailedEntries(List<SubscriptionWithFilters> subscriptions) {
         List<EventProcessingLedgerEntity> failedEntries = QuarkusTransaction.requiringNew().call(() ->
+            // Exclude entries that used up their attempts in the query itself, so they
+            // can never fill the batch and starve retryable entries.
             EventProcessingLedgerEntity.<EventProcessingLedgerEntity>find(
-                "status = ?1 ORDER BY createdOn ASC", "failed")
+                "FROM EventProcessingLedgerEntity l WHERE l.status = ?1 AND "
+                        + "(SELECT COUNT(o) FROM RoutingOutcomeEntity o "
+                        + "WHERE o.ledgerId = l.id AND o.status = 'failed') < ?2 "
+                        + "ORDER BY l.createdOn ASC", "failed", (long) maxAttempts)
                 .page(0, BATCH_SIZE).list()
         );
 
@@ -220,9 +237,14 @@ public class EventStreamOrchestrator {
                 continue;
             }
 
+            Map<String, Object> eventMap;
             try {
-                JsonNode payloadNode = objectMapper.readTree(event.payload);
-                Map<String, Object> eventMap = buildEventMap(event, payloadNode);
+                eventMap = buildEventMap(event, parsePayload(event));
+            } catch (Exception e) {
+                failProcessing(entry.id, e);
+                continue;
+            }
+            try {
                 routeEvent(event, sub, eventMap, entry.id);
                 completeLedgerEntry(entry.id);
                 LOG.infof("Retry succeeded for event %s / subscription %d", event.id, sub.id);
@@ -230,6 +252,40 @@ public class EventStreamOrchestrator {
                 failLedgerEntry(entry.id, e.getMessage());
             }
         }
+    }
+
+    /**
+     * Parses the event payload, returning null (an empty payload map) if it is not valid
+     * JSON. The first pass and retries use the same rule, so a bad payload never fails a
+     * retry that the first pass would have routed.
+     */
+    private JsonNode parsePayload(StreamEventEntity event) {
+        try {
+            return event.payload != null ? objectMapper.readTree(event.payload) : null;
+        } catch (Exception e) {
+            LOG.warnf("Failed to parse payload for event %s: %s", event.id, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Records a failure that happened outside {@link #routeEvent} as a failed
+     * {@code processing} outcome, so it counts toward the attempt cap, then fails the
+     * ledger entry.
+     */
+    private void failProcessing(Long ledgerId, Exception e) {
+        String error = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+        LOG.warnf(e, "Event processing failed for ledger entry %d", ledgerId);
+        QuarkusTransaction.requiringNew().run(() -> {
+            RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
+            outcome.ledgerId = ledgerId;
+            outcome.routingType = ROUTING_TYPE_PROCESSING;
+            outcome.status = "failed";
+            outcome.errorMessage = truncate(error, 2000);
+            outcome.createdOn = Instant.now();
+            outcome.persist();
+        });
+        failLedgerEntry(ledgerId, error);
     }
 
     // ── Ledger entry management ─────────────────────────────────
@@ -268,15 +324,29 @@ public class EventStreamOrchestrator {
         });
     }
 
+    /**
+     * Marks a ledger entry failed. When this failure used up the last allowed attempt,
+     * the error message says retries are exhausted and a single WARN is logged (the
+     * retry query skips the entry from then on, so this happens only once).
+     */
     private void failLedgerEntry(Long ledgerId, String errorMessage) {
         QuarkusTransaction.requiringNew().run(() -> {
             EventProcessingLedgerEntity entry = EventProcessingLedgerEntity.findById(ledgerId);
             if (entry != null) {
+                long attempts = RoutingOutcomeEntity.count(
+                        "ledgerId = ?1 and status = 'failed'", ledgerId);
+                String suffix = attempts >= maxAttempts
+                        ? " (giving up after " + attempts + " attempts)" : "";
+                String message = errorMessage != null ? errorMessage : "Unknown error";
+                int room = 2000 - suffix.length();
                 entry.status = "failed";
-                entry.errorMessage = errorMessage != null
-                        ? errorMessage.substring(0, Math.min(errorMessage.length(), 2000))
-                        : null;
+                entry.errorMessage = message.substring(0, Math.min(message.length(), room))
+                        + suffix;
                 entry.processedOn = Instant.now();
+                if (!suffix.isEmpty()) {
+                    LOG.warnf("Giving up on event %s / subscription %d after %d failed attempts: %s",
+                            entry.eventId, entry.subscriptionId, attempts, message);
+                }
             }
         });
     }
@@ -291,7 +361,26 @@ public class EventStreamOrchestrator {
             return;
         }
 
+        // On a retry, skip rules that already completed for this ledger entry. Outcomes do
+        // not store the rule's index, so the k-th rule of a type is matched to the k-th
+        // completed outcome of that type. Rules run in order and stop at the first
+        // failure, so this is exact as long as the subscription's rules are unchanged.
+        Map<String, Long> completedByType = QuarkusTransaction.requiringNew().call(() -> {
+            Map<String, Long> counts = new HashMap<>();
+            RoutingOutcomeEntity.<RoutingOutcomeEntity>list(
+                    "ledgerId = ?1 and status = 'completed'", ledgerId)
+                    .forEach(o -> counts.merge(o.routingType, 1L, Long::sum));
+            return counts;
+        });
+        Map<String, Long> seenByType = new HashMap<>();
+
         for (RoutingRule rule : sub.routing) {
+            long occurrence = seenByType.merge(rule.type(), 1L, Long::sum);
+            if (occurrence <= completedByType.getOrDefault(rule.type(), 0L)) {
+                LOG.debugf("Skipping routing rule %s (#%d) for event %s: already completed",
+                        rule.type(), occurrence, event.id);
+                continue;
+            }
             try {
                 RoutingOutcomeEntity outcome = switch (rule.type()) {
                     case RoutingRule.TYPE_MANAGER -> routeToManager(event);
@@ -311,15 +400,18 @@ public class EventStreamOrchestrator {
                     QuarkusTransaction.requiringNew().run(() -> outcome.persist());
                 }
             } catch (Exception e) {
-                // Record failed outcome
+                // Record failed outcome (routing types may supply a pre-filled one, e.g.
+                // with the trace ID of the failed Manager evaluation)
                 QuarkusTransaction.requiringNew().run(() -> {
-                    RoutingOutcomeEntity failedOutcome = new RoutingOutcomeEntity();
+                    RoutingOutcomeEntity failedOutcome = e instanceof RoutingFailedException rfe
+                            ? rfe.outcome() : new RoutingOutcomeEntity();
                     failedOutcome.ledgerId = ledgerId;
                     failedOutcome.routingType = rule.type();
                     failedOutcome.status = "failed";
-                    failedOutcome.errorMessage = e.getMessage() != null
-                            ? e.getMessage().substring(0, Math.min(e.getMessage().length(), 2000))
-                            : "Unknown error";
+                    if (failedOutcome.errorMessage == null) {
+                        failedOutcome.errorMessage = e.getMessage() != null
+                                ? truncate(e.getMessage(), 2000) : "Unknown error";
+                    }
                     failedOutcome.createdOn = Instant.now();
                     failedOutcome.persist();
                 });
@@ -330,18 +422,21 @@ public class EventStreamOrchestrator {
     }
 
     private RoutingOutcomeEntity routeToManager(StreamEventEntity event) {
-        // Create a trace for this manager evaluation
-        io.apitomy.axiom.core.tracing.TraceContext traceCtx = null;
+        // Trace structure: event-ingested (root) → manager-evaluation → manager-decision
+        // (one per decision) → task (for create_task / script_action decisions)
+        TraceContext traceCtx = null;
         try {
             traceCtx = traceService.createTrace(
                     "manager",
                     "Manager evaluation: " + event.type + " — " + event.ref,
                     event.id, null, null,
-                    "manager-evaluation", "Manager evaluation: " + event.type,
+                    "event-ingested", "Event: " + event.type + " — " + event.ref,
                     null, null);
         } catch (Exception e) {
             LOG.warnf(e, "Failed to create trace for manager evaluation of event %s", event.id);
         }
+        Long evalNodeId = addTraceNode(traceCtx, "manager-evaluation",
+                "Manager evaluation: " + event.type);
 
         RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
         outcome.status = "completed";
@@ -349,45 +444,86 @@ public class EventStreamOrchestrator {
             outcome.traceId = traceCtx.traceId();
         }
 
-        List<ManagerDecision> decisions;
+        ManagerEvaluationResult evaluation;
         try {
-            decisions = managerService.evaluateStreamEvent(event);
+            evaluation = managerService.evaluateStreamEvent(event,
+                    traceCtx != null ? traceCtx.traceId() : null);
         } catch (RuntimeException e) {
-            completeTrace(traceCtx, "failed");
-            throw e;
+            throw failManagerRouting(outcome, traceCtx, evalNodeId, null,
+                    "Manager evaluation error: " + e.getMessage(), e);
         }
-        if (decisions == null || decisions.isEmpty()) {
+        if (evaluation == null || evaluation.failed()) {
+            String error = evaluation != null && evaluation.errorMessage() != null
+                    ? evaluation.errorMessage() : "Manager evaluation failed";
+            throw failManagerRouting(outcome, traceCtx, evalNodeId,
+                    evaluation != null ? evaluation.activityLogId() : null, error, null);
+        }
+        completeTraceNode(evalNodeId, "completed", evaluation.activityLogId());
+
+        List<ManagerDecision> decisions = evaluation.decisions();
+        if (decisions.isEmpty()) {
             LOG.debugf("Manager returned no decisions for stream event %s", event.id);
             outcome.summary = "No decisions";
             completeTrace(traceCtx, "completed");
             return outcome;
         }
 
-        // Build summary from decisions and capture first project/task created
+        // Decision nodes are children of the evaluation node; task nodes are children of
+        // the decision that created them.
+        if (traceCtx != null && evalNodeId != null) {
+            traceCtx.push(evalNodeId);
+        }
+        Set<Long> projectIds = new LinkedHashSet<>();
         StringBuilder summaryBuilder = new StringBuilder();
         for (ManagerDecision decision : decisions) {
+            String label = decisionLabel(decision);
+            if (summaryBuilder.length() > 0) summaryBuilder.append("; ");
+            summaryBuilder.append(label);
+
+            Long decisionNodeId = addTraceNode(traceCtx, "manager-decision",
+                    decisionNodeSummary(decision));
+            if (traceCtx != null && decisionNodeId != null) {
+                traceCtx.push(decisionNodeId);
+            }
             try {
                 ManagerDecisionResult result = processManagerDecision(event, decision, traceCtx);
-                if (summaryBuilder.length() > 0) summaryBuilder.append("; ");
-                summaryBuilder.append(decision.decision());
-                if (decision.actionType() != null) {
-                    summaryBuilder.append("(").append(decision.actionType()).append(")");
-                }
-                // Capture first project/task from decisions
+                completeTraceNode(decisionNodeId, "completed",
+                        result != null ? result.activityLogId() : null);
                 if (result != null) {
-                    if (outcome.projectId == null && result.projectId != null) {
-                        outcome.projectId = result.projectId;
+                    if (result.projectId() != null) {
+                        projectIds.add(result.projectId());
                     }
-                    if (outcome.taskId == null && result.taskId != null) {
-                        outcome.taskId = result.taskId;
+                    if (outcome.projectId == null && result.projectId() != null) {
+                        outcome.projectId = result.projectId();
+                    }
+                    if (outcome.taskId == null && result.taskId() != null) {
+                        outcome.taskId = result.taskId();
                     }
                 }
             } catch (Exception e) {
+                String error = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
                 LOG.warnf(e, "Failed to process Manager decision '%s' for event %s",
                         decision.decision(), event.id);
+                failDecisionNode(traceCtx, decisionNodeId, error);
+                summaryBuilder.append(" failed: ").append(error);
+            } finally {
+                if (traceCtx != null && decisionNodeId != null) {
+                    traceCtx.pop();
+                }
             }
         }
-        outcome.summary = summaryBuilder.toString();
+        if (traceCtx != null && evalNodeId != null) {
+            traceCtx.pop();
+        }
+        outcome.summary = truncate(summaryBuilder.toString(), 2000);
+
+        if (traceCtx != null && projectIds.size() == 1) {
+            try {
+                traceService.setProjectId(traceCtx.traceId(), projectIds.iterator().next());
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to set project on trace %s", traceCtx.traceId());
+            }
+        }
 
         // Tasks created by the Manager share this trace; TaskTraceFinalizer completes it
         // when the last of them finishes. Only complete it here if no task is open.
@@ -396,10 +532,99 @@ public class EventStreamOrchestrator {
     }
 
     /**
+     * Records a failed Manager evaluation: fails the evaluation node and the trace, marks
+     * the outcome failed, and returns an exception that makes {@link #routeEvent} persist
+     * this outcome and fail the ledger entry (so it is retried).
+     */
+    private RoutingFailedException failManagerRouting(RoutingOutcomeEntity outcome,
+                                                      TraceContext traceCtx, Long evalNodeId,
+                                                      Long activityLogId, String error,
+                                                      Throwable cause) {
+        LOG.warnf("Manager evaluation failed: %s", error);
+        if (evalNodeId != null) {
+            try {
+                traceService.failNode(evalNodeId, error,
+                        activityLogId != null ? "activity-log" : null, activityLogId);
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to record error on trace node %d", evalNodeId);
+            }
+        }
+        completeTrace(traceCtx, "failed");
+        outcome.status = "failed";
+        outcome.errorMessage = truncate(error, 2000);
+        outcome.summary = "Manager evaluation failed";
+        return new RoutingFailedException(error, outcome, cause);
+    }
+
+    /**
+     * Fails a decision node with the error, and fails any task node under it that was left
+     * open because the decision's transaction rolled back.
+     */
+    private void failDecisionNode(TraceContext traceCtx, Long decisionNodeId, String error) {
+        if (traceCtx == null || decisionNodeId == null) return;
+        try {
+            traceService.failNode(decisionNodeId, error);
+            List<Long> orphanTaskNodes = QuarkusTransaction.requiringNew().call(() ->
+                    io.apitomy.axiom.core.entities.TraceNodeEntity
+                            .<io.apitomy.axiom.core.entities.TraceNodeEntity>list(
+                                    "parentNodeId = ?1 and nodeType = 'task' and status = 'in-progress'",
+                                    decisionNodeId)
+                            .stream().map(n -> n.id).toList());
+            orphanTaskNodes.forEach(id -> traceService.completeNode(id, "failed"));
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to record decision failure on trace node %d", decisionNodeId);
+        }
+    }
+
+    private Long addTraceNode(TraceContext traceCtx, String nodeType, String summary) {
+        if (traceCtx == null) return null;
+        try {
+            return traceService.addNode(traceCtx, nodeType, "in-progress", summary, null, null);
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to add %s trace node to trace %s", nodeType, traceCtx.traceId());
+            return null;
+        }
+    }
+
+    private void completeTraceNode(Long nodeId, String status, Long activityLogId) {
+        if (nodeId == null) return;
+        try {
+            if (activityLogId != null) {
+                traceService.completeNode(nodeId, status, "activity-log", activityLogId);
+            } else {
+                traceService.completeNode(nodeId, status);
+            }
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to complete trace node %d", nodeId);
+        }
+    }
+
+    private static String decisionLabel(ManagerDecision decision) {
+        return decision.actionType() != null
+                ? decision.decision() + "(" + decision.actionType() + ")"
+                : decision.decision();
+    }
+
+    private String decisionNodeSummary(ManagerDecision decision) {
+        String prefix = managerService.meetsConfidenceThreshold(decision)
+                ? "Decision: " : "Escalated (low confidence): ";
+        return prefix + decisionLabel(decision)
+                + String.format(" [confidence %.0f%%]", decision.confidence() * 100)
+                + " — " + decision.reasoning();
+    }
+
+    private static String truncate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength - 3) + "...";
+    }
+
+    /**
      * Completes the trace unless it still has in-progress task nodes (which will
      * complete it when they finish) or has already been completed.
      */
-    private void completeTraceIfNoOpenTasks(io.apitomy.axiom.core.tracing.TraceContext traceCtx) {
+    private void completeTraceIfNoOpenTasks(TraceContext traceCtx) {
         if (traceCtx == null) return;
         try {
             boolean hasOpenTasks = QuarkusTransaction.requiringNew().call(() ->
@@ -422,7 +647,7 @@ public class EventStreamOrchestrator {
         }
     }
 
-    private void completeTrace(io.apitomy.axiom.core.tracing.TraceContext traceCtx, String status) {
+    private void completeTrace(TraceContext traceCtx, String status) {
         if (traceCtx == null) return;
         try {
             traceService.completeTrace(traceCtx.traceId(), status);
@@ -433,47 +658,56 @@ public class EventStreamOrchestrator {
 
     /**
      * Result of processing a single manager decision, capturing the IDs of any
-     * project/task created so they can be recorded in the routing outcome.
+     * project/task involved and the activity row written, so they can be recorded
+     * in the routing outcome and on the decision's trace node.
      */
-    record ManagerDecisionResult(Long projectId, Long taskId) {}
+    record ManagerDecisionResult(Long projectId, Long taskId, Long activityLogId) {}
+
+    /**
+     * Thrown by a routing type to fail routing while supplying the outcome to persist.
+     */
+    static final class RoutingFailedException extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+        private final transient RoutingOutcomeEntity outcome;
+
+        RoutingFailedException(String message, RoutingOutcomeEntity outcome, Throwable cause) {
+            super(message, cause);
+            this.outcome = outcome;
+        }
+
+        RoutingOutcomeEntity outcome() {
+            return outcome;
+        }
+    }
 
     private ManagerDecisionResult processManagerDecision(StreamEventEntity event,
                                                           ManagerDecision decision,
-                                                          io.apitomy.axiom.core.tracing.TraceContext traceCtx) {
+                                                          TraceContext traceCtx) {
         // Check confidence threshold — escalate if below
         if (!managerService.meetsConfidenceThreshold(decision)) {
             LOG.infof("Decision below confidence threshold (%.2f): %s — escalating",
                     decision.confidence(), decision.decision());
-            QuarkusTransaction.requiringNew().run(() ->
+            return QuarkusTransaction.requiringNew().call(() ->
                 handleEscalation(event, decision, traceCtx,
                     "Low confidence (" + String.format("%.0f%%", decision.confidence() * 100)
                         + "): " + decision.reasoning()));
-            return null;
         }
 
         return switch (decision.decision()) {
             case "create_task", "script_action" -> QuarkusTransaction.requiringNew().call(() ->
                     handleCreateTask(event, decision, traceCtx));
-            case "ignore" -> {
-                QuarkusTransaction.requiringNew().run(() ->
-                        handleIgnore(event, decision, traceCtx));
-                yield null;
-            }
-            case "escalate" -> {
-                QuarkusTransaction.requiringNew().run(() ->
-                        handleEscalation(event, decision, traceCtx, decision.reasoning()));
-                yield null;
-            }
-            default -> {
-                LOG.warnf("Unknown Manager decision type: %s", decision.decision());
-                yield null;
-            }
+            case "ignore" -> QuarkusTransaction.requiringNew().call(() ->
+                    handleIgnore(event, decision, traceCtx));
+            case "escalate" -> QuarkusTransaction.requiringNew().call(() ->
+                    handleEscalation(event, decision, traceCtx, decision.reasoning()));
+            default -> throw new IllegalArgumentException(
+                    "Unknown Manager decision type: " + decision.decision());
         };
     }
 
     private ManagerDecisionResult handleCreateTask(StreamEventEntity event,
                                                      ManagerDecision decision,
-                                                     io.apitomy.axiom.core.tracing.TraceContext traceCtx) {
+                                                     TraceContext traceCtx) {
         ProjectEntity project = findOrCreateProjectForStreamEvent(event,
                 traceCtx != null ? traceCtx.traceId() : null);
 
@@ -523,22 +757,24 @@ public class EventStreamOrchestrator {
             scriptExecutionService.executeScript(task, project);
         }
 
-        return new ManagerDecisionResult(project.id, task.id);
+        return new ManagerDecisionResult(project.id, task.id, null);
     }
 
-    private void handleIgnore(StreamEventEntity event, ManagerDecision decision,
-                              io.apitomy.axiom.core.tracing.TraceContext traceCtx) {
+    private ManagerDecisionResult handleIgnore(StreamEventEntity event, ManagerDecision decision,
+                                               TraceContext traceCtx) {
         LOG.infof("Manager ignored stream event %s: %s", event.id, decision.reasoning());
-        logActivity(null, null, event.id, "event-ignored",
+        Long logId = logActivity(null, null, event.id, "event-ignored",
                 "Event ignored: " + event.type + " — " + decision.reasoning(),
                 traceCtx != null ? traceCtx.traceId() : null);
+        return new ManagerDecisionResult(null, null, logId);
     }
 
-    private void handleEscalation(StreamEventEntity event, ManagerDecision decision,
-                                   io.apitomy.axiom.core.tracing.TraceContext traceCtx,
-                                   String reason) {
+    private ManagerDecisionResult handleEscalation(StreamEventEntity event,
+                                                   ManagerDecision decision,
+                                                   TraceContext traceCtx,
+                                                   String reason) {
         LOG.infof("Manager escalated stream event %s: %s", event.id, reason);
-        logActivity(null, null, event.id, "manager-escalation",
+        Long logId = logActivity(null, null, event.id, "manager-escalation",
                 "Manager escalation: " + reason,
                 traceCtx != null ? traceCtx.traceId() : null);
 
@@ -553,6 +789,7 @@ public class EventStreamOrchestrator {
         }
 
         sseEvents.fire(SseEvent.notification("Manager escalation: " + reason, "warning"));
+        return new ManagerDecisionResult(project != null ? project.id : null, null, logId);
     }
 
     private RoutingOutcomeEntity routeToWorkflowDispatch(StreamEventEntity event,
@@ -623,7 +860,7 @@ public class EventStreamOrchestrator {
         }
 
         // Create a trace for this invoke-action routing
-        io.apitomy.axiom.core.tracing.TraceContext traceCtx = null;
+        TraceContext traceCtx = null;
         try {
             traceCtx = traceService.createTrace(
                     "invoke-action",
@@ -882,8 +1119,8 @@ public class EventStreamOrchestrator {
 
     // ── Activity and thread logging ────────────────────────────────
 
-    private void logActivity(Long projectId, Long taskId, UUID eventId,
-                              String entryType, String summary, UUID traceId) {
+    private Long logActivity(Long projectId, Long taskId, UUID eventId,
+                             String entryType, String summary, UUID traceId) {
         ActivityLogEntity log = new ActivityLogEntity();
         log.projectId = projectId;
         log.taskId = taskId;
@@ -895,6 +1132,7 @@ public class EventStreamOrchestrator {
         log.createdOn = Instant.now();
         log.traceId = traceId;
         log.persist();
+        return log.id;
     }
 
     private void addThreadEntry(Long projectId, String authorType, String entryType,

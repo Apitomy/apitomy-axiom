@@ -78,6 +78,7 @@ public class ManagerResourceImpl implements ManagerResource {
         if (event == null) {
             throw new WebApplicationException("Event not found: " + eventId, 404);
         }
-        return Response.ok(managerService.evaluateStreamEvent(event)).build();
+        // The response stays a plain decision list; a failed evaluation returns an empty list.
+        return Response.ok(managerService.evaluateStreamEvent(event).decisions()).build();
     }
 }

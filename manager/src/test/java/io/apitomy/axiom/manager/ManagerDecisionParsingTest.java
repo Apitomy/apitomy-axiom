@@ -176,6 +176,50 @@ class ManagerDecisionParsingTest {
     }
 
     @Test
+    void strictParseRejectsInvalidJson() {
+        assertThrows(ManagerOutputException.class,
+                () -> service.parseDecisionsStrict("not json at all"));
+    }
+
+    @Test
+    void strictParseRejectsMissingDecisionsArray() {
+        assertThrows(ManagerOutputException.class,
+                () -> service.parseDecisionsStrict("{ \"something\": \"else\" }"));
+    }
+
+    @Test
+    void strictParseRejectsBlankOutput() {
+        assertThrows(ManagerOutputException.class, () -> service.parseDecisionsStrict("  "));
+        assertThrows(ManagerOutputException.class, () -> service.parseDecisionsStrict(null));
+    }
+
+    @Test
+    void strictParseAcceptsEmptyDecisionsArray() {
+        assertTrue(service.parseDecisionsStrict("{ \"decisions\": [] }").isEmpty());
+    }
+
+    @Test
+    void strictParseUnwrapsNestedResultField() {
+        String json = """
+                { "result": "{\\"decisions\\":[{\\"decision\\":\\"ignore\\",\\"reasoning\\":\\"r\\"}]}" }
+                """;
+        List<ManagerDecision> decisions = service.parseDecisionsStrict(json);
+        assertEquals(1, decisions.size());
+        assertEquals("r", decisions.getFirst().reasoning());
+    }
+
+    @Test
+    void evaluationResultSeparatesFailureFromNoDecisions() {
+        ManagerEvaluationResult empty = ManagerEvaluationResult.success(List.of(), 1L);
+        assertFalse(empty.failed());
+        assertTrue(empty.decisions().isEmpty());
+        ManagerEvaluationResult failed = ManagerEvaluationResult.failure("boom", 2L);
+        assertTrue(failed.failed());
+        assertEquals("boom", failed.errorMessage());
+        assertTrue(failed.decisions().isEmpty());
+    }
+
+    @Test
     void testParseNestedResultField() {
         // Claude Code may wrap the structured output in a "result" field
         String json = """
