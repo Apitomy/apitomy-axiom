@@ -500,6 +500,28 @@
         ],
         "summary": "Create a task (user-initiated action)",
         "operationId": "createTask",
+        "parameters": [
+          {
+            "name": "X-Axiom-Trace-Id",
+            "in": "header",
+            "required": false,
+            "description": "Trace of the calling agent; the new task joins it",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Axiom-Parent-Node-Id",
+            "in": "header",
+            "required": false,
+            "description": "Trace node of the calling agent; the new task node is attached under it",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
