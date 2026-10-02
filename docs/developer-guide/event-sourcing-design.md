@@ -117,6 +117,16 @@ Each `(event_id, subscription_id)` pair gets a ledger entry with one of four sta
   failed `routing_outcome` rows for the entry; the retry query excludes entries at the cap. When the
   last attempt fails, a WARN is logged once and "(giving up after N attempts)" is appended to the
   entry's error message. There is no backoff yet (#422).
+- **No replay on retry:** A retry skips routing rules that already have a `completed` outcome for the
+  ledger entry, so a later rule's failure does not re-create tasks or workflows, or re-dispatch the
+  event. Outcomes do not store the rule's position, so the k-th rule of a routing type is matched to the
+  k-th completed outcome of that type. Rules run in order and stop at the first failure, so this is exact
+  while the subscription's rules are unchanged; editing the rules between attempts can skip or replay
+  the wrong rule.
+- **Processing failures count:** A failure outside the routing rules (building the event context) is
+  recorded as a failed outcome with routing type `processing`, so it counts toward the attempt cap. An
+  unparseable payload is not a failure: it is routed with an empty payload map, on the first pass and on
+  retries alike.
 - **Dedup:** Unique constraint on `(event_id, subscription_id)` prevents duplicate processing.
 - **Startup recovery:** Orphaned `pending` entries from a previous crash are bulk-updated
   to `failed` on the first tick, then retried normally.

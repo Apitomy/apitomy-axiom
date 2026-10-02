@@ -219,7 +219,9 @@ event-ingested             root, completed on creation
 - If processing one decision fails (for example an unknown decision type), its node is closed as
   `failed` with the error prefixed to the summary, any `task` node left open under it is closed as
   `failed`, and the error is appended to the routing outcome summary. Other decisions still run, and the
-  ledger entry is not failed, so the decisions that succeeded are not repeated by a retry.
+  ledger entry is not failed, so the decisions that succeeded are not repeated by a retry. The trace
+  therefore ends `completed` even though that decision node is `failed`. This is intended: failing the
+  trace and retrying would create duplicate tasks for the decisions that succeeded.
 - When the evaluation fails, the `manager-evaluation` node and the trace are closed as `failed`, the
   routing outcome is `failed` with the error (and keeps the trace ID), and the ledger entry is `failed`
   so `retryFailedEntries` retries it. Each retry creates a new trace. Retries are capped by

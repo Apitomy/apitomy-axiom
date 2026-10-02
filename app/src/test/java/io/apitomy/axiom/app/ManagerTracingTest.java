@@ -1,5 +1,6 @@
 package io.apitomy.axiom.app;
 
+import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
@@ -234,6 +235,61 @@ class ManagerTracingTest {
         assertTrue(entry.errorMessage.contains("giving up after 3 attempts"), entry.errorMessage);
     }
 
+    @Test
+    void retriesDoNotReplayCompletedRoutingRules() {
+        stubEvaluation(ManagerEvaluationResult.failure("still broken", null));
+        String actionName = "mgr-trace-action-" + UUID.randomUUID();
+        Long actionTypeId = QuarkusTransaction.requiringNew().call(() -> {
+            ActionTypeEntity at = new ActionTypeEntity();
+            at.name = actionName;
+            at.description = "Retry replay test";
+            at.executionMode = "agent";
+            at.managerTriggerable = false;
+            at.userTriggerable = false;
+            at.workflowEnabled = false;
+            at.emitsEvent = false;
+            at.persist();
+            return at.id;
+        });
+        UUID eventId = createEventAndSubscription(
+                "[{\"type\":\"invoke-action\",\"actionTypeId\":" + actionTypeId + "},"
+                        + "{\"type\":\"manager\"}]",
+                "{\"issue\":{\"title\":\"Test\"}}");
+        try {
+            for (int i = 0; i < 6; i++) {
+                orchestrator.processNewEvents();
+            }
+
+            assertEquals(3, evaluationCalls());
+            long tasks = QuarkusTransaction.requiringNew().call(() ->
+                    TaskEntity.count("eventId = ?1 and actionType = ?2", eventId, actionName));
+            assertEquals(1, tasks, "invoke-action must not be replayed on retries");
+            assertTrue(ledger(eventId).errorMessage.contains("giving up after 3 attempts"));
+        } finally {
+            QuarkusTransaction.requiringNew().run(() -> {
+                TaskEntity.delete("actionType", actionName);
+                ActionTypeEntity.delete("name", actionName);
+            });
+        }
+    }
+
+    @Test
+    void unparseablePayloadCountsTowardTheRetryCap() {
+        stubEvaluation(ManagerEvaluationResult.failure("still broken", null));
+        UUID eventId = createEventAndSubscription("[{\"type\":\"manager\"}]", "{not json");
+
+        for (int i = 0; i < 6; i++) {
+            orchestrator.processNewEvents();
+        }
+
+        long attempts = QuarkusTransaction.requiringNew().call(() ->
+                RoutingOutcomeEntity.count("status = 'failed'"));
+        assertEquals(3, attempts, "Every attempt must be counted");
+        EventProcessingLedgerEntity entry = ledger(eventId);
+        assertEquals("failed", entry.status);
+        assertTrue(entry.errorMessage.contains("giving up after 3 attempts"), entry.errorMessage);
+    }
+
     private long evaluationCalls() {
         return Mockito.mockingDetails(managerService).getInvocations().stream()
                 .filter(i -> i.getMethod().getName().equals("evaluateStreamEvent"))
@@ -276,6 +332,11 @@ class ManagerTracingTest {
     }
 
     private UUID createEventAndSubscription() {
+        return createEventAndSubscription("[{\"type\":\"manager\"}]",
+                "{\"issue\":{\"title\":\"Test\",\"state\":\"open\",\"number\":\"1\"}}");
+    }
+
+    private UUID createEventAndSubscription(String routing, String payload) {
         UUID eventId = UUID.randomUUID();
         eventIds.add(eventId);
         QuarkusTransaction.requiringNew().run(() -> {
@@ -288,14 +349,14 @@ class ManagerTracingTest {
             event.ref = "https://github.com/test-org/mgr-trace/issues/" + eventId;
             event.timestamp = Instant.now();
             event.actor = "{\"login\":\"testuser\"}";
-            event.payload = "{\"issue\":{\"title\":\"Test\",\"state\":\"open\",\"number\":\"1\"}}";
+            event.payload = payload;
             event.createdOn = Instant.now();
             event.persist();
 
             EventSubscriptionEntity sub = new EventSubscriptionEntity();
             sub.name = "mgr-trace-" + eventId;
             sub.enabled = true;
-            sub.routing = "[{\"type\":\"manager\"}]";
+            sub.routing = routing;
             sub.createdOn = Instant.now();
             sub.modifiedOn = Instant.now();
             sub.persist();

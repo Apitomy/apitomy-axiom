@@ -184,6 +184,7 @@ const ROUTING_LABELS: Record<string, string> = {
     "workflow-dispatch": "Dispatch to Workflows",
     "create-workflow": "Create Workflow",
     "invoke-action": "Invoke Action",
+    processing: "Event Processing",
 };
 
 function ProcessingTab({ entries, loading }: {

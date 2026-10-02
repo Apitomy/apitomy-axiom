@@ -124,10 +124,13 @@ class TraceCorrelationTest {
         });
         traceService.addNode(ctx, "task", "in-progress", "Task", "task", taskId);
 
+        Instant start = Instant.now();
         taskExecutionService.onTaskCompleted(taskId, AgentResult.success("ok"));
 
+        // Scope to rows written here: other tests insert fixture rows with hard-coded task IDs
         List<ActivityLogEntity> rows = QuarkusTransaction.requiringNew().call(() ->
-                ActivityLogEntity.<ActivityLogEntity>list("taskId", taskId));
+                ActivityLogEntity.<ActivityLogEntity>list("taskId = ?1 and createdOn >= ?2",
+                        taskId, start));
         assertFalse(rows.isEmpty(), "Task completion must write an activity row");
         rows.forEach(r -> assertEquals(ctx.traceId(), r.traceId,
                 "Activity row " + r.entryType + " must carry the task trace"));

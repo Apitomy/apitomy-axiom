@@ -57,6 +57,12 @@ public class EventStreamOrchestrator {
     private static final Logger LOG = Logger.getLogger(EventStreamOrchestrator.class);
     private static final int BATCH_SIZE = 50;
 
+    /**
+     * Routing type of the failed outcome written when processing fails outside a routing
+     * rule (it is not a rule type, so it never matches a rule when skipping on retry).
+     */
+    static final String ROUTING_TYPE_PROCESSING = "processing";
+
     @Inject
     SubscriptionFilterEvaluator filterEvaluator;
 
@@ -170,13 +176,7 @@ public class EventStreamOrchestrator {
                                               SubscriptionWithFilters sub) {
         try {
             // Build event map for filter evaluation
-            JsonNode payloadNode = null;
-            try {
-                payloadNode = objectMapper.readTree(event.payload);
-            } catch (Exception e) {
-                LOG.warnf("Failed to parse payload for event %s: %s", event.id, e.getMessage());
-            }
-            Map<String, Object> eventMap = buildEventMap(event, payloadNode);
+            Map<String, Object> eventMap = buildEventMap(event, parsePayload(event));
 
             // Evaluate filter
             boolean matched = filterEvaluator.matches(sub.filterExpression, eventMap);
@@ -237,9 +237,14 @@ public class EventStreamOrchestrator {
                 continue;
             }
 
+            Map<String, Object> eventMap;
             try {
-                JsonNode payloadNode = objectMapper.readTree(event.payload);
-                Map<String, Object> eventMap = buildEventMap(event, payloadNode);
+                eventMap = buildEventMap(event, parsePayload(event));
+            } catch (Exception e) {
+                failProcessing(entry.id, e);
+                continue;
+            }
+            try {
                 routeEvent(event, sub, eventMap, entry.id);
                 completeLedgerEntry(entry.id);
                 LOG.infof("Retry succeeded for event %s / subscription %d", event.id, sub.id);
@@ -247,6 +252,40 @@ public class EventStreamOrchestrator {
                 failLedgerEntry(entry.id, e.getMessage());
             }
         }
+    }
+
+    /**
+     * Parses the event payload, returning null (an empty payload map) if it is not valid
+     * JSON. The first pass and retries use the same rule, so a bad payload never fails a
+     * retry that the first pass would have routed.
+     */
+    private JsonNode parsePayload(StreamEventEntity event) {
+        try {
+            return event.payload != null ? objectMapper.readTree(event.payload) : null;
+        } catch (Exception e) {
+            LOG.warnf("Failed to parse payload for event %s: %s", event.id, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Records a failure that happened outside {@link #routeEvent} as a failed
+     * {@code processing} outcome, so it counts toward the attempt cap, then fails the
+     * ledger entry.
+     */
+    private void failProcessing(Long ledgerId, Exception e) {
+        String error = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+        LOG.warnf(e, "Event processing failed for ledger entry %d", ledgerId);
+        QuarkusTransaction.requiringNew().run(() -> {
+            RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
+            outcome.ledgerId = ledgerId;
+            outcome.routingType = ROUTING_TYPE_PROCESSING;
+            outcome.status = "failed";
+            outcome.errorMessage = truncate(error, 2000);
+            outcome.createdOn = Instant.now();
+            outcome.persist();
+        });
+        failLedgerEntry(ledgerId, error);
     }
 
     // ── Ledger entry management ─────────────────────────────────
@@ -322,7 +361,26 @@ public class EventStreamOrchestrator {
             return;
         }
 
+        // On a retry, skip rules that already completed for this ledger entry. Outcomes do
+        // not store the rule's index, so the k-th rule of a type is matched to the k-th
+        // completed outcome of that type. Rules run in order and stop at the first
+        // failure, so this is exact as long as the subscription's rules are unchanged.
+        Map<String, Long> completedByType = QuarkusTransaction.requiringNew().call(() -> {
+            Map<String, Long> counts = new HashMap<>();
+            RoutingOutcomeEntity.<RoutingOutcomeEntity>list(
+                    "ledgerId = ?1 and status = 'completed'", ledgerId)
+                    .forEach(o -> counts.merge(o.routingType, 1L, Long::sum));
+            return counts;
+        });
+        Map<String, Long> seenByType = new HashMap<>();
+
         for (RoutingRule rule : sub.routing) {
+            long occurrence = seenByType.merge(rule.type(), 1L, Long::sum);
+            if (occurrence <= completedByType.getOrDefault(rule.type(), 0L)) {
+                LOG.debugf("Skipping routing rule %s (#%d) for event %s: already completed",
+                        rule.type(), occurrence, event.id);
+                continue;
+            }
             try {
                 RoutingOutcomeEntity outcome = switch (rule.type()) {
                     case RoutingRule.TYPE_MANAGER -> routeToManager(event);
@@ -484,9 +542,9 @@ public class EventStreamOrchestrator {
                                                       Throwable cause) {
         LOG.warnf("Manager evaluation failed: %s", error);
         if (evalNodeId != null) {
-            completeTraceNode(evalNodeId, "failed", activityLogId);
             try {
-                traceService.failNode(evalNodeId, error);
+                traceService.failNode(evalNodeId, error,
+                        activityLogId != null ? "activity-log" : null, activityLogId);
             } catch (Exception e) {
                 LOG.warnf(e, "Failed to record error on trace node %d", evalNodeId);
             }
