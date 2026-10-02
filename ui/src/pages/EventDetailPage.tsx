@@ -225,9 +225,7 @@ function OutcomeItems({ items }: { items: EventProcessingOutcomeItem[] }) {
                     <Label isCompact color={item.status === "failed" ? "red" : "grey"}>
                         {ITEM_LABELS[item.type] || item.type}: {item.status}
                     </Label>
-                    {item.taskId && item.projectId && (
-                        <Link to={`/projects/${item.projectId}`}>Task #{item.taskId}</Link>
-                    )}
+                    {item.taskId && <span>Task #{item.taskId}</span>}
                     {item.taskId && (
                         <Label isCompact color={taskStatusColor(item.taskStatus)}>
                             {item.taskStatus || "Pending"}
