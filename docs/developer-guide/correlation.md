@@ -231,4 +231,4 @@ belongs to the trace.
   the owner finishes first, its trace is marked complete while the joined task may still be running. The
   task's own node still completes when the task finishes.
 - Script-mode scheduled job runs have no `ai_usage` row, because no AI is invoked.
-- Out of scope for now: the lineage view (#430).
+- The lineage view that follows these links across entities is described in [Lineage](lineage.md).

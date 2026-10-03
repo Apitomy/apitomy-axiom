@@ -79,6 +79,7 @@ import {
 import { EditLabelsModal } from "../components/EditLabelsModal";
 import { LabelDisplay } from "../components/LabelDisplay";
 import { ExecutionLogModal } from "../components/ExecutionLogModal";
+import { LineageModal } from "../components/LineageModal";
 import { CreateSessionModal } from "../components/assistant/CreateSessionModal";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { WorkflowTab } from "../components/WorkflowTab";
@@ -616,6 +617,7 @@ function TasksTab({ tasks, projectId, agentNames, onRefresh }: {
     // Execution log modal state
     const [isLogModalOpen, setIsLogModalOpen] = useState(false);
     const [logTaskId, setLogTaskId] = useState<number | null>(null);
+    const [lineageTaskId, setLineageTaskId] = useState<number | null>(null);
 
     const handleViewLog = (taskId: number) => {
         setLogTaskId(taskId);
@@ -688,6 +690,11 @@ function TasksTab({ tasks, projectId, agentNames, onRefresh }: {
                                 ) : task.createdBy === "user" ? "—" : ""}
                             </Td>
                             <Td>
+                                <Button variant="link" size="sm"
+                                    data-testid={`project-task-lineage-${task.id}`}
+                                    onClick={() => setLineageTaskId(task.id)}>
+                                    Lineage
+                                </Button>
                                 {(task.status === "Completed" || task.status === "Failed") && (
                                     <Button
                                         variant="link"
@@ -767,6 +774,10 @@ function TasksTab({ tasks, projectId, agentNames, onRefresh }: {
                 taskId={logTaskId}
                 onClose={() => setIsLogModalOpen(false)}
             />
+
+            <LineageModal entityType="task" id={lineageTaskId}
+                title={`Lineage of task #${lineageTaskId}`}
+                onClose={() => setLineageTaskId(null)} />
         </div>
     );
 }

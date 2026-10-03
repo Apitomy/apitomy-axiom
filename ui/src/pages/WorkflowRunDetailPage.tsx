@@ -10,6 +10,7 @@ import type {
     Workflow, WorkflowInstance as FlowInstance, WorkflowViewerNodeMenuItem,
 } from "@apitomy/flow-ui";
 import { TraceGraph } from "../components/TraceGraph";
+import { LineagePanel } from "../components/LineagePanel";
 import { WorkflowStepTimeline } from "../components/WorkflowStepTimeline";
 import { ExecutionLogModal } from "../components/ExecutionLogModal";
 import { getWorkflowRun, type WorkflowInstanceInfo } from "../config/api";
@@ -137,6 +138,7 @@ export function WorkflowRunDetailPage() {
                 <Tab eventKey={1} title={<TabTitleText>Diagram</TabTitleText>} />
                 <Tab eventKey={2} title={<TabTitleText>Timeline</TabTitleText>} />
                 <Tab eventKey={3} title={<TabTitleText>Execution Trace</TabTitleText>} />
+                <Tab eventKey={4} title={<TabTitleText>Lineage</TabTitleText>} />
             </Tabs>
 
             <div style={{ paddingTop: "16px" }}>
@@ -218,6 +220,10 @@ export function WorkflowRunDetailPage() {
                 )}
                 {activeTab === 3 && !run.traceId && (
                     <p>No execution trace is available for this run.</p>
+                )}
+
+                {activeTab === 4 && run.runId != null && (
+                    <LineagePanel entityType="workflow-run" id={run.runId} expandable={false} />
                 )}
             </div>
 

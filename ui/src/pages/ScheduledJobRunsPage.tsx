@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
     Button,
     EmptyState,
@@ -22,6 +22,7 @@ import {
 } from "@apitomy/common-ui-components";
 import { type ScheduledJobRun, fetchAllScheduledJobRuns } from "../config/api";
 import { ExecutionLogModal } from "../components/ExecutionLogModal";
+import { LineageModal } from "../components/LineageModal";
 
 const STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
     Pending: "grey",
@@ -59,6 +60,15 @@ export function ScheduledJobRunsPage() {
 
     const [isLogModalOpen, setIsLogModalOpen] = useState(false);
     const [logRunId, setLogRunId] = useState<number | null>(null);
+
+    // Lineage modal; `?runId=` (used by lineage links) opens it for that run.
+    const [searchParams, setSearchParams] = useSearchParams();
+    const lineageRunId = searchParams.get("runId");
+    const setLineageRunId = (runId: number | null) => {
+        const next = new URLSearchParams(searchParams);
+        if (runId == null) next.delete("runId"); else next.set("runId", String(runId));
+        setSearchParams(next);
+    };
 
     const filterJobName = filters.find((f) => f.filterBy.value === "jobName")?.filterValue;
     const filterStatus = filters
@@ -263,6 +273,12 @@ export function ScheduledJobRunsPage() {
                                             data-testid={`run-activity-link-${run.id}`}>
                                             Activity
                                         </Link>
+                                        {" | "}
+                                        <Button variant="link" isInline
+                                            data-testid={`run-lineage-${run.id}`}
+                                            onClick={() => setLineageRunId(run.id)}>
+                                            Lineage
+                                        </Button>
                                         {run.executionLog
                                             && (run.status === "Completed"
                                                 || run.status === "Failed") && " | "}
@@ -286,6 +302,10 @@ export function ScheduledJobRunsPage() {
                 scheduledJobRunId={logRunId}
                 onClose={() => setIsLogModalOpen(false)}
             />
+
+            <LineageModal entityType="scheduled-job-run" id={lineageRunId}
+                title={`Lineage of job run #${lineageRunId}`}
+                onClose={() => setLineageRunId(null)} />
         </PageSection>
     );
 }

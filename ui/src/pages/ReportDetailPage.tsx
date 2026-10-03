@@ -35,6 +35,7 @@ import { LabelDisplay } from "../components/LabelDisplay";
 import { EditLabelsModal } from "../components/EditLabelsModal";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { ConfigurationUsed } from "../components/ConfigurationUsed";
+import { LineagePanel } from "../components/LineagePanel";
 import {If} from "@apitomy/common-ui-components";
 
 export function ReportDetailPage() {
@@ -225,6 +226,10 @@ export function ReportDetailPage() {
                     </div>
                 </CardBody>
             </Card>
+
+            <div style={{ marginBottom: "24px" }}>
+                <LineagePanel entityType="report" id={report.id} />
+            </div>
 
             {report.content ? (
                 <RenderedReport content={report.content} />
