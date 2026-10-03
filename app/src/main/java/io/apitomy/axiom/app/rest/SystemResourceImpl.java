@@ -21,6 +21,7 @@ import io.apitomy.axiom.agents.spi.AgentRegistry;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 
 import jakarta.transaction.Transactional;
@@ -223,17 +224,13 @@ public class SystemResourceImpl implements SystemResource {
         RetentionConfigEntity entity = RetentionConfigEntity.<RetentionConfigEntity>findAll()
                 .firstResult();
 
-        RetentionConfig config = new RetentionConfig();
-        if (entity != null) {
-            config.setClosedProjectRetentionDays(entity.closedProjectRetentionDays);
-            config.setTraceRetentionDays(entity.traceRetentionDays);
-            config.setEventRetentionDays(entity.eventRetentionDays);
-        } else {
-            config.setClosedProjectRetentionDays(90);
-            config.setTraceRetentionDays(30);
-            config.setEventRetentionDays(90);
+        if (entity == null) {
+            entity = new RetentionConfigEntity();
+            entity.closedProjectRetentionDays = 90;
+            entity.traceRetentionDays = 30;
+            entity.eventRetentionDays = 90;
         }
-        return config;
+        return toRetentionBean(entity);
     }
 
     /**
@@ -246,12 +243,72 @@ public class SystemResourceImpl implements SystemResource {
                 .firstResult();
         if (entity == null) {
             entity = new RetentionConfigEntity();
+            entity.closedProjectRetentionDays = 90;
+            entity.traceRetentionDays = 30;
+            entity.eventRetentionDays = 90;
         }
-        entity.closedProjectRetentionDays = data.getClosedProjectRetentionDays();
-        entity.traceRetentionDays = data.getTraceRetentionDays();
-        entity.eventRetentionDays = data.getEventRetentionDays();
+        validateRetentionDays(data);
+        // Every setting is optional: a null field keeps its current value.
+        if (data.getClosedProjectRetentionDays() != null) {
+            entity.closedProjectRetentionDays = data.getClosedProjectRetentionDays();
+        }
+        if (data.getTraceRetentionDays() != null) {
+            entity.traceRetentionDays = data.getTraceRetentionDays();
+        }
+        if (data.getEventRetentionDays() != null) {
+            entity.eventRetentionDays = data.getEventRetentionDays();
+        }
+        if (data.getScheduledJobRunRetentionDays() != null) {
+            entity.scheduledJobRunRetentionDays = data.getScheduledJobRunRetentionDays();
+        }
+        if (data.getReportRetentionDays() != null) {
+            entity.reportRetentionDays = data.getReportRetentionDays();
+        }
+        if (data.getWorkflowRunRetentionDays() != null) {
+            entity.workflowRunRetentionDays = data.getWorkflowRunRetentionDays();
+        }
+        if (data.getActivityLogRetentionDays() != null) {
+            entity.activityLogRetentionDays = data.getActivityLogRetentionDays();
+        }
+        if (data.getAiUsageRetentionDays() != null) {
+            entity.aiUsageRetentionDays = data.getAiUsageRetentionDays();
+        }
         entity.persist();
 
-        return data;
+        return toRetentionBean(entity);
+    }
+
+    private static RetentionConfig toRetentionBean(RetentionConfigEntity entity) {
+        RetentionConfig config = new RetentionConfig();
+        config.setClosedProjectRetentionDays(entity.closedProjectRetentionDays);
+        config.setTraceRetentionDays(entity.traceRetentionDays);
+        config.setEventRetentionDays(entity.eventRetentionDays);
+        config.setScheduledJobRunRetentionDays(entity.scheduledJobRunRetentionDays);
+        config.setReportRetentionDays(entity.reportRetentionDays);
+        config.setWorkflowRunRetentionDays(entity.workflowRunRetentionDays);
+        config.setActivityLogRetentionDays(entity.activityLogRetentionDays);
+        config.setAiUsageRetentionDays(entity.aiUsageRetentionDays);
+        return config;
+    }
+
+    private static void validateRetentionDays(RetentionConfig data) {
+        // 0 would delete everything for these settings, so at least 1 day is required.
+        Integer[] coreValues = {data.getClosedProjectRetentionDays(), data.getTraceRetentionDays(),
+            data.getEventRetentionDays()};
+        for (Integer value : coreValues) {
+            if (value != null && value < 1) {
+                throw new WebApplicationException(
+                        "Closed project, trace and event retention must be at least 1 day", 400);
+            }
+        }
+        Integer[] values = {data.getScheduledJobRunRetentionDays(), data.getReportRetentionDays(),
+            data.getWorkflowRunRetentionDays(), data.getActivityLogRetentionDays(),
+            data.getAiUsageRetentionDays()};
+        for (Integer value : values) {
+            if (value != null && value < 0) {
+                throw new WebApplicationException(
+                        "Retention days must be 0 (keep forever) or greater", 400);
+            }
+        }
     }
 }

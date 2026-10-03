@@ -196,7 +196,7 @@ The **Settings** section contains instance-wide configuration:
 |------|---------|
 | **AI Engine** | View and change the default agent type, health checks, and available models per registered agent |
 | **Manager** | Edit the Manager's system prompt and prompt template |
-| **Data Retention** | Configure how long closed projects, traces, and events are kept before automatic cleanup |
+| **Data Retention** | Configure how long closed projects, traces, events, job runs, reports, workflow runs, activity and AI usage are kept before automatic cleanup (0 keeps history forever) |
 | **Configuration Packs** | Export and import bundles of configuration as JSON |
 
 Most configuration pages follow the same pattern: a list view with a **Create** button,

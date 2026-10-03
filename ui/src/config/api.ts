@@ -886,6 +886,16 @@ export interface RetentionConfig {
     closedProjectRetentionDays?: number;
     traceRetentionDays?: number;
     eventRetentionDays?: number;
+    /** Days to keep finished scheduled job runs; 0 keeps them forever. */
+    scheduledJobRunRetentionDays?: number;
+    /** Days to keep finished reports; 0 keeps them forever. */
+    reportRetentionDays?: number;
+    /** Days to keep finished workflow runs; 0 keeps them forever. */
+    workflowRunRetentionDays?: number;
+    /** Days to keep activity log entries; 0 keeps them forever. */
+    activityLogRetentionDays?: number;
+    /** Days to keep AI usage records; 0 keeps them forever. */
+    aiUsageRetentionDays?: number;
 }
 
 export async function fetchRetentionConfig(): Promise<RetentionConfig> {
@@ -900,7 +910,11 @@ export async function updateRetentionConfig(config: RetentionConfig): Promise<Re
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(config),
     });
-    if (!response.ok) throw new Error(`Failed to update retention config: ${response.status}`);
+    if (!response.ok) {
+        const detail = (await response.text()).trim();
+        throw new Error(`Failed to update retention config (${response.status})`
+            + (detail ? `: ${detail}` : ""));
+    }
     return response.json();
 }
 

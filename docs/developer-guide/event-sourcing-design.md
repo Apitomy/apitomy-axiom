@@ -197,7 +197,8 @@ items.
 ### Links between events and workflow runs
 
 Events and workflow runs are linked both ways (V68, #420, #421). None of these links are foreign keys:
-event retention deletes events and ledger entries while runs are kept.
+event retention deletes events and ledger entries while runs are kept (but never while the run is still
+running or waiting).
 
 - **Started runs (`create-workflow`).** The run stores `trigger_event_id` and `trigger_ledger_id`; the
   run's `workflow` trace has `eventId` set to the event; the run's context has the event ID as
@@ -252,7 +253,10 @@ items of an attempt stay on that attempt's outcome and never appear on a later a
 ## Retention
 
 - **Stream events and ledger entries:** Cleaned up hourly based on `eventRetentionDays`
-  setting (default 90 days). Ledger entries are deleted first (FK), then events.
+  setting (default 90 days), in batches of 500. Routing outcomes and ledger entries are deleted first (FK),
+  then events. Events that a `running` or `waiting` workflow run was started by (`trigger_event_id`) or
+  resumed by (`workflow_run_resume.event_id`) are kept until the run finishes. See
+  [Data Retention](data-retention.md).
 - **Connection poll logs:** Cleaned up hourly with a 3-day fixed retention.
 
 ## Configuration Packs

@@ -146,15 +146,23 @@ sessions — see [AI Assistant](../user-guide/ai-assistant.md).
 
 ## Data Retention
 
-Retention periods for closed projects, execution traces, and stream events are stored
-in the database (not as static properties) and can be changed at any time from
-**Settings > Data Retention** in the UI. Defaults are:
+Retention periods are stored in the database (not as static properties) and can be changed at any time from
+**Settings > Data Retention** in the UI or with `PUT /api/v1/system/retention`. Defaults are:
 
 | Setting | Default | What it controls |
 |---------|---------|-------------------|
-| Closed projects | 90 days | How long a `Completed` project (and its tasks, events, and thread) is kept before automatic deletion |
+| Closed projects | 90 days | How long a `Completed` project (and its tasks, thread, workflow runs, activity and AI usage) is kept before automatic deletion. Traces and event routing outcomes of the project are kept. |
 | Traces | 30 days | How long execution traces (and their nodes and tool execution records) are kept |
-| Events | 90 days | How long stream events and their subscription processing ledger entries are kept |
+| Events | 90 days | How long stream events, their subscription processing ledger entries and routing outcomes are kept. Events that a running or waiting workflow run depends on are kept until the run finishes. |
+| Scheduled job runs | 0 (forever) | How long finished (`Completed` or `Failed`) scheduled job runs are kept |
+| Reports | 0 (forever) | How long finished (`Completed` or `Failed`) reports are kept |
+| Workflow runs | 0 (forever) | How long finished workflow runs are kept, measured from when they finished. Running and waiting runs are never deleted. |
+| Activity log | 0 (forever) | How long activity log entries are kept |
+| AI usage | 0 (forever) | How long AI usage (cost) records are kept |
+
+Closed projects, traces and events must be kept for at least 1 day. For the history settings, `0` means
+"keep forever". They default to `0` so that upgrading Axiom never deletes
+data you did not ask it to delete.
 
 Cleanup runs hourly in the background. Connection poll logs are always retained for a
 fixed 3 days and are not configurable.

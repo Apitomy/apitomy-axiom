@@ -121,4 +121,131 @@ class SystemResourceTest {
             .then()
                 .statusCode(400);
     }
+
+    @Test
+    void testRetentionConfigIncludesHistorySettings() {
+        given()
+            .when()
+                .get("/api/v1/system/retention")
+            .then()
+                .statusCode(200)
+                .body("traceRetentionDays", notNullValue())
+                .body("scheduledJobRunRetentionDays", equalTo(0))
+                .body("reportRetentionDays", equalTo(0))
+                .body("workflowRunRetentionDays", equalTo(0))
+                .body("activityLogRetentionDays", equalTo(0))
+                .body("aiUsageRetentionDays", equalTo(0))
+                .body("$", not(hasKey("eventSourceLogRetentionDays")));
+    }
+
+    @Test
+    void testUpdateRetentionConfigRoundTripsAndKeepsOmittedSettings() {
+        String original = given().when().get("/api/v1/system/retention")
+                .then().statusCode(200).extract().asString();
+        try {
+            given()
+                    .contentType(ContentType.JSON)
+                    .body("""
+                            {"closedProjectRetentionDays":90,"traceRetentionDays":30,
+                             "eventRetentionDays":90,"scheduledJobRunRetentionDays":11,
+                             "reportRetentionDays":12,"workflowRunRetentionDays":13,
+                             "activityLogRetentionDays":14,"aiUsageRetentionDays":15}
+                            """)
+                .when()
+                    .put("/api/v1/system/retention")
+                .then()
+                    .statusCode(200)
+                    .body("workflowRunRetentionDays", equalTo(13));
+
+            // A client that does not know the new settings must not reset them.
+            given()
+                    .contentType(ContentType.JSON)
+                    .body("""
+                            {"closedProjectRetentionDays":90,"traceRetentionDays":30,
+                             "eventRetentionDays":90}
+                            """)
+                .when()
+                    .put("/api/v1/system/retention")
+                .then()
+                    .statusCode(200)
+                    .body("scheduledJobRunRetentionDays", equalTo(11))
+                    .body("aiUsageRetentionDays", equalTo(15));
+
+            given()
+                .when()
+                    .get("/api/v1/system/retention")
+                .then()
+                    .statusCode(200)
+                    .body("reportRetentionDays", equalTo(12))
+                    .body("activityLogRetentionDays", equalTo(14));
+        } finally {
+            given().contentType(ContentType.JSON).body(original)
+                    .when().put("/api/v1/system/retention")
+                    .then().statusCode(200);
+        }
+    }
+
+    @Test
+    void testUpdateRetentionConfigRejectsNegativeDays() {
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                        {"closedProjectRetentionDays":90,"traceRetentionDays":30,
+                         "eventRetentionDays":90,"reportRetentionDays":-1}
+                        """)
+            .when()
+                .put("/api/v1/system/retention")
+            .then()
+                .statusCode(400);
+    }
+
+    @Test
+    void testUpdateRetentionConfigRejectsCoreSettingsBelowOne() {
+        for (String field : new String[] {"closedProjectRetentionDays", "traceRetentionDays",
+                "eventRetentionDays"}) {
+            for (int value : new int[] {0, -5}) {
+                given()
+                        .contentType(ContentType.JSON)
+                        .body("{\"" + field + "\":" + value + "}")
+                    .when()
+                        .put("/api/v1/system/retention")
+                    .then()
+                        .statusCode(400);
+            }
+        }
+    }
+
+    @Test
+    void testUpdateRetentionConfigKeepsOmittedCoreSettings() {
+        String original = given().when().get("/api/v1/system/retention")
+                .then().statusCode(200).extract().asString();
+        try {
+            given()
+                    .contentType(ContentType.JSON)
+                    .body("""
+                            {"closedProjectRetentionDays":77,"traceRetentionDays":22,
+                             "eventRetentionDays":66}
+                            """)
+                .when()
+                    .put("/api/v1/system/retention")
+                .then()
+                    .statusCode(200);
+
+            given()
+                    .contentType(ContentType.JSON)
+                    .body("{\"reportRetentionDays\":3}")
+                .when()
+                    .put("/api/v1/system/retention")
+                .then()
+                    .statusCode(200)
+                    .body("closedProjectRetentionDays", equalTo(77))
+                    .body("traceRetentionDays", equalTo(22))
+                    .body("eventRetentionDays", equalTo(66))
+                    .body("reportRetentionDays", equalTo(3));
+        } finally {
+            given().contentType(ContentType.JSON).body(original)
+                    .when().put("/api/v1/system/retention")
+                    .then().statusCode(200);
+        }
+    }
 }
