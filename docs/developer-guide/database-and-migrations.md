@@ -184,10 +184,13 @@ migrations and the entity model, `MigrationSchemaValidationTest` (in
 `app/src/test/java/io/apitomy/axiom/app/db/`) runs in CI as a plain JUnit test (no Quarkus boot, a few
 seconds):
 
-1. It applies every migration to a fresh, private in-memory H2 database with Flyway's Java API.
+1. Once per run, it applies every migration to a fresh, private in-memory H2 database with Flyway's Java API.
 2. It builds Hibernate metadata from every `@Entity` in the core module's Jandex index and starts a session
    factory with `hbm2ddl.auto=validate`, which checks tables, columns, column types and sequences.
 3. It lists every sequence the entity model expects and reports all that are missing at once.
+4. It checks the V73 upgrade path on a file H2 database: an existing `agent_SEQ` is never lowered.
+
+The guard covers H2 only; nothing in CI runs the migrations against PostgreSQL.
 
 If you add or change an entity without a matching migration, this test fails. Fix the migration; don't
 change the test.
