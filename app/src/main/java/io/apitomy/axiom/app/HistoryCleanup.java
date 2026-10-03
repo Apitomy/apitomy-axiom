@@ -52,6 +52,13 @@ public class HistoryCleanup {
     /** Statuses of scheduled job runs and reports that have finished. */
     static final List<String> FINISHED_STATUSES = List.of("Completed", "Failed");
 
+    /**
+     * Statuses of workflow runs that have finished (lower-case names of the flow engine's
+     * {@code InstanceStatus}). Runs in any other status, including statuses added later, are kept.
+     */
+    static final List<String> FINISHED_WORKFLOW_RUN_STATUSES =
+            List.of("completed", "failed", "cancelled");
+
     private volatile boolean shuttingDown = false;
 
     @PreDestroy
@@ -105,7 +112,7 @@ public class HistoryCleanup {
         if (cutoff == null) {
             return 0;
         }
-        List<Long> ids = ids("select r.id from ScheduledJobRunEntity r "
+        List<Long> ids = finishedIds("select r.id from ScheduledJobRunEntity r "
                 + "where r.status in :finished and r.createdOn < :cutoff", cutoff);
         if (ids.isEmpty()) {
             return 0;
@@ -125,7 +132,7 @@ public class HistoryCleanup {
         if (cutoff == null) {
             return 0;
         }
-        List<Long> ids = ids("select r.id from ReportEntity r "
+        List<Long> ids = finishedIds("select r.id from ReportEntity r "
                 + "where r.status in :finished and r.createdOn < :cutoff", cutoff);
         if (ids.isEmpty()) {
             return 0;
@@ -141,7 +148,8 @@ public class HistoryCleanup {
     /**
      * Deletes one batch of finished workflow runs, with their waits, event subscriptions and
      * resume records, whose completion (or start, if no completion time was recorded) is older
-     * than the retention period. Running and waiting runs are never deleted.
+     * than the retention period. Only runs in {@link #FINISHED_WORKFLOW_RUN_STATUSES} are
+     * deleted.
      *
      * @return the number of runs deleted
      */
@@ -151,9 +159,9 @@ public class HistoryCleanup {
             return 0;
         }
         List<Long> ids = em().createQuery("select r.id from WorkflowRunEntity r "
-                        + "where r.status not in :active "
+                        + "where r.status in :finished "
                         + "and coalesce(r.completedOn, r.startedOn) < :cutoff", Long.class)
-                .setParameter("active", StreamEventCleanup.ACTIVE_RUN_STATUSES)
+                .setParameter("finished", FINISHED_WORKFLOW_RUN_STATUSES)
                 .setParameter("cutoff", cutoff)
                 .setMaxResults(BATCH_SIZE)
                 .getResultList();
@@ -227,13 +235,17 @@ public class HistoryCleanup {
     }
 
     private static List<Long> ids(String jpql, Instant cutoff) {
-        TypedQuery<Long> query = em().createQuery(jpql, Long.class)
+        return query(jpql, cutoff).getResultList();
+    }
+
+    private static List<Long> finishedIds(String jpql, Instant cutoff) {
+        return query(jpql, cutoff).setParameter("finished", FINISHED_STATUSES).getResultList();
+    }
+
+    private static TypedQuery<Long> query(String jpql, Instant cutoff) {
+        return em().createQuery(jpql, Long.class)
                 .setParameter("cutoff", cutoff)
                 .setMaxResults(BATCH_SIZE);
-        if (jpql.contains(":finished")) {
-            query.setParameter("finished", FINISHED_STATUSES);
-        }
-        return query.getResultList();
     }
 
     private static EntityManager em() {

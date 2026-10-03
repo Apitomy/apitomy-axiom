@@ -910,7 +910,11 @@ export async function updateRetentionConfig(config: RetentionConfig): Promise<Re
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(config),
     });
-    if (!response.ok) throw new Error(`Failed to update retention config: ${response.status}`);
+    if (!response.ok) {
+        const detail = (await response.text()).trim();
+        throw new Error(`Failed to update retention config (${response.status})`
+            + (detail ? `: ${detail}` : ""));
+    }
     return response.json();
 }
 

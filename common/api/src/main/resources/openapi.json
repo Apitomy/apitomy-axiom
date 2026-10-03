@@ -193,6 +193,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "A retention value is out of range: closed project, trace and event retention must be at least 1, the other settings at least 0."
           }
         }
       }
@@ -6653,17 +6656,20 @@
         "properties": {
           "closedProjectRetentionDays": {
             "format": "int32",
-            "description": "Number of days to retain closed projects before automatic deletion.",
+            "description": "Number of days to retain closed projects before automatic deletion. Must be at least 1. Omitting the field on update leaves the current value unchanged.",
+            "minimum": 1,
             "type": "integer"
           },
           "traceRetentionDays": {
             "format": "int32",
-            "description": "Number of days to retain execution traces before automatic deletion.",
+            "description": "Number of days to retain execution traces before automatic deletion. Must be at least 1. Omitting the field on update leaves the current value unchanged.",
+            "minimum": 1,
             "type": "integer"
           },
           "eventRetentionDays": {
             "format": "int32",
-            "description": "Number of days to retain ingested events before automatic deletion.",
+            "description": "Number of days to retain ingested events before automatic deletion. Must be at least 1. Omitting the field on update leaves the current value unchanged.",
+            "minimum": 1,
             "type": "integer"
           },
           "scheduledJobRunRetentionDays": {

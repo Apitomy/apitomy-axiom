@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
+    Alert,
+    AlertActionCloseButton,
     Button,
     EmptyState,
     EmptyStateBody,
@@ -21,11 +23,51 @@ import {
     updateRetentionConfig,
 } from "../config/api";
 
+/** History retention settings, where 0 keeps the records forever. */
+const HISTORY_FIELDS: {
+    field: keyof RetentionConfig;
+    id: string;
+    label: string;
+    help: string;
+}[] = [
+    {
+        field: "scheduledJobRunRetentionDays",
+        id: "job-run-retention",
+        label: "Scheduled job runs",
+        help: "Days to retain finished scheduled job runs.",
+    },
+    {
+        field: "reportRetentionDays",
+        id: "report-retention",
+        label: "Reports",
+        help: "Days to retain finished reports.",
+    },
+    {
+        field: "workflowRunRetentionDays",
+        id: "workflow-run-retention",
+        label: "Workflow runs",
+        help: "Days to retain finished workflow runs. Running and waiting runs are never deleted.",
+    },
+    {
+        field: "activityLogRetentionDays",
+        id: "activity-log-retention",
+        label: "Activity log",
+        help: "Days to retain activity log entries.",
+    },
+    {
+        field: "aiUsageRetentionDays",
+        id: "ai-usage-retention",
+        label: "AI usage",
+        help: "Days to retain AI usage (cost) records.",
+    },
+];
+
 export function DataRetentionPage() {
     const [config, setConfig] = useState<RetentionConfig>({});
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
 
     const loadConfig = useCallback(() => {
         setLoading(true);
@@ -39,9 +81,13 @@ export function DataRetentionPage() {
 
     const handleSave = () => {
         setSaving(true);
+        setSaveError(null);
         updateRetentionConfig(config)
             .then((c) => { setConfig(c); setDirty(false); })
-            .catch(console.error)
+            .catch((e: unknown) => {
+                console.error(e);
+                setSaveError(e instanceof Error ? e.message : String(e));
+            })
             .finally(() => setSaving(false));
     };
 
@@ -83,6 +129,18 @@ export function DataRetentionPage() {
                     </Button>
                 </FlexItem>
             </Flex>
+
+            {saveError && (
+                <Alert
+                    variant="danger"
+                    isInline
+                    title="Could not save retention settings"
+                    actionClose={<AlertActionCloseButton onClose={() => setSaveError(null)} />}
+                    style={{ marginBottom: "16px" }}
+                >
+                    {saveError}
+                </Alert>
+            )}
 
             <p className="axiom-text-subtle" style={{ marginBottom: "24px" }}>
                 Configure how long Axiom retains data before automatic cleanup. A background
@@ -163,115 +221,30 @@ export function DataRetentionPage() {
                     Set a value of 0 to keep these records forever (the default).
                 </p>
 
-                <FormGroup label="Scheduled job runs" fieldId="job-run-retention">
-                    <NumberInput
-                        id="job-run-retention"
-                        value={config.scheduledJobRunRetentionDays ?? 0}
-                        min={0}
-                        onMinus={() => updateField("scheduledJobRunRetentionDays",
-                            (config.scheduledJobRunRetentionDays ?? 0) - 1, 0)}
-                        onPlus={() => updateField("scheduledJobRunRetentionDays",
-                            (config.scheduledJobRunRetentionDays ?? 0) + 1, 0)}
-                        onChange={(event) => updateField("scheduledJobRunRetentionDays",
-                            Number((event.target as HTMLInputElement).value), 0)}
-                        widthChars={4}
-                    />
-                    <FormHelperText>
-                        <HelperText>
-                            <HelperTextItem>
-                                Days to retain finished scheduled job runs. {(config.scheduledJobRunRetentionDays ?? 0) === 0 ? "Currently kept forever." : ""}
-                            </HelperTextItem>
-                        </HelperText>
-                    </FormHelperText>
-                </FormGroup>
-
-                <FormGroup label="Reports" fieldId="report-retention">
-                    <NumberInput
-                        id="report-retention"
-                        value={config.reportRetentionDays ?? 0}
-                        min={0}
-                        onMinus={() => updateField("reportRetentionDays",
-                            (config.reportRetentionDays ?? 0) - 1, 0)}
-                        onPlus={() => updateField("reportRetentionDays",
-                            (config.reportRetentionDays ?? 0) + 1, 0)}
-                        onChange={(event) => updateField("reportRetentionDays",
-                            Number((event.target as HTMLInputElement).value), 0)}
-                        widthChars={4}
-                    />
-                    <FormHelperText>
-                        <HelperText>
-                            <HelperTextItem>
-                                Days to retain finished reports. {(config.reportRetentionDays ?? 0) === 0 ? "Currently kept forever." : ""}
-                            </HelperTextItem>
-                        </HelperText>
-                    </FormHelperText>
-                </FormGroup>
-
-                <FormGroup label="Workflow runs" fieldId="workflow-run-retention">
-                    <NumberInput
-                        id="workflow-run-retention"
-                        value={config.workflowRunRetentionDays ?? 0}
-                        min={0}
-                        onMinus={() => updateField("workflowRunRetentionDays",
-                            (config.workflowRunRetentionDays ?? 0) - 1, 0)}
-                        onPlus={() => updateField("workflowRunRetentionDays",
-                            (config.workflowRunRetentionDays ?? 0) + 1, 0)}
-                        onChange={(event) => updateField("workflowRunRetentionDays",
-                            Number((event.target as HTMLInputElement).value), 0)}
-                        widthChars={4}
-                    />
-                    <FormHelperText>
-                        <HelperText>
-                            <HelperTextItem>
-                                Days to retain finished workflow runs. Running and waiting runs are never deleted. {(config.workflowRunRetentionDays ?? 0) === 0 ? "Currently kept forever." : ""}
-                            </HelperTextItem>
-                        </HelperText>
-                    </FormHelperText>
-                </FormGroup>
-
-                <FormGroup label="Activity log" fieldId="activity-log-retention">
-                    <NumberInput
-                        id="activity-log-retention"
-                        value={config.activityLogRetentionDays ?? 0}
-                        min={0}
-                        onMinus={() => updateField("activityLogRetentionDays",
-                            (config.activityLogRetentionDays ?? 0) - 1, 0)}
-                        onPlus={() => updateField("activityLogRetentionDays",
-                            (config.activityLogRetentionDays ?? 0) + 1, 0)}
-                        onChange={(event) => updateField("activityLogRetentionDays",
-                            Number((event.target as HTMLInputElement).value), 0)}
-                        widthChars={4}
-                    />
-                    <FormHelperText>
-                        <HelperText>
-                            <HelperTextItem>
-                                Days to retain activity log entries. {(config.activityLogRetentionDays ?? 0) === 0 ? "Currently kept forever." : ""}
-                            </HelperTextItem>
-                        </HelperText>
-                    </FormHelperText>
-                </FormGroup>
-
-                <FormGroup label="AI usage" fieldId="ai-usage-retention">
-                    <NumberInput
-                        id="ai-usage-retention"
-                        value={config.aiUsageRetentionDays ?? 0}
-                        min={0}
-                        onMinus={() => updateField("aiUsageRetentionDays",
-                            (config.aiUsageRetentionDays ?? 0) - 1, 0)}
-                        onPlus={() => updateField("aiUsageRetentionDays",
-                            (config.aiUsageRetentionDays ?? 0) + 1, 0)}
-                        onChange={(event) => updateField("aiUsageRetentionDays",
-                            Number((event.target as HTMLInputElement).value), 0)}
-                        widthChars={4}
-                    />
-                    <FormHelperText>
-                        <HelperText>
-                            <HelperTextItem>
-                                Days to retain AI usage (cost) records. {(config.aiUsageRetentionDays ?? 0) === 0 ? "Currently kept forever." : ""}
-                            </HelperTextItem>
-                        </HelperText>
-                    </FormHelperText>
-                </FormGroup>
+                {HISTORY_FIELDS.map(({ field, id, label, help }) => {
+                    const value = config[field] ?? 0;
+                    return (
+                        <FormGroup key={field} label={label} fieldId={id}>
+                            <NumberInput
+                                id={id}
+                                value={value}
+                                min={0}
+                                onMinus={() => updateField(field, value - 1, 0)}
+                                onPlus={() => updateField(field, value + 1, 0)}
+                                onChange={(event) => updateField(field,
+                                    Number((event.target as HTMLInputElement).value), 0)}
+                                widthChars={4}
+                            />
+                            <FormHelperText>
+                                <HelperText>
+                                    <HelperTextItem>
+                                        {help} {value === 0 ? "Currently kept forever." : ""}
+                                    </HelperTextItem>
+                                </HelperText>
+                            </FormHelperText>
+                        </FormGroup>
+                    );
+                })}
             </Form>
         </PageSection>
     );

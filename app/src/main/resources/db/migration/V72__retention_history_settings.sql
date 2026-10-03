@@ -21,3 +21,10 @@ CREATE INDEX IF NOT EXISTS idx_ro_trace ON routing_outcome(trace_id);
 CREATE INDEX IF NOT EXISTS idx_roi_trace_node ON routing_outcome_item(trace_node_id);
 CREATE INDEX IF NOT EXISTS idx_roi_workflow_run ON routing_outcome_item(workflow_run_id);
 CREATE INDEX IF NOT EXISTS idx_wrr_trace_node ON workflow_run_resume(trace_node_id);
+-- task.workflow_run_id has an H2 foreign-key index, but other databases do not create one.
+CREATE INDEX IF NOT EXISTS idx_task_workflow_run ON task(workflow_run_id);
+CREATE INDEX IF NOT EXISTS idx_task_trace ON task(trace_id);
+CREATE INDEX IF NOT EXISTS idx_wf_run_trace ON workflow_run(trace_id);
+CREATE INDEX IF NOT EXISTS idx_wf_run_completed_on ON workflow_run(completed_on);
+CREATE INDEX IF NOT EXISTS idx_trace_started_on ON trace(started_on);
+CREATE INDEX IF NOT EXISTS idx_stream_event_created_on ON stream_event(created_on);

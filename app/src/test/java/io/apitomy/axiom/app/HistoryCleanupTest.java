@@ -194,6 +194,23 @@ class HistoryCleanupTest {
     }
 
     @Test
+    void workflowRunRetentionOnlyDeletesKnownFinishedStatuses() {
+        setRetention(0, 0, 5, 0, 0);
+        long[] ids = QuarkusTransaction.requiringNew().call(() -> new long[] {
+            workflowRun("failed", OLD).id, workflowRun("cancelled", OLD).id,
+            workflowRun("some-future-status", OLD).id});
+
+        QuarkusTransaction.requiringNew().run(() -> historyCleanup.doCleanup());
+
+        QuarkusTransaction.requiringNew().run(() -> {
+            assertNull(WorkflowRunEntity.findById(ids[0]));
+            assertNull(WorkflowRunEntity.findById(ids[1]));
+            assertNotNull(WorkflowRunEntity.findById(ids[2]), "unknown statuses are kept");
+            WorkflowRunEntity.deleteById(ids[2]);
+        });
+    }
+
+    @Test
     void activityAndAiUsageRetentionDeleteOldRows() {
         setRetention(0, 0, 0, 5, 5);
         long[] ids = QuarkusTransaction.requiringNew().call(() -> new long[] {

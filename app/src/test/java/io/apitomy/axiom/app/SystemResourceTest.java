@@ -198,4 +198,54 @@ class SystemResourceTest {
             .then()
                 .statusCode(400);
     }
+
+    @Test
+    void testUpdateRetentionConfigRejectsCoreSettingsBelowOne() {
+        for (String field : new String[] {"closedProjectRetentionDays", "traceRetentionDays",
+                "eventRetentionDays"}) {
+            for (int value : new int[] {0, -5}) {
+                given()
+                        .contentType(ContentType.JSON)
+                        .body("{\"" + field + "\":" + value + "}")
+                    .when()
+                        .put("/api/v1/system/retention")
+                    .then()
+                        .statusCode(400);
+            }
+        }
+    }
+
+    @Test
+    void testUpdateRetentionConfigKeepsOmittedCoreSettings() {
+        String original = given().when().get("/api/v1/system/retention")
+                .then().statusCode(200).extract().asString();
+        try {
+            given()
+                    .contentType(ContentType.JSON)
+                    .body("""
+                            {"closedProjectRetentionDays":77,"traceRetentionDays":22,
+                             "eventRetentionDays":66}
+                            """)
+                .when()
+                    .put("/api/v1/system/retention")
+                .then()
+                    .statusCode(200);
+
+            given()
+                    .contentType(ContentType.JSON)
+                    .body("{\"reportRetentionDays\":3}")
+                .when()
+                    .put("/api/v1/system/retention")
+                .then()
+                    .statusCode(200)
+                    .body("closedProjectRetentionDays", equalTo(77))
+                    .body("traceRetentionDays", equalTo(22))
+                    .body("eventRetentionDays", equalTo(66))
+                    .body("reportRetentionDays", equalTo(3));
+        } finally {
+            given().contentType(ContentType.JSON).body(original)
+                    .when().put("/api/v1/system/retention")
+                    .then().statusCode(200);
+        }
+    }
 }

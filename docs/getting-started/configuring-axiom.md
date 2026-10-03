@@ -160,7 +160,8 @@ Retention periods are stored in the database (not as static properties) and can 
 | Activity log | 0 (forever) | How long activity log entries are kept |
 | AI usage | 0 (forever) | How long AI usage (cost) records are kept |
 
-For the history settings, `0` means "keep forever". They default to `0` so that upgrading Axiom never deletes
+Closed projects, traces and events must be kept for at least 1 day. For the history settings, `0` means
+"keep forever". They default to `0` so that upgrading Axiom never deletes
 data you did not ask it to delete.
 
 Cleanup runs hourly in the background. Connection poll logs are always retained for a

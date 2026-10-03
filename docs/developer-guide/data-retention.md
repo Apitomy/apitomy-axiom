@@ -21,9 +21,10 @@ documented soft references listed under [Accepted dangling references](#accepted
 | `ai_usage_retention_days`          | `aiUsageRetentionDays`         | 0       | `HistoryCleanup`       |
 
 The five history settings were added in `V72` (#429). For them, `0` means **keep forever**, and `0` is the
-default, so upgrading never deletes data unexpectedly. Negative values are rejected with `400`. A `PUT` that
-omits a history setting leaves its current value unchanged, so older clients do not reset them. `V72` also
-dropped the unused `event_source_log_retention_days` column.
+default, so upgrading never deletes data unexpectedly. Negative values are rejected with `400`. The three
+original settings must be at least 1, because 0 would delete everything; smaller values are also rejected with
+`400`. A `PUT` that omits any setting (or sends `null`) leaves its current value unchanged. `V72` also dropped
+the unused `event_source_log_retention_days` column.
 
 ## Batching and Retries
 
@@ -77,16 +78,26 @@ Each setting is skipped when it is `0`.
 |---------------------|---------------------------------------------------------------------------------|
 | Scheduled job runs  | Status `Completed` or `Failed` and `created_on` older than the period           |
 | Reports             | Status `Completed` or `Failed` and `created_on` older than the period, with labels |
-| Workflow runs       | Status not `running`/`waiting`, and `completed_on` (or `started_on` if unset) older than the period |
+| Workflow runs       | Status `completed`, `failed` or `cancelled`, and `completed_on` (or `started_on` if unset) older than the period |
 | Activity log        | `created_on` older than the period, with or without a project                   |
 | AI usage            | `created_on` older than the period, with or without a project                   |
 
-Deleting a workflow run deletes its `workflow_wait`, `workflow_event_subscription` and `workflow_run_resume`
-rows and clears `task.workflow_run_id` and `routing_outcome_item.workflow_run_id`. Tasks are kept: they belong
-to the project and are deleted with it. The run's trace follows trace retention.
+Workflow runs use an allow-list of finished statuses (`FINISHED_WORKFLOW_RUN_STATUSES`), so runs in a status
+added later are kept until the list is updated. Deleting a workflow run deletes its `workflow_wait`,
+`workflow_event_subscription` and `workflow_run_resume` rows and clears `task.workflow_run_id` and
+`routing_outcome_item.workflow_run_id`. Tasks are kept: they belong to the project and are deleted with it.
+The run's trace follows trace retention.
 
 Deleting a job run or report does not touch its configuration version (`scheduled_job_version` /
 `report_definition_version`), which belongs to the definition.
+
+## Concurrency
+
+The cleanup jobs use bulk JPQL `UPDATE` and `DELETE` statements, which bypass the persistence context. If
+another transaction has the same row loaded as a managed entity (for example a task whose `trace_id` is being
+cleared) and flushes it after the cleanup commits, it can write the old value back, or fail on a row that no
+longer exists. The window is small, because cleanup only touches rows that are past their retention period,
+and this was already true before #429. The next cleanup run clears any value that was written back.
 
 ## Accepted Dangling References
 
