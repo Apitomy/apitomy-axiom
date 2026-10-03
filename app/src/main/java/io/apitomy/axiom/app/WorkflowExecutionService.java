@@ -43,6 +43,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
+import io.apitomy.axiom.core.logging.LogContext;
 import org.jboss.logging.Logger;
 
 import java.time.Instant;
@@ -143,6 +144,14 @@ public class WorkflowExecutionService {
     private WorkflowRunEntity doTriggerWorkflow(long projectId, long definitionId,
                                                   Map<String, Object> extraContext,
                                                   EventOrigin origin) {
+        try (LogContext logCtx = LogContext.create().projectId(projectId)) {
+            return startRun(projectId, definitionId, extraContext, origin, logCtx);
+        }
+    }
+
+    private WorkflowRunEntity startRun(long projectId, long definitionId,
+                                       Map<String, Object> extraContext,
+                                       EventOrigin origin, LogContext logCtx) {
         ProjectEntity project = ProjectEntity.findById(projectId);
         if (project == null) {
             throw new WebApplicationException("Project not found", 404);
@@ -213,6 +222,7 @@ public class WorkflowExecutionService {
         }
         persistInstanceState(entity, instance);
         entity.persist();
+        logCtx.workflowRunId(entity.id);
 
         try {
             TraceContext traceCtx = traceService.createTrace(
@@ -222,6 +232,7 @@ public class WorkflowExecutionService {
                     "workflow", "Workflow: " + definition.name,
                     "workflow-run", entity.id);
             entity.traceId = traceCtx.traceId();
+            logCtx.traceId(entity.traceId);
         } catch (Exception e) {
             LOG.warnf(e, "Failed to create trace for workflow run %d", entity.id);
         }
@@ -447,6 +458,16 @@ public class WorkflowExecutionService {
      * and {@link #onEventReceived(long, String, Map)}.
      */
     private void advanceWorkflow(WorkflowRunEntity entity, Workflow workflow,
+            WorkflowInstance instance, String nodeId, NodeResult result) {
+        try (LogContext ignored = LogContext.create()
+                .traceId(entity.traceId)
+                .projectId(entity.projectId)
+                .workflowRunId(entity.id)) {
+            doAdvanceWorkflow(entity, workflow, instance, nodeId, result);
+        }
+    }
+
+    private void doAdvanceWorkflow(WorkflowRunEntity entity, Workflow workflow,
             WorkflowInstance instance, String nodeId, NodeResult result) {
         WorkflowInstance advanced = workflowEngine.completeNode(
                 workflow, instance, nodeId, result);

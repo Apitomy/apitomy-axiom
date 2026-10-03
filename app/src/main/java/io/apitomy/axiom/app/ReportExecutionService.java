@@ -27,6 +27,7 @@ import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import io.apitomy.axiom.core.logging.LogContext;
 import org.jboss.logging.Logger;
 
 import java.nio.file.Path;
@@ -101,6 +102,13 @@ public class ReportExecutionService {
      * @param reportId the report entity ID to update
      */
     public void generateReport(ReportDefinitionEntity definition, Long reportId) {
+        try (LogContext logCtx = LogContext.create().reportId(reportId)) {
+            doGenerateReport(definition, reportId, logCtx);
+        }
+    }
+
+    private void doGenerateReport(ReportDefinitionEntity definition, Long reportId,
+                                  LogContext logCtx) {
         LOG.infof("Generating report '%s' (ID: %d)", definition.name, reportId);
 
         // Load DB-backed context (toolset resolution, repository lookup) in a
@@ -125,6 +133,9 @@ public class ReportExecutionService {
             LOG.warnf(e, "Failed to create trace for report %d", reportId);
         }
         final TraceContext ctx = createdTrace;
+        if (ctx != null) {
+            logCtx.traceId(ctx.traceId());
+        }
         final Long nodeId = createdNodeId;
 
         GenerationContext genCtx;
@@ -257,21 +268,22 @@ public class ReportExecutionService {
             agentPool.release(lease);
             throw e;
         }
+        // The callbacks run on the agent's thread: carry the logging context over to it.
         future
-                .thenAccept(result -> {
+                .thenAccept(LogContext.wrap((AgentResult result) -> {
                     Thread.currentThread().setContextClassLoader(contextCl);
                     agentPool.release(lease);
                     onReportCompleted(reportId, definition.id, result,
                             finalTraceCtx, finalAiNodeId);
-                })
-                .exceptionally(throwable -> {
+                }))
+                .exceptionally(LogContext.wrap((Throwable throwable) -> {
                     Thread.currentThread().setContextClassLoader(contextCl);
                     agentPool.release(lease);
                     LOG.errorf(throwable, "Report %d generation failed unexpectedly", reportId);
                     failReport(reportId, "Unexpected error: " + throwable.getMessage(),
                             finalTraceCtx, finalAiNodeId);
                     return null;
-                });
+                }));
     }
 
     /**

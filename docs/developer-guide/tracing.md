@@ -713,3 +713,6 @@ continues normally — tracing is best-effort and never blocks work.
 The trace ID is also Axiom's correlation ID. Activity log rows, AI usage rows, tasks, runs and reports store
 the trace ID of the work that produced them, and agents can join their caller's trace through the
 `X-Axiom-Trace-Id` and `X-Axiom-Parent-Node-Id` headers. See [Correlation by Trace ID](correlation.md).
+
+Server log lines also carry the trace ID (MDC key `traceId`), so a trace can be followed in the logs with
+`grep traceId=<uuid>`. See [Correlation by Trace ID](correlation.md#server-logs-correlation-ids-in-the-mdc).

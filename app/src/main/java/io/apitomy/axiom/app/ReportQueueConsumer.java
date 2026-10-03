@@ -10,6 +10,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import io.apitomy.axiom.core.logging.LogContext;
 import org.jboss.logging.Logger;
 
 import java.util.concurrent.BlockingQueue;
@@ -87,7 +88,9 @@ public class ReportQueueConsumer {
                 ManagedContext requestContext = Arc.container().requestContext();
                 requestContext.activate();
                 try {
-                    executeReport(reportId);
+                    try (LogContext ignored = LogContext.create().reportId(reportId)) {
+                        executeReport(reportId);
+                    }
                 } finally {
                     requestContext.terminate();
                 }

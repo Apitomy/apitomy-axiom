@@ -2,11 +2,14 @@ package io.apitomy.axiom.app.rest;
 
 import io.apitomy.axiom.core.entities.TraceEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
+import io.apitomy.axiom.core.logging.LogContext;
 import io.apitomy.axiom.core.tracing.TraceContext;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerRequestFilter;
+import jakarta.ws.rs.container.ContainerResponseContext;
+import jakarta.ws.rs.container.ContainerResponseFilter;
 import jakarta.ws.rs.ext.Provider;
 import org.jboss.logging.Logger;
 
@@ -18,9 +21,17 @@ import java.util.UUID;
  * <p>
  * The filter never fails a request: invalid or unknown values are logged at debug level, removed from
  * the request headers (so typed header parameters cannot reject the request) and otherwise ignored.
+ * <p>
+ * A valid caller trace is also put into the logging MDC ({@link LogContext#TRACE_ID}) for the rest of
+ * the request, so server log lines written while handling the callback carry the caller's trace ID.
+ * The response filter restores the MDC. (Quarkus stores the MDC in the request's Vert.x duplicated
+ * context, so it cannot leak to other requests even when the response filter does not run.)
  */
 @Provider
-public class CallerTraceFilter implements ContainerRequestFilter {
+public class CallerTraceFilter implements ContainerRequestFilter, ContainerResponseFilter {
+
+    /** Request property holding the {@link LogContext} opened for the request. */
+    static final String LOG_CONTEXT_PROPERTY = CallerTraceFilter.class.getName() + ".logContext";
 
     /** Header carrying the caller's trace ID. */
     public static final String TRACE_HEADER = "X-Axiom-Trace-Id";
@@ -49,6 +60,8 @@ public class CallerTraceFilter implements ContainerRequestFilter {
             TraceContext ctx = resolve(traceHeader, parentHeader);
             if (ctx != null) {
                 callerTraceContext.set(ctx);
+                requestContext.setProperty(LOG_CONTEXT_PROPERTY,
+                        LogContext.create().traceId(ctx.traceId()));
                 return;
             }
         } catch (Exception e) {
@@ -57,6 +70,22 @@ public class CallerTraceFilter implements ContainerRequestFilter {
         // Invalid: drop the headers so they cannot affect request handling.
         requestContext.getHeaders().remove(TRACE_HEADER);
         requestContext.getHeaders().remove(PARENT_NODE_HEADER);
+    }
+
+    /**
+     * Restores the logging MDC changed by {@link #filter(ContainerRequestContext)}.
+     *
+     * @param requestContext  the request context
+     * @param responseContext the response context
+     */
+    @Override
+    public void filter(ContainerRequestContext requestContext,
+                       ContainerResponseContext responseContext) {
+        Object logContext = requestContext.getProperty(LOG_CONTEXT_PROPERTY);
+        if (logContext instanceof LogContext lc) {
+            requestContext.removeProperty(LOG_CONTEXT_PROPERTY);
+            lc.close();
+        }
     }
 
     private TraceContext resolve(String traceHeader, String parentHeader) {

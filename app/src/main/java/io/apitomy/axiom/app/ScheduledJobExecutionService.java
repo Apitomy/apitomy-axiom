@@ -22,6 +22,7 @@ import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import io.apitomy.axiom.core.logging.LogContext;
 import org.jboss.logging.Logger;
 
 import java.io.IOException;
@@ -95,20 +96,25 @@ public class ScheduledJobExecutionService {
      * @param runId the run entity ID
      */
     public void executeRun(ScheduledJobEntity job, Long runId) {
-        if ("script".equals(job.executionMode)) {
-            executeScript(job, runId);
-        } else {
-            executeAgent(job, runId);
+        try (LogContext logCtx = LogContext.create().runId(runId)) {
+            if ("script".equals(job.executionMode)) {
+                executeScript(job, runId, logCtx);
+            } else {
+                executeAgent(job, runId, logCtx);
+            }
         }
     }
 
     /**
      * Executes a job run in agent mode via the agent pool.
      */
-    private void executeAgent(ScheduledJobEntity job, Long runId) {
+    private void executeAgent(ScheduledJobEntity job, Long runId, LogContext logCtx) {
         LOG.infof("Executing scheduled job '%s' in agent mode (run ID: %d)", job.name, runId);
 
         TraceContext traceCtx = createRunTrace(job, runId);
+        if (traceCtx != null) {
+            logCtx.traceId(traceCtx.traceId());
+        }
 
         Long aiNodeId = null;
         if (traceCtx != null) {
@@ -195,29 +201,33 @@ public class ScheduledJobExecutionService {
             agentPool.release(lease);
             throw e;
         }
+        // The callbacks run on the agent's thread: carry the logging context over to it.
         future
-                .thenAccept(result -> {
+                .thenAccept(LogContext.wrap((AgentResult result) -> {
                     Thread.currentThread().setContextClassLoader(contextCl);
                     agentPool.release(lease);
                     onAgentCompleted(runId, job.id, result, finalTraceCtx, finalAiNodeId);
-                })
-                .exceptionally(throwable -> {
+                }))
+                .exceptionally(LogContext.wrap((Throwable throwable) -> {
                     Thread.currentThread().setContextClassLoader(contextCl);
                     agentPool.release(lease);
                     LOG.errorf(throwable, "Scheduled job run %d failed unexpectedly", runId);
                     failRun(runId, "Unexpected error: " + throwable.getMessage(),
                             finalTraceCtx, finalAiNodeId);
                     return null;
-                });
+                }));
     }
 
     /**
      * Executes a job run in script mode via ProcessBuilder.
      */
-    private void executeScript(ScheduledJobEntity job, Long runId) {
+    private void executeScript(ScheduledJobEntity job, Long runId, LogContext logCtx) {
         LOG.infof("Executing scheduled job '%s' in script mode (run ID: %d)", job.name, runId);
 
         TraceContext traceCtx = createRunTrace(job, runId);
+        if (traceCtx != null) {
+            logCtx.traceId(traceCtx.traceId());
+        }
         Long scriptNodeId = null;
         if (traceCtx != null) {
             try {
