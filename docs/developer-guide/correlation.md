@@ -123,6 +123,96 @@ node is added under the caller's parent node, instead of a new `user-action` tra
 `createdBy` stays `user`. `POST /scheduled-jobs/{id}/run` and `POST /reports/definitions/{id}/run` only
 record the caller trace in `triggered_by_trace_id`. Other endpoints ignore the caller trace.
 
+## Server Logs: Correlation IDs in the MDC
+
+Server log lines carry the correlation IDs of the work they belong to (#428). The IDs are put into the
+logging MDC (`org.jboss.logging.MDC`) by `io.apitomy.axiom.core.logging.LogContext`:
+
+| MDC key         | Value                                  |
+|-----------------|----------------------------------------|
+| `traceId`       | Trace (correlation) ID                 |
+| `eventId`       | Stream event being routed              |
+| `projectId`     | Project                                |
+| `taskId`        | Task                                   |
+| `runId`         | Scheduled job run                      |
+| `workflowRunId` | Workflow run                           |
+| `reportId`      | Report                                 |
+
+`LogContext` also maintains the composite key `axiomCtx`, which holds only the keys that are present, for
+example `[traceId=3f2a9c1e-... projectId=7 taskId=42] `, and is absent when none are set. The console and file
+log formats in `application.properties` print it with `%X{axiomCtx}`, so lines outside any unit of work look
+exactly as before:
+
+```
+2026-10-03 11:53:27 INFO  [io.ap.ax.ap.TaskExecutionService] (main) [traceId=3f2a9c1e-... projectId=7 taskId=42] Task 42 completed
+2026-10-03 11:53:27 INFO  [io.ap.ax.ap.EventStreamOrchestrator] (executor-thread-1) Recovered 2 orphaned pending ledger entries
+```
+
+### Grepping the Logs
+
+Given a trace ID (from the trace UI, a task, a report, a run or a `routing_outcome` row):
+
+```bash
+grep 'traceId=3f2a9c1e-0000-4000-8000-000000000001' axiom.log
+# Everything for one task, scheduled job run, report or stream event
+grep -E 'taskId=42[] ]' axiom.log
+grep -E 'runId=17[] ]' axiom.log
+grep -E 'reportId=5[] ]' axiom.log
+grep 'eventId=6b1d...' axiom.log
+```
+
+Match numeric IDs with a trailing `]` or space (as above) so that `taskId=4` does not also match `taskId=42`.
+The console log goes to standard output; the file log is written only when `quarkus.log.file.enabled=true`.
+
+A failed routing rule logs two lines: `Routing rule <type> failed for event <id>: <message>`, written inside
+the rule's context (so it carries the `eventId` and the rule's `traceId`) and **without** a stack trace, and then
+`Routing failed for event <id> / subscription <id>`, written in the event's context (`eventId` only) **with**
+the stack trace. The stack trace is logged once, on the second line, because not every routing failure
+passes through a rule. To find the stack trace for a trace ID, grep the trace ID, then grep the `eventId` shown
+on the rule line.
+
+### Where the Context Is Set
+
+| Entry point                                        | Keys                                                  |
+|----------------------------------------------------|-------------------------------------------------------|
+| `EventStreamOrchestrator`, per event and ledger retry | `eventId`; per routing rule also `traceId` once the Manager or invoke-action trace exists |
+| `TaskExecutionService.executeTask`, `onTaskCompleted`, `failTask` | `traceId`, `eventId`, `projectId`, `taskId`, `workflowRunId` |
+| `ScriptExecutionService.executeScript` (incl. the async script body) | as for tasks                     |
+| `ScheduledJobQueueConsumer`, `ScheduledJobExecutionService.executeRun` | `runId`, then `traceId`      |
+| `ReportQueueConsumer`, `ReportExecutionService.generateReport` | `reportId`, then `traceId`           |
+| `WorkflowExecutionService` start and advance (task completion, wait elapsed, event received) | `traceId`, `projectId`, `workflowRunId` |
+| `CallerTraceFilter` (REST requests with a valid `X-Axiom-Trace-Id`) | `traceId`                           |
+
+### Rules for New Code
+
+- Always use try-with-resources: `try (LogContext ignored = LogContext.create().traceId(id).taskId(t)) {...}`.
+  `close()` restores the previous values, so contexts nest (a task started during event routing logs with the
+  task's trace, then the event's context is back) and nothing leaks to the next job on a pooled, virtual or
+  scheduler thread, including when the body throws.
+- The MDC belongs to the current thread (or, on Vert.x, to the request's duplicated context). Work handed to
+  another thread loses it. Agent completion callbacks (`CompletableFuture.thenAccept` / `exceptionally`) run
+  on the agent's thread, usually a common `ForkJoinPool` worker, so they are wrapped with
+  `LogContext.wrap(...)`, which captures the context when the callback is created and restores it, and
+  removes it again, around the callback. Do the same for new asynchronous code, or open a `LogContext`
+  inside the asynchronous body as `ScriptExecutionService` does.
+- Code running inside agent subprocess readers (`agents/*`) runs on threads Axiom does not wrap; those lines
+  have no correlation IDs.
+
+### OpenTelemetry (Follow-Up Evaluation)
+
+`quarkus-opentelemetry` would add W3C trace context propagation, spans for REST, JDBC and the scheduler, and
+export to a collector (Jaeger, Tempo). With it enabled, Quarkus also puts its own `traceId`/`spanId` in the
+MDC. Notes for a follow-up:
+
+- OpenTelemetry trace IDs are 32 hex characters; Axiom trace IDs are UUIDs stored in the database. They would
+  be separate IDs. Keep the Axiom trace ID as the correlation ID and add it as a span attribute
+  (`axiom.trace_id`) rather than trying to make the two equal. The MDC key `traceId` would clash with the
+  OpenTelemetry one; rename ours (for example `axiomTraceId`) at that point.
+- Context propagation across the `CompletableFuture` callbacks and the queue consumer threads has the same
+  problem as the MDC and would need the same wrapping (or SmallRye Context Propagation's `ManagedExecutor`).
+- It needs a collector to be useful; Axiom is a single-process app with its own trace UI, so the benefit is
+  mainly for deployments that already run an observability stack. It is not added for now.
+
 ## Accepted Risk
 
 An agent can keep its trace open by creating tasks that join it, because `TaskTraceFinalizer` keeps a trace
@@ -138,4 +228,4 @@ belongs to the trace.
   the owner finishes first, its trace is marked complete while the joined task may still be running. The
   task's own node still completes when the task finishes.
 - Script-mode scheduled job runs have no `ai_usage` row, because no AI is invoked.
-- Out of scope for now: MDC log correlation (#428) and the lineage view (#430).
+- Out of scope for now: the lineage view (#430).

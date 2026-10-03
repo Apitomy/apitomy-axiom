@@ -2,6 +2,7 @@ package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
 import io.apitomy.axiom.core.entities.ReportEntity;
+import io.apitomy.axiom.core.logging.LogContext;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ManagedContext;
 import io.quarkus.runtime.ShutdownEvent;
@@ -87,7 +88,9 @@ public class ReportQueueConsumer {
                 ManagedContext requestContext = Arc.container().requestContext();
                 requestContext.activate();
                 try {
-                    executeReport(reportId);
+                    try (LogContext ignored = LogContext.create().reportId(reportId)) {
+                        executeReport(reportId);
+                    }
                 } finally {
                     requestContext.terminate();
                 }

@@ -1,26 +1,27 @@
 package io.apitomy.axiom.app;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.agents.spi.AgentRegistry;
 import io.apitomy.axiom.agents.spi.AgentRequest;
 import io.apitomy.axiom.agents.spi.AgentResult;
-import io.apitomy.axiom.core.entities.TraceNodeEntity;
-import io.apitomy.axiom.core.tracing.TraceService;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
+import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AgentEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
-import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
+import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.events.SseEvent;
+import io.apitomy.axiom.core.logging.LogContext;
 import io.apitomy.axiom.core.services.ActionTypeIoValidator;
 import io.apitomy.axiom.core.services.EncryptionService;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.InputBindingResolver;
 import io.apitomy.axiom.core.services.ToolsetResolver;
 import io.apitomy.axiom.core.services.WorkspaceService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.core.tracing.TraceService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
@@ -116,6 +117,28 @@ public class TaskExecutionService {
      * @param task the task to execute
      */
     public void executeTask(TaskEntity task) {
+        try (LogContext ignored = taskLogContext(task)) {
+            doExecuteTask(task);
+        }
+    }
+
+    /**
+     * Opens a logging context carrying the task's correlation IDs (trace, event, project, task and
+     * workflow run). The caller must close it, normally with try-with-resources.
+     *
+     * @param task the task whose IDs are put into the MDC
+     * @return the opened context
+     */
+    static LogContext taskLogContext(TaskEntity task) {
+        return LogContext.create()
+                .traceId(task.traceId)
+                .eventId(task.eventId)
+                .projectId(task.projectId)
+                .taskId(task.id)
+                .workflowRunId(task.workflowRunId);
+    }
+
+    private void doExecuteTask(TaskEntity task) {
         // Check if this is a script action type
         ActionTypeEntity actionTypeEntity = ActionTypeEntity.find("name", task.actionType).firstResult();
 
@@ -219,18 +242,19 @@ public class TaskExecutionService {
                         ? actionTypeEntity.timeoutSeconds : 120)
                 .build();
 
-        // Execute asynchronously
+        // Execute asynchronously. The callbacks run on the agent's thread (typically a common
+        // ForkJoinPool worker), so the logging context is captured here and re-applied there.
         lease.agent().execute(request)
-                .thenAccept(result -> {
+                .thenAccept(LogContext.wrap((AgentResult result) -> {
                     agentPool.release(lease);
                     onTaskCompleted(task.id, result);
-                })
-                .exceptionally(throwable -> {
+                }))
+                .exceptionally(LogContext.wrap((Throwable throwable) -> {
                     agentPool.release(lease);
                     LOG.errorf(throwable, "Task %d execution failed unexpectedly", task.id);
                     failTask(task.id, "Unexpected error: " + throwable.getMessage());
                     return null;
-                });
+                }));
     }
 
     /**
@@ -438,7 +462,13 @@ public class TaskExecutionService {
         if (task == null) {
             return;
         }
+        try (LogContext ignored = taskLogContext(task)) {
+            recordTaskCompletion(task, result);
+        }
+    }
 
+    private void recordTaskCompletion(TaskEntity task, AgentResult result) {
+        Long taskId = task.id;
         String previousStatus = task.status;
         task.status = result.success() ? "Completed" : "Failed";
         task.output = result.output();
@@ -523,7 +553,10 @@ public class TaskExecutionService {
     @Transactional
     void failTask(Long taskId, String reason) {
         TaskEntity task = TaskEntity.findById(taskId);
-        if (task != null) {
+        if (task == null) {
+            return;
+        }
+        try (LogContext ignored = taskLogContext(task)) {
             task.status = "Failed";
             task.output = reason;
             task.completedOn = Instant.now();

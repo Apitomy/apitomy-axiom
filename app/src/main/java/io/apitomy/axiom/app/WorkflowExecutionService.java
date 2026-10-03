@@ -2,6 +2,7 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.api.beans.OutputSchema;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
@@ -13,23 +14,23 @@ import io.apitomy.axiom.core.entities.WorkflowEventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunResumeEntity;
 import io.apitomy.axiom.core.entities.WorkflowWaitEntity;
-import io.apitomy.axiom.core.services.ActionTypeIoValidator;
 import io.apitomy.axiom.core.events.SseEvent;
-import io.apitomy.axiom.core.tracing.TraceService;
+import io.apitomy.axiom.core.logging.LogContext;
+import io.apitomy.axiom.core.services.ActionTypeIoValidator;
 import io.apitomy.axiom.core.tracing.TraceContext;
-import io.apitomy.axiom.api.beans.OutputSchema;
+import io.apitomy.axiom.core.tracing.TraceService;
 import io.apitomy.flow.engine.WorkflowEngine;
 import io.apitomy.flow.engine.WorkflowValidationException;
-import io.apitomy.flow.model.InstanceStatus;
-import io.apitomy.flow.model.NodeType;
-import io.apitomy.flow.model.Workflow;
-import io.apitomy.flow.model.WorkflowInstance;
-import io.apitomy.flow.model.WorkflowNode;
 import io.apitomy.flow.model.ActionInfo;
 import io.apitomy.flow.model.ActiveBranch;
 import io.apitomy.flow.model.HumanTaskInfo;
+import io.apitomy.flow.model.InstanceStatus;
+import io.apitomy.flow.model.NodeType;
 import io.apitomy.flow.model.ReceiveEventInfo;
 import io.apitomy.flow.model.WaitInfo;
+import io.apitomy.flow.model.Workflow;
+import io.apitomy.flow.model.WorkflowInstance;
+import io.apitomy.flow.model.WorkflowNode;
 import io.apitomy.flow.spi.NodeExecutionContext;
 import io.apitomy.flow.spi.NodeExecutor;
 import io.apitomy.flow.spi.NodeExecutorProvider;
@@ -143,6 +144,14 @@ public class WorkflowExecutionService {
     private WorkflowRunEntity doTriggerWorkflow(long projectId, long definitionId,
                                                   Map<String, Object> extraContext,
                                                   EventOrigin origin) {
+        try (LogContext logCtx = LogContext.create().projectId(projectId)) {
+            return startRun(projectId, definitionId, extraContext, origin, logCtx);
+        }
+    }
+
+    private WorkflowRunEntity startRun(long projectId, long definitionId,
+                                       Map<String, Object> extraContext,
+                                       EventOrigin origin, LogContext logCtx) {
         ProjectEntity project = ProjectEntity.findById(projectId);
         if (project == null) {
             throw new WebApplicationException("Project not found", 404);
@@ -213,6 +222,7 @@ public class WorkflowExecutionService {
         }
         persistInstanceState(entity, instance);
         entity.persist();
+        logCtx.workflowRunId(entity.id);
 
         try {
             TraceContext traceCtx = traceService.createTrace(
@@ -222,6 +232,7 @@ public class WorkflowExecutionService {
                     "workflow", "Workflow: " + definition.name,
                     "workflow-run", entity.id);
             entity.traceId = traceCtx.traceId();
+            logCtx.traceId(entity.traceId);
         } catch (Exception e) {
             LOG.warnf(e, "Failed to create trace for workflow run %d", entity.id);
         }
@@ -256,6 +267,17 @@ public class WorkflowExecutionService {
         if (task == null || task.workflowRunId == null) {
             return;
         }
+        try (LogContext ignored = LogContext.create()
+                .traceId(task.traceId)
+                .projectId(task.projectId)
+                .taskId(task.id)
+                .workflowRunId(task.workflowRunId)) {
+            advanceAfterTask(task);
+        }
+    }
+
+    private void advanceAfterTask(TaskEntity task) {
+        long taskId = task.id;
 
         WorkflowRunEntity entity =
                 WorkflowRunEntity.findById(task.workflowRunId);
@@ -327,12 +349,19 @@ public class WorkflowExecutionService {
      */
     @Transactional
     public void onWaitElapsed(long runId, String nodeId, Long waitId) {
+        try (LogContext logCtx = LogContext.create().workflowRunId(runId)) {
+            advanceAfterWait(runId, nodeId, waitId, logCtx);
+        }
+    }
+
+    private void advanceAfterWait(long runId, String nodeId, Long waitId, LogContext logCtx) {
         WorkflowRunEntity entity = WorkflowRunEntity.findById(runId);
         if (entity == null) {
             LOG.warnf("Workflow run %d not found for elapsed wait node %s",
                     runId, nodeId);
             return;
         }
+        logCtx.traceId(entity.traceId).projectId(entity.projectId);
 
         completeParkedTraceNode(entity, "workflow-wait", waitId);
 
@@ -379,12 +408,23 @@ public class WorkflowExecutionService {
     @Transactional
     public ResumedRun onEventReceived(long runId, String nodeId, Map<String, Object> eventMap,
                                       EventOrigin origin, Long subscriptionId) {
+        try (LogContext logCtx = LogContext.create()
+                .workflowRunId(runId)
+                .eventId(origin != null ? origin.eventId() : null)) {
+            return advanceAfterEvent(runId, nodeId, eventMap, origin, subscriptionId, logCtx);
+        }
+    }
+
+    private ResumedRun advanceAfterEvent(long runId, String nodeId, Map<String, Object> eventMap,
+                                         EventOrigin origin, Long subscriptionId,
+                                         LogContext logCtx) {
         WorkflowRunEntity entity = WorkflowRunEntity.findById(runId);
         if (entity == null) {
             LOG.warnf("Workflow run %d not found for received event at node %s",
                     runId, nodeId);
             return null;
         }
+        logCtx.traceId(entity.traceId).projectId(entity.projectId);
 
         Long traceNodeId = completeParkedTraceNode(entity, "workflow-event-subscription",
                 subscriptionId);
@@ -447,6 +487,16 @@ public class WorkflowExecutionService {
      * and {@link #onEventReceived(long, String, Map)}.
      */
     private void advanceWorkflow(WorkflowRunEntity entity, Workflow workflow,
+            WorkflowInstance instance, String nodeId, NodeResult result) {
+        try (LogContext ignored = LogContext.create()
+                .traceId(entity.traceId)
+                .projectId(entity.projectId)
+                .workflowRunId(entity.id)) {
+            doAdvanceWorkflow(entity, workflow, instance, nodeId, result);
+        }
+    }
+
+    private void doAdvanceWorkflow(WorkflowRunEntity entity, Workflow workflow,
             WorkflowInstance instance, String nodeId, NodeResult result) {
         WorkflowInstance advanced = workflowEngine.completeNode(
                 workflow, instance, nodeId, result);

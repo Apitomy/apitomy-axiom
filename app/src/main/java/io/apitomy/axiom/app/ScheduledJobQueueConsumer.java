@@ -2,6 +2,7 @@ package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.core.entities.ScheduledJobEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
+import io.apitomy.axiom.core.logging.LogContext;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ManagedContext;
 import io.quarkus.runtime.ShutdownEvent;
@@ -95,7 +96,7 @@ public class ScheduledJobQueueConsumer {
 
                 ManagedContext requestContext = Arc.container().requestContext();
                 requestContext.activate();
-                try {
+                try (LogContext ignored = LogContext.create().runId(runId)) {
                     executeRun(runId);
                 } finally {
                     requestContext.terminate();

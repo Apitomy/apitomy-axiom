@@ -2,25 +2,26 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.apitomy.axiom.core.tracing.TraceContext;
-import io.apitomy.axiom.core.tracing.TraceService;
-import io.apitomy.axiom.core.util.SlugUtil;
-import io.apitomy.axiom.core.entities.ActivityLogEntity;
-import io.apitomy.axiom.core.entities.AiUsageEntity;
-import io.apitomy.axiom.core.events.SseEvent;
-import io.apitomy.axiom.core.entities.EventSourceConnectionEntity;
-import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
-import io.apitomy.axiom.core.entities.ReportEntity;
-import io.apitomy.axiom.core.entities.SecretEntity;
-import io.apitomy.axiom.core.services.EncryptionService;
-import io.apitomy.axiom.core.services.EnvironmentResolver;
-import io.apitomy.axiom.core.services.ToolsetResolver;
 import io.apitomy.axiom.agents.spi.Agent;
 import io.apitomy.axiom.agents.spi.AgentRegistry;
 import io.apitomy.axiom.agents.spi.AgentRequest;
 import io.apitomy.axiom.agents.spi.AgentResult;
 import io.apitomy.axiom.app.AgentLease;
 import io.apitomy.axiom.app.AgentPool;
+import io.apitomy.axiom.core.entities.ActivityLogEntity;
+import io.apitomy.axiom.core.entities.AiUsageEntity;
+import io.apitomy.axiom.core.entities.EventSourceConnectionEntity;
+import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
+import io.apitomy.axiom.core.entities.ReportEntity;
+import io.apitomy.axiom.core.entities.SecretEntity;
+import io.apitomy.axiom.core.events.SseEvent;
+import io.apitomy.axiom.core.logging.LogContext;
+import io.apitomy.axiom.core.services.EncryptionService;
+import io.apitomy.axiom.core.services.EnvironmentResolver;
+import io.apitomy.axiom.core.services.ToolsetResolver;
+import io.apitomy.axiom.core.tracing.TraceContext;
+import io.apitomy.axiom.core.tracing.TraceService;
+import io.apitomy.axiom.core.util.SlugUtil;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
@@ -30,14 +31,14 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.nio.file.Path;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Executes report generation by invoking the AI engine with a prompt template,
@@ -101,6 +102,13 @@ public class ReportExecutionService {
      * @param reportId the report entity ID to update
      */
     public void generateReport(ReportDefinitionEntity definition, Long reportId) {
+        try (LogContext logCtx = LogContext.create().reportId(reportId)) {
+            doGenerateReport(definition, reportId, logCtx);
+        }
+    }
+
+    private void doGenerateReport(ReportDefinitionEntity definition, Long reportId,
+                                  LogContext logCtx) {
         LOG.infof("Generating report '%s' (ID: %d)", definition.name, reportId);
 
         // Load DB-backed context (toolset resolution, repository lookup) in a
@@ -125,6 +133,9 @@ public class ReportExecutionService {
             LOG.warnf(e, "Failed to create trace for report %d", reportId);
         }
         final TraceContext ctx = createdTrace;
+        if (ctx != null) {
+            logCtx.traceId(ctx.traceId());
+        }
         final Long nodeId = createdNodeId;
 
         GenerationContext genCtx;
@@ -257,21 +268,22 @@ public class ReportExecutionService {
             agentPool.release(lease);
             throw e;
         }
+        // The callbacks run on the agent's thread: carry the logging context over to it.
         future
-                .thenAccept(result -> {
+                .thenAccept(LogContext.wrap((AgentResult result) -> {
                     Thread.currentThread().setContextClassLoader(contextCl);
                     agentPool.release(lease);
                     onReportCompleted(reportId, definition.id, result,
                             finalTraceCtx, finalAiNodeId);
-                })
-                .exceptionally(throwable -> {
+                }))
+                .exceptionally(LogContext.wrap((Throwable throwable) -> {
                     Thread.currentThread().setContextClassLoader(contextCl);
                     agentPool.release(lease);
                     LOG.errorf(throwable, "Report %d generation failed unexpectedly", reportId);
                     failReport(reportId, "Unexpected error: " + throwable.getMessage(),
                             finalTraceCtx, finalAiNodeId);
                     return null;
-                });
+                }));
     }
 
     /**

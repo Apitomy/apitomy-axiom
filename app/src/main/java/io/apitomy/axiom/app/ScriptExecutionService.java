@@ -1,18 +1,19 @@
 package io.apitomy.axiom.app;
 
-import io.apitomy.axiom.core.entities.TraceNodeEntity;
-import io.apitomy.axiom.core.tracing.TraceService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
+import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.events.SseEvent;
+import io.apitomy.axiom.core.logging.LogContext;
 import io.apitomy.axiom.core.services.EncryptionService;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.InputBindingResolver;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.core.tracing.TraceService;
 import io.quarkus.arc.Arc;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
@@ -27,9 +28,9 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
@@ -96,11 +97,15 @@ public class ScriptExecutionService {
      * @param project the project to use for placeholder substitution, or {@code null}
      */
     public void executeScript(TaskEntity task, ProjectEntity project) {
-        markTaskInProgress(task.id);
+        try (LogContext ignored = TaskExecutionService.taskLogContext(task)) {
+            markTaskInProgress(task.id);
+        }
 
+        // Runs on a common ForkJoinPool worker; the logging context is applied (and
+        // removed again) inside the async body so nothing leaks to the pooled thread.
         CompletableFuture.runAsync(() -> {
             Arc.container().requestContext().activate();
-            try {
+            try (LogContext ignored = TaskExecutionService.taskLogContext(task)) {
                 RunResult result = runScript(task, project);
                 completeTask(task.id, result.output, result.exitCode == 0,
                         result.executionLog);

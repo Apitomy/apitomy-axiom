@@ -17,11 +17,13 @@ import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.axiom.core.events.model.RoutingRule;
 import io.apitomy.axiom.core.filters.SubscriptionFilterEvaluator;
 import io.apitomy.axiom.core.lifecycle.ProjectStatus;
+import io.apitomy.axiom.core.logging.LogContext;
 import io.apitomy.axiom.core.services.WorkspaceService;
 import io.apitomy.axiom.core.tracing.TraceContext;
 import io.apitomy.axiom.manager.ManagerDecision;
 import io.apitomy.axiom.manager.ManagerEvaluationResult;
 import io.apitomy.axiom.manager.ManagerService;
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.annotation.PreDestroy;
@@ -29,7 +31,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
-import io.quarkus.narayana.jta.QuarkusTransaction;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -253,7 +254,9 @@ public class EventStreamOrchestrator {
 
             for (StreamEventEntity event : unprocessed) {
                 if (shuttingDown) break;
-                processEventForSubscription(event, sub);
+                try (LogContext ignored = LogContext.create().eventId(event.id)) {
+                    processEventForSubscription(event, sub);
+                }
             }
         }
     }
@@ -324,47 +327,56 @@ public class EventStreamOrchestrator {
 
         for (EventProcessingLedgerEntity entry : failedEntries) {
             if (shuttingDown) break;
-
-            SubscriptionWithFilters sub = subscriptions.stream()
-                    .filter(s -> s.id == entry.subscriptionId)
-                    .findFirst().orElse(null);
-            if (sub == null) continue; // Subscription no longer enabled or deleted
-
-            StreamEventEntity event = QuarkusTransaction.requiringNew().call(() ->
-                    StreamEventEntity.findById(entry.eventId));
-            if (event == null) {
-                // Event was deleted (retention); clean up the ledger entry
-                QuarkusTransaction.requiringNew().run(() -> {
-                    EventProcessingLedgerEntity e = EventProcessingLedgerEntity.findById(entry.id);
-                    if (e != null) e.delete();
-                });
-                continue;
+            try (LogContext ignored = LogContext.create().eventId(entry.eventId)) {
+                retryFailedEntry(entry, subscriptions);
             }
+        }
+    }
 
-            Integer attempt = beginAttempt(entry.id);
-            if (attempt == null) continue; // Changed concurrently (e.g. deleted)
+    /**
+     * Retries a single failed ledger entry (one iteration of {@link #retryFailedEntries}).
+     */
+    private void retryFailedEntry(EventProcessingLedgerEntity entry,
+                                  List<SubscriptionWithFilters> subscriptions) {
+        SubscriptionWithFilters sub = subscriptions.stream()
+                .filter(s -> s.id == entry.subscriptionId)
+                .findFirst().orElse(null);
+        if (sub == null) return; // Subscription no longer enabled or deleted
 
-            Map<String, Object> eventMap;
-            try {
-                eventMap = buildEventMap(event, parsePayload(event));
-                // An entry that never ran a routing rule may have failed before its filter
-                // matched (a pre-ledger failure): evaluate the filter again.
-                if (!hasRuleOutcomes(entry.id) && !filterEvaluator.matches(sub.filterExpression, eventMap)) {
-                    skipLedgerEntry(entry.id);
-                    continue;
-                }
-            } catch (Exception e) {
-                failProcessing(entry.id, attempt, e);
-                continue;
+        StreamEventEntity event = QuarkusTransaction.requiringNew().call(() ->
+                StreamEventEntity.findById(entry.eventId));
+        if (event == null) {
+            // Event was deleted (retention); clean up the ledger entry
+            QuarkusTransaction.requiringNew().run(() -> {
+                EventProcessingLedgerEntity e = EventProcessingLedgerEntity.findById(entry.id);
+                if (e != null) e.delete();
+            });
+            return;
+        }
+
+        Integer attempt = beginAttempt(entry.id);
+        if (attempt == null) return; // Changed concurrently (e.g. deleted)
+
+        Map<String, Object> eventMap;
+        try {
+            eventMap = buildEventMap(event, parsePayload(event));
+            // An entry that never ran a routing rule may have failed before its filter
+            // matched (a pre-ledger failure): evaluate the filter again.
+            if (!hasRuleOutcomes(entry.id) && !filterEvaluator.matches(sub.filterExpression, eventMap)) {
+                skipLedgerEntry(entry.id);
+                return;
             }
-            try {
-                routeEvent(event, sub, eventMap, entry.id, attempt);
-                completeLedgerEntry(entry.id);
-                LOG.infof("Retry succeeded for event %s / subscription %d (attempt %d)",
-                        event.id, sub.id, attempt);
-            } catch (Exception e) {
-                failLedgerEntry(entry.id, e.getMessage());
-            }
+        } catch (Exception e) {
+            failProcessing(entry.id, attempt, e);
+            return;
+        }
+        try {
+            routeEvent(event, sub, eventMap, entry.id, attempt);
+            completeLedgerEntry(entry.id);
+            LOG.infof("Retry succeeded for event %s / subscription %d (attempt %d)",
+                    event.id, sub.id, attempt);
+        } catch (Exception e) {
+            failLedgerEntry(entry.id, e.getMessage());
         }
     }
 
@@ -571,47 +583,63 @@ public class EventStreamOrchestrator {
                         rule.type(), occurrence, event.id);
                 continue;
             }
-            try {
-                RoutingOutcomeEntity outcome = switch (rule.type()) {
-                    case RoutingRule.TYPE_MANAGER -> routeToManager(event);
-                    case RoutingRule.TYPE_WORKFLOW_DISPATCH ->
-                            routeToWorkflowDispatch(event, eventMap, ledgerId);
-                    case RoutingRule.TYPE_CREATE_WORKFLOW ->
-                            routeToCreateWorkflow(event, rule, ledgerId);
-                    case RoutingRule.TYPE_INVOKE_ACTION -> routeToInvokeAction(event, rule);
-                    default -> {
-                        LOG.warnf("Unknown routing type '%s' in subscription %d",
-                                rule.type(), sub.id);
-                        yield null;
-                    }
-                };
-                if (outcome != null) {
-                    outcome.ledgerId = ledgerId;
-                    outcome.attemptNumber = attempt;
-                    outcome.routingType = rule.type();
-                    outcome.createdOn = Instant.now();
-                    QuarkusTransaction.requiringNew().run(() -> persistOutcome(outcome));
-                }
-            } catch (Exception e) {
-                // Record failed outcome (routing types may supply a pre-filled one, e.g.
-                // with the trace ID of the failed Manager evaluation)
-                QuarkusTransaction.requiringNew().run(() -> {
-                    RoutingOutcomeEntity failedOutcome = e instanceof RoutingFailedException rfe
-                            ? rfe.outcome() : new RoutingOutcomeEntity();
-                    failedOutcome.ledgerId = ledgerId;
-                    failedOutcome.attemptNumber = attempt;
-                    failedOutcome.routingType = rule.type();
-                    failedOutcome.status = "failed";
-                    if (failedOutcome.errorMessage == null) {
-                        failedOutcome.errorMessage = e.getMessage() != null
-                                ? truncate(e.getMessage(), 2000) : "Unknown error";
-                    }
-                    failedOutcome.createdOn = Instant.now();
-                    persistOutcome(failedOutcome);
-                });
-                // Still throw to mark the ledger entry as failed
-                throw e;
+            // Each rule starts its own trace: a per-rule context scopes the trace ID to it.
+            try (LogContext ruleLog = LogContext.create()) {
+                routeRule(event, sub, rule, eventMap, ledgerId, attempt, ruleLog);
             }
+        }
+    }
+
+    /**
+     * Runs a single routing rule and persists its outcome (completed or failed).
+     */
+    private void routeRule(StreamEventEntity event, SubscriptionWithFilters sub, RoutingRule rule,
+                           Map<String, Object> eventMap, Long ledgerId, int attempt,
+                           LogContext ruleLog) {
+        try {
+            RoutingOutcomeEntity outcome = switch (rule.type()) {
+                case RoutingRule.TYPE_MANAGER -> routeToManager(event, ruleLog);
+                case RoutingRule.TYPE_WORKFLOW_DISPATCH ->
+                        routeToWorkflowDispatch(event, eventMap, ledgerId);
+                case RoutingRule.TYPE_CREATE_WORKFLOW ->
+                        routeToCreateWorkflow(event, rule, ledgerId);
+                case RoutingRule.TYPE_INVOKE_ACTION -> routeToInvokeAction(event, rule, ruleLog);
+                default -> {
+                    LOG.warnf("Unknown routing type '%s' in subscription %d",
+                            rule.type(), sub.id);
+                    yield null;
+                }
+            };
+            if (outcome != null) {
+                outcome.ledgerId = ledgerId;
+                outcome.attemptNumber = attempt;
+                outcome.routingType = rule.type();
+                outcome.createdOn = Instant.now();
+                QuarkusTransaction.requiringNew().run(() -> persistOutcome(outcome));
+            }
+        } catch (Exception e) {
+            // Record failed outcome (routing types may supply a pre-filled one, e.g.
+            // with the trace ID of the failed Manager evaluation)
+            QuarkusTransaction.requiringNew().run(() -> {
+                RoutingOutcomeEntity failedOutcome = e instanceof RoutingFailedException rfe
+                        ? rfe.outcome() : new RoutingOutcomeEntity();
+                failedOutcome.ledgerId = ledgerId;
+                failedOutcome.attemptNumber = attempt;
+                failedOutcome.routingType = rule.type();
+                failedOutcome.status = "failed";
+                if (failedOutcome.errorMessage == null) {
+                    failedOutcome.errorMessage = e.getMessage() != null
+                            ? truncate(e.getMessage(), 2000) : "Unknown error";
+                }
+                failedOutcome.createdOn = Instant.now();
+                persistOutcome(failedOutcome);
+            });
+            // Message only: the caller logs the stack trace once ("Routing failed for event"),
+            // since not every routing failure passes through here.
+            LOG.warnf("Routing rule %s failed for event %s: %s", rule.type(), event.id,
+                    e.getMessage());
+            // Still throw to mark the ledger entry as failed
+            throw e;
         }
     }
 
@@ -655,12 +683,15 @@ public class EventStreamOrchestrator {
         };
     }
 
-    private RoutingOutcomeEntity routeToManager(StreamEventEntity event) {
+    private RoutingOutcomeEntity routeToManager(StreamEventEntity event, LogContext ruleLog) {
         // Trace structure: event-ingested (root) → manager-evaluation → manager-decision
         // (one per decision) → task (for create_task / script_action decisions)
         TraceContext traceCtx = managerTraceRecorder.startTrace("manager",
                 "Manager evaluation: " + event.type + " — " + event.ref,
                 "Event: " + event.type + " — " + event.ref, event);
+        if (traceCtx != null) {
+            ruleLog.traceId(traceCtx.traceId());
+        }
         Long evalNodeId = managerTraceRecorder.addNode(traceCtx, "manager-evaluation",
                 "Manager evaluation: " + event.type);
 
@@ -1075,7 +1106,8 @@ public class EventStreamOrchestrator {
         return outcome;
     }
 
-    private RoutingOutcomeEntity routeToInvokeAction(StreamEventEntity event, RoutingRule rule) {
+    private RoutingOutcomeEntity routeToInvokeAction(StreamEventEntity event, RoutingRule rule,
+                                                     LogContext ruleLog) {
         if (rule.actionTypeId() == null) {
             throw new IllegalStateException(
                     "invoke-action routing rule missing actionTypeId");
@@ -1099,6 +1131,9 @@ public class EventStreamOrchestrator {
                     null, null);
         } catch (Exception e) {
             LOG.warnf(e, "Failed to create trace for invoke-action of event %s", event.id);
+        }
+        if (traceCtx != null) {
+            ruleLog.traceId(traceCtx.traceId());
         }
 
         final io.apitomy.axiom.core.tracing.TraceContext finalTraceCtx = traceCtx;
