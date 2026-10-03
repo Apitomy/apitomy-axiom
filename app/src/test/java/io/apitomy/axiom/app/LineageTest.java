@@ -20,6 +20,7 @@ import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunResumeEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
+import io.restassured.http.ContentType;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
@@ -32,11 +33,14 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -90,7 +94,7 @@ class LineageTest {
     @AfterEach
     void cleanup() {
         QuarkusTransaction.requiringNew().run(() -> {
-            for (Object[] row : created) {
+            for (Object[] row : created.reversed()) {
                 Object entity = entityManager.find((Class<?>) row[0], row[1]);
                 if (entity != null) {
                     entityManager.remove(entity);
@@ -346,26 +350,119 @@ class LineageTest {
     // ── Errors ──────────────────────────────────────────────────────
 
     @Test
-    void badRequestsReturn400() {
-        given().when().get("/api/v1/lineage/bogus/1").then().statusCode(400);
-        given().when().get("/api/v1/lineage/task/abc").then().statusCode(400);
-        given().when().get("/api/v1/lineage/event/not-a-uuid").then().statusCode(400);
-        given().when().get("/api/v1/lineage/trace/123").then().statusCode(400);
-        given().when().get("/api/v1/lineage/task/1?direction=sideways").then().statusCode(400);
-        given().when().get("/api/v1/lineage/task/1?depth=0").then().statusCode(400);
-        given().when().get("/api/v1/lineage/task/1?depth=11").then().statusCode(400);
-        given().when().get("/api/v1/lineage/task/1?maxNodes=0").then().statusCode(400);
-        given().when().get("/api/v1/lineage/task/1?maxNodes=1001").then().statusCode(400);
+    void badRequestsReturn400WithErrorBody() {
+        for (String path : List.of("bogus/1", "task/abc", "event/not-a-uuid", "trace/123",
+                "task/1?direction=sideways", "task/1?depth=0", "task/1?depth=11", "task/1?depth=abc",
+                "task/1?maxNodes=0", "task/1?maxNodes=1001", "task/1?maxNodes=xyz")) {
+            given().when().get("/api/v1/lineage/" + path).then()
+                    .statusCode(400)
+                    .contentType(ContentType.JSON)
+                    .body("errorCode", equalTo(400))
+                    .body("message", notNullValue());
+        }
     }
 
     @Test
-    void unknownRootReturns404() {
-        given().when().get("/api/v1/lineage/task/999999999").then().statusCode(404);
-        given().when().get("/api/v1/lineage/event/" + UUID.randomUUID()).then().statusCode(404);
-        given().when().get("/api/v1/lineage/trace/" + UUID.randomUUID()).then().statusCode(404);
-        given().when().get("/api/v1/lineage/workflow-run/999999999").then().statusCode(404);
-        given().when().get("/api/v1/lineage/scheduled-job-run/999999999").then().statusCode(404);
-        given().when().get("/api/v1/lineage/report/999999999").then().statusCode(404);
+    void unknownRootReturns404WithErrorBody() {
+        for (String path : List.of("task/999999999", "event/" + UUID.randomUUID(),
+                "trace/" + UUID.randomUUID(), "workflow-run/999999999", "scheduled-job-run/999999999",
+                "report/999999999")) {
+            given().when().get("/api/v1/lineage/" + path).then()
+                    .statusCode(404)
+                    .contentType(ContentType.JSON)
+                    .body("errorCode", equalTo(404))
+                    .body("message", notNullValue());
+        }
+    }
+
+    // ── Bounded traversal ───────────────────────────────────────────
+
+    @Test
+    void maxNodesBoundsTheRowsLoaded() {
+        UUID eventId = createEvent();
+        UUID traceId = createTrace("manager", eventId);
+        Long outcomeId = createOutcome(eventId, "manager", traceId);
+        for (int i = 0; i < 30; i++) {
+            Long task = createTask(traceId, eventId, null);
+            createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_TASK, task, null);
+        }
+        Statistics stats = statistics();
+        stats.clear();
+        LineageGraph graph = lineageService.getLineage("trace", traceId.toString(), "downstream", 5, 5);
+        assertTrue(graph.getTruncated());
+        assertEquals(5, graph.getNodes().size());
+        for (String entity : List.of("TaskEntity", "RoutingOutcomeItemEntity")) {
+            long rows = Arrays.stream(stats.getQueries())
+                    .filter(q -> q.contains(entity))
+                    .mapToLong(q -> stats.getQueryStatistics(q).getExecutionRowCount())
+                    .sum();
+            assertTrue(rows <= 6, entity + " rows loaded: " + rows);
+        }
+    }
+
+    @Test
+    void labelsDoNotLoadFullEntities() {
+        UUID eventId = createEvent();
+        UUID runTrace = createTrace("workflow", eventId);
+        Long runId = createRun(eventId, runTrace);
+        createTask(runTrace, null, runId);
+        UUID reportTrace = createTrace("report-generation", null);
+        Long reportId = createReport(reportTrace, runTrace);
+        createTask(reportTrace, null, null);
+        Long[] job = createJobRun(runTrace);
+
+        Statistics stats = statistics();
+        stats.clear();
+        LineageGraph graph = lineageService.getLineage("event", eventId.toString(), "both", 5, 200);
+        assertNotNull(findNode(graph, "report:" + reportId));
+        assertNotNull(findNode(graph, "scheduled-job-run:" + job[1]));
+        for (Class<?> type : List.of(StreamEventEntity.class, TaskEntity.class, WorkflowRunEntity.class,
+                ScheduledJobRunEntity.class, ReportEntity.class)) {
+            assertEquals(0, stats.getEntityStatistics(type.getName()).getLoadCount(),
+                    type.getSimpleName() + " rows must be loaded as label projections");
+        }
+    }
+
+    @Test
+    void cappedGraphHasNoOrphanNodes() {
+        UUID eventId = createEvent();
+        UUID traceId = createTrace("manager", eventId);
+        // The child task has the lower ID, so it is found before the agent task that created it.
+        Long child = createTask(traceId, null, null);
+        Long agentTask = createTask(traceId, eventId, null);
+        Long agentNode = createTraceNode(traceId, null, "task", agentTask.toString());
+        createTraceNode(traceId, agentNode, "task", child.toString());
+
+        for (int cap = 1; cap <= 3; cap++) {
+            LineageGraph graph = lineageService.getLineage("trace", traceId.toString(), "downstream", 5, cap);
+            for (LineageNode node : graph.getNodes()) {
+                if (!node.getKey().equals(graph.getRoot())) {
+                    assertTrue(graph.getEdges().stream().anyMatch(e -> e.getTo().equals(node.getKey())
+                            || e.getFrom().equals(node.getKey())), "Orphan node " + node.getKey()
+                            + " with maxNodes=" + cap);
+                }
+            }
+        }
+    }
+
+    @Test
+    void edgesBetweenKnownNodesAtTheDepthLimitAreKept() {
+        UUID eventId = createEvent();
+        UUID managerTrace = createTrace("manager", eventId);
+        Long[] job = createJobRun(managerTrace);
+        UUID runTrace = createTrace("scheduled-job-execution", eventId);
+        setJobRunTrace(job[1], runTrace);
+
+        LineageGraph graph = get("event", eventId.toString(), "?direction=downstream&depth=1");
+        assertEdge(graph, "event:" + eventId, "trace:" + managerTrace, "triggered");
+        assertEdge(graph, "event:" + eventId, "scheduled-job-run:" + job[1], "triggered");
+        assertEdge(graph, "trace:" + managerTrace, "scheduled-job-run:" + job[1], "triggered-by-agent");
+    }
+
+    private Statistics statistics() {
+        Statistics stats = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+        assertTrue(stats.isStatisticsEnabled(), "Hibernate statistics must be enabled in tests");
+        return stats;
     }
 
     // ── N+1 guard ───────────────────────────────────────────────────

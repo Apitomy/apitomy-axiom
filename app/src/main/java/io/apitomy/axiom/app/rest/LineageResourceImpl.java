@@ -6,9 +6,9 @@ import io.apitomy.axiom.app.LineageService;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.WebApplicationException;
-
-import java.math.BigInteger;
+import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.core.Response;
+import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 
 /**
  * REST resource for the lineage graph of an entity (#430).
@@ -31,20 +31,24 @@ public class LineageResourceImpl implements LineageResource {
      * @return the lineage graph
      */
     @Override
-    public LineageGraph getLineage(String entityType, String id, String direction, BigInteger depth,
-            BigInteger maxNodes) {
+    public LineageGraph getLineage(String entityType, String id, String direction, Integer depth,
+            Integer maxNodes) {
         return lineageService.getLineage(entityType, id, direction,
-                toInt(depth, LineageService.DEFAULT_DEPTH, "depth"),
-                toInt(maxNodes, LineageService.DEFAULT_MAX_NODES, "maxNodes"));
+                depth != null ? depth : LineageService.DEFAULT_DEPTH,
+                maxNodes != null ? maxNodes : LineageService.DEFAULT_MAX_NODES);
     }
 
-    private static int toInt(BigInteger value, int defaultValue, String name) {
-        if (value == null) {
-            return defaultValue;
-        }
-        if (value.bitLength() > 31) {
-            throw new WebApplicationException("Invalid " + name + ": " + value, 400);
-        }
-        return value.intValue();
+    /**
+     * Maps a failed conversion of the integer query parameters (for example {@code ?depth=abc}) to
+     * {@code 400} with an {@code Error} body. JAX-RS reports such failures as {@code 404}. This mapper is
+     * declared on the resource class, so it applies to this resource only; 404s for unknown roots are
+     * thrown as plain {@code WebApplicationException}s and are not affected.
+     *
+     * @param e the conversion failure
+     * @return a 400 response
+     */
+    @ServerExceptionMapper
+    public Response mapParamConversion(NotFoundException e) {
+        return LineageService.error(400, "Invalid depth or maxNodes: must be an integer").getResponse();
     }
 }

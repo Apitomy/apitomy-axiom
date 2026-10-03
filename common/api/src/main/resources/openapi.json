@@ -5958,7 +5958,9 @@
             "description": "Which side of the graph to return: `upstream` (origin), `downstream` (results) or `both` (default)",
             "required": false,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": ["upstream", "downstream", "both"],
+              "default": "both"
             }
           },
           {
@@ -5967,7 +5969,11 @@
             "description": "Maximum number of hops to walk in each direction (1-10, default 5)",
             "required": false,
             "schema": {
-              "type": "integer"
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1,
+              "maximum": 10,
+              "default": 5
             }
           },
           {
@@ -5976,7 +5982,11 @@
             "description": "Maximum number of nodes to return (1-1000, default 200)",
             "required": false,
             "schema": {
-              "type": "integer"
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 200
             }
           }
         ],
@@ -6020,7 +6030,8 @@
           "description": "Type of the root entity: `event`, `trace`, `workflow-run`, `task`, `scheduled-job-run` or `report`",
           "required": true,
           "schema": {
-            "type": "string"
+            "type": "string",
+            "enum": ["event", "trace", "workflow-run", "task", "scheduled-job-run", "report"]
           }
         },
         {

@@ -67,7 +67,7 @@ export function ScheduledJobRunsPage() {
     const setLineageRunId = (runId: number | null) => {
         const next = new URLSearchParams(searchParams);
         if (runId == null) next.delete("runId"); else next.set("runId", String(runId));
-        setSearchParams(next);
+        setSearchParams(next, { replace: true });
     };
 
     const filterJobName = filters.find((f) => f.filterBy.value === "jobName")?.filterValue;

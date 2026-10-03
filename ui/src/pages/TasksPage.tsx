@@ -63,7 +63,7 @@ export function TasksPage() {
     const setLineageTaskId = (taskId: number | null) => {
         const next = new URLSearchParams(searchParams);
         if (taskId == null) next.delete("taskId"); else next.set("taskId", String(taskId));
-        setSearchParams(next);
+        setSearchParams(next, { replace: true });
     };
 
     const filterActionType = filters.find((f) => f.filterBy.value === "actionType")?.filterValue;

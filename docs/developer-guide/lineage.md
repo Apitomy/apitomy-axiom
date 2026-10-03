@@ -22,8 +22,13 @@ GET /api/v1/lineage/{entityType}/{id}?direction=both&depth=5&maxNodes=200
 | `depth`      | Hops walked in each direction, 1–10                                             | 5       |
 | `maxNodes`   | Maximum number of nodes, 1–1000                                                 | 200     |
 
-An unknown entity type, a malformed ID or an out-of-range parameter returns `400`. A root that does not exist
-returns `404`. Projects are not a root type: a project holds too much unrelated work to give a useful graph.
+An unknown entity type, a malformed ID or an out-of-range or non-numeric parameter returns `400`. A root that
+does not exist returns `404`. Both carry the JSON `Error` body (`message`, `errorCode`). A non-numeric
+`depth` or `maxNodes` fails JAX-RS parameter conversion, which JAX-RS reports as `404`;
+`LineageResourceImpl` declares a `@ServerExceptionMapper` for `NotFoundException` that turns it into `400`.
+The mapper is declared on the resource class, so it applies to this resource only.
+
+Projects are not a root type: a project holds too much unrelated work to give a useful graph.
 
 The response is a `LineageGraph`:
 
@@ -117,10 +122,18 @@ walk runs first, so a node found by both walks keeps `upstream`.
 
 ## Limits and Truncation
 
-The walk is breadth-first. `depth` limits the hops in each direction. When a new node would exceed
-`maxNodes`, it is skipped and `truncated` is set; edges to skipped nodes are left out, so every edge refers to
-a node in the response. When the depth limit is reached and the last level still has unvisited neighbours,
-`truncated` is also set (this costs one extra round of queries for that level).
+The walk is breadth-first. `depth` limits the hops in each direction.
+
+- `maxNodes` also bounds the rows read: every expansion query (tasks of a trace or run, traces of an event,
+  job runs and reports triggered from a trace, outcome items, resumes, child tasks) uses `setMaxResults` with
+  the room left in the graph plus one. When a query returns that many rows, `truncated` is set. This is
+  conservative: `truncated` can be `true` when the extra row was a node that was already in the graph.
+- Every `IN` list is split into chunks of at most 500 IDs (`LineageService.IN_CHUNK`).
+- A node is added only when the other end of its edge is already in the graph, so a truncated graph has no
+  unconnected nodes. When a new node would exceed `maxNodes`, it is skipped and `truncated` is set; edges to
+  skipped nodes are left out, so every edge refers to a node in the response.
+- When the depth limit is reached, the last level is expanded once more: edges between nodes that are already
+  in the graph are kept, and `truncated` is set if any neighbour lies beyond the limit.
 
 ## Cost
 
@@ -138,8 +151,10 @@ a node in the response. When the depth limit is reached and the last level still
 
 Every level of the walk does a fixed number of queries per node type, using `IN (...)` lists:
 
-1. Load the frontier's entities: one query per type (`stream_event`, `trace`, `workflow_run`, `task`,
-   `scheduled_job_run`, `report`, `routing_outcome_item`), plus one for the scheduled job names.
+1. Load the frontier: one query per type (`stream_event`, `trace`, `workflow_run`, `task`,
+   `scheduled_job_run`, `report`, `routing_outcome_item`), plus one for the scheduled job names. Events,
+   tasks, workflow runs, job runs and reports are read as projections of the label and link columns only, so
+   event payloads, task input, output and logs, report content and workflow instance state are never loaded.
 2. Resolve trace owners: one query per owned trace type present.
 3. Expand: for example, for events one query each for traces, workflow runs, resumes, ledger rows, outcomes
    and items; for traces and owners one query each for tasks, the tasks' trace nodes and their parent nodes,
@@ -149,7 +164,9 @@ Entities found while expanding are cached, so they are not loaded again in the n
 once at the end with one grouped query per cost key (task, job run, report, trace). The number of queries
 therefore depends on the depth and the node types, not on the number of nodes. `LineageTest` checks this with
 Hibernate statistics (`%test.quarkus.hibernate-orm.statistics=true`): a graph with 2 tasks and one with 12
-tasks must use the same number of statements.
+tasks must use the same number of statements. It also checks that no `StreamEventEntity`, `TaskEntity`,
+`WorkflowRunEntity`, `ScheduledJobRunEntity` or `ReportEntity` is loaded as an entity (entity load count 0),
+and that a trace with 30 tasks and `maxNodes=5` reads at most 6 task rows (query execution row count).
 
 ## Dangling References
 
