@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
     Button,
     EmptyState,
@@ -24,6 +24,7 @@ import {
 import { type Task, fetchAllTasks, cancelTask } from "../config/api";
 import { ExecutionLogModal } from "../components/ExecutionLogModal";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
+import { LineageModal } from "../components/LineageModal";
 
 const STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
     Pending: "blue",
@@ -55,6 +56,15 @@ export function TasksPage() {
 
     // Cancel confirmation modal
     const [cancelTarget, setCancelTarget] = useState<Task | null>(null);
+
+    // Lineage modal; `?taskId=` (used by lineage links) opens it for that task.
+    const [searchParams, setSearchParams] = useSearchParams();
+    const lineageTaskId = searchParams.get("taskId");
+    const setLineageTaskId = (taskId: number | null) => {
+        const next = new URLSearchParams(searchParams);
+        if (taskId == null) next.delete("taskId"); else next.set("taskId", String(taskId));
+        setSearchParams(next, { replace: true });
+    };
 
     const filterActionType = filters.find((f) => f.filterBy.value === "actionType")?.filterValue;
     const filterStatus = filters
@@ -235,6 +245,12 @@ export function TasksPage() {
                                             : "—"}
                                     </Td>
                                     <Td>
+                                        <Button variant="link" isInline
+                                            data-testid={`task-lineage-${task.id}`}
+                                            style={{ marginRight: "8px" }}
+                                            onClick={() => setLineageTaskId(task.id)}>
+                                            Lineage
+                                        </Button>
                                         {(task.status === "Completed" || task.status === "Failed") && (
                                             <Button variant="link" isInline
                                                 onClick={() => handleViewLog(task.projectId, task.id)}>
@@ -262,6 +278,10 @@ export function TasksPage() {
                 taskId={logTaskId}
                 onClose={() => setIsLogModalOpen(false)}
             />
+
+            <LineageModal entityType="task" id={lineageTaskId}
+                title={`Lineage of task #${lineageTaskId}`}
+                onClose={() => setLineageTaskId(null)} />
 
             <ConfirmDeleteModal isOpen={cancelTarget !== null} title="Cancel Task"
                 onConfirm={confirmCancel} onCancel={() => setCancelTarget(null)}

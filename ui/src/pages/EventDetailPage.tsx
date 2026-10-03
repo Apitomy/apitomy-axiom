@@ -41,6 +41,7 @@ import {
     retryEventProcessing,
 } from "../config/api";
 import { statusColor as traceStatusColor } from "../components/TraceGraphNode";
+import { LineagePanel } from "../components/LineagePanel";
 
 const SOURCE_COLORS: Record<string, "blue" | "green" | "orange" | "grey"> = {
     github: "blue",
@@ -200,6 +201,8 @@ export function EventDetailPage() {
                     </TabContent>
                 </Tab>
             </Tabs>
+
+            <LineagePanel entityType="event" id={event.id} />
         </PageSection>
     );
 }

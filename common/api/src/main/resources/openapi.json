@@ -5943,6 +5943,108 @@
         }
       ]
     },
+    "/lineage/{entityType}/{id}": {
+      "get": {
+        "tags": [
+          "Lineage"
+        ],
+        "summary": "Get the lineage graph of an entity",
+        "description": "Returns the upstream (origin) and downstream (results) graph of work linked to an entity: stream events, Manager evaluations and other traces, workflow runs, tasks, scheduled job runs and reports. Each node carries a status, a UI link and its direct AI cost. Edges always point from the upstream node to the downstream node. The walk is bounded by `depth` (hops in each direction) and `maxNodes`; when either limit cuts the graph short, `truncated` is true. References to rows removed by data retention are returned as nodes with `available` false.",
+        "operationId": "getLineage",
+        "parameters": [
+          {
+            "name": "direction",
+            "in": "query",
+            "description": "Which side of the graph to return: `upstream` (origin), `downstream` (results) or `both` (default)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["upstream", "downstream", "both"],
+              "default": "both"
+            }
+          },
+          {
+            "name": "depth",
+            "in": "query",
+            "description": "Maximum number of hops to walk in each direction (1-10, default 5)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1,
+              "maximum": 10,
+              "default": 5
+            }
+          },
+          {
+            "name": "maxNodes",
+            "in": "query",
+            "description": "Maximum number of nodes to return (1-1000, default 200)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lineage graph",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineageGraph"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown entity type, malformed ID or invalid parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Root entity not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "entityType",
+          "in": "path",
+          "description": "Type of the root entity: `event`, `trace`, `workflow-run`, `task`, `scheduled-job-run` or `report`",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "enum": ["event", "trace", "workflow-run", "task", "scheduled-job-run", "report"]
+          }
+        },
+        {
+          "name": "id",
+          "in": "path",
+          "description": "ID of the root entity (UUID for `event` and `trace`, numeric otherwise)",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
     "/sdk/functions": {
       "get": {
         "tags": [
@@ -5980,6 +6082,135 @@
   },
   "components": {
     "schemas": {
+      "LineageGraph": {
+        "required": [
+          "root",
+          "nodes",
+          "edges",
+          "truncated"
+        ],
+        "type": "object",
+        "description": "Lineage graph of an entity",
+        "properties": {
+          "root": {
+            "description": "Key of the root node (`type:id`)",
+            "type": "string"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LineageNode"
+            }
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LineageEdge"
+            }
+          },
+          "truncated": {
+            "description": "True when the depth or node limit stopped the walk before all linked entities were visited",
+            "type": "boolean"
+          },
+          "depth": {
+            "description": "Depth limit that was applied",
+            "type": "integer"
+          },
+          "maxNodes": {
+            "description": "Node limit that was applied",
+            "type": "integer"
+          },
+          "totalCostUsd": {
+            "description": "Sum of the direct AI cost of all nodes in the graph",
+            "type": "number"
+          }
+        }
+      },
+      "LineageNode": {
+        "required": [
+          "key",
+          "type",
+          "id",
+          "label",
+          "direction",
+          "available"
+        ],
+        "type": "object",
+        "description": "One entity in a lineage graph",
+        "properties": {
+          "key": {
+            "description": "Unique key of the node in the graph (`type:id`), used by edges",
+            "type": "string"
+          },
+          "type": {
+            "description": "Entity type: `event`, `trace`, `workflow-run`, `task`, `scheduled-job-run`, `report` or `outcome` (a routing outcome item such as an ignored or escalated decision)",
+            "type": "string"
+          },
+          "id": {
+            "description": "Entity ID (UUID or number, as a string)",
+            "type": "string"
+          },
+          "label": {
+            "description": "Human-readable label",
+            "type": "string"
+          },
+          "status": {
+            "description": "Entity status; `unavailable` when the row no longer exists",
+            "type": "string"
+          },
+          "subtype": {
+            "description": "Additional type information, e.g. the trace type, action type or outcome item type",
+            "type": "string"
+          },
+          "linkPath": {
+            "description": "UI path of the entity's page, absent when there is none or the entity is unavailable",
+            "type": "string"
+          },
+          "costUsd": {
+            "description": "Direct AI cost of this node (sum of its `ai_usage` rows), not including other nodes",
+            "type": "number"
+          },
+          "direction": {
+            "description": "`root`, `upstream` or `downstream`",
+            "type": "string"
+          },
+          "depth": {
+            "description": "Number of hops from the root",
+            "type": "integer"
+          },
+          "available": {
+            "description": "False when the referenced row was deleted (for example by data retention)",
+            "type": "boolean"
+          },
+          "createdOn": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      },
+      "LineageEdge": {
+        "required": [
+          "from",
+          "to",
+          "relation"
+        ],
+        "type": "object",
+        "description": "A link between two lineage nodes, pointing downstream",
+        "properties": {
+          "from": {
+            "description": "Key of the upstream node",
+            "type": "string"
+          },
+          "to": {
+            "description": "Key of the downstream node",
+            "type": "string"
+          },
+          "relation": {
+            "description": "`triggered`, `created`, `resumed`, `produced`, `part-of` or `triggered-by-agent`",
+            "type": "string"
+          }
+        }
+      },
       "Error": {
         "type": "object",
         "properties": {
@@ -10905,6 +11136,10 @@
     {
       "name": "Subscriptions",
       "description": "Event subscription management"
+    },
+    {
+      "name": "Lineage",
+      "description": "Lineage (origin and results) of events, runs, tasks and reports"
     },
     {
       "name": "SDK",
