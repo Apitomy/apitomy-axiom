@@ -1,18 +1,18 @@
 package io.apitomy.axiom.app;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.agents.spi.AgentRegistry;
 import io.apitomy.axiom.agents.spi.AgentRequest;
 import io.apitomy.axiom.agents.spi.AgentResult;
-import io.apitomy.axiom.core.entities.TraceNodeEntity;
-import io.apitomy.axiom.core.tracing.TraceService;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
+import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AgentEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
-import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
+import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.axiom.core.logging.LogContext;
 import io.apitomy.axiom.core.services.ActionTypeIoValidator;
@@ -21,7 +21,7 @@ import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.InputBindingResolver;
 import io.apitomy.axiom.core.services.ToolsetResolver;
 import io.apitomy.axiom.core.services.WorkspaceService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.core.tracing.TraceService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
@@ -123,7 +123,11 @@ public class TaskExecutionService {
     }
 
     /**
-     * Opens a logging context carrying the task's correlation IDs.
+     * Opens a logging context carrying the task's correlation IDs (trace, event, project, task and
+     * workflow run). The caller must close it, normally with try-with-resources.
+     *
+     * @param task the task whose IDs are put into the MDC
+     * @return the opened context
      */
     static LogContext taskLogContext(TaskEntity task) {
         return LogContext.create()
@@ -238,7 +242,6 @@ public class TaskExecutionService {
                         ? actionTypeEntity.timeoutSeconds : 120)
                 .build();
 
-        // Execute asynchronously
         // Execute asynchronously. The callbacks run on the agent's thread (typically a common
         // ForkJoinPool worker), so the logging context is captured here and re-applied there.
         lease.agent().execute(request)

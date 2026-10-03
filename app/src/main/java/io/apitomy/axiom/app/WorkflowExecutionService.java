@@ -2,6 +2,7 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.api.beans.OutputSchema;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
@@ -13,23 +14,23 @@ import io.apitomy.axiom.core.entities.WorkflowEventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunResumeEntity;
 import io.apitomy.axiom.core.entities.WorkflowWaitEntity;
-import io.apitomy.axiom.core.services.ActionTypeIoValidator;
 import io.apitomy.axiom.core.events.SseEvent;
-import io.apitomy.axiom.core.tracing.TraceService;
+import io.apitomy.axiom.core.logging.LogContext;
+import io.apitomy.axiom.core.services.ActionTypeIoValidator;
 import io.apitomy.axiom.core.tracing.TraceContext;
-import io.apitomy.axiom.api.beans.OutputSchema;
+import io.apitomy.axiom.core.tracing.TraceService;
 import io.apitomy.flow.engine.WorkflowEngine;
 import io.apitomy.flow.engine.WorkflowValidationException;
-import io.apitomy.flow.model.InstanceStatus;
-import io.apitomy.flow.model.NodeType;
-import io.apitomy.flow.model.Workflow;
-import io.apitomy.flow.model.WorkflowInstance;
-import io.apitomy.flow.model.WorkflowNode;
 import io.apitomy.flow.model.ActionInfo;
 import io.apitomy.flow.model.ActiveBranch;
 import io.apitomy.flow.model.HumanTaskInfo;
+import io.apitomy.flow.model.InstanceStatus;
+import io.apitomy.flow.model.NodeType;
 import io.apitomy.flow.model.ReceiveEventInfo;
 import io.apitomy.flow.model.WaitInfo;
+import io.apitomy.flow.model.Workflow;
+import io.apitomy.flow.model.WorkflowInstance;
+import io.apitomy.flow.model.WorkflowNode;
 import io.apitomy.flow.spi.NodeExecutionContext;
 import io.apitomy.flow.spi.NodeExecutor;
 import io.apitomy.flow.spi.NodeExecutorProvider;
@@ -43,7 +44,6 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
-import io.apitomy.axiom.core.logging.LogContext;
 import org.jboss.logging.Logger;
 
 import java.time.Instant;
@@ -267,6 +267,17 @@ public class WorkflowExecutionService {
         if (task == null || task.workflowRunId == null) {
             return;
         }
+        try (LogContext ignored = LogContext.create()
+                .traceId(task.traceId)
+                .projectId(task.projectId)
+                .taskId(task.id)
+                .workflowRunId(task.workflowRunId)) {
+            advanceAfterTask(task);
+        }
+    }
+
+    private void advanceAfterTask(TaskEntity task) {
+        long taskId = task.id;
 
         WorkflowRunEntity entity =
                 WorkflowRunEntity.findById(task.workflowRunId);
@@ -338,12 +349,19 @@ public class WorkflowExecutionService {
      */
     @Transactional
     public void onWaitElapsed(long runId, String nodeId, Long waitId) {
+        try (LogContext logCtx = LogContext.create().workflowRunId(runId)) {
+            advanceAfterWait(runId, nodeId, waitId, logCtx);
+        }
+    }
+
+    private void advanceAfterWait(long runId, String nodeId, Long waitId, LogContext logCtx) {
         WorkflowRunEntity entity = WorkflowRunEntity.findById(runId);
         if (entity == null) {
             LOG.warnf("Workflow run %d not found for elapsed wait node %s",
                     runId, nodeId);
             return;
         }
+        logCtx.traceId(entity.traceId).projectId(entity.projectId);
 
         completeParkedTraceNode(entity, "workflow-wait", waitId);
 
@@ -390,12 +408,23 @@ public class WorkflowExecutionService {
     @Transactional
     public ResumedRun onEventReceived(long runId, String nodeId, Map<String, Object> eventMap,
                                       EventOrigin origin, Long subscriptionId) {
+        try (LogContext logCtx = LogContext.create()
+                .workflowRunId(runId)
+                .eventId(origin != null ? origin.eventId() : null)) {
+            return advanceAfterEvent(runId, nodeId, eventMap, origin, subscriptionId, logCtx);
+        }
+    }
+
+    private ResumedRun advanceAfterEvent(long runId, String nodeId, Map<String, Object> eventMap,
+                                         EventOrigin origin, Long subscriptionId,
+                                         LogContext logCtx) {
         WorkflowRunEntity entity = WorkflowRunEntity.findById(runId);
         if (entity == null) {
             LOG.warnf("Workflow run %d not found for received event at node %s",
                     runId, nodeId);
             return null;
         }
+        logCtx.traceId(entity.traceId).projectId(entity.projectId);
 
         Long traceNodeId = completeParkedTraceNode(entity, "workflow-event-subscription",
                 subscriptionId);

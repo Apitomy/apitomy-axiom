@@ -2,6 +2,7 @@ package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.core.entities.ScheduledJobEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
+import io.apitomy.axiom.core.logging.LogContext;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ManagedContext;
 import io.quarkus.runtime.ShutdownEvent;
@@ -10,7 +11,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
-import io.apitomy.axiom.core.logging.LogContext;
 import org.jboss.logging.Logger;
 
 import java.util.concurrent.BlockingQueue;

@@ -1,25 +1,25 @@
 package io.apitomy.axiom.app;
 
-import io.apitomy.axiom.core.entities.TraceNodeEntity;
-import io.apitomy.axiom.core.tracing.TraceService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
+import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.events.SseEvent;
+import io.apitomy.axiom.core.logging.LogContext;
 import io.apitomy.axiom.core.services.EncryptionService;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.InputBindingResolver;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.core.tracing.TraceService;
 import io.quarkus.arc.Arc;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import io.apitomy.axiom.core.logging.LogContext;
 import org.jboss.logging.Logger;
 
 import java.io.IOException;
@@ -28,9 +28,9 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**

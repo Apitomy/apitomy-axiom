@@ -24,6 +24,13 @@ import java.util.function.Function;
  * those values. Contexts can therefore nest, and nothing leaks into the next unit of work that runs on a
  * pooled, virtual or Vert.x thread.
  * <p>
+ * <b>Nesting order.</b> Contexts must be closed in the reverse order they were opened (LIFO), which
+ * try-with-resources guarantees. An inner context only touches the keys it sets: keys it does not set keep
+ * the outer value, and keys it overrides get the outer value back on close. Closing an outer context while an
+ * inner one is still open restores the outer's previous values and breaks the inner one's scope; do not do
+ * that. A context may be extended after it is opened (for example adding {@code traceId} once a trace has
+ * been created); the added keys are restored by the same {@link #close()}.
+ * <p>
  * Besides the individual keys, the context maintains the composite key {@value #SUMMARY}, which holds only
  * the correlation keys that are present (for example {@code "[traceId=... taskId=42] "}) and is empty
  * otherwise. The log format uses {@code %X{axiomCtx}} so that log lines stay compact.

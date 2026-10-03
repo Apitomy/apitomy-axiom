@@ -164,6 +164,13 @@ grep 'eventId=6b1d...' axiom.log
 Match numeric IDs with a trailing `]` or space (as above) so that `taskId=4` does not also match `taskId=42`.
 The console log goes to standard output; the file log is written only when `quarkus.log.file.enabled=true`.
 
+A failed routing rule logs two lines: `Routing rule <type> failed for event <id>: <message>`, written inside
+the rule's context (so it carries the `eventId` and the rule's `traceId`) and **without** a stack trace, and then
+`Routing failed for event <id> / subscription <id>`, written in the event's context (`eventId` only) **with**
+the stack trace. The stack trace is logged once, on the second line, because not every routing failure
+passes through a rule. To find the stack trace for a trace ID, grep the trace ID, then grep the `eventId` shown
+on the rule line.
+
 ### Where the Context Is Set
 
 | Entry point                                        | Keys                                                  |

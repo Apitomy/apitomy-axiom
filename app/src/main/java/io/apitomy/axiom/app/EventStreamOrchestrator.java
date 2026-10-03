@@ -17,11 +17,13 @@ import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.axiom.core.events.model.RoutingRule;
 import io.apitomy.axiom.core.filters.SubscriptionFilterEvaluator;
 import io.apitomy.axiom.core.lifecycle.ProjectStatus;
+import io.apitomy.axiom.core.logging.LogContext;
 import io.apitomy.axiom.core.services.WorkspaceService;
 import io.apitomy.axiom.core.tracing.TraceContext;
 import io.apitomy.axiom.manager.ManagerDecision;
 import io.apitomy.axiom.manager.ManagerEvaluationResult;
 import io.apitomy.axiom.manager.ManagerService;
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.annotation.PreDestroy;
@@ -29,9 +31,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
-import io.quarkus.narayana.jta.QuarkusTransaction;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import io.apitomy.axiom.core.logging.LogContext;
 import org.jboss.logging.Logger;
 
 import java.time.Duration;
@@ -634,6 +634,8 @@ public class EventStreamOrchestrator {
                 failedOutcome.createdOn = Instant.now();
                 persistOutcome(failedOutcome);
             });
+            // Message only: the caller logs the stack trace once ("Routing failed for event"),
+            // since not every routing failure passes through here.
             LOG.warnf("Routing rule %s failed for event %s: %s", rule.type(), event.id,
                     e.getMessage());
             // Still throw to mark the ledger entry as failed

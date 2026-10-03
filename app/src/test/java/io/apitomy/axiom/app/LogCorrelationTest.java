@@ -22,6 +22,8 @@ import org.mockito.Mockito;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -67,10 +69,10 @@ class LogCorrelationTest {
         public void publish(LogRecord record) {
             // Handlers publish synchronously on the logging thread, so the MDC read here is
             // the MDC the log line is formatted with.
-            Map<String, String> mdc = new java.util.HashMap<>();
+            Map<String, String> mdc = new HashMap<>();
             MDC.getMap().forEach((k, v) -> mdc.put(k, String.valueOf(v)));
             captured.add(new CapturedLog(record.getLoggerName(),
-                    record.getMessage() + " " + java.util.Arrays.toString(record.getParameters()),
+                    record.getMessage() + " " + Arrays.toString(record.getParameters()),
                     Thread.currentThread().getName(), Map.copyOf(mdc)));
         }
 
