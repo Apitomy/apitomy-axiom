@@ -1557,6 +1557,50 @@
         }
       ]
     },
+    "/reports/{reportId}/config": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get the configuration a report was generated with",
+        "description": "Returns the execution configuration that was snapshotted when the item was created, compared field by field with the definition's current configuration. Secret values are never included: environment values other than ${secret:NAME} references are redacted.",
+        "operationId": "getReportConfig",
+        "responses": {
+          "200": {
+            "description": "The configuration used",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationSnapshot"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The run or report does not exist, or no configuration was recorded for it (created before configuration tracking). The Error message starts with \"No configuration was recorded\" in the latter case.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "reportId",
+          "in": "path",
+          "description": "Report ID",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
     "/usage/ai": {
       "get": {
         "tags": [
@@ -4654,6 +4698,50 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "runId",
+          "in": "path",
+          "description": "Scheduled job run ID",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/scheduled-jobs/runs/{runId}/config": {
+      "get": {
+        "tags": [
+          "ScheduledJobs"
+        ],
+        "summary": "Get the configuration a scheduled job run used",
+        "description": "Returns the execution configuration that was snapshotted when the item was created, compared field by field with the definition's current configuration. Secret values are never included: environment values other than ${secret:NAME} references are redacted.",
+        "operationId": "getScheduledJobRunConfig",
+        "responses": {
+          "200": {
+            "description": "The configuration used",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigurationSnapshot"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The run or report does not exist, or no configuration was recorded for it (created before configuration tracking). The Error message starts with \"No configuration was recorded\" in the latter case.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       },
@@ -10546,6 +10634,73 @@
             "type": "string"
           },
           "required": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ConfigurationSnapshot": {
+        "description": "The execution configuration a scheduled job run or report used, compared with the current definition.",
+        "type": "object",
+        "required": [
+          "versionId",
+          "configHash",
+          "changed",
+          "fields"
+        ],
+        "properties": {
+          "versionId": {
+            "description": "ID of the stored configuration version",
+            "format": "int64",
+            "type": "integer"
+          },
+          "configHash": {
+            "description": "SHA-256 hash of the configuration used",
+            "type": "string"
+          },
+          "currentConfigHash": {
+            "description": "SHA-256 hash of the definition's current configuration; null if the definition no longer exists",
+            "type": "string"
+          },
+          "capturedOn": {
+            "description": "When this configuration version was first recorded",
+            "format": "date-time",
+            "type": "string"
+          },
+          "changed": {
+            "description": "True when the definition's configuration has changed since this run or report",
+            "type": "boolean"
+          },
+          "fields": {
+            "description": "Field-by-field comparison of the configuration used with the current configuration",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConfigurationField"
+            }
+          }
+        }
+      },
+      "ConfigurationField": {
+        "description": "One execution-relevant configuration field.",
+        "type": "object",
+        "required": [
+          "name",
+          "changed"
+        ],
+        "properties": {
+          "name": {
+            "description": "Field name, e.g. promptTemplate, model or environment",
+            "type": "string"
+          },
+          "value": {
+            "description": "Value used by the run or report (null when unset)",
+            "type": "string"
+          },
+          "currentValue": {
+            "description": "Current value in the definition (null when unset)",
+            "type": "string"
+          },
+          "changed": {
+            "description": "True when the current value differs from the value used",
             "type": "boolean"
           }
         }

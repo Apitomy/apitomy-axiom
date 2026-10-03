@@ -2583,3 +2583,46 @@ export async function previewSubscriptionFilter(
     if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to preview filter"));
     return response.json();
 }
+
+// ── Configuration snapshots (#426) ──────────────────────────────────
+
+/** One execution-relevant configuration field, compared with the current definition. */
+export interface ConfigurationField {
+    name: string;
+    value?: string | null;
+    currentValue?: string | null;
+    changed: boolean;
+}
+
+/** The configuration a scheduled job run or report used. */
+export interface ConfigurationSnapshot {
+    versionId: number;
+    configHash: string;
+    currentConfigHash?: string | null;
+    capturedOn?: string;
+    changed: boolean;
+    fields: ConfigurationField[];
+}
+
+/** Message prefix of the 404 returned when the run or report exists but has no snapshot. */
+const CONFIG_NOT_RECORDED = "No configuration was recorded";
+
+async function fetchConfigSnapshot(url: string): Promise<ConfigurationSnapshot | null> {
+    const response = await fetch(url);
+    if (!response.ok) {
+        const message = await extractErrorMessage(response, "Failed to fetch configuration");
+        if (response.status === 404 && message.startsWith(CONFIG_NOT_RECORDED)) return null;
+        throw new Error(message);
+    }
+    return response.json();
+}
+
+/** Returns the configuration a scheduled job run used, or null if none was recorded. */
+export function fetchScheduledJobRunConfig(runId: number): Promise<ConfigurationSnapshot | null> {
+    return fetchConfigSnapshot(`${API}/scheduled-jobs/runs/${runId}/config`);
+}
+
+/** Returns the configuration a report was generated with, or null if none was recorded. */
+export function fetchReportConfig(reportId: number): Promise<ConfigurationSnapshot | null> {
+    return fetchConfigSnapshot(`${API}/reports/${reportId}/config`);
+}

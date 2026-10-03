@@ -36,6 +36,9 @@ public class ScheduledJobScheduler {
     @Inject
     Event<SseEvent> sseEvents;
 
+    @Inject
+    ConfigSnapshotService configSnapshots;
+
     private volatile boolean shuttingDown = false;
 
     @PreDestroy
@@ -88,6 +91,7 @@ public class ScheduledJobScheduler {
                 run.trigger = "scheduled";
                 run.triggeredBy = "scheduler";
                 run.createdOn = Instant.now();
+                run.configVersionId = recordVersion(job);
                 run.persist();
 
                 job.lastRunAt = Instant.now();
@@ -132,6 +136,7 @@ public class ScheduledJobScheduler {
         run.triggeredBy = "manual";
         run.triggeredByTraceId = callerTraceId;
         run.createdOn = Instant.now();
+        run.configVersionId = recordVersion(job);
         run.persist();
 
         job.lastRunAt = Instant.now();
@@ -142,6 +147,18 @@ public class ScheduledJobScheduler {
                 job.name, run.id, job.nextRunAt);
 
         return run.id;
+    }
+
+    /**
+     * Records the job's configuration version; never fails run creation (#426).
+     */
+    private Long recordVersion(ScheduledJobEntity job) {
+        try {
+            return configSnapshots.recordJobVersion(job);
+        } catch (RuntimeException e) {
+            LOG.warnf(e, "Could not record configuration snapshot for job '%s'", job.name);
+            return null;
+        }
     }
 
     /**

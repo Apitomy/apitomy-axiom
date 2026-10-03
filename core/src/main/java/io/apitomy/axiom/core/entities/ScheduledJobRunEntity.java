@@ -69,6 +69,12 @@ public class ScheduledJobRunEntity extends PanacheEntity {
     @Column(name = "trace_id")
     public UUID traceId;
 
+    /**
+     * The configuration version this ran with (#426); null when none was recorded.
+     */
+    @Column(name = "config_version_id")
+    public Long configVersionId;
+
     @Column(name = "created_on", nullable = false)
     public Instant createdOn;
 }

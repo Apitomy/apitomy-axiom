@@ -80,6 +80,12 @@ public class ReportEntity extends PanacheEntity {
     @Column(name = "trace_id")
     public UUID traceId;
 
+    /**
+     * The configuration version this ran with (#426); null when none was recorded.
+     */
+    @Column(name = "config_version_id")
+    public Long configVersionId;
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "report_label", joinColumns = @JoinColumn(name = "report_id"))
     @Column(name = "label")
