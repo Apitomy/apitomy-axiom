@@ -162,6 +162,12 @@ public class SeedDataInitializer {
         config.closedProjectRetentionDays = 90;
         config.traceRetentionDays = 30;
         config.eventRetentionDays = 90;
+        // History settings: 0 keeps the rows forever.
+        config.scheduledJobRunRetentionDays = 0;
+        config.reportRetentionDays = 0;
+        config.workflowRunRetentionDays = 0;
+        config.activityLogRetentionDays = 0;
+        config.aiUsageRetentionDays = 0;
         config.persist();
 
         LOG.info("Seeded default retention configuration");

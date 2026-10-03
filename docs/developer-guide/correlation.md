@@ -18,8 +18,10 @@ the trace ID, so given one trace ID you can find everything that belongs to that
 | `ai_usage`          | Added in migration `V66`                  |
 
 All columns are nullable UUIDs with no foreign key. Trace data has a bounded lifetime: when `TraceCleanup`
-deletes a trace, it clears `trace_id` on `activity_log`, `ai_usage`, `task`, `scheduled_job_run` and `report`,
-and `triggered_by_trace_id` on `scheduled_job_run` and `report`.
+deletes a trace, it clears `trace_id` on `activity_log`, `ai_usage`, `task`, `scheduled_job_run`, `report`,
+`workflow_run` and `routing_outcome`, and `triggered_by_trace_id` on `scheduled_job_run` and `report`. It also
+clears `trace_node_id` on `routing_outcome_item` and `workflow_run_resume` for the deleted trace's nodes. See
+[Data Retention](data-retention.md).
 
 ## Scheduled Job Run and Report Columns
 
@@ -37,8 +39,9 @@ deleted.
 
 All are nullable `BIGINT` columns with no foreign key. Rows written before `V70` have no value.
 
-Deleting a scheduled job, a report or a report definition intentionally keeps its `ai_usage` and
-`activity_log` rows, so cost and activity history survive. Their `scheduled_job_run_id`, `report_id` and
+Deleting a scheduled job, a report or a report definition, or removing job runs and reports with the
+retention settings, intentionally keeps their `ai_usage` and `activity_log` rows, so cost and activity history
+survive. The same applies to `trace.report_id`. Their `scheduled_job_run_id`, `report_id` and
 `report_definition_id` values may then refer to rows that no longer exist; consumers must treat these IDs as
 possibly dangling.
 

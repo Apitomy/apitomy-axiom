@@ -64,6 +64,7 @@ nav:
     - Workflow Human-Task Nodes: developer-guide/workflow-human-task-nodes.md
     - Tracing: developer-guide/tracing.md
     - Correlation: developer-guide/correlation.md
+    - Data Retention: developer-guide/data-retention.md
     - UI Development: developer-guide/ui-development.md
     - Extending Axiom: developer-guide/extending-axiom.md
 

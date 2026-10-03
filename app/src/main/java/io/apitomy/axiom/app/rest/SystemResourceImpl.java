@@ -21,6 +21,7 @@ import io.apitomy.axiom.agents.spi.AgentRegistry;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 
 import jakarta.transaction.Transactional;
@@ -223,17 +224,13 @@ public class SystemResourceImpl implements SystemResource {
         RetentionConfigEntity entity = RetentionConfigEntity.<RetentionConfigEntity>findAll()
                 .firstResult();
 
-        RetentionConfig config = new RetentionConfig();
-        if (entity != null) {
-            config.setClosedProjectRetentionDays(entity.closedProjectRetentionDays);
-            config.setTraceRetentionDays(entity.traceRetentionDays);
-            config.setEventRetentionDays(entity.eventRetentionDays);
-        } else {
-            config.setClosedProjectRetentionDays(90);
-            config.setTraceRetentionDays(30);
-            config.setEventRetentionDays(90);
+        if (entity == null) {
+            entity = new RetentionConfigEntity();
+            entity.closedProjectRetentionDays = 90;
+            entity.traceRetentionDays = 30;
+            entity.eventRetentionDays = 90;
         }
-        return config;
+        return toRetentionBean(entity);
     }
 
     /**
@@ -247,11 +244,53 @@ public class SystemResourceImpl implements SystemResource {
         if (entity == null) {
             entity = new RetentionConfigEntity();
         }
+        validateRetentionDays(data);
         entity.closedProjectRetentionDays = data.getClosedProjectRetentionDays();
         entity.traceRetentionDays = data.getTraceRetentionDays();
         entity.eventRetentionDays = data.getEventRetentionDays();
+        // The history settings are optional so that older clients do not reset them.
+        if (data.getScheduledJobRunRetentionDays() != null) {
+            entity.scheduledJobRunRetentionDays = data.getScheduledJobRunRetentionDays();
+        }
+        if (data.getReportRetentionDays() != null) {
+            entity.reportRetentionDays = data.getReportRetentionDays();
+        }
+        if (data.getWorkflowRunRetentionDays() != null) {
+            entity.workflowRunRetentionDays = data.getWorkflowRunRetentionDays();
+        }
+        if (data.getActivityLogRetentionDays() != null) {
+            entity.activityLogRetentionDays = data.getActivityLogRetentionDays();
+        }
+        if (data.getAiUsageRetentionDays() != null) {
+            entity.aiUsageRetentionDays = data.getAiUsageRetentionDays();
+        }
         entity.persist();
 
-        return data;
+        return toRetentionBean(entity);
+    }
+
+    private static RetentionConfig toRetentionBean(RetentionConfigEntity entity) {
+        RetentionConfig config = new RetentionConfig();
+        config.setClosedProjectRetentionDays(entity.closedProjectRetentionDays);
+        config.setTraceRetentionDays(entity.traceRetentionDays);
+        config.setEventRetentionDays(entity.eventRetentionDays);
+        config.setScheduledJobRunRetentionDays(entity.scheduledJobRunRetentionDays);
+        config.setReportRetentionDays(entity.reportRetentionDays);
+        config.setWorkflowRunRetentionDays(entity.workflowRunRetentionDays);
+        config.setActivityLogRetentionDays(entity.activityLogRetentionDays);
+        config.setAiUsageRetentionDays(entity.aiUsageRetentionDays);
+        return config;
+    }
+
+    private static void validateRetentionDays(RetentionConfig data) {
+        Integer[] values = {data.getScheduledJobRunRetentionDays(), data.getReportRetentionDays(),
+            data.getWorkflowRunRetentionDays(), data.getActivityLogRetentionDays(),
+            data.getAiUsageRetentionDays()};
+        for (Integer value : values) {
+            if (value != null && value < 0) {
+                throw new WebApplicationException(
+                        "Retention days must be 0 (keep forever) or greater", 400);
+            }
+        }
     }
 }
