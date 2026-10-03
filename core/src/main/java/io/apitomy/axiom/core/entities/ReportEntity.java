@@ -31,6 +31,27 @@ public class ReportEntity extends PanacheEntity {
 
     public String title;
 
+    /**
+     * How the report was triggered: "scheduled" or "manual" (null for reports created before
+     * this was recorded).
+     */
+    @Column(name = "report_trigger")
+    public String trigger;
+
+    /**
+     * Who triggered the report: "scheduler" or "manual". Axiom has no authentication, so no
+     * user identity is available for manual reports.
+     */
+    @Column(name = "triggered_by")
+    public String triggeredBy;
+
+    /**
+     * Trace of the caller (typically an agent) that triggered a manual report, if the request
+     * carried a valid caller trace.
+     */
+    @Column(name = "triggered_by_trace_id")
+    public UUID triggeredByTraceId;
+
     @Column(columnDefinition = "TEXT")
     public String content;
 

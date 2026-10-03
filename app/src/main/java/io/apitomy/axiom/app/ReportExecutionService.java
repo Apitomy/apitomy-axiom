@@ -299,7 +299,7 @@ public class ReportExecutionService {
 
             ReportDefinitionEntity def = ReportDefinitionEntity.findById(report.definitionId);
             String defName = def != null ? def.name : "Report #" + reportId;
-            logActivity("report-generating",
+            logActivity(reportId, report.definitionId, "report-generating",
                     "Report generation started: " + defName, traceId);
         }
     }
@@ -350,6 +350,7 @@ public class ReportExecutionService {
         usage.outputTokens = result.outputTokens();
         usage.createdOn = Instant.now();
         usage.traceId = traceCtx != null ? traceCtx.traceId() : report.traceId;
+        usage.reportId = reportId;
         usage.persist();
 
         // Log activity
@@ -362,7 +363,7 @@ public class ReportExecutionService {
         if (result.costUsd() != null) {
             summary += String.format(" — $%.4f", result.costUsd());
         }
-        logActivity("report-" + statusText, summary,
+        logActivity(reportId, definitionId, "report-" + statusText, summary,
                 traceCtx != null ? traceCtx.traceId() : report.traceId);
         sseEvents.fire(SseEvent.reportUpdated(reportId, report.status));
         mcpConfigGenerator.cleanupTempFiles(reportId);
@@ -397,7 +398,8 @@ public class ReportExecutionService {
 
             ReportDefinitionEntity def = ReportDefinitionEntity.findById(report.definitionId);
             String defName = def != null ? def.name : "Report #" + reportId;
-            logActivity("report-failed", "Report failed: " + defName + " — " + reason,
+            logActivity(reportId, report.definitionId, "report-failed",
+                    "Report failed: " + defName + " — " + reason,
                     report.traceId);
             sseEvents.fire(SseEvent.reportUpdated(reportId, "Failed"));
             mcpConfigGenerator.cleanupTempFiles(reportId);
@@ -526,7 +528,8 @@ public class ReportExecutionService {
         return env;
     }
 
-    private void logActivity(String entryType, String summary, UUID traceId) {
+    private void logActivity(Long reportId, Long definitionId, String entryType, String summary,
+            UUID traceId) {
         ActivityLogEntity log = new ActivityLogEntity();
         log.entryType = entryType;
         log.summary = summary != null && summary.length() > 1024
@@ -534,6 +537,8 @@ public class ReportExecutionService {
                 : summary;
         log.createdOn = Instant.now();
         log.traceId = traceId;
+        log.reportId = reportId;
+        log.reportDefinitionId = definitionId;
         log.persist();
     }
 }

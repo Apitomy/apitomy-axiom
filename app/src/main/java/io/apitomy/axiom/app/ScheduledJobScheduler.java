@@ -19,6 +19,7 @@ import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Polls for scheduled jobs that are due and triggers execution.
@@ -85,6 +86,7 @@ public class ScheduledJobScheduler {
                 run.jobId = job.id;
                 run.status = "Pending";
                 run.trigger = "scheduled";
+                run.triggeredBy = "scheduler";
                 run.createdOn = Instant.now();
                 run.persist();
 
@@ -111,10 +113,24 @@ public class ScheduledJobScheduler {
      */
     @Transactional
     public Long createRunForManualTrigger(ScheduledJobEntity job) {
+        return createRunForManualTrigger(job, null);
+    }
+
+    /**
+     * Creates a pending run entity for a manual trigger and advances the schedule.
+     *
+     * @param job           the scheduled job to run
+     * @param callerTraceId trace of the caller (e.g. an agent) that triggered the run, or null
+     * @return the created run entity ID
+     */
+    @Transactional
+    public Long createRunForManualTrigger(ScheduledJobEntity job, UUID callerTraceId) {
         ScheduledJobRunEntity run = new ScheduledJobRunEntity();
         run.jobId = job.id;
         run.status = "Pending";
         run.trigger = "manual";
+        run.triggeredBy = "manual";
+        run.triggeredByTraceId = callerTraceId;
         run.createdOn = Instant.now();
         run.persist();
 

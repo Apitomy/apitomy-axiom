@@ -46,6 +46,18 @@ public class AiUsageEntity extends PanacheEntity {
     public UUID traceId;
 
     /**
+     * Scheduled job run that made this invocation (null for other invocation types).
+     */
+    @Column(name = "scheduled_job_run_id")
+    public Long scheduledJobRunId;
+
+    /**
+     * Report that made this invocation (null for other invocation types).
+     */
+    @Column(name = "report_id")
+    public Long reportId;
+
+    /**
      * Project ID (if associated with a project).
      */
     @Column(name = "project_id")

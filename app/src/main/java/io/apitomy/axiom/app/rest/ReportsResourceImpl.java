@@ -34,6 +34,7 @@ import jakarta.ws.rs.core.Response;
 import io.apitomy.axiom.api.beans.ToolValidationResult;
 import io.apitomy.axiom.api.beans.ToolValidationMessage;
 import io.apitomy.axiom.core.services.ReportDefinitionValidator;
+import io.apitomy.axiom.core.tracing.TraceContext;
 
 import java.math.BigInteger;
 import java.time.Instant;
@@ -55,6 +56,9 @@ public class ReportsResourceImpl implements ReportsResource {
 
     @Inject
     ReportScheduler reportScheduler;
+
+    @Inject
+    CallerTraceContext callerTraceContext;
 
     @Inject
     ReportQueueConsumer reportQueuePoller;
@@ -167,7 +171,8 @@ public class ReportsResourceImpl implements ReportsResource {
     @Transactional
     Long createReportForRun(long definitionId) {
         ReportDefinitionEntity definition = findDefinitionOrThrow(definitionId);
-        return reportScheduler.createReportAndScheduleNext(definition);
+        return reportScheduler.createReportAndScheduleNext(definition,
+                callerTraceContext.get().map(TraceContext::traceId).orElse(null));
     }
 
     // ── Reports (read-only) ──────────────────────────────────────────
@@ -408,6 +413,9 @@ public class ReportsResourceImpl implements ReportsResource {
         report.setDefinitionId(entity.definitionId);
         report.setStatus(entity.status);
         report.setTitle(entity.title);
+        report.setTrigger(entity.trigger);
+        report.setTriggeredBy(entity.triggeredBy);
+        report.setTriggeredByTraceId(entity.triggeredByTraceId);
         report.setContent(entity.content);
         if (entity.timeRangeStart != null) report.setTimeRangeStart(Date.from(entity.timeRangeStart));
         if (entity.timeRangeEnd != null) report.setTimeRangeEnd(Date.from(entity.timeRangeEnd));

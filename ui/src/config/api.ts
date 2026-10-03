@@ -141,6 +141,9 @@ export interface ActivityLogEntry {
     taskId?: number;
     eventId?: string;
     traceId?: string;
+    scheduledJobRunId?: number;
+    reportId?: number;
+    reportDefinitionId?: number;
     entryType: string;
     summary: string;
     details?: string;
@@ -957,6 +960,9 @@ export interface Report {
     definitionId: number;
     status: string;
     title?: string;
+    trigger?: string;
+    triggeredBy?: string;
+    triggeredByTraceId?: string;
     content?: string;
     timeRangeStart?: string;
     timeRangeEnd?: string;
@@ -1124,6 +1130,8 @@ export interface AiUsage {
     taskId?: number;
     eventId?: string;
     traceId?: string;
+    scheduledJobRunId?: number;
+    reportId?: number;
     projectId?: number;
     agentId?: number;
     actionType?: string;
@@ -1148,7 +1156,8 @@ export async function fetchUsage(
     filterAgentId?: number, filterActionType?: string,
     filterDateFrom?: string, filterDateTo?: string,
     filterLabels?: string, filterEngine?: string,
-    filterModel?: string, filterTraceId?: string
+    filterModel?: string, filterTraceId?: string,
+    filterScheduledJobRunId?: string, filterReportId?: string
 ): Promise<AiUsageSearchResults> {
     const params = new URLSearchParams();
     params.set("page", String(page));
@@ -1163,6 +1172,8 @@ export async function fetchUsage(
     if (filterEngine) params.set("filterEngine", filterEngine);
     if (filterModel) params.set("filterModel", filterModel);
     if (filterTraceId) params.set("filterTraceId", filterTraceId);
+    if (filterScheduledJobRunId) params.set("filterScheduledJobRunId", filterScheduledJobRunId);
+    if (filterReportId) params.set("filterReportId", filterReportId);
     const response = await fetch(`${API}/usage/ai?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch usage: ${response.status}`);
     return response.json();
@@ -1202,7 +1213,8 @@ export async function fetchActivityLog(
     page = 1, limit = 20,
     filterEventId?: string, filterSummary?: string,
     filterProjectId?: number, filterEntryType?: string,
-    filterLabels?: string, filterTraceId?: string
+    filterLabels?: string, filterTraceId?: string,
+    filterScheduledJobRunId?: string, filterReportId?: string
 ): Promise<SearchResults<ActivityLogEntry>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
@@ -1213,6 +1225,8 @@ export async function fetchActivityLog(
     if (filterEntryType) params.set("filterEntryType", filterEntryType);
     if (filterLabels) params.set("filterLabels", filterLabels);
     if (filterTraceId) params.set("filterTraceId", filterTraceId);
+    if (filterScheduledJobRunId) params.set("filterScheduledJobRunId", filterScheduledJobRunId);
+    if (filterReportId) params.set("filterReportId", filterReportId);
     const response = await fetch(`${API}/activity?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch activity log: ${response.status}`);
     return response.json();
@@ -1846,6 +1860,8 @@ export interface ScheduledJobRun {
     jobName?: string;
     status: string;
     trigger: string;
+    triggeredBy?: string;
+    triggeredByTraceId?: string;
     startedAt?: string;
     completedAt?: string;
     output?: string;

@@ -108,16 +108,7 @@ public class ScheduledJobExecutionService {
     private void executeAgent(ScheduledJobEntity job, Long runId) {
         LOG.infof("Executing scheduled job '%s' in agent mode (run ID: %d)", job.name, runId);
 
-        TraceContext traceCtx = null;
-        try {
-            traceCtx = traceService.createTrace("scheduled-job-execution",
-                    "Executing scheduled job: " + job.name,
-                    null, null, null,
-                    "scheduled-job-triggered", "Scheduled job triggered: " + job.name,
-                    "scheduled-job-run", runId);
-        } catch (Exception e) {
-            LOG.warnf(e, "Failed to create trace for scheduled job run %d", runId);
-        }
+        TraceContext traceCtx = createRunTrace(job, runId);
 
         Long aiNodeId = null;
         if (traceCtx != null) {
@@ -226,12 +217,24 @@ public class ScheduledJobExecutionService {
     private void executeScript(ScheduledJobEntity job, Long runId) {
         LOG.infof("Executing scheduled job '%s' in script mode (run ID: %d)", job.name, runId);
 
-        markRunning(runId, null);
+        TraceContext traceCtx = createRunTrace(job, runId);
+        Long scriptNodeId = null;
+        if (traceCtx != null) {
+            try {
+                scriptNodeId = traceService.addNode(traceCtx, "scheduled-job-script-executed",
+                        "in-progress", "Scheduled job execution (script): " + job.name,
+                        null, null);
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to add script execution trace node for run %d", runId);
+            }
+        }
 
         try {
+            markRunning(runId, traceCtx != null ? traceCtx.traceId() : null);
+
             if (job.scriptTemplate == null || job.scriptTemplate.isBlank()) {
                 failRun(runId, "No script template configured for scheduled job: " + job.name,
-                        null, null);
+                        traceCtx, scriptNodeId);
                 return;
             }
 
@@ -290,13 +293,52 @@ public class ScheduledJobExecutionService {
                 } else {
                     failRunWithLog(runId, output, executionLog, durationMs);
                 }
+                finishScriptTrace(runId, traceCtx, scriptNodeId, exitCode == 0);
             } finally {
-                Files.deleteIfExists(scriptFile);
-                Files.deleteIfExists(outputFile);
+                deleteQuietly(scriptFile);
+                deleteQuietly(outputFile);
             }
         } catch (Exception e) {
             LOG.errorf(e, "Script execution failed for scheduled job run %d", runId);
-            failRun(runId, "Script execution error: " + e.getMessage(), null, null);
+            failRun(runId, "Script execution error: " + e.getMessage(), traceCtx, scriptNodeId);
+        }
+    }
+
+    /**
+     * Creates the run's trace. The root node references the run, so the trace can be found from
+     * the run (and vice versa) for both agent and script mode.
+     *
+     * @return the trace context, or null if the trace could not be created
+     */
+    private TraceContext createRunTrace(ScheduledJobEntity job, Long runId) {
+        try {
+            return traceService.createTrace("scheduled-job-execution",
+                    "Executing scheduled job: " + job.name,
+                    null, null, null,
+                    "scheduled-job-triggered", "Scheduled job triggered: " + job.name,
+                    "scheduled-job-run", runId);
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to create trace for scheduled job run %d", runId);
+            return null;
+        }
+    }
+
+    /**
+     * Closes the script execution node and the trace of a finished script-mode run.
+     */
+    private void finishScriptTrace(Long runId, TraceContext traceCtx, Long scriptNodeId,
+                                   boolean success) {
+        if (traceCtx == null) {
+            return;
+        }
+        String status = success ? "completed" : "failed";
+        try {
+            if (scriptNodeId != null) {
+                traceService.completeNode(scriptNodeId, status, null, null);
+            }
+            traceService.completeTrace(traceCtx.traceId(), status);
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to complete trace for scheduled job run %d", runId);
         }
     }
 
@@ -311,7 +353,7 @@ public class ScheduledJobExecutionService {
 
             ScheduledJobEntity job = ScheduledJobEntity.findById(run.jobId);
             String jobName = job != null ? job.name : "Job #" + run.jobId;
-            logActivity("scheduled-job-running",
+            logActivity(runId, "scheduled-job-running",
                     "Scheduled job execution started: " + jobName, traceId);
         }
     }
@@ -357,6 +399,7 @@ public class ScheduledJobExecutionService {
         usage.outputTokens = result.outputTokens();
         usage.createdOn = Instant.now();
         usage.traceId = traceCtx != null ? traceCtx.traceId() : run.traceId;
+        usage.scheduledJobRunId = runId;
         usage.persist();
 
         String jobName = job != null ? job.name : "Job #" + jobId;
@@ -368,7 +411,7 @@ public class ScheduledJobExecutionService {
         if (result.costUsd() != null) {
             summary += String.format(" — $%.4f", result.costUsd());
         }
-        logActivity("scheduled-job-" + statusText, summary,
+        logActivity(runId, "scheduled-job-" + statusText, summary,
                 traceCtx != null ? traceCtx.traceId() : run.traceId);
         sseEvents.fire(SseEvent.scheduledJobRunUpdated(runId, run.status));
         mcpConfigGenerator.cleanupTempFiles(runId);
@@ -398,7 +441,7 @@ public class ScheduledJobExecutionService {
 
             ScheduledJobEntity job = ScheduledJobEntity.findById(run.jobId);
             String jobName = job != null ? job.name : "Job #" + run.jobId;
-            logActivity("scheduled-job-completed",
+            logActivity(runId, "scheduled-job-completed",
                     String.format("Scheduled job completed: %s (%ds)", jobName,
                             durationMs / 1000),
                     run.traceId);
@@ -418,7 +461,7 @@ public class ScheduledJobExecutionService {
 
             ScheduledJobEntity job = ScheduledJobEntity.findById(run.jobId);
             String jobName = job != null ? job.name : "Job #" + run.jobId;
-            logActivity("scheduled-job-failed",
+            logActivity(runId, "scheduled-job-failed",
                     "Scheduled job failed: " + jobName, run.traceId);
             sseEvents.fire(SseEvent.scheduledJobRunUpdated(runId, "Failed"));
         }
@@ -442,7 +485,7 @@ public class ScheduledJobExecutionService {
 
             ScheduledJobEntity job = ScheduledJobEntity.findById(run.jobId);
             String jobName = job != null ? job.name : "Job #" + run.jobId;
-            logActivity("scheduled-job-failed",
+            logActivity(runId, "scheduled-job-failed",
                     "Scheduled job failed: " + jobName + " — " + reason,
                     run.traceId);
             sseEvents.fire(SseEvent.scheduledJobRunUpdated(runId, "Failed"));
@@ -458,6 +501,20 @@ public class ScheduledJobExecutionService {
             } catch (Exception e) {
                 LOG.warnf(e, "Failed to complete trace for failed run %d", runId);
             }
+        }
+    }
+
+    /**
+     * Deletes a temp file, logging instead of throwing on failure, so cleanup after a script run
+     * can never change the run's outcome or close its trace a second time.
+     *
+     * @param file the file to delete
+     */
+    static void deleteQuietly(Path file) {
+        try {
+            Files.deleteIfExists(file);
+        } catch (IOException e) {
+            LOG.warnf(e, "Failed to delete temp file %s", file);
         }
     }
 
@@ -554,7 +611,7 @@ public class ScheduledJobExecutionService {
         return log.toString();
     }
 
-    private void logActivity(String entryType, String summary, UUID traceId) {
+    private void logActivity(Long runId, String entryType, String summary, UUID traceId) {
         ActivityLogEntity log = new ActivityLogEntity();
         log.entryType = entryType;
         log.summary = summary != null && summary.length() > 1024
@@ -562,6 +619,7 @@ public class ScheduledJobExecutionService {
                 : summary;
         log.createdOn = Instant.now();
         log.traceId = traceId;
+        log.scheduledJobRunId = runId;
         log.persist();
     }
 }

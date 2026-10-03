@@ -31,6 +31,20 @@ public class ScheduledJobRunEntity extends PanacheEntity {
     @Column(name = "run_trigger", nullable = false)
     public String trigger;
 
+    /**
+     * Who triggered the run: "scheduler" or "manual". Axiom has no authentication, so no user
+     * identity is available for manual runs.
+     */
+    @Column(name = "triggered_by")
+    public String triggeredBy;
+
+    /**
+     * Trace of the caller (typically an agent) that triggered a manual run, if the request
+     * carried a valid caller trace.
+     */
+    @Column(name = "triggered_by_trace_id")
+    public UUID triggeredByTraceId;
+
     @Column(name = "started_at")
     public Instant startedAt;
 

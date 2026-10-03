@@ -52,7 +52,9 @@ public class UsageResourceImpl implements UsageResource {
                                            String filterLabels,
                                            String filterEngine,
                                            String filterModel,
-                                           String filterTraceId) {
+                                           String filterTraceId,
+                                           String filterScheduledJobRunId,
+                                           String filterReportId) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
@@ -109,6 +111,17 @@ public class UsageResourceImpl implements UsageResource {
         if (filterTraceId != null && !filterTraceId.isBlank()) {
             hql.append(" and traceId = :traceId");
             params.put("traceId", TraceResourceImpl.parseUuidParam("filterTraceId", filterTraceId));
+        }
+
+        if (filterScheduledJobRunId != null && !filterScheduledJobRunId.isBlank()) {
+            hql.append(" and scheduledJobRunId = :scheduledJobRunId");
+            params.put("scheduledJobRunId",
+                    TraceResourceImpl.parseIdParam("filterScheduledJobRunId", filterScheduledJobRunId));
+        }
+        if (filterReportId != null && !filterReportId.isBlank()) {
+            hql.append(" and reportId = :reportId");
+            params.put("reportId",
+                    TraceResourceImpl.parseIdParam("filterReportId", filterReportId));
         }
 
         long totalCount = AiUsageEntity.count(hql.toString(), params);
@@ -226,6 +239,8 @@ public class UsageResourceImpl implements UsageResource {
         usage.setTaskId(entity.taskId);
         usage.setEventId(entity.eventId);
         usage.setTraceId(entity.traceId);
+        usage.setScheduledJobRunId(entity.scheduledJobRunId);
+        usage.setReportId(entity.reportId);
         usage.setProjectId(entity.projectId);
         usage.setAgentId(entity.agentId);
         usage.setActionType(entity.actionType);

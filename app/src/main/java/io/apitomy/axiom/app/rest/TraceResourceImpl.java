@@ -62,7 +62,7 @@ public class TraceResourceImpl implements TracesResource {
     public TraceSearchResults listTraces(BigInteger page, BigInteger limit,
             String filterTraceType, String filterStatus,
             String filterEventId, BigInteger filterProjectId,
-            BigInteger filterReportId) {
+            BigInteger filterReportId, String filterScheduledJobRunId) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
@@ -95,6 +95,22 @@ public class TraceResourceImpl implements TracesResource {
         if (filterReportId != null) {
             hql.append(" and reportId = :reportId");
             params.put("reportId", filterReportId.longValue());
+        }
+
+        if (filterScheduledJobRunId != null && !filterScheduledJobRunId.isBlank()) {
+            long runId = parseIdParam("filterScheduledJobRunId", filterScheduledJobRunId);
+            ScheduledJobRunEntity run = ScheduledJobRunEntity.findById(runId);
+            if (run != null && run.traceId != null) {
+                hql.append(" and traceId = :runTraceId");
+                params.put("runTraceId", run.traceId);
+            } else {
+                // No trace stored on the run (yet): fall back to the trace whose root node
+                // references the run (#423).
+                hql.append(" and traceId in (select n.traceId from TraceNodeEntity n"
+                        + " where n.parentNodeId is null and n.entityType = 'scheduled-job-run'"
+                        + " and n.entityId = :runIdText)");
+                params.put("runIdText", String.valueOf(runId));
+            }
         }
 
         long totalCount = TraceEntity.count(hql.toString(), params);
@@ -404,6 +420,25 @@ public class TraceResourceImpl implements TracesResource {
         try {
             return UUID.fromString(value.trim());
         } catch (IllegalArgumentException e) {
+            throw new WebApplicationException("Invalid " + name + ": " + value, 400);
+        }
+    }
+
+    /**
+     * Parses a numeric ID query parameter, rejecting malformed input with 400.
+     *
+     * @param name  the parameter name (used in the error message)
+     * @param value the raw parameter value
+     * @return the parsed ID
+     */
+    static long parseIdParam(String name, String value) {
+        try {
+            long id = Long.parseLong(value.trim());
+            if (id < 0) {
+                throw new NumberFormatException(value);
+            }
+            return id;
+        } catch (NumberFormatException e) {
             throw new WebApplicationException("Invalid " + name + ": " + value, 400);
         }
     }
