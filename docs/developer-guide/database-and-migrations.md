@@ -84,6 +84,11 @@ Flyway is configured with:
 V<number>__<description>.sql
 ```
 
+Migrations that need to compute values from data (for example, a sequence start value) can be written in
+Java instead. Put them in `app/src/main/java/db/migration/` as a class named `V<number>__<description>`
+that extends Flyway's `BaseJavaMigration` (see `V73__create_agent_sequence`). SQL and Java migrations share
+one version sequence.
+
 Examples:
 
 ```
@@ -142,7 +147,15 @@ CREATE INDEX IF NOT EXISTS idx_task_status ON task (status);
         description VARCHAR(1024),
         created_on TIMESTAMP NOT NULL
     );
+    CREATE SEQUENCE IF NOT EXISTS my_entity_SEQ START WITH 1 INCREMENT BY 50;
     ```
+
+    **One sequence per entity.** Every `PanacheEntity` gets its id from a sequence named
+    `<table>_SEQ` with `INCREMENT BY 50` (the Hibernate/Panache default `allocationSize`). The migration
+    that creates the table must also create that sequence. If you rename a table, create the new
+    `<new_table>_SEQ`, start it above the existing ids (at least `max(id) + 50`) and drop the old one.
+    Forgetting this is invisible in tests, which use `drop-and-create`, but makes `prod` fail Hibernate
+    validation with `missing sequence` (issue #445: V45 renamed `actor` to `agent` but left `actor_SEQ`).
 
 3. If the entity is API-exposed, update the OpenAPI spec and create/update the
    corresponding REST resource (see
@@ -163,6 +176,24 @@ CREATE INDEX IF NOT EXISTS idx_task_status ON task (status);
     -- V22__add_priority_to_task.sql
     ALTER TABLE task ADD COLUMN IF NOT EXISTS priority VARCHAR(255) DEFAULT 'normal';
     ```
+
+### Migration Guard Test
+
+Tests run with Hibernate `drop-and-create`, so they never exercise the migrations. To catch drift between the
+migrations and the entity model, `MigrationSchemaValidationTest` (in
+`app/src/test/java/io/apitomy/axiom/app/db/`) runs in CI as a plain JUnit test (no Quarkus boot, a few
+seconds):
+
+1. Once per run, it applies every migration to a fresh, private in-memory H2 database with Flyway's Java API.
+2. It builds Hibernate metadata from every `@Entity` in the core module's Jandex index and starts a session
+   factory with `hbm2ddl.auto=validate`, which checks tables, columns, column types and sequences.
+3. It lists every sequence the entity model expects and reports all that are missing at once.
+4. It checks the V73 upgrade path on a file H2 database: an existing `agent_SEQ` is never lowered.
+
+The guard covers H2 only; nothing in CI runs the migrations against PostgreSQL.
+
+If you add or change an entity without a matching migration, this test fails. Fix the migration; don't
+change the test.
 
 ---
 
