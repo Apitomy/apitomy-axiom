@@ -62,6 +62,8 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
     private final AtomicReference<String> errorMessage = new AtomicReference<>();
     private final AtomicReference<AssistantSession.Status> status;
     private final Set<String> userMessageIds = ConcurrentHashMap.newKeySet();
+    /** Pending OpenCode question requests (request id to questions, in order). */
+    private final Map<String, JsonNode> pendingQuestions = new ConcurrentHashMap<>();
 
     private volatile OpenCodeAssistantClient client;
     private volatile String openCodeSessionId;
@@ -469,6 +471,7 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
         }
         normalizer = normalizerFactory.get();
         userMessageIds.clear();
+        pendingQuestions.clear();
         openCodeSessionId = newSessionId;
         eventSink.accept(new SseEvent("conversation_reset", JsonNodeFactory.instance.objectNode()));
         try {
@@ -493,6 +496,19 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
     public void respondToPermission(String permissionId, boolean allow, boolean always,
                                     JsonNode toolInput) throws IOException {
         ensureRunning();
+        JsonNode questions = pendingQuestions.remove(permissionId);
+        if (questions != null) {
+            try {
+                if (allow) {
+                    client.replyQuestion(permissionId, questionAnswers(questions, toolInput));
+                } else {
+                    client.rejectQuestion(permissionId);
+                }
+            } catch (RuntimeException e) {
+                throw new IOException("Failed to respond to OpenCode question", e);
+            }
+            return;
+        }
         try {
             client.respondPermission(openCodeSessionId, permissionId, allow, always);
         } catch (RuntimeException e) {
@@ -668,11 +684,41 @@ public final class OpenCodeInteractiveSessionDriver implements InteractiveSessio
     private void dispatch(List<SseEvent> normalizedEvents) {
         for (SseEvent normalizedEvent : normalizedEvents) {
             if ("permission_request".equals(normalizedEvent.type())) {
+                rememberQuestion(normalizedEvent.data());
                 autoApprovalSink.accept(normalizedEvent);
             } else {
                 eventSink.accept(normalizedEvent);
             }
         }
+    }
+
+    /** Records a pending question so its response is sent to OpenCode's question endpoints. */
+    private void rememberQuestion(JsonNode data) {
+        String requestId = data.path("requestId").asText("");
+        if (!requestId.isEmpty()
+                && OpenCodeEventNormalizer.ASK_USER_QUESTION.equals(data.path("permission").asText(""))) {
+            pendingQuestions.put(requestId, data.path("toolInput").path("questions"));
+        }
+    }
+
+    /**
+     * Converts the UI's answers (a map keyed by question text; multi-select answers joined with ", ") into
+     * OpenCode's answer list, one list of labels per question in question order.
+     */
+    private static List<List<String>> questionAnswers(JsonNode questions, JsonNode toolInput) {
+        JsonNode answers = toolInput == null ? JsonNodeFactory.instance.objectNode() : toolInput.path("answers");
+        List<List<String>> result = new ArrayList<>();
+        for (JsonNode question : questions) {
+            String answer = answers.path(question.path("question").asText("")).asText("");
+            if (answer.isEmpty()) {
+                result.add(List.of());
+            } else if (question.path("multiSelect").asBoolean(false)) {
+                result.add(List.of(answer.split(",\\s*")));
+            } else {
+                result.add(List.of(answer));
+            }
+        }
+        return result;
     }
 
     private static String eventSessionId(JsonNode payload) {

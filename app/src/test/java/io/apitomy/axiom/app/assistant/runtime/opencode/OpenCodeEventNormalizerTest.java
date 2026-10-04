@@ -122,6 +122,70 @@ class OpenCodeEventNormalizerTest {
         assertEquals("task-call-1", out.get(0).data().path("subagentToolUseId").asText());
     }
 
+    private static final String QUESTION_ASKED = """
+            {"type":"question.asked","properties":{"id":"que_1","sessionID":"%s","questions":[
+            {"question":"What schedule?","header":"Schedule","options":[
+            {"label":"Weekly","description":"Every Monday"},{"label":"Daily","description":"Every day"}]},
+            {"question":"Which repos?","header":"Repos","multiple":true,"options":[
+            {"label":"a","description":"A"},{"label":"b","description":"B"}]}],
+            "tool":{"messageID":"m1","callID":"call_q"}}}
+            """;
+
+    @Test
+    void questionAskedBecomesAskUserQuestionPermissionRequest() throws Exception {
+        List<SseEvent> out = normalizer.normalize("message", mapper.readTree(QUESTION_ASKED.formatted("s1")));
+
+        assertEquals(List.of("tool_use", "permission_request"), out.stream().map(SseEvent::type).toList());
+        assertEquals("AskUserQuestion", out.get(0).data().path("name").asText());
+        assertEquals("call_q", out.get(0).data().path("id").asText());
+        JsonNode data = out.get(1).data();
+        assertEquals("que_1", data.path("requestId").asText());
+        assertEquals("AskUserQuestion", data.path("permission").asText());
+        assertEquals("AskUserQuestion", data.path("toolName").asText());
+        assertEquals("call_q", data.path("toolUseId").asText());
+        JsonNode questions = data.path("toolInput").path("questions");
+        assertEquals(2, questions.size());
+        assertEquals("What schedule?", questions.get(0).path("question").asText());
+        assertEquals("Weekly", questions.get(0).path("options").get(0).path("label").asText());
+        assertFalse(questions.get(0).path("multiSelect").asBoolean());
+        assertTrue(questions.get(1).path("multiSelect").asBoolean());
+    }
+
+    @Test
+    void questionToolPartIsShownAsAskUserQuestion() throws Exception {
+        List<SseEvent> part = normalizer.normalize("message", mapper.readTree("""
+                {"type":"message.part.updated","properties":{"sessionID":"s1","part":{"id":"p1","type":"tool",
+                "tool":"question","callID":"call_q","state":{"status":"running","input":{"questions":[]}}}}}
+                """));
+        List<SseEvent> asked = normalizer.normalize("message", mapper.readTree(QUESTION_ASKED.formatted("s1")));
+
+        assertEquals("AskUserQuestion", part.get(0).data().path("name").asText());
+        assertEquals(List.of("permission_request"), asked.stream().map(SseEvent::type).toList());
+    }
+
+    @Test
+    void questionRepliedAndRejectedEmitNothing() throws Exception {
+        assertTrue(normalizer.normalize("message", mapper.readTree("""
+                {"type":"question.replied","properties":{"sessionID":"s1","requestID":"que_1","answers":[["a"]]}}
+                """)).isEmpty());
+        assertTrue(normalizer.normalize("message", mapper.readTree("""
+                {"type":"question.rejected","properties":{"sessionID":"s1","requestID":"que_1"}}
+                """)).isEmpty());
+    }
+
+    @Test
+    void childQuestionAskedBecomesPermissionRequest() throws Exception {
+        normalizer.registerChildSession("child-1");
+
+        List<SseEvent> out = normalizer.normalizeChild("message",
+                mapper.readTree(QUESTION_ASKED.formatted("child-1")), "child-1");
+
+        assertEquals(1, out.size());
+        assertEquals("permission_request", out.get(0).type());
+        assertEquals("AskUserQuestion", out.get(0).data().path("toolName").asText());
+        assertEquals(2, out.get(0).data().path("toolInput").path("questions").size());
+    }
+
     @Test
     void childIdleAndTextAreIgnored() throws Exception {
         normalizer.registerChildSession("child-1");

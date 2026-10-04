@@ -316,6 +316,63 @@ class OpenCodeInteractiveSessionDriverTest {
         }
     }
 
+    private static final String QUESTION_EVENT = "event: message\n"
+            + "data: {\"type\":\"question.asked\",\"properties\":{\"id\":\"que_1\",\"sessionID\":\"session-1\","
+            + "\"questions\":[{\"question\":\"What schedule?\",\"header\":\"Schedule\",\"options\":["
+            + "{\"label\":\"Weekly\",\"description\":\"w\"}]},{\"question\":\"Which repos?\",\"header\":\"Repos\","
+            + "\"multiple\":true,\"options\":[{\"label\":\"a\",\"description\":\"A\"},"
+            + "{\"label\":\"b\",\"description\":\"B\"}]}],\"tool\":{\"messageID\":\"m1\",\"callID\":\"call_q\"}}}\n\n";
+
+    @Test
+    void answeredQuestionIsRepliedToOpenCodeInQuestionOrder() throws Exception {
+        List<String> requests = askQuestionAndRespond(true, """
+                {"questions":[],"answers":{"Which repos?":"a, b","What schedule?":"Weekly"}}
+                """);
+
+        assertEquals(List.of("/question/que_1/reply {\"answers\":[[\"Weekly\"],[\"a\",\"b\"]]}"), requests);
+    }
+
+    @Test
+    void deniedQuestionIsRejectedInOpenCode() throws Exception {
+        List<String> requests = askQuestionAndRespond(false, "{}");
+
+        assertEquals(List.of("/question/que_1/reject {}"), requests);
+    }
+
+    private List<String> askQuestionAndRespond(boolean allow, String toolInput) throws Exception {
+        EventResponder eventResponder = exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+            exchange.sendResponseHeaders(200, 0);
+            try (OutputStream outputStream = exchange.getResponseBody()) {
+                outputStream.write(QUESTION_EVENT.getBytes(StandardCharsets.UTF_8));
+                outputStream.flush();
+                Thread.sleep(2000);
+            }
+        };
+        try (FakeOpenCodeServer server = FakeOpenCodeServer.start(eventResponder)) {
+            List<io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent> approvals =
+                    new CopyOnWriteArrayList<>();
+            OpenCodeInteractiveSessionDriver driver = new OpenCodeInteractiveSessionDriver(
+                    new FakeServerProcess(server.baseUrl()),
+                    client -> OpenCodeCapabilityProbe.Result.pass(),
+                    new OpenCodeEventNormalizer(),
+                    event -> { },
+                    approvals::add,
+                    "Axiom Session",
+                    "github-copilot/claude-sonnet-5"
+            );
+            driver.start();
+            waitUntil(() -> !approvals.isEmpty(), Duration.ofSeconds(2));
+            assertEquals("AskUserQuestion", approvals.getFirst().data().path("toolName").asText());
+
+            driver.respondToPermission("que_1", allow,
+                    new com.fasterxml.jackson.databind.ObjectMapper().readTree(toolInput));
+
+            driver.destroy();
+            return List.copyOf(server.questionRequests());
+        }
+    }
+
     @Test
     void streamFailureTransitionsToError() throws Exception {
         CountDownLatch promptSubmitted = new CountDownLatch(1);
@@ -1466,6 +1523,8 @@ class OpenCodeInteractiveSessionDriverTest {
         private final List<String> promptPaths = new CopyOnWriteArrayList<>();
         private final List<String> commandBodies = new CopyOnWriteArrayList<>();
         private final AtomicInteger sessionCreates = new AtomicInteger();
+        /** Question reply/reject requests as "path body". */
+        private final List<String> questionRequests = new CopyOnWriteArrayList<>();
         private volatile int abortStatus = 200;
         /** When set, the command endpoint waits for it before responding. */
         private volatile CountDownLatch commandGate;
@@ -1579,6 +1638,12 @@ class OpenCodeInteractiveSessionDriverTest {
                 exchange.sendResponseHeaders(200, -1);
                 exchange.close();
             });
+            server.createContext("/question/", exchange -> {
+                fakeOpenCodeServer.questionRequests.add(exchange.getRequestURI().getPath() + " "
+                        + new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+                exchange.sendResponseHeaders(200, -1);
+                exchange.close();
+            });
             server.createContext("/mcp", new JsonHandler(mcpStatusCode, mcpResponse));
             // Serve each exchange on its own thread so a long-lived /event stream cannot block prompt_async.
             server.setExecutor(java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor());
@@ -1624,6 +1689,10 @@ class OpenCodeInteractiveSessionDriverTest {
 
         int sessionCreateCount() {
             return sessionCreates.get();
+        }
+
+        List<String> questionRequests() {
+            return questionRequests;
         }
 
         /**

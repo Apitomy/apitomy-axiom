@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -15,6 +16,7 @@ class OpenCodeAssistantClientPermissionContractTest {
 
     private static final String SESSION_ID = "session-1";
     private static final String PERMISSION_ID = "per-1";
+    private static final String QUESTION_ID = "que_1";
 
     @Test
     void respondPermissionSendsContractCompliantPayload() throws Exception {
@@ -49,6 +51,34 @@ class OpenCodeAssistantClientPermissionContractTest {
             new OpenCodeAssistantClient(recordingServer.baseUrl())
                     .respondPermission(SESSION_ID, PERMISSION_ID, allow, always);
             return recordingServer.body();
+        } finally {
+            recordingServer.close();
+        }
+    }
+
+    @Test
+    void replyQuestionPostsAnswersInQuestionOrder() throws Exception {
+        RecordingPermissionServer recordingServer = RecordingPermissionServer.start();
+        try {
+            new OpenCodeAssistantClient(recordingServer.baseUrl())
+                    .replyQuestion(QUESTION_ID, List.of(List.of("Weekly"), List.of("a", "b")));
+
+            assertEquals("POST", recordingServer.method());
+            assertEquals("/question/" + QUESTION_ID + "/reply", recordingServer.path());
+            assertEquals("{\"answers\":[[\"Weekly\"],[\"a\",\"b\"]]}", recordingServer.body());
+        } finally {
+            recordingServer.close();
+        }
+    }
+
+    @Test
+    void rejectQuestionPostsToRejectEndpoint() throws Exception {
+        RecordingPermissionServer recordingServer = RecordingPermissionServer.start();
+        try {
+            new OpenCodeAssistantClient(recordingServer.baseUrl()).rejectQuestion(QUESTION_ID);
+
+            assertEquals("POST", recordingServer.method());
+            assertEquals("/question/" + QUESTION_ID + "/reject", recordingServer.path());
         } finally {
             recordingServer.close();
         }
@@ -118,6 +148,7 @@ class OpenCodeAssistantClientPermissionContractTest {
             RecordingPermissionServer recordingServer = new RecordingPermissionServer(server);
             server.createContext("/session/" + SESSION_ID + "/permissions/" + PERMISSION_ID,
                     new PermissionHandler(recordingServer));
+            server.createContext("/question/" + QUESTION_ID, new PermissionHandler(recordingServer));
             server.createContext("/session/" + SESSION_ID + "/prompt_async",
                     new PromptHandler(recordingServer));
             server.start();
