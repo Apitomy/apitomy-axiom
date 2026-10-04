@@ -246,6 +246,32 @@ public final class OpenCodeAssistantClient {
     }
 
     /**
+     * Answers a pending question request ({@code POST /question/{requestID}/reply}).
+     *
+     * @param requestId question request identifier
+     * @param answers one answer per question, in question order; each answer is the list of selected labels (or
+     *                free text)
+     */
+    public void replyQuestion(String requestId, List<List<String>> answers) {
+        ObjectNode body = MAPPER.createObjectNode();
+        ArrayNode answersNode = body.putArray("answers");
+        answers.forEach(answer -> {
+            ArrayNode answerNode = answersNode.addArray();
+            answer.forEach(answerNode::add);
+        });
+        postJson("/question/" + requestId + "/reply", body, 200, 204);
+    }
+
+    /**
+     * Rejects (dismisses) a pending question request ({@code POST /question/{requestID}/reject}).
+     *
+     * @param requestId question request identifier
+     */
+    public void rejectQuestion(String requestId) {
+        postJson("/question/" + requestId + "/reject", MAPPER.createObjectNode(), 200, 204);
+    }
+
+    /**
      * Returns the connection status of every MCP server known to the OpenCode server.
      *
      * @return statuses keyed by MCP server name

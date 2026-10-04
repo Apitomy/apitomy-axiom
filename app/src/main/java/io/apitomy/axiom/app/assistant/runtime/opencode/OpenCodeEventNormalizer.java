@@ -42,7 +42,14 @@ public class OpenCodeEventNormalizer {
             "session.deleted",
             "session.diff",
             "session.compacted",
-            "permission.replied");
+            "permission.replied",
+            "question.replied",
+            "question.rejected");
+
+    /** OpenCode's tool that asks the user questions. */
+    static final String QUESTION_TOOL = "question";
+    /** Tool name the UI renders as an interactive question form; also the {@code permission} of question requests. */
+    public static final String ASK_USER_QUESTION = "AskUserQuestion";
 
     /** Message part types that are understood but not surfaced to the UI. */
     /** Permission keys that guard a tool call rather than name a tool (e.g. directory access). */
@@ -170,6 +177,13 @@ public class OpenCodeEventNormalizer {
                 }
                 yield List.of(new SseEvent("permission_request", data));
             }
+            case "question.asked" -> {
+                ObjectNode data = questionData(eventData);
+                if (parentCallId != null) {
+                    data.put("subagentToolUseId", parentCallId);
+                }
+                yield List.of(new SseEvent("permission_request", data));
+            }
             default -> Collections.emptyList();
         };
     }
@@ -262,6 +276,7 @@ public class OpenCodeEventNormalizer {
             case "message.part.updated" -> mapMessagePart(eventData, safePayload);
             case "message.updated" -> trackUsage(eventData);
             case "permission.asked", "permission.updated" -> permission(eventData);
+            case "question.asked" -> question(eventData);
             case "session.turn.completed", "session.idle" -> List.of(turnComplete(eventData));
             case "session.error" -> List.of(sessionError(eventData));
             // Retry notices may repeat: one is emitted per session.status retry event.
@@ -348,7 +363,7 @@ public class OpenCodeEventNormalizer {
         if (toolUsesEmitted.add(callId)) {
             ObjectNode data = JsonNodeFactory.instance.objectNode();
             data.put("id", callId);
-            data.put("name", part.path("tool").asText(""));
+            data.put("name", displayToolName(part.path("tool").asText("")));
             data.set("input", state.path("input").isObject()
                     ? state.path("input")
                     : JsonNodeFactory.instance.objectNode());
@@ -418,6 +433,56 @@ public class OpenCodeEventNormalizer {
         toolUse.put("name", callName);
         toolUse.set("input", data.path("toolInput"));
         return List.of(new SseEvent("tool_use", toolUse), request);
+    }
+
+    /** Maps OpenCode's question tool to the tool name the UI renders as a question form. */
+    private static String displayToolName(String tool) {
+        return QUESTION_TOOL.equals(tool) ? ASK_USER_QUESTION : tool;
+    }
+
+    /**
+     * Maps {@code question.asked} to an {@code AskUserQuestion} permission request. A {@code tool_use} is emitted
+     * first when the question tool part has not been shown yet, so the UI can attach the question form to it.
+     */
+    private List<SseEvent> question(JsonNode payload) {
+        ObjectNode data = questionData(payload);
+        SseEvent request = new SseEvent("permission_request", data);
+        String callId = data.path("toolUseId").asText("");
+        if (callId.isEmpty() || !toolUsesEmitted.add(callId)) {
+            return List.of(request);
+        }
+        ObjectNode toolUse = JsonNodeFactory.instance.objectNode();
+        toolUse.put("id", callId);
+        toolUse.put("name", ASK_USER_QUESTION);
+        toolUse.set("input", data.path("toolInput"));
+        return List.of(new SseEvent("tool_use", toolUse), request);
+    }
+
+    /** Builds {@code permission_request} data for a question, in the UI's {@code AskUserQuestion} input shape. */
+    private static ObjectNode questionData(JsonNode payload) {
+        ArrayNode questions = JsonNodeFactory.instance.arrayNode();
+        payload.path("questions").forEach(question -> {
+            ObjectNode copy = question.isObject()
+                    ? ((ObjectNode) question).deepCopy()
+                    : JsonNodeFactory.instance.objectNode();
+            copy.put("multiSelect", question.path("multiple").asBoolean(false));
+            questions.add(copy);
+        });
+        ObjectNode input = JsonNodeFactory.instance.objectNode();
+        input.set("questions", questions);
+        ObjectNode data = JsonNodeFactory.instance.objectNode();
+        data.put("requestId", payload.path("id").asText(""));
+        // Same as toolName so the UI does not treat the request as a guard permission.
+        data.put("permission", ASK_USER_QUESTION);
+        data.put("toolName", ASK_USER_QUESTION);
+        data.set("toolInput", input);
+        data.set("patterns", JsonNodeFactory.instance.arrayNode());
+        data.set("alwaysPatterns", JsonNodeFactory.instance.arrayNode());
+        String callId = payload.path("tool").path("callID").asText("");
+        if (!callId.isEmpty()) {
+            data.put("toolUseId", callId);
+        }
+        return data;
     }
 
     /** Builds {@code permission_request} data, looking the tool call up in {@code calls}. */
