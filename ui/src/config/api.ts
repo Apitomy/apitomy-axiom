@@ -2640,3 +2640,49 @@ export function fetchScheduledJobRunConfig(runId: number): Promise<Configuration
 export function fetchReportConfig(reportId: number): Promise<ConfigurationSnapshot | null> {
     return fetchConfigSnapshot(`${API}/reports/${reportId}/config`);
 }
+
+// ── Lineage (#430) ───────────────────────────────────────────────────
+
+/** Root entity types accepted by `GET /lineage/{entityType}/{id}`. */
+export type LineageEntityType =
+    "event" | "trace" | "workflow-run" | "task" | "scheduled-job-run" | "report";
+
+export interface LineageNode {
+    key: string;
+    type: string;
+    id: string;
+    label: string;
+    status?: string;
+    subtype?: string;
+    linkPath?: string;
+    costUsd?: number;
+    direction: "root" | "upstream" | "downstream";
+    depth?: number;
+    available: boolean;
+    createdOn?: string;
+}
+
+export interface LineageEdge {
+    from: string;
+    to: string;
+    relation: string;
+}
+
+export interface LineageGraph {
+    root: string;
+    nodes: LineageNode[];
+    edges: LineageEdge[];
+    truncated: boolean;
+    depth?: number;
+    maxNodes?: number;
+    totalCostUsd?: number;
+}
+
+/** Fetches the upstream ("origin") or downstream ("results") lineage graph of an entity. */
+export async function fetchLineage(entityType: LineageEntityType, id: string | number,
+    direction: "upstream" | "downstream" | "both" = "both"): Promise<LineageGraph> {
+    const response = await fetch(
+        `${API}/lineage/${entityType}/${encodeURIComponent(String(id))}?direction=${direction}`);
+    if (!response.ok) throw new Error(`Failed to fetch lineage: ${response.status}`);
+    return response.json();
+}

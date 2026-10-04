@@ -60,6 +60,7 @@ the pipeline things went wrong and examining the logs at that stage.
 | Workflow run stuck | **Logs > Workflow Runs** — check current node and status |
 | No agent picks up a task/report/job | **Configuration > Agents** — confirm an enabled agent's capabilities match |
 | Want to see the full run tree for one manager evaluation, workflow run, or report | **Logs > Traces** |
+| Want to see where a task, run or report came from and everything it led to | **Lineage** panel (see below) |
 | Don't know where to start | **Logs > All Activity** — scan the timeline |
 
 ---
@@ -318,6 +319,30 @@ created, what decisions were made, what work was done, and what the results were
 
 Shows all stream events (from connections) that were associated with this project.
 This helps you understand what activity triggered the Manager's decisions.
+
+---
+
+## Following the Chain of Work (Lineage)
+
+The **Lineage** panel shows the chain of work an item belongs to, so you do not have to hop between the event,
+trace, workflow run, task and usage pages. It is available on:
+
+- the event detail page and the report detail page (expand **Lineage** below the summary),
+- the workflow run detail page (**Lineage** tab),
+- the **Logs > Tasks** page and the project **Tasks** tab (**Lineage** button on each task),
+- the **Logs > Job Runs** page (**Lineage** button on each run).
+
+The panel has two views:
+
+- **Show origin** walks back to what caused the item, for example task ← Manager evaluation ← event, or
+  task ← scheduled job run ← the agent's trace that started the run ← event.
+- **Show results** walks forward to what the item produced, for example event → Manager evaluation →
+  tasks and ignored or escalated decisions, or event → workflow run → tasks.
+
+Every item links to its own page and shows its status and its direct AI cost; the total AI cost of the items
+shown is displayed below the tree. Items whose records were removed by data retention are shown in italics as
+"deleted or unavailable". Very large chains are cut off after a fixed number of levels and items; the panel
+says so when this happens.
 
 ---
 
