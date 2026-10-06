@@ -63,14 +63,18 @@ class AssistantReferenceTest {
     }
 
     @Test
-    void everyExampleValidatesWithoutErrors(@TempDir Path dir) throws Exception {
+    void everyExampleValidatesWithoutProblems(@TempDir Path dir) throws Exception {
         copyExamples(dir);
         ObjectNode pack = AssistantPackBuilder.fromDirectory(dir, mapper);
         ValidationContext ctx = contextFactory.forPack(pack);
         for (Map.Entry<String, String> e : generator.examples()) {
             ConfigItemType type = ConfigItemType.fromName(e.getKey().substring(0, e.getKey().indexOf('/')));
             List<ConfigProblem> problems = validationService.validate(type, mapper.readTree(e.getValue()), ctx);
-            assertFalse(ConfigItemValidationService.hasErrors(problems), e.getKey() + ": " + problems);
+            // The example's secret (GH_TOKEN, mandated by the scenario) is not created in tests.
+            List<ConfigProblem> unexpected = problems.stream()
+                    .filter(p -> !"UNKNOWN_SECRET".equals(p.code()))
+                    .toList();
+            assertTrue(unexpected.isEmpty(), e.getKey() + ": " + unexpected);
         }
     }
 

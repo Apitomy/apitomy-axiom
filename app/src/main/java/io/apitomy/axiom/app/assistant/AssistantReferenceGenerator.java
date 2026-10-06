@@ -46,8 +46,8 @@ public class AssistantReferenceGenerator {
                     + "`{name, type, required, contextKey}` to rename or require outputs.",
             NodeType.HUMAN_TASK, "Creates a task for a person and waits for completion. `config.description`, "
                     + "`config.inputs` (map of name → EL expression shown to the person), `config.outputs` "
-                    + "(array of `{name, type, required, label, description, widget, defaultValue, options}`; "
-                    + "answers are merged into the context under each output's name).",
+                    + "(array of `{name, type, required, contextKey, label, description, widget, defaultValue, options}`; "
+                    + "answers are merged into the context under `contextKey`, or the output's name if unset).",
             NodeType.RECEIVE_EVENT, "Parks the run until a matching event is delivered. `config.eventType` "
                     + "(required, an event type from the list below), `config.match`: optional array of EL "
                     + "conditions over `event` and `context`, `config.outputs`: optional array of "
@@ -110,13 +110,19 @@ public class AssistantReferenceGenerator {
                         .collect(Collectors.joining(", ")))
                 .append(".\n\n")
                 .append("Graph rules:\n\n")
-                .append("- A node with several outgoing edges must have exactly one default edge (`isDefault: true`).\n")
-                .append("- The default edge has no `condition`.\n")
-                .append("- A single conditional edge needs a default fallback edge from the same node.\n")
-                .append("- Do not mix unconditional fork edges and conditional edges on the same node.\n")
-                .append("- All nodes must be connected and reachable from the start node.\n")
-                .append("- Every node except `end` needs at least one outgoing edge.\n")
-                .append("- No cycles made only of automated nodes (a loop must pass through a waiting node).\n\n")
+                .append("- At most one default edge (`isDefault: true`) per node.\n")
+                .append("- A node with conditional edges needs exactly one default edge (no condition) as its ")
+                .append("fallback; this includes a node with a single conditional edge.\n")
+                .append("- A default edge must not have a `condition`.\n")
+                .append("- A fork (parallel branches) uses only unconditional, non-default edges — do not mix ")
+                .append("fork edges with conditional/default edges. Parallel branches must re-join at a single ")
+                .append("node before reaching an `end` node.\n")
+                .append("- Edges leaving the same node should have distinct `priority` values.\n")
+                .append("- One `start` node (no incoming edges) and at least one `end` node (no outgoing edges).\n")
+                .append("- Every node except `end` needs an outgoing edge; every node must be reachable from ")
+                .append("`start` and have a path to an `end` node.\n")
+                .append("- No cycle made only of `action` nodes (a loop must pass through a `human-task`, ")
+                .append("`wait` or `receive-event` node).\n\n")
                 .append("Conditions are raw EL without `${}`, e.g. `context.needsInfo == true`. Variables: ")
                 .append("`context.<key>` (run context: inputs and merged node outputs) and `event.<field>` ")
                 .append("(the triggering or received event).\n\n")
