@@ -37,7 +37,7 @@ import {
     type Toolset,
     type McpServer,
     type SessionTemplate,
-    type EventSource,
+    type EventSourceConfig,
     type Subscription,
     type WorkflowDefinition,
     type PackExportRequest,
@@ -60,7 +60,7 @@ export function ConfigurationPacksPage() {
     const [toolsets, setToolsets] = useState<Toolset[]>([]);
     const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
     const [sessionTemplates, setSessionTemplates] = useState<SessionTemplate[]>([]);
-    const [eventSources, setEventSources] = useState<EventSource[]>([]);
+    const [eventSources, setEventSources] = useState<EventSourceConfig[]>([]);
     const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
     const [workflowDefs, setWorkflowDefs] = useState<WorkflowDefinition[]>([]);
     const [loading, setLoading] = useState(true);
@@ -1021,7 +1021,7 @@ function SessionTemplateCheckboxSection({ templates, selected, onToggle }: {
 }
 
 function EventSourceCheckboxSection({ eventSources, selected, onToggle }: {
-    eventSources: EventSource[];
+    eventSources: EventSourceConfig[];
     selected: Set<string>;
     onToggle: (id: string) => void;
 }) {

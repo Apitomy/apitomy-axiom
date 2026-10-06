@@ -40,7 +40,7 @@ import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle
 import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
 import { BooleanStatusIcon } from "../components/BooleanStatusIcon";
 import {
-    type EventSource,
+    type EventSourceConfig,
     type NewEventSource,
     type EventSourceStatus,
     type EventSourcePollLog,
@@ -61,8 +61,8 @@ const SOURCE_COLORS: Record<string, "blue" | "green" | "orange" | "grey"> = {
 
 export function EventSourceDetailPage() {
     const { eventSourceId } = useParams<{ eventSourceId: string }>();
-    const [eventSource, setEventSource] = useState<EventSource | null>(null);
-    const [form, setForm] = useState<Partial<EventSource>>({});
+    const [eventSource, setEventSource] = useState<EventSourceConfig | null>(null);
+    const [form, setForm] = useState<Partial<EventSourceConfig>>({});
     const [reposText, setReposText] = useState("");
     const [projectsText, setProjectsText] = useState("");
     const [secrets, setSecrets] = useState<Secret[]>([]);
@@ -111,7 +111,7 @@ export function EventSourceDetailPage() {
 
     useEffect(() => { loadData(); }, [loadData]);
 
-    const updateForm = (updates: Partial<EventSource>) => {
+    const updateForm = (updates: Partial<EventSourceConfig>) => {
         setForm((prev) => ({ ...prev, ...updates }));
         setDirty(true);
     };
@@ -222,8 +222,8 @@ export function EventSourceDetailPage() {
 }
 
 function InfoTab({ form, updateForm, reposText, setReposText, projectsText, setProjectsText, secrets }: {
-    form: Partial<EventSource>;
-    updateForm: (updates: Partial<EventSource>) => void;
+    form: Partial<EventSourceConfig>;
+    updateForm: (updates: Partial<EventSourceConfig>) => void;
     reposText: string;
     setReposText: (v: string) => void;
     projectsText: string;

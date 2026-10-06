@@ -859,7 +859,7 @@ export async function updateRetentionConfig(config: RetentionConfig): Promise<Re
 // ── Event Source Filters (used by subscriptions) ─────────────────
 
 export interface EventSourceFilterRule {
-    type: "event-type" | "payload" | "ref";
+    type: "event-type" | "payload";
     pointer?: string;
     pattern: string;
 }
@@ -1971,7 +1971,7 @@ export async function fetchWorkflowDefinitionRuns(
 
 // ── Event Sources ───────────────────────────────────────────────────
 
-export interface EventSource {
+export interface EventSourceConfig {
     id: string;
     name: string;
     description?: string;
@@ -2008,7 +2008,7 @@ export interface EventSourceStatus {
 
 export async function fetchEventSources(
     page = 1, limit = 20, filterName?: string, filterType?: string
-): Promise<SearchResults<EventSource>> {
+): Promise<SearchResults<EventSourceConfig>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
     params.set("limit", String(limit));
@@ -2019,13 +2019,13 @@ export async function fetchEventSources(
     return response.json();
 }
 
-export async function fetchEventSource(eventSourceId: string): Promise<EventSource> {
+export async function fetchEventSource(eventSourceId: string): Promise<EventSourceConfig> {
     const response = await fetch(`${API}/event-sources/${encodeURIComponent(eventSourceId)}`);
     if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch event source"));
     return response.json();
 }
 
-export async function createEventSource(data: NewEventSource): Promise<EventSource> {
+export async function createEventSource(data: NewEventSource): Promise<EventSourceConfig> {
     const response = await fetch(`${API}/event-sources`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2035,7 +2035,7 @@ export async function createEventSource(data: NewEventSource): Promise<EventSour
     return response.json();
 }
 
-export async function updateEventSource(eventSourceId: string, data: NewEventSource): Promise<EventSource> {
+export async function updateEventSource(eventSourceId: string, data: NewEventSource): Promise<EventSourceConfig> {
     const response = await fetch(`${API}/event-sources/${encodeURIComponent(eventSourceId)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },

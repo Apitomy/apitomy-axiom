@@ -40,7 +40,7 @@ import {
 import { BooleanStatusIcon } from "../components/BooleanStatusIcon";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import {
-    type EventSource,
+    type EventSourceConfig,
     type NewEventSource,
     type Secret,
     fetchEventSources,
@@ -58,7 +58,7 @@ const SLUG_PATTERN = /^[a-z0-9-]*$/;
 
 export function EventSourcesPage() {
     const navigate = useNavigate();
-    const [eventSources, setEventSources] = useState<EventSource[]>([]);
+    const [eventSources, setEventSources] = useState<EventSourceConfig[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
