@@ -5,6 +5,7 @@ import io.apitomy.axiom.agents.spi.AgentRegistry;
 import io.apitomy.axiom.agents.spi.AgentRequest;
 import io.apitomy.axiom.agents.spi.AgentResult;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
+import io.apitomy.axiom.core.entities.ActionTypeField;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AgentEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
@@ -142,7 +143,18 @@ public class TaskExecutionService {
         // Check if this is a script action type
         ActionTypeEntity actionTypeEntity = ActionTypeEntity.find("name", task.actionType).firstResult();
 
-        // Validate resolved inputs for workflow tasks (fail fast on missing required inputs or type mismatches)
+        // Fail fast when a required declared input has no value (e.g. it is not mapped on the node)
+        if (actionTypeEntity != null) {
+            List<String> missing = InputBindingResolver.missingRequiredInputs(
+                    actionTypeEntity.inputs, parseResolvedInputs(task));
+            if (!missing.isEmpty()) {
+                failTask(task.id, "Missing required input(s): " + String.join(", ", missing)
+                        + ". Map them on the workflow node.");
+                return;
+            }
+        }
+
+        // Validate resolved inputs for workflow tasks (fail fast on type mismatches)
         if (actionTypeEntity != null && task.workflowRunId != null
                 && actionTypeEntity.inputs != null && !actionTypeEntity.inputs.isEmpty()) {
             List<String> inputErrors = ActionTypeIoValidator.validate(
@@ -226,11 +238,11 @@ public class TaskExecutionService {
             LOG.warnf(e, "Failed to configure agent MCP servers for task %d", task.id);
         }
 
-        String prompt = resolvePromptTemplate(actionTypeEntity, task, subject, workspace);
+        String prompt = resolvePromptTemplate(actionTypeEntity, task);
         AgentRequest request = AgentRequest.builder()
                 .prompt(prompt != null ? prompt : task.input)
                 .workingDirectory(workspace)
-                .systemPrompt(buildSystemPrompt(task, subject))
+                .systemPrompt(buildSystemPrompt(actionTypeEntity))
                 .allowedTools(allowedTools)
                 .mcpConfigFile(mcpConfig)
                 .environment(env)
@@ -307,26 +319,34 @@ public class TaskExecutionService {
     }
 
     /**
-     * Resolves the prompt template for the action type, substituting placeholders
-     * with values from the task and subject. Returns null if no template is configured.
+     * Resolves the prompt template for the action type: binds declared inputs into
+     * {@code {{inputs.NAME}}} placeholders (absent inputs render empty), then appends the
+     * "## Inputs" section and, for workflow tasks with declared outputs, the output contract.
+     * Returns null if no template is configured.
+     *
+     * @param actionType the action type, may be {@code null}
+     * @param task       the task whose resolved inputs supply the values
+     * @return the assembled prompt, or {@code null} when no template is configured
      */
-    private String resolvePromptTemplate(ActionTypeEntity actionType, TaskEntity task,
-                                          SubjectEntity subject, Path workspace) {
+    String resolvePromptTemplate(ActionTypeEntity actionType, TaskEntity task) {
         if (actionType == null || actionType.promptTemplate == null
                 || actionType.promptTemplate.isBlank()) {
             return null;
         }
 
-        String resolved = actionType.promptTemplate;
+        Map<String, Object> values = parseResolvedInputs(task);
+        Map<String, Object> bindings = new HashMap<>();
+        if (actionType.inputs != null) {
+            for (ActionTypeField input : actionType.inputs) {
+                bindings.put(input.name, values.get(input.name));
+            }
+        }
+        String resolved = InputBindingResolver.bindInputs(actionType.promptTemplate, bindings, objectMapper);
 
-        resolved = resolved.replace("{{actionType}}", task.actionType != null ? task.actionType : "");
-        resolved = resolved.replace("{{ref}}", subject.ref != null ? subject.ref : "");
-        resolved = resolved.replace("{{repository}}", subject.repository != null ? subject.repository : "");
-        resolved = resolved.replace("{{subjectName}}", subject.name != null ? subject.name : "");
-        resolved = resolved.replace("{{workDir}}", workspace != null ? workspace.toAbsolutePath().toString() : "");
-
-        // Bind named workflow inputs as {{inputs.NAME}}.
-        resolved = InputBindingResolver.bindInputs(resolved, parseResolvedInputs(task), objectMapper);
+        String inputsSection = InputBindingResolver.buildInputsSection(actionType.inputs, values, objectMapper);
+        if (!inputsSection.isEmpty()) {
+            resolved = resolved + "\n\n" + inputsSection;
+        }
 
         // Auto-append the output contract for workflow tasks that declare outputs.
         if (task.workflowRunId != null && actionType.outputs != null && !actionType.outputs.isEmpty()) {
@@ -346,14 +366,21 @@ public class TaskExecutionService {
         return InputBindingResolver.parseInputs(task.input, objectMapper);
     }
 
-    private String buildSystemPrompt(TaskEntity task, SubjectEntity subject) {
+    /**
+     * Builds the agent system prompt: the action being performed, its description (if any) and the
+     * working-directory note. Contains no subject data — agents receive data only through inputs.
+     *
+     * @param actionType the action type, may be {@code null}
+     * @return the system prompt
+     */
+    String buildSystemPrompt(ActionTypeEntity actionType) {
         StringBuilder sb = new StringBuilder();
-        sb.append("You are working on subject: ").append(subject.name).append("\n");
-        sb.append("Reference: ").append(subject.ref).append("\n");
-        sb.append("Action type: ").append(task.actionType).append("\n");
-        if (subject.body != null) {
-            sb.append("Subject description: ").append(subject.body).append("\n");
+        sb.append("You are performing the action '")
+                .append(actionType != null ? actionType.name : "").append("'.\n");
+        if (actionType != null && actionType.description != null && !actionType.description.isBlank()) {
+            sb.append(actionType.description).append("\n");
         }
+        sb.append("Your current working directory is the task's workspace.\n");
         return sb.toString();
     }
 

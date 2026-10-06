@@ -2,6 +2,7 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
+import io.apitomy.axiom.core.entities.ActionTypeField;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.services.WorkspaceService;
@@ -28,6 +29,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -36,8 +38,8 @@ import java.util.regex.Pattern;
 
 /**
  * Executes script-mode action types by running a user-defined bash script.
- * The script template is stored on the ActionTypeEntity and supports
- * placeholder substitution for subject/event context and the API base URL.
+ * The script template is stored on the ActionTypeEntity and receives data only
+ * through its declared inputs ({@code {{inputs.NAME}}} placeholders).
  */
 @ApplicationScoped
 public class ScriptExecutionService {
@@ -92,13 +94,13 @@ public class ScriptExecutionService {
 
     /**
      * Executes the script for a task asynchronously, using the supplied subject
-     * for template variable resolution. If {@code subject} is {@code null}, the
+     * to locate the workspace directory. If {@code subject} is {@code null}, the
      * subject is loaded from the database — callers that already hold a managed
      * entity (e.g. inside an uncommitted transaction) should pass it directly to
      * avoid a race between the async thread and the transaction commit.
      *
      * @param task    the task whose action type defines the script to run
-     * @param subject the subject to use for placeholder substitution, or {@code null}
+     * @param subject the subject whose workspace the script runs against, or {@code null}
      */
     public void executeScript(TaskEntity task, SubjectEntity subject) {
         try (LogContext ignored = TaskExecutionService.taskLogContext(task)) {
@@ -136,8 +138,8 @@ public class ScriptExecutionService {
             subject = SubjectEntity.findById(task.subjectId);
         }
         Map<String, String> placeholderEnv = new LinkedHashMap<>();
-        String script = substitutePlaceholders(actionType.scriptTemplate, task, subject,
-                placeholderEnv);
+        String script = substitutePlaceholders(actionType.scriptTemplate, task,
+                actionType.inputs, placeholderEnv);
         Instant startTime = Instant.now();
 
         Path scriptFile = Files.createTempFile("axiom-script-", ".sh");
@@ -150,9 +152,7 @@ public class ScriptExecutionService {
 
             ProcessBuilder pb = new ProcessBuilder("/bin/bash", scriptFile.toString())
                     .redirectErrorStream(true);
-            pb.environment().put("AXIOM_API_URL", "http://localhost:" + httpPort + "/api/v1");
-            pb.environment().put("AXIOM_SUBJECT_ID", String.valueOf(task.subjectId));
-            pb.environment().put("AXIOM_TASK_ID", String.valueOf(task.id));
+            pb.environment().putAll(buildBaseEnvironment(task, subject));
 
             // Inject environment variables (custom or all secrets as fallback)
             if (environmentResolver.hasCustomEnvironment(actionType.environment)) {
@@ -232,17 +232,37 @@ public class ScriptExecutionService {
     }
 
     /**
-     * Resolves {@code {{...}}} placeholders in a script template.
+     * Builds the plumbing environment variables every script receives: the API base URL, the task ID
+     * and the subject's workspace directory. No subject data is exposed; scripts receive data only
+     * through declared inputs.
      *
-     * <p>To guard against shell injection, placeholder <em>values</em> are never
+     * @param task    the task being executed
+     * @param subject the task's subject, may be {@code null}
+     * @return the plumbing environment variables
+     */
+    Map<String, String> buildBaseEnvironment(TaskEntity task, SubjectEntity subject) {
+        Map<String, String> env = new LinkedHashMap<>();
+        env.put("AXIOM_API_URL", "http://localhost:" + httpPort + "/api/v1");
+        env.put("AXIOM_TASK_ID", String.valueOf(task.id));
+        env.put("AXIOM_WORK_DIR", subject != null
+                ? workspaceService.getWorkspacePath(subject).toString()
+                : "");
+        return env;
+    }
+
+    /**
+     * Resolves {@code {{inputs.NAME}}} placeholders for the action type's declared inputs in a
+     * script template. No other placeholders are recognised.
+     *
+     * <p>To guard against shell injection, input <em>values</em> are never
      * inlined into the script text. Instead each value is exported as an
-     * environment variable (collected into {@code env}) and the placeholder is
-     * replaced with a shell expansion of that variable — e.g.
-     * {@code {{subjectName}}} becomes a reference to {@code AXIOM_SUBJECT_NAME}.
+     * environment variable {@code AXIOM_INPUT_<name>} (collected into {@code env})
+     * and the placeholder is replaced with a shell expansion of that variable.
      * Because bash does not re-parse the contents of a variable expansion for
      * command substitution, a value containing {@code $(...)}, backticks,
      * {@code ;}, {@code &&}, newlines, etc. is treated as literal data rather
-     * than being executed (issue #267).
+     * than being executed (issue #267). Declared inputs without a value (e.g.
+     * unmapped optional inputs) render as an empty string.
      *
      * <p>The exact form of the injected reference is chosen based on the shell
      * quoting context in which the placeholder appears, so that values containing
@@ -262,70 +282,35 @@ public class ScriptExecutionService {
      * </ul>
      *
      * @param template the raw script template
-     * @param task     the task providing context values
-     * @param subject  the subject providing context values, may be {@code null}
+     * @param task     the task whose resolved inputs supply the values (workflow tasks only)
+     * @param inputs   the action type's declared inputs, may be {@code null}
      * @param env      output map that receives the environment variables the
      *                 resolved script references; the caller must inject these
      *                 into the script's process environment
      * @return the resolved script with placeholders replaced by shell references
      */
     String substitutePlaceholders(String template, TaskEntity task,
-                                           SubjectEntity subject, Map<String, String> env) {
-        String apiBaseUrl = "http://localhost:" + httpPort + "/api/v1";
-        String workDir = subject != null
-                ? workspaceService.getWorkspacePath(subject).toString()
-                : "";
+                                  List<ActionTypeField> inputs, Map<String, String> env) {
+        Map<String, Object> values = task.workflowRunId != null
+                ? InputBindingResolver.parseInputs(task.input, objectMapper)
+                : Map.of();
 
-        // Collect every candidate placeholder and its target environment
-        // variable. Longer placeholders are matched first during rendering so
-        // that e.g. {{inputs.title}} wins over any shorter prefix match.
         Map<String, String> bindings = new LinkedHashMap<>();
-        Map<String, String> values = new LinkedHashMap<>();
-        addBinding(bindings, values, "{{subjectId}}", "AXIOM_SUBJECT_ID", str(task.subjectId));
-        addBinding(bindings, values, "{{eventId}}", "AXIOM_EVENT_ID", str(task.eventId));
-        addBinding(bindings, values, "{{taskId}}", "AXIOM_TASK_ID", str(task.id));
-        addBinding(bindings, values, "{{ref}}", "AXIOM_REF",
-                subject != null && subject.ref != null ? subject.ref : "");
-        addBinding(bindings, values, "{{repository}}", "AXIOM_REPOSITORY",
-                subject != null && subject.repository != null ? subject.repository : "");
-        addBinding(bindings, values, "{{subjectName}}", "AXIOM_SUBJECT_NAME",
-                subject != null && subject.name != null ? subject.name : "");
-        addBinding(bindings, values, "{{apiBaseUrl}}", "AXIOM_API_URL", apiBaseUrl);
-        addBinding(bindings, values, "{{workDir}}", "AXIOM_WORK_DIR", workDir);
-
-        // Bind named workflow inputs as {{inputs.NAME}} (workflow tasks only).
-        // Input parsing and value rendering are shared with the agent-prompt path
-        // via InputBindingResolver; the script path additionally routes each value
-        // through an environment variable (rather than inlining it, as the prompt
-        // path safely does) so shell metacharacters cannot execute (issue #267).
-        if (task.workflowRunId != null) {
-            Map<String, Object> inputs =
-                    InputBindingResolver.parseInputs(task.input, objectMapper);
-            for (Map.Entry<String, Object> e : inputs.entrySet()) {
-                String key = e.getKey();
-                if (!VALID_INPUT_NAME.matcher(key).matches()) {
-                    // Not a valid shell identifier — cannot bind as an env var
-                    // safely; leave the placeholder untouched.
+        Map<String, String> rendered = new LinkedHashMap<>();
+        if (inputs != null) {
+            for (ActionTypeField input : inputs) {
+                if (input.name == null || !VALID_INPUT_NAME.matcher(input.name).matches()) {
+                    // Not a valid shell identifier — cannot bind as an env var safely.
                     continue;
                 }
-                addBinding(bindings, values, "{{inputs." + key + "}}",
-                        "AXIOM_INPUT_" + key,
-                        InputBindingResolver.renderValue(e.getValue(), objectMapper));
+                String placeholder = "{{inputs." + input.name + "}}";
+                bindings.put(placeholder, "AXIOM_INPUT_" + input.name);
+                rendered.put(placeholder,
+                        InputBindingResolver.renderValue(values.get(input.name), objectMapper));
             }
         }
 
-        return render(template, bindings, values, env);
-    }
-
-    /**
-     * Records a candidate placeholder-to-environment-variable binding. The value
-     * is only exported (and the env var only referenced) if the placeholder is
-     * actually encountered while rendering the template.
-     */
-    private void addBinding(Map<String, String> bindings, Map<String, String> values,
-                            String placeholder, String envName, String value) {
-        bindings.put(placeholder, envName);
-        values.put(placeholder, value != null ? value : "");
+        return render(template, bindings, rendered, env);
     }
 
     /**
@@ -414,10 +399,6 @@ public class ScriptExecutionService {
         }
         // Unquoted: quote the expansion so whitespace does not word-split it.
         return "\"${" + envName + "}\"";
-    }
-
-    private String str(Object value) {
-        return value != null ? String.valueOf(value) : "";
     }
 
     @Transactional

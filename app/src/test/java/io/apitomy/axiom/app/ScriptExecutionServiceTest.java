@@ -1,6 +1,7 @@
 package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.core.entities.ActionTypeField;
 import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.services.WorkspaceService;
@@ -10,6 +11,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -20,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests for {@link ScriptExecutionService#substitutePlaceholders} focusing
- * on shell-injection hardening (issue #267): placeholder values must be passed
+ * on declared-input binding and shell-injection hardening (issue #267): input values must be passed
  * to the script as environment variables and referenced via quoted expansions,
  * never inlined into the script text.
  */
@@ -48,78 +50,68 @@ class ScriptExecutionServiceTest {
         return task;
     }
 
-    private SubjectEntity subject(String ref, String repository, String name) {
+    private SubjectEntity subject() {
         SubjectEntity subject = new SubjectEntity();
-        subject.ref = ref;
-        subject.repository = repository;
-        subject.name = name;
+        subject.ref = "owner/repo#42";
+        subject.repository = "owner/repo";
+        subject.name = "My Subject";
         subject.id = 42L;
         return subject;
     }
 
-    @Test
-    void standardPlaceholdersBecomeQuotedEnvReferences() {
-        ScriptExecutionService svc = newService();
-        Map<String, String> env = new LinkedHashMap<>();
-        String template = "echo {{subjectId}} {{taskId}} {{ref}} {{repository}} "
-                + "{{subjectName}} {{apiBaseUrl}} {{workDir}}";
+    private static final List<ActionTypeField> INPUTS = List.of(
+            new ActionTypeField("title", "string", true, null),
+            new ActionTypeField("count", "number", false, null),
+            new ActionTypeField("x", "string", false, null));
 
-        String resolved = svc.substitutePlaceholders(template,
-                task(7L, 42L, "do the thing"),
-                subject("owner/repo#42", "owner/repo", "My Subject"), env);
-
-        // No raw values are inlined; each placeholder is a quoted env reference.
-        assertEquals("echo \"${AXIOM_SUBJECT_ID}\" \"${AXIOM_TASK_ID}\" \"${AXIOM_REF}\" "
-                + "\"${AXIOM_REPOSITORY}\" \"${AXIOM_SUBJECT_NAME}\" \"${AXIOM_API_URL}\" "
-                + "\"${AXIOM_WORK_DIR}\"", resolved);
-
-        assertEquals("42", env.get("AXIOM_SUBJECT_ID"));
-        assertEquals("7", env.get("AXIOM_TASK_ID"));
-        assertEquals("owner/repo#42", env.get("AXIOM_REF"));
-        assertEquals("owner/repo", env.get("AXIOM_REPOSITORY"));
-        assertEquals("My Subject", env.get("AXIOM_SUBJECT_NAME"));
-        assertEquals("http://localhost:9090/api/v1", env.get("AXIOM_API_URL"));
-        assertEquals("/ws/subject-42", env.get("AXIOM_WORK_DIR"));
-    }
-
-    @Test
-    void onlyReferencedPlaceholdersAreExported() {
-        ScriptExecutionService svc = newService();
-        Map<String, String> env = new LinkedHashMap<>();
-
-        svc.substitutePlaceholders("echo {{ref}}", task(1L, 2L, null),
-                subject("r", "repo", "n"), env);
-
-        assertTrue(env.containsKey("AXIOM_REF"));
-        assertFalse(env.containsKey("AXIOM_SUBJECT_NAME"));
-    }
-
-    @Test
-    void injectionPayloadIsNotInlinedIntoScript() {
-        ScriptExecutionService svc = newService();
-        Map<String, String> env = new LinkedHashMap<>();
-        String payload = "$(touch /tmp/pwned); `id`; rm -rf /";
-
-        String resolved = svc.substitutePlaceholders("echo {{subjectName}}",
-                task(1L, 2L, null), subject("r", "repo", payload), env);
-
-        // The dangerous characters live only in the env value, not the script.
-        assertEquals("echo \"${AXIOM_SUBJECT_NAME}\"", resolved);
-        assertEquals(payload, env.get("AXIOM_SUBJECT_NAME"));
-        assertFalse(resolved.contains("touch"));
-        assertFalse(resolved.contains("rm -rf"));
-    }
-
-    @Test
-    void workflowInputsBecomeQuotedEnvReferences() {
-        ScriptExecutionService svc = newService();
-        Map<String, String> env = new LinkedHashMap<>();
-        TaskEntity task = task(1L, 2L, "{\"title\":\"$(evil)\",\"count\":3}");
+    private TaskEntity workflowTask(String input) {
+        TaskEntity task = task(7L, 42L, input);
         task.workflowRunId = 99L;
+        return task;
+    }
 
-        String resolved = svc.substitutePlaceholders(
-                "echo {{inputs.title}} {{inputs.count}}", task,
-                subject("r", "repo", "n"), env);
+    private String substitute(String template, String title, Map<String, String> env) {
+        Map<String, Object> inputs = new LinkedHashMap<>();
+        inputs.put("title", title);
+        try {
+            return newService().substitutePlaceholders(template,
+                    workflowTask(new ObjectMapper().writeValueAsString(inputs)), INPUTS, env);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    @Test
+    void baseEnvironmentHasPlumbingOnlyAndNoSubjectData() {
+        Map<String, String> env = newService().buildBaseEnvironment(workflowTask(null), subject());
+
+        assertEquals("http://localhost:9090/api/v1", env.get("AXIOM_API_URL"));
+        assertEquals("7", env.get("AXIOM_TASK_ID"));
+        assertEquals("/ws/subject-42", env.get("AXIOM_WORK_DIR"));
+        for (String removed : List.of("AXIOM_SUBJECT_ID", "AXIOM_REF", "AXIOM_REPOSITORY",
+                "AXIOM_SUBJECT_NAME", "AXIOM_EVENT_ID")) {
+            assertFalse(env.containsKey(removed), removed + " must not be set");
+        }
+    }
+
+    @Test
+    void removedSubjectPlaceholdersAreNotBound() {
+        Map<String, String> env = new LinkedHashMap<>();
+        String template = "echo {{subjectId}} {{ref}} {{repository}} {{subjectName}} {{eventId}} "
+                + "{{taskId}} {{apiBaseUrl}} {{workDir}}";
+
+        String resolved = substitute(template, "t", env);
+
+        assertEquals(template, resolved);
+        assertTrue(env.isEmpty());
+    }
+
+    @Test
+    void declaredInputsBecomeQuotedEnvReferences() {
+        Map<String, String> env = new LinkedHashMap<>();
+        String resolved = newService().substitutePlaceholders(
+                "echo {{inputs.title}} {{inputs.count}}",
+                workflowTask("{\"title\":\"$(evil)\",\"count\":3}"), INPUTS, env);
 
         assertEquals("echo \"${AXIOM_INPUT_title}\" \"${AXIOM_INPUT_count}\"", resolved);
         assertEquals("$(evil)", env.get("AXIOM_INPUT_title"));
@@ -127,63 +119,95 @@ class ScriptExecutionServiceTest {
     }
 
     @Test
+    void unmappedOptionalInputRendersEmpty() throws IOException, InterruptedException {
+        Map<String, String> env = new LinkedHashMap<>();
+        String resolved = substitute("printf '[%s]' {{inputs.x}}", "t", env);
+
+        assertEquals("printf '[%s]' \"${AXIOM_INPUT_x}\"", resolved);
+        assertEquals("", env.get("AXIOM_INPUT_x"));
+        assertEquals("[]", runScript(resolved, env));
+    }
+
+    @Test
+    void undeclaredInputIsNotBound() {
+        Map<String, String> env = new LinkedHashMap<>();
+        String resolved = newService().substitutePlaceholders("echo {{inputs.extra}}",
+                workflowTask("{\"extra\":\"v\"}"), INPUTS, env);
+
+        assertEquals("echo {{inputs.extra}}", resolved);
+        assertTrue(env.isEmpty());
+    }
+
+    @Test
+    void nonWorkflowTaskHasNoInputValues() {
+        Map<String, String> env = new LinkedHashMap<>();
+        String resolved = newService().substitutePlaceholders("echo {{inputs.title}}",
+                task(1L, 2L, "{\"title\":\"v\"}"), INPUTS, env);
+
+        assertEquals("echo \"${AXIOM_INPUT_title}\"", resolved);
+        assertEquals("", env.get("AXIOM_INPUT_title"));
+    }
+
+    @Test
+    void injectionPayloadIsNotInlinedIntoScript() {
+        Map<String, String> env = new LinkedHashMap<>();
+        String payload = "$(touch /tmp/pwned); `id`; rm -rf /";
+
+        String resolved = substitute("echo {{inputs.title}}", payload, env);
+
+        // The dangerous characters live only in the env value, not the script.
+        assertEquals("echo \"${AXIOM_INPUT_title}\"", resolved);
+        assertEquals(payload, env.get("AXIOM_INPUT_title"));
+        assertFalse(resolved.contains("touch"));
+        assertFalse(resolved.contains("rm -rf"));
+    }
+
+    @Test
     void placeholderInsideDoubleQuotesIsNotReQuoted() {
-        ScriptExecutionService svc = newService();
         Map<String, String> env = new LinkedHashMap<>();
 
-        String resolved = svc.substitutePlaceholders(
-                "git commit -m \"Automated fix: {{subjectName}}\"",
-                task(1L, 2L, null), subject("r", "repo", "fix login bug"), env);
+        String resolved = substitute("git commit -m \"Automated fix: {{inputs.title}}\"",
+                "fix login bug", env);
 
         // Inside an existing double-quoted string the reference must NOT add its
         // own quotes, otherwise the value would word-split (issue: PR #280 review).
-        assertEquals("git commit -m \"Automated fix: ${AXIOM_SUBJECT_NAME}\"", resolved);
-        assertEquals("fix login bug", env.get("AXIOM_SUBJECT_NAME"));
+        assertEquals("git commit -m \"Automated fix: ${AXIOM_INPUT_title}\"", resolved);
+        assertEquals("fix login bug", env.get("AXIOM_INPUT_title"));
     }
 
     @Test
     void placeholderInsideSingleQuotesBreaksOutToExpand() {
-        ScriptExecutionService svc = newService();
         Map<String, String> env = new LinkedHashMap<>();
 
-        String resolved = svc.substitutePlaceholders("echo '{{subjectName}}'",
-                task(1L, 2L, null), subject("r", "repo", "hello world"), env);
+        String resolved = substitute("echo '{{inputs.title}}'", "hello world", env);
 
         // Single quotes suppress expansion, so the reference closes the region,
-        // expands within double quotes, then reopens it. The template's own
-        // quotes remain, yielding empty-string + expansion + empty-string.
-        assertEquals("echo ''\"${AXIOM_SUBJECT_NAME}\"''", resolved);
-        assertEquals("hello world", env.get("AXIOM_SUBJECT_NAME"));
+        // expands within double quotes, then reopens it.
+        assertEquals("echo ''\"${AXIOM_INPUT_title}\"''", resolved);
+        assertEquals("hello world", env.get("AXIOM_INPUT_title"));
     }
 
     @Test
     void whitespaceValueInDoubleQuotesStaysSingleArgument()
             throws IOException, InterruptedException {
-        ScriptExecutionService svc = newService();
         Map<String, String> env = new LinkedHashMap<>();
 
-        // Print the argument count and the first argument so we can confirm the
-        // whitespace-bearing value was passed as exactly one argument.
-        String resolved = svc.substitutePlaceholders(
-                "set -- \"Automated fix: {{subjectName}}\"\nprintf '%s|%s' \"$#\" \"$1\"",
-                task(1L, 2L, null), subject("r", "repo", "fix login bug"), env);
+        String resolved = substitute(
+                "set -- \"Automated fix: {{inputs.title}}\"\nprintf '%s|%s' \"$#\" \"$1\"",
+                "fix login bug", env);
 
-        String output = runScript(resolved, env);
-        assertEquals("1|Automated fix: fix login bug", output);
+        assertEquals("1|Automated fix: fix login bug", runScript(resolved, env));
     }
 
     @Test
     void whitespaceValueInSingleQuotesExpandsAsSingleArgument()
             throws IOException, InterruptedException {
-        ScriptExecutionService svc = newService();
         Map<String, String> env = new LinkedHashMap<>();
 
-        String resolved = svc.substitutePlaceholders(
-                "set -- '{{subjectName}}'\nprintf '%s|%s' \"$#\" \"$1\"",
-                task(1L, 2L, null), subject("r", "repo", "fix login bug"), env);
+        String resolved = substitute("set -- '{{inputs.title}}'\nprintf '%s|%s' \"$#\" \"$1\"",
+                "fix login bug", env);
 
-        String output = runScript(resolved, env);
-        assertEquals("1|fix login bug", output);
+        assertEquals("1|fix login bug", runScript(resolved, env));
     }
 
     private String runScript(String script, Map<String, String> env)
@@ -205,15 +229,13 @@ class ScriptExecutionServiceTest {
 
     @Test
     void injectionPayloadIsNotExecutedByBash() throws IOException, InterruptedException {
-        ScriptExecutionService svc = newService();
         Map<String, String> env = new LinkedHashMap<>();
 
         Path marker = Files.createTempFile("axiom-inject-", ".marker");
         Files.deleteIfExists(marker);
         String payload = "$(touch " + marker + ")";
 
-        String resolved = svc.substitutePlaceholders("printf '%s' {{subjectName}}",
-                task(1L, 2L, null), subject("r", "repo", payload), env);
+        String resolved = substitute("printf '%s' {{inputs.title}}", payload, env);
 
         Path scriptFile = Files.createTempFile("axiom-inject-script-", ".sh");
         try {
