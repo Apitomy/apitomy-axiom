@@ -78,4 +78,61 @@ class ConfigItemValidationServiceTest {
             """), names(Set.of("present"), Set.of()));
         assertTrue(problems.stream().anyMatch(p -> p.code().equals("UNKNOWN_TOOL") && p.path().equals("tools[0]")));
     }
+
+    private static final String VALID_WORKFLOW = """
+        {"name": "triage", "content": {
+          "id": "triage", "name": "triage",
+          "nodes": [
+            {"id": "s", "type": "start", "name": "Start", "config": {}, "position": {"x": 0, "y": 0}},
+            {"id": "a", "type": "action", "name": "Do", "config": {"actionType": "do-it"},
+             "position": {"x": 200, "y": 0}},
+            {"id": "e", "type": "end", "name": "End", "config": {}, "position": {"x": 400, "y": 0}}
+          ],
+          "edges": [
+            {"id": "e1", "source": "s", "target": "a", "priority": 0, "isDefault": true},
+            {"id": "e2", "source": "a", "target": "e", "priority": 0, "isDefault": true}
+          ]}}
+        """;
+
+    private static ValidationContext actionTypes(String... names) {
+        return new ValidationContext(Set.of(), Set.of(), Set.of(names), Set.of(), Set.of(), Set.of(), Set.of());
+    }
+
+    @Test
+    void validWorkflowPasses() throws Exception {
+        List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW, json(VALID_WORKFLOW),
+                actionTypes("do-it"));
+        assertFalse(ConfigItemValidationService.hasErrors(problems), problems.toString());
+    }
+
+    @Test
+    void uppercaseNodeTypeIsRejectedWithHint() throws Exception {
+        List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW,
+                json(VALID_WORKFLOW.replace("\"type\": \"start\"", "\"type\": \"START\"")), actionTypes("do-it"));
+        assertTrue(problems.stream().anyMatch(p -> p.code().equals("WORKFLOW_PARSE_ERROR")
+                && p.message().contains("lowercase")), problems.toString());
+    }
+
+    @Test
+    void sourceNodeIdEdgesAreRejected() throws Exception {
+        String bad = VALID_WORKFLOW.replace("\"source\": \"s\", \"target\": \"a\"",
+                "\"sourceNodeId\": \"s\", \"targetNodeId\": \"a\"");
+        List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW, json(bad), actionTypes("do-it"));
+        assertTrue(ConfigItemValidationService.hasErrors(problems), problems.toString());
+    }
+
+    @Test
+    void missingContentIdIsRejected() throws Exception {
+        String bad = VALID_WORKFLOW.replace("\"id\": \"triage\", ", "");
+        List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW, json(bad), actionTypes("do-it"));
+        assertTrue(ConfigItemValidationService.hasErrors(problems), problems.toString());
+    }
+
+    @Test
+    void unknownActionTypeIsRejectedAtNodePath() throws Exception {
+        List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW, json(VALID_WORKFLOW),
+                actionTypes("other"));
+        assertTrue(problems.stream().anyMatch(p -> p.code().equals("UNKNOWN_ACTION_TYPE")
+                && p.path().startsWith("content.nodes[1]")), problems.toString());
+    }
 }

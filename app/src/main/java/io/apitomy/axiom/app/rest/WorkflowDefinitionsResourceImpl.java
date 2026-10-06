@@ -16,6 +16,7 @@ import io.apitomy.axiom.api.beans.WorkflowDefinitionVersion;
 import io.apitomy.axiom.app.CronSchedules;
 import io.apitomy.axiom.app.WorkflowExecutionService;
 import io.apitomy.axiom.app.WorkflowRunBeanMapper;
+import io.apitomy.axiom.app.validation.WorkflowPublisher;
 import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
@@ -26,10 +27,6 @@ import io.apitomy.axiom.core.entities.WorkflowRunResumeEntity;
 import io.apitomy.axiom.core.entities.WorkflowScheduleTriggerEntity;
 import io.apitomy.axiom.core.entities.WorkflowWaitEntity;
 import io.apitomy.flow.model.Workflow;
-import io.apitomy.flow.model.WorkflowNode;
-import io.apitomy.flow.validation.ValidationProblem;
-import io.apitomy.flow.validation.ValidationSeverity;
-import io.apitomy.flow.validation.WorkflowValidator;
 import io.quarkus.hibernate.orm.panache.PanacheQuery;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
@@ -68,13 +65,8 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
     @Inject
     WorkflowExecutionService workflowExecutionService;
 
-    /** Built-in inputs that are not always present and therefore may not be marked required. */
-    private static final Set<String> OPTIONAL_BUILT_IN_INPUTS =
-            Set.of("subjectName", "repository", "event");
-
-    /** Valid Start-node input names: identifiers usable in expressions. */
-    private static final java.util.regex.Pattern INPUT_NAME_PATTERN =
-            java.util.regex.Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+    @Inject
+    WorkflowPublisher workflowPublisher;
 
     // ── List ────────────────────────────────────────────────────────
 
@@ -345,42 +337,7 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
     @Transactional
     public WorkflowDefinitionVersion publishWorkflowDefinition(long workflowDefinitionId) {
         WorkflowDefinitionEntity entity = findOrThrow(workflowDefinitionId);
-
-        if (entity.content == null || entity.content.isBlank()) {
-            throw new WebApplicationException("No draft content to publish", 400);
-        }
-
-        Workflow workflow;
-        try {
-            workflow = objectMapper.readValue(entity.content, Workflow.class);
-        } catch (JsonProcessingException e) {
-            throw new WebApplicationException("Invalid workflow JSON: " + e.getMessage(), 400);
-        }
-
-        WorkflowValidator validator = new WorkflowValidator();
-        List<ValidationProblem> problems = validator.validate(workflow);
-        List<ValidationProblem> errors = problems.stream()
-                .filter(p -> p.severity() == ValidationSeverity.ERROR)
-                .toList();
-        if (!errors.isEmpty()) {
-            throw new WebApplicationException(
-                    Response.status(400).entity(errors).build());
-        }
-
-        validateStartInputs(workflow);
-
-        int newVersion = entity.currentVersion != null ? entity.currentVersion + 1 : 1;
-
-        WorkflowDefinitionVersionEntity version = new WorkflowDefinitionVersionEntity();
-        version.definitionId = entity.id;
-        version.version = newVersion;
-        version.content = entity.content;
-        version.createdOn = Instant.now();
-        version.persist();
-
-        entity.currentVersion = newVersion;
-        entity.updatedOn = Instant.now();
-
+        WorkflowDefinitionVersionEntity version = workflowPublisher.publish(entity);
         return toVersionBean(version);
     }
 
@@ -438,46 +395,6 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
                 .find("name", name).firstResult();
         if (existing != null && (excludeId == null || !existing.id.equals(excludeId))) {
             throw new WebApplicationException("Workflow definition name already exists", 409);
-        }
-    }
-
-    /**
-     * Validates a workflow's Start node inputs: every name must be a valid identifier, and the
-     * built-in inputs Axiom does not always provide ({@code event}, {@code subjectName},
-     * {@code repository}) may not be marked required. Custom inputs may be required. Throws a
-     * 400 WebApplicationException on any violation.
-     */
-    private void validateStartInputs(Workflow workflow) {
-        WorkflowNode startNode = workflow.findStartNode().orElse(null);
-        if (startNode == null) {
-            return; // missing Start node is handled by structural validation
-        }
-        Object inputsDef = startNode.config().get("inputs");
-        if (!(inputsDef instanceof List<?> inputs)) {
-            return;
-        }
-        for (Object inputObj : inputs) {
-            if (!(inputObj instanceof Map<?, ?> input)) {
-                continue;
-            }
-            Object nameObj = input.get("name");
-            String name = nameObj != null ? nameObj.toString() : null;
-            if (name == null || !INPUT_NAME_PATTERN.matcher(name).matches()) {
-                throw new WebApplicationException(
-                        Response.status(400).entity(Map.of("message",
-                                "Start node input '" + name + "' is not a valid input name. "
-                                        + "Names must start with a letter or underscore and "
-                                        + "contain only letters, digits and underscores."))
-                                .build());
-            }
-            if (Boolean.TRUE.equals(input.get("required"))
-                    && OPTIONAL_BUILT_IN_INPUTS.contains(name)) {
-                throw new WebApplicationException(
-                        Response.status(400).entity(Map.of("message",
-                                "Start node input '" + name + "' cannot be marked "
-                                        + "required because Axiom does not always provide "
-                                        + "it.")).build());
-            }
         }
     }
 

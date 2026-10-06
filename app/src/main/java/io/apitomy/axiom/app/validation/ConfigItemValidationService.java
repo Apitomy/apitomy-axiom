@@ -5,16 +5,24 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.beans.NewActionType;
 import io.apitomy.axiom.api.beans.NewToolDefinition;
 import io.apitomy.axiom.core.SdkFunctionRegistry;
+import io.apitomy.axiom.core.events.model.EventType;
 import io.apitomy.axiom.core.filters.SubscriptionFilterEvaluator;
 import io.apitomy.axiom.core.services.ActionTypeValidator;
 import io.apitomy.axiom.core.services.ToolValidator;
 import jakarta.enterprise.context.ApplicationScoped;
+import io.apitomy.flow.model.NodeType;
+import io.apitomy.flow.model.Workflow;
+import io.apitomy.flow.model.WorkflowNode;
+import io.apitomy.flow.validation.ValidationProblem;
 import jakarta.inject.Inject;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Arrays;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Validates configuration items (tools, action types, toolsets, session templates, workflows, event sources,
@@ -26,6 +34,8 @@ public class ConfigItemValidationService {
 
     private static final String AXIOM_TOOL_PREFIX = "mcp__axiom-tools__";
     private static final Pattern EVENT_SOURCE_ID = Pattern.compile("[a-z0-9-]+");
+    private static final String WORKFLOW_FORMAT_HINT = "Node types are lowercase (start, end, action, "
+            + "human-task, receive-event, wait); edges use id/source/target/condition/priority/isDefault.";
     private static final Pattern GITHUB_REPOSITORY = Pattern.compile("[^/\\s]+/[^/\\s]+");
 
     @Inject
@@ -50,8 +60,9 @@ public class ConfigItemValidationService {
             case TOOLSET -> validateToolset(item, context, problems);
             case SESSION_TEMPLATE -> validateSessionTemplate(item, problems);
             case EVENT_SOURCE -> validateEventSource(item, context, problems);
-            case WORKFLOW, SUBSCRIPTION -> {
-                // Implemented in later tasks.
+            case WORKFLOW -> validateWorkflow(item, context, problems);
+            case SUBSCRIPTION -> {
+                // Implemented in a later task.
             }
             default -> throw new IllegalArgumentException("Unsupported item type: " + type);
         }
@@ -179,6 +190,103 @@ public class ConfigItemValidationService {
             problems.add(ConfigProblem.warning("secretName", "UNKNOWN_SECRET", "Secret '" + secretName
                     + "' does not exist. Create it before enabling this event source."));
         }
+    }
+
+    private void validateWorkflow(JsonNode item, ValidationContext context, List<ConfigProblem> problems) {
+        requireText(item, "name", problems);
+        JsonNode content = item.path("content");
+        if (!content.isObject()) {
+            problems.add(ConfigProblem.error("content", "MISSING_FIELD",
+                    "'content' is required and must be a workflow object."));
+            return;
+        }
+        Workflow workflow;
+        try {
+            workflow = objectMapper.treeToValue(content, Workflow.class);
+        } catch (Exception e) {
+            problems.add(ConfigProblem.error("content", "WORKFLOW_PARSE_ERROR",
+                    "Invalid workflow content: " + e.getMessage() + " " + WORKFLOW_FORMAT_HINT));
+            return;
+        }
+
+        for (ValidationProblem p : WorkflowContentRules.engineProblems(workflow)) {
+            problems.add(new ConfigProblem(p.severity().name().toLowerCase(Locale.ROOT),
+                    engineProblemPath(content, p), p.code(), p.message()));
+        }
+
+        Optional<String> inputViolation = WorkflowContentRules.startInputViolation(workflow);
+        if (inputViolation.isPresent()) {
+            String startId = workflow.findStartNode().map(WorkflowNode::id).orElse(null);
+            problems.add(ConfigProblem.error(nodePath(content, startId) + ".config.inputs",
+                    "INVALID_START_INPUT", inputViolation.get()));
+        }
+
+        List<WorkflowNode> nodes = workflow.nodes() != null ? workflow.nodes() : List.of();
+        for (int i = 0; i < nodes.size(); i++) {
+            WorkflowNode node = nodes.get(i);
+            String path = "content.nodes[" + i + "].config";
+            if (node.type() == NodeType.ACTION) {
+                validateActionNode(node, path, context, problems);
+            } else if (node.type() == NodeType.RECEIVE_EVENT) {
+                Object eventType = node.config().get("eventType");
+                boolean known = eventType != null && Arrays.stream(EventType.values())
+                        .anyMatch(t -> t.value().equals(eventType.toString()));
+                if (!known) {
+                    String valid = Arrays.stream(EventType.values()).map(EventType::value)
+                            .collect(Collectors.joining(", "));
+                    problems.add(ConfigProblem.warning(path + ".eventType", "UNKNOWN_EVENT_TYPE",
+                            "Event type '" + eventType + "' is not recognized. Valid values: " + valid + "."));
+                }
+            }
+        }
+    }
+
+    private static void validateActionNode(WorkflowNode node, String path, ValidationContext context,
+                                           List<ConfigProblem> problems) {
+        Object value = node.config().get("actionType");
+        String actionType = value != null ? value.toString() : "";
+        String actionPath = path + ".actionType";
+        if (actionType.isBlank()) {
+            problems.add(ConfigProblem.error(actionPath, "MISSING_ACTION_TYPE",
+                    "Action node '" + node.id() + "' must set config.actionType."));
+        } else if (actionType.startsWith("sdk:")) {
+            String fn = actionType.substring("sdk:".length());
+            if (!SdkFunctionRegistry.isValidSdkCall(fn)) {
+                problems.add(ConfigProblem.error(actionPath, "UNKNOWN_SDK_FUNCTION",
+                        "Action node '" + node.id() + "' references unknown SDK function '" + fn + "'."));
+            }
+        } else if (context.actionTypeNames() != null && !context.actionTypeNames().contains(actionType)) {
+            problems.add(ConfigProblem.error(actionPath, "UNKNOWN_ACTION_TYPE",
+                    "Action node '" + node.id() + "' references action type '" + actionType
+                            + "' which does not exist; create it in action-types/ or use axiom_list_action_types."));
+        }
+    }
+
+    private static String engineProblemPath(JsonNode content, ValidationProblem problem) {
+        if (problem.nodeId() != null) {
+            return nodePath(content, problem.nodeId());
+        }
+        if (problem.edgeId() != null) {
+            int index = indexOfId(content.path("edges"), problem.edgeId());
+            if (index >= 0) {
+                return "content.edges[" + index + "]";
+            }
+        }
+        return "content";
+    }
+
+    private static String nodePath(JsonNode content, String nodeId) {
+        int index = nodeId != null ? indexOfId(content.path("nodes"), nodeId) : -1;
+        return index >= 0 ? "content.nodes[" + index + "]" : "content";
+    }
+
+    private static int indexOfId(JsonNode array, String id) {
+        for (int i = 0; i < array.size(); i++) {
+            if (id.equals(array.get(i).path("id").asText(null))) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private static void validateStringList(JsonNode list, String path, Pattern pattern, String expected,
