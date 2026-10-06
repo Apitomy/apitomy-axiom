@@ -232,6 +232,21 @@ export async function exportPack(request: PackExportRequest): Promise<Blob> {
     return response.blob();
 }
 
+/** A single validation problem reported for a configuration item. */
+export interface PackImportProblem {
+    severity: string;
+    path: string;
+    code: string;
+    message: string;
+}
+
+/** Error thrown by {@link importPack} when the pack fails validation (HTTP 400). */
+export interface PackImportValidationError {
+    status: 400;
+    message?: string;
+    problems: Record<string, PackImportProblem[]>;
+}
+
 export async function importPack(packJson: string): Promise<ImportResult> {
     const response = await fetch(`${API}/system/packs/import`, {
         method: "POST",
@@ -243,7 +258,10 @@ export async function importPack(packJson: string): Promise<ImportResult> {
         if (response.status === 409 && body.conflicts) {
             throw { status: 409, conflicts: body.conflicts };
         }
-        throw new Error(`Failed to import pack: ${response.status}`);
+        if (response.status === 400 && body.problems) {
+            throw { status: 400, message: body.message, problems: body.problems } as PackImportValidationError;
+        }
+        throw new Error(body.message || `Failed to import pack: ${response.status}`);
     }
     return response.json();
 }

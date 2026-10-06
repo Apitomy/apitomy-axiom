@@ -229,9 +229,10 @@ export function AssistantSessionPage() {
             const result = await applyAssistantSession(sessionId);
             setApplyResult(result);
         } catch (err: unknown) {
-            const e = err as { message?: string; validationErrors?: string[] };
-            if (e.validationErrors) {
-                setApplyError("Validation errors:\n" + e.validationErrors.join("\n"));
+            const e = err as { message?: string; errors?: string[]; validationErrors?: string[] };
+            const details = e.errors ?? e.validationErrors;
+            if (details && details.length > 0) {
+                setApplyError((e.message || "Validation errors") + ":\n" + details.join("\n"));
             } else {
                 setApplyError(e.message || "Failed to apply");
             }

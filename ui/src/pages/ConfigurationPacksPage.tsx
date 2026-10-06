@@ -52,6 +52,7 @@ import {
     fetchWorkflowDefinitions,
     exportPack,
     importPack,
+    type PackImportProblem,
 } from "../config/api";
 
 export function ConfigurationPacksPage() {
@@ -87,6 +88,7 @@ export function ConfigurationPacksPage() {
     const [importing, setImporting] = useState(false);
     const [importResult, setImportResult] = useState<ImportResult | null>(null);
     const [importError, setImportError] = useState<string | null>(null);
+    const [importProblems, setImportProblems] = useState<Record<string, PackImportProblem[]> | null>(null);
     const [importConflicts, setImportConflicts] = useState<Array<{ type: string; name: string }> | null>(null);
 
     const loadData = useCallback(() => {
@@ -157,6 +159,7 @@ export function ConfigurationPacksPage() {
         setImportFilename(file.name);
         setImportResult(null);
         setImportError(null);
+        setImportProblems(null);
         setImportConflicts(null);
         if (file) {
             file.text().then((text) => {
@@ -191,6 +194,7 @@ export function ConfigurationPacksPage() {
         setImportPackName("");
         setImportResult(null);
         setImportError(null);
+        setImportProblems(null);
         setImportConflicts(null);
     };
 
@@ -199,6 +203,7 @@ export function ConfigurationPacksPage() {
         setImporting(true);
         setImportResult(null);
         setImportError(null);
+        setImportProblems(null);
         setImportConflicts(null);
         try {
             const text = await importFile.text();
@@ -212,6 +217,10 @@ export function ConfigurationPacksPage() {
         } catch (e: unknown) {
             if (e && typeof e === "object" && "status" in e && (e as unknown as { status: number }).status === 409) {
                 setImportConflicts((e as unknown as { conflicts: Array<{ type: string; name: string }> }).conflicts);
+            } else if (e && typeof e === "object" && "problems" in e) {
+                const err = e as { message?: string; problems: Record<string, PackImportProblem[]> };
+                setImportError(err.message || "Configuration pack has validation errors");
+                setImportProblems(err.problems);
             } else {
                 setImportError(e instanceof Error ? e.message : String(e));
             }
@@ -495,6 +504,17 @@ export function ConfigurationPacksPage() {
                                 <Alert variant="danger" title="Import failed" isInline
                                     style={{ marginBottom: "16px" }}>
                                     {importError}
+                                    {importProblems && (
+                                        <ul style={{ marginTop: "8px" }}>
+                                            {Object.entries(importProblems).flatMap(([key, problems]) =>
+                                                problems.map((p, i) => (
+                                                    <li key={`${key}-${i}`}>
+                                                        <strong>{key}</strong>
+                                                        {p.path ? <code> {p.path}</code> : null}: {p.message}
+                                                    </li>
+                                                )))}
+                                        </ul>
+                                    )}
                                 </Alert>
                             )}
 
