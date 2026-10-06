@@ -16,7 +16,8 @@ public class SubscriptionRoutingResolver {
 
     /**
      * Returns a copy of the routing array in which every rule with {@code workflowDefinitionName} has
-     * {@code workflowDefinitionId} set from the database and the name removed.
+     * {@code workflowDefinitionId} set from the database and the name removed. A blank name is treated as
+     * absent and simply removed.
      *
      * @param routing routing rules JSON array (may be null)
      * @return resolved array (null if input null)
@@ -31,6 +32,11 @@ public class SubscriptionRoutingResolver {
             for (JsonNode rule : rules) {
                 if (rule instanceof ObjectNode obj && obj.hasNonNull(NAME_FIELD)) {
                     String name = obj.get(NAME_FIELD).asText();
+                    if (name.isBlank()) {
+                        // A blank name is treated as absent, matching the validator
+                        obj.remove(NAME_FIELD);
+                        continue;
+                    }
                     WorkflowDefinitionEntity definition = WorkflowDefinitionEntity
                             .<WorkflowDefinitionEntity>find("name", name).firstResult();
                     if (definition == null) {

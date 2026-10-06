@@ -16,6 +16,14 @@ import io.apitomy.axiom.core.entities.ToolsetEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.app.assistant.SessionTemplateService;
+import io.apitomy.axiom.app.validation.ConfigItemType;
+import io.apitomy.axiom.app.validation.ConfigItemValidationService;
+import io.apitomy.axiom.app.validation.ConfigProblem;
+import io.apitomy.axiom.app.validation.ConfigValidationException;
+import io.apitomy.axiom.app.validation.SubscriptionRoutingResolver;
+import io.apitomy.axiom.app.validation.ValidationContext;
+import io.apitomy.axiom.app.validation.ValidationContextFactory;
+import io.apitomy.axiom.app.validation.WorkflowPublisher;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -24,7 +32,9 @@ import org.jboss.logging.Logger;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Service for exporting and importing configuration packs.
@@ -41,6 +51,28 @@ public class ImportExportService {
 
     @Inject
     SessionTemplateService sessionTemplateService;
+
+    @Inject
+    ValidationContextFactory contextFactory;
+
+    @Inject
+    ConfigItemValidationService validationService;
+
+    @Inject
+    WorkflowPublisher workflowPublisher;
+
+    @Inject
+    SubscriptionRoutingResolver routingResolver;
+
+    /** Pack array names paired with their item types, in apply order. */
+    private static final List<Map.Entry<String, ConfigItemType>> PACK_ARRAYS = List.of(
+            Map.entry("tools", ConfigItemType.TOOL),
+            Map.entry("toolsets", ConfigItemType.TOOLSET),
+            Map.entry("actionTypes", ConfigItemType.ACTION_TYPE),
+            Map.entry("sessionTemplates", ConfigItemType.SESSION_TEMPLATE),
+            Map.entry("workflowDefinitions", ConfigItemType.WORKFLOW),
+            Map.entry("eventSources", ConfigItemType.EVENT_SOURCE),
+            Map.entry("subscriptions", ConfigItemType.SUBSCRIPTION));
 
     /**
      * Exports a configuration pack containing the selected items.
@@ -128,14 +160,16 @@ public class ImportExportService {
     }
 
     /**
-     * Imports a configuration pack. Checks for name conflicts first and
-     * fails fast if any are detected.
+     * Imports a configuration pack. Validates every item and checks for name
+     * conflicts first, failing fast if any are detected.
      *
      * @param pack the pack JSON
      * @return summary of what was imported
+     * @throws ConfigValidationException if any item is invalid (nothing is written)
      */
     @Transactional
     public ImportResult importPack(JsonNode pack) {
+        validatePack(pack);
         List<String> conflicts = new ArrayList<>();
 
         checkConflicts(pack, "tools", "name", "tool", conflicts);
@@ -165,9 +199,9 @@ public class ImportExportService {
         int mcpServers = importMcpServers(pack.path("mcpServers"));
         int actionTypes = importActionTypes(pack.path("actionTypes"));
         int sessionTemplates = importSessionTemplates(pack.path("sessionTemplates"));
+        int workflowDefinitions = importWorkflowDefinitions(pack.path("workflowDefinitions"));
         int eventSources = importEventSources(pack.path("eventSources"));
         int subscriptions = importSubscriptions(pack.path("subscriptions"));
-        int workflowDefinitions = importWorkflowDefinitions(pack.path("workflowDefinitions"));
 
         String packName = pack.path("metadata").path("name").asText("unnamed");
         LOG.infof("Imported configuration pack '%s': %d tools, %d toolsets, %d MCP servers, "
@@ -206,20 +240,26 @@ public class ImportExportService {
     /**
      * Imports a configuration pack with upsert semantics: items whose name
      * matches an existing entity are updated in place; new names are created.
-     * Used by the assistant apply flow.
+     * Used by the assistant apply flow. Every item is validated first; if any item has errors a
+     * {@link ConfigValidationException} is thrown before anything is written. Items are applied in dependency
+     * order (tools, toolsets, action types, session templates, workflows, event sources, subscriptions);
+     * workflows are published and subscription routing names are resolved within the same transaction.
      *
      * @param pack the pack JSON
      * @return summary with created and updated counts per category
+     * @throws ConfigValidationException if any item is invalid
      */
     @Transactional
     public UpsertResult importOrUpdatePack(JsonNode pack) {
+        validatePack(pack);
+
         int[] tools = upsertTools(pack.path("tools"));
-        int[] actionTypes = upsertActionTypes(pack.path("actionTypes"));
         int[] toolsets = upsertToolsets(pack.path("toolsets"));
+        int[] actionTypes = upsertActionTypes(pack.path("actionTypes"));
         int[] sessionTemplates = upsertSessionTemplates(pack.path("sessionTemplates"));
+        int[] workflowDefs = upsertWorkflowDefinitions(pack.path("workflowDefinitions"));
         int[] eventSources = upsertEventSources(pack.path("eventSources"));
         int[] subscriptions = upsertSubscriptions(pack.path("subscriptions"));
-        int[] workflowDefs = upsertWorkflowDefinitions(pack.path("workflowDefinitions"));
 
         String packName = pack.path("metadata").path("name").asText("unnamed");
         LOG.infof("Upserted configuration pack '%s': %d tools created, %d updated; "
@@ -247,6 +287,64 @@ public class ImportExportService {
                 subscriptions[0], subscriptions[1],
                 workflowDefs[0], workflowDefs[1]
         );
+    }
+
+    // ── Validation ───────────────────────────────────────────────────
+
+    /**
+     * Validates every item of every known pack array against the database plus the pack's own items.
+     * Workflow {@code content} given as a JSON string is parsed into an object in place.
+     *
+     * @param pack the pack JSON
+     * @throws ConfigValidationException if any item has errors
+     */
+    private void validatePack(JsonNode pack) {
+        normalizeWorkflowContent(pack.path("workflowDefinitions"));
+        ValidationContext ctx = contextFactory.forPack(pack);
+        Map<String, List<ConfigProblem>> problemsByItem = new LinkedHashMap<>();
+        for (Map.Entry<String, ConfigItemType> entry : PACK_ARRAYS) {
+            ConfigItemType type = entry.getValue();
+            for (JsonNode item : pack.path(entry.getKey())) {
+                List<ConfigProblem> errors = validationService.validate(type, item, ctx).stream()
+                        .filter(ConfigProblem::isError)
+                        .toList();
+                if (!errors.isEmpty()) {
+                    String key = type.jsonName() + "/" + itemName(item);
+                    problemsByItem.computeIfAbsent(key, k -> new ArrayList<>()).addAll(errors);
+                }
+            }
+        }
+        if (!problemsByItem.isEmpty()) {
+            throw new ConfigValidationException(problemsByItem);
+        }
+    }
+
+    private static String itemName(JsonNode item) {
+        String name = item.path("name").asText("");
+        if (name.isBlank()) {
+            name = item.path("id").asText("");
+        }
+        if (name.isBlank()) {
+            name = item.path("templateId").asText("");
+        }
+        return name;
+    }
+
+    /** Parses string-valued workflow {@code content} (as written by older exports) into a JSON object. */
+    private void normalizeWorkflowContent(JsonNode workflows) {
+        for (JsonNode item : workflows) {
+            JsonNode content = item.path("content");
+            if (item instanceof ObjectNode obj && content.isTextual()) {
+                try {
+                    JsonNode parsed = objectMapper.readTree(content.asText());
+                    if (parsed != null && parsed.isObject()) {
+                        obj.set("content", parsed);
+                    }
+                } catch (Exception ignored) {
+                    // Left as a string; validation reports it as invalid content
+                }
+            }
+        }
     }
 
     // ── Conflict detection ───────────────────────────────────────────
@@ -788,7 +886,8 @@ public class ImportExportService {
             entity.description = textOrNull(item, "description");
             entity.enabled = item.path("enabled").asBoolean(false);
             entity.filters = textOrNull(item, "filterExpression");
-            entity.routing = jsonOrNull(item, "routing");
+            JsonNode routing = routingResolver.resolve(item.get("routing"));
+            entity.routing = routing != null ? routing.toString() : null;
             entity.labels = new java.util.ArrayList<>();
             JsonNode labelsNode = item.path("labels");
             if (labelsNode.isArray()) {
@@ -847,7 +946,8 @@ public class ImportExportService {
             entity.description = textOrNull(item, "description");
             entity.enabled = item.path("enabled").asBoolean(false);
             entity.filters = textOrNull(item, "filterExpression");
-            entity.routing = jsonOrNull(item, "routing");
+            JsonNode routing = routingResolver.resolve(item.get("routing"));
+            entity.routing = routing != null ? routing.toString() : null;
             entity.labels.clear();
             JsonNode labelsNode = item.path("labels");
             if (labelsNode.isArray()) {
@@ -926,24 +1026,9 @@ public class ImportExportService {
             }
             entity.description = textOrNull(item, "description");
             entity.updatedOn = Instant.now();
-
-            JsonNode content = item.path("content");
-            if (!content.isMissingNode() && !content.isNull()) {
-                String contentStr = content.isObject() ? content.toString() : content.asText();
-                entity.content = contentStr;
-                int nextVersion = (entity.currentVersion != null ? entity.currentVersion : 0) + 1;
-                entity.persist();
-
-                WorkflowDefinitionVersionEntity version = new WorkflowDefinitionVersionEntity();
-                version.definitionId = entity.id;
-                version.version = nextVersion;
-                version.content = contentStr;
-                version.createdOn = Instant.now();
-                version.persist();
-                entity.currentVersion = nextVersion;
-            } else {
-                entity.persist();
-            }
+            entity.content = jsonOrNull(item, "content");
+            entity.persist();
+            workflowPublisher.publish(entity);
             if (isNew) created++; else updated++;
         }
         return new int[]{created, updated};

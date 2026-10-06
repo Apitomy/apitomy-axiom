@@ -208,6 +208,12 @@ public class SystemResourceImpl implements SystemResource {
         try {
             JsonNode pack = packObjectMapper.readTree(data);
             return importExportService.importPack(pack);
+        } catch (io.apitomy.axiom.app.validation.ConfigValidationException e) {
+            java.util.Map<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("message", "Configuration pack has invalid items");
+            body.put("problems", e.problemsByItem());
+            throw new jakarta.ws.rs.WebApplicationException(
+                    Response.status(400).entity(body).build());
         } catch (jakarta.ws.rs.WebApplicationException e) {
             throw e;
         } catch (Exception e) {
