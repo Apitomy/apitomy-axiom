@@ -217,11 +217,23 @@ When adding a new extension module:
 
 `io.apitomy.axiom.app.validation.ConfigItemValidationService` is the single place where configuration items
 (tools, action types, toolsets, session templates, workflows, event sources, and subscriptions) are
-validated. It is used by the REST create/validate endpoints for tools and action types, subscription
-create/update, workflow publishing (`WorkflowPublisher`), configuration-pack import (including import from
-the UI), and the Configuration Assistant's live feedback, `axiom_validate_item` MCP tool,
-`POST /api/v1/assistant/sessions/{sessionId}/validate` endpoint, and Apply. When adding or changing a rule,
-change it there so every entry point stays consistent; do not add ad-hoc checks in REST resources.
+validated. It is called by:
+
+- `ToolsResourceImpl` — tool validate and create endpoints
+- `ActionResourceImpl` — action type validate and create endpoints
+- `SubscriptionsResourceImpl` — subscription create and update
+- `ImportExportService` — configuration-pack import (including import from the UI) and assistant Apply
+- `AssistantItemValidator` — the Configuration Assistant's live feedback, the `axiom_validate_item` MCP
+  tool, and `POST /api/v1/assistant/sessions/{sessionId}/validate`
+
+Workflow publishing does not call the service. `WorkflowPublisher` calls
+`WorkflowContentRules.engineProblems` and `WorkflowContentRules.startInputViolation` directly. The service's
+workflow validation uses those same `WorkflowContentRules` checks and adds cross-reference checks: referenced
+action types exist, `sdk:` functions are valid, and `receive-event` event types are known.
+
+When adding or changing a rule: graph and Start-input rules belong in `WorkflowContentRules` (shared by
+publishing and the service); cross-reference checks belong in `ConfigItemValidationService`. Do not add
+ad-hoc checks in REST resources.
 
 Configuration-pack import and assistant Apply validate the whole pack before writing anything. Any error
 aborts the operation with nothing written (REST import returns `400` with `{message, problems}`). Items are
