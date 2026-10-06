@@ -13,7 +13,10 @@ import { TraceGraph } from "../components/TraceGraph";
 import { LineagePanel } from "../components/LineagePanel";
 import { WorkflowStepTimeline } from "../components/WorkflowStepTimeline";
 import { ExecutionLogModal } from "../components/ExecutionLogModal";
-import { getWorkflowRun, type WorkflowInstanceInfo } from "../config/api";
+import {
+    cancelWorkflowRun, fetchSubjectTasks, getWorkflowRun,
+    type Task, type WorkflowInstanceInfo,
+} from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 import { useEffectiveTheme } from "../hooks/useTheme";
 
@@ -22,6 +25,7 @@ const STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"
     failed: "red", cancelled: "grey",
 };
 
+/** Shows a single workflow run: overview, diagram, timeline, trace and lineage. */
 export function WorkflowRunDetailPage() {
     const { runId } = useParams<{ runId: string }>();
     const numericRunId = Number(runId);
@@ -30,10 +34,17 @@ export function WorkflowRunDetailPage() {
     const [refreshKey, setRefreshKey] = useState(0);
     const [isLogOpen, setIsLogOpen] = useState(false);
     const [logTaskId, setLogTaskId] = useState<number | null>(null);
+    const [tasks, setTasks] = useState<Task[]>([]);
     const effectiveTheme = useEffectiveTheme();
 
     const load = useCallback(() => {
-        getWorkflowRun(numericRunId).then(setRun).catch(console.error);
+        getWorkflowRun(numericRunId)
+            .then((r) => {
+                setRun(r);
+                return fetchSubjectTasks(r.subjectId);
+            })
+            .then((all) => setTasks(all.filter((t) => t.workflowRunId === numericRunId)))
+            .catch(console.error);
     }, [numericRunId]);
 
     useEffect(() => { load(); }, [load]);
@@ -110,7 +121,7 @@ export function WorkflowRunDetailPage() {
         <PageSection>
             <Breadcrumb style={{ marginBottom: "12px" }}>
                 <BreadcrumbItem render={() => (
-                    <Link to="/logs/workflow-runs">Workflow Runs</Link>)} />
+                    <Link to="/runs">Runs</Link>)} />
                 <BreadcrumbItem isActive>Run #{run.runId}</BreadcrumbItem>
             </Breadcrumb>
 
@@ -119,13 +130,19 @@ export function WorkflowRunDetailPage() {
                 style={{ marginBottom: "16px" }}>
                 <FlexItem>
                     <Title headingLevel="h1" size="lg">
-                        {run.definitionName} v{run.definitionVersion}{" "}
+                        {run.title || `${run.definitionName} v${run.definitionVersion}`}{" "}
                         <Label color={STATUS_COLORS[run.status] || "grey"}>
                             {run.status}
                         </Label>
                     </Title>
                 </FlexItem>
                 <FlexItem>
+                    {(run.status === "running" || run.status === "waiting") && (
+                        <Button variant="secondary" style={{ marginRight: "8px" }}
+                            onClick={() => cancelWorkflowRun(numericRunId).then(load).catch(console.error)}>
+                            Cancel run
+                        </Button>
+                    )}
                     <Button variant="control" aria-label="Refresh"
                         onClick={() => { load(); setRefreshKey((k) => k + 1); }}>
                         <SyncAltIcon />
@@ -144,6 +161,29 @@ export function WorkflowRunDetailPage() {
             <div style={{ paddingTop: "16px" }}>
                 {activeTab === 0 && (
                     <dl>
+                        <dt><strong>Title</strong></dt>
+                        <dd>{run.title || "—"}</dd>
+                        <dt><strong>Subject</strong></dt>
+                        <dd>
+                            <Link to={`/subjects/${run.subjectId}`}>Subject #{run.subjectId}</Link>
+                        </dd>
+                        <dt><strong>Labels</strong></dt>
+                        <dd>
+                            {Object.keys(run.labels ?? {}).length === 0 ? "—"
+                                : Object.entries(run.labels ?? {}).map(([k, v]) => (
+                                    <Label key={k} isCompact style={{ marginRight: "4px" }}>
+                                        {k}: {v}
+                                    </Label>
+                                ))}
+                        </dd>
+                        <dt><strong>Inputs</strong></dt>
+                        <dd>
+                            {Object.keys(run.inputs ?? {}).length === 0 ? "—" : (
+                                <pre style={{ whiteSpace: "pre-wrap" }}>
+                                    {JSON.stringify(run.inputs, null, 2)}
+                                </pre>
+                            )}
+                        </dd>
                         <dt><strong>Workflow</strong></dt>
                         <dd>{run.definitionName} v{run.definitionVersion}</dd>
                         <dt><strong>Status</strong></dt>
@@ -191,6 +231,19 @@ export function WorkflowRunDetailPage() {
                                 ))}
                             </>
                         )}
+                        <dt><strong>Tasks</strong></dt>
+                        <dd>
+                            {tasks.length === 0 ? "—" : tasks.map((t) => (
+                                <div key={t.id} style={{ marginBottom: "8px" }}>
+                                    <strong>{t.nodeId ?? t.actionType}</strong>{" "}
+                                    <Label isCompact>{t.status}</Label>{" "}
+                                    <Button variant="link" isInline onClick={() => openLog(t.id)}>
+                                        log
+                                    </Button>
+                                    <pre style={{ whiteSpace: "pre-wrap" }}>{t.output || "(no output)"}</pre>
+                                </div>
+                            ))}
+                        </dd>
                     </dl>
                 )}
 

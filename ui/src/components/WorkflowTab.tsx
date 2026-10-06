@@ -184,7 +184,7 @@ export function WorkflowTab({
                 id: "view-run",
                 label: "View run details",
                 onSelect: () => navigate(
-                    `/logs/workflow-runs/${instance.id}`),
+                    `/runs/${instance.id}`),
             });
             return items;
         }, [instance, navigate]);
@@ -346,7 +346,7 @@ export function WorkflowTab({
                     </FlexItem>
                 )}
                 <FlexItem style={{ paddingLeft: "24px" }}>
-                    <Link to={`/logs/workflow-runs/${instance.id}`}>
+                    <Link to={`/runs/${instance.id}`}>
                         View run details →
                     </Link>
                 </FlexItem>

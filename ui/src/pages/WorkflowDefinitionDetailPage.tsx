@@ -57,6 +57,7 @@ import {
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 import { fetchSdkFunctions } from "../config/sdkTools";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
+import { WorkflowTriggersTab } from "../components/WorkflowTriggersTab";
 import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
 import RocketIcon from "@patternfly/react-icons/dist/esm/icons/rocket-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
@@ -486,6 +487,7 @@ export function WorkflowDefinitionDetailPage() {
                             </TabTitleText>
                         }
                     />
+                    <Tab eventKey={3} title={<TabTitleText>Triggers</TabTitleText>} />
                 </Tabs>
 
                 <div className="workflow-definition-detail__tab-content">
@@ -715,7 +717,7 @@ export function WorkflowDefinitionDetailPage() {
                                                     {formatDuration(run.startedOn, run.completedOn)}
                                                 </Td>
                                                 <Td>
-                                                    <Link to={`/logs/workflow-runs/${run.runId}`}>
+                                                    <Link to={`/runs/${run.runId}`}>
                                                         View details
                                                     </Link>
                                                 </Td>
@@ -724,6 +726,12 @@ export function WorkflowDefinitionDetailPage() {
                                     </Tbody>
                                 </Table>
                             )}
+                        </div>
+                    )}
+
+                    {activeTab === 3 && (
+                        <div className="workflow-definition-detail__panel">
+                            <WorkflowTriggersTab definitionId={id} />
                         </div>
                     )}
                 </div>

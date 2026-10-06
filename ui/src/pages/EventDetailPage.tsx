@@ -243,7 +243,7 @@ function OutcomeItems({ items }: { items: EventProcessingOutcomeItem[] }) {
                         </Label>
                     )}
                     {item.workflowRunId && (
-                        <Link to={`/logs/workflow-runs/${item.workflowRunId}`}>
+                        <Link to={`/runs/${item.workflowRunId}`}>
                             {item.type === "workflow-resumed" ? "Resumed" : "Started"}{" "}
                             Workflow Run #{item.workflowRunId}
                         </Link>

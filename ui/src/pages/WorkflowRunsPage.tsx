@@ -4,9 +4,12 @@ import {
     Button,
     EmptyState,
     EmptyStateBody,
+    FormSelect,
+    FormSelectOption,
     Label,
     PageSection,
     Pagination,
+    TextInput,
     Title,
     Toolbar,
     ToolbarContent,
@@ -14,7 +17,10 @@ import {
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
-import { type WorkflowRunSummary, fetchWorkflowRuns } from "../config/api";
+import {
+    type WorkflowDefinition, type WorkflowRunSummary,
+    fetchWorkflowDefinitions, fetchWorkflowRuns,
+} from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 
 const STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
@@ -35,23 +41,44 @@ function formatDuration(startedOn: string, completedOn?: string): string {
     return `${mins}m ${secs}s`;
 }
 
+/** Lists workflow runs with status, definition, subject and label filters. */
 export function WorkflowRunsPage() {
     const [runs, setRuns] = useState<WorkflowRunSummary[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState(20);
     const [loading, setLoading] = useState(true);
+    const [statusFilter, setStatusFilter] = useState("");
+    const [definitionFilter, setDefinitionFilter] = useState("");
+    const [subjectFilter, setSubjectFilter] = useState("");
+    const [labelFilter, setLabelFilter] = useState("");
+    const [definitions, setDefinitions] = useState<WorkflowDefinition[]>([]);
+
+    useEffect(() => {
+        fetchWorkflowDefinitions(1, 100)
+            .then((results) => setDefinitions(results.items))
+            .catch(console.error);
+    }, []);
 
     const loadData = useCallback(() => {
         setLoading(true);
-        fetchWorkflowRuns(page, perPage)
+        const subjectId: number = Number(subjectFilter);
+        const labels: string[] = labelFilter.split(",")
+            .map((l) => l.trim())
+            .filter((l) => l.includes(":"));
+        fetchWorkflowRuns(page, perPage, {
+            status: statusFilter || undefined,
+            definitionId: definitionFilter ? Number(definitionFilter) : undefined,
+            subjectId: subjectFilter.trim() && Number.isInteger(subjectId) ? subjectId : undefined,
+            labels,
+        })
             .then((results) => {
                 setRuns(results.items);
                 setTotalCount(results.totalCount);
             })
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [page, perPage]);
+    }, [page, perPage, statusFilter, definitionFilter, subjectFilter, labelFilter]);
 
     useEffect(() => { loadData(); }, [loadData]);
 
@@ -69,11 +96,39 @@ export function WorkflowRunsPage() {
     return (
         <PageSection>
             <Title headingLevel="h1" size="lg" style={{ marginBottom: "16px" }}>
-                Workflow Runs
+                Runs
             </Title>
 
             <Toolbar>
                 <ToolbarContent>
+                    <ToolbarItem>
+                        <FormSelect aria-label="Status" value={statusFilter}
+                            onChange={(_e, v) => { setStatusFilter(v); setPage(1); }}>
+                            <FormSelectOption value="" label="All statuses" />
+                            {Object.keys(STATUS_COLORS).map((st) => (
+                                <FormSelectOption key={st} value={st} label={st} />
+                            ))}
+                        </FormSelect>
+                    </ToolbarItem>
+                    <ToolbarItem>
+                        <FormSelect aria-label="Definition" value={definitionFilter}
+                            onChange={(_e, v) => { setDefinitionFilter(v); setPage(1); }}>
+                            <FormSelectOption value="" label="All workflows" />
+                            {definitions.map((d) => (
+                                <FormSelectOption key={d.id} value={String(d.id)} label={d.name} />
+                            ))}
+                        </FormSelect>
+                    </ToolbarItem>
+                    <ToolbarItem>
+                        <TextInput aria-label="Subject" placeholder="Subject ID" type="number"
+                            value={subjectFilter}
+                            onChange={(_e, v) => { setSubjectFilter(v); setPage(1); }} />
+                    </ToolbarItem>
+                    <ToolbarItem>
+                        <TextInput aria-label="Label" placeholder="key:value, key:value"
+                            value={labelFilter}
+                            onChange={(_e, v) => { setLabelFilter(v); setPage(1); }} />
+                    </ToolbarItem>
                     <ToolbarItem>
                         <Button variant="control" aria-label="Refresh" onClick={loadData}>
                             <SyncAltIcon />
@@ -101,6 +156,7 @@ export function WorkflowRunsPage() {
                     <Thead>
                         <Tr>
                             <Th>Status</Th>
+                            <Th>Title</Th>
                             <Th>Subject</Th>
                             <Th>Workflow</Th>
                             <Th>Started</Th>
@@ -115,6 +171,9 @@ export function WorkflowRunsPage() {
                                     <Label isCompact color={STATUS_COLORS[run.status] || "grey"}>
                                         {run.status}
                                     </Label>
+                                </Td>
+                                <Td>
+                                    <Link to={`/runs/${run.runId}`}>{run.title}</Link>
                                 </Td>
                                 <Td>
                                     <Link to={`/subjects/${run.subjectId}`}>
@@ -132,7 +191,7 @@ export function WorkflowRunsPage() {
                                     {formatDuration(run.startedOn, run.completedOn)}
                                 </Td>
                                 <Td>
-                                    <Link to={`/logs/workflow-runs/${run.runId}`}>
+                                    <Link to={`/runs/${run.runId}`}>
                                         View details
                                     </Link>
                                 </Td>

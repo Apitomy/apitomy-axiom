@@ -50,7 +50,9 @@ import {
     type StreamEvent,
     type Task,
     type ThreadEntry,
+    type WorkflowRunSummary,
     fetchAgents,
+    fetchWorkflowRuns,
     fetchSubject,
     fetchSubjectMetrics,
     fetchSubjectTasks,
@@ -81,6 +83,17 @@ const STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"
     Cancelled: "grey",
 };
 
+const RUNS_TAB = 6;
+
+const RUN_STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
+    running: "blue",
+    waiting: "orange",
+    completed: "green",
+    failed: "red",
+    cancelled: "grey",
+};
+
+/** Shows a subject: header, runs timeline, body, tasks, thread, events, metrics and workflow. */
 export function SubjectDetailPage() {
     const { subjectId } = useParams<{ subjectId: string }>();
     const navigate = useNavigate();
@@ -91,7 +104,8 @@ export function SubjectDetailPage() {
     const [events, setEvents] = useState<StreamEvent[]>([]);
     const [metrics, setMetrics] = useState<SubjectMetrics | null>(null);
     const [agentNames, setAgentNames] = useState<Record<number, string>>({});
-    const [activeTab, setActiveTab] = useState(0);
+    const [runs, setRuns] = useState<WorkflowRunSummary[]>([]);
+    const [activeTab, setActiveTab] = useState(RUNS_TAB);
     const [loading, setLoading] = useState(true);
     const [isMetadataExpanded, setIsMetadataExpanded] = useState(false);
 
@@ -125,9 +139,12 @@ export function SubjectDetailPage() {
             fetchThreadEntries(id),
             fetchSubjectMetrics(id),
             fetchAgents(),
+            fetchWorkflowRuns(1, 100, { subjectId: id }),
         ])
-            .then(([p, t, th, m, agents]) => {
+            .then(([p, t, th, m, agents, r]) => {
                 setSubject(p);
+                setRuns([...r.items].sort(
+                    (a, b) => new Date(b.startedOn).getTime() - new Date(a.startedOn).getTime()));
                 setTasks(t);
                 setThread(th);
                 setMetrics(m);
@@ -172,7 +189,6 @@ export function SubjectDetailPage() {
     return (
         <PageSection isFilled className="subject-detail">
             <Breadcrumb style={{ marginBottom: "16px" }}>
-                <BreadcrumbItem><Link to="/">Dashboard</Link></BreadcrumbItem>
                 <BreadcrumbItem><Link to="/subjects">Subjects</Link></BreadcrumbItem>
                 <BreadcrumbItem isActive>{subject.name}</BreadcrumbItem>
             </Breadcrumb>
@@ -262,6 +278,16 @@ export function SubjectDetailPage() {
                             </FlexItem>
                         </>
                     )}
+                    {subject.ref && (
+                        <>
+                            <FlexItem className="subject-detail__metadata-term">
+                                Ref:
+                            </FlexItem>
+                            <FlexItem>
+                                <code>{subject.ref}</code>
+                            </FlexItem>
+                        </>
+                    )}
                     <FlexItem
                         onClick={(e) => e.stopPropagation()}
                         style={{ marginLeft: "auto" }}
@@ -296,6 +322,12 @@ export function SubjectDetailPage() {
                         </DescriptionListDescription>
                     </DescriptionListGroup>
                 )}
+                {Object.entries(subject.metadata ?? {}).map(([key, value]) => (
+                    <DescriptionListGroup key={key}>
+                        <DescriptionListTerm>{key}</DescriptionListTerm>
+                        <DescriptionListDescription>{value}</DescriptionListDescription>
+                    </DescriptionListGroup>
+                ))}
                 <DescriptionListGroup>
                     <DescriptionListTerm>Created</DescriptionListTerm>
                     <DescriptionListDescription>
@@ -323,6 +355,7 @@ export function SubjectDetailPage() {
                 content scrolls when it exceeds the available height. */}
             <div className="subject-detail__tabs">
                 <Tabs activeKey={activeTab} onSelect={(_e, k) => setActiveTab(k as number)}>
+                    <Tab eventKey={RUNS_TAB} title={<TabTitleText>Runs ({runs.length})</TabTitleText>} />
                     <Tab eventKey={0} title={<TabTitleText>Body</TabTitleText>} />
                     <Tab eventKey={1} title={<TabTitleText>Tasks ({tasks.length})</TabTitleText>} />
                     <Tab eventKey={2} title={<TabTitleText>Thread ({thread.length})</TabTitleText>} />
@@ -421,6 +454,7 @@ export function SubjectDetailPage() {
                             )}
                         </div>
                     )}
+                    {activeTab === RUNS_TAB && <RunsTimeline runs={runs} />}
                     {activeTab === 1 && (
                         <TasksTab tasks={tasks} subjectId={id} agentNames={agentNames} onRefresh={loadData} />
                     )}
@@ -469,6 +503,51 @@ export function SubjectDetailPage() {
                 onClose={() => setIsLabelsOpen(false)}
             />
         </PageSection>
+    );
+}
+
+/** Renders the subject's workflow runs, newest first. */
+function RunsTimeline({ runs }: { runs: WorkflowRunSummary[] }) {
+    if (runs.length === 0) {
+        return (
+            <EmptyState>
+                <EmptyStateBody>No workflow runs for this subject yet.</EmptyStateBody>
+            </EmptyState>
+        );
+    }
+    return (
+        <Table aria-label="Runs timeline" variant="compact">
+            <Thead>
+                <Tr>
+                    <Th>Status</Th>
+                    <Th>Title</Th>
+                    <Th>Workflow</Th>
+                    <Th>Started</Th>
+                    <Th>Completed</Th>
+                </Tr>
+            </Thead>
+            <Tbody>
+                {runs.map((run) => (
+                    <Tr key={run.runId}>
+                        <Td>
+                            <Label isCompact color={RUN_STATUS_COLORS[run.status] || "grey"}>
+                                {run.status}
+                            </Label>
+                        </Td>
+                        <Td>
+                            <Link to={`/runs/${run.runId}`}>{run.title}</Link>
+                        </Td>
+                        <Td>
+                            {run.definitionName || `Definition #${run.definitionId}`} v{run.definitionVersion}
+                        </Td>
+                        <Td style={{ whiteSpace: "nowrap" }}>{new Date(run.startedOn).toLocaleString()}</Td>
+                        <Td style={{ whiteSpace: "nowrap" }}>
+                            {run.completedOn ? new Date(run.completedOn).toLocaleString() : "—"}
+                        </Td>
+                    </Tr>
+                ))}
+            </Tbody>
+        </Table>
     );
 }
 

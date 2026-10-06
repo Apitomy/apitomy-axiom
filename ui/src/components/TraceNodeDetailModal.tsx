@@ -374,7 +374,7 @@ function WorkflowRunGroup({ detail }: { detail: Record<string, unknown> }) {
         <DescriptionListGroup>
             <DescriptionListTerm>Workflow Run</DescriptionListTerm>
             <DescriptionListDescription>
-                <Link to={`/logs/workflow-runs/${detail.runId}`}>{label}</Link>
+                <Link to={`/runs/${detail.runId}`}>{label}</Link>
             </DescriptionListDescription>
         </DescriptionListGroup>
     );

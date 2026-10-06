@@ -112,7 +112,7 @@ export function App() {
                     <ConfigurationWarning checks={startupChecks!} />
                 ) : (
                     <Routes>
-                        <Route path="/" element={<Navigate to="/dashboards" replace />} />
+                        <Route path="/" element={<Navigate to="/runs" replace />} />
                         <Route path="/dashboards" element={<DashboardsPage />} />
                         <Route path="/dashboards/:dashboardId" element={<DashboardViewPage />} />
                         <Route path="/inbox" element={<InboxPage />} />
@@ -135,8 +135,8 @@ export function App() {
                         <Route path="/logs/tasks" element={<TasksPage />} />
                         <Route path="/logs/traces" element={<TracesPage />} />
                         <Route path="/logs/traces/:traceId" element={<TraceDetailPage />} />
-                        <Route path="/logs/workflow-runs" element={<WorkflowRunsPage />} />
-                        <Route path="/logs/workflow-runs/:runId" element={<WorkflowRunDetailPage />} />
+                        <Route path="/runs" element={<WorkflowRunsPage />} />
+                        <Route path="/runs/:runId" element={<WorkflowRunDetailPage />} />
                         <Route path="/metrics/ai-usage" element={<AiUsagePage />} />
                         <Route path="/metrics/disk-usage" element={<DiskUsagePage />} />
                         <Route path="/events/connections" element={<ConnectionsPage />} />

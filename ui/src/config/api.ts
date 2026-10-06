@@ -1866,14 +1866,26 @@ export interface WorkflowRunSummary {
     completedOn?: string;
 }
 
+/** Optional filters for listing workflow runs. */
+export interface WorkflowRunFilters {
+    subjectId?: number;
+    /** Comma-separated statuses. */
+    status?: string;
+    definitionId?: number;
+    /** Labels in `key:value` form; all must match. */
+    labels?: string[];
+}
+
 export async function fetchWorkflowRuns(
-    page = 1, limit = 20, subjectId?: number, status?: string
+    page = 1, limit = 20, filters: WorkflowRunFilters = {}
 ): Promise<SearchResults<WorkflowRunSummary>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
     params.set("limit", String(limit));
-    if (subjectId != null) params.set("subjectId", String(subjectId));
-    if (status) params.set("status", status);
+    if (filters.subjectId != null) params.set("subjectId", String(filters.subjectId));
+    if (filters.status) params.set("status", filters.status);
+    if (filters.definitionId != null) params.set("definitionId", String(filters.definitionId));
+    (filters.labels ?? []).forEach((l) => params.append("label", l));
     const response = await fetch(`${API}/workflow/runs?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch workflow runs: ${response.status}`);
     return response.json();
@@ -1883,6 +1895,67 @@ export async function getWorkflowRun(runId: number): Promise<WorkflowInstanceInf
     const response = await fetch(`${API}/workflow/runs/${runId}`);
     if (!response.ok) throw new Error(`Failed to fetch workflow run: ${response.status}`);
     return response.json();
+}
+
+// ── Schedule Triggers ─────────────────────────────────────────────
+
+export interface NewScheduleTrigger {
+    /** Unix (5-field) cron expression, evaluated in UTC. */
+    cron: string;
+    subjectName: string;
+    inputs?: Record<string, unknown>;
+    enabled?: boolean;
+}
+
+export interface ScheduleTrigger extends NewScheduleTrigger {
+    id: number;
+    definitionId: number;
+    enabled: boolean;
+    nextRunAt?: string;
+    lastRunAt?: string;
+    /** started, skipped or "failed: <reason>". */
+    lastOutcome?: string;
+    createdOn?: string;
+    updatedOn?: string;
+}
+
+export async function fetchScheduleTriggers(definitionId: number): Promise<ScheduleTrigger[]> {
+    const response = await fetch(`${API}/workflow/definitions/${definitionId}/triggers/schedules`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch schedule triggers"));
+    return response.json();
+}
+
+export async function createScheduleTrigger(
+    definitionId: number, data: NewScheduleTrigger
+): Promise<ScheduleTrigger> {
+    const response = await fetch(`${API}/workflow/definitions/${definitionId}/triggers/schedules`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to create schedule trigger"));
+    return response.json();
+}
+
+export async function updateScheduleTrigger(
+    definitionId: number, triggerId: number, data: NewScheduleTrigger
+): Promise<ScheduleTrigger> {
+    const response = await fetch(
+        `${API}/workflow/definitions/${definitionId}/triggers/schedules/${triggerId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+        });
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to update schedule trigger"));
+    return response.json();
+}
+
+export async function deleteScheduleTrigger(definitionId: number, triggerId: number): Promise<void> {
+    const response = await fetch(
+        `${API}/workflow/definitions/${definitionId}/triggers/schedules/${triggerId}`, {
+            method: "DELETE",
+        });
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to delete schedule trigger"));
 }
 
 export async function fetchWorkflowDefinitionRuns(

@@ -11,6 +11,12 @@ vi.mock("../config/sse", () => ({
 }));
 
 describe("AppSidebar", () => {
+    it("lists Runs as the first navigation item", async () => {
+        renderWithRouter(<AppSidebar />);
+        await screen.findByText("Inbox");
+        expect(screen.getAllByRole("listitem")[0]).toHaveTextContent("Runs");
+    });
+
     it("renders the Inbox navigation item", async () => {
         renderWithRouter(<AppSidebar />);
         expect(await screen.findByText("Inbox")).toBeInTheDocument();
