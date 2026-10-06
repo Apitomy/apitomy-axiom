@@ -157,7 +157,8 @@ instructions in the prompt — Axiom appends the contract automatically.
 
 **Script environment.** Scripts receive the plumbing environment variables `AXIOM_API_URL` (Axiom's
 API base URL), `AXIOM_TASK_ID` and `AXIOM_WORK_DIR`, plus secrets and the action type's environment.
-Agents receive none of these; they run in the task workspace and get data only through declared inputs. Subject data is not passed through the environment; declare an input instead, e.g.
+Agents receive none of these; they run in the task workspace and get data only through declared inputs.
+Subject data is not passed through the environment; declare an input instead, e.g.
 `curl "$AXIOM_API_URL/subjects/{{inputs.subjectId}}"`.
 
 > **Input values are treated as literal data.** In script mode an `{{inputs.NAME}}` placeholder is not

@@ -5718,11 +5718,11 @@
             }
           },
           "promptTemplate": {
-            "description": "Prompt template sent to the AI agent when executing this action type. Supports placeholders: {{issueRef}}, {{repository}}, {{subjectName}}, {{issueTitle}}",
+            "description": "Prompt template sent to the AI agent when executing this action type. The only supported placeholder is {{inputs.<name>}}, where <name> is a declared input. Axiom appends an Inputs section listing the provided input values, followed by the output contract.",
             "type": "string"
           },
           "scriptTemplate": {
-            "description": "Bash script template for script-mode action types. Supports placeholders: {{subjectId}}, {{eventId}}, {{taskId}}, {{issueRef}}, {{repository}}, {{subjectName}}, {{apiBaseUrl}}",
+            "description": "Bash script template for script-mode action types. The only supported placeholder is {{inputs.<name>}}, where <name> is a declared input. $AXIOM_API_URL, $AXIOM_TASK_ID and $AXIOM_WORK_DIR are available as environment variables.",
             "type": "string"
           },
           "model": {
@@ -5806,11 +5806,11 @@
             }
           },
           "promptTemplate": {
-            "description": "Prompt template sent to the AI agent when executing this action type. Supports placeholders: {{issueRef}}, {{repository}}, {{subjectName}}, {{issueTitle}}",
+            "description": "Prompt template sent to the AI agent when executing this action type. The only supported placeholder is {{inputs.<name>}}, where <name> is a declared input. Axiom appends an Inputs section listing the provided input values, followed by the output contract.",
             "type": "string"
           },
           "scriptTemplate": {
-            "description": "Bash script template for script-mode action types. Supports placeholders: {{subjectId}}, {{eventId}}, {{taskId}}, {{issueRef}}, {{repository}}, {{subjectName}}, {{apiBaseUrl}}",
+            "description": "Bash script template for script-mode action types. The only supported placeholder is {{inputs.<name>}}, where <name> is a declared input. $AXIOM_API_URL, $AXIOM_TASK_ID and $AXIOM_WORK_DIR are available as environment variables.",
             "type": "string"
           },
           "model": {

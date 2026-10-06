@@ -59,9 +59,11 @@ subject is not what the action assumes, and cannot be reused on a different targ
 
 ### 2. Runtime plumbing via environment variables only
 
-- Script processes and agent processes keep: `AXIOM_API_URL`, `AXIOM_TASK_ID`, `AXIOM_WORK_DIR`, resolved
-  secrets, the action type's `environment`, and the `AXIOM_INPUT_*` variables used by script input substitution.
-- Removed from both script and agent process environments: `AXIOM_SUBJECT_ID`, `AXIOM_EVENT_ID`, `AXIOM_REF`,
+- Script processes keep: `AXIOM_API_URL`, `AXIOM_TASK_ID`, `AXIOM_WORK_DIR`, resolved secrets, the action
+  type's `environment`, and the `AXIOM_INPUT_*` variables used by script input substitution.
+- Agent processes never had `AXIOM_API_URL`, `AXIOM_TASK_ID` or `AXIOM_WORK_DIR`; agents get data only through
+  declared inputs.
+- Removed from script and agent process environments: `AXIOM_SUBJECT_ID`, `AXIOM_EVENT_ID`, `AXIOM_REF`,
   `AXIOM_REPOSITORY`, `AXIOM_SUBJECT_NAME`.
 - The working directory remains the subject workspace (runtime location, not data).
 

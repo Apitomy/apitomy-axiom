@@ -23,10 +23,11 @@ JUnit 5, Vitest.
 
 - `{{inputs.X}}` is the only template placeholder in action type `promptTemplate` and `scriptTemplate`; `X` must
   be a declared input.
-- Plumbing env vars kept for scripts and agents: `AXIOM_API_URL`, `AXIOM_TASK_ID`, `AXIOM_WORK_DIR` (plus
+- Plumbing env vars kept for scripts only: `AXIOM_API_URL`, `AXIOM_TASK_ID`, `AXIOM_WORK_DIR` (plus
   secrets, the action type `environment`, `AXIOM_INPUT_*` used by script input substitution, and existing
   tracing vars `AXIOM_TRACE_ID`, `AXIOM_PARENT_NODE_ID`). Removed: `AXIOM_SUBJECT_ID`, `AXIOM_EVENT_ID`,
-  `AXIOM_REF`, `AXIOM_REPOSITORY`, `AXIOM_SUBJECT_NAME`.
+  `AXIOM_REF`, `AXIOM_REPOSITORY`, `AXIOM_SUBJECT_NAME`. Agents never had these plumbing vars; they get data
+  only through declared inputs.
 - Workflow context always has `subjectId`, `subjectName`, `ref`, `repository` (empty string when null) and
   `event` when event-started; all five protected from override by supplied run inputs.
 - Required declared inputs must be mapped on the node; unknown mapping keys are errors; optional inputs may be
