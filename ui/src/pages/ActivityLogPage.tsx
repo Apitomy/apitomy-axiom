@@ -30,8 +30,6 @@ const ENTRY_TYPE_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "
     "task-completed": "green",
     "task-failed": "red",
     "subject-created": "blue",
-    "project-closed": "grey",
-    "project-reopened": "orange",
     "pipeline-error": "red",
     "task-awaiting-input": "orange",
 };
@@ -41,7 +39,7 @@ const FILTER_TYPES: ChipFilterType[] = [
     { value: "traceId", label: "Trace ID", testId: "activity-filter-traceId" },
     { value: "entryType", label: "Entry Type", testId: "activity-filter-entryType" },
     { value: "summary", label: "Summary", testId: "activity-filter-summary" },
-    { value: "projectId", label: "Project ID", testId: "activity-filter-projectId" },
+    { value: "subjectId", label: "Subject ID", testId: "activity-filter-subjectId" },
 ];
 
 const DEEP_LINK_FILTERS = ["traceId"];
@@ -67,12 +65,12 @@ export function ActivityLogPage() {
 
     // Execution log modal state
     const [isLogModalOpen, setIsLogModalOpen] = useState(false);
-    const [logProjectId, setLogProjectId] = useState<number | null>(null);
+    const [logSubjectId, setLogSubjectId] = useState<number | null>(null);
     const [logTaskId, setLogTaskId] = useState<number | null>(null);
     const [logActivityId, setLogActivityId] = useState<number | null>(null);
 
-    const handleViewTaskLog = (projectId: number, taskId: number) => {
-        setLogProjectId(projectId);
+    const handleViewTaskLog = (subjectId: number, taskId: number) => {
+        setLogSubjectId(subjectId);
         setLogTaskId(taskId);
         setLogActivityId(null);
         setIsLogModalOpen(true);
@@ -81,7 +79,7 @@ export function ActivityLogPage() {
     const filterEventId = filters.find((f) => f.filterBy.value === "eventId")?.filterValue;
     const filterTraceId = filters.find((f) => f.filterBy.value === "traceId")?.filterValue;
     const filterSummary = filters.find((f) => f.filterBy.value === "summary")?.filterValue;
-    const filterProjectId = filters.find((f) => f.filterBy.value === "projectId")?.filterValue;
+    const filterSubjectId = filters.find((f) => f.filterBy.value === "subjectId")?.filterValue;
     const filterEntryTypes = filters
         .filter((f) => f.filterBy.value === "entryType")
         .map((f) => f.filterValue)
@@ -94,7 +92,7 @@ export function ActivityLogPage() {
             page, perPage,
             filterEventId?.trim() || undefined,
             filterSummary || undefined,
-            filterProjectId ? Number(filterProjectId) : undefined,
+            filterSubjectId ? Number(filterSubjectId) : undefined,
             filterEntryTypes || undefined,
             undefined,
             filterTraceId?.trim() || undefined
@@ -105,7 +103,7 @@ export function ActivityLogPage() {
             })
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [page, perPage, filterEventId, filterSummary, filterProjectId, filterEntryTypes, filterTraceId]);
+    }, [page, perPage, filterEventId, filterSummary, filterSubjectId, filterEntryTypes, filterTraceId]);
 
     useEffect(() => {
         loadData();
@@ -117,7 +115,7 @@ export function ActivityLogPage() {
             !(f.filterBy.value === criteria.filterBy.value && f.filterValue === criteria.filterValue));
         if (criteria.filterBy.value === "eventId" || criteria.filterBy.value === "traceId"
                 || criteria.filterBy.value === "summary"
-                || criteria.filterBy.value === "projectId") {
+                || criteria.filterBy.value === "subjectId") {
             const withoutSame = updated.filter((f) => f.filterBy.value !== criteria.filterBy.value);
             withoutSame.push(criteria);
             setFilters(withoutSame);
@@ -202,7 +200,7 @@ export function ActivityLogPage() {
                                 <Th>Trace</Th>
                                 <Th>Type</Th>
                                 <Th>Summary</Th>
-                                <Th>Project</Th>
+                                <Th>Subject</Th>
                             </Tr>
                         </Thead>
                         <Tbody>
@@ -267,10 +265,10 @@ export function ActivityLogPage() {
                                                 variant="link"
                                                 isInline
                                                 onClick={() =>
-                                                    navigate(`/projects/${entry.subjectId}`)
+                                                    navigate(`/subjects/${entry.subjectId}`)
                                                 }
                                             >
-                                                Project #{entry.subjectId}
+                                                Subject #{entry.subjectId}
                                             </Button>
                                         ) : (
                                             "—"
@@ -285,7 +283,7 @@ export function ActivityLogPage() {
 
             <ExecutionLogModal
                 isOpen={isLogModalOpen}
-                projectId={logProjectId}
+                subjectId={logSubjectId}
                 taskId={logTaskId}
                 activityId={logActivityId}
                 onClose={() => setIsLogModalOpen(false)}

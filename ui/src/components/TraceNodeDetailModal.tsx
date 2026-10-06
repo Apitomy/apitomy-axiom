@@ -306,7 +306,7 @@ function ActivityLogDetail({ detail }: { detail: Record<string, unknown> }) {
                         <DescriptionListDescription>{String(detail.summary)}</DescriptionListDescription>
                     </DescriptionListGroup>
                 )}
-                <ProjectGroup detail={detail} />
+                <SubjectGroup detail={detail} />
                 {detail.traceId != null && (
                     <DescriptionListGroup>
                         <DescriptionListTerm>Activity</DescriptionListTerm>
@@ -352,14 +352,14 @@ function StatusGroup({ label, status }: { label: string; status: unknown }) {
     );
 }
 
-function ProjectGroup({ detail }: { detail: Record<string, unknown> }) {
+function SubjectGroup({ detail }: { detail: Record<string, unknown> }) {
     if (detail.subjectId == null) return null;
-    const name = detail.subjectName ? String(detail.subjectName) : `Project #${detail.subjectId}`;
+    const name = detail.subjectName ? String(detail.subjectName) : `Subject #${detail.subjectId}`;
     return (
         <DescriptionListGroup>
-            <DescriptionListTerm>Project</DescriptionListTerm>
+            <DescriptionListTerm>Subject</DescriptionListTerm>
             <DescriptionListDescription>
-                <Link to={`/projects/${detail.subjectId}`}>{name}</Link>
+                <Link to={`/subjects/${detail.subjectId}`}>{name}</Link>
             </DescriptionListDescription>
         </DescriptionListGroup>
     );
@@ -385,7 +385,7 @@ function WorkflowRunDetail({ detail }: { detail: Record<string, unknown> }) {
         <DescriptionList isHorizontal isCompact>
             <WorkflowRunGroup detail={{ ...detail, runId: detail.id }} />
             <StatusGroup label="Run Status" status={detail.status} />
-            <ProjectGroup detail={detail} />
+            <SubjectGroup detail={detail} />
             <DescriptionListGroup>
                 <DescriptionListTerm>Current Node</DescriptionListTerm>
                 <DescriptionListDescription>
@@ -431,7 +431,7 @@ function WorkflowWaitDetail({ detail }: { detail: Record<string, unknown> }) {
                 </DescriptionListGroup>
             )}
             <WorkflowRunGroup detail={detail} />
-            <ProjectGroup detail={detail} />
+            <SubjectGroup detail={detail} />
         </DescriptionList>
     );
 }
@@ -463,7 +463,7 @@ function WorkflowEventSubscriptionDetail({ detail }: { detail: Record<string, un
                 </DescriptionListGroup>
             )}
             <WorkflowRunGroup detail={detail} />
-            <ProjectGroup detail={detail} />
+            <SubjectGroup detail={detail} />
         </DescriptionList>
     );
 }

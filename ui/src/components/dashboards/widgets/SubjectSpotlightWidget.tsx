@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Flex, FlexItem, Label, Title } from "@patternfly/react-core";
-import { type Project, type Task, fetchProject, fetchProjectTasks } from "../../../config/api";
+import { type Subject, type Task, fetchSubject, fetchSubjectTasks } from "../../../config/api";
 import { registerWidget, type WidgetProps } from "../widget-registry";
 import { WidgetError } from "../WidgetError";
 
@@ -17,26 +17,26 @@ function stripMarkdown(md: string): string {
     return plain.length > 150 ? plain.slice(0, 147) + "..." : plain;
 }
 
-function ProjectSpotlightWidget({ config }: WidgetProps) {
-    const [project, setProject] = useState<Project | null>(null);
+function SubjectSpotlightWidget({ config }: WidgetProps) {
+    const [subject, setSubject] = useState<Subject | null>(null);
     const [tasks, setTasks] = useState<Task[]>([]);
     const [error, setError] = useState(false);
-    const projectId = Number(config.projectId);
+    const subjectId = Number(config.subjectId);
 
     useEffect(() => {
-        if (!projectId) return;
+        if (!subjectId) return;
         let cancelled = false;
-        Promise.all([fetchProject(projectId), fetchProjectTasks(projectId)])
-            .then(([p, t]) => { if (!cancelled) { setProject(p); setTasks(t); } })
+        Promise.all([fetchSubject(subjectId), fetchSubjectTasks(subjectId)])
+            .then(([p, t]) => { if (!cancelled) { setSubject(p); setTasks(t); } })
             .catch(() => { if (!cancelled) setError(true); });
         return () => { cancelled = true; };
-    }, [projectId]);
+    }, [subjectId]);
 
-    if (!projectId) {
-        return <p style={{ padding: "16px" }}>Configure a project ID in widget settings.</p>;
+    if (!subjectId) {
+        return <p style={{ padding: "16px" }}>Configure a subject ID in widget settings.</p>;
     }
     if (error) return <WidgetError />;
-    if (!project) {
+    if (!subject) {
         return <p style={{ padding: "16px" }}>Loading...</p>;
     }
 
@@ -47,21 +47,21 @@ function ProjectSpotlightWidget({ config }: WidgetProps) {
 
     return (
         <div style={{ padding: "8px" }}>
-            <Title headingLevel="h4" size="md">{project.name}</Title>
+            <Title headingLevel="h4" size="md">{subject.name}</Title>
             <Flex gap={{ default: "gapSm" }} style={{ marginTop: "8px" }}>
                 <FlexItem>
-                    <Label isCompact color={project.active ? "green" : "grey"}>
-                        {project.active ? "Active" : "Inactive"}
+                    <Label isCompact color={subject.active ? "green" : "grey"}>
+                        {subject.active ? "Active" : "Inactive"}
                     </Label>
                 </FlexItem>
                 <FlexItem>
-                    <Label isCompact>{project.ref}</Label>
+                    <Label isCompact>{subject.ref}</Label>
                 </FlexItem>
             </Flex>
-            {project.body && (
+            {subject.body && (
                 <p style={{ marginTop: "8px", fontSize: "0.9em",
                             color: "var(--pf-t--global--color--200)" }}>
-                    {stripMarkdown(project.body)}
+                    {stripMarkdown(subject.body)}
                 </p>
             )}
             <div style={{ marginTop: "12px" }}>
@@ -79,14 +79,14 @@ function ProjectSpotlightWidget({ config }: WidgetProps) {
 }
 
 registerWidget({
-    type: "project-spotlight",
-    name: "Project Spotlight",
-    description: "Single-project deep view with status, task breakdown, and details.",
-    category: "Projects",
+    type: "subject-spotlight",
+    name: "Subject Spotlight",
+    description: "Single-subject deep view with status, task breakdown, and details.",
+    category: "Subjects",
     defaultSize: { w: 4, h: 4 },
     minSize: { w: 3, h: 3 },
     configSchema: [
-        { key: "projectId", label: "Project ID", type: "number", default: 0 },
+        { key: "subjectId", label: "Subject ID", type: "number", default: 0 },
     ],
-    component: ProjectSpotlightWidget,
+    component: SubjectSpotlightWidget,
 });

@@ -48,7 +48,7 @@ import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 // Placeholders must be ones the server's ActionTypeValidator recognizes.
 const DEFAULT_PROMPT_TEMPLATE = "Complete the following task:\n\n{{input}}\n";
 const DEFAULT_SCRIPT_TEMPLATE =
-    "#!/usr/bin/env bash\nset -euo pipefail\n\n# TODO: implement this action\necho \"Running action for {{projectName}}\"\n";
+    "#!/usr/bin/env bash\nset -euo pipefail\n\n# TODO: implement this action\necho \"Running action for {{subjectName}}\"\n";
 
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "name", label: "Name", testId: "action-type-filter-name" },

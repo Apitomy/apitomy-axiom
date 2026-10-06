@@ -35,4 +35,11 @@ describe("AppSidebar", () => {
         expect(screen.queryByText("Scheduled Jobs")).not.toBeInTheDocument();
         expect(screen.queryByText("Job Runs")).not.toBeInTheDocument();
     });
+
+    it("shows Subjects and not Projects", async () => {
+        renderWithRouter(<AppSidebar />, "/subjects");
+        await screen.findByText("Inbox");
+        expect(screen.getByText("Subjects")).toBeInTheDocument();
+        expect(screen.queryByText(/projects/i)).not.toBeInTheDocument();
+    });
 });

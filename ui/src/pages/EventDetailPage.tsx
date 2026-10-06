@@ -252,8 +252,8 @@ function OutcomeItems({ items }: { items: EventProcessingOutcomeItem[] }) {
                         <Link to={`/logs/traces/${item.traceId}`}>View Trace</Link>
                     )}
                     {item.subjectId && (
-                        <Link to={`/projects/${item.subjectId}`}>
-                            {item.subjectName || `Project #${item.subjectId}`}
+                        <Link to={`/subjects/${item.subjectId}`}>
+                            {item.subjectName || `Subject #${item.subjectId}`}
                         </Link>
                     )}
                     {item.summary && <span>{item.summary}</span>}
@@ -464,8 +464,8 @@ function ProcessingTab({ eventId, entries, loading, onRetried }: {
                                                         flexWrap: "wrap",
                                                     }}>
                                                         {!hasItems(o) && o.subjectId && (
-                                                            <Link to={`/projects/${o.subjectId}`}>
-                                                                {o.subjectName || `Project #${o.subjectId}`}
+                                                            <Link to={`/subjects/${o.subjectId}`}>
+                                                                {o.subjectName || `Subject #${o.subjectId}`}
                                                             </Link>
                                                         )}
                                                         {!hasItems(o) && o.taskId && (

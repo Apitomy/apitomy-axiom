@@ -23,18 +23,18 @@ import {
     ChipFilterInput,
     FilterChips,
 } from "@apitomy/common-ui-components";
-import { type DiskUsageProject, fetchDiskUsage, formatBytes } from "../config/api";
+import { type DiskUsageSubject, fetchDiskUsage, formatBytes } from "../config/api";
 
 const FILTER_TYPES: ChipFilterType[] = [
-    { value: "name", label: "Project Name", testId: "disk-filter-name" },
+    { value: "name", label: "Subject Name", testId: "disk-filter-name" },
 ];
 
 export function DiskUsagePage() {
     const navigate = useNavigate();
-    const [projects, setProjects] = useState<DiskUsageProject[]>([]);
+    const [subjects, setSubjects] = useState<DiskUsageSubject[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [totalDiskUsageBytes, setTotalDiskUsageBytes] = useState(0);
-    const [projectCount, setProjectCount] = useState(0);
+    const [subjectCount, setSubjectCount] = useState(0);
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState(20);
     const [loading, setLoading] = useState(true);
@@ -53,10 +53,10 @@ export function DiskUsagePage() {
         setLoading(true);
         fetchDiskUsage(page, perPage, filterName || undefined, sortBy, activeSortDirection)
             .then((results) => {
-                setProjects(results.items);
+                setSubjects(results.items);
                 setTotalCount(results.totalCount);
                 setTotalDiskUsageBytes(results.totalDiskUsageBytes || 0);
-                setProjectCount(results.subjectCount || 0);
+                setSubjectCount(results.subjectCount || 0);
             })
             .catch(console.error)
             .finally(() => setLoading(false));
@@ -112,10 +112,10 @@ export function DiskUsagePage() {
                     <Card isCompact>
                         <CardBody style={{ textAlign: "center", padding: "16px" }}>
                             <div style={{ fontSize: "24px", fontWeight: "bold" }}>
-                                {projectCount}
+                                {subjectCount}
                             </div>
                             <div className="axiom-text-subtle" style={{ fontSize: "13px" }}>
-                                Projects
+                                Subjects
                             </div>
                         </CardBody>
                     </Card>
@@ -163,23 +163,23 @@ export function DiskUsagePage() {
                 <EmptyState>
                     <EmptyStateBody>Loading disk usage...</EmptyStateBody>
                 </EmptyState>
-            ) : projects.length === 0 ? (
+            ) : subjects.length === 0 ? (
                 <EmptyState>
                     <EmptyStateBody>
                         {isFiltered
-                            ? "No projects match the current filter."
-                            : "No projects found."}
+                            ? "No subjects match the current filter."
+                            : "No subjects found."}
                     </EmptyStateBody>
                 </EmptyState>
             ) : (
-                <Table aria-label="Disk Usage by Project" variant="compact">
+                <Table aria-label="Disk Usage by Subject" variant="compact">
                     <Thead>
                         <Tr>
                             <Th sort={{
                                 sortBy: { index: activeSortIndex, direction: activeSortDirection },
                                 onSort,
                                 columnIndex: 0,
-                            }}>Project</Th>
+                            }}>Subject</Th>
                             <Th sort={{
                                 sortBy: { index: activeSortIndex, direction: activeSortDirection },
                                 onSort,
@@ -188,9 +188,9 @@ export function DiskUsagePage() {
                         </Tr>
                     </Thead>
                     <Tbody>
-                        {projects.map((p) => (
+                        {subjects.map((p) => (
                             <Tr key={p.subjectId} isClickable
-                                onRowClick={() => navigate(`/projects/${p.subjectId}`)}>
+                                onRowClick={() => navigate(`/subjects/${p.subjectId}`)}>
                                 <Td>{p.subjectName}</Td>
                                 <Td>{formatBytes(p.diskUsageBytes)}</Td>
                             </Tr>

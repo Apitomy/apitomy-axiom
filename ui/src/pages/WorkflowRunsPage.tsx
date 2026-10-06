@@ -101,7 +101,7 @@ export function WorkflowRunsPage() {
                     <Thead>
                         <Tr>
                             <Th>Status</Th>
-                            <Th>Project</Th>
+                            <Th>Subject</Th>
                             <Th>Workflow</Th>
                             <Th>Started</Th>
                             <Th>Duration</Th>
@@ -117,8 +117,8 @@ export function WorkflowRunsPage() {
                                     </Label>
                                 </Td>
                                 <Td>
-                                    <Link to={`/projects/${run.subjectId}`}>
-                                        {run.subjectName || `Project #${run.subjectId}`}
+                                    <Link to={`/subjects/${run.subjectId}`}>
+                                        {run.subjectName || `Subject #${run.subjectId}`}
                                     </Link>
                                 </Td>
                                 <Td>

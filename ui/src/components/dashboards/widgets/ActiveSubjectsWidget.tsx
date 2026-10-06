@@ -5,21 +5,21 @@ import CodeBranchIcon from "@patternfly/react-icons/dist/esm/icons/code-branch-i
 import BugIcon from "@patternfly/react-icons/dist/esm/icons/bug-icon";
 import GithubIcon from "@patternfly/react-icons/dist/esm/icons/github-icon";
 import JiraIcon from "@patternfly/react-icons/dist/esm/icons/jira-icon";
-import { type Project, fetchProjects } from "../../../config/api";
+import { type Subject, fetchSubjects } from "../../../config/api";
 import { registerWidget, type WidgetProps } from "../widget-registry";
 import { WidgetError } from "../WidgetError";
 
-function ActiveProjectsWidget({ config, labels }: WidgetProps) {
+function ActiveSubjectsWidget({ config, labels }: WidgetProps) {
     const navigate = useNavigate();
-    const [projects, setProjects] = useState<Project[]>([]);
+    const [subjects, setSubjects] = useState<Subject[]>([]);
     const [error, setError] = useState(false);
     const maxRows = Number(config.maxRows) || 8;
 
     useEffect(() => {
         let cancelled = false;
         const labelsParam = labels.length > 0 ? labels.join(",") : undefined;
-        fetchProjects(1, maxRows, undefined, true, labelsParam)
-            .then(result => { if (!cancelled) setProjects(result.items); })
+        fetchSubjects(1, maxRows, undefined, true, labelsParam)
+            .then(result => { if (!cancelled) setSubjects(result.items); })
             .catch(() => { if (!cancelled) setError(true); });
         return () => { cancelled = true; };
     }, [labels, maxRows]);
@@ -27,13 +27,13 @@ function ActiveProjectsWidget({ config, labels }: WidgetProps) {
     if (error) return <WidgetError />;
 
     return (
-        <Table aria-label="Active Projects" variant="compact" isStickyHeader>
+        <Table aria-label="Active Subjects" variant="compact" isStickyHeader>
             <Thead><Tr>
                 <Th>Name</Th><Th>Reference</Th>
             </Tr></Thead>
             <Tbody>
-                {projects.map(p => (
-                    <Tr key={p.id} isClickable onRowClick={() => navigate(`/projects/${p.id}`)}>
+                {subjects.map(p => (
+                    <Tr key={p.id} isClickable onRowClick={() => navigate(`/subjects/${p.id}`)}>
                         <Td>
                             {p.refSource === "github" && <GithubIcon style={{ marginRight: 6 }} />}
                             {p.refSource === "jira" && <JiraIcon style={{ marginRight: 6 }} />}
@@ -44,8 +44,8 @@ function ActiveProjectsWidget({ config, labels }: WidgetProps) {
                         <Td>{p.ref || "—"}</Td>
                     </Tr>
                 ))}
-                {projects.length === 0 && (
-                    <Tr><Td colSpan={2}>No active projects.</Td></Tr>
+                {subjects.length === 0 && (
+                    <Tr><Td colSpan={2}>No active subjects.</Td></Tr>
                 )}
             </Tbody>
         </Table>
@@ -53,14 +53,14 @@ function ActiveProjectsWidget({ config, labels }: WidgetProps) {
 }
 
 registerWidget({
-    type: "active-projects",
-    name: "Active Projects",
-    description: "Compact table of active projects (with a running or waiting workflow run) and their issue reference.",
-    category: "Projects",
+    type: "active-subjects",
+    name: "Active Subjects",
+    description: "Compact table of active subjects (with a running or waiting workflow run) and their issue reference.",
+    category: "Subjects",
     defaultSize: { w: 6, h: 3 },
     minSize: { w: 4, h: 2 },
     configSchema: [
         { key: "maxRows", label: "Max Rows", type: "number", default: 8 },
     ],
-    component: ActiveProjectsWidget,
+    component: ActiveSubjectsWidget,
 });

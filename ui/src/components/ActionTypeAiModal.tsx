@@ -112,7 +112,7 @@ export function ActionTypeAiModal({
                     Placeholders:{" "}
                     <code>{"{{ref}}"}</code>,{" "}
                     <code>{"{{repository}}"}</code>,{" "}
-                    <code>{"{{projectName}}"}</code>
+                    <code>{"{{subjectName}}"}</code>
                 </div>
             </StackItem>
             <StackItem isFilled style={{ paddingLeft: "16px", paddingRight: "16px" }}>

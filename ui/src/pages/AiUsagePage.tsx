@@ -259,7 +259,7 @@ export function AiUsagePage() {
                                 <Th>Action</Th>
                                 <Th>Engine</Th>
                                 <Th>Model</Th>
-                                <Th>Project</Th>
+                                <Th>Subject</Th>
                                 <Th>Trace</Th>
                                 <Th>Cost</Th>
                                 <Th>Input Tokens</Th>
@@ -317,7 +317,7 @@ export function AiUsagePage() {
                                         ) : "—"}
                                     </Td>
                                     <Td>
-                                        {r.subjectId ? `Project #${r.subjectId}` : "—"}
+                                        {r.subjectId ? `Subject #${r.subjectId}` : "—"}
                                     </Td>
                                     <Td>
                                         {r.traceId ? (

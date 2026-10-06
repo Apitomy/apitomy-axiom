@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { ChartBar, ChartGroup, ChartVoronoiContainer, Chart, ChartAxis } from "@patternfly/react-charts/victory";
-import { fetchProjects, fetchUsage } from "../../../config/api";
+import { fetchSubjects, fetchUsage } from "../../../config/api";
 import { registerWidget, type WidgetProps } from "../widget-registry";
 import { WidgetError } from "../WidgetError";
 
@@ -8,16 +8,16 @@ const TIME_WINDOWS: Record<string, number> = {
     "24h": 1, "7d": 7, "30d": 30, "90d": 90,
 };
 
-interface ProjectCost {
+interface SubjectCost {
     name: string;
     cost: number;
 }
 
-function AiCostByProjectWidget({ config, labels }: WidgetProps) {
-    const [data, setData] = useState<ProjectCost[]>([]);
+function AiCostBySubjectWidget({ config, labels }: WidgetProps) {
+    const [data, setData] = useState<SubjectCost[]>([]);
     const [error, setError] = useState(false);
     const timeWindow = String(config.timeWindow || "7d");
-    const maxProjects = Number(config.maxProjects) || 5;
+    const maxSubjects = Number(config.maxSubjects) || 5;
 
     useEffect(() => {
         let cancelled = false;
@@ -25,7 +25,7 @@ function AiCostByProjectWidget({ config, labels }: WidgetProps) {
         const from = new Date(Date.now() - days * 86400000).toISOString();
         const labelsParam = labels.length > 0 ? labels.join(",") : undefined;
 
-        fetchProjects(1, 50, undefined, undefined, labelsParam)
+        fetchSubjects(1, 50, undefined, undefined, labelsParam)
             .then(async (result) => {
                 const usagePromises = result.items.map(p =>
                     fetchUsage(1, 1, undefined, p.id, undefined, undefined, from)
@@ -35,12 +35,12 @@ function AiCostByProjectWidget({ config, labels }: WidgetProps) {
                 const costs = (await Promise.all(usagePromises))
                     .filter(c => c.cost > 0)
                     .sort((a, b) => b.cost - a.cost)
-                    .slice(0, maxProjects);
+                    .slice(0, maxSubjects);
                 if (!cancelled) setData(costs);
             })
             .catch(() => { if (!cancelled) setError(true); });
         return () => { cancelled = true; };
-    }, [labels, timeWindow, maxProjects]);
+    }, [labels, timeWindow, maxSubjects]);
 
     if (error) return <WidgetError />;
 
@@ -69,9 +69,9 @@ function AiCostByProjectWidget({ config, labels }: WidgetProps) {
 }
 
 registerWidget({
-    type: "ai-cost-by-project",
-    name: "AI Cost by Project",
-    description: "Top projects ranked by AI cost shown as a bar chart.",
+    type: "ai-cost-by-subject",
+    name: "AI Cost by Subject",
+    description: "Top subjects ranked by AI cost shown as a bar chart.",
     category: "AI & Cost",
     defaultSize: { w: 4, h: 3 },
     minSize: { w: 3, h: 3 },
@@ -85,7 +85,7 @@ registerWidget({
                 { label: "90 Days", value: "90d" },
             ],
         },
-        { key: "maxProjects", label: "Max Projects", type: "number", default: 5 },
+        { key: "maxSubjects", label: "Max Subjects", type: "number", default: 5 },
     ],
-    component: AiCostByProjectWidget,
+    component: AiCostBySubjectWidget,
 });

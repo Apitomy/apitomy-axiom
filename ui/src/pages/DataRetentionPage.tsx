@@ -137,9 +137,9 @@ export function DataRetentionPage() {
             </p>
 
             <Form style={{ maxWidth: "600px" }}>
-                <FormGroup label="Inactive projects" fieldId="inactive-project-retention">
+                <FormGroup label="Inactive subjects" fieldId="inactive-subject-retention">
                     <NumberInput
-                        id="inactive-project-retention"
+                        id="inactive-subject-retention"
                         value={config.inactiveSubjectRetentionDays ?? 90}
                         min={1}
                         onMinus={() => updateField("inactiveSubjectRetentionDays",
@@ -153,7 +153,7 @@ export function DataRetentionPage() {
                     <FormHelperText>
                         <HelperText>
                             <HelperTextItem>
-                                Days to retain a project after its last workflow run completed (with no run still active) before automatic deletion.
+                                Days to retain a subject after its last workflow run completed (with no run still active) before automatic deletion.
                             </HelperTextItem>
                         </HelperText>
                     </FormHelperText>

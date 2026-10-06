@@ -45,20 +45,20 @@ import AngleRightIcon from "@patternfly/react-icons/dist/esm/icons/angle-right-i
 import AngleDownIcon from "@patternfly/react-icons/dist/esm/icons/angle-down-icon";
 import {
     type InboxItem,
-    type Project,
-    type ProjectMetrics,
+    type Subject,
+    type SubjectMetrics,
     type StreamEvent,
     type Task,
     type ThreadEntry,
     fetchAgents,
-    fetchProject,
-    fetchProjectMetrics,
-    fetchProjectTasks,
+    fetchSubject,
+    fetchSubjectMetrics,
+    fetchSubjectTasks,
     fetchStreamEvents,
     fetchThreadEntries,
-    deleteProject,
-    updateProject,
-    updateProjectBody,
+    deleteSubject,
+    updateSubject,
+    updateSubjectBody,
     formatBytes,
     fetchInboxItem,
     completeInboxItem,
@@ -81,15 +81,15 @@ const STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"
     Cancelled: "grey",
 };
 
-export function ProjectDetailPage() {
-    const { projectId } = useParams<{ projectId: string }>();
+export function SubjectDetailPage() {
+    const { subjectId } = useParams<{ subjectId: string }>();
     const navigate = useNavigate();
     const effectiveTheme = useEffectiveTheme();
-    const [project, setProject] = useState<Project | null>(null);
+    const [subject, setSubject] = useState<Subject | null>(null);
     const [tasks, setTasks] = useState<Task[]>([]);
     const [thread, setThread] = useState<ThreadEntry[]>([]);
     const [events, setEvents] = useState<StreamEvent[]>([]);
-    const [metrics, setMetrics] = useState<ProjectMetrics | null>(null);
+    const [metrics, setMetrics] = useState<SubjectMetrics | null>(null);
     const [agentNames, setAgentNames] = useState<Record<number, string>>({});
     const [activeTab, setActiveTab] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -109,7 +109,7 @@ export function ProjectDetailPage() {
 
     const [isAssistantModalOpen, setIsAssistantModalOpen] = useState(false);
 
-    const id = Number(projectId);
+    const id = Number(subjectId);
 
     const cancelBodyEdit = useCallback(() => {
         setIsEditingBody(false);
@@ -120,21 +120,21 @@ export function ProjectDetailPage() {
         if (!id) return;
         setLoading(true);
         Promise.all([
-            fetchProject(id),
-            fetchProjectTasks(id),
+            fetchSubject(id),
+            fetchSubjectTasks(id),
             fetchThreadEntries(id),
-            fetchProjectMetrics(id),
+            fetchSubjectMetrics(id),
             fetchAgents(),
         ])
             .then(([p, t, th, m, agents]) => {
-                setProject(p);
+                setSubject(p);
                 setTasks(t);
                 setThread(th);
                 setMetrics(m);
                 const names: Record<number, string> = {};
                 agents.forEach((a) => { names[a.id] = a.name; });
                 setAgentNames(names);
-                // Load stream events by project ref
+                // Load stream events by subject ref
                 if (p.ref) {
                     fetchStreamEvents(1, 100, undefined, undefined, p.ref)
                         .then(r => setEvents(r.items))
@@ -153,42 +153,42 @@ export function ProjectDetailPage() {
         return (
             <PageSection>
                 <EmptyState>
-                    <EmptyStateBody>Loading project...</EmptyStateBody>
+                    <EmptyStateBody>Loading subject...</EmptyStateBody>
                 </EmptyState>
             </PageSection>
         );
     }
 
-    if (!project) {
+    if (!subject) {
         return (
             <PageSection>
                 <EmptyState>
-                    <EmptyStateBody>Project not found.</EmptyStateBody>
+                    <EmptyStateBody>Subject not found.</EmptyStateBody>
                 </EmptyState>
             </PageSection>
         );
     }
 
     return (
-        <PageSection isFilled className="project-detail">
+        <PageSection isFilled className="subject-detail">
             <Breadcrumb style={{ marginBottom: "16px" }}>
                 <BreadcrumbItem><Link to="/">Dashboard</Link></BreadcrumbItem>
-                <BreadcrumbItem><Link to="/projects">Projects</Link></BreadcrumbItem>
-                <BreadcrumbItem isActive>{project.name}</BreadcrumbItem>
+                <BreadcrumbItem><Link to="/subjects">Subjects</Link></BreadcrumbItem>
+                <BreadcrumbItem isActive>{subject.name}</BreadcrumbItem>
             </Breadcrumb>
 
-            {/* Project header */}
+            {/* Subject header */}
             <Flex
                 justifyContent={{ default: "justifyContentSpaceBetween" }}
                 alignItems={{ default: "alignItemsCenter" }}
             >
                 <FlexItem>
                     <Title headingLevel="h1" size="lg">
-                        {project.refSource === "github" && <GithubIcon style={{ marginRight: 8 }} />}
-                        {project.refSource === "jira" && <JiraIcon style={{ marginRight: 8 }} />}
-                        {project.type === "issue" && <BugIcon style={{ marginRight: 8 }} />}
-                        {project.type === "pull-request" && <CodeBranchIcon style={{ marginRight: 8 }} />}
-                        {project.name}
+                        {subject.refSource === "github" && <GithubIcon style={{ marginRight: 8 }} />}
+                        {subject.refSource === "jira" && <JiraIcon style={{ marginRight: 8 }} />}
+                        {subject.type === "issue" && <BugIcon style={{ marginRight: 8 }} />}
+                        {subject.type === "pull-request" && <CodeBranchIcon style={{ marginRight: 8 }} />}
+                        {subject.name}
                     </Title>
                 </FlexItem>
                 <FlexItem>
@@ -208,28 +208,28 @@ export function ProjectDetailPage() {
                     >
                         Assistant
                     </Button>
-                    {!project.active && (
+                    {!subject.active && (
                         <Button variant="danger" icon={<TrashIcon />}
                             onClick={() => setIsDeleteOpen(true)}
                             style={{ marginRight: "8px" }}>
                             Delete
                         </Button>
                     )}
-                    <Label color={project.active ? "green" : "grey"}>
-                        {project.active ? "Active" : "Inactive"}
+                    <Label color={subject.active ? "green" : "grey"}>
+                        {subject.active ? "Active" : "Inactive"}
                     </Label>
                 </FlexItem>
             </Flex>
 
-            {/* Project metadata — collapsible. Collapsed shows a compact
+            {/* Subject metadata — collapsible. Collapsed shows a compact
                 summary bar (type, source, labels); expanded shows the full
                 description list. Clicking the bar toggles between the two. */}
             <div
-                className="project-detail__metadata-toggle"
+                className="subject-detail__metadata-toggle"
                 role="button"
                 tabIndex={0}
                 aria-expanded={isMetadataExpanded}
-                aria-label={isMetadataExpanded ? "Collapse project details" : "Expand project details"}
+                aria-label={isMetadataExpanded ? "Collapse subject details" : "Expand subject details"}
                 onClick={() => setIsMetadataExpanded((v) => !v)}
                 onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
@@ -246,19 +246,19 @@ export function ProjectDetailPage() {
                     <FlexItem>
                         {isMetadataExpanded ? <AngleDownIcon /> : <AngleRightIcon />}
                     </FlexItem>
-                    <FlexItem className="project-detail__metadata-term">
+                    <FlexItem className="subject-detail__metadata-term">
                         Type:
                     </FlexItem>
                     <FlexItem>
-                        <Label isCompact>{project.type}</Label>
+                        <Label isCompact>{subject.type}</Label>
                     </FlexItem>
-                    {project.refSource && (
+                    {subject.refSource && (
                         <>
-                            <FlexItem className="project-detail__metadata-term">
+                            <FlexItem className="subject-detail__metadata-term">
                                 Source:
                             </FlexItem>
                             <FlexItem>
-                                <Label isCompact>{project.refSource}</Label>
+                                <Label isCompact>{subject.refSource}</Label>
                             </FlexItem>
                         </>
                     )}
@@ -266,7 +266,7 @@ export function ProjectDetailPage() {
                         onClick={(e) => e.stopPropagation()}
                         style={{ marginLeft: "auto" }}
                     >
-                        <LabelDisplay labels={project.labels || []}
+                        <LabelDisplay labels={subject.labels || []}
                             onEdit={() => setIsLabelsOpen(true)} />
                     </FlexItem>
                 </Flex>
@@ -278,41 +278,41 @@ export function ProjectDetailPage() {
                 <DescriptionListGroup>
                     <DescriptionListTerm>Reference</DescriptionListTerm>
                     <DescriptionListDescription>
-                        {project.ref ? (
-                            <a href={project.ref}
+                        {subject.ref ? (
+                            <a href={subject.ref}
                                 target="_blank" rel="noopener noreferrer">
-                                {project.ref}
+                                {subject.ref}
                             </a>
                         ) : (
                             "—"
                         )}
                     </DescriptionListDescription>
                 </DescriptionListGroup>
-                {project.repository && (
+                {subject.repository && (
                     <DescriptionListGroup>
                         <DescriptionListTerm>Repository</DescriptionListTerm>
                         <DescriptionListDescription>
-                            {project.repository}
+                            {subject.repository}
                         </DescriptionListDescription>
                     </DescriptionListGroup>
                 )}
                 <DescriptionListGroup>
                     <DescriptionListTerm>Created</DescriptionListTerm>
                     <DescriptionListDescription>
-                        {new Date(project.createdOn).toLocaleString()}
+                        {new Date(subject.createdOn).toLocaleString()}
                     </DescriptionListDescription>
                 </DescriptionListGroup>
                 <DescriptionListGroup>
                     <DescriptionListTerm>Updated</DescriptionListTerm>
                     <DescriptionListDescription>
-                        {new Date(project.updatedOn).toLocaleString()}
+                        {new Date(subject.updatedOn).toLocaleString()}
                     </DescriptionListDescription>
                 </DescriptionListGroup>
                 <DescriptionListGroup>
                     <DescriptionListTerm>Workspace</DescriptionListTerm>
                     <DescriptionListDescription>
                         <code style={{ fontSize: "13px" }}>
-                            ~/.axiom/workspaces/subject-{project.id}
+                            ~/.axiom/workspaces/subject-{subject.id}
                         </code>
                     </DescriptionListDescription>
                 </DescriptionListGroup>
@@ -321,16 +321,16 @@ export function ProjectDetailPage() {
 
             {/* Tabs fill the remaining vertical space; the active tab's
                 content scrolls when it exceeds the available height. */}
-            <div className="project-detail__tabs">
+            <div className="subject-detail__tabs">
                 <Tabs activeKey={activeTab} onSelect={(_e, k) => setActiveTab(k as number)}>
                     <Tab eventKey={0} title={<TabTitleText>Body</TabTitleText>} />
                     <Tab eventKey={1} title={<TabTitleText>Tasks ({tasks.length})</TabTitleText>} />
                     <Tab eventKey={2} title={<TabTitleText>Thread ({thread.length})</TabTitleText>} />
                     <Tab eventKey={3} title={<TabTitleText>Events ({events.length})</TabTitleText>} />
                     <Tab eventKey={4} title={<TabTitleText>Metrics</TabTitleText>} />
-                    <Tab eventKey={5} title={<TabTitleText>Workflow{project?.hasWorkflowInstance ? " ●" : ""}</TabTitleText>} />
+                    <Tab eventKey={5} title={<TabTitleText>Workflow{subject?.hasWorkflowInstance ? " ●" : ""}</TabTitleText>} />
                 </Tabs>
-                <div className={`project-detail__tab-content${activeTab === 5 ? " project-detail__tab-content--fill" : ""}`}>
+                <div className={`subject-detail__tab-content${activeTab === 5 ? " subject-detail__tab-content--fill" : ""}`}>
                     {activeTab === 0 && (
                         <div style={{
                             padding: "0 14px",
@@ -339,16 +339,16 @@ export function ProjectDetailPage() {
                                 ? { height: "100%", display: "flex", flexDirection: "column" }
                                 : {}),
                         }}>
-                            <div className={`project-detail__body-actions${isEditingBody ? " project-detail__body-actions--offset" : ""}`}>
+                            <div className={`subject-detail__body-actions${isEditingBody ? " subject-detail__body-actions--offset" : ""}`}>
                                 {isEditingBody ? (
                                     <>
                                         <Button variant="plain" aria-label="Save body"
                                             onClick={() => {
                                                 setBodySaveError("");
                                                 const newBody = editBodyRef.current;
-                                                updateProjectBody(id, newBody)
+                                                updateSubjectBody(id, newBody)
                                                     .then(() => {
-                                                        setProject({ ...project, body: newBody });
+                                                        setSubject({ ...subject, body: newBody });
                                                         setIsEditingBody(false);
                                                     })
                                                     .catch((err) => {
@@ -365,7 +365,7 @@ export function ProjectDetailPage() {
                                 ) : (
                                     <Button variant="plain" aria-label="Edit body"
                                         onClick={() => {
-                                            const initial = project.body || "";
+                                            const initial = subject.body || "";
                                             setEditBody(initial);
                                             editBodyRef.current = initial;
                                             setIsEditingBody(true);
@@ -406,11 +406,11 @@ export function ProjectDetailPage() {
                                         }}
                                     />
                                 </div>
-                            ) : project.body ? (
+                            ) : subject.body ? (
                                 <div className="axiom-markdown">
                                     <Content>
                                         <Markdown remarkPlugins={[remarkGfm]} components={markdownMermaidComponents}>
-                                            {project.body}
+                                            {subject.body}
                                         </Markdown>
                                     </Content>
                                 </div>
@@ -422,15 +422,15 @@ export function ProjectDetailPage() {
                         </div>
                     )}
                     {activeTab === 1 && (
-                        <TasksTab tasks={tasks} projectId={id} agentNames={agentNames} onRefresh={loadData} />
+                        <TasksTab tasks={tasks} subjectId={id} agentNames={agentNames} onRefresh={loadData} />
                     )}
                     {activeTab === 2 && <ThreadTab entries={thread} />}
                     {activeTab === 3 && <EventsTab events={events} />}
                     {activeTab === 4 && <MetricsTab metrics={metrics} />}
-                    {activeTab === 5 && project && (
+                    {activeTab === 5 && subject && (
                         <WorkflowTab
-                            projectId={project.id}
-                            hasWorkflowInstance={project.hasWorkflowInstance ?? false}
+                            subjectId={subject.id}
+                            hasWorkflowInstance={subject.hasWorkflowInstance ?? false}
                             onRefresh={loadData}
                         />
                     )}
@@ -444,27 +444,27 @@ export function ProjectDetailPage() {
                     setIsAssistantModalOpen(false);
                     window.open(`/assistant/${session.id}?breakout=true`, "_blank");
                 }}
-                projectId={project.id}
-                defaultName={project.name}
+                subjectId={subject.id}
+                defaultName={subject.name}
             />
 
-            <ConfirmDeleteModal isOpen={isDeleteOpen} title="Delete Project"
+            <ConfirmDeleteModal isOpen={isDeleteOpen} title="Delete Subject"
                 onConfirm={() => {
-                    deleteProject(id)
-                        .then(() => navigate("/projects"))
+                    deleteSubject(id)
+                        .then(() => navigate("/subjects"))
                         .catch(console.error);
                 }}
                 onCancel={() => setIsDeleteOpen(false)}>
-                Delete this project and all its data? This will remove all tasks,
+                Delete this subject and all its data? This will remove all tasks,
                 activity, thread entries, and workspace files. This cannot be undone.
             </ConfirmDeleteModal>
 
             <EditLabelsModal
                 isOpen={isLabelsOpen}
-                labels={project.labels || []}
+                labels={subject.labels || []}
                 onSave={async (labels) => {
-                    const updated = await updateProject(id, { labels });
-                    setProject(updated);
+                    const updated = await updateSubject(id, { labels });
+                    setSubject(updated);
                 }}
                 onClose={() => setIsLabelsOpen(false)}
             />
@@ -472,9 +472,9 @@ export function ProjectDetailPage() {
     );
 }
 
-function TasksTab({ tasks, projectId, agentNames, onRefresh }: {
+function TasksTab({ tasks, subjectId, agentNames, onRefresh }: {
     tasks: Task[];
-    projectId: number;
+    subjectId: number;
     agentNames: Record<number, string>;
     onRefresh: () => void;
 }) {
@@ -561,7 +561,7 @@ function TasksTab({ tasks, projectId, agentNames, onRefresh }: {
                             </Td>
                             <Td>
                                 <Button variant="link" size="sm"
-                                    data-testid={`project-task-lineage-${task.id}`}
+                                    data-testid={`subject-task-lineage-${task.id}`}
                                     onClick={() => setLineageTaskId(task.id)}>
                                     Lineage
                                 </Button>
@@ -640,7 +640,7 @@ function TasksTab({ tasks, projectId, agentNames, onRefresh }: {
 
             <ExecutionLogModal
                 isOpen={isLogModalOpen}
-                projectId={projectId}
+                subjectId={subjectId}
                 taskId={logTaskId}
                 onClose={() => setIsLogModalOpen(false)}
             />
@@ -720,13 +720,13 @@ function EventsTab({ events }: { events: StreamEvent[] }) {
     if (events.length === 0) {
         return (
             <EmptyState>
-                <EmptyStateBody>No events recorded for this project.</EmptyStateBody>
+                <EmptyStateBody>No events recorded for this subject.</EmptyStateBody>
             </EmptyState>
         );
     }
 
     return (
-        <Table aria-label="Project Events" variant="compact">
+        <Table aria-label="Subject Events" variant="compact">
             <Thead>
                 <Tr>
                     <Th>Time</Th>
@@ -758,7 +758,7 @@ function EventsTab({ events }: { events: StreamEvent[] }) {
     );
 }
 
-function MetricsTab({ metrics }: { metrics: ProjectMetrics | null }) {
+function MetricsTab({ metrics }: { metrics: SubjectMetrics | null }) {
     if (!metrics) {
         return (
             <EmptyState>

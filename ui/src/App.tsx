@@ -5,7 +5,7 @@ import { Page } from "@patternfly/react-core";
 
 import { DashboardsPage } from "./pages/DashboardsPage";
 import { DashboardViewPage } from "./pages/DashboardViewPage";
-import { ProjectsPage } from "./pages/ProjectsPage";
+import { SubjectsPage } from "./pages/SubjectsPage";
 import { AgentsPage } from "./pages/AgentsPage";
 import { AgentDetailPage } from "./pages/AgentDetailPage";
 import { ActionTypesPage } from "./pages/ActionTypesPage";
@@ -14,7 +14,7 @@ import { EventDetailPage } from "./pages/EventDetailPage";
 import { EventStreamPage } from "./pages/EventStreamPage";
 import { TasksPage } from "./pages/TasksPage";
 import { ConnectionsPage } from "./pages/ConnectionsPage";
-import { ProjectDetailPage } from "./pages/ProjectDetailPage";
+import { SubjectDetailPage } from "./pages/SubjectDetailPage";
 import { ActionTypeDetailPage } from "./pages/ActionTypeDetailPage";
 import { ToolsPage } from "./pages/ToolsPage";
 import { McpServersPage } from "./pages/McpServersPage";
@@ -116,8 +116,8 @@ export function App() {
                         <Route path="/dashboards" element={<DashboardsPage />} />
                         <Route path="/dashboards/:dashboardId" element={<DashboardViewPage />} />
                         <Route path="/inbox" element={<InboxPage />} />
-                        <Route path="/projects" element={<ProjectsPage />} />
-                        <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
+                        <Route path="/subjects" element={<SubjectsPage />} />
+                        <Route path="/subjects/:subjectId" element={<SubjectDetailPage />} />
                         <Route path="/engine" element={<EngineSettingsPage />} />
                         <Route path="/agents" element={<AgentsPage />} />
                         <Route path="/agents/:agentId" element={<AgentDetailPage />} />

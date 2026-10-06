@@ -123,20 +123,20 @@ export const ACTION_TYPE_PLACEHOLDERS: PlaceholderItem[] = [
     { name: "actionType", description: "The action type name" },
     { name: "ref", description: "Full URL of the event subject (e.g. 'https://github.com/owner/repo/issues/42')" },
     { name: "repository", description: "Repository identifier" },
-    { name: "subjectName", description: "Project name" },
-    { name: "workDir", description: "Absolute path to the project workspace directory" },
+    { name: "subjectName", description: "Subject name" },
+    { name: "workDir", description: "Absolute path to the subject workspace directory" },
 ];
 
 /**
  * Placeholders available in the Action Type script template.
  */
 export const SCRIPT_PLACEHOLDERS: PlaceholderItem[] = [
-    { name: "subjectId", description: "Numeric ID of the Axiom project" },
+    { name: "subjectId", description: "Numeric ID of the Axiom subject" },
     { name: "eventId", description: "ID of the triggering event (if applicable)" },
     { name: "taskId", description: "ID of the task executing this script" },
     { name: "ref", description: "Full URL of the event subject (e.g. 'https://github.com/owner/repo/issues/42')" },
     { name: "repository", description: "Repository identifier" },
-    { name: "subjectName", description: "Project name" },
+    { name: "subjectName", description: "Subject name" },
     { name: "apiBaseUrl", description: "Base URL of the Axiom API (e.g. 'http://localhost:8080/api/v1')" },
-    { name: "workDir", description: "Absolute path to the project workspace directory" },
+    { name: "workDir", description: "Absolute path to the subject workspace directory" },
 ];

@@ -82,7 +82,7 @@ export interface SearchResults<T> {
     limit: number;
 }
 
-export interface Project {
+export interface Subject {
     id: number;
     name: string;
     body?: string;
@@ -95,11 +95,11 @@ export interface Project {
     metadata?: Record<string, string>;
     labels?: string[];
     hasWorkflowInstance?: boolean;
-    /** True if the project has at least one running or waiting workflow run. */
+    /** True if the subject has at least one running or waiting workflow run. */
     active?: boolean;
 }
 
-export interface NewProject {
+export interface NewSubject {
     name: string;
     body?: string;
     type: string;
@@ -263,11 +263,11 @@ export async function fetchEngines(): Promise<string[]> {
     return response.json();
 }
 
-// ── Projects ──────────────────────────────────────────────────────
+// ── Subjects ──────────────────────────────────────────────────────
 
-export async function fetchProjects(
+export async function fetchSubjects(
     page = 1, limit = 20, filterName?: string, filterActive?: boolean, filterLabels?: string
-): Promise<SearchResults<Project>> {
+): Promise<SearchResults<Subject>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
     params.set("limit", String(limit));
@@ -275,87 +275,87 @@ export async function fetchProjects(
     if (filterActive !== undefined) params.set("filterActive", String(filterActive));
     if (filterLabels) params.set("filterLabels", filterLabels);
     const response = await fetch(`${API}/subjects?${params}`);
-    if (!response.ok) throw new Error(`Failed to fetch projects: ${response.status}`);
+    if (!response.ok) throw new Error(`Failed to fetch subjects: ${response.status}`);
     return response.json();
 }
 
-export async function fetchProject(id: number): Promise<Project> {
+export async function fetchSubject(id: number): Promise<Subject> {
     const response = await fetch(`${API}/subjects/${id}`);
-    if (!response.ok) throw new Error(`Failed to fetch project: ${response.status}`);
+    if (!response.ok) throw new Error(`Failed to fetch subject: ${response.status}`);
     return response.json();
 }
 
-export async function updateProject(id: number, data: Partial<Project>): Promise<Project> {
+export async function updateSubject(id: number, data: Partial<Subject>): Promise<Subject> {
     const response = await fetch(`${API}/subjects/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error(`Failed to update project: ${response.status}`);
+    if (!response.ok) throw new Error(`Failed to update subject: ${response.status}`);
     return response.json();
 }
 
-export async function createProject(project: NewProject): Promise<Project> {
+export async function createSubject(subject: NewSubject): Promise<Subject> {
     const response = await fetch(`${API}/subjects`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(project),
+        body: JSON.stringify(subject),
     });
-    if (!response.ok) throw new Error(`Failed to create project: ${response.status}`);
+    if (!response.ok) throw new Error(`Failed to create subject: ${response.status}`);
     return response.json();
 }
 
-export async function deleteProject(id: number): Promise<void> {
+export async function deleteSubject(id: number): Promise<void> {
     const response = await fetch(`${API}/subjects/${id}`, { method: "DELETE" });
-    if (!response.ok) throw new Error(`Failed to delete project: ${response.status}`);
+    if (!response.ok) throw new Error(`Failed to delete subject: ${response.status}`);
 }
 
-export async function updateProjectBody(id: number, body: string): Promise<void> {
+export async function updateSubjectBody(id: number, body: string): Promise<void> {
     const response = await fetch(`${API}/subjects/${id}/body`, {
         method: "PUT",
         headers: { "Content-Type": "text/markdown" },
         body,
     });
-    if (!response.ok) throw new Error(`Failed to update project body: ${response.status}`);
+    if (!response.ok) throw new Error(`Failed to update subject body: ${response.status}`);
 }
 
 // ── Tasks ─────────────────────────────────────────────────────────
 
 export async function fetchAllTasks(
     page = 1, limit = 20,
-    filterActionType?: string, filterStatus?: string, filterProjectId?: number
+    filterActionType?: string, filterStatus?: string, filterSubjectId?: number
 ): Promise<SearchResults<Task>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
     params.set("limit", String(limit));
     if (filterActionType) params.set("filterActionType", filterActionType);
     if (filterStatus) params.set("filterStatus", filterStatus);
-    if (filterProjectId != null) params.set("filterSubjectId", String(filterProjectId));
+    if (filterSubjectId != null) params.set("filterSubjectId", String(filterSubjectId));
     const response = await fetch(`${API}/tasks?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch tasks: ${response.status}`);
     return response.json();
 }
 
-export async function cancelTask(projectId: number, taskId: number): Promise<Task> {
-    const response = await fetch(`${API}/subjects/${projectId}/tasks/${taskId}/cancel`, {
+export async function cancelTask(subjectId: number, taskId: number): Promise<Task> {
+    const response = await fetch(`${API}/subjects/${subjectId}/tasks/${taskId}/cancel`, {
         method: "POST",
     });
     if (!response.ok) throw new Error(`Failed to cancel task: ${response.status}`);
     return response.json();
 }
 
-export async function fetchProjectTasks(projectId: number): Promise<Task[]> {
-    const response = await fetch(`${API}/subjects/${projectId}/tasks`);
+export async function fetchSubjectTasks(subjectId: number): Promise<Task[]> {
+    const response = await fetch(`${API}/subjects/${subjectId}/tasks`);
     if (!response.ok) throw new Error(`Failed to fetch tasks: ${response.status}`);
     return response.json();
 }
 
 export async function fetchTaskExecutionLog(
-    projectId: number,
+    subjectId: number,
     taskId: number
 ): Promise<string> {
     const response = await fetch(
-        `${API}/subjects/${projectId}/tasks/${taskId}/log`
+        `${API}/subjects/${subjectId}/tasks/${taskId}/log`
     );
     if (!response.ok) throw new Error(`Failed to fetch execution log: ${response.status}`);
     return response.text();
@@ -873,8 +873,8 @@ export interface EventSourceFilters {
 
 // ── Thread ────────────────────────────────────────────────────────
 
-export async function fetchThreadEntries(projectId: number): Promise<ThreadEntry[]> {
-    const response = await fetch(`${API}/subjects/${projectId}/thread`);
+export async function fetchThreadEntries(subjectId: number): Promise<ThreadEntry[]> {
+    const response = await fetch(`${API}/subjects/${subjectId}/thread`);
     if (!response.ok) throw new Error(`Failed to fetch thread: ${response.status}`);
     return response.json();
 }
@@ -897,7 +897,7 @@ export interface AiEditPromptResponse {
 
 // ── Metrics ──────────────────────────────────────────────────────
 
-export interface ProjectMetrics {
+export interface SubjectMetrics {
     subjectId: number;
     diskUsageBytes: number;
     totalCostUsd: number;
@@ -906,9 +906,9 @@ export interface ProjectMetrics {
     invocationCount: number;
 }
 
-export async function fetchProjectMetrics(projectId: number): Promise<ProjectMetrics> {
-    const response = await fetch(`${API}/subjects/${projectId}/metrics`);
-    if (!response.ok) throw new Error(`Failed to fetch project metrics: ${response.status}`);
+export async function fetchSubjectMetrics(subjectId: number): Promise<SubjectMetrics> {
+    const response = await fetch(`${API}/subjects/${subjectId}/metrics`);
+    if (!response.ok) throw new Error(`Failed to fetch subject metrics: ${response.status}`);
     return response.json();
 }
 
@@ -948,7 +948,7 @@ export interface AiUsageSearchResults extends SearchResults<AiUsage> {
 
 export async function fetchUsage(
     page = 1, limit = 20,
-    filterInvocationType?: string, filterProjectId?: number,
+    filterInvocationType?: string, filterSubjectId?: number,
     filterAgentId?: number, filterActionType?: string,
     filterDateFrom?: string, filterDateTo?: string,
     filterLabels?: string, filterEngine?: string,
@@ -958,7 +958,7 @@ export async function fetchUsage(
     params.set("page", String(page));
     params.set("limit", String(limit));
     if (filterInvocationType) params.set("filterInvocationType", filterInvocationType);
-    if (filterProjectId != null) params.set("filterSubjectId", String(filterProjectId));
+    if (filterSubjectId != null) params.set("filterSubjectId", String(filterSubjectId));
     if (filterAgentId != null) params.set("filterAgentId", String(filterAgentId));
     if (filterActionType) params.set("filterActionType", filterActionType);
     if (filterDateFrom) params.set("filterDateFrom", filterDateFrom);
@@ -974,13 +974,13 @@ export async function fetchUsage(
 
 // ── Disk Usage ──────────────────────────────────────────────────
 
-export interface DiskUsageProject {
+export interface DiskUsageSubject {
     subjectId: number;
     subjectName: string;
     diskUsageBytes: number;
 }
 
-export interface DiskUsageSearchResults extends SearchResults<DiskUsageProject> {
+export interface DiskUsageSearchResults extends SearchResults<DiskUsageSubject> {
     totalDiskUsageBytes: number;
     subjectCount: number;
 }
@@ -1005,7 +1005,7 @@ export async function fetchDiskUsage(
 export async function fetchActivityLog(
     page = 1, limit = 20,
     filterEventId?: string, filterSummary?: string,
-    filterProjectId?: number, filterEntryType?: string,
+    filterSubjectId?: number, filterEntryType?: string,
     filterLabels?: string, filterTraceId?: string
 ): Promise<SearchResults<ActivityLogEntry>> {
     const params = new URLSearchParams();
@@ -1013,7 +1013,7 @@ export async function fetchActivityLog(
     params.set("limit", String(limit));
     if (filterEventId) params.set("filterEventId", String(filterEventId));
     if (filterSummary) params.set("filterSummary", filterSummary);
-    if (filterProjectId != null) params.set("filterSubjectId", String(filterProjectId));
+    if (filterSubjectId != null) params.set("filterSubjectId", String(filterSubjectId));
     if (filterEntryType) params.set("filterEntryType", filterEntryType);
     if (filterLabels) params.set("filterLabels", filterLabels);
     if (filterTraceId) params.set("filterTraceId", filterTraceId);
@@ -1093,12 +1093,12 @@ export interface AssistantItem {
 export async function createAssistantSession(
     templateId: string,
     name?: string,
-    projectId?: number
+    subjectId?: number
 ): Promise<AssistantSessionInfo> {
     const response = await fetch(`${API}/assistant/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, templateId, subjectId: projectId }),
+        body: JSON.stringify({ name, templateId, subjectId: subjectId }),
     });
     if (!response.ok) {
         const body = await response.json().catch(() => null);
@@ -1391,7 +1391,7 @@ export interface TraceNodeDetailResponse {
 export async function fetchTraces(
     page = 1, limit = 20,
     filterTraceType?: string, filterStatus?: string,
-    filterEventId?: string, filterProjectId?: number
+    filterEventId?: string, filterSubjectId?: number
 ): Promise<SearchResults<Trace>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
@@ -1399,7 +1399,7 @@ export async function fetchTraces(
     if (filterTraceType) params.set("filterTraceType", filterTraceType);
     if (filterStatus) params.set("filterStatus", filterStatus);
     if (filterEventId) params.set("filterEventId", String(filterEventId));
-    if (filterProjectId) params.set("filterSubjectId", String(filterProjectId));
+    if (filterSubjectId) params.set("filterSubjectId", String(filterSubjectId));
     const response = await fetch(`${API}/traces?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch traces: ${response.status}`);
     return response.json();
@@ -1419,9 +1419,9 @@ export async function fetchTraceNodeDetail(
     return response.json();
 }
 
-export async function fetchProjectTraces(projectId: number): Promise<Trace[]> {
-    const response = await fetch(`${API}/subjects/${projectId}/traces`);
-    if (!response.ok) throw new Error(`Failed to fetch project traces: ${response.status}`);
+export async function fetchSubjectTraces(subjectId: number): Promise<Trace[]> {
+    const response = await fetch(`${API}/subjects/${subjectId}/traces`);
+    if (!response.ok) throw new Error(`Failed to fetch subject traces: ${response.status}`);
     return response.json();
 }
 
@@ -1792,10 +1792,10 @@ export interface TriggerWorkflowRequest {
 }
 
 export async function triggerWorkflow(
-    projectId: number, data: TriggerWorkflowRequest
+    subjectId: number, data: TriggerWorkflowRequest
 ): Promise<WorkflowInstanceInfo> {
     const response = await fetch(
-        `${API}/subjects/${projectId}/workflow`, {
+        `${API}/subjects/${subjectId}/workflow`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(data),
@@ -1819,10 +1819,10 @@ export async function triggerWorkflow(
 }
 
 export async function getWorkflowInstance(
-    projectId: number
+    subjectId: number
 ): Promise<WorkflowInstanceInfo> {
     const response = await fetch(
-        `${API}/subjects/${projectId}/workflow`);
+        `${API}/subjects/${subjectId}/workflow`);
     if (!response.ok) {
         if (response.status === 404) return null as any;
         throw new Error(
@@ -1861,12 +1861,12 @@ export interface WorkflowRunSummary {
 }
 
 export async function fetchWorkflowRuns(
-    page = 1, limit = 20, projectId?: number, status?: string
+    page = 1, limit = 20, subjectId?: number, status?: string
 ): Promise<SearchResults<WorkflowRunSummary>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
     params.set("limit", String(limit));
-    if (projectId != null) params.set("subjectId", String(projectId));
+    if (subjectId != null) params.set("subjectId", String(subjectId));
     if (status) params.set("status", status);
     const response = await fetch(`${API}/workflow/runs?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch workflow runs: ${response.status}`);

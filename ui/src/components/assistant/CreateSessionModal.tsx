@@ -44,12 +44,12 @@ interface CreateSessionModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSessionCreated: (session: AssistantSessionInfo) => void;
-    projectId?: number;
+    subjectId?: number;
     defaultName?: string;
 }
 
 export function CreateSessionModal({
-    isOpen, onClose, onSessionCreated, projectId, defaultName,
+    isOpen, onClose, onSessionCreated, subjectId, defaultName,
 }: CreateSessionModalProps) {
     const [templates, setTemplates] = useState<SessionTemplate[]>([]);
     const [templateFilter, setTemplateFilter] = useState("");
@@ -112,7 +112,7 @@ export function CreateSessionModal({
         setCreateError("");
         try {
             const session = await createAssistantSession(
-                selectedTemplate.templateId, newName || undefined, projectId);
+                selectedTemplate.templateId, newName || undefined, subjectId);
             onSessionCreated(session);
         } catch (err: unknown) {
             const e = err as { message?: string };

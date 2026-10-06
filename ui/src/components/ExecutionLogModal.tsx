@@ -14,8 +14,8 @@ import { fetchTaskExecutionLog, fetchActivityLogDetails } from "../config/api";
 
 interface ExecutionLogModalProps {
     isOpen: boolean;
-    /** For task logs: the project ID */
-    projectId?: number | null;
+    /** For task logs: the subject ID */
+    subjectId?: number | null;
     /** For task logs: the task ID */
     taskId?: number | null;
     /** For activity log details : the activity entry ID */
@@ -26,7 +26,7 @@ interface ExecutionLogModalProps {
 /**
  * Modal that displays an execution log.
  */
-export function ExecutionLogModal({ isOpen, projectId, taskId, activityId,
+export function ExecutionLogModal({ isOpen, subjectId, taskId, activityId,
                                      onClose }: ExecutionLogModalProps) {
     const effectiveTheme = useEffectiveTheme();
     const [content, setContent] = useState("");
@@ -41,8 +41,8 @@ export function ExecutionLogModal({ isOpen, projectId, taskId, activityId,
         let fetchPromise: Promise<string>;
         if (activityId != null) {
             fetchPromise = fetchActivityLogDetails(activityId);
-        } else if (projectId != null && taskId != null) {
-            fetchPromise = fetchTaskExecutionLog(projectId, taskId);
+        } else if (subjectId != null && taskId != null) {
+            fetchPromise = fetchTaskExecutionLog(subjectId, taskId);
         } else {
             setContent("No log source specified.");
             setLoading(false);
@@ -53,7 +53,7 @@ export function ExecutionLogModal({ isOpen, projectId, taskId, activityId,
             .then(setContent)
             .catch((err) => setContent("Error loading log: " + err.message))
             .finally(() => setLoading(false));
-    }, [isOpen, projectId, taskId, activityId]);
+    }, [isOpen, subjectId, taskId, activityId]);
 
     const handleClose = () => {
         onClose();

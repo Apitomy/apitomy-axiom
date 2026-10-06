@@ -178,7 +178,7 @@ export function InboxPage() {
                         <Thead>
                             <Tr>
                                 <Th>Title</Th>
-                                <Th>Project</Th>
+                                <Th>Subject</Th>
                                 <Th>Action Type</Th>
                                 <Th>Created</Th>
                                 <Th />
@@ -196,10 +196,10 @@ export function InboxPage() {
                                     </Td>
                                     <Td>
                                         <Link
-                                            to={`/projects/${item.subjectId}`}
+                                            to={`/subjects/${item.subjectId}`}
                                             onClick={(e) => e.stopPropagation()}
                                         >
-                                            {item.subjectName || `Project #${item.subjectId}`}
+                                            {item.subjectName || `Subject #${item.subjectId}`}
                                         </Link>
                                     </Td>
                                     <Td>
@@ -284,14 +284,14 @@ export function InboxPage() {
                             </div>
                         )}
 
-                        {/* Project info */}
+                        {/* Subject info */}
                         <div style={{ marginBottom: "16px" }}>
                             <Split hasGutter>
                                 <SplitItem>
-                                    <strong>Project:</strong>{" "}
-                                    <Link to={`/projects/${selectedItem.subjectId}`}>
+                                    <strong>Subject:</strong>{" "}
+                                    <Link to={`/subjects/${selectedItem.subjectId}`}>
                                         {selectedItem.subjectName ||
-                                            `Project #${selectedItem.subjectId}`}
+                                            `Subject #${selectedItem.subjectId}`}
                                     </Link>
                                 </SplitItem>
                                 <SplitItem>

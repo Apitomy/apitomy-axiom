@@ -336,7 +336,7 @@ export function AssistantSessionPage() {
                             color="teal"
                             isCompact
                             className="axiom-session-page__header-label--clickable"
-                            onClick={() => navigate(`/projects/${session.subjectId}`)}
+                            onClick={() => navigate(`/subjects/${session.subjectId}`)}
                         >
                             {session.subjectName}
                         </Label>

@@ -21,13 +21,13 @@ import {
 } from "../config/api";
 
 interface WorkflowTabProps {
-    projectId: number;
+    subjectId: number;
     hasWorkflowInstance: boolean;
     onRefresh: () => void;
 }
 
 export function WorkflowTab({
-    projectId, hasWorkflowInstance, onRefresh,
+    subjectId, hasWorkflowInstance, onRefresh,
 }: WorkflowTabProps) {
     const effectiveTheme = useEffectiveTheme();
     const navigate = useNavigate();
@@ -51,11 +51,11 @@ export function WorkflowTab({
             return;
         }
         setLoading(true);
-        getWorkflowInstance(projectId)
+        getWorkflowInstance(subjectId)
             .then(setInstance)
             .catch(() => setInstance(null))
             .finally(() => setLoading(false));
-    }, [projectId, hasWorkflowInstance]);
+    }, [subjectId, hasWorkflowInstance]);
 
     useEffect(() => {
         loadInstance();
@@ -66,7 +66,7 @@ export function WorkflowTab({
         const handler = (event: MessageEvent) => {
             try {
                 const data = JSON.parse(event.data);
-                if (data.subjectId === projectId) {
+                if (data.subjectId === subjectId) {
                     loadInstance();
                     onRefresh();
                 }
@@ -81,7 +81,7 @@ export function WorkflowTab({
                 "workflow-updated", handler);
             eventSource.close();
         };
-    }, [projectId, loadInstance, onRefresh]);
+    }, [subjectId, loadInstance, onRefresh]);
 
     const openTriggerModal = useCallback(() => {
         fetchWorkflowDefinitions(1, 1000)
@@ -102,7 +102,7 @@ export function WorkflowTab({
         if (!selectedDefId) return;
         setSubmitting(true);
         setTriggerError(null);
-        triggerWorkflow(projectId, {
+        triggerWorkflow(subjectId, {
             workflowDefinitionId: Number(selectedDefId),
         })
             .then(() => {
@@ -115,7 +115,7 @@ export function WorkflowTab({
                     ? err.message
                     : "Failed to run workflow"))
             .finally(() => setSubmitting(false));
-    }, [projectId, selectedDefId, onRefresh, loadInstance]);
+    }, [subjectId, selectedDefId, onRefresh, loadInstance]);
 
     const handleCancel = useCallback(() => {
         if (!instance) return;
@@ -259,7 +259,7 @@ export function WorkflowTab({
             <>
                 <EmptyState>
                     <EmptyStateBody>
-                        No workflow is running on this project.
+                        No workflow is running on this subject.
                     </EmptyStateBody>
                     <Button variant="primary"
                         onClick={openTriggerModal}>
@@ -398,7 +398,7 @@ export function WorkflowTab({
 
             <ExecutionLogModal
                 isOpen={isLogOpen}
-                projectId={projectId}
+                subjectId={subjectId}
                 taskId={logTaskId}
                 onClose={() => setIsLogOpen(false)}
             />

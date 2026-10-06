@@ -684,7 +684,7 @@ export function WorkflowDefinitionDetailPage() {
                                     <Thead>
                                         <Tr>
                                             <Th>Status</Th>
-                                            <Th>Project</Th>
+                                            <Th>Subject</Th>
                                             <Th>Version</Th>
                                             <Th>Started</Th>
                                             <Th>Duration</Th>
@@ -703,8 +703,8 @@ export function WorkflowDefinitionDetailPage() {
                                                     </Label>
                                                 </Td>
                                                 <Td>
-                                                    <Link to={`/projects/${run.subjectId}`}>
-                                                        {run.subjectName || `Project #${run.subjectId}`}
+                                                    <Link to={`/subjects/${run.subjectId}`}>
+                                                        {run.subjectName || `Subject #${run.subjectId}`}
                                                     </Link>
                                                 </Td>
                                                 <Td>v{run.definitionVersion}</Td>

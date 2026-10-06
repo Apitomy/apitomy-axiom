@@ -40,21 +40,21 @@ import {
     FilterChips,
 } from "@apitomy/common-ui-components";
 import {
-    type Project,
-    type NewProject,
-    fetchProjects,
-    createProject,
-    deleteProject,
+    type Subject,
+    type NewSubject,
+    fetchSubjects,
+    createSubject,
+    deleteSubject,
 } from "../config/api";
 
 const FILTER_TYPES: ChipFilterType[] = [
-    { value: "name", label: "Name", testId: "project-filter-name" },
-    { value: "labels", label: "Labels", testId: "project-filter-labels" },
+    { value: "name", label: "Name", testId: "subject-filter-name" },
+    { value: "labels", label: "Labels", testId: "subject-filter-labels" },
 ];
 
-export function ProjectsPage() {
+export function SubjectsPage() {
     const navigate = useNavigate();
-    const [projects, setProjects] = useState<Project[]>([]);
+    const [subjects, setSubjects] = useState<Subject[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState(20);
@@ -62,12 +62,12 @@ export function ProjectsPage() {
 
     const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
     const [showInactive, setShowInactive] = useState(
-        () => localStorage.getItem("axiom.projects.showInactive") !== "false"
+        () => localStorage.getItem("axiom.subjects.showInactive") !== "false"
     );
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
-    const [newProject, setNewProject] = useState<NewProject>({
+    const [newSubject, setNewSubject] = useState<NewSubject>({
         name: "",
         type: "other",
         ref: "",
@@ -81,16 +81,16 @@ export function ProjectsPage() {
         .join(",");
     const isFiltered = filters.length > 0 || !showInactive;
 
-    const loadProjects = useCallback(() => {
+    const loadSubjects = useCallback(() => {
         setLoading(true);
-        fetchProjects(
+        fetchSubjects(
             page, perPage,
             filterName || undefined,
             filterActive,
             filterLabels || undefined
         )
             .then((results) => {
-                setProjects(results.items);
+                setSubjects(results.items);
                 setTotalCount(results.totalCount);
             })
             .catch(console.error)
@@ -98,8 +98,8 @@ export function ProjectsPage() {
     }, [page, perPage, filterName, filterActive, filterLabels]);
 
     useEffect(() => {
-        loadProjects();
-    }, [loadProjects]);
+        loadSubjects();
+    }, [loadSubjects]);
 
     const onAddFilterCriteria = (criteria: ChipFilterCriteria) => {
         if (!criteria.filterValue) return;
@@ -143,28 +143,28 @@ export function ProjectsPage() {
 
     const confirmDelete = () => {
         if (deleteTarget !== null) {
-            deleteProject(deleteTarget).then(loadProjects).catch(console.error);
+            deleteSubject(deleteTarget).then(loadSubjects).catch(console.error);
             setDeleteTarget(null);
         }
     };
 
     const handleCreate = () => {
-        createProject(newProject)
+        createSubject(newSubject)
             .then(() => {
                 setIsModalOpen(false);
-                setNewProject({
+                setNewSubject({
                     name: "",
                     type: "other",
                     ref: "",
                 });
-                loadProjects();
+                loadSubjects();
             })
             .catch(console.error);
     };
 
     return (
         <PageSection>
-            <Title headingLevel="h1" size="lg">Projects</Title>
+            <Title headingLevel="h1" size="lg">Subjects</Title>
 
             <Toolbar style={{ marginTop: "16px" }}>
                 <ToolbarContent>
@@ -174,17 +174,17 @@ export function ProjectsPage() {
                             onAddCriteria={onAddFilterCriteria} />
                     </ToolbarItem>
                     <ToolbarItem>
-                        <Button variant="control" aria-label="Refresh" onClick={loadProjects}>
+                        <Button variant="control" aria-label="Refresh" onClick={loadSubjects}>
                             <SyncAltIcon />
                         </Button>
                     </ToolbarItem>
                     <ToolbarItem>
-                        <Tooltip content={showInactive ? "Hide inactive projects" : "Show inactive projects"}>
-                            <Button variant="control" aria-label="Toggle inactive projects"
+                        <Tooltip content={showInactive ? "Hide inactive subjects" : "Show inactive subjects"}>
+                            <Button variant="control" aria-label="Toggle inactive subjects"
                                 onClick={() => {
                                     const next = !showInactive;
                                     setShowInactive(next);
-                                    localStorage.setItem("axiom.projects.showInactive", String(next));
+                                    localStorage.setItem("axiom.subjects.showInactive", String(next));
                                     setPage(1);
                                 }}>
                                 {showInactive ? <EyeIcon /> : <EyeSlashIcon />}
@@ -197,7 +197,7 @@ export function ProjectsPage() {
                             icon={<PlusCircleIcon />}
                             onClick={() => setIsModalOpen(true)}
                         >
-                            Create Project
+                            Create Subject
                         </Button>
                     </ToolbarItem>
                     <ToolbarItem variant="pagination" align={{ default: "alignEnd" }}>
@@ -228,20 +228,20 @@ export function ProjectsPage() {
             <div>
                 {loading ? (
                     <EmptyState>
-                        <EmptyStateBody>Loading projects...</EmptyStateBody>
+                        <EmptyStateBody>Loading subjects...</EmptyStateBody>
                     </EmptyState>
-                ) : projects.length === 0 ? (
+                ) : subjects.length === 0 ? (
                     <EmptyState>
                         <EmptyStateBody>
                             {filters.length > 0
-                                ? "No projects match the current filters."
+                                ? "No subjects match the current filters."
                                 : !showInactive
-                                    ? "No active projects. Toggle the eye icon to show inactive ones."
-                                    : "No projects yet. Create one or wait for events from a monitored repository."}
+                                    ? "No active subjects. Toggle the eye icon to show inactive ones."
+                                    : "No subjects yet. Create one or wait for events from a monitored repository."}
                         </EmptyStateBody>
                     </EmptyState>
                 ) : (
-                    <Table aria-label="Projects" variant="compact">
+                    <Table aria-label="Subjects" variant="compact">
                         <Thead>
                             <Tr>
                                 <Th>Name</Th>
@@ -253,27 +253,27 @@ export function ProjectsPage() {
                             </Tr>
                         </Thead>
                         <Tbody>
-                            {projects.map((project) => (
+                            {subjects.map((subject) => (
                                 <Tr
-                                    key={project.id}
+                                    key={subject.id}
                                     isClickable
-                                    onRowClick={() => navigate(`/projects/${project.id}`)}
+                                    onRowClick={() => navigate(`/subjects/${subject.id}`)}
                                 >
                                     <Td>
-                                        {project.refSource === "github" && <GithubIcon style={{ marginRight: 6 }} />}
-                                        {project.refSource === "jira" && <JiraIcon style={{ marginRight: 6 }} />}
-                                        {project.type === "issue" && <BugIcon style={{ marginRight: 6 }} />}
-                                        {project.type === "pull-request" && <CodeBranchIcon style={{ marginRight: 6 }} />}
-                                        {project.name}
+                                        {subject.refSource === "github" && <GithubIcon style={{ marginRight: 6 }} />}
+                                        {subject.refSource === "jira" && <JiraIcon style={{ marginRight: 6 }} />}
+                                        {subject.type === "issue" && <BugIcon style={{ marginRight: 6 }} />}
+                                        {subject.type === "pull-request" && <CodeBranchIcon style={{ marginRight: 6 }} />}
+                                        {subject.name}
                                     </Td>
                                     <Td>
-                                        <Label isCompact={true} color={project.active ? "green" : "grey"}>
-                                            {project.active ? "Active" : "Inactive"}
+                                        <Label isCompact={true} color={subject.active ? "green" : "grey"}>
+                                            {subject.active ? "Active" : "Inactive"}
                                         </Label>
                                     </Td>
-                                    <Td>{project.ref}</Td>
+                                    <Td>{subject.ref}</Td>
                                     <Td>
-                                        {project.labels?.map((label) => (
+                                        {subject.labels?.map((label) => (
                                             <ColoredLabel key={label} isCompact
                                                 style={{ marginRight: "4px", cursor: "pointer" }}
                                                 onClick={(e) => {
@@ -284,11 +284,11 @@ export function ProjectsPage() {
                                             </ColoredLabel>
                                         ))}
                                     </Td>
-                                    <Td>{new Date(project.updatedOn).toLocaleString()}</Td>
+                                    <Td>{new Date(subject.updatedOn).toLocaleString()}</Td>
                                     <Td>
-                                        {!project.active && (
+                                        {!subject.active && (
                                             <Button variant="plain" size="sm" style={{ padding: 0 }}
-                                                onClick={(e) => handleDelete(e, project.id)}>
+                                                onClick={(e) => handleDelete(e, subject.id)}>
                                                 <TrashIcon />
                                             </Button>
                                         )}
@@ -300,32 +300,32 @@ export function ProjectsPage() {
                 )}
             </div>
 
-            {/* Create Project Modal */}
+            {/* Create Subject Modal */}
             <Modal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 variant="medium"
             >
-                <ModalHeader title="Create Project" />
+                <ModalHeader title="Create Subject" />
                 <ModalBody>
                     <Form>
                         <FormGroup label="Name" isRequired fieldId="name">
                             <TextInput
                                 id="name"
                                 isRequired
-                                value={newProject.name}
+                                value={newSubject.name}
                                 onChange={(_e, v) =>
-                                    setNewProject({ ...newProject, name: v })
+                                    setNewSubject({ ...newSubject, name: v })
                                 }
                             />
                         </FormGroup>
                         <FormGroup label="Body" fieldId="body">
                             <TextArea
                                 id="body"
-                                value={newProject.body || ""}
+                                value={newSubject.body || ""}
                                 onChange={(_e, v) =>
-                                    setNewProject({
-                                        ...newProject,
+                                    setNewSubject({
+                                        ...newSubject,
                                         body: v,
                                     })
                                 }
@@ -337,9 +337,9 @@ export function ProjectsPage() {
                                 isRequired
                                 list="type-suggestions"
                                 placeholder="e.g. bug-fix, feature, cve"
-                                value={newProject.type}
+                                value={newSubject.type}
                                 onChange={(_e, v) =>
-                                    setNewProject({ ...newProject, type: v })
+                                    setNewSubject({ ...newSubject, type: v })
                                 }
                             />
                             <datalist id="type-suggestions">
@@ -358,10 +358,10 @@ export function ProjectsPage() {
                                 id="ref"
                                 isRequired
                                 placeholder="owner/repo#123 or CVE-2024-12345"
-                                value={newProject.ref}
+                                value={newSubject.ref}
                                 onChange={(_e, v) =>
-                                    setNewProject({
-                                        ...newProject,
+                                    setNewSubject({
+                                        ...newSubject,
                                         ref: v,
                                     })
                                 }
@@ -371,10 +371,10 @@ export function ProjectsPage() {
                             <TextInput
                                 id="refSource"
                                 placeholder="e.g. github, jira"
-                                value={newProject.refSource || ""}
+                                value={newSubject.refSource || ""}
                                 onChange={(_e, v) =>
-                                    setNewProject({
-                                        ...newProject,
+                                    setNewSubject({
+                                        ...newSubject,
                                         refSource: v || undefined,
                                     })
                                 }
@@ -384,10 +384,10 @@ export function ProjectsPage() {
                             <TextInput
                                 id="repository"
                                 placeholder="owner/repo"
-                                value={newProject.repository || ""}
+                                value={newSubject.repository || ""}
                                 onChange={(_e, v) =>
-                                    setNewProject({
-                                        ...newProject,
+                                    setNewSubject({
+                                        ...newSubject,
                                         repository: v || undefined,
                                     })
                                 }
@@ -400,8 +400,8 @@ export function ProjectsPage() {
                         variant="primary"
                         onClick={handleCreate}
                         isDisabled={
-                            !newProject.name ||
-                            !newProject.ref
+                            !newSubject.name ||
+                            !newSubject.ref
                         }
                     >
                         Create
@@ -415,9 +415,9 @@ export function ProjectsPage() {
                 </ModalFooter>
             </Modal>
 
-            <ConfirmDeleteModal isOpen={deleteTarget !== null} title="Delete Project"
+            <ConfirmDeleteModal isOpen={deleteTarget !== null} title="Delete Subject"
                 onConfirm={confirmDelete} onCancel={() => setDeleteTarget(null)}>
-                Delete this project and all its data? This will remove all tasks,
+                Delete this subject and all its data? This will remove all tasks,
                 activity, thread entries, and workspace files. This cannot be undone.
             </ConfirmDeleteModal>
         </PageSection>

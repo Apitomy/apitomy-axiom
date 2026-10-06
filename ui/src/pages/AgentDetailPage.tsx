@@ -79,7 +79,7 @@ export function AgentDetailPage() {
 
     // Execution log modal
     const [isLogModalOpen, setIsLogModalOpen] = useState(false);
-    const [logProjectId, setLogProjectId] = useState<number | null>(null);
+    const [logSubjectId, setLogSubjectId] = useState<number | null>(null);
     const [logTaskId, setLogTaskId] = useState<number | null>(null);
 
     const loadAgent = useCallback(() => {
@@ -132,8 +132,8 @@ export function AgentDetailPage() {
     useEffect(() => { loadAgent(); }, [loadAgent]);
     useEffect(() => { loadTasks(); }, [loadTasks]);
 
-    const handleViewLog = (projectId: number, taskId: number) => {
-        setLogProjectId(projectId);
+    const handleViewLog = (subjectId: number, taskId: number) => {
+        setLogSubjectId(subjectId);
         setLogTaskId(taskId);
         setIsLogModalOpen(true);
     };
@@ -239,7 +239,7 @@ export function AgentDetailPage() {
 
             <ExecutionLogModal
                 isOpen={isLogModalOpen}
-                projectId={logProjectId}
+                subjectId={logSubjectId}
                 taskId={logTaskId}
                 onClose={() => setIsLogModalOpen(false)}
             />
@@ -373,7 +373,7 @@ function TaskHistoryTab({ tasks, totalCount, page, perPage, filterActionType, fi
     onFilterStatus: (v: string[]) => void;
     onStatusSelectToggle: (open: boolean) => void;
     onRefresh: () => void;
-    onViewLog: (projectId: number, taskId: number) => void;
+    onViewLog: (subjectId: number, taskId: number) => void;
 }) {
     const hasActiveFilters = filterActionType || filterStatus.length > 0;
 
@@ -484,7 +484,7 @@ function TaskHistoryTab({ tasks, totalCount, page, perPage, filterActionType, fi
                     <Thead>
                         <Tr>
                             <Th>Action Type</Th>
-                            <Th>Project</Th>
+                            <Th>Subject</Th>
                             <Th>Status</Th>
                             <Th>Created</Th>
                             <Th>Completed</Th>
@@ -496,8 +496,8 @@ function TaskHistoryTab({ tasks, totalCount, page, perPage, filterActionType, fi
                             <Tr key={task.id}>
                                 <Td>{task.actionType}</Td>
                                 <Td>
-                                    <Link to={`/projects/${task.subjectId}`}>
-                                        Project #{task.subjectId}
+                                    <Link to={`/subjects/${task.subjectId}`}>
+                                        Subject #{task.subjectId}
                                     </Link>
                                 </Td>
                                 <Td>

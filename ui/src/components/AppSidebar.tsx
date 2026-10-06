@@ -58,8 +58,8 @@ export function AppSidebar() {
                                 <Badge isRead={false}>{inboxCount}</Badge>
                             )}
                         </NavItem>
-                        <NavItem isActive={location.pathname.startsWith("/projects")} onClick={() => navigate("/projects")}>
-                            Projects
+                        <NavItem isActive={location.pathname.startsWith("/subjects")} onClick={() => navigate("/subjects")}>
+                            Subjects
                         </NavItem>
                         <NavExpandable title="Events"
                             isActive={isEventsActive}
