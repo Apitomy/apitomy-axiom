@@ -47,7 +47,6 @@ const HANDLERS = {
         const params = new URLSearchParams();
         params.set("limit", "50");
         if (args.filterName) params.set("filterName", args.filterName);
-        if (args.filterStatus) params.set("filterStatus", args.filterStatus);
         if (args.filterLabels) params.set("filterLabels", args.filterLabels);
         if (args.filterRef) params.set("filterRef", args.filterRef);
         return await axiomApi("GET", `/projects?${params}`);
@@ -65,12 +64,6 @@ const HANDLERS = {
         return await axiomApi("POST", `/projects/${args.projectId}/thread`, {
             content: args.content,
         });
-    },
-    axiom_close_project: async (args) => {
-        return await axiomApi("POST", `/projects/${args.projectId}/close`);
-    },
-    axiom_reopen_project: async (args) => {
-        return await axiomApi("POST", `/projects/${args.projectId}/reopen`);
     },
     axiom_add_project_label: async (args) => {
         const project = JSON.parse(await axiomApi("GET", `/projects/${args.projectId}`));

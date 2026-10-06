@@ -421,12 +421,6 @@ public class ScriptExecutionService {
         if (task != null) {
             task.status = "InProgress";
 
-            ProjectEntity project = ProjectEntity.findById(task.projectId);
-            if (project != null) {
-                project.status = "InProgress";
-                project.updatedOn = Instant.now();
-            }
-
             logActivity(task.projectId, taskId, task.eventId, "task-started",
                     "Script task started: " + task.actionType, task.traceId);
             addThreadEntry(task.projectId, "system", "update",
@@ -469,8 +463,6 @@ public class ScriptExecutionService {
         // Complete the task node and (when it was the last open task) the trace
         taskTraceFinalizer.finalizeTaskTrace(task, statusText);
 
-        updateProjectStatusAfterTask(task.projectId);
-
         // Advance workflow if this task is part of one
         if (task.workflowRunId != null) {
             workflowExecutionService.onTaskCompleted(task.id);
@@ -480,19 +472,6 @@ public class ScriptExecutionService {
     @Transactional
     void failTask(Long taskId, String reason) {
         completeTask(taskId, reason, false, null);
-    }
-
-    private void updateProjectStatusAfterTask(Long projectId) {
-        long activeTasks = TaskEntity.count(
-                "projectId = ?1 and (status = 'InProgress' or status = 'AwaitingInput')",
-                projectId);
-        if (activeTasks == 0) {
-            ProjectEntity project = ProjectEntity.findById(projectId);
-            if (project != null && "InProgress".equals(project.status)) {
-                project.status = "Idle";
-                project.updatedOn = Instant.now();
-            }
-        }
     }
 
     private void logActivity(Long projectId, Long taskId, UUID eventId,

@@ -69,7 +69,6 @@ class LineageTest {
             ProjectEntity project = new ProjectEntity();
             project.name = "lineage-" + UUID.randomUUID();
             project.type = "other";
-            project.status = "Created";
             project.ref = "test/lineage-" + UUID.randomUUID();
             project.createdOn = Instant.now();
             project.updatedOn = Instant.now();

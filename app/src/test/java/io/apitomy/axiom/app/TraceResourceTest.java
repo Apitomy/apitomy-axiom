@@ -369,7 +369,6 @@ class TraceResourceTest {
             ProjectEntity project = new ProjectEntity();
             project.name = "Trace Detail Project";
             project.type = "other";
-            project.status = "new";
             project.ref = "test/trace-detail-" + UUID.randomUUID();
             project.createdOn = Instant.now();
             project.updatedOn = Instant.now();

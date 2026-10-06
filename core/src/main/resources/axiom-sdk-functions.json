@@ -13,10 +13,9 @@
   },
   {
     "name": "axiom_list_projects",
-    "description": "List existing Axiom projects with optional filtering by name, status, labels, and ref.",
+    "description": "List existing Axiom projects with optional filtering by name, labels, and ref. Each result includes an active flag (true if the project has a running or waiting workflow run).",
     "parameters": [
       { "name": "filterName", "type": "string", "description": "Filter by project name or issue ref (substring match)", "required": false },
-      { "name": "filterStatus", "type": "string", "description": "Filter by status: Created, InProgress, Idle, Completed (comma-separated for multiple)", "required": false },
       { "name": "filterLabels", "type": "string", "description": "Filter by labels (comma-separated, AND logic)", "required": false },
       { "name": "filterRef", "type": "string", "description": "Exact-match filter on the project reference", "required": false }
     ],
@@ -24,7 +23,7 @@
   },
   {
     "name": "axiom_get_project",
-    "description": "Get details of a specific Axiom project including metadata, status, and reference.",
+    "description": "Get details of a specific Axiom project including metadata, reference, and whether it is active (has a running or waiting workflow run).",
     "parameters": [
       { "name": "projectId", "type": "number", "description": "The project ID", "required": true }
     ],
@@ -45,22 +44,6 @@
     "parameters": [
       { "name": "projectId", "type": "number", "description": "The project ID", "required": true },
       { "name": "content", "type": "string", "description": "The message content to post", "required": true }
-    ],
-    "sdkCallSupported": true
-  },
-  {
-    "name": "axiom_close_project",
-    "description": "Close (complete) an Axiom project.",
-    "parameters": [
-      { "name": "projectId", "type": "number", "description": "The project ID to close", "required": true }
-    ],
-    "sdkCallSupported": true
-  },
-  {
-    "name": "axiom_reopen_project",
-    "description": "Reopen a previously closed Axiom project.",
-    "parameters": [
-      { "name": "projectId", "type": "number", "description": "The project ID to reopen", "required": true }
     ],
     "sdkCallSupported": true
   },

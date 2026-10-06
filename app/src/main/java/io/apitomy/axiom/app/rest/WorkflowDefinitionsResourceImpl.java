@@ -9,6 +9,7 @@ import io.apitomy.axiom.api.beans.UpdateWorkflowDefinition;
 import io.apitomy.axiom.api.beans.WorkflowDefinition;
 import io.apitomy.axiom.api.beans.WorkflowDefinitionSearchResults;
 import io.apitomy.axiom.api.beans.WorkflowDefinitionVersion;
+import io.apitomy.axiom.app.WorkflowExecutionService;
 import io.apitomy.axiom.app.WorkflowRunBeanMapper;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
@@ -53,6 +54,9 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
 
     @Inject
     WorkflowRunBeanMapper runBeanMapper;
+
+    @Inject
+    WorkflowExecutionService workflowExecutionService;
 
     /** Inputs Axiom always injects when starting a workflow (may be marked required). */
     private static final Set<String> ALWAYS_PRESENT_INPUTS =
@@ -452,6 +456,14 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
                     Response.Status.NOT_FOUND);
         }
         return runBeanMapper.toBean(run);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void cancelWorkflowRun(long runId) {
+        workflowExecutionService.cancelWorkflowRun(runId);
     }
 
     /**

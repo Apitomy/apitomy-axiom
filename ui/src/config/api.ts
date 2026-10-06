@@ -87,7 +87,6 @@ export interface Project {
     name: string;
     body?: string;
     type: string;
-    status: string;
     refSource?: string;
     ref: string;
     repository?: string;
@@ -96,6 +95,8 @@ export interface Project {
     metadata?: Record<string, string>;
     labels?: string[];
     hasWorkflowInstance?: boolean;
+    /** True if the project has at least one running or waiting workflow run. */
+    active?: boolean;
 }
 
 export interface NewProject {
@@ -265,13 +266,13 @@ export async function fetchEngines(): Promise<string[]> {
 // ── Projects ──────────────────────────────────────────────────────
 
 export async function fetchProjects(
-    page = 1, limit = 20, filterName?: string, filterStatus?: string, filterLabels?: string
+    page = 1, limit = 20, filterName?: string, filterActive?: boolean, filterLabels?: string
 ): Promise<SearchResults<Project>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
     params.set("limit", String(limit));
     if (filterName) params.set("filterName", filterName);
-    if (filterStatus) params.set("filterStatus", filterStatus);
+    if (filterActive !== undefined) params.set("filterActive", String(filterActive));
     if (filterLabels) params.set("filterLabels", filterLabels);
     const response = await fetch(`${API}/projects?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch projects: ${response.status}`);
@@ -826,7 +827,7 @@ export async function deleteSecret(id: number): Promise<void> {
 // ── Retention Configuration ─────────────────────────────────────
 
 export interface RetentionConfig {
-    closedProjectRetentionDays?: number;
+    inactiveProjectRetentionDays?: number;
     traceRetentionDays?: number;
     eventRetentionDays?: number;
     /** Days to keep finished workflow runs; 0 keeps them forever. */
@@ -1830,12 +1831,12 @@ export async function getWorkflowInstance(
     return response.json();
 }
 
-export async function cancelWorkflow(
-    projectId: number
+export async function cancelWorkflowRun(
+    runId: number
 ): Promise<void> {
     const response = await fetch(
-        `${API}/projects/${projectId}/workflow`, {
-            method: "DELETE",
+        `${API}/workflow/runs/${runId}/cancel`, {
+            method: "POST",
         });
     if (!response.ok) {
         throw new Error(
@@ -2060,7 +2061,8 @@ export interface EventProcessingOutcome {
 
 export interface EventProcessingOutcomeItem {
     type: string;
-    status: string;
+    /** completed, failed, or skipped (subject already had an active run of the definition). */
+    status: "completed" | "failed" | "skipped" | string;
     summary?: string;
     errorMessage?: string;
     projectId?: number;

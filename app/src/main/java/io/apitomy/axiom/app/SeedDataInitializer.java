@@ -142,7 +142,7 @@ public class SeedDataInitializer {
         }
 
         RetentionConfigEntity config = new RetentionConfigEntity();
-        config.closedProjectRetentionDays = 90;
+        config.inactiveProjectRetentionDays = 90;
         config.traceRetentionDays = 30;
         config.eventRetentionDays = 90;
         // History settings: 0 keeps the rows forever.

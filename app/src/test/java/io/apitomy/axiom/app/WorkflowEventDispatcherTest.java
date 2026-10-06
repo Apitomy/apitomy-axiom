@@ -161,6 +161,41 @@ class WorkflowEventDispatcherTest {
         });
     }
 
+    /**
+     * One matching event resumes every run waiting for it on the project, not just the first one.
+     */
+    @Test
+    void dispatchBroadcastsToAllWaitingRunsOnProject() {
+        String content = RECEIVE_EVENT_CONTENT.replace("pr-merged", "issue.commented");
+        long[] first = setup("Dispatcher Broadcast Project", content);
+        long secondDefinitionId = QuarkusTransaction.requiringNew().call(() -> {
+            WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
+            def.name = "Dispatcher Broadcast Second WF";
+            def.content = content;
+            def.currentVersion = 1;
+            def.createdOn = Instant.now();
+            def.updatedOn = Instant.now();
+            def.persist();
+
+            WorkflowDefinitionVersionEntity version = new WorkflowDefinitionVersionEntity();
+            version.definitionId = def.id;
+            version.version = 1;
+            version.content = content;
+            version.createdOn = Instant.now();
+            version.persist();
+            return def.id;
+        });
+        WorkflowRunEntity runA = trigger(first);
+        WorkflowRunEntity runB = trigger(new long[] { first[0], secondDefinitionId });
+
+        Map<String, Object> eventMap = buildStreamEventMap("issue.commented", "github",
+                projectRef(first[0]), null);
+        dispatcher.dispatchStreamEvent("issue.commented", eventMap);
+
+        assertRunStatus(runA.id, "completed");
+        assertRunStatus(runB.id, "completed");
+    }
+
     @Test
     void dispatchStreamEventNoMatchingSubscriptionsDoesNotThrow() {
         Map<String, Object> eventMap = Map.of(
@@ -181,7 +216,6 @@ class WorkflowEventDispatcherTest {
             ProjectEntity project = new ProjectEntity();
             project.name = projectName;
             project.type = "other";
-            project.status = "new";
             project.ref = "test/" + projectName.toLowerCase().replace(" ", "-");
             project.createdOn = Instant.now();
             project.updatedOn = Instant.now();

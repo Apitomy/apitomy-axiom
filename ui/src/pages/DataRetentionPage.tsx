@@ -137,23 +137,23 @@ export function DataRetentionPage() {
             </p>
 
             <Form style={{ maxWidth: "600px" }}>
-                <FormGroup label="Closed projects" fieldId="closed-project-retention">
+                <FormGroup label="Inactive projects" fieldId="inactive-project-retention">
                     <NumberInput
-                        id="closed-project-retention"
-                        value={config.closedProjectRetentionDays ?? 90}
+                        id="inactive-project-retention"
+                        value={config.inactiveProjectRetentionDays ?? 90}
                         min={1}
-                        onMinus={() => updateField("closedProjectRetentionDays",
-                            (config.closedProjectRetentionDays ?? 90) - 1)}
-                        onPlus={() => updateField("closedProjectRetentionDays",
-                            (config.closedProjectRetentionDays ?? 90) + 1)}
-                        onChange={(event) => updateField("closedProjectRetentionDays",
+                        onMinus={() => updateField("inactiveProjectRetentionDays",
+                            (config.inactiveProjectRetentionDays ?? 90) - 1)}
+                        onPlus={() => updateField("inactiveProjectRetentionDays",
+                            (config.inactiveProjectRetentionDays ?? 90) + 1)}
+                        onChange={(event) => updateField("inactiveProjectRetentionDays",
                             Number((event.target as HTMLInputElement).value))}
                         widthChars={4}
                     />
                     <FormHelperText>
                         <HelperText>
                             <HelperTextItem>
-                                Days to retain closed projects before automatic deletion.
+                                Days to retain a project after its last workflow run completed (with no run still active) before automatic deletion.
                             </HelperTextItem>
                         </HelperText>
                     </FormHelperText>

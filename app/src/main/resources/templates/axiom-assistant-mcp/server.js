@@ -270,15 +270,13 @@ const TOOLS = [
     },
     {
         name: "axiom_list_projects",
-        description: "List projects in Axiom with optional filtering. Returns names, statuses, issue references, and labels.",
+        description: "List projects in Axiom with optional filtering. Returns names, active flags, issue references, and labels.",
         parameters: [
-            { name: "filterStatus", type: "string", description: "Comma-separated status filter (e.g. 'Created,InProgress,Idle')", required: false },
             { name: "filterName", type: "string", description: "Substring filter on project name or issue reference", required: false },
             { name: "limit", type: "string", description: "Max results to return (default 20)", required: false },
         ],
         handler: async (args) => {
             let path = "/projects?limit=" + (args.limit || "20");
-            if (args.filterStatus) path += "&filterStatus=" + encodeURIComponent(args.filterStatus);
             if (args.filterName) path += "&filterName=" + encodeURIComponent(args.filterName);
             const result = JSON.parse(await axiomApi("GET", path));
             const items = result.items || [];
@@ -286,7 +284,7 @@ const TOOLS = [
             return JSON.stringify(items.map(p => ({
                 id: p.id,
                 name: p.name,
-                status: p.status,
+                active: p.active,
                 refSource: p.refSource || "",
                 ref: p.ref || "",
                 labels: p.labels || [],
@@ -315,7 +313,7 @@ if (AXIOM_PROJECT_ID) {
     TOOLS.push(
         {
             name: "axiom_project_get_details",
-            description: "Get full details of the project this session is scoped to, including name, description, type, status, issue reference, repository, and labels",
+            description: "Get full details of the project this session is scoped to, including name, description, type, active flag, issue reference, repository, and labels",
             parameters: [],
             handler: async () => {
                 return await axiomApi("GET", `/projects/${encodeURIComponent(projectId)}`);

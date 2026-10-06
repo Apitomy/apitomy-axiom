@@ -17,7 +17,7 @@ import { ExecutionLogModal } from "./ExecutionLogModal";
 import {
     type WorkflowDefinition, type WorkflowInstanceInfo,
     fetchWorkflowDefinitions, triggerWorkflow,
-    getWorkflowInstance, cancelWorkflow,
+    getWorkflowInstance, cancelWorkflowRun,
 } from "../config/api";
 
 interface WorkflowTabProps {
@@ -118,14 +118,15 @@ export function WorkflowTab({
     }, [projectId, selectedDefId, onRefresh, loadInstance]);
 
     const handleCancel = useCallback(() => {
-        cancelWorkflow(projectId)
+        if (!instance) return;
+        cancelWorkflowRun(instance.id)
             .then(() => {
                 setIsCancelOpen(false);
                 onRefresh();
                 loadInstance();
             })
             .catch(console.error);
-    }, [projectId, onRefresh, loadInstance]);
+    }, [instance, onRefresh, loadInstance]);
 
     const workflowContent = useMemo<Workflow | null>(() => {
         if (!instance?.workflowContent) return null;

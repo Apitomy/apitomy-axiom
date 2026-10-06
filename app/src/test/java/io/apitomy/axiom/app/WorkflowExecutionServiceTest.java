@@ -70,7 +70,6 @@ class WorkflowExecutionServiceTest {
             ProjectEntity project = new ProjectEntity();
             project.name = "Linear Run Project";
             project.type = "other";
-            project.status = "new";
             project.ref = "test/linear-run";
             project.createdOn = Instant.now();
             project.updatedOn = Instant.now();
@@ -132,7 +131,6 @@ class WorkflowExecutionServiceTest {
             ProjectEntity project = new ProjectEntity();
             project.name = "Linear Failure Project";
             project.type = "other";
-            project.status = "new";
             project.ref = "test/linear-failure";
             project.createdOn = Instant.now();
             project.updatedOn = Instant.now();
@@ -346,7 +344,7 @@ class WorkflowExecutionServiceTest {
                 workflowExecutionService.triggerWorkflow(ids[0], ids[1]));
 
         QuarkusTransaction.requiringNew().run(() ->
-                workflowExecutionService.cancelWorkflow(ids[0]));
+                workflowExecutionService.cancelWorkflowRun(run.id));
 
         QuarkusTransaction.requiringNew().run(() -> {
             long count = WorkflowEventSubscriptionEntity.count("runId", run.id);
@@ -364,7 +362,6 @@ class WorkflowExecutionServiceTest {
             ProjectEntity project = new ProjectEntity();
             project.name = projectName;
             project.type = "other";
-            project.status = "new";
             project.ref = "test/" + projectName.toLowerCase().replace(" ", "-");
             project.createdOn = Instant.now();
             project.updatedOn = Instant.now();

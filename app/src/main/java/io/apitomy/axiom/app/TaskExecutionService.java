@@ -364,13 +364,6 @@ public class TaskExecutionService {
             task.status = "InProgress";
             task.assignedAgent = agentEntityId;
 
-            // Update project status (don't overwrite Completed)
-            ProjectEntity project = ProjectEntity.findById(task.projectId);
-            if (project != null && !"Completed".equals(project.status)) {
-                project.status = "InProgress";
-                project.updatedOn = Instant.now();
-            }
-
             // Log to activity
             logActivity(task.projectId, taskId, task.eventId, "task-started",
                     "Task started: " + task.actionType + " (agent: " + agentName + ")", task.traceId);
@@ -397,13 +390,6 @@ public class TaskExecutionService {
         TaskEntity task = TaskEntity.findById(taskId);
         if (task != null) {
             task.status = "AwaitingInput";
-
-            // Update project status (don't overwrite Completed)
-            ProjectEntity project = ProjectEntity.findById(task.projectId);
-            if (project != null && !"Completed".equals(project.status)) {
-                project.status = "InProgress";
-                project.updatedOn = Instant.now();
-            }
 
             // Log to activity
             logActivity(task.projectId, taskId, task.eventId, "task-awaiting-input",
@@ -516,8 +502,8 @@ public class TaskExecutionService {
         // Clean up temporary MCP config files
         mcpConfigGenerator.cleanupTempFiles(task.id);
 
-        // Update project status back to Idle if no more active tasks
-        updateProjectStatusAfterTask(task.projectId);
+        // Refresh disk usage and start the next pending task, if any
+        afterTaskFinished(task.projectId);
 
         // Advance workflow if this task is part of one. This runs output-contract
         // validation and may transition the task to Failed. It shares this
@@ -551,7 +537,7 @@ public class TaskExecutionService {
             taskTraceFinalizer.finalizeTaskTrace(task, "failed");
 
             mcpConfigGenerator.cleanupTempFiles(taskId);
-            updateProjectStatusAfterTask(task.projectId);
+            afterTaskFinished(task.projectId);
 
             // Advance workflow if this task is part of one
             if (task.workflowRunId != null) {
@@ -560,7 +546,7 @@ public class TaskExecutionService {
         }
     }
 
-    private void updateProjectStatusAfterTask(Long projectId) {
+    private void afterTaskFinished(Long projectId) {
         long activeTasks = TaskEntity.count(
                 "projectId = ?1 and (status = 'InProgress' or status = 'AwaitingInput')",
                 projectId);
@@ -573,16 +559,9 @@ public class TaskExecutionService {
             project.diskUsageBytes = workspaceService.computeDiskUsage(project);
         }
 
-        if (activeTasks == 0) {
-            if (project != null && "InProgress".equals(project.status)) {
-                project.status = "Idle";
-                project.updatedOn = Instant.now();
-            }
-
-            // If there are pending tasks, trigger the next one
-            if (pendingTasks > 0) {
-                executeNextTask(projectId);
-            }
+        // If there are pending tasks, trigger the next one
+        if (activeTasks == 0 && pendingTasks > 0) {
+            executeNextTask(projectId);
         }
     }
 

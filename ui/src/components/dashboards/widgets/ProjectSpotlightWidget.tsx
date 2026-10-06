@@ -50,10 +50,9 @@ function ProjectSpotlightWidget({ config }: WidgetProps) {
             <Title headingLevel="h4" size="md">{project.name}</Title>
             <Flex gap={{ default: "gapSm" }} style={{ marginTop: "8px" }}>
                 <FlexItem>
-                    <Label isCompact color={
-                        project.status === "InProgress" ? "green" :
-                        project.status === "Idle" ? "orange" : "blue"
-                    }>{project.status}</Label>
+                    <Label isCompact color={project.active ? "green" : "grey"}>
+                        {project.active ? "Active" : "Inactive"}
+                    </Label>
                 </FlexItem>
                 <FlexItem>
                     <Label isCompact>{project.ref}</Label>

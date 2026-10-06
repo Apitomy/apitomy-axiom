@@ -5,7 +5,6 @@ import io.apitomy.axiom.core.SdkFunctionRegistry;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
-import io.apitomy.axiom.core.lifecycle.ProjectStatus;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
@@ -51,8 +50,6 @@ public class SdkCallService {
         LOG.infof("SDK call: %s(%s)", functionName, params);
 
         return switch (functionName) {
-            case "axiom_close_project" -> closeProject(params);
-            case "axiom_reopen_project" -> reopenProject(params);
             case "axiom_add_project_label" -> addProjectLabel(params);
             case "axiom_remove_project_label" -> removeProjectLabel(params);
             case "axiom_update_project" -> updateProject(params);
@@ -72,26 +69,6 @@ public class SdkCallService {
      */
     public boolean isValidFunction(String functionName) {
         return SdkFunctionRegistry.isValidSdkCall(functionName);
-    }
-
-    private SdkCallResult closeProject(Map<String, Object> params) {
-        Long projectId = toLong(params.get("projectId"));
-        if (projectId == null) return SdkCallResult.error("projectId is required");
-        ProjectEntity project = ProjectEntity.findById(projectId);
-        if (project == null) return SdkCallResult.error("Project not found: " + projectId);
-        project.status = ProjectStatus.Completed.name();
-        project.updatedOn = Instant.now();
-        return SdkCallResult.ok("Project " + projectId + " closed");
-    }
-
-    private SdkCallResult reopenProject(Map<String, Object> params) {
-        Long projectId = toLong(params.get("projectId"));
-        if (projectId == null) return SdkCallResult.error("projectId is required");
-        ProjectEntity project = ProjectEntity.findById(projectId);
-        if (project == null) return SdkCallResult.error("Project not found: " + projectId);
-        project.status = ProjectStatus.InProgress.name();
-        project.updatedOn = Instant.now();
-        return SdkCallResult.ok("Project " + projectId + " reopened");
     }
 
     private SdkCallResult addProjectLabel(Map<String, Object> params) {
@@ -127,8 +104,6 @@ public class SdkCallService {
         if (project == null) return SdkCallResult.error("Project not found: " + projectId);
         String name = toString(params.get("name"));
         if (name != null) project.name = name;
-        String status = toString(params.get("status"));
-        if (status != null) project.status = status;
         project.updatedOn = Instant.now();
         return SdkCallResult.ok("Project " + projectId + " updated");
     }
@@ -156,7 +131,7 @@ public class SdkCallService {
         return SdkCallResult.ok("Project found", Map.of(
                 "id", project.id,
                 "name", project.name != null ? project.name : "",
-                "status", project.status != null ? project.status : "",
+                "active", ProjectEntity.isActive(project.id),
                 "ref", project.ref != null ? project.ref : "",
                 "type", project.type != null ? project.type : ""
         ));
@@ -207,10 +182,11 @@ public class SdkCallService {
                 io.quarkus.panache.common.Sort.descending("createdOn"), queryParams)
                 .page(0, 50).list();
 
+        java.util.Set<Long> activeIds = ProjectEntity.findActiveProjectIds();
         var items = projects.stream().map(p -> Map.<String, Object>of(
                 "id", p.id,
                 "name", p.name != null ? p.name : "",
-                "status", p.status != null ? p.status : "",
+                "active", activeIds.contains(p.id),
                 "ref", p.ref != null ? p.ref : "",
                 "type", p.type != null ? p.type : ""
         )).toList();
@@ -234,7 +210,6 @@ public class SdkCallService {
         project.refSource = toString(params.get("refSource"));
         project.repository = toString(params.get("repository"));
         project.body = toString(params.get("body"));
-        project.status = ProjectStatus.Created.name();
         project.createdOn = Instant.now();
         project.updatedOn = Instant.now();
         project.persist();

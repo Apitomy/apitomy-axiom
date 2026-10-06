@@ -14,7 +14,6 @@ import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.axiom.core.events.model.RoutingRule;
 import io.apitomy.axiom.core.filters.SubscriptionFilterEvaluator;
-import io.apitomy.axiom.core.lifecycle.ProjectStatus;
 import io.apitomy.axiom.core.logging.LogContext;
 import io.apitomy.axiom.core.services.WorkspaceService;
 import io.apitomy.axiom.core.tracing.TraceContext;
@@ -744,9 +743,25 @@ public class EventStreamOrchestrator {
             LOG.warnf(e, "Failed to build event context for workflow creation");
         }
 
-        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
-                workflowExecutionService.triggerWorkflow(projectId, rule.workflowDefinitionId(),
-                        extraContext, new EventOrigin(event.id, ledgerId)));
+        WorkflowRunEntity run;
+        try {
+            run = QuarkusTransaction.requiringNew().call(() ->
+                    workflowExecutionService.triggerWorkflow(projectId, rule.workflowDefinitionId(),
+                            extraContext, new EventOrigin(event.id, ledgerId)));
+        } catch (WorkflowRunConflictException e) {
+            String summary = "Skipped: subject already has an active run of definition "
+                    + rule.workflowDefinitionId();
+            LOG.infof("%s (event %s, project %d)", summary, event.id, projectId);
+            RoutingOutcomeEntity skipped = new RoutingOutcomeEntity();
+            skipped.status = "completed";
+            skipped.summary = summary;
+            skipped.projectId = projectId;
+            RoutingOutcomeItemEntity item = newItem(RoutingOutcomeItemEntity.TYPE_WORKFLOW_RUN,
+                    "skipped", summary);
+            item.projectId = projectId;
+            skipped.pendingItems.add(item);
+            return skipped;
+        }
         LOG.infof("Created workflow (definition %d) for event %s on project %d",
                 rule.workflowDefinitionId(), event.id, projectId);
 
@@ -781,7 +796,6 @@ public class EventStreamOrchestrator {
         project.ref = event.ref;
         project.refSource = event.source;
         project.type = determineProjectType(event.type);
-        project.status = ProjectStatus.Created.name();
         project.createdOn = Instant.now();
         project.updatedOn = Instant.now();
 

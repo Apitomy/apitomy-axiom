@@ -158,12 +158,11 @@ public class WorkflowExecutionService {
         }
 
         WorkflowRunEntity activeRun = WorkflowRunEntity
-                .find("projectId = ?1 and status in ?2",
-                        projectId, List.of("running", "waiting"))
+                .find("projectId = ?1 and definitionId = ?2 and status in ?3",
+                        projectId, definitionId, List.of("running", "waiting"))
                 .firstResult();
         if (activeRun != null) {
-            throw new WebApplicationException(
-                    "Project already has an active workflow run", 409);
+            throw new WorkflowRunConflictException(projectId, definitionId);
         }
 
         WorkflowDefinitionEntity definition =
@@ -524,19 +523,17 @@ public class WorkflowExecutionService {
     }
 
     /**
-     * Cancels a running or waiting workflow instance.
+     * Cancels a running or waiting workflow run.
+     *
+     * @param runId the workflow run id
      */
     @Transactional
-    public void cancelWorkflow(long projectId) {
-        WorkflowRunEntity entity = WorkflowRunEntity
-                .find("projectId = ?1 and status in ?2", projectId,
-                        List.of("running", "waiting"))
-                .firstResult();
+    public void cancelWorkflowRun(long runId) {
+        WorkflowRunEntity entity = WorkflowRunEntity.findById(runId);
         if (entity == null) {
-            long runCount = WorkflowRunEntity.count("projectId", projectId);
-            if (runCount == 0) {
-                throw new WebApplicationException("No workflow instance found", 404);
-            }
+            throw new WebApplicationException("Workflow run not found", 404);
+        }
+        if (!"running".equals(entity.status) && !"waiting".equals(entity.status)) {
             throw new WebApplicationException(
                     "Workflow instance is already in a terminal state", 409);
         }
@@ -565,7 +562,7 @@ public class WorkflowExecutionService {
             activeTask.completedOn = Instant.now();
         }
 
-        logActivity(projectId, "workflow-cancelled", "Workflow cancelled", entity.traceId);
+        logActivity(entity.projectId, "workflow-cancelled", "Workflow cancelled", entity.traceId);
         sseEvents.fire(SseEvent.workflowUpdated(
                 entity.projectId, entity.id, entity.status));
     }

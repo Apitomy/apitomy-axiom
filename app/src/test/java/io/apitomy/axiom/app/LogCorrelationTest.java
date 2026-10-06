@@ -192,7 +192,6 @@ class LogCorrelationTest {
             ProjectEntity project = new ProjectEntity();
             project.name = "log-correlation-" + UUID.randomUUID();
             project.type = "test-log";
-            project.status = "Idle";
             project.ref = "https://example.com/" + UUID.randomUUID();
             project.createdOn = Instant.now();
             project.updatedOn = Instant.now();

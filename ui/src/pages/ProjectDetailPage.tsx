@@ -73,9 +73,7 @@ import { WorkflowTab } from "../components/WorkflowTab";
 import { DynamicFormRenderer } from "../components/DynamicFormRenderer";
 
 const STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
-    Created: "blue",
     InProgress: "green",
-    Idle: "orange",
     Completed: "grey",
     Pending: "blue",
     AwaitingInput: "orange",
@@ -210,15 +208,15 @@ export function ProjectDetailPage() {
                     >
                         Assistant
                     </Button>
-                    {project.status === "Completed" && (
+                    {!project.active && (
                         <Button variant="danger" icon={<TrashIcon />}
                             onClick={() => setIsDeleteOpen(true)}
                             style={{ marginRight: "8px" }}>
                             Delete
                         </Button>
                     )}
-                    <Label color={STATUS_COLORS[project.status] || "grey"}>
-                        {project.status}
+                    <Label color={project.active ? "green" : "grey"}>
+                        {project.active ? "Active" : "Inactive"}
                     </Label>
                 </FlexItem>
             </Flex>

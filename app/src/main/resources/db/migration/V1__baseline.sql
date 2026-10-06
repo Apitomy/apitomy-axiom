@@ -257,7 +257,6 @@
         project_ref varchar(255) not null unique,
         ref_source varchar(255),
         repository varchar(255),
-        status varchar(255) not null,
         type varchar(255) not null,
         primary key (id)
     );
@@ -270,7 +269,7 @@
     create table retention_config (
         activity_log_retention_days integer default 0 not null,
         ai_usage_retention_days integer default 0 not null,
-        closed_project_retention_days integer default 90 not null,
+        inactive_project_retention_days integer default 90 not null,
         event_retention_days integer default 90 not null,
         trace_retention_days integer default 30 not null,
         workflow_run_retention_days integer default 0 not null,

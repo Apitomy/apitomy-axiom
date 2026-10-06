@@ -1,6 +1,8 @@
 package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.core.entities.TaskEntity;
+import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
+import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
@@ -56,7 +58,7 @@ class ProjectsResourceTest {
                 .body("name", equalTo("Test Project"))
                 .body("body", equalTo("A test project"))
                 .body("type", equalTo("bug-fix"))
-                .body("status", equalTo("Created"))
+                .body("active", equalTo(false))
                 .body("refSource", equalTo("github"))
                 .body("ref", equalTo("owner/repo#1"))
                 .body("repository", equalTo("owner/repo"))
@@ -98,10 +100,6 @@ class ProjectsResourceTest {
     @Test
     void testDeleteProject() {
         int id = createProject("Delete Test", "other", "owner/repo#200");
-
-        // Project must be Completed before it can be deleted
-        updateStatus(id, "InProgress");
-        updateStatus(id, "Completed");
 
         given()
             .when()
@@ -206,89 +204,6 @@ class ProjectsResourceTest {
 
     // ── Project Lifecycle ─────────────────────────────────────────────
 
-    @Test
-    void testValidStatusTransition() {
-        int id = createProject("Lifecycle Test", "bug-fix", "owner/repo#300");
-
-        // Created → InProgress (valid)
-        given()
-            .contentType(ContentType.JSON)
-            .body("""
-                { "status": "InProgress" }
-                """)
-            .when()
-                .put(PROJECTS_PATH + "/" + id)
-            .then()
-                .statusCode(200)
-                .body("status", equalTo("InProgress"));
-
-        // InProgress → Idle (valid)
-        given()
-            .contentType(ContentType.JSON)
-            .body("""
-                { "status": "Idle" }
-                """)
-            .when()
-                .put(PROJECTS_PATH + "/" + id)
-            .then()
-                .statusCode(200)
-                .body("status", equalTo("Idle"));
-
-        // Idle → Completed (valid)
-        given()
-            .contentType(ContentType.JSON)
-            .body("""
-                { "status": "Completed" }
-                """)
-            .when()
-                .put(PROJECTS_PATH + "/" + id)
-            .then()
-                .statusCode(200)
-                .body("status", equalTo("Completed"));
-    }
-
-    @Test
-    void testInvalidStatusTransition() {
-        int id = createProject("Invalid Lifecycle", "bug-fix", "owner/repo#301");
-
-        // Created → Completed (invalid — must go through InProgress)
-        given()
-            .contentType(ContentType.JSON)
-            .body("""
-                { "status": "Completed" }
-                """)
-            .when()
-                .put(PROJECTS_PATH + "/" + id)
-            .then()
-                .statusCode(409);
-    }
-
-    @Test
-    void testReopenCompletedProject() {
-        int id = createProject("Reopen Test", "bug-fix", "owner/repo#302");
-
-        // Created → InProgress → Completed
-        updateStatus(id, "InProgress");
-        updateStatus(id, "Completed");
-
-        // Completed → InProgress (valid re-open)
-        given()
-            .contentType(ContentType.JSON)
-            .body("""
-                { "status": "InProgress" }
-                """)
-            .when()
-                .put(PROJECTS_PATH + "/" + id)
-            .then()
-                .statusCode(200)
-                .body("status", equalTo("InProgress"));
-    }
-
-    // ── Tasks ─────────────────────────────────────────────────────────
-
-    /**
-     * Action types can only be invoked from workflows; creating a task directly on a project is not allowed.
-     */
     @Test
     void creatingTaskDirectlyOnProjectIsNotAllowed() {
         int projectId = createProject("Direct Task", "feature", "owner/repo#399");
@@ -446,39 +361,6 @@ class ProjectsResourceTest {
     }
 
     @Test
-    void testFilterByStatus() {
-        int id = createProject("Status Filter Test", "bug-fix", "owner/repo#630");
-        updateStatus(id, "InProgress");
-
-        given()
-            .queryParam("filterStatus", "InProgress")
-            .when()
-                .get(PROJECTS_PATH)
-            .then()
-                .statusCode(200)
-                .body("items.size()", greaterThanOrEqualTo(1))
-                .body("items.status", everyItem(equalTo("InProgress")));
-    }
-
-    @Test
-    void testFilterByMultipleStatuses() {
-        int id1 = createProject("Multi Status 1", "bug-fix", "owner/repo#640");
-        updateStatus(id1, "InProgress");
-        createProject("Multi Status 2", "feature", "owner/repo#641");
-        // id2 stays in "Created" status
-
-        given()
-            .queryParam("filterStatus", "InProgress,Created")
-            .when()
-                .get(PROJECTS_PATH)
-            .then()
-                .statusCode(200)
-                .body("items.size()", greaterThanOrEqualTo(2))
-                .body("items.status", everyItem(
-                        anyOf(equalTo("InProgress"), equalTo("Created"))));
-    }
-
-    @Test
     void testFilterNoResults() {
         given()
             .queryParam("filterName", "zzz_nonexistent_project_name_zzz")
@@ -509,6 +391,76 @@ class ProjectsResourceTest {
                 .body("totalCount", greaterThanOrEqualTo(2));
     }
 
+    @Test
+    void testActiveReflectsRunningOrWaitingRuns() {
+        int id = createProject("Active Test", "other", "owner/repo#700");
+        long runId = QuarkusTransaction.requiringNew().call(() -> {
+            WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
+            def.name = "active-test-def-" + id;
+            def.content = "{}";
+            def.createdOn = Instant.now();
+            def.updatedOn = Instant.now();
+            def.persist();
+            WorkflowRunEntity run = new WorkflowRunEntity();
+            run.projectId = (long) id;
+            run.definitionId = def.id;
+            run.definitionVersion = 1;
+            run.instanceState = "{}";
+            run.status = "waiting";
+            run.startedOn = Instant.now();
+            run.persist();
+            return run.id;
+        });
+
+        given()
+            .when()
+                .get(PROJECTS_PATH + "/" + id)
+            .then()
+                .statusCode(200)
+                .body("active", equalTo(true));
+        given()
+            .queryParam("filterRef", "owner/repo#700")
+            .when()
+                .get(PROJECTS_PATH)
+            .then()
+                .statusCode(200)
+                .body("items[0].active", equalTo(true));
+        given()
+            .queryParam("filterActive", true)
+            .queryParam("filterRef", "owner/repo#700")
+            .when()
+                .get(PROJECTS_PATH)
+            .then()
+                .statusCode(200)
+                .body("totalCount", equalTo(1));
+        given()
+            .queryParam("filterActive", false)
+            .queryParam("filterRef", "owner/repo#700")
+            .when()
+                .get(PROJECTS_PATH)
+            .then()
+                .statusCode(200)
+                .body("totalCount", equalTo(0));
+        // Projects with an active run cannot be deleted
+        given()
+            .when()
+                .delete(PROJECTS_PATH + "/" + id)
+            .then()
+                .statusCode(409);
+
+        QuarkusTransaction.requiringNew().run(() -> {
+            WorkflowRunEntity run = WorkflowRunEntity.findById(runId);
+            run.status = "completed";
+            run.completedOn = Instant.now();
+        });
+        given()
+            .when()
+                .get(PROJECTS_PATH + "/" + id)
+            .then()
+                .statusCode(200)
+                .body("active", equalTo(false));
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────
 
     private int createProject(String name, String type, String ref) {
@@ -530,15 +482,4 @@ class ProjectsResourceTest {
                 .extract().path("id");
     }
 
-    private void updateStatus(int projectId, String status) {
-        given()
-            .contentType(ContentType.JSON)
-            .body(String.format("""
-                { "status": "%s" }
-                """, status))
-            .when()
-                .put(PROJECTS_PATH + "/" + projectId)
-            .then()
-                .statusCode(200);
-    }
 }

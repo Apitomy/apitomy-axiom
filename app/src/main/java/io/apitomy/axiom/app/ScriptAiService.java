@@ -74,10 +74,7 @@ public class ScriptAiService {
 
             Common Axiom REST API endpoints the script can call:
             - GET {{apiBaseUrl}}/projects/{{projectId}} — get project details
-            - PUT {{apiBaseUrl}}/projects/{{projectId}} — update project (status, description, etc.)
-            - POST {{apiBaseUrl}}/projects/{{projectId}}/close — close/complete a project
-            - POST {{apiBaseUrl}}/projects/{{projectId}}/reopen — reopen a closed project
-            - POST {{apiBaseUrl}}/projects/{{projectId}}/tasks — create a task
+            - PUT {{apiBaseUrl}}/projects/{{projectId}} — update project (name, description, labels, etc.)
             - GET {{apiBaseUrl}}/projects/{{projectId}}/thread — get project thread
 
             Common CLI tools available: curl, jq, gh (GitHub CLI), git, standard Unix utilities.

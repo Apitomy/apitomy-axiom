@@ -26,7 +26,7 @@ import {
     Tabs,
     Title,
 } from "@patternfly/react-core";
-import { CheckCircleIcon, TimesCircleIcon } from "@patternfly/react-icons";
+import { BanIcon, CheckCircleIcon, TimesCircleIcon } from "@patternfly/react-icons";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import {
@@ -228,6 +228,8 @@ function OutcomeItems({ items }: { items: EventProcessingOutcomeItem[] }) {
                 }}>
                     {item.status === "failed" ? (
                         <TimesCircleIcon color="var(--pf-v6-global--danger-color--100)" />
+                    ) : item.status === "skipped" ? (
+                        <BanIcon color="var(--pf-v6-global--Color--200)" />
                     ) : (
                         <CheckCircleIcon color="var(--pf-v6-global--success-color--100)" />
                     )}

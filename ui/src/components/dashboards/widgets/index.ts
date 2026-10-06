@@ -1,4 +1,3 @@
-import "./ProjectStatusSummaryWidget";
 import "./ActiveProjectsWidget";
 import "./ProjectSpotlightWidget";
 import "./RecentActivityWidget";

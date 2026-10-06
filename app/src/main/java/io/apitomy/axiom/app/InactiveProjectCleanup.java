@@ -14,13 +14,17 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 /**
- * Periodically deletes closed projects that have exceeded the configured
- * retention period. Runs once per hour.
+ * Periodically deletes inactive projects that have exceeded the configured
+ * retention period. A project is inactive when it has no running or waiting
+ * workflow run; it is eligible for deletion once its most recent run completed
+ * before the retention cutoff. Runs once per hour.
  */
 @ApplicationScoped
-public class ClosedProjectCleanup {
+public class InactiveProjectCleanup {
 
-    private static final Logger LOG = Logger.getLogger(ClosedProjectCleanup.class);
+    private static final Logger LOG = Logger.getLogger(InactiveProjectCleanup.class);
+
+    private static final List<String> ACTIVE_STATUSES = List.of("running", "waiting");
 
     @Inject
     ProjectDeletionService projectDeletionService;
@@ -33,7 +37,7 @@ public class ClosedProjectCleanup {
     }
 
     /**
-     * Finds and deletes closed projects older than the retention period.
+     * Finds and deletes inactive projects whose last run completed before the retention period.
      */
     @Scheduled(every = "1h", concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     @Transactional
@@ -47,18 +51,21 @@ public class ClosedProjectCleanup {
             return;
         }
 
-        Instant cutoff = Instant.now().minus(config.closedProjectRetentionDays, ChronoUnit.DAYS);
+        Instant cutoff = Instant.now().minus(config.inactiveProjectRetentionDays, ChronoUnit.DAYS);
         List<ProjectEntity> staleProjects = ProjectEntity
-                .find("status = 'Completed' and updatedOn < ?1", cutoff)
+                .find("id in (select r.projectId from WorkflowRunEntity r"
+                        + " group by r.projectId having max(r.completedOn) < ?1)"
+                        + " and id not in (select a.projectId from WorkflowRunEntity a"
+                        + " where a.status in ?2)", cutoff, ACTIVE_STATUSES)
                 .list();
 
         if (!staleProjects.isEmpty()) {
             for (ProjectEntity project : staleProjects) {
-                LOG.infof("Cleaning up closed project %d (%s)", project.id, project.name);
+                LOG.infof("Cleaning up inactive project %d (%s)", project.id, project.name);
                 projectDeletionService.deleteProject(project);
             }
-            LOG.infof("Cleaned up %d closed project(s) older than %d days",
-                    staleProjects.size(), config.closedProjectRetentionDays);
+            LOG.infof("Cleaned up %d inactive project(s) older than %d days",
+                    staleProjects.size(), config.inactiveProjectRetentionDays);
         }
     }
 }

@@ -75,7 +75,6 @@ class WorkflowRunBeanMapperTest {
             ProjectEntity project = new ProjectEntity();
             project.name = "Fork Run Project";
             project.type = "other";
-            project.status = "new";
             project.ref = "test/fork-run";
             project.createdOn = Instant.now();
             project.updatedOn = Instant.now();
@@ -166,7 +165,6 @@ class WorkflowRunBeanMapperTest {
             ProjectEntity project = new ProjectEntity();
             project.name = "Active Branches Project";
             project.type = "other";
-            project.status = "new";
             project.ref = "test/active-branches";
             project.createdOn = Instant.now();
             project.updatedOn = Instant.now();

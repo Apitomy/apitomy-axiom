@@ -47,23 +47,8 @@ import {
     deleteProject,
 } from "../config/api";
 
-const STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey"> = {
-    Created: "blue",
-    InProgress: "green",
-    Idle: "orange",
-    Completed: "grey",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-    Created: "Created",
-    InProgress: "In Progress",
-    Idle: "Idle",
-    Completed: "Completed",
-};
-
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "name", label: "Name", testId: "project-filter-name" },
-    { value: "status", label: "Status", testId: "project-filter-status" },
     { value: "labels", label: "Labels", testId: "project-filter-labels" },
 ];
 
@@ -76,8 +61,8 @@ export function ProjectsPage() {
     const [loading, setLoading] = useState(true);
 
     const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
-    const [showCompleted, setShowCompleted] = useState(
-        () => localStorage.getItem("axiom.projects.showCompleted") === "true"
+    const [showInactive, setShowInactive] = useState(
+        () => localStorage.getItem("axiom.projects.showInactive") !== "false"
     );
 
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -89,28 +74,19 @@ export function ProjectsPage() {
     });
 
     const filterName = filters.find((f) => f.filterBy.value === "name")?.filterValue;
-    const explicitStatusFilters = filters
-        .filter((f) => f.filterBy.value === "status")
-        .map((f) => f.filterValue)
-        .join(",");
-    const nonCompletedStatuses = Object.keys(STATUS_LABELS)
-        .filter((s) => s !== "Completed")
-        .join(",");
-    const filterStatus = explicitStatusFilters
-        ? explicitStatusFilters
-        : (!showCompleted ? nonCompletedStatuses : undefined);
+    const filterActive = showInactive ? undefined : true;
     const filterLabels = filters
         .filter((f) => f.filterBy.value === "labels")
         .map((f) => f.filterValue)
         .join(",");
-    const isFiltered = filters.length > 0 || !showCompleted;
+    const isFiltered = filters.length > 0 || !showInactive;
 
     const loadProjects = useCallback(() => {
         setLoading(true);
         fetchProjects(
             page, perPage,
             filterName || undefined,
-            filterStatus || undefined,
+            filterActive,
             filterLabels || undefined
         )
             .then((results) => {
@@ -119,7 +95,7 @@ export function ProjectsPage() {
             })
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [page, perPage, filterName, filterStatus, filterLabels]);
+    }, [page, perPage, filterName, filterActive, filterLabels]);
 
     useEffect(() => {
         loadProjects();
@@ -203,15 +179,15 @@ export function ProjectsPage() {
                         </Button>
                     </ToolbarItem>
                     <ToolbarItem>
-                        <Tooltip content={showCompleted ? "Hide completed projects" : "Show completed projects"}>
-                            <Button variant="control" aria-label="Toggle completed projects"
+                        <Tooltip content={showInactive ? "Hide inactive projects" : "Show inactive projects"}>
+                            <Button variant="control" aria-label="Toggle inactive projects"
                                 onClick={() => {
-                                    const next = !showCompleted;
-                                    setShowCompleted(next);
-                                    localStorage.setItem("axiom.projects.showCompleted", String(next));
+                                    const next = !showInactive;
+                                    setShowInactive(next);
+                                    localStorage.setItem("axiom.projects.showInactive", String(next));
                                     setPage(1);
                                 }}>
-                                {showCompleted ? <EyeIcon /> : <EyeSlashIcon />}
+                                {showInactive ? <EyeIcon /> : <EyeSlashIcon />}
                             </Button>
                         </Tooltip>
                     </ToolbarItem>
@@ -259,8 +235,8 @@ export function ProjectsPage() {
                         <EmptyStateBody>
                             {filters.length > 0
                                 ? "No projects match the current filters."
-                                : !showCompleted
-                                    ? "All projects are completed. Toggle the eye icon to show them."
+                                : !showInactive
+                                    ? "No active projects. Toggle the eye icon to show inactive ones."
                                     : "No projects yet. Create one or wait for events from a monitored repository."}
                         </EmptyStateBody>
                     </EmptyState>
@@ -291,8 +267,8 @@ export function ProjectsPage() {
                                         {project.name}
                                     </Td>
                                     <Td>
-                                        <Label isCompact={true} color={STATUS_COLORS[project.status] || "grey"}>
-                                            {STATUS_LABELS[project.status] || project.status}
+                                        <Label isCompact={true} color={project.active ? "green" : "grey"}>
+                                            {project.active ? "Active" : "Inactive"}
                                         </Label>
                                     </Td>
                                     <Td>{project.ref}</Td>
@@ -310,7 +286,7 @@ export function ProjectsPage() {
                                     </Td>
                                     <Td>{new Date(project.updatedOn).toLocaleString()}</Td>
                                     <Td>
-                                        {project.status === "Completed" && (
+                                        {!project.active && (
                                             <Button variant="plain" size="sm" style={{ padding: 0 }}
                                                 onClick={(e) => handleDelete(e, project.id)}>
                                                 <TrashIcon />

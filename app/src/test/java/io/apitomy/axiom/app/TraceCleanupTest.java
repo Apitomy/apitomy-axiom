@@ -67,7 +67,7 @@ class TraceCleanupTest {
                     .firstResult();
             if (config == null) {
                 config = new RetentionConfigEntity();
-                config.closedProjectRetentionDays = 30;
+                config.inactiveProjectRetentionDays = 30;
                 config.eventRetentionDays = 30;
                 config.traceRetentionDays = 30;
                 config.persist();

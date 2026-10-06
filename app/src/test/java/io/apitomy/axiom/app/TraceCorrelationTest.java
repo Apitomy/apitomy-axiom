@@ -165,7 +165,6 @@ class TraceCorrelationTest {
             ProjectEntity project = new ProjectEntity();
             project.name = "trace-correlation-" + UUID.randomUUID();
             project.type = "test-trace";
-            project.status = "Idle";
             project.ref = "https://example.com/" + UUID.randomUUID();
             project.createdOn = Instant.now();
             project.updatedOn = Instant.now();

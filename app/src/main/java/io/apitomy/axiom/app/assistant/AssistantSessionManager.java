@@ -638,7 +638,7 @@ public class AssistantSessionManager {
             context.append("- **Description**: ").append(project.body).append("\n");
         }
         context.append("- **Type**: ").append(project.type).append("\n");
-        context.append("- **Status**: ").append(project.status).append("\n");
+        context.append("- **Active**: ").append(ProjectEntity.isActive(project.id)).append("\n");
         if (project.refSource != null && !project.refSource.isBlank()) {
             context.append("- **Source**: ").append(project.refSource).append("\n");
         }

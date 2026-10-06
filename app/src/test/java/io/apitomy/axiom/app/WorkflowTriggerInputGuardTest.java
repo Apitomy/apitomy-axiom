@@ -52,7 +52,6 @@ class WorkflowTriggerInputGuardTest {
             ProjectEntity project = new ProjectEntity();
             project.name = "Input Guard Project";
             project.type = "other";
-            project.status = "new";
             project.ref = "test/input-guard";
             project.createdOn = Instant.now();
             project.updatedOn = Instant.now();

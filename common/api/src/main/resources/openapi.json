@@ -235,11 +235,12 @@
             }
           },
           {
-            "name": "filterStatus",
+            "name": "filterActive",
             "in": "query",
-            "description": "Comma-separated list of status values to include",
+            "description": "If true, only projects with a running or waiting workflow run; if false, only projects without one",
+            "required": false,
             "schema": {
-              "type": "string"
+              "type": "boolean"
             }
           },
           {
@@ -368,64 +369,6 @@
         "responses": {
           "204": {
             "description": "Project deleted"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/ProjectId"
-        }
-      ]
-    },
-    "/projects/{projectId}/close": {
-      "post": {
-        "tags": [
-          "Projects"
-        ],
-        "summary": "Close a project",
-        "description": "Sets the project status to Completed.",
-        "operationId": "closeProject",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Project"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/ProjectId"
-        }
-      ]
-    },
-    "/projects/{projectId}/reopen": {
-      "post": {
-        "tags": [
-          "Projects"
-        ],
-        "summary": "Reopen a project",
-        "description": "Sets the project status to InProgress.",
-        "operationId": "reopenProject",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Project"
-                }
-              }
-            }
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -645,25 +588,7 @@
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "description": "Project already has a workflow instance"
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "WorkflowInstances"
-        ],
-        "summary": "Cancel a running workflow instance",
-        "operationId": "cancelProjectWorkflow",
-        "responses": {
-          "204": {
-            "description": "Workflow cancelled"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "409": {
-            "description": "Workflow instance is already in a terminal state"
+            "description": "Project already has an active run of this workflow definition"
           }
         }
       },
@@ -4077,6 +4002,38 @@
         }
       ]
     },
+    "/workflow/runs/{runId}/cancel": {
+      "post": {
+        "tags": [
+          "WorkflowRuns"
+        ],
+        "summary": "Cancel a running or waiting workflow run",
+        "operationId": "cancelWorkflowRun",
+        "responses": {
+          "204": {
+            "description": "Workflow run cancelled"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "Workflow run is already in a terminal state"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "runId",
+          "in": "path",
+          "description": "Workflow run ID",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
     "/workflow/runs": {
       "get": {
         "tags": [
@@ -5239,7 +5196,6 @@
           "id",
           "name",
           "type",
-          "status",
           "ref",
           "createdOn",
           "updatedOn"
@@ -5255,15 +5211,6 @@
           },
           "body": {
             "description": "Markdown content (e.g. issue body)",
-            "type": "string"
-          },
-          "status": {
-            "enum": [
-              "Created",
-              "InProgress",
-              "Idle",
-              "Completed"
-            ],
             "type": "string"
           },
           "repository": {
@@ -5301,6 +5248,11 @@
           },
           "hasWorkflowInstance": {
             "type": "boolean"
+          },
+          "active": {
+            "description": "True if the project has at least one running or waiting workflow run",
+            "type": "boolean",
+            "readOnly": true
           }
         }
       },
@@ -5347,15 +5299,6 @@
           },
           "body": {
             "description": "Markdown content (e.g. issue body)",
-            "type": "string"
-          },
-          "status": {
-            "enum": [
-              "Created",
-              "InProgress",
-              "Idle",
-              "Completed"
-            ],
             "type": "string"
           },
           "metadata": {
@@ -5716,9 +5659,9 @@
       "RetentionConfig": {
         "type": "object",
         "properties": {
-          "closedProjectRetentionDays": {
+          "inactiveProjectRetentionDays": {
             "format": "int32",
-            "description": "Number of days to retain closed projects before automatic deletion. Must be at least 1. Omitting the field on update leaves the current value unchanged.",
+            "description": "Number of days an inactive project (no running or waiting workflow run) is retained after its last run completed before its workspace is deleted. Must be at least 1. Omitting the field on update leaves the current value unchanged.",
             "minimum": 1,
             "type": "integer"
           },
@@ -7667,7 +7610,7 @@
             "type": "string"
           },
           "type": {
-            "description": "Widget registry key, e.g. project-status-summary",
+            "description": "Widget registry key, e.g. active-projects",
             "type": "string"
           },
           "config": {
@@ -8726,7 +8669,7 @@
           },
           "status": {
             "type": "string",
-            "description": "completed or failed"
+            "description": "completed, failed, or skipped (e.g. the subject already had an active run of the workflow definition)"
           },
           "summary": {
             "type": "string"

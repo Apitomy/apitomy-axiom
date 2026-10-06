@@ -10,7 +10,7 @@ import java.util.UUID;
 
 /**
  * A single execution (run) of a workflow definition against a project.
- * Runs accumulate as history; at most one non-terminal run exists per project.
+ * Runs accumulate as history; at most one non-terminal run exists per (project, definition).
  */
 @Entity
 @Table(name = "workflow_run")

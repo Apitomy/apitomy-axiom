@@ -28,7 +28,7 @@ class SdkResourceTest {
                 .statusCode(200)
                 .body("size()", greaterThanOrEqualTo(15))
                 .body("name", hasItems(
-                    "axiom_close_project",
+                    "axiom_add_project_label",
                     "axiom_fire_event",
                     "axiom_list_projects",
                     "axiom_get_project",
@@ -49,7 +49,7 @@ class SdkResourceTest {
                 .body("size()", greaterThan(0))
                 .body("sdkCallSupported", everyItem(equalTo(true)))
                 .body("name", hasItems(
-                    "axiom_close_project",
+                    "axiom_add_project_label",
                     "axiom_fire_event",
                     "axiom_create_project"));
     }
@@ -74,13 +74,13 @@ class SdkResourceTest {
                 .get(SDK_PATH)
             .then()
                 .statusCode(200)
-                .body("find { it.name == 'axiom_close_project' }.parameters.size()",
+                .body("find { it.name == 'axiom_get_project' }.parameters.size()",
                     equalTo(1))
-                .body("find { it.name == 'axiom_close_project' }.parameters[0].name",
+                .body("find { it.name == 'axiom_get_project' }.parameters[0].name",
                     equalTo("projectId"))
-                .body("find { it.name == 'axiom_close_project' }.parameters[0].type",
+                .body("find { it.name == 'axiom_get_project' }.parameters[0].type",
                     equalTo("number"))
-                .body("find { it.name == 'axiom_close_project' }.parameters[0].required",
+                .body("find { it.name == 'axiom_get_project' }.parameters[0].required",
                     equalTo(true));
     }
 
@@ -121,5 +121,24 @@ class SdkResourceTest {
         SdkCallService.SdkCallResult result = sdkCallService.execute("axiom_create_task", Map.of());
         assertFalse(result.success());
         assertTrue(result.output().startsWith("Unknown SDK function"), result.output());
+    }
+
+    /**
+     * The project lifecycle was removed: closing and reopening projects are no longer SDK functions.
+     */
+    @Test
+    void closeProjectFunctionIsUnknown() {
+        given()
+            .when()
+                .get(SDK_PATH)
+            .then()
+                .statusCode(200)
+                .body("name", not(hasItems("axiom_close_project", "axiom_reopen_project")));
+
+        for (String name : new String[] {"axiom_close_project", "axiom_reopen_project"}) {
+            SdkCallService.SdkCallResult result = sdkCallService.execute(name, Map.of("projectId", 1));
+            assertFalse(result.success());
+            assertTrue(result.output().startsWith("Unknown SDK function"), result.output());
+        }
     }
 }

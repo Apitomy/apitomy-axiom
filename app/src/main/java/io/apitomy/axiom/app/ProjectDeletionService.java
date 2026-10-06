@@ -37,7 +37,7 @@ public class ProjectDeletionService {
      * row points at a deleted project, task or run. Trace node {@code entity_id} values are
      * free-form display references and are left as they are.
      *
-     * @param project the project to delete (must already be in Completed status)
+     * @param project the project to delete
      */
     @Transactional(TxType.REQUIRES_NEW)
     public void deleteProject(ProjectEntity project) {

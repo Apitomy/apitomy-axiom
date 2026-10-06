@@ -25,8 +25,6 @@ import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
-import io.apitomy.axiom.core.lifecycle.ProjectLifecycle;
-import io.apitomy.axiom.core.lifecycle.ProjectStatus;
 import io.apitomy.axiom.core.services.WorkspaceService;
 import io.apitomy.axiom.core.tracing.TraceService;
 import io.quarkus.panache.common.Page;
@@ -49,6 +47,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Implementation of the Projects REST API (includes tasks and threads).
@@ -90,7 +89,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
      */
     @Override
     public ProjectSearchResults listProjects(BigInteger page, BigInteger limit,
-                                              String filterName, String filterStatus,
+                                              String filterName, Boolean filterActive,
                                               String filterLabels, String filterRef) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
@@ -102,11 +101,10 @@ public class ProjectsResourceImpl implements ProjectsResource {
             hql.append(" and (lower(name) like :name or lower(ref) like :name)");
             params.put("name", "%" + filterName.toLowerCase() + "%");
         }
-        if (filterStatus != null && !filterStatus.isBlank()) {
-            List<String> statuses = Arrays.stream(filterStatus.split(","))
-                    .map(String::trim).filter(s -> !s.isEmpty()).toList();
-            hql.append(" and status in :statuses");
-            params.put("statuses", statuses);
+        if (filterActive != null) {
+            hql.append(filterActive ? " and id in" : " and id not in");
+            hql.append(" (select r.projectId from WorkflowRunEntity r where r.status in :activeStatuses)");
+            params.put("activeStatuses", List.of("running", "waiting"));
         }
         if (filterLabels != null && !filterLabels.isBlank()) {
             List<String> labels = Arrays.stream(filterLabels.split(","))
@@ -123,12 +121,13 @@ public class ProjectsResourceImpl implements ProjectsResource {
         }
 
         long totalCount = ProjectEntity.count(hql.toString(), params);
+        Set<Long> activeIds = ProjectEntity.findActiveProjectIds();
         List<Project> items = ProjectEntity.<ProjectEntity>find(hql.toString(),
                         Sort.descending("updatedOn"), params)
                 .page(Page.of(pageNum - 1, pageSize))
                 .list()
                 .stream()
-                .map(this::toProjectBean)
+                .map(entity -> toProjectBean(entity, activeIds.contains(entity.id)))
                 .toList();
 
         ProjectSearchResults results = new ProjectSearchResults();
@@ -153,7 +152,6 @@ public class ProjectsResourceImpl implements ProjectsResource {
         entity.name = data.getName();
         entity.body = data.getBody();
         entity.type = data.getType();
-        entity.status = ProjectStatus.Created.name();
         entity.refSource = data.getRefSource();
         entity.ref = data.getRef();
         entity.repository = data.getRepository();
@@ -187,16 +185,6 @@ public class ProjectsResourceImpl implements ProjectsResource {
         if (data.getType() != null) {
             entity.type = data.getType();
         }
-        if (data.getStatus() != null) {
-            ProjectStatus currentStatus = ProjectStatus.fromValue(entity.status);
-            ProjectStatus newStatus = ProjectStatus.fromValue(data.getStatus().value());
-            try {
-                ProjectLifecycle.validateTransition(currentStatus, newStatus);
-            } catch (Exception e) {
-                throw new WebApplicationException(e.getMessage(), 409);
-            }
-            entity.status = newStatus.name();
-        }
         if (data.getLabels() != null) {
             entity.labels.clear();
             entity.labels.addAll(data.getLabels());
@@ -212,35 +200,11 @@ public class ProjectsResourceImpl implements ProjectsResource {
     @Transactional
     public void deleteProject(long projectId) {
         ProjectEntity entity = findProjectOrThrow(projectId);
-        if (!"Completed".equals(entity.status)) {
+        if (ProjectEntity.isActive(projectId)) {
             throw new WebApplicationException(
-                    "Only closed projects can be deleted. Current status: " + entity.status, 409);
+                    "Projects with a running or waiting workflow run cannot be deleted", 409);
         }
         projectDeletionService.deleteProject(entity);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    @Transactional
-    public Project closeProject(long projectId) {
-        ProjectEntity entity = findProjectOrThrow(projectId);
-        entity.status = "Completed";
-        entity.updatedOn = Instant.now();
-        return toProjectBean(entity);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    @Transactional
-    public Project reopenProject(long projectId) {
-        ProjectEntity entity = findProjectOrThrow(projectId);
-        entity.status = "InProgress";
-        entity.updatedOn = Instant.now();
-        return toProjectBean(entity);
     }
 
     /**
@@ -375,18 +339,6 @@ public class ProjectsResourceImpl implements ProjectsResource {
             }
         }
 
-        // Reset project status if no other active tasks remain
-        long activeTasks = TaskEntity.count(
-                "projectId = ?1 and id != ?2 and (status = 'InProgress' or status = 'AwaitingInput')",
-                projectId, taskId);
-        if (activeTasks == 0) {
-            ProjectEntity project = ProjectEntity.findById(projectId);
-            if (project != null && "InProgress".equals(project.status)) {
-                project.status = "Idle";
-                project.updatedOn = Instant.now();
-            }
-        }
-
         return toTaskBean(task);
     }
 
@@ -452,11 +404,6 @@ public class ProjectsResourceImpl implements ProjectsResource {
         return toWorkflowInstanceBean(entity);
     }
 
-    @Override
-    public void cancelProjectWorkflow(long projectId) {
-        workflowExecutionService.cancelWorkflow(projectId);
-    }
-
     private io.apitomy.axiom.api.beans.WorkflowInstance toWorkflowInstanceBean(
             WorkflowRunEntity entity) {
         return runBeanMapper.toBean(entity);
@@ -477,12 +424,15 @@ public class ProjectsResourceImpl implements ProjectsResource {
     }
 
     private Project toProjectBean(ProjectEntity entity) {
+        return toProjectBean(entity, ProjectEntity.isActive(entity.id));
+    }
+
+    private Project toProjectBean(ProjectEntity entity, boolean active) {
         Project project = new Project();
         project.setId(entity.id);
         project.setName(entity.name);
         project.setBody(entity.body);
         project.setType(entity.type);
-        project.setStatus(Project.Status.fromValue(entity.status));
         project.setRefSource(entity.refSource);
         project.setRef(entity.ref);
         project.setRepository(entity.repository);
@@ -491,6 +441,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
         project.setLabels(entity.labels);
         project.setHasWorkflowInstance(
                 WorkflowRunEntity.count("projectId", entity.id) > 0);
+        project.setActive(active);
         return project;
     }
 

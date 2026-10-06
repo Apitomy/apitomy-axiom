@@ -262,23 +262,11 @@ class WorkflowInstanceResourceTest {
         int projectId = createProject("WF Cancel Test Project");
         int definitionId = createAndPublishActionWorkflow(
                 "Cancel Test WF");
-
-        given()
-                .contentType(ContentType.JSON)
-                .body("""
-                    {
-                        "workflowDefinitionId": %d
-                    }
-                    """.formatted(definitionId))
-                .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
-                .then()
-                    .statusCode(200)
-                    .body("status", equalTo("waiting"));
+        int runId = triggerAndExpect(projectId, definitionId, "waiting");
 
         given()
                 .when()
-                    .delete(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .post("/api/v1/workflow/runs/" + runId + "/cancel")
                 .then()
                     .statusCode(204);
 
@@ -295,33 +283,32 @@ class WorkflowInstanceResourceTest {
         int projectId = createProject("WF Cancel Term Project");
         int definitionId = createAndPublishDefinition(
                 "Cancel Term WF");
-
-        given()
-                .contentType(ContentType.JSON)
-                .body("""
-                    {
-                        "workflowDefinitionId": %d
-                    }
-                    """.formatted(definitionId))
-                .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
-                .then()
-                    .statusCode(200)
-                    .body("status", equalTo("completed"));
+        int runId = triggerAndExpect(projectId, definitionId, "completed");
 
         given()
                 .when()
-                    .delete(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .post("/api/v1/workflow/runs/" + runId + "/cancel")
                 .then()
                     .statusCode(409);
     }
 
     @Test
-    void testCancelActiveRunCancelsLatestNotPriorTerminal() {
+    void testCancelUnknownRunReturns404() {
+        given()
+                .when()
+                    .post("/api/v1/workflow/runs/999999999/cancel")
+                .then()
+                    .statusCode(404);
+    }
+
+    @Test
+    void testSameDefinitionCanRunAgainAfterCancel() {
         int projectId = createProject("WF Cancel Active Run Project");
         int definitionId = createAndPublishActionWorkflow(
                 "Cancel Active Run WF");
+        int firstRunId = triggerAndExpect(projectId, definitionId, "waiting");
 
+        // A second active run of the same definition on the same project conflicts
         given()
                 .contentType(ContentType.JSON)
                 .body("""
@@ -332,40 +319,44 @@ class WorkflowInstanceResourceTest {
                 .when()
                     .post(PROJECTS_PATH + "/" + projectId + "/workflow")
                 .then()
-                    .statusCode(200)
-                    .body("status", equalTo("waiting"));
+                    .statusCode(409);
 
         given()
                 .when()
-                    .delete(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .post("/api/v1/workflow/runs/" + firstRunId + "/cancel")
                 .then()
                     .statusCode(204);
 
-        given()
-                .contentType(ContentType.JSON)
-                .body("""
-                    {
-                        "workflowDefinitionId": %d
-                    }
-                    """.formatted(definitionId))
-                .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
-                .then()
-                    .statusCode(200)
-                    .body("status", equalTo("waiting"));
+        int secondRunId = triggerAndExpect(projectId, definitionId, "waiting");
 
         given()
                 .when()
-                    .delete(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .post("/api/v1/workflow/runs/" + secondRunId + "/cancel")
                 .then()
                     .statusCode(204);
 
         given()
                 .when()
-                    .get(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .get("/api/v1/workflow/runs/" + firstRunId)
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("cancelled"));
+    }
+
+    private int triggerAndExpect(int projectId, int definitionId, String expectedStatus) {
+        return given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "workflowDefinitionId": %d
+                    }
+                    """.formatted(definitionId))
+                .when()
+                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .then()
+                    .statusCode(200)
+                    .body("status", equalTo(expectedStatus))
+                    .extract().path("id");
     }
 
     @Test

@@ -148,7 +148,6 @@ class WorkflowDispatchFailureTest {
             ProjectEntity project = new ProjectEntity();
             project.name = "Dispatch Fail Project";
             project.type = "other";
-            project.status = "Created";
             project.ref = "test/dispatch-fail-" + UUID.randomUUID();
             project.createdOn = Instant.now();
             project.updatedOn = Instant.now();

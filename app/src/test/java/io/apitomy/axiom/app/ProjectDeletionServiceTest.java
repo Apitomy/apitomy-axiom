@@ -40,7 +40,6 @@ class ProjectDeletionServiceTest {
             ProjectEntity project = new ProjectEntity();
             project.name = "deletion-test";
             project.type = "test";
-            project.status = "Completed";
             project.ref = "deletion-test-" + traceId;
             project.createdOn = Instant.now();
             project.updatedOn = Instant.now();

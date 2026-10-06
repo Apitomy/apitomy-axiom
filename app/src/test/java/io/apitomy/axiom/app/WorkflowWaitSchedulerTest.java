@@ -120,7 +120,6 @@ class WorkflowWaitSchedulerTest {
             ProjectEntity project = new ProjectEntity();
             project.name = projectName;
             project.type = "other";
-            project.status = "new";
             project.ref = "test/" + projectName.toLowerCase().replace(" ", "-");
             project.createdOn = Instant.now();
             project.updatedOn = Instant.now();
