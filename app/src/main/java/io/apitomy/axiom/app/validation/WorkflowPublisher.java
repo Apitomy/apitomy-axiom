@@ -2,6 +2,7 @@ package io.apitomy.axiom.app.validation;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.flow.model.Workflow;
@@ -28,7 +29,8 @@ public class WorkflowPublisher {
     /**
      * Validates the draft content of a definition and creates the next published version.
      * Throws {@link WebApplicationException} (400) when there is no draft, the JSON is invalid, the flow
-     * engine reports errors, or a Start input declaration is invalid.
+     * engine reports errors, a Start input declaration is invalid, or an action node does not map its
+     * action type's inputs correctly.
      *
      * @param entity the definition (managed entity)
      * @return the new version entity
@@ -57,6 +59,16 @@ public class WorkflowPublisher {
         if (violation.isPresent()) {
             throw new WebApplicationException(
                     Response.status(400).entity(Map.of("message", violation.get())).build());
+        }
+
+        List<WorkflowContentRules.InputMappingProblem> mappingProblems = WorkflowContentRules.inputMappingProblems(
+                workflow, ValidationContextFactory.actionTypeInputs(ActionTypeEntity.listAll()));
+        if (!mappingProblems.isEmpty()) {
+            List<String> messages = mappingProblems.stream()
+                    .map(WorkflowContentRules.InputMappingProblem::message)
+                    .toList();
+            throw new WebApplicationException(Response.status(400)
+                    .entity(Map.of("message", messages.get(0), "problems", messages)).build());
         }
 
         int newVersion = entity.currentVersion != null ? entity.currentVersion + 1 : 1;

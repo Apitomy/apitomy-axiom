@@ -1,10 +1,12 @@
 package io.apitomy.axiom.app.validation;
 
 import io.apitomy.flow.model.Workflow;
+import io.apitomy.flow.model.NodeType;
 import io.apitomy.flow.model.WorkflowNode;
 import io.apitomy.flow.validation.ValidationProblem;
 import io.apitomy.flow.validation.WorkflowValidator;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -65,5 +67,59 @@ public final class WorkflowContentRules {
      */
     public static List<ValidationProblem> engineProblems(Workflow workflow) {
         return new WorkflowValidator().validate(workflow);
+    }
+
+    /**
+     * A node input-mapping problem.
+     *
+     * @param nodeIndex index of the node in content.nodes
+     * @param key       the input name concerned
+     * @param code      UNMAPPED_REQUIRED_INPUT or UNKNOWN_INPUT_MAPPING
+     * @param message   human-readable explanation
+     */
+    public record InputMappingProblem(int nodeIndex, String key, String code, String message) {
+    }
+
+    /**
+     * Checks that every action node maps each required declared input and maps no undeclared input. Nodes
+     * whose action type is {@code sdk:*} or unknown to {@code declarations} are skipped.
+     *
+     * @param workflow     the workflow
+     * @param declarations action type name to (input name to required)
+     * @return problems, empty if valid
+     */
+    public static List<InputMappingProblem> inputMappingProblems(Workflow workflow,
+            Map<String, Map<String, Boolean>> declarations) {
+        List<InputMappingProblem> problems = new ArrayList<>();
+        List<WorkflowNode> nodes = workflow.nodes() != null ? workflow.nodes() : List.of();
+        for (int i = 0; i < nodes.size(); i++) {
+            WorkflowNode node = nodes.get(i);
+            if (node.type() != NodeType.ACTION || node.config() == null) {
+                continue;
+            }
+            Object typeObj = node.config().get("actionType");
+            String type = typeObj != null ? typeObj.toString() : "";
+            Map<String, Boolean> declared = declarations.get(type);
+            if (type.startsWith("sdk:") || declared == null) {
+                continue;
+            }
+            Map<?, ?> mapped = node.config().get("inputs") instanceof Map<?, ?> m ? m : Map.of();
+            for (Map.Entry<String, Boolean> input : declared.entrySet()) {
+                if (Boolean.TRUE.equals(input.getValue()) && !mapped.containsKey(input.getKey())) {
+                    String k = input.getKey();
+                    problems.add(new InputMappingProblem(i, k, "UNMAPPED_REQUIRED_INPUT",
+                            "Required input '" + k + "' of action type '" + type + "' is not mapped. "
+                                    + "Add it to config.inputs (e.g. \"" + k + "\": \"context." + k + "\")."));
+                }
+            }
+            for (Object key : mapped.keySet()) {
+                String k = String.valueOf(key);
+                if (!declared.containsKey(k)) {
+                    problems.add(new InputMappingProblem(i, k, "UNKNOWN_INPUT_MAPPING",
+                            "Action type '" + type + "' has no input named '" + k + "'."));
+                }
+            }
+        }
+        return problems;
     }
 }

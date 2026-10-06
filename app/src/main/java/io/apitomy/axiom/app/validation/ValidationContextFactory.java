@@ -18,8 +18,12 @@ import org.jboss.logging.Logger;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -58,7 +62,8 @@ public class ValidationContextFactory {
                     collect(workflows, w -> w.name),
                     workflows.stream().map(w -> w.id).collect(Collectors.toCollection(HashSet::new)),
                     collect(EventSourceEntity.<EventSourceEntity>listAll(), e -> e.id),
-                    collect(SecretEntity.<SecretEntity>listAll(), s -> s.name));
+                    collect(SecretEntity.<SecretEntity>listAll(), s -> s.name),
+                    actionTypeInputs(ActionTypeEntity.<ActionTypeEntity>listAll()));
         } finally {
             if (activated) {
                 requestContext.deactivate();
@@ -81,7 +86,8 @@ public class ValidationContextFactory {
                 union(db.workflowDefinitionNames(), packNames(pack, "workflowDefinitions", "name")),
                 db.workflowDefinitionIds(),
                 union(db.eventSourceIds(), packNames(pack, "eventSources", "id")),
-                db.secretNames());
+                db.secretNames(),
+                overlay(db.actionTypeInputs(), pendingInputs(pack != null ? pack.path("actionTypes") : null)));
     }
 
     /**
@@ -99,7 +105,78 @@ public class ValidationContextFactory {
                 union(db.workflowDefinitionNames(), directoryNames(workDir, ConfigItemType.WORKFLOW, "name")),
                 db.workflowDefinitionIds(),
                 union(db.eventSourceIds(), directoryNames(workDir, ConfigItemType.EVENT_SOURCE, "id")),
-                db.secretNames());
+                db.secretNames(),
+                overlay(db.actionTypeInputs(), pendingInputs(directoryItems(workDir, ConfigItemType.ACTION_TYPE))));
+    }
+
+    /**
+     * Builds declared-input maps (input name to required) for the given action types.
+     *
+     * @param actionTypes the action type entities
+     * @return action type name to (input name to required)
+     */
+    public static Map<String, Map<String, Boolean>> actionTypeInputs(List<ActionTypeEntity> actionTypes) {
+        Map<String, Map<String, Boolean>> result = new HashMap<>();
+        for (ActionTypeEntity at : actionTypes) {
+            Map<String, Boolean> inputs = new LinkedHashMap<>();
+            if (at.inputs != null) {
+                at.inputs.forEach(f -> inputs.put(f.name, f.required));
+            }
+            result.put(at.name, inputs);
+        }
+        return result;
+    }
+
+    private static Map<String, Map<String, Boolean>> overlay(Map<String, Map<String, Boolean>> base,
+                                                             Map<String, Map<String, Boolean>> pending) {
+        Map<String, Map<String, Boolean>> result = new HashMap<>(base);
+        result.putAll(pending);
+        return result;
+    }
+
+    private static Map<String, Map<String, Boolean>> pendingInputs(Iterable<JsonNode> actionTypes) {
+        Map<String, Map<String, Boolean>> result = new HashMap<>();
+        if (actionTypes == null) {
+            return result;
+        }
+        for (JsonNode item : actionTypes) {
+            String name = item.path("name").asText("");
+            if (name.isBlank()) {
+                continue;
+            }
+            Map<String, Boolean> inputs = new LinkedHashMap<>();
+            for (JsonNode input : item.path("inputs")) {
+                String inputName = input.path("name").asText("");
+                if (!inputName.isBlank()) {
+                    inputs.put(inputName, input.path("required").asBoolean(false));
+                }
+            }
+            result.put(name, inputs);
+        }
+        return result;
+    }
+
+    private List<JsonNode> directoryItems(Path workDir, ConfigItemType type) {
+        List<JsonNode> items = new ArrayList<>();
+        if (workDir == null) {
+            return items;
+        }
+        Path dir = workDir.resolve(type.directory());
+        if (!Files.isDirectory(dir)) {
+            return items;
+        }
+        try (Stream<Path> files = Files.list(dir)) {
+            files.filter(f -> f.getFileName().toString().endsWith(".json")).forEach(f -> {
+                try {
+                    items.add(objectMapper.readTree(f.toFile()));
+                } catch (IOException e) {
+                    LOG.debugf("Skipping unreadable %s: %s", f, e.getMessage());
+                }
+            });
+        } catch (IOException e) {
+            LOG.warnf("Failed to list %s: %s", dir, e.getMessage());
+        }
+        return items;
     }
 
     private static <E> Set<String> collect(List<E> entities, Function<E, String> name) {

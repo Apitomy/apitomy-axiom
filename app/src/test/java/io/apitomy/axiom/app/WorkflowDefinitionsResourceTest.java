@@ -444,6 +444,58 @@ class WorkflowDefinitionsResourceTest {
     }
 
     @Test
+    void testPublishRejectsUnmappedRequiredInput() {
+        String actionType = "map-test-" + java.util.UUID.randomUUID();
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {"name": "%s", "executionMode": "agent", "promptTemplate": "Do {{inputs.ref}}",
+                     "inputs": [{"name": "ref", "type": "string", "required": true}]}
+                    """.formatted(actionType))
+                .when()
+                    .post("/api/v1/action-types")
+                .then()
+                    .statusCode(200);
+
+        int id = createDefinition("Unmapped Input WF " + actionType);
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "id": "wf-unmapped",
+                        "name": "Unmapped",
+                        "nodes": [
+                            {"id": "s1", "type": "start", "name": "Start",
+                             "config": {}, "position": {"x": 100, "y": 100}},
+                            {"id": "a1", "type": "action", "name": "Act",
+                             "config": {"actionType": "%s", "inputs": {}},
+                             "position": {"x": 100, "y": 200}},
+                            {"id": "e1", "type": "end", "name": "End",
+                             "config": {}, "position": {"x": 100, "y": 300}}
+                        ],
+                        "edges": [
+                            {"id": "edge1", "source": "s1", "target": "a1",
+                             "priority": 0, "isDefault": true},
+                            {"id": "edge2", "source": "a1", "target": "e1",
+                             "priority": 0, "isDefault": true}
+                        ]
+                    }
+                    """.formatted(actionType))
+                .when()
+                    .put(BASE_PATH + "/" + id + "/content")
+                .then()
+                    .statusCode(204);
+
+        given()
+                .when()
+                    .post(BASE_PATH + "/" + id + "/publish")
+                .then()
+                    .statusCode(400)
+                    .body("message", containsString("is not mapped"))
+                    .body("problems", hasSize(1));
+    }
+
+    @Test
     void testPublishRejectsForkWithoutJoin() {
         int id = createDefinition("Fork Without Join WF");
 

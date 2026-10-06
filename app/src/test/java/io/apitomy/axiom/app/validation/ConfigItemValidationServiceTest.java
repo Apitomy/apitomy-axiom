@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -35,7 +36,7 @@ class ConfigItemValidationServiceTest {
     }
 
     private static ValidationContext names(Set<String> tools, Set<String> toolsets) {
-        return new ValidationContext(tools, toolsets, Set.of(), Set.of(), Set.of(), Set.of(), Set.of());
+        return new ValidationContext(tools, toolsets, Set.of(), Set.of(), Set.of(), Set.of(), Set.of(), null);
     }
 
     @Test
@@ -98,7 +99,7 @@ class ConfigItemValidationServiceTest {
         """;
 
     private static ValidationContext actionTypes(String... names) {
-        return new ValidationContext(Set.of(), Set.of(), Set.of(names), Set.of(), Set.of(), Set.of(), Set.of());
+        return new ValidationContext(Set.of(), Set.of(), Set.of(names), Set.of(), Set.of(), Set.of(), Set.of(), null);
     }
 
     @Test
@@ -176,10 +177,44 @@ class ConfigItemValidationServiceTest {
                 && p.message().contains("issue.created")), problems.toString());
     }
 
+    private static ValidationContext withInputs() {
+        return new ValidationContext(Set.of(), Set.of(), Set.of("do-it"), Set.of(), Set.of(), Set.of(), Set.of(),
+                Map.of("do-it", Map.of("ref", true, "note", false)));
+    }
+
+    private static String withNodeInputs(String inputs) {
+        return VALID_WORKFLOW.replace("{\"actionType\": \"do-it\"}",
+                "{\"actionType\": \"do-it\", \"inputs\": " + inputs + "}");
+    }
+
+    @Test
+    void unmappedRequiredInputIsRejected() throws Exception {
+        List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW, json(withNodeInputs("{}")),
+                withInputs());
+        assertTrue(problems.stream().anyMatch(p -> p.isError() && p.code().equals("UNMAPPED_REQUIRED_INPUT")
+                && p.path().equals("content.nodes[1].config.inputs")
+                && p.message().contains("'ref'")), problems.toString());
+    }
+
+    @Test
+    void mappedRequiredInputPassesWithOptionalUnmapped() throws Exception {
+        List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW,
+                json(withNodeInputs("{\"ref\": \"context.ref\"}")), withInputs());
+        assertFalse(ConfigItemValidationService.hasErrors(problems), problems.toString());
+    }
+
+    @Test
+    void unknownInputMappingIsRejected() throws Exception {
+        List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW,
+                json(withNodeInputs("{\"ref\": \"context.ref\", \"bogus\": \"1\"}")), withInputs());
+        assertTrue(problems.stream().anyMatch(p -> p.isError() && p.code().equals("UNKNOWN_INPUT_MAPPING")
+                && p.path().equals("content.nodes[1].config.inputs.bogus")), problems.toString());
+    }
+
     @Test
     void subscriptionMayReferenceWorkflowByName() throws Exception {
         ValidationContext ctx = new ValidationContext(Set.of(), Set.of(), Set.of(), Set.of("triage"),
-                Set.of(), Set.of(), Set.of());
+                Set.of(), Set.of(), Set.of(), null);
         List<ConfigProblem> problems = service.validate(ConfigItemType.SUBSCRIPTION, json("""
             {"name": "s", "filterExpression": "event.type == 'issue.created'",
              "routing": [{"type": "create-workflow", "workflowDefinitionName": "triage"}]}
@@ -190,7 +225,7 @@ class ConfigItemValidationServiceTest {
     @Test
     void subscriptionWithUnknownWorkflowNameFails() throws Exception {
         ValidationContext ctx = new ValidationContext(Set.of(), Set.of(), Set.of(), Set.of("triage"),
-                Set.of(), Set.of(), Set.of());
+                Set.of(), Set.of(), Set.of(), null);
         List<ConfigProblem> problems = service.validate(ConfigItemType.SUBSCRIPTION, json("""
             {"name": "s", "routing": [{"type": "create-workflow", "workflowDefinitionName": "nope"}]}
             """), ctx);

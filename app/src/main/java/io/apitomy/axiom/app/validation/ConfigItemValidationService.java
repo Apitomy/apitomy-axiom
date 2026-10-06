@@ -241,6 +241,15 @@ public class ConfigItemValidationService {
                 }
             }
         }
+
+        if (context.actionTypeInputs() != null) {
+            for (WorkflowContentRules.InputMappingProblem p
+                    : WorkflowContentRules.inputMappingProblems(workflow, context.actionTypeInputs())) {
+                String inputsPath = "content.nodes[" + p.nodeIndex() + "].config.inputs";
+                String path = "UNKNOWN_INPUT_MAPPING".equals(p.code()) ? inputsPath + "." + p.key() : inputsPath;
+                problems.add(ConfigProblem.error(path, p.code(), p.message()));
+            }
+        }
     }
 
     private void validateSubscription(JsonNode item, ValidationContext context, List<ConfigProblem> problems) {
