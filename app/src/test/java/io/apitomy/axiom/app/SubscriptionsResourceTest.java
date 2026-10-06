@@ -257,7 +257,7 @@ class SubscriptionsResourceTest {
         event.id = UUID.randomUUID();
         event.sourceEventId = sourceEventId;
         event.source = source;
-        event.connectionId = "test-connection";
+        event.eventSourceId = "test-event-source";
         event.type = type;
         event.ref = "https://github.com/test/repo/issues/1";
         event.timestamp = timestamp;

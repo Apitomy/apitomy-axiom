@@ -182,7 +182,7 @@ class WorkflowDispatchFailureTest {
             event.id = eventId;
             event.sourceEventId = "dispatch-fail-" + eventId;
             event.source = "github";
-            event.connectionId = "conn-dispatch-fail";
+            event.eventSourceId = "conn-dispatch-fail";
             event.type = eventType;
             event.ref = "https://github.com/test-org/dispatch-fail/issues/" + eventId;
             event.timestamp = Instant.now();

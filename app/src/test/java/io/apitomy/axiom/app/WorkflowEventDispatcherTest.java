@@ -201,7 +201,7 @@ class WorkflowEventDispatcherTest {
         Map<String, Object> eventMap = Map.of(
                 "type", "some.unmatched.type",
                 "source", "github",
-                "connectionId", "test-conn",
+                "eventSourceId", "test-conn",
                 "ref", "https://github.com/owner/repo/issues/1",
                 "timestamp", Instant.now().toString(),
                 "payload", Map.of());
@@ -258,7 +258,7 @@ class WorkflowEventDispatcherTest {
         return Map.of(
                 "type", eventType,
                 "source", source,
-                "connectionId", "test-conn",
+                "eventSourceId", "test-conn",
                 "ref", ref != null ? ref : "",
                 "timestamp", Instant.now().toString(),
                 "payload", payload != null ? payload : Map.of());

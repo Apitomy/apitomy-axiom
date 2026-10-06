@@ -1,16 +1,16 @@
 package io.apitomy.axiom.app.rest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.apitomy.axiom.api.ConnectionsResource;
-import io.apitomy.axiom.api.beans.Connection;
-import io.apitomy.axiom.api.beans.ConnectionPollLog;
-import io.apitomy.axiom.api.beans.ConnectionPollLogSearchResults;
-import io.apitomy.axiom.api.beans.ConnectionSearchResults;
-import io.apitomy.axiom.api.beans.ConnectionStatus;
+import io.apitomy.axiom.api.EventResource;
+import io.apitomy.axiom.api.beans.EventSource;
+import io.apitomy.axiom.api.beans.EventSourcePollLog;
+import io.apitomy.axiom.api.beans.EventSourcePollLogSearchResults;
+import io.apitomy.axiom.api.beans.EventSourceSearchResults;
+import io.apitomy.axiom.api.beans.EventSourceStatus;
 import io.apitomy.axiom.api.beans.Configuration;
-import io.apitomy.axiom.api.beans.NewConnection;
-import io.apitomy.axiom.core.entities.ConnectionPollLogEntity;
-import io.apitomy.axiom.core.entities.EventSourceConnectionEntity;
+import io.apitomy.axiom.api.beans.NewEventSource;
+import io.apitomy.axiom.core.entities.EventSourcePollLogEntity;
+import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
@@ -30,13 +30,13 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
- * Implementation of the Connections REST API.
+ * Implementation of the Event Sources REST API.
  */
 @ApplicationScoped
 @RunOnVirtualThread
-public class ConnectionsResourceImpl implements ConnectionsResource {
+public class EventSourcesResourceImpl implements EventResource {
 
-    private static final Logger LOG = Logger.getLogger(ConnectionsResourceImpl.class);
+    private static final Logger LOG = Logger.getLogger(EventSourcesResourceImpl.class);
 
     private static final Pattern SLUG_PATTERN = Pattern.compile("^[a-z0-9-]+$");
     private static final int SLUG_MAX_LENGTH = 63;
@@ -48,7 +48,7 @@ public class ConnectionsResourceImpl implements ConnectionsResource {
      * {@inheritDoc}
      */
     @Override
-    public ConnectionSearchResults listConnections(BigInteger page, BigInteger limit,
+    public EventSourceSearchResults listEventSources(BigInteger page, BigInteger limit,
                                                    String filterName, String filterType) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
@@ -66,13 +66,13 @@ public class ConnectionsResourceImpl implements ConnectionsResource {
             params.put("sourceType", filterType.toLowerCase());
         }
 
-        long totalCount = EventSourceConnectionEntity.count(hql.toString(), params);
-        List<Connection> items = EventSourceConnectionEntity.<EventSourceConnectionEntity>find(
+        long totalCount = EventSourceEntity.count(hql.toString(), params);
+        List<EventSource> items = EventSourceEntity.<EventSourceEntity>find(
                         hql.toString(), Sort.ascending("name"), params)
                 .page(Page.of(pageNum - 1, pageSize))
                 .list().stream().map(this::toBean).toList();
 
-        ConnectionSearchResults results = new ConnectionSearchResults();
+        EventSourceSearchResults results = new EventSourceSearchResults();
         results.setItems(items);
         results.setTotalCount(totalCount);
         results.setPage(pageNum);
@@ -85,20 +85,20 @@ public class ConnectionsResourceImpl implements ConnectionsResource {
      */
     @Override
     @Transactional
-    public Connection createConnection(NewConnection data) {
+    public EventSource createEventSource(NewEventSource data) {
         String slug = data.getId();
         if (slug == null || slug.isEmpty() || slug.length() > SLUG_MAX_LENGTH
                 || !SLUG_PATTERN.matcher(slug).matches()) {
             throw new WebApplicationException(
-                    "Invalid connection id: must be 1-63 lowercase letters, numbers, or dashes", 400);
+                    "Invalid event source id: must be 1-63 lowercase letters, numbers, or dashes", 400);
         }
 
-        EventSourceConnectionEntity existing = EventSourceConnectionEntity.findById(slug);
+        EventSourceEntity existing = EventSourceEntity.findById(slug);
         if (existing != null) {
-            throw new WebApplicationException("Connection already exists: " + slug, 409);
+            throw new WebApplicationException("Event source already exists: " + slug, 409);
         }
 
-        EventSourceConnectionEntity entity = new EventSourceConnectionEntity();
+        EventSourceEntity entity = new EventSourceEntity();
         entity.id = slug;
         Instant now = Instant.now();
         entity.createdOn = now;
@@ -112,8 +112,8 @@ public class ConnectionsResourceImpl implements ConnectionsResource {
      * {@inheritDoc}
      */
     @Override
-    public Connection getConnection(String connectionId) {
-        return toBean(findOrThrow(connectionId));
+    public EventSource getEventSource(String eventSourceId) {
+        return toBean(findOrThrow(eventSourceId));
     }
 
     /**
@@ -121,8 +121,8 @@ public class ConnectionsResourceImpl implements ConnectionsResource {
      */
     @Override
     @Transactional
-    public Connection updateConnection(String connectionId, NewConnection data) {
-        EventSourceConnectionEntity entity = findOrThrow(connectionId);
+    public EventSource updateEventSource(String eventSourceId, NewEventSource data) {
+        EventSourceEntity entity = findOrThrow(eventSourceId);
         entity.modifiedOn = Instant.now();
         applyFields(entity, data);
         return toBean(entity);
@@ -133,8 +133,8 @@ public class ConnectionsResourceImpl implements ConnectionsResource {
      */
     @Override
     @Transactional
-    public void deleteConnection(String connectionId) {
-        EventSourceConnectionEntity entity = findOrThrow(connectionId);
+    public void deleteEventSource(String eventSourceId) {
+        EventSourceEntity entity = findOrThrow(eventSourceId);
         entity.delete();
     }
 
@@ -142,21 +142,21 @@ public class ConnectionsResourceImpl implements ConnectionsResource {
      * {@inheritDoc}
      */
     @Override
-    public ConnectionStatus getConnectionStatus(String connectionId) {
-        EventSourceConnectionEntity entity = findOrThrow(connectionId);
+    public EventSourceStatus getEventSourceStatus(String eventSourceId) {
+        EventSourceEntity entity = findOrThrow(eventSourceId);
 
-        long totalEvents = StreamEventEntity.count("connectionId", connectionId);
+        long totalEvents = StreamEventEntity.count("eventSourceId", eventSourceId);
 
-        ConnectionStatus status = new ConnectionStatus();
-        status.setConnectionId(connectionId);
+        EventSourceStatus status = new EventSourceStatus();
+        status.setEventSourceId(eventSourceId);
         status.setEnabled(entity.enabled);
         status.setTotalEventsProduced(totalEvents);
         if (entity.lastPolledAt != null) {
             status.setLastPolledAt(Date.from(entity.lastPolledAt));
         }
         // Find last error from poll logs
-        ConnectionPollLogEntity lastError = ConnectionPollLogEntity.<ConnectionPollLogEntity>find(
-                "connectionId = ?1 and status = 'error' ORDER BY createdOn DESC", connectionId)
+        EventSourcePollLogEntity lastError = EventSourcePollLogEntity.<EventSourcePollLogEntity>find(
+                "eventSourceId = ?1 and status = 'error' ORDER BY createdOn DESC", eventSourceId)
                 .firstResult();
         if (lastError != null) {
             status.setLastError(lastError.message);
@@ -172,19 +172,19 @@ public class ConnectionsResourceImpl implements ConnectionsResource {
      * {@inheritDoc}
      */
     @Override
-    public ConnectionPollLogSearchResults listConnectionPollLogs(String connectionId,
+    public EventSourcePollLogSearchResults listEventSourcePollLogs(String eventSourceId,
             BigInteger page, BigInteger limit) {
-        findOrThrow(connectionId);
+        findOrThrow(eventSourceId);
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
-        long totalCount = ConnectionPollLogEntity.count("connectionId", connectionId);
-        List<ConnectionPollLog> items = ConnectionPollLogEntity.<ConnectionPollLogEntity>find(
-                        "connectionId = ?1 ORDER BY createdOn DESC", connectionId)
+        long totalCount = EventSourcePollLogEntity.count("eventSourceId", eventSourceId);
+        List<EventSourcePollLog> items = EventSourcePollLogEntity.<EventSourcePollLogEntity>find(
+                        "eventSourceId = ?1 ORDER BY createdOn DESC", eventSourceId)
                 .page(Page.of(pageNum - 1, pageSize))
                 .list().stream().map(this::toPollLogBean).toList();
 
-        ConnectionPollLogSearchResults results = new ConnectionPollLogSearchResults();
+        EventSourcePollLogSearchResults results = new EventSourcePollLogSearchResults();
         results.setItems(items);
         results.setTotalCount(totalCount);
         results.setPage(pageNum);
@@ -192,10 +192,10 @@ public class ConnectionsResourceImpl implements ConnectionsResource {
         return results;
     }
 
-    private ConnectionPollLog toPollLogBean(ConnectionPollLogEntity entity) {
-        ConnectionPollLog bean = new ConnectionPollLog();
+    private EventSourcePollLog toPollLogBean(EventSourcePollLogEntity entity) {
+        EventSourcePollLog bean = new EventSourcePollLog();
         bean.setId(entity.id);
-        bean.setConnectionId(entity.connectionId);
+        bean.setEventSourceId(entity.eventSourceId);
         bean.setStatus(entity.status);
         bean.setMessage(entity.message);
         bean.setDetail(entity.detail);
@@ -213,7 +213,7 @@ public class ConnectionsResourceImpl implements ConnectionsResource {
      * @param entity the entity to update
      * @param data the API bean with new values
      */
-    private void applyFields(EventSourceConnectionEntity entity, NewConnection data) {
+    private void applyFields(EventSourceEntity entity, NewEventSource data) {
         entity.name = data.getName();
         entity.description = data.getDescription();
         entity.sourceType = data.getSourceType() != null ? data.getSourceType().value() : "github";
@@ -233,15 +233,15 @@ public class ConnectionsResourceImpl implements ConnectionsResource {
     }
 
     /**
-     * Finds a connection by ID or throws a 404 WebApplicationException.
+     * Finds an event source by ID or throws a 404 WebApplicationException.
      *
-     * @param id the connection ID (slug)
+     * @param id the event source ID (slug)
      * @return the entity
      */
-    private EventSourceConnectionEntity findOrThrow(String id) {
-        EventSourceConnectionEntity entity = EventSourceConnectionEntity.findById(id);
+    private EventSourceEntity findOrThrow(String id) {
+        EventSourceEntity entity = EventSourceEntity.findById(id);
         if (entity == null) {
-            throw new WebApplicationException("Connection not found: " + id, 404);
+            throw new WebApplicationException("Event source not found: " + id, 404);
         }
         return entity;
     }
@@ -252,12 +252,12 @@ public class ConnectionsResourceImpl implements ConnectionsResource {
      * @param entity the entity to convert
      * @return the API bean
      */
-    private Connection toBean(EventSourceConnectionEntity entity) {
-        Connection bean = new Connection();
+    private EventSource toBean(EventSourceEntity entity) {
+        EventSource bean = new EventSource();
         bean.setId(entity.id);
         bean.setName(entity.name);
         bean.setDescription(entity.description);
-        bean.setSourceType(Connection.SourceType.fromValue(entity.sourceType));
+        bean.setSourceType(EventSource.SourceType.fromValue(entity.sourceType));
         bean.setEnabled(entity.enabled);
         bean.setBaseUrl(entity.baseUrl);
         bean.setSecretName(entity.secretName);

@@ -513,7 +513,7 @@ class EventWorkflowLinksTest {
             event.id = eventId;
             event.sourceEventId = "links-" + eventId;
             event.source = "github";
-            event.connectionId = "conn-links";
+            event.eventSourceId = "conn-links";
             event.type = eventType;
             event.ref = ref;
             event.timestamp = Instant.now();

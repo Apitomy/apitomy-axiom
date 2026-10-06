@@ -76,7 +76,7 @@ public class AssistantContextBuilder {
             Files.createDirectories(workDir.resolve("action-types"));
             Files.createDirectories(workDir.resolve("toolsets"));
             Files.createDirectories(workDir.resolve("session-templates"));
-            Files.createDirectories(workDir.resolve("connections"));
+            Files.createDirectories(workDir.resolve("event-sources"));
             Files.createDirectories(workDir.resolve("subscriptions"));
             Files.createDirectories(workDir.resolve("workflows"));
         }

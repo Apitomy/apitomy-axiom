@@ -8,15 +8,15 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 
 /**
- * Tests for the Connections REST API endpoints.
+ * Tests for the Event Sources REST API endpoints.
  */
 @QuarkusTest
-class ConnectionsResourceTest {
+class EventSourcesResourceTest {
 
-    private static final String CONNECTIONS_PATH = "/api/v1/connections";
+    private static final String EVENT_SOURCES_PATH = "/api/v1/event-sources";
 
     @Test
-    void testCreateAndGetConnection() {
+    void testCreateAndGetEventSource() {
         String slug = "test-github-conn";
 
         given()
@@ -24,8 +24,8 @@ class ConnectionsResourceTest {
             .body("""
                 {
                     "id": "%s",
-                    "name": "Test GitHub Connection",
-                    "description": "A test connection",
+                    "name": "Test GitHub Event Source",
+                    "description": "A test event source",
                     "sourceType": "github",
                     "enabled": true,
                     "baseUrl": "https://api.github.com",
@@ -35,13 +35,13 @@ class ConnectionsResourceTest {
                 }
                 """.formatted(slug))
             .when()
-                .post(CONNECTIONS_PATH)
+                .post(EVENT_SOURCES_PATH)
             .then()
                 .statusCode(200)
                 .contentType(ContentType.JSON)
                 .body("id", equalTo(slug))
-                .body("name", equalTo("Test GitHub Connection"))
-                .body("description", equalTo("A test connection"))
+                .body("name", equalTo("Test GitHub Event Source"))
+                .body("description", equalTo("A test event source"))
                 .body("sourceType", equalTo("github"))
                 .body("enabled", equalTo(true))
                 .body("baseUrl", equalTo("https://api.github.com"))
@@ -53,21 +53,21 @@ class ConnectionsResourceTest {
 
         given()
             .when()
-                .get(CONNECTIONS_PATH + "/" + slug)
+                .get(EVENT_SOURCES_PATH + "/" + slug)
             .then()
                 .statusCode(200)
                 .body("id", equalTo(slug))
-                .body("name", equalTo("Test GitHub Connection"));
+                .body("name", equalTo("Test GitHub Event Source"));
     }
 
     @Test
-    void testListConnections() {
-        createConnection("list-conn-1");
-        createConnection("list-conn-2");
+    void testListEventSources() {
+        createEventSource("list-conn-1");
+        createEventSource("list-conn-2");
 
         given()
             .when()
-                .get(CONNECTIONS_PATH)
+                .get(EVENT_SOURCES_PATH)
             .then()
                 .statusCode(200)
                 .contentType(ContentType.JSON)
@@ -77,16 +77,16 @@ class ConnectionsResourceTest {
     }
 
     @Test
-    void testUpdateConnection() {
+    void testUpdateEventSource() {
         String slug = "update-conn";
-        createConnection(slug);
+        createEventSource(slug);
 
         given()
             .contentType(ContentType.JSON)
             .body("""
                 {
                     "id": "%s",
-                    "name": "Updated Connection",
+                    "name": "Updated Event Source",
                     "description": "Updated description",
                     "sourceType": "jira",
                     "enabled": false,
@@ -96,10 +96,10 @@ class ConnectionsResourceTest {
                 }
                 """.formatted(slug))
             .when()
-                .put(CONNECTIONS_PATH + "/" + slug)
+                .put(EVENT_SOURCES_PATH + "/" + slug)
             .then()
                 .statusCode(200)
-                .body("name", equalTo("Updated Connection"))
+                .body("name", equalTo("Updated Event Source"))
                 .body("description", equalTo("Updated description"))
                 .body("sourceType", equalTo("jira"))
                 .body("enabled", equalTo(false))
@@ -107,19 +107,19 @@ class ConnectionsResourceTest {
     }
 
     @Test
-    void testDeleteConnection() {
+    void testDeleteEventSource() {
         String slug = "delete-conn";
-        createConnection(slug);
+        createEventSource(slug);
 
         given()
             .when()
-                .delete(CONNECTIONS_PATH + "/" + slug)
+                .delete(EVENT_SOURCES_PATH + "/" + slug)
             .then()
                 .statusCode(204);
 
         given()
             .when()
-                .get(CONNECTIONS_PATH + "/" + slug)
+                .get(EVENT_SOURCES_PATH + "/" + slug)
             .then()
                 .statusCode(404);
     }
@@ -131,49 +131,65 @@ class ConnectionsResourceTest {
             .body("""
                 {
                     "id": "INVALID_SLUG!",
-                    "name": "Bad Connection",
+                    "name": "Bad Event Source",
                     "sourceType": "github",
                     "baseUrl": "https://api.github.com",
                     "configuration": {}
                 }
                 """)
             .when()
-                .post(CONNECTIONS_PATH)
+                .post(EVENT_SOURCES_PATH)
             .then()
                 .statusCode(400);
     }
 
     @Test
-    void testGetConnectionNotFound() {
+    void testGetEventSourceNotFound() {
         given()
             .when()
-                .get(CONNECTIONS_PATH + "/nonexistent-slug")
+                .get(EVENT_SOURCES_PATH + "/nonexistent-slug")
             .then()
                 .statusCode(404);
     }
 
     @Test
-    void testGetConnectionStatus() {
+    void testGetEventSourceStatus() {
         String slug = "status-conn";
-        createConnection(slug);
+        createEventSource(slug);
 
         given()
             .when()
-                .get(CONNECTIONS_PATH + "/" + slug + "/status")
+                .get(EVENT_SOURCES_PATH + "/" + slug + "/status")
             .then()
                 .statusCode(200)
                 .contentType(ContentType.JSON)
-                .body("connectionId", equalTo(slug))
+                .body("eventSourceId", equalTo(slug))
                 .body("totalEventsProduced", equalTo(0));
     }
 
-    private void createConnection(String slug) {
+    /**
+     * The old Connections endpoint was renamed to Event Sources and must no longer exist.
+     */
+    @Test
+    void oldConnectionsPathIsGone() {
+        given().when().get("/api/v1/connections").then().statusCode(404);
+    }
+
+    /**
+     * The Event Sources list endpoint responds.
+     */
+    @Test
+    void eventSourcesPathResponds() {
+        given().when().get(EVENT_SOURCES_PATH).then().statusCode(200);
+    }
+
+    private void createEventSource(String slug) {
         given()
             .contentType(ContentType.JSON)
             .body("""
                 {
                     "id": "%s",
-                    "name": "Connection %s",
+                    "name": "Event Source %s",
                     "sourceType": "github",
                     "enabled": true,
                     "baseUrl": "https://api.github.com",
@@ -181,7 +197,7 @@ class ConnectionsResourceTest {
                 }
                 """.formatted(slug, slug))
             .when()
-                .post(CONNECTIONS_PATH)
+                .post(EVENT_SOURCES_PATH)
             .then()
                 .statusCode(200);
     }

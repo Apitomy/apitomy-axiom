@@ -414,7 +414,7 @@ class TraceResourceTest {
             event.id = UUID.randomUUID();
             event.sourceEventId = "trace-test-" + event.id;
             event.source = "github";
-            event.connectionId = "trace-test";
+            event.eventSourceId = "trace-test";
             event.type = "issue.opened";
             event.ref = "https://github.com/example/repo/issues/1";
             event.timestamp = Instant.now();

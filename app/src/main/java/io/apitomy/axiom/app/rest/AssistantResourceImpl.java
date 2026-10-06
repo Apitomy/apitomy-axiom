@@ -435,8 +435,8 @@ public class AssistantResourceImpl implements AssistantResource {
             applyResult.setSessionTemplates(result.sessionTemplatesCreated() + result.sessionTemplatesUpdated());
             applyResult.setSessionTemplatesCreated(result.sessionTemplatesCreated());
             applyResult.setSessionTemplatesUpdated(result.sessionTemplatesUpdated());
-            applyResult.setConnectionsCreated(result.connectionsCreated());
-            applyResult.setConnectionsUpdated(result.connectionsUpdated());
+            applyResult.setEventSourcesCreated(result.eventSourcesCreated());
+            applyResult.setEventSourcesUpdated(result.eventSourcesUpdated());
             applyResult.setSubscriptionsCreated(result.subscriptionsCreated());
             applyResult.setSubscriptionsUpdated(result.subscriptionsUpdated());
             applyResult.setWorkflowDefinitionsCreated(result.workflowDefinitionsCreated());

@@ -729,7 +729,7 @@ public class EventStreamOrchestrator {
             eventNode.put("id", event.id.toString());
             eventNode.put("type", event.type);
             eventNode.put("source", event.source);
-            eventNode.put("connectionId", event.connectionId);
+            eventNode.put("eventSourceId", event.eventSourceId);
             eventNode.put("ref", event.ref);
             eventNode.put("timestamp", event.timestamp.toString());
             if (event.actor != null) {
@@ -851,7 +851,7 @@ public class EventStreamOrchestrator {
         }
         map.put("type", event.type);
         map.put("source", event.source);
-        map.put("connectionId", event.connectionId);
+        map.put("eventSourceId", event.eventSourceId);
         map.put("ref", event.ref);
         map.put("timestamp", event.timestamp.toString());
 

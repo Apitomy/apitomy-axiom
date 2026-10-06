@@ -56,14 +56,14 @@ class EventStreamOrchestratorTest {
 
     // ── Helper methods ──────────────────────────────────────────────
 
-    private UUID insertStreamEvent(String sourceEventId, String type, String connectionId, String ref) {
+    private UUID insertStreamEvent(String sourceEventId, String type, String eventSourceId, String ref) {
         UUID id = UUID.randomUUID();
         QuarkusTransaction.requiringNew().run(() -> {
             StreamEventEntity event = new StreamEventEntity();
             event.id = id;
             event.sourceEventId = sourceEventId;
             event.source = "github";
-            event.connectionId = connectionId;
+            event.eventSourceId = eventSourceId;
             event.type = type;
             event.ref = ref;
             event.timestamp = Instant.now();
@@ -97,7 +97,7 @@ class EventStreamOrchestratorTest {
         event.id = UUID.randomUUID();
         event.sourceEventId = "gh-12345";
         event.source = "github";
-        event.connectionId = "my-org-repo";
+        event.eventSourceId = "my-org-repo";
         event.type = "issue.created";
         event.ref = "https://github.com/my-org/repo/issues/42";
         event.timestamp = Instant.parse("2026-09-19T10:30:00Z");
@@ -111,7 +111,7 @@ class EventStreamOrchestratorTest {
         // Verify all expected keys are present
         assertEquals("issue.created", map.get("type"));
         assertEquals("github", map.get("source"));
-        assertEquals("my-org-repo", map.get("connectionId"));
+        assertEquals("my-org-repo", map.get("eventSourceId"));
         assertEquals("https://github.com/my-org/repo/issues/42", map.get("ref"));
         assertEquals("2026-09-19T10:30:00Z", map.get("timestamp"));
 
@@ -135,7 +135,7 @@ class EventStreamOrchestratorTest {
         event.id = UUID.randomUUID();
         event.sourceEventId = "gh-99";
         event.source = "github";
-        event.connectionId = "conn-1";
+        event.eventSourceId = "conn-1";
         event.type = "pr.merged";
         event.ref = "https://github.com/org/repo/pull/5";
         event.timestamp = Instant.parse("2026-09-19T12:00:00Z");
@@ -172,7 +172,7 @@ class EventStreamOrchestratorTest {
             event.id = UUID.randomUUID();
             event.sourceEventId = "smoke-1";
             event.source = "github";
-            event.connectionId = "test-conn";
+            event.eventSourceId = "test-conn";
             event.type = "issue.created";
             event.ref = "https://github.com/org/repo/issues/1";
             event.timestamp = Instant.now();

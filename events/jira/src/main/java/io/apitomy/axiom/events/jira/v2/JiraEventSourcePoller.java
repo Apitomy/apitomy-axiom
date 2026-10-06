@@ -2,8 +2,8 @@ package io.apitomy.axiom.events.jira.v2;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.apitomy.axiom.core.entities.ConnectionPollLogEntity;
-import io.apitomy.axiom.core.entities.EventSourceConnectionEntity;
+import io.apitomy.axiom.core.entities.EventSourcePollLogEntity;
+import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.events.model.NormalizedEvent;
 import io.apitomy.axiom.core.services.EncryptionService;
@@ -21,9 +21,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 @ApplicationScoped
-public class JiraConnectionPoller {
+public class JiraEventSourcePoller {
 
-    private static final Logger LOG = Logger.getLogger(JiraConnectionPoller.class);
+    private static final Logger LOG = Logger.getLogger(JiraEventSourcePoller.class);
     private static final int DEFAULT_POLL_INTERVAL = 60;
     private static final int TICK_INTERVAL = 10;
 
@@ -54,45 +54,45 @@ public class JiraConnectionPoller {
     void poll() {
         if (shuttingDown) return;
 
-        List<EventSourceConnectionEntity> connections = EventSourceConnectionEntity
+        List<EventSourceEntity> eventSources = EventSourceEntity
                 .list("sourceType = ?1 and enabled = ?2", "jira", true);
 
-        if (connections.isEmpty()) return;
+        if (eventSources.isEmpty()) return;
 
         Instant now = Instant.now();
-        for (EventSourceConnectionEntity conn : connections) {
-            if (isDue(conn, now)) {
-                pollConnection(conn);
+        for (EventSourceEntity eventSource : eventSources) {
+            if (isDue(eventSource, now)) {
+                pollEventSource(eventSource);
             }
         }
     }
 
-    private boolean isDue(EventSourceConnectionEntity conn, Instant now) {
-        if (conn.lastPolledAt == null) return true;
-        int interval = conn.pollInterval != null ? conn.pollInterval : DEFAULT_POLL_INTERVAL;
-        return now.isAfter(conn.lastPolledAt.plusSeconds(interval));
+    private boolean isDue(EventSourceEntity eventSource, Instant now) {
+        if (eventSource.lastPolledAt == null) return true;
+        int interval = eventSource.pollInterval != null ? eventSource.pollInterval : DEFAULT_POLL_INTERVAL;
+        return now.isAfter(eventSource.lastPolledAt.plusSeconds(interval));
     }
 
-    private void pollConnection(EventSourceConnectionEntity conn) {
+    private void pollEventSource(EventSourceEntity eventSource) {
         long startMs = System.currentTimeMillis();
 
         // First poll: set baseline and skip historical events
-        if (conn.lastPolledAt == null) {
-            LOG.infof("First poll for Jira connection %s — setting baseline to now", conn.id);
-            updateLastPolledAt(conn.id);
-            recordPollLog(conn.id, "success", "Baseline set (first poll)",
+        if (eventSource.lastPolledAt == null) {
+            LOG.infof("First poll for Jira event source %s — setting baseline to now", eventSource.id);
+            updateLastPolledAt(eventSource.id);
+            recordPollLog(eventSource.id, "success", "Baseline set (first poll)",
                     null, 0, System.currentTimeMillis() - startMs);
             return;
         }
 
-        String credentials = resolveCredentials(conn);
+        String credentials = resolveCredentials(eventSource);
         List<String> projects;
         try {
-            JsonNode config = objectMapper.readTree(conn.configuration);
+            JsonNode config = objectMapper.readTree(eventSource.configuration);
             JsonNode projectsNode = config.path("projects");
             if (!projectsNode.isArray() || projectsNode.isEmpty()) {
-                LOG.warnf("Connection %s has no projects configured", conn.id);
-                recordPollLog(conn.id, "error", "No projects configured",
+                LOG.warnf("Event source %s has no projects configured", eventSource.id);
+                recordPollLog(eventSource.id, "error", "No projects configured",
                         null, 0, System.currentTimeMillis() - startMs);
                 return;
             }
@@ -101,22 +101,22 @@ public class JiraConnectionPoller {
                 projects.add(p.asText());
             }
         } catch (Exception e) {
-            LOG.warnf(e, "Failed to parse configuration for connection %s", conn.id);
-            recordPollLog(conn.id, "error", "Configuration error",
+            LOG.warnf(e, "Failed to parse configuration for event source %s", eventSource.id);
+            recordPollLog(eventSource.id, "error", "Configuration error",
                     e.getMessage(), 0, System.currentTimeMillis() - startMs);
             return;
         }
 
-        Instant since = conn.lastPolledAt;
+        Instant since = eventSource.lastPolledAt;
 
         // Fetch issues with changelog
         ApiResult result = apiClient.fetchIssuesWithChangelog(
-                conn.baseUrl, projects, since, credentials);
+                eventSource.baseUrl, projects, since, credentials);
 
         if (!result.success()) {
-            LOG.warnf("Failed to poll Jira for connection %s: %s", conn.id, result.errorMessage());
-            updateLastPolledAt(conn.id);
-            recordPollLog(conn.id, "error", "API request failed",
+            LOG.warnf("Failed to poll Jira for event source %s: %s", eventSource.id, result.errorMessage());
+            updateLastPolledAt(eventSource.id);
+            recordPollLog(eventSource.id, "error", "API request failed",
                     result.errorMessage(), 0, System.currentTimeMillis() - startMs);
             return;
         }
@@ -130,7 +130,7 @@ public class JiraConnectionPoller {
                 if (shuttingDown) break;
 
                 List<NormalizedEvent> events = normalizer.normalizeIssue(
-                        issue, since, conn.id, conn.baseUrl);
+                        issue, since, eventSource.id, eventSource.baseUrl);
 
                 for (NormalizedEvent event : events) {
                     boolean persisted = eventStreamService.persistEvent(event);
@@ -139,23 +139,23 @@ public class JiraConnectionPoller {
             }
         }
 
-        updateLastPolledAt(conn.id);
+        updateLastPolledAt(eventSource.id);
         long duration = System.currentTimeMillis() - startMs;
-        recordPollLog(conn.id, "success",
+        recordPollLog(eventSource.id, "success",
                 "Polled " + projects.size() + " projects, " + issues.size() + " issues",
                 null, totalIngested, duration);
-        LOG.infof("Polled Jira connection %s: %d events ingested from %d issues",
-                conn.id, totalIngested, issues.size());
+        LOG.infof("Polled Jira event source %s: %d events ingested from %d issues",
+                eventSource.id, totalIngested, issues.size());
     }
 
     /**
      * Resolves Jira credentials (email:api_token format) using the same
      * three-tier fallback as the existing JiraPoller.
      */
-    private String resolveCredentials(EventSourceConnectionEntity conn) {
-        // Per-connection secret
-        if (conn.secretName != null && !conn.secretName.isBlank()) {
-            SecretEntity secret = SecretEntity.find("name", conn.secretName).firstResult();
+    private String resolveCredentials(EventSourceEntity eventSource) {
+        // Per-event-source secret
+        if (eventSource.secretName != null && !eventSource.secretName.isBlank()) {
+            SecretEntity secret = SecretEntity.find("name", eventSource.secretName).firstResult();
             if (secret != null) {
                 return encryptionService.decrypt(secret.encryptedValue);
             }
@@ -170,10 +170,10 @@ public class JiraConnectionPoller {
     }
 
     @Transactional
-    void recordPollLog(String connectionId, String status, String message,
+    void recordPollLog(String eventSourceId, String status, String message,
                         String detail, int eventsIngested, long durationMs) {
-        ConnectionPollLogEntity log = new ConnectionPollLogEntity();
-        log.connectionId = connectionId;
+        EventSourcePollLogEntity log = new EventSourcePollLogEntity();
+        log.eventSourceId = eventSourceId;
         log.status = status;
         log.message = message;
         log.detail = detail;
@@ -184,10 +184,10 @@ public class JiraConnectionPoller {
     }
 
     @Transactional
-    void updateLastPolledAt(String connectionId) {
-        EventSourceConnectionEntity conn = EventSourceConnectionEntity.findById(connectionId);
-        if (conn != null) {
-            conn.lastPolledAt = Instant.now();
+    void updateLastPolledAt(String eventSourceId) {
+        EventSourceEntity eventSource = EventSourceEntity.findById(eventSourceId);
+        if (eventSource != null) {
+            eventSource.lastPolledAt = Instant.now();
         }
     }
 }

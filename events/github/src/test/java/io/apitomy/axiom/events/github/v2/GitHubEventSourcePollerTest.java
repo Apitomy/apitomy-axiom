@@ -5,11 +5,11 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Unit tests for {@link GitHubConnectionPoller}.
+ * Unit tests for {@link GitHubEventSourcePoller}.
  */
-class GitHubConnectionPollerTest {
+class GitHubEventSourcePollerTest {
 
-    private final GitHubConnectionPoller poller = new GitHubConnectionPoller();
+    private final GitHubEventSourcePoller poller = new GitHubEventSourcePoller();
 
     @Test
     void deriveApiBaseUrl_publicGitHub() {

@@ -54,7 +54,7 @@ public class StreamEventsResourceImpl implements StreamResource {
 
     @Override
     public StreamEventSearchResults listStreamEvents(BigInteger page, BigInteger limit,
-                                                     String filterType, String filterConnectionId,
+                                                     String filterType, String filterEventSourceId,
                                                      String filterRef) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
@@ -66,9 +66,9 @@ public class StreamEventsResourceImpl implements StreamResource {
             hql.append(" and lower(type) like :type");
             params.put("type", filterType.toLowerCase() + "%");
         }
-        if (filterConnectionId != null && !filterConnectionId.isBlank()) {
-            hql.append(" and connectionId = :connectionId");
-            params.put("connectionId", filterConnectionId);
+        if (filterEventSourceId != null && !filterEventSourceId.isBlank()) {
+            hql.append(" and eventSourceId = :eventSourceId");
+            params.put("eventSourceId", filterEventSourceId);
         }
         if (filterRef != null && !filterRef.isBlank()) {
             hql.append(" and lower(ref) like :ref");
@@ -333,7 +333,7 @@ public class StreamEventsResourceImpl implements StreamResource {
         bean.setId(entity.id);
         bean.setSourceEventId(entity.sourceEventId);
         bean.setSource(entity.source);
-        bean.setConnectionId(entity.connectionId);
+        bean.setEventSourceId(entity.eventSourceId);
         bean.setType(entity.type);
         bean.setRef(entity.ref);
         bean.setTimestamp(Date.from(entity.timestamp));

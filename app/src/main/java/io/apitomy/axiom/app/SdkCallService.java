@@ -158,7 +158,7 @@ public class SdkCallService {
         event.id = java.util.UUID.randomUUID();
         event.sourceEventId = "sdk-" + event.id;
         event.source = source;
-        event.connectionId = "sdk";
+        event.eventSourceId = "sdk";
         event.type = eventType;
         event.ref = toString(params.getOrDefault("ref", ""));
         event.timestamp = Instant.now();

@@ -152,15 +152,15 @@ public record SseEvent(
      *
      * @param eventId      the stream event UUID
      * @param eventType    the normalized event type (e.g., "issue.created")
-     * @param connectionId the connection slug that produced the event
+     * @param eventSourceId the event source slug that produced the event
      * @return a new SSE event
      */
     public static SseEvent streamEventReceived(String eventId, String eventType,
-                                                String connectionId) {
+                                                String eventSourceId) {
         return new SseEvent("stream-event",
                 "{\"eventId\":\"" + eventId
                         + "\",\"eventType\":\"" + escapeJson(eventType)
-                        + "\",\"connectionId\":\"" + escapeJson(connectionId) + "\"}");
+                        + "\",\"eventSourceId\":\"" + escapeJson(eventSourceId) + "\"}");
     }
 
     /**

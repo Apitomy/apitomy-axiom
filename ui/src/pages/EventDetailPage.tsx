@@ -129,7 +129,7 @@ export function EventDetailPage() {
                 <DescriptionListGroup>
                     <DescriptionListTerm>Connection</DescriptionListTerm>
                     <DescriptionListDescription>
-                        <Link to={`/events/connections/${event.connectionId}`}>{event.connectionId}</Link>
+                        <Link to={`/events/connections/${event.eventSourceId}`}>{event.eventSourceId}</Link>
                     </DescriptionListDescription>
                 </DescriptionListGroup>
                 <DescriptionListGroup>

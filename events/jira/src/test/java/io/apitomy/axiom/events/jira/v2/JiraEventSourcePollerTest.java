@@ -5,13 +5,13 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
- * Unit tests for {@link JiraConnectionPoller}.
+ * Unit tests for {@link JiraEventSourcePoller}.
  */
-class JiraConnectionPollerTest {
+class JiraEventSourcePollerTest {
 
     @Test
     void canInstantiate() {
-        JiraConnectionPoller poller = new JiraConnectionPoller();
+        JiraEventSourcePoller poller = new JiraEventSourcePoller();
         assertNotNull(poller);
     }
 }

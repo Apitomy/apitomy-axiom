@@ -34,7 +34,7 @@ const SOURCE_COLORS: Record<string, "blue" | "green" | "orange" | "grey"> = {
 
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "type", label: "Event Type", testId: "stream-filter-type" },
-    { value: "connectionId", label: "Connection", testId: "stream-filter-connection" },
+    { value: "eventSourceId", label: "Connection", testId: "stream-filter-connection" },
     { value: "ref", label: "Ref", testId: "stream-filter-ref" },
 ];
 
@@ -76,7 +76,7 @@ export function EventStreamPage() {
     const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
 
     const filterType = filters.find((f) => f.filterBy.value === "type")?.filterValue;
-    const filterConnectionId = filters.find((f) => f.filterBy.value === "connectionId")?.filterValue;
+    const filterConnectionId = filters.find((f) => f.filterBy.value === "eventSourceId")?.filterValue;
     const filterRef = filters.find((f) => f.filterBy.value === "ref")?.filterValue;
     const isFiltered = filters.length > 0;
 
@@ -223,13 +223,13 @@ export function EventStreamPage() {
                                             style={{ cursor: "pointer" }}
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                const typeFilter = FILTER_TYPES.find((t) => t.value === "connectionId")!;
-                                                onAddFilterCriteria({ filterBy: typeFilter, filterValue: event.connectionId });
+                                                const typeFilter = FILTER_TYPES.find((t) => t.value === "eventSourceId")!;
+                                                onAddFilterCriteria({ filterBy: typeFilter, filterValue: event.eventSourceId });
                                             }}>
                                             {event.source}
                                         </Label>
                                     </Td>
-                                    <Td>{event.connectionId}</Td>
+                                    <Td>{event.eventSourceId}</Td>
                                     <Td>
                                         <Label isCompact
                                             style={{ cursor: "pointer" }}

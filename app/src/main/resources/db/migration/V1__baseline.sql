@@ -11,7 +11,7 @@
 
     create sequence ai_usage_SEQ start with 1 increment by 50;
 
-    create sequence connection_poll_log_SEQ start with 1 increment by 50;
+    create sequence event_source_poll_log_SEQ start with 1 increment by 50;
 
     create sequence dashboard_SEQ start with 1 increment by 50;
 
@@ -161,13 +161,13 @@
         primary key (id)
     );
 
-    create table connection_poll_log (
+    create table event_source_poll_log (
         events_ingested integer,
         created_on timestamp(6) not null,
         duration_ms bigint,
         id bigint not null,
         status varchar(16) not null,
-        connection_id varchar(63) not null,
+        event_source_id varchar(63) not null,
         detail TEXT,
         message TEXT not null,
         primary key (id)
@@ -203,7 +203,7 @@
         primary key (id)
     );
 
-    create table event_source_connection (
+    create table event_source (
         enabled boolean default true not null,
         poll_interval integer,
         created_on timestamp(6) not null,
@@ -349,7 +349,7 @@
         timestamp timestamp(6) not null,
         id uuid not null,
         source varchar(32) not null,
-        connection_id varchar(63) not null,
+        event_source_id varchar(63) not null,
         type varchar(64) not null,
         ref varchar(2048) not null,
         actor TEXT not null,
@@ -602,8 +602,8 @@ CREATE INDEX idx_activity_log_trace ON activity_log (trace_id);
 CREATE INDEX idx_ai_usage_created_on ON ai_usage (created_on);
 CREATE INDEX idx_ai_usage_event ON ai_usage (event_id);
 CREATE INDEX idx_ai_usage_trace ON ai_usage (trace_id);
-CREATE INDEX idx_cpl_connection ON connection_poll_log (connection_id);
-CREATE INDEX idx_cpl_created ON connection_poll_log (created_on);
+CREATE INDEX idx_espl_event_source ON event_source_poll_log (event_source_id);
+CREATE INDEX idx_espl_created ON event_source_poll_log (created_on);
 CREATE INDEX idx_dashboard_label ON dashboard_label (label, dashboard_id);
 CREATE INDEX idx_epl_event ON event_processing_ledger (event_id);
 CREATE INDEX idx_epl_status ON event_processing_ledger (status);
@@ -614,7 +614,7 @@ CREATE INDEX idx_ro_trace ON routing_outcome (trace_id);
 CREATE INDEX idx_roi_outcome ON routing_outcome_item (outcome_id);
 CREATE INDEX idx_roi_trace_node ON routing_outcome_item (trace_node_id);
 CREATE INDEX idx_roi_workflow_run ON routing_outcome_item (workflow_run_id);
-CREATE INDEX idx_stream_event_connection ON stream_event (connection_id);
+CREATE INDEX idx_stream_event_event_source ON stream_event (event_source_id);
 CREATE INDEX idx_stream_event_created_on ON stream_event (created_on);
 CREATE INDEX idx_stream_event_ref ON stream_event (ref);
 CREATE UNIQUE INDEX idx_stream_event_source_event_id ON stream_event (source_event_id);
@@ -652,12 +652,12 @@ CREATE INDEX idx_workflow_wait_run ON workflow_wait (run_id);
 -- Constraints not declared in the entity model
 alter table agent_capability add foreign key (agent_id) references agent (id) on delete cascade;
 alter table agent_lease add foreign key (agent_id) references agent (id);
-alter table connection_poll_log add foreign key (connection_id) references event_source_connection (id) on delete cascade;
+alter table event_source_poll_log add foreign key (event_source_id) references event_source (id) on delete cascade;
 alter table event_processing_ledger add foreign key (event_id) references stream_event (id);
 alter table event_processing_ledger add foreign key (subscription_id) references event_subscription (id) on delete cascade;
 alter table routing_outcome add foreign key (ledger_id) references event_processing_ledger (id) on delete cascade;
 alter table routing_outcome_item add foreign key (outcome_id) references routing_outcome (id) on delete cascade;
-alter table stream_event add foreign key (connection_id) references event_source_connection (id);
+alter table stream_event add foreign key (event_source_id) references event_source (id);
 alter table task add foreign key (workflow_run_id) references workflow_run (id);
 alter table tool_execution add foreign key (trace_id) references trace (trace_id) on delete cascade;
 alter table trace_node add foreign key (parent_node_id) references trace_node (id) on delete set null;

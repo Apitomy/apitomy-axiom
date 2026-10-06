@@ -448,7 +448,7 @@ public class AssistantSessionManager {
         collectItems(workDir, "action-types", items);
         collectItems(workDir, "toolsets", items);
         collectItems(workDir, "session-templates", items);
-        collectItems(workDir, "connections", items);
+        collectItems(workDir, "event-sources", items);
         collectItems(workDir, "subscriptions", items);
         collectItems(workDir, "workflows", items);
 
@@ -521,7 +521,7 @@ public class AssistantSessionManager {
                 result.actionTypesCreated(), result.actionTypesUpdated(),
                 result.toolsetsCreated(), result.toolsetsUpdated(),
                 result.sessionTemplatesCreated(), result.sessionTemplatesUpdated(),
-                result.connectionsCreated(), result.connectionsUpdated(),
+                result.eventSourcesCreated(), result.eventSourcesUpdated(),
                 result.subscriptionsCreated(), result.subscriptionsUpdated(),
                 wfCounts[0], wfCounts[1]);
 
@@ -721,7 +721,7 @@ public class AssistantSessionManager {
                 validateAndFeedback(workDir, "action-types", session, tracker);
                 validateAndFeedback(workDir, "toolsets", session, tracker);
                 validateAndFeedback(workDir, "session-templates", session, tracker);
-                validateAndFeedback(workDir, "connections", session, tracker);
+                validateAndFeedback(workDir, "event-sources", session, tracker);
                 validateAndFeedback(workDir, "subscriptions", session, tracker);
                 validateAndFeedback(workDir, "workflows", session, tracker);
             } catch (Exception e) {
@@ -808,7 +808,7 @@ public class AssistantSessionManager {
         ArrayNode actionTypesArr = pack.putArray("actionTypes");
         ArrayNode toolsetsArr = pack.putArray("toolsets");
         ArrayNode templatesArr = pack.putArray("sessionTemplates");
-        ArrayNode connectionsArr = pack.putArray("connections");
+        ArrayNode eventSourcesArr = pack.putArray("eventSources");
         ArrayNode subscriptionsArr = pack.putArray("subscriptions");
 
         for (AssistantItem item : items) {
@@ -821,7 +821,7 @@ public class AssistantSessionManager {
                 case "action-types" -> actionTypesArr.add(content);
                 case "toolsets" -> toolsetsArr.add(content);
                 case "session-templates" -> templatesArr.add(content);
-                case "connections" -> connectionsArr.add(content);
+                case "event-sources" -> eventSourcesArr.add(content);
                 case "subscriptions" -> subscriptionsArr.add(content);
                 case "workflows" -> {} // Handled separately in applyWorkflowDefinitions
             }

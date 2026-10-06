@@ -80,7 +80,7 @@ public class AssistantItemValidator {
             case "action-types" -> validateActionType(content, workingDirectory, errors, warnings);
             case "toolsets" -> validateToolset(content, errors, warnings);
             case "session-templates" -> validateSessionTemplate(content, errors, warnings);
-            case "connections" -> validateConnection(content, errors, warnings);
+            case "event-sources" -> validateEventSource(content, errors, warnings);
             case "subscriptions" -> validateSubscription(content, errors, warnings);
             case "workflows" -> validateWorkflowDefinition(content, errors, warnings);
             default -> errors.add("Unknown item type: " + itemType);
@@ -104,7 +104,7 @@ public class AssistantItemValidator {
             case "action-types" -> "action-types";
             case "toolsets" -> "toolsets";
             case "session-templates" -> "session-templates";
-            case "connections" -> "connections";
+            case "event-sources" -> "event-sources";
             case "subscriptions" -> "subscriptions";
             case "workflows" -> "workflows";
             default -> null;
@@ -199,7 +199,7 @@ public class AssistantItemValidator {
         }
     }
 
-    private void validateConnection(String json, List<String> errors, List<String> warnings) {
+    private void validateEventSource(String json, List<String> errors, List<String> warnings) {
         JsonNode node;
         try {
             node = objectMapper.readTree(json);

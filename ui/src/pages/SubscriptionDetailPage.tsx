@@ -417,7 +417,7 @@ function registerElLanguage(monaco: typeof Monaco) {
         event: {
             type: "Normalized event type (e.g., \"issue.created\", \"pr.merged\")",
             source: "Source system: \"github\" or \"jira\"",
-            connectionId: "Connection slug (e.g., \"github-com\")",
+            eventSourceId: "Connection slug (e.g., \"github-com\")",
             ref: "Full URL of the event subject",
             timestamp: "When the event occurred (ISO-8601)",
             actor: actorFields,
@@ -699,7 +699,7 @@ function FilterTab({ filterExpression, setFilterExpression, processEventsFrom, e
                                         {result.event.source}
                                     </Label>
                                 </Td>
-                                <Td>{result.event.connectionId}</Td>
+                                <Td>{result.event.eventSourceId}</Td>
                                 <Td>
                                     <Label isCompact>{result.event.type}</Label>
                                 </Td>
@@ -755,7 +755,7 @@ function FilterHelpModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
                     <Tbody>
                         <Tr><Td><code>event.type</code></Td><Td>Normalized event type</Td><Td><code>"issue.created"</code>, <code>"pr.merged"</code>, <code>"push"</code></Td></Tr>
                         <Tr><Td><code>event.source</code></Td><Td>Source system</Td><Td><code>"github"</code>, <code>"jira"</code></Td></Tr>
-                        <Tr><Td><code>event.connectionId</code></Td><Td>Connection slug</Td><Td><code>"github-com"</code>, <code>"jira-prod"</code></Td></Tr>
+                        <Tr><Td><code>event.eventSourceId</code></Td><Td>Connection slug</Td><Td><code>"github-com"</code>, <code>"jira-prod"</code></Td></Tr>
                         <Tr><Td><code>event.ref</code></Td><Td>Full URL of the event subject</Td><Td><code>"https://github.com/owner/repo/issues/123"</code></Td></Tr>
                         <Tr><Td><code>event.timestamp</code></Td><Td>When the event occurred</Td><Td>ISO-8601 string</Td></Tr>
                         <Tr><Td><code>event.actor.login</code></Td><Td>Actor username or account ID</Td><Td><code>"octocat"</code></Td></Tr>
@@ -783,7 +783,7 @@ function FilterHelpModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
                     </Thead>
                     <Tbody>
                         <Tr><Td><code>==</code></Td><Td>Equals</Td><Td><code>event.type == 'issue.created'</code></Td></Tr>
-                        <Tr><Td><code>!=</code></Td><Td>Not equals</Td><Td><code>event.connectionId != 'jira-staging'</code></Td></Tr>
+                        <Tr><Td><code>!=</code></Td><Td>Not equals</Td><Td><code>event.eventSourceId != 'jira-staging'</code></Td></Tr>
                         <Tr><Td><code>&&</code></Td><Td>Logical AND</Td><Td><code>event.source == 'github' && event.type == 'push'</code></Td></Tr>
                         <Tr><Td><code>||</code></Td><Td>Logical OR</Td><Td><code>event.type == 'issue.created' || event.type == 'issue.closed'</code></Td></Tr>
                         <Tr><Td><code>!</code></Td><Td>Logical NOT</Td><Td><code>!(event.type.startsWith('pr.'))</code></Td></Tr>
@@ -807,9 +807,9 @@ function FilterHelpModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
                         {[
                             ["event.type == 'issue.created'", "Match a specific event type"],
                             ["event.type.startsWith('pr.')", "Match all pull request events"],
-                            ["event.connectionId == 'github-com' && event.type.startsWith('issue.')", "Issues from a specific connection"],
+                            ["event.eventSourceId == 'github-com' && event.type.startsWith('issue.')", "Issues from a specific connection"],
                             ["event.type == 'issue.created' || event.type == 'issue.closed'", "Match either of two event types"],
-                            ["event.connectionId != 'jira-staging'", "Exclude events from a specific connection"],
+                            ["event.eventSourceId != 'jira-staging'", "Exclude events from a specific connection"],
                             ["event.payload.issue.state == 'open'", "Match events where the issue is open"],
                             ["event.payload.pullRequest.baseBranch == 'main'", "PR events targeting the main branch"],
                             ["event.type == 'pr.review.submitted' && event.payload.review.state == 'approved'", "Only approved PR reviews"],

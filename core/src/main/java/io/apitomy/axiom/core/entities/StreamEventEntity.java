@@ -11,7 +11,7 @@ import java.util.UUID;
 
 /**
  * A single normalized event in the event stream. Every event produced by
- * an {@link EventSourceConnectionEntity} is stored here with a typed,
+ * an {@link EventSourceEntity} is stored here with a typed,
  * schema-validated payload.
  */
 @Entity
@@ -35,10 +35,10 @@ public class StreamEventEntity extends PanacheEntityBase {
     public String source;
 
     /**
-     * Slug of the EventSourceConnection that produced this event.
+     * Slug of the EventSource that produced this event.
      */
-    @Column(name = "connection_id", nullable = false, length = 63)
-    public String connectionId;
+    @Column(name = "event_source_id", nullable = false, length = 63)
+    public String eventSourceId;
 
     /**
      * Normalized event type (e.g., "issue.created", "pr.merged").

@@ -225,7 +225,7 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
         }
         map.put("type", event.type);
         map.put("source", event.source);
-        map.put("connectionId", event.connectionId);
+        map.put("eventSourceId", event.eventSourceId);
         map.put("ref", event.ref);
         map.put("timestamp", event.timestamp.toString());
 
@@ -266,7 +266,7 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
         bean.setId(entity.id);
         bean.setSourceEventId(entity.sourceEventId);
         bean.setSource(entity.source);
-        bean.setConnectionId(entity.connectionId);
+        bean.setEventSourceId(entity.eventSourceId);
         bean.setType(entity.type);
         bean.setRef(entity.ref);
         bean.setTimestamp(Date.from(entity.timestamp));

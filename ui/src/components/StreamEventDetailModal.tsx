@@ -38,7 +38,7 @@ export function StreamEventDetailModal({ event, onClose, onSelectPath }: StreamE
             <ModalHeader
                 title={event?.type ?? "Stream Event"}
                 description={event
-                    ? `${event.source} · ${event.connectionId} · ${new Date(event.timestamp).toLocaleString()}${handleSelectPath ? " · Click a field to insert its path" : ""}`
+                    ? `${event.source} · ${event.eventSourceId} · ${new Date(event.timestamp).toLocaleString()}${handleSelectPath ? " · Click a field to insert its path" : ""}`
                     : undefined}
             />
             <ModalBody>

@@ -7,7 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.api.beans.ImportResult;
 import io.apitomy.axiom.api.beans.PackExportRequest;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
-import io.apitomy.axiom.core.entities.EventSourceConnectionEntity;
+import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.McpServerEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
@@ -99,11 +99,11 @@ public class ImportExportService {
             }
         }
 
-        if (request.getConnectionIds() != null && !request.getConnectionIds().isEmpty()) {
-            ArrayNode arr = pack.putArray("connections");
-            for (String id : request.getConnectionIds()) {
-                EventSourceConnectionEntity entity = EventSourceConnectionEntity.findById(id);
-                if (entity != null) arr.add(serializeConnection(entity));
+        if (request.getEventSourceIds() != null && !request.getEventSourceIds().isEmpty()) {
+            ArrayNode arr = pack.putArray("eventSources");
+            for (String id : request.getEventSourceIds()) {
+                EventSourceEntity entity = EventSourceEntity.findById(id);
+                if (entity != null) arr.add(serializeEventSource(entity));
             }
         }
 
@@ -143,7 +143,7 @@ public class ImportExportService {
         checkConflicts(pack, "mcpServers", "name", "mcpServer", conflicts);
         checkConflicts(pack, "actionTypes", "name", "actionType", conflicts);
         checkConflicts(pack, "sessionTemplates", "templateId", "sessionTemplate", conflicts);
-        checkConflicts(pack, "connections", "id", "connection", conflicts);
+        checkConflicts(pack, "eventSources", "id", "eventSource", conflicts);
         checkConflicts(pack, "subscriptions", "name", "subscription", conflicts);
         checkConflicts(pack, "workflowDefinitions", "name", "workflowDefinition", conflicts);
 
@@ -165,17 +165,17 @@ public class ImportExportService {
         int mcpServers = importMcpServers(pack.path("mcpServers"));
         int actionTypes = importActionTypes(pack.path("actionTypes"));
         int sessionTemplates = importSessionTemplates(pack.path("sessionTemplates"));
-        int connections = importConnections(pack.path("connections"));
+        int eventSources = importEventSources(pack.path("eventSources"));
         int subscriptions = importSubscriptions(pack.path("subscriptions"));
         int workflowDefinitions = importWorkflowDefinitions(pack.path("workflowDefinitions"));
 
         String packName = pack.path("metadata").path("name").asText("unnamed");
         LOG.infof("Imported configuration pack '%s': %d tools, %d toolsets, %d MCP servers, "
                         + "%d action types, %d session templates, "
-                        + "%d connections, %d subscriptions, "
+                        + "%d event sources, %d subscriptions, "
                         + "%d workflow definitions",
                 packName, tools, toolsets, mcpServers, actionTypes,
-                sessionTemplates, connections, subscriptions,
+                sessionTemplates, eventSources, subscriptions,
                 workflowDefinitions);
 
         ImportResult result = new ImportResult();
@@ -184,7 +184,7 @@ public class ImportExportService {
         result.setMcpServers(mcpServers);
         result.setActionTypes(actionTypes);
         result.setSessionTemplates(sessionTemplates);
-        result.setConnections(connections);
+        result.setEventSources(eventSources);
         result.setSubscriptions(subscriptions);
         result.setWorkflowDefinitions(workflowDefinitions);
         return result;
@@ -198,7 +198,7 @@ public class ImportExportService {
             int actionTypesCreated, int actionTypesUpdated,
             int toolsetsCreated, int toolsetsUpdated,
             int sessionTemplatesCreated, int sessionTemplatesUpdated,
-            int connectionsCreated, int connectionsUpdated,
+            int eventSourcesCreated, int eventSourcesUpdated,
             int subscriptionsCreated, int subscriptionsUpdated,
             int workflowDefinitionsCreated, int workflowDefinitionsUpdated
     ) {}
@@ -217,7 +217,7 @@ public class ImportExportService {
         int[] actionTypes = upsertActionTypes(pack.path("actionTypes"));
         int[] toolsets = upsertToolsets(pack.path("toolsets"));
         int[] sessionTemplates = upsertSessionTemplates(pack.path("sessionTemplates"));
-        int[] connections = upsertConnections(pack.path("connections"));
+        int[] eventSources = upsertEventSources(pack.path("eventSources"));
         int[] subscriptions = upsertSubscriptions(pack.path("subscriptions"));
         int[] workflowDefs = upsertWorkflowDefinitions(pack.path("workflowDefinitions"));
 
@@ -226,7 +226,7 @@ public class ImportExportService {
                         + "%d action types created, %d updated; "
                         + "%d toolsets created, %d updated; "
                         + "%d session templates created, %d updated; "
-                        + "%d connections created, %d updated; "
+                        + "%d event sources created, %d updated; "
                         + "%d subscriptions created, %d updated; "
                         + "%d workflow definitions created, %d updated",
                 packName,
@@ -234,7 +234,7 @@ public class ImportExportService {
                 actionTypes[0], actionTypes[1],
                 toolsets[0], toolsets[1],
                 sessionTemplates[0], sessionTemplates[1],
-                connections[0], connections[1],
+                eventSources[0], eventSources[1],
                 subscriptions[0], subscriptions[1],
                 workflowDefs[0], workflowDefs[1]);
 
@@ -243,7 +243,7 @@ public class ImportExportService {
                 actionTypes[0], actionTypes[1],
                 toolsets[0], toolsets[1],
                 sessionTemplates[0], sessionTemplates[1],
-                connections[0], connections[1],
+                eventSources[0], eventSources[1],
                 subscriptions[0], subscriptions[1],
                 workflowDefs[0], workflowDefs[1]
         );
@@ -330,7 +330,7 @@ public class ImportExportService {
                 case "mcpServer" -> McpServerEntity.count("name", name) > 0;
                 case "actionType" -> ActionTypeEntity.count("name", name) > 0;
                 case "sessionTemplate" -> SessionTemplateEntity.count("templateId", name) > 0;
-                case "connection" -> EventSourceConnectionEntity.findById(name) != null;
+                case "eventSource" -> EventSourceEntity.findById(name) != null;
                 case "subscription" -> EventSubscriptionEntity.count("name", name) > 0;
                 case "workflowDefinition" -> WorkflowDefinitionEntity.count("name", name) > 0;
                 default -> false;
@@ -709,7 +709,7 @@ public class ImportExportService {
         return n;
     }
 
-    private ObjectNode serializeConnection(EventSourceConnectionEntity e) {
+    private ObjectNode serializeEventSource(EventSourceEntity e) {
         ObjectNode n = objectMapper.createObjectNode();
         n.put("id", e.id);
         n.put("name", e.name);
@@ -756,11 +756,11 @@ public class ImportExportService {
         return n;
     }
 
-    private int importConnections(JsonNode items) {
+    private int importEventSources(JsonNode items) {
         if (!items.isArray()) return 0;
         int count = 0;
         for (JsonNode item : items) {
-            EventSourceConnectionEntity entity = new EventSourceConnectionEntity();
+            EventSourceEntity entity = new EventSourceEntity();
             entity.id = item.path("id").asText();
             entity.name = item.path("name").asText();
             entity.description = textOrNull(item, "description");
@@ -804,15 +804,15 @@ public class ImportExportService {
         return count;
     }
 
-    private int[] upsertConnections(JsonNode items) {
+    private int[] upsertEventSources(JsonNode items) {
         if (!items.isArray()) return new int[]{0, 0};
         int created = 0, updated = 0;
         for (JsonNode item : items) {
             String id = item.path("id").asText();
-            EventSourceConnectionEntity entity = EventSourceConnectionEntity.findById(id);
+            EventSourceEntity entity = EventSourceEntity.findById(id);
             boolean isNew = (entity == null);
             if (isNew) {
-                entity = new EventSourceConnectionEntity();
+                entity = new EventSourceEntity();
                 entity.id = id;
                 entity.createdOn = Instant.now();
             }

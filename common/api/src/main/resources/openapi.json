@@ -4291,13 +4291,13 @@
         }
       ]
     },
-    "/connections": {
+    "/event-sources": {
       "get": {
         "tags": [
-          "Connections"
+          "EventSources"
         ],
-        "summary": "List all connections",
-        "operationId": "listConnections",
+        "summary": "List all event sources",
+        "operationId": "listEventSources",
         "parameters": [
           {
             "name": "page",
@@ -4338,11 +4338,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Paginated list of connections",
+            "description": "Paginated list of event sources",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConnectionSearchResults"
+                  "$ref": "#/components/schemas/EventSourceSearchResults"
                 }
               }
             }
@@ -4351,15 +4351,15 @@
       },
       "post": {
         "tags": [
-          "Connections"
+          "EventSources"
         ],
-        "summary": "Create a connection",
-        "operationId": "createConnection",
+        "summary": "Create an event source",
+        "operationId": "createEventSource",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NewConnection"
+                "$ref": "#/components/schemas/NewEventSource"
               }
             }
           },
@@ -4367,11 +4367,11 @@
         },
         "responses": {
           "201": {
-            "description": "Connection created",
+            "description": "Event source created",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Connection"
+                  "$ref": "#/components/schemas/EventSource"
                 }
               }
             }
@@ -4379,20 +4379,20 @@
         }
       }
     },
-    "/connections/{connectionId}": {
+    "/event-sources/{eventSourceId}": {
       "get": {
         "tags": [
-          "Connections"
+          "EventSources"
         ],
-        "summary": "Get a connection by ID",
-        "operationId": "getConnection",
+        "summary": "Get an event source by ID",
+        "operationId": "getEventSource",
         "responses": {
           "200": {
-            "description": "Connection details",
+            "description": "Event source details",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Connection"
+                  "$ref": "#/components/schemas/EventSource"
                 }
               }
             }
@@ -4404,15 +4404,15 @@
       },
       "put": {
         "tags": [
-          "Connections"
+          "EventSources"
         ],
-        "summary": "Update a connection",
-        "operationId": "updateConnection",
+        "summary": "Update an event source",
+        "operationId": "updateEventSource",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NewConnection"
+                "$ref": "#/components/schemas/NewEventSource"
               }
             }
           },
@@ -4420,11 +4420,11 @@
         },
         "responses": {
           "200": {
-            "description": "Connection updated",
+            "description": "Event source updated",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Connection"
+                  "$ref": "#/components/schemas/EventSource"
                 }
               }
             }
@@ -4436,10 +4436,10 @@
       },
       "delete": {
         "tags": [
-          "Connections"
+          "EventSources"
         ],
-        "summary": "Delete a connection",
-        "operationId": "deleteConnection",
+        "summary": "Delete an event source",
+        "operationId": "deleteEventSource",
         "responses": {
           "204": {
             "description": "Deleted"
@@ -4451,9 +4451,9 @@
       },
       "parameters": [
         {
-          "name": "connectionId",
+          "name": "eventSourceId",
           "in": "path",
-          "description": "Connection ID (slug)",
+          "description": "Event source ID (slug)",
           "required": true,
           "schema": {
             "type": "string"
@@ -4461,20 +4461,20 @@
         }
       ]
     },
-    "/connections/{connectionId}/status": {
+    "/event-sources/{eventSourceId}/status": {
       "get": {
         "tags": [
-          "Connections"
+          "EventSources"
         ],
-        "summary": "Get connection status",
-        "operationId": "getConnectionStatus",
+        "summary": "Get event source status",
+        "operationId": "getEventSourceStatus",
         "responses": {
           "200": {
-            "description": "Connection status",
+            "description": "Event source status",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConnectionStatus"
+                  "$ref": "#/components/schemas/EventSourceStatus"
                 }
               }
             }
@@ -4486,9 +4486,9 @@
       },
       "parameters": [
         {
-          "name": "connectionId",
+          "name": "eventSourceId",
           "in": "path",
-          "description": "Connection ID (slug)",
+          "description": "Event source ID (slug)",
           "required": true,
           "schema": {
             "type": "string"
@@ -4496,13 +4496,13 @@
         }
       ]
     },
-    "/connections/{connectionId}/logs": {
+    "/event-sources/{eventSourceId}/logs": {
       "get": {
         "tags": [
-          "Connections"
+          "EventSources"
         ],
-        "summary": "List connection poll logs",
-        "operationId": "listConnectionPollLogs",
+        "summary": "List event source poll logs",
+        "operationId": "listEventSourcePollLogs",
         "parameters": [
           {
             "name": "page",
@@ -4529,7 +4529,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConnectionPollLogSearchResults"
+                  "$ref": "#/components/schemas/EventSourcePollLogSearchResults"
                 }
               }
             }
@@ -4541,9 +4541,9 @@
       },
       "parameters": [
         {
-          "name": "connectionId",
+          "name": "eventSourceId",
           "in": "path",
-          "description": "Connection ID (slug)",
+          "description": "Event source ID (slug)",
           "required": true,
           "schema": {
             "type": "string"
@@ -4587,9 +4587,9 @@
             }
           },
           {
-            "name": "filterConnectionId",
+            "name": "filterEventSourceId",
             "in": "query",
-            "description": "Filter by connection ID",
+            "description": "Filter by event source ID",
             "required": false,
             "schema": {
               "type": "string"
@@ -6640,8 +6640,8 @@
               "type": "string"
             }
           },
-          "connectionIds": {
-            "description": "Connection slugs to include",
+          "eventSourceIds": {
+            "description": "Event source slugs to include",
             "type": "array",
             "items": {
               "type": "string"
@@ -6681,7 +6681,7 @@
           "sessionTemplates": {
             "type": "integer"
           },
-          "connections": {
+          "eventSources": {
             "type": "integer"
           },
           "subscriptions": {
@@ -6941,12 +6941,12 @@
             "description": "Number of existing session templates updated",
             "type": "integer"
           },
-          "connectionsCreated": {
-            "description": "Number of new connections created",
+          "eventSourcesCreated": {
+            "description": "Number of new event sources created",
             "type": "integer"
           },
-          "connectionsUpdated": {
-            "description": "Number of existing connections updated",
+          "eventSourcesUpdated": {
+            "description": "Number of existing event sources updated",
             "type": "integer"
           },
           "subscriptionsCreated": {
@@ -8524,7 +8524,7 @@
           }
         }
       },
-      "Connection": {
+      "EventSource": {
         "required": [
           "id",
           "name",
@@ -8583,7 +8583,7 @@
           }
         }
       },
-      "NewConnection": {
+      "NewEventSource": {
         "required": [
           "id",
           "name",
@@ -8634,13 +8634,13 @@
           }
         }
       },
-      "ConnectionSearchResults": {
+      "EventSourceSearchResults": {
         "type": "object",
         "properties": {
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Connection"
+              "$ref": "#/components/schemas/EventSource"
             }
           },
           "totalCount": {
@@ -8657,10 +8657,10 @@
           }
         }
       },
-      "ConnectionStatus": {
+      "EventSourceStatus": {
         "type": "object",
         "properties": {
-          "connectionId": {
+          "eventSourceId": {
             "type": "string"
           },
           "enabled": {
@@ -8683,14 +8683,14 @@
           }
         }
       },
-      "ConnectionPollLog": {
+      "EventSourcePollLog": {
         "type": "object",
         "properties": {
           "id": {
             "format": "int64",
             "type": "integer"
           },
-          "connectionId": {
+          "eventSourceId": {
             "type": "string"
           },
           "status": {
@@ -8716,13 +8716,13 @@
           }
         }
       },
-      "ConnectionPollLogSearchResults": {
+      "EventSourcePollLogSearchResults": {
         "type": "object",
         "properties": {
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ConnectionPollLog"
+              "$ref": "#/components/schemas/EventSourcePollLog"
             }
           },
           "totalCount": {
@@ -8743,7 +8743,7 @@
         "required": [
           "id",
           "source",
-          "connectionId",
+          "eventSourceId",
           "type",
           "ref",
           "timestamp"
@@ -8761,9 +8761,9 @@
             "type": "string",
             "description": "Source system: github or jira"
           },
-          "connectionId": {
+          "eventSourceId": {
             "type": "string",
-            "description": "Slug of the connection that produced this event"
+            "description": "Slug of the event source that produced this event"
           },
           "type": {
             "type": "string",
@@ -9047,7 +9047,7 @@
           },
           "filterExpression": {
             "type": "string",
-            "description": "Jakarta EL expression that evaluates to boolean. Available variables: event.type, event.source, event.connectionId, event.ref, event.timestamp, event.actor.login, event.payload.* Fields from the typed event payload are accessible via dot notation."
+            "description": "Jakarta EL expression that evaluates to boolean. Available variables: event.type, event.source, event.eventSourceId, event.ref, event.timestamp, event.actor.login, event.payload.* Fields from the typed event payload are accessible via dot notation."
           },
           "labels": {
             "type": "array",
@@ -9094,7 +9094,7 @@
           },
           "filterExpression": {
             "type": "string",
-            "description": "Jakarta EL expression that evaluates to boolean. Available variables: event.type, event.source, event.connectionId, event.ref, event.timestamp, event.actor.login, event.payload.* Fields from the typed event payload are accessible via dot notation."
+            "description": "Jakarta EL expression that evaluates to boolean. Available variables: event.type, event.source, event.eventSourceId, event.ref, event.timestamp, event.actor.login, event.payload.* Fields from the typed event payload are accessible via dot notation."
           },
           "labels": {
             "type": "array",
@@ -9437,8 +9437,8 @@
       "description": "Workflow run history and execution observability"
     },
     {
-      "name": "Connections",
-      "description": "Event source connection management"
+      "name": "EventSources",
+      "description": "Event source management"
     },
     {
       "name": "StreamEvents",

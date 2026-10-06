@@ -9,13 +9,13 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 
 /**
- * An authenticated connection to an external system (GitHub or Jira) that
+ * An authenticated event source backed by an external system (GitHub or Jira) that
  * produces a normalized event stream. The id is a user-provided slug
  * constrained to lowercase letters, numbers, and dashes.
  */
 @Entity
-@Table(name = "event_source_connection")
-public class EventSourceConnectionEntity extends PanacheEntityBase {
+@Table(name = "event_source")
+public class EventSourceEntity extends PanacheEntityBase {
 
     /**
      * User-provided slug identifier (e.g., "github-com", "jira-prod").

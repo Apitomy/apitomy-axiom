@@ -25,7 +25,7 @@ public final class WorkflowEventMapper {
      *
      * @param event        the stream event entity
      * @param objectMapper used to parse JSON fields
-     * @return a map with keys: type, source, connectionId, ref, timestamp,
+     * @return a map with keys: type, source, eventSourceId, ref, timestamp,
      *         actor, payload
      */
     public static Map<String, Object> toEventMap(StreamEventEntity event,
@@ -33,7 +33,7 @@ public final class WorkflowEventMapper {
         Map<String, Object> map = new HashMap<>();
         map.put("type", event.type);
         map.put("source", event.source);
-        map.put("connectionId", event.connectionId);
+        map.put("eventSourceId", event.eventSourceId);
         map.put("ref", event.ref);
         map.put("timestamp", event.timestamp.toString());
 

@@ -274,7 +274,7 @@ class RoutingOutcomeItemsTest {
         event.id = eventId;
         event.sourceEventId = "items-" + eventId;
         event.source = "github";
-        event.connectionId = "conn-items";
+        event.eventSourceId = "conn-items";
         event.type = "issue.created";
         event.ref = "https://github.com/test-org/items/issues/" + eventId;
         event.timestamp = Instant.now();

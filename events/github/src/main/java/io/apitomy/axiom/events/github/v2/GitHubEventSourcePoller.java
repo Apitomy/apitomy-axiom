@@ -2,8 +2,8 @@ package io.apitomy.axiom.events.github.v2;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.apitomy.axiom.core.entities.ConnectionPollLogEntity;
-import io.apitomy.axiom.core.entities.EventSourceConnectionEntity;
+import io.apitomy.axiom.core.entities.EventSourcePollLogEntity;
+import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.events.model.NormalizedEvent;
 import io.apitomy.axiom.core.services.EncryptionService;
@@ -25,9 +25,9 @@ import java.util.concurrent.ConcurrentHashMap;
 @ApplicationScoped
 public class
 
-GitHubConnectionPoller {
+GitHubEventSourcePoller {
 
-    private static final Logger LOG = Logger.getLogger(GitHubConnectionPoller.class);
+    private static final Logger LOG = Logger.getLogger(GitHubEventSourcePoller.class);
     private static final int DEFAULT_POLL_INTERVAL = 60;
     private static final int TICK_INTERVAL = 10;
 
@@ -48,11 +48,11 @@ GitHubConnectionPoller {
 
     private volatile boolean shuttingDown = false;
 
-    // Track ETag per connection+repo for conditional polling
-    // Key: "connectionId:owner/repo"
+    // Track ETag per event source+repo for conditional polling
+    // Key: "eventSourceId:owner/repo"
     private final Map<String, String> etagCache = new ConcurrentHashMap<>();
 
-    // Track last-seen event IDs per connection+repo for dedup
+    // Track last-seen event IDs per event source+repo for dedup
     private final Map<String, Set<String>> seenEventIds = new ConcurrentHashMap<>();
 
     @PreDestroy
@@ -65,35 +65,35 @@ GitHubConnectionPoller {
     void poll() {
         if (shuttingDown) return;
 
-        List<EventSourceConnectionEntity> connections = EventSourceConnectionEntity
+        List<EventSourceEntity> eventSources = EventSourceEntity
                 .list("sourceType = ?1 and enabled = ?2", "github", true);
 
-        if (connections.isEmpty()) return;
+        if (eventSources.isEmpty()) return;
 
         Instant now = Instant.now();
-        for (EventSourceConnectionEntity conn : connections) {
-            if (isDue(conn, now)) {
-                pollConnection(conn);
+        for (EventSourceEntity eventSource : eventSources) {
+            if (isDue(eventSource, now)) {
+                pollEventSource(eventSource);
             }
         }
     }
 
-    private boolean isDue(EventSourceConnectionEntity conn, Instant now) {
-        if (conn.lastPolledAt == null) return true;
-        int interval = conn.pollInterval != null ? conn.pollInterval : DEFAULT_POLL_INTERVAL;
-        return now.isAfter(conn.lastPolledAt.plusSeconds(interval));
+    private boolean isDue(EventSourceEntity eventSource, Instant now) {
+        if (eventSource.lastPolledAt == null) return true;
+        int interval = eventSource.pollInterval != null ? eventSource.pollInterval : DEFAULT_POLL_INTERVAL;
+        return now.isAfter(eventSource.lastPolledAt.plusSeconds(interval));
     }
 
-    private void pollConnection(EventSourceConnectionEntity conn) {
+    private void pollEventSource(EventSourceEntity eventSource) {
         long startMs = System.currentTimeMillis();
-        String token = resolveToken(conn);
+        String token = resolveToken(eventSource);
         List<String> repositories;
         try {
-            JsonNode config = objectMapper.readTree(conn.configuration);
+            JsonNode config = objectMapper.readTree(eventSource.configuration);
             JsonNode reposNode = config.path("repositories");
             if (!reposNode.isArray() || reposNode.isEmpty()) {
-                LOG.warnf("Connection %s has no repositories configured", conn.id);
-                recordPollLog(conn.id, "error", "No repositories configured",
+                LOG.warnf("Event source %s has no repositories configured", eventSource.id);
+                recordPollLog(eventSource.id, "error", "No repositories configured",
                         null, 0, System.currentTimeMillis() - startMs);
                 return;
             }
@@ -102,16 +102,16 @@ GitHubConnectionPoller {
                 repositories.add(repo.asText());
             }
         } catch (Exception e) {
-            LOG.warnf(e, "Failed to parse configuration for connection %s", conn.id);
-            recordPollLog(conn.id, "error", "Configuration error",
+            LOG.warnf(e, "Failed to parse configuration for event source %s", eventSource.id);
+            recordPollLog(eventSource.id, "error", "Configuration error",
                     e.getMessage(), 0, System.currentTimeMillis() - startMs);
             return;
         }
 
         // The stored baseUrl is the human-readable URL (e.g. https://github.com).
         // Derive the API base URL from it for API calls.
-        String apiBaseUrl = deriveApiBaseUrl(conn.baseUrl);
-        String htmlBaseUrl = conn.baseUrl;
+        String apiBaseUrl = deriveApiBaseUrl(eventSource.baseUrl);
+        String htmlBaseUrl = eventSource.baseUrl;
 
         int totalIngested = 0;
         StringBuilder errors = new StringBuilder();
@@ -119,45 +119,45 @@ GitHubConnectionPoller {
             if (shuttingDown) break;
             String[] parts = repoFullName.split("/");
             if (parts.length != 2) {
-                LOG.warnf("Invalid repository format '%s' in connection %s, expected 'owner/repo'",
-                        repoFullName, conn.id);
+                LOG.warnf("Invalid repository format '%s' in event source %s, expected 'owner/repo'",
+                        repoFullName, eventSource.id);
                 if (!errors.isEmpty()) errors.append("; ");
                 errors.append("Invalid repo format: ").append(repoFullName);
                 continue;
             }
-            int ingested = pollRepository(conn, parts[0], parts[1], token, apiBaseUrl, htmlBaseUrl, errors);
+            int ingested = pollRepository(eventSource, parts[0], parts[1], token, apiBaseUrl, htmlBaseUrl, errors);
             totalIngested += ingested;
         }
 
-        updateLastPolledAt(conn.id);
+        updateLastPolledAt(eventSource.id);
         long duration = System.currentTimeMillis() - startMs;
 
         if (errors.isEmpty()) {
-            recordPollLog(conn.id, "success",
+            recordPollLog(eventSource.id, "success",
                     "Polled " + repositories.size() + " repositories",
                     null, totalIngested, duration);
         } else {
-            recordPollLog(conn.id, "error",
+            recordPollLog(eventSource.id, "error",
                     "Polled " + repositories.size() + " repositories with errors",
                     errors.toString(), totalIngested, duration);
         }
 
-        LOG.infof("Polled connection %s: %d events ingested across %d repositories",
-                conn.id, totalIngested, repositories.size());
+        LOG.infof("Polled event source %s: %d events ingested across %d repositories",
+                eventSource.id, totalIngested, repositories.size());
     }
 
-    private int pollRepository(EventSourceConnectionEntity conn, String owner, String repo,
+    private int pollRepository(EventSourceEntity eventSource, String owner, String repo,
                                 String token, String apiBaseUrl, String htmlBaseUrl,
                                 StringBuilder errors) {
-        String cacheKey = conn.id + ":" + owner + "/" + repo;
+        String cacheKey = eventSource.id + ":" + owner + "/" + repo;
         String etag = etagCache.get(cacheKey);
 
         GitHubEventsApiClient.EventsPollResult result = apiClient.fetchRepositoryEvents(
                 apiBaseUrl, owner, repo, token, etag);
 
         if (!result.success()) {
-            LOG.warnf("Failed to poll %s/%s for connection %s: %s",
-                    owner, repo, conn.id, result.errorMessage());
+            LOG.warnf("Failed to poll %s/%s for event source %s: %s",
+                    owner, repo, eventSource.id, result.errorMessage());
             if (!errors.isEmpty()) errors.append("; ");
             errors.append(owner).append("/").append(repo).append(": ").append(result.errorMessage());
             return 0;
@@ -195,7 +195,7 @@ GitHubConnectionPoller {
                 fullPr = backfillPr(apiBaseUrl, owner, repo, event, token);
             }
 
-            NormalizedEvent normalized = normalizer.normalize(event, conn.id, htmlBaseUrl, fullPr);
+            NormalizedEvent normalized = normalizer.normalize(event, eventSource.id, htmlBaseUrl, fullPr);
             if (normalized != null) {
                 boolean persisted = eventStreamService.persistEvent(normalized);
                 if (persisted) ingested++;
@@ -251,10 +251,10 @@ GitHubConnectionPoller {
         return url + "/api/v3";
     }
 
-    private String resolveToken(EventSourceConnectionEntity conn) {
-        // Per-connection secret
-        if (conn.secretName != null && !conn.secretName.isBlank()) {
-            SecretEntity secret = SecretEntity.find("name", conn.secretName).firstResult();
+    private String resolveToken(EventSourceEntity eventSource) {
+        // Per-event-source secret
+        if (eventSource.secretName != null && !eventSource.secretName.isBlank()) {
+            SecretEntity secret = SecretEntity.find("name", eventSource.secretName).firstResult();
             if (secret != null) {
                 return encryptionService.decrypt(secret.encryptedValue);
             }
@@ -273,10 +273,10 @@ GitHubConnectionPoller {
     }
 
     @Transactional
-    void recordPollLog(String connectionId, String status, String message,
+    void recordPollLog(String eventSourceId, String status, String message,
                         String detail, int eventsIngested, long durationMs) {
-        ConnectionPollLogEntity log = new ConnectionPollLogEntity();
-        log.connectionId = connectionId;
+        EventSourcePollLogEntity log = new EventSourcePollLogEntity();
+        log.eventSourceId = eventSourceId;
         log.status = status;
         log.message = message;
         log.detail = detail;
@@ -287,10 +287,10 @@ GitHubConnectionPoller {
     }
 
     @Transactional
-    void updateLastPolledAt(String connectionId) {
-        EventSourceConnectionEntity conn = EventSourceConnectionEntity.findById(connectionId);
-        if (conn != null) {
-            conn.lastPolledAt = Instant.now();
+    void updateLastPolledAt(String eventSourceId) {
+        EventSourceEntity eventSource = EventSourceEntity.findById(eventSourceId);
+        if (eventSource != null) {
+            eventSource.lastPolledAt = Instant.now();
         }
     }
 }

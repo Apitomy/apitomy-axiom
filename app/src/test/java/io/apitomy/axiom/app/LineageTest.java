@@ -456,7 +456,7 @@ class LineageTest {
             event.id = eventId;
             event.sourceEventId = "lineage-" + eventId;
             event.source = "github";
-            event.connectionId = "conn-lineage";
+            event.eventSourceId = "conn-lineage";
             event.type = "lineage.test";
             event.ref = "https://github.com/test-org/lineage/issues/1";
             event.timestamp = Instant.now();

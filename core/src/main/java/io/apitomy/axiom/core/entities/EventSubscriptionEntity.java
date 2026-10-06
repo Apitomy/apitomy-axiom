@@ -33,7 +33,7 @@ public class EventSubscriptionEntity extends PanacheEntity {
 
     /**
      * Jakarta EL filter expression that evaluates to boolean.
-     * Available variables: event.type, event.source, event.connectionId,
+     * Available variables: event.type, event.source, event.eventSourceId,
      * event.ref, event.timestamp, event.actor.login, event.payload.*
      */
     @Column(columnDefinition = "TEXT")

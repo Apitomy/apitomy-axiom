@@ -187,7 +187,7 @@ export interface PackExportRequest {
     toolsetIds?: number[];
     mcpServerIds?: number[];
     sessionTemplateIds?: string[];
-    connectionIds?: string[];
+    eventSourceIds?: string[];
     subscriptionIds?: number[];
     workflowDefinitionIds?: number[];
 }
@@ -198,7 +198,7 @@ export interface ImportResult {
     toolsets?: number;
     mcpServers?: number;
     sessionTemplates?: number;
-    connections?: number;
+    eventSources?: number;
     subscriptions?: number;
     workflowDefinitions?: number;
 }
@@ -218,8 +218,6 @@ export interface AssistantApplyResult {
     sessionTemplatesUpdated?: number;
     eventSourcesCreated?: number;
     eventSourcesUpdated?: number;
-    connectionsCreated?: number;
-    connectionsUpdated?: number;
     subscriptionsCreated?: number;
     subscriptionsUpdated?: number;
 }
@@ -2000,7 +1998,7 @@ export interface NewConnection {
 }
 
 export interface ConnectionStatus {
-    connectionId: string;
+    eventSourceId: string;
     enabled: boolean;
     lastPolledAt?: string;
     totalEventsProduced: number;
@@ -2016,19 +2014,19 @@ export async function fetchConnections(
     params.set("limit", String(limit));
     if (filterName) params.set("filterName", filterName);
     if (filterType) params.set("filterType", filterType);
-    const response = await fetch(`${API}/connections?${params}`);
+    const response = await fetch(`${API}/event-sources?${params}`);
     if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch connections"));
     return response.json();
 }
 
 export async function fetchConnection(connectionId: string): Promise<Connection> {
-    const response = await fetch(`${API}/connections/${encodeURIComponent(connectionId)}`);
+    const response = await fetch(`${API}/event-sources/${encodeURIComponent(connectionId)}`);
     if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch connection"));
     return response.json();
 }
 
 export async function createConnection(data: NewConnection): Promise<Connection> {
-    const response = await fetch(`${API}/connections`, {
+    const response = await fetch(`${API}/event-sources`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -2038,7 +2036,7 @@ export async function createConnection(data: NewConnection): Promise<Connection>
 }
 
 export async function updateConnection(connectionId: string, data: NewConnection): Promise<Connection> {
-    const response = await fetch(`${API}/connections/${encodeURIComponent(connectionId)}`, {
+    const response = await fetch(`${API}/event-sources/${encodeURIComponent(connectionId)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -2048,21 +2046,21 @@ export async function updateConnection(connectionId: string, data: NewConnection
 }
 
 export async function deleteConnection(connectionId: string): Promise<void> {
-    const response = await fetch(`${API}/connections/${encodeURIComponent(connectionId)}`, {
+    const response = await fetch(`${API}/event-sources/${encodeURIComponent(connectionId)}`, {
         method: "DELETE",
     });
     if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to delete connection"));
 }
 
 export async function fetchConnectionStatus(connectionId: string): Promise<ConnectionStatus> {
-    const response = await fetch(`${API}/connections/${encodeURIComponent(connectionId)}/status`);
+    const response = await fetch(`${API}/event-sources/${encodeURIComponent(connectionId)}/status`);
     if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch connection status"));
     return response.json();
 }
 
 export interface ConnectionPollLog {
     id: number;
-    connectionId: string;
+    eventSourceId: string;
     status: string;
     message: string;
     detail?: string;
@@ -2078,7 +2076,7 @@ export async function fetchConnectionPollLogs(
     params.set("page", String(page));
     params.set("limit", String(limit));
     const response = await fetch(
-        `${API}/connections/${encodeURIComponent(connectionId)}/logs?${params}`);
+        `${API}/event-sources/${encodeURIComponent(connectionId)}/logs?${params}`);
     if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch poll logs"));
     return response.json();
 }
@@ -2089,7 +2087,7 @@ export interface StreamEvent {
     id: string;
     sourceEventId?: string;
     source: string;
-    connectionId: string;
+    eventSourceId: string;
     type: string;
     ref: string;
     timestamp: string;
@@ -2108,7 +2106,7 @@ export async function fetchStreamEvents(
     params.set("page", String(page));
     params.set("limit", String(limit));
     if (filterType) params.set("filterType", filterType);
-    if (filterConnectionId) params.set("filterConnectionId", filterConnectionId);
+    if (filterConnectionId) params.set("filterEventSourceId", filterConnectionId);
     if (filterRef) params.set("filterRef", filterRef);
     const response = await fetch(`${API}/stream/events?${params}`);
     if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch stream events"));

@@ -498,7 +498,7 @@ class RetryBackoffTest {
             event.id = eventId;
             event.sourceEventId = "retry-" + eventId;
             event.source = "github";
-            event.connectionId = "conn-retry";
+            event.eventSourceId = "conn-retry";
             event.type = "issue.created";
             event.ref = "https://github.com/test-org/retry/issues/" + eventId;
             event.timestamp = Instant.now();

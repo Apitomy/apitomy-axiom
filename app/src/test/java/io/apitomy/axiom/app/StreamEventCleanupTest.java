@@ -98,7 +98,7 @@ class StreamEventCleanupTest {
         event.id = id;
         event.sourceEventId = "cleanup-test-" + id;
         event.source = "test";
-        event.connectionId = "test";
+        event.eventSourceId = "test";
         event.type = "test.event";
         event.ref = "ref";
         event.timestamp = old;

@@ -8,14 +8,14 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 
 /**
- * Audits the result of a single poll cycle for a connection.
+ * Audits the result of a single poll cycle for an event source.
  */
 @Entity
-@Table(name = "connection_poll_log")
-public class ConnectionPollLogEntity extends PanacheEntity {
+@Table(name = "event_source_poll_log")
+public class EventSourcePollLogEntity extends PanacheEntity {
 
-    @Column(name = "connection_id", nullable = false, length = 63)
-    public String connectionId;
+    @Column(name = "event_source_id", nullable = false, length = 63)
+    public String eventSourceId;
 
     /** "success" or "error" */
     @Column(nullable = false, length = 16)

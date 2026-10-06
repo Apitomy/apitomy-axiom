@@ -134,7 +134,7 @@ export function ConfigurationPacksPage() {
                 toolsetIds: [...selectedToolsets],
                 mcpServerIds: [...selectedMcpServers],
                 sessionTemplateIds: [...selectedSessionTemplates],
-                connectionIds: [...selectedConnections],
+                eventSourceIds: [...selectedConnections],
                 subscriptionIds: [...selectedSubscriptions],
                 workflowDefinitionIds: [...selectedWorkflowDefs],
             };
@@ -168,7 +168,7 @@ export function ConfigurationPacksPage() {
                     if (json.toolsets?.length) preview["Toolsets"] = json.toolsets.length;
                     if (json.mcpServers?.length) preview["MCP Servers"] = json.mcpServers.length;
                     if (json.sessionTemplates?.length) preview["Session Templates"] = json.sessionTemplates.length;
-                    if (json.connections?.length) preview["Connections"] = json.connections.length;
+                    if (json.eventSources?.length) preview["Connections"] = json.eventSources.length;
                     if (json.subscriptions?.length) preview["Subscriptions"] = json.subscriptions.length;
                     if (json.workflowDefinitions?.length) preview["Workflow Definitions"] = json.workflowDefinitions.length;
                     setImportPreview(preview);
@@ -508,7 +508,7 @@ export function ConfigurationPacksPage() {
                                         {importResult.mcpServers ? <li>{importResult.mcpServers} MCP server(s)</li> : null}
                                         {importResult.actionTypes ? <li>{importResult.actionTypes} action type(s)</li> : null}
                                         {importResult.sessionTemplates ? <li>{importResult.sessionTemplates} session template(s)</li> : null}
-                                        {importResult.connections ? <li>{importResult.connections} connection(s)</li> : null}
+                                        {importResult.eventSources ? <li>{importResult.eventSources} connection(s)</li> : null}
                                         {importResult.subscriptions ? <li>{importResult.subscriptions} subscription(s)</li> : null}
                                         {importResult.workflowDefinitions ? <li>{importResult.workflowDefinitions} workflow definition(s)</li> : null}
                                     </ul>

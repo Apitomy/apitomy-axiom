@@ -164,13 +164,13 @@ const TOOLS = [
         },
     },
     {
-        name: "axiom_list_connections",
-        description: "List all configured event source connections (GitHub, Jira) with their IDs, names, types, and enabled status.",
+        name: "axiom_list_event_sources",
+        description: "List all configured event sources (GitHub, Jira) with their IDs, names, types, and enabled status.",
         parameters: [],
         handler: async () => {
-            const result = JSON.parse(await axiomApi("GET", "/connections?limit=100"));
+            const result = JSON.parse(await axiomApi("GET", "/event-sources?limit=100"));
             const items = result.items || [];
-            if (items.length === 0) return "No connections configured.";
+            if (items.length === 0) return "No event sources configured.";
             return JSON.stringify(items.map(c => ({
                 id: c.id,
                 name: c.name,
@@ -181,16 +181,16 @@ const TOOLS = [
         },
     },
     {
-        name: "axiom_get_connection",
-        description: "Get the full details of an event source connection by its slug ID, including configuration (repositories/subjects), base URL, and poll interval.",
+        name: "axiom_get_event_source",
+        description: "Get the full details of an event source by its slug ID, including configuration (repositories/subjects), base URL, and poll interval.",
         parameters: [
-            { name: "connectionId", type: "string", description: "The connection slug ID (e.g., 'github-com')", required: true },
+            { name: "eventSourceId", type: "string", description: "The event source slug ID (e.g., 'github-com')", required: true },
         ],
         handler: async (args) => {
             try {
-                return await axiomApi("GET", "/connections/" + encodeURIComponent(args.connectionId));
+                return await axiomApi("GET", "/event-sources/" + encodeURIComponent(args.eventSourceId));
             } catch (e) {
-                return `Connection '${args.connectionId}' not found.`;
+                return `Event source '${args.eventSourceId}' not found.`;
             }
         },
     },

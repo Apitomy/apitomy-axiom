@@ -74,12 +74,12 @@ public class JiraEventNormalizerV2 {
      *
      * @param issue        a single issue JSON object from the Jira search results
      * @param since        only events after this instant are included
-     * @param connectionId the slug of the EventSourceConnection that produced this event
+     * @param eventSourceId the slug of the EventSource that produced this event
      * @param baseUrl      the Jira instance base URL (e.g., {@code https://myorg.atlassian.net})
      * @return a list of normalized events (may be empty if nothing changed since {@code since})
      */
     public List<NormalizedEvent> normalizeIssue(JsonNode issue, Instant since,
-                                                 String connectionId, String baseUrl) {
+                                                 String eventSourceId, String baseUrl) {
         List<NormalizedEvent> events = new ArrayList<>();
 
         String issueKey = textOrNull(issue, "key");
@@ -98,7 +98,7 @@ public class JiraEventNormalizerV2 {
         if (createdAt != null && createdAt.isAfter(since)) {
             events.add(buildEvent(
                     issueKey + "-created",
-                    connectionId,
+                    eventSourceId,
                     EventType.ISSUE_CREATED,
                     ref,
                     formatTimestamp(createdAt),
@@ -140,19 +140,19 @@ public class JiraEventNormalizerV2 {
                             Change change = new Change(field, fromString, toString, historyActor);
                             if (isDoneStatus(toString)) {
                                 historyEvents.add(buildEvent(
-                                        null, connectionId, EventType.ISSUE_CLOSED, ref,
+                                        null, eventSourceId, EventType.ISSUE_CLOSED, ref,
                                         historyTimestamp, historyActor,
                                         new IssueClosedPayload(normalizedIssue), sourceData
                                 ));
                             } else if (isDoneStatus(fromString)) {
                                 historyEvents.add(buildEvent(
-                                        null, connectionId, EventType.ISSUE_REOPENED, ref,
+                                        null, eventSourceId, EventType.ISSUE_REOPENED, ref,
                                         historyTimestamp, historyActor,
                                         new IssueReopenedPayload(normalizedIssue), sourceData
                                 ));
                             } else {
                                 historyEvents.add(buildEvent(
-                                        null, connectionId, EventType.ISSUE_UPDATED, ref,
+                                        null, eventSourceId, EventType.ISSUE_UPDATED, ref,
                                         historyTimestamp, historyActor,
                                         new IssueUpdatedPayload(normalizedIssue, change), sourceData
                                 ));
@@ -161,7 +161,7 @@ public class JiraEventNormalizerV2 {
                         case "summary", "description" -> {
                             Change change = new Change(field, fromString, toString, historyActor);
                             historyEvents.add(buildEvent(
-                                    null, connectionId, EventType.ISSUE_UPDATED, ref,
+                                    null, eventSourceId, EventType.ISSUE_UPDATED, ref,
                                     historyTimestamp, historyActor,
                                     new IssueUpdatedPayload(normalizedIssue, change), sourceData
                             ));
@@ -170,7 +170,7 @@ public class JiraEventNormalizerV2 {
                             if (toString != null && !toString.isEmpty()) {
                                 Actor assignee = new Actor(null, toString, null, null);
                                 historyEvents.add(buildEvent(
-                                        null, connectionId, EventType.ISSUE_ASSIGNED, ref,
+                                        null, eventSourceId, EventType.ISSUE_ASSIGNED, ref,
                                         historyTimestamp, historyActor,
                                         new IssueAssignedPayload(normalizedIssue, assignee), sourceData
                                 ));
@@ -178,7 +178,7 @@ public class JiraEventNormalizerV2 {
                                 Actor previousAssignee = fromString != null
                                         ? new Actor(null, fromString, null, null) : null;
                                 historyEvents.add(buildEvent(
-                                        null, connectionId, EventType.ISSUE_UNASSIGNED, ref,
+                                        null, eventSourceId, EventType.ISSUE_UNASSIGNED, ref,
                                         historyTimestamp, historyActor,
                                         new IssueUnassignedPayload(normalizedIssue, previousAssignee),
                                         sourceData
@@ -193,7 +193,7 @@ public class JiraEventNormalizerV2 {
                             for (String label : newLabels) {
                                 if (!oldLabels.contains(label)) {
                                     historyEvents.add(buildEvent(
-                                            null, connectionId, EventType.ISSUE_LABELED, ref,
+                                            null, eventSourceId, EventType.ISSUE_LABELED, ref,
                                             historyTimestamp, historyActor,
                                             new IssueLabeledPayload(normalizedIssue,
                                                     new NormalizedLabel(label, null, null)),
@@ -205,7 +205,7 @@ public class JiraEventNormalizerV2 {
                             for (String label : oldLabels) {
                                 if (!newLabels.contains(label)) {
                                     historyEvents.add(buildEvent(
-                                            null, connectionId, EventType.ISSUE_UNLABELED, ref,
+                                            null, eventSourceId, EventType.ISSUE_UNLABELED, ref,
                                             historyTimestamp, historyActor,
                                             new IssueUnlabeledPayload(normalizedIssue,
                                                     new NormalizedLabel(label, null, null)),
@@ -244,7 +244,7 @@ public class JiraEventNormalizerV2 {
                 if (commentCreated != null && commentCreated.isAfter(since)) {
                     events.add(buildEvent(
                             issueKey + "-comment-" + commentId,
-                            connectionId,
+                            eventSourceId,
                             EventType.ISSUE_COMMENT_CREATED,
                             ref,
                             formatTimestamp(commentCreated),
@@ -259,7 +259,7 @@ public class JiraEventNormalizerV2 {
                         && commentUpdated.isAfter(since)) {
                     events.add(buildEvent(
                             issueKey + "-comment-" + commentId + "-updated",
-                            connectionId,
+                            eventSourceId,
                             EventType.ISSUE_COMMENT_UPDATED,
                             ref,
                             formatTimestamp(commentUpdated),
@@ -423,14 +423,14 @@ public class JiraEventNormalizerV2 {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
-    private NormalizedEvent buildEvent(String sourceEventId, String connectionId,
+    private NormalizedEvent buildEvent(String sourceEventId, String eventSourceId,
                                         EventType type, String ref, String timestamp,
                                         Actor actor, EventPayload payload, JsonNode sourceData) {
         return new NormalizedEvent(
                 UUID.randomUUID().toString(),
                 sourceEventId,
                 SOURCE,
-                connectionId,
+                eventSourceId,
                 type,
                 ref,
                 timestamp,
@@ -445,7 +445,7 @@ public class JiraEventNormalizerV2 {
                 event.id(),
                 sourceEventId,
                 event.source(),
-                event.connectionId(),
+                event.eventSourceId(),
                 event.type(),
                 event.ref(),
                 event.timestamp(),

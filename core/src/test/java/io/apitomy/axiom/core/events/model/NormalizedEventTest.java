@@ -57,7 +57,7 @@ class NormalizedEventTest {
         assertTrue(json.contains("\"id\":\"" + eventId + "\""), "JSON should contain id");
         assertTrue(json.contains("\"sourceEventId\":\"gh-event-123456\""), "JSON should contain sourceEventId");
         assertTrue(json.contains("\"source\":\"github\""), "JSON should contain source");
-        assertTrue(json.contains("\"connectionId\":\"github-com\""), "JSON should contain connectionId");
+        assertTrue(json.contains("\"eventSourceId\":\"github-com\""), "JSON should contain eventSourceId");
         assertTrue(json.contains("\"issue.created\""), "JSON should contain type as issue.created");
         assertTrue(json.contains("\"ref\":\"https://github.com/owner/repo/issues/42\""), "JSON should contain ref URL");
         assertTrue(json.contains("\"timestamp\":\"2026-09-18T10:00:00Z\""), "JSON should contain timestamp");
@@ -71,7 +71,7 @@ class NormalizedEventTest {
         assertEquals(eventId, deserialized.id());
         assertEquals("gh-event-123456", deserialized.sourceEventId());
         assertEquals("github", deserialized.source());
-        assertEquals("github-com", deserialized.connectionId());
+        assertEquals("github-com", deserialized.eventSourceId());
         assertEquals(EventType.ISSUE_CREATED, deserialized.type());
         assertEquals("https://github.com/owner/repo/issues/42", deserialized.ref());
         assertEquals("2026-09-18T10:00:00Z", deserialized.timestamp());
@@ -200,7 +200,7 @@ class NormalizedEventTest {
         NormalizedEvent deserialized = mapper.readValue(json, NormalizedEvent.class);
         assertEquals(eventId, deserialized.id());
         assertEquals(EventType.PUSH, deserialized.type());
-        assertEquals("github-com", deserialized.connectionId());
+        assertEquals("github-com", deserialized.eventSourceId());
         assertEquals("https://github.com/owner/repo", deserialized.ref());
 
         assertInstanceOf(PushPayload.class, deserialized.payload());
