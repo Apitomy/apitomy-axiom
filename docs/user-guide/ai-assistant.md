@@ -362,9 +362,9 @@ the item. The `type` is one of `tool`, `action-type`, `toolset`, `session-templa
 `event-source`, or `subscription`.
 
 Validation uses the same rules Axiom uses when importing a configuration pack and on Apply, so an item that
-passes validation in the session will be accepted by Apply. After an item is written, the assistant still receives validation feedback in real
-time: any errors are sent back to Claude as messages, allowing it to fix issues without you having to
-point them out.
+passes validation in the session will be accepted by Apply. After an item is written, the assistant still
+receives validation feedback in real time: any errors are sent back to Claude as messages, allowing it to
+fix issues without you having to point them out.
 
 The assistant's system prompt includes a generated reference of every item type, its fields, and worked
 examples. These examples are checked by Axiom's test suite, so the patterns the assistant copies are known
@@ -391,7 +391,8 @@ During Apply:
   `workflowDefinitionName` instead of `workflowDefinitionId`. The name is resolved to the workflow's id, so
   a subscription can target a workflow created in the same session.
 - Event sources and subscriptions created by the assistant are **disabled** unless the item sets
-  `enabled: true`; the assistant is instructed to leave them disabled. Review them and enable them on their detail pages when you are ready for events to flow.
+  `enabled: true`; the assistant is instructed to leave them disabled. Review them and enable them on their
+  detail pages when you are ready for events to flow.
 
 A summary dialog shows what was applied with a breakdown of created and updated counts (e.g., "2 tool(s)
 created, 1 tool(s) updated"). After applying, the session ends and you are returned to the sessions list.
