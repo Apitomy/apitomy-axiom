@@ -1,16 +1,20 @@
 package io.apitomy.axiom.app;
 
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.Map;
+import java.util.UUID;
 
 import jakarta.ws.rs.WebApplicationException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -82,5 +86,46 @@ class WorkflowRunMetadataTest {
                 workflowExecutionService.triggerWorkflow(subjectId, defId, RunRequest.EMPTY, null));
 
         assertEquals(500, run.title.length());
+    }
+
+    /**
+     * The run context always exposes the subject's name and repository so nodes can map them explicitly.
+     */
+    @Test
+    void contextContainsSubjectNameAndRepository() {
+        long subjectId = QuarkusTransaction.requiringNew().call(() -> {
+            SubjectEntity s = new SubjectEntity();
+            s.name = "ctx-subject-" + UUID.randomUUID();
+            s.type = "other";
+            s.ref = "https://github.com/o/r/issues/1";
+            s.repository = "o/r";
+            s.createdOn = Instant.now();
+            s.updatedOn = Instant.now();
+            s.persist();
+            return s.id;
+        });
+        long defId = TestFixtures.createWaitDefinition("Ctx Def " + UUID.randomUUID());
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(subjectId, defId, RunRequest.EMPTY, null));
+        String state = QuarkusTransaction.requiringNew().call(() ->
+                ((WorkflowRunEntity) WorkflowRunEntity.findById(run.id)).instanceState);
+        assertTrue(state.contains("\"repository\":\"o/r\""), state);
+        assertTrue(state.contains("\"subjectName\":\"ctx-subject-"), state);
+    }
+
+    /**
+     * Supplied run inputs cannot override protected subject keys.
+     */
+    @Test
+    void suppliedInputsCannotOverrideRepositoryOrSubjectName() {
+        long subjectId = TestFixtures.createSubject("ctx-protected-" + UUID.randomUUID());
+        long defId = TestFixtures.createWaitDefinition("Ctx Prot " + UUID.randomUUID());
+        RunRequest request = new RunRequest(null, null,
+                Map.of("repository", "evil/repo", "subjectName", "evil"), null);
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(subjectId, defId, request, null));
+        String state = QuarkusTransaction.requiringNew().call(() ->
+                ((WorkflowRunEntity) WorkflowRunEntity.findById(run.id)).instanceState);
+        assertFalse(state.contains("evil"), state);
     }
 }

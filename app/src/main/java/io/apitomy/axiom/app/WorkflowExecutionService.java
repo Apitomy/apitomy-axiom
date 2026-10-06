@@ -64,7 +64,8 @@ public class WorkflowExecutionService {
     private static final int MAX_TITLE_LENGTH = 500;
 
     /** Built-in inputs that supplied run inputs may never override. */
-    private static final Set<String> PROTECTED_INPUTS = Set.of("subjectId", "ref", "event");
+    private static final Set<String> PROTECTED_INPUTS = Set.of(
+            "subjectId", "subjectName", "ref", "repository", "event");
 
     @Inject
     ObjectMapper objectMapper;
@@ -206,15 +207,19 @@ public class WorkflowExecutionService {
         validateNodeTypes(workflow);
 
         Map<String, Object> context = new HashMap<>();
-        context.put("subjectId", subject.id);
-        context.put("ref", subject.ref != null ? subject.ref : "");
 
-        // Merge extra context (e.g., event data from create-workflow routing)
+        // Merge extra context (e.g., event data from create-workflow routing). Subject keys are
+        // applied afterwards so extra context can never clobber them.
         if (request.extraContext() != null) {
             context.putAll(request.extraContext());
         }
+        context.put("subjectId", subject.id);
+        context.put("subjectName", subject.name != null ? subject.name : "");
+        context.put("ref", subject.ref != null ? subject.ref : "");
+        context.put("repository", subject.repository != null ? subject.repository : "");
         // Supplied inputs join the initial context; the engine validates them against the Start
-        // node's declared inputs. Protected inputs (subjectId, ref, event) cannot be overridden.
+        // node's declared inputs. Protected inputs (subjectId, subjectName, ref, repository, event)
+        // cannot be overridden.
         if (request.inputs() != null) {
             request.inputs().forEach((key, value) -> {
                 if (!PROTECTED_INPUTS.contains(key)) {
