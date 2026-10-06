@@ -27,14 +27,22 @@ public final class ActionTypeValidator {
             Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
     private static final Pattern MALFORMED_PLACEHOLDER_PATTERN =
             Pattern.compile("\\{\\{\\s+|\\s+\\}\\}|\\{\\{[^}]*$");
-    /** Placeholders recognized in agent-mode prompt templates. */
-    public static final Set<String> RECOGNIZED_PROMPT_PLACEHOLDERS = Set.of(
-            "input", "actionType", "ref", "repository",
-            "subjectName", "workDir");
-    /** Placeholders recognized in script-mode templates. */
-    public static final Set<String> RECOGNIZED_SCRIPT_PLACEHOLDERS = Set.of(
-            "subjectId", "eventId", "taskId", "ref", "repository",
-            "subjectName", "apiBaseUrl", "workDir");
+    /** Former placeholders and how to replace them; any of these in a template is an error. */
+    public static final Map<String, String> REMOVED_PLACEHOLDER_HINTS = Map.ofEntries(
+            Map.entry("ref", "Declare an input 'ref' and map it from context.ref on the workflow node."),
+            Map.entry("repository",
+                    "Declare an input 'repository' and map it from context.repository on the workflow node."),
+            Map.entry("subjectName",
+                    "Declare an input 'subjectName' and map it from context.subjectName on the workflow node."),
+            Map.entry("subjectId",
+                    "Declare an input 'subjectId' and map it from context.subjectId on the workflow node."),
+            Map.entry("eventId",
+                    "Declare an input 'eventId' and map it from context.event.id on the workflow node."),
+            Map.entry("workDir", "Not a placeholder. Scripts can use $AXIOM_WORK_DIR; agents already run there."),
+            Map.entry("apiBaseUrl", "Not a placeholder. Scripts can use $AXIOM_API_URL."),
+            Map.entry("taskId", "Not a placeholder. Scripts can use $AXIOM_TASK_ID."),
+            Map.entry("actionType", "Not available. Remove it."),
+            Map.entry("input", "Not available. Declare named inputs and use {{inputs.<name>}}."));
     private static final Pattern SECRET_REF_PATTERN =
             Pattern.compile("\\$\\{secret:([^}]+)\\}");
     private static final Pattern MALFORMED_SECRET_REF_PATTERN =
@@ -128,15 +136,7 @@ public final class ActionTypeValidator {
 
         checkMalformedPlaceholders(prompt, "promptTemplate", messages);
 
-        Matcher matcher = PLACEHOLDER_PATTERN.matcher(prompt);
-        while (matcher.find()) {
-            String name = matcher.group(1);
-            if (!RECOGNIZED_PROMPT_PLACEHOLDERS.contains(name)) {
-                messages.add(error("promptTemplate",
-                        "Unrecognized placeholder '{{" + name + "}}'. Supported: "
-                                + RECOGNIZED_PROMPT_PLACEHOLDERS + "."));
-            }
-        }
+        checkUnsupportedPlaceholders(prompt, "promptTemplate", messages);
 
         checkInputPlaceholders(prompt, "promptTemplate", def, messages);
     }
@@ -154,15 +154,7 @@ public final class ActionTypeValidator {
 
         checkMalformedPlaceholders(script, "scriptTemplate", messages);
 
-        Matcher matcher = PLACEHOLDER_PATTERN.matcher(script);
-        while (matcher.find()) {
-            String name = matcher.group(1);
-            if (!RECOGNIZED_SCRIPT_PLACEHOLDERS.contains(name)) {
-                messages.add(error("scriptTemplate",
-                        "Unrecognized placeholder '{{" + name + "}}'. Supported: "
-                                + RECOGNIZED_SCRIPT_PLACEHOLDERS + "."));
-            }
-        }
+        checkUnsupportedPlaceholders(script, "scriptTemplate", messages);
 
         checkInputPlaceholders(script, "scriptTemplate", def, messages);
 
@@ -304,6 +296,17 @@ public final class ActionTypeValidator {
             if (f.getType() == null) {
                 messages.add(error(field, "Field type is required."));
             }
+        }
+    }
+
+    private static void checkUnsupportedPlaceholders(String text, String field,
+                                                     List<ValidationMessage> messages) {
+        Matcher matcher = PLACEHOLDER_PATTERN.matcher(text);
+        while (matcher.find()) {
+            String name = matcher.group(1);
+            String hint = REMOVED_PLACEHOLDER_HINTS.getOrDefault(name,
+                    "Only {{inputs.<name>}} placeholders for declared inputs are supported.");
+            messages.add(error(field, "Placeholder '{{" + name + "}}' is not supported. " + hint));
         }
     }
 

@@ -16,7 +16,9 @@ class ActionResourceTest {
     private static final String ACTION_TYPES_PATH = "/api/v1/action-types";
 
     @Test
-    void testSeedDataLoaded() {
+    void testListActionTypes() {
+        createScriptActionType("listed-script-action");
+
         given()
             .when()
                 .get(ACTION_TYPES_PATH)
@@ -24,42 +26,19 @@ class ActionResourceTest {
                 .statusCode(200)
                 .contentType(ContentType.JSON)
                 .body("items.size()", greaterThanOrEqualTo(1))
-                .body("items.name", hasItems("close-subject"));
-    }
-
-    @Test
-    void testGetSeedActionType() {
-        int id = given()
-            .when()
-                .get(ACTION_TYPES_PATH)
-            .then()
-                .statusCode(200)
-                .extract().path("items.find { it.name == 'close-subject' }.id");
-
-        given()
-            .when()
-                .get(ACTION_TYPES_PATH + "/" + id)
-            .then()
-                .statusCode(200)
-                .body("name", equalTo("close-subject"))
-                .body("executionMode", equalTo("script"));
+                .body("items.name", hasItems("listed-script-action"));
     }
 
     @Test
     void testScriptActionType() {
-        int id = given()
-            .when()
-                .get(ACTION_TYPES_PATH)
-            .then()
-                .statusCode(200)
-                .extract().path("items.find { it.name == 'close-subject' }.id");
+        int id = createScriptActionType("fetched-script-action");
 
         given()
             .when()
                 .get(ACTION_TYPES_PATH + "/" + id)
             .then()
                 .statusCode(200)
-                .body("name", equalTo("close-subject"))
+                .body("name", equalTo("fetched-script-action"))
                 .body("executionMode", equalTo("script"))
                 .body("$", not(hasKey("userTriggerable")))
                 .body("$", not(hasKey("managerTriggerable")))
@@ -76,7 +55,7 @@ class ActionResourceTest {
                     "name": "custom-action",
                     "description": "A custom action for testing",
                     "executionMode": "agent",
-                    "promptTemplate": "Do the thing: {{input}}"
+                    "promptTemplate": "Do the thing"
                 }
                 """)
             .when()
@@ -146,7 +125,7 @@ class ActionResourceTest {
                 {
                     "name": "invalid-field-type-action",
                     "executionMode": "agent",
-                    "promptTemplate": "Do: {{input}}",
+                    "promptTemplate": "Do it",
                     "inputs": [{ "name": "issueNumber", "type": "integer", "required": true }]
                 }
                 """)
@@ -207,6 +186,24 @@ class ActionResourceTest {
                 .statusCode(404);
     }
 
+    private int createScriptActionType(String name) {
+        return given()
+            .contentType(ContentType.JSON)
+            .body(String.format("""
+                {
+                    "name": "%s",
+                    "executionMode": "script",
+                    "scriptTemplate": "echo {{inputs.ref}}",
+                    "inputs": [{ "name": "ref", "type": "string", "required": true }]
+                }
+                """, name))
+            .when()
+                .post(ACTION_TYPES_PATH)
+            .then()
+                .statusCode(200)
+                .extract().path("id");
+    }
+
     private int createActionType(String name) {
         return given()
             .contentType(ContentType.JSON)
@@ -214,7 +211,7 @@ class ActionResourceTest {
                 {
                     "name": "%s",
                     "executionMode": "agent",
-                    "promptTemplate": "Do: {{input}}"
+                    "promptTemplate": "Do it"
                 }
                 """, name))
             .when()

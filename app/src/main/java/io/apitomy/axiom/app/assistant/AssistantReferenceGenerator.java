@@ -137,12 +137,15 @@ public class AssistantReferenceGenerator {
     private static void appendActionTypes(StringBuilder sb) {
         sb.append("## Action types\n\n")
                 .append("Action types run only from workflow `action` nodes.\n\n")
-                .append("Prompt template placeholders (agent mode): ")
-                .append(placeholders(ActionTypeValidator.RECOGNIZED_PROMPT_PLACEHOLDERS))
-                .append(", plus `{{inputs.<name>}}` for each declared input.\n\n")
-                .append("Script template placeholders (script mode): ")
-                .append(placeholders(ActionTypeValidator.RECOGNIZED_SCRIPT_PLACEHOLDERS))
-                .append(", plus `{{inputs.<name>}}` for each declared input.\n\n")
+                .append("The only template placeholder is `{{inputs.<name>}}` for a declared input. ")
+                .append("Other former placeholders are rejected:\n\n");
+        ActionTypeValidator.REMOVED_PLACEHOLDER_HINTS.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(e -> sb.append("- `{{").append(e.getKey()).append("}}` — ")
+                        .append(e.getValue()).append("\n"));
+        sb.append("\nScripts and agents get runtime environment variables `AXIOM_API_URL`, ")
+                .append("`AXIOM_TASK_ID`, `AXIOM_WORK_DIR`. The workflow context provides `subjectId`, ")
+                .append("`subjectName`, `ref`, `repository` and `event` for mapping into inputs.\n\n")
                 .append("Input and output field types: `string`, `number`, `boolean`, `object`.\n\n")
                 .append("`allowedTools` entry formats: `mcp__axiom-tools__<tool>` (a tool), `@<toolset>` ")
                 .append("(a toolset), or one of the Axiom SDK tools: ")
@@ -196,10 +199,6 @@ public class AssistantReferenceGenerator {
 
     private static String codeList(Collection<String> values) {
         return values.stream().sorted().map(v -> "`" + v + "`").collect(Collectors.joining(", "));
-    }
-
-    private static String placeholders(Collection<String> names) {
-        return names.stream().sorted().map(n -> "`{{" + n + "}}`").collect(Collectors.joining(", "));
     }
 
     private static String readResource(String path) {

@@ -60,7 +60,7 @@ class ConfigItemValidationServiceTest {
     @Test
     void actionTypeMayReferenceToolsetFromSameSession() throws Exception {
         List<ConfigProblem> problems = service.validate(ConfigItemType.ACTION_TYPE, json("""
-            {"name": "triage", "executionMode": "agent", "promptTemplate": "Triage {{ref}}",
+            {"name": "triage", "executionMode": "agent", "promptTemplate": "Triage the issue",
              "allowedTools": ["@triage-tools"]}
             """), names(Set.of(), Set.of("triage-tools")));
         assertFalse(ConfigItemValidationService.hasErrors(problems), problems.toString());

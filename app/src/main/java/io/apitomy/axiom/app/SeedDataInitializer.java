@@ -1,7 +1,6 @@
 package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.core.SdkFunctionRegistry;
-import io.apitomy.axiom.core.entities.ActionTypeEntity;
 
 import java.util.List;
 import io.apitomy.axiom.core.entities.AgentCapabilityEntity;
@@ -18,7 +17,8 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
- * Seeds built-in action types on application startup if they don't already exist.
+ * Seeds built-in configuration (toolsets, agents, system and retention config) on application startup
+ * if it doesn't already exist.
  */
 @ApplicationScoped
 public class SeedDataInitializer {
@@ -29,31 +29,12 @@ public class SeedDataInitializer {
     String defaultAgentType;
 
     /**
-     * Called on application startup to seed built-in action types.
+     * Called on application startup to seed built-in configuration.
      *
      * @param event the Quarkus startup event
      */
     @Transactional
     void onStart(@Observes StartupEvent event) {
-        if (ActionTypeEntity.count() > 0) {
-            LOG.info("Action types already exist, skipping seed data");
-            return;
-        }
-
-        LOG.info("Seeding built-in action types");
-
-        seedActionType("close-subject",
-                "Mark the subject as completed. Use this script action when an "
-                        + "issue-closed event is received, indicating the issue has "
-                        + "been resolved and the subject should be marked as done.",
-                "script", null, null,
-                """
-                #!/bin/bash
-                curl -s -X POST "{{apiBaseUrl}}/subjects/{{subjectId}}/close"
-                """);
-
-        LOG.infof("Seeded %d built-in action types", ActionTypeEntity.count());
-
         seedToolsets();
         ensureAxiomSdkToolset();
         seedAgents();
@@ -165,17 +146,5 @@ public class SeedDataInitializer {
         config.persist();
 
         LOG.infof("Seeded system config with default engine: %s", defaultAgentType);
-    }
-
-    private void seedActionType(String name, String description, String executionMode,
-                                String allowedTools, String promptTemplate, String scriptTemplate) {
-        ActionTypeEntity entity = new ActionTypeEntity();
-        entity.name = name;
-        entity.description = description;
-        entity.executionMode = executionMode;
-        entity.allowedTools = allowedTools;
-        entity.promptTemplate = promptTemplate;
-        entity.scriptTemplate = scriptTemplate;
-        entity.persist();
     }
 }

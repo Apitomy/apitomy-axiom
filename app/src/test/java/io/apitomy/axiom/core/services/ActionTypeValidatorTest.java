@@ -21,7 +21,8 @@ class ActionTypeValidatorTest {
     @Test
     void validActorActionTypePassesWithNoErrors() {
         NewActionType at = makeActor("analyze", "Analyzes issues",
-                "Analyze the issue: {{input}}");
+                "Analyze the issue: {{inputs.issue}}");
+        at.setInputs(List.of(field("issue", ActionTypeField.Type.STRING)));
 
         ValidationResult result = ActionTypeValidator.validate(at);
 
@@ -31,8 +32,9 @@ class ActionTypeValidatorTest {
 
     @Test
     void validScriptActionTypePassesWithNoErrors() {
-        NewActionType at = makeScript("close-subject", "Closes subject",
-                "echo closing {{subjectId}}");
+        NewActionType at = makeScript("comment", "Comments on an issue",
+                "echo commenting {{inputs.ref}}");
+        at.setInputs(List.of(field("ref", ActionTypeField.Type.STRING)));
 
         ValidationResult result = ActionTypeValidator.validate(at);
 
@@ -44,14 +46,14 @@ class ActionTypeValidatorTest {
 
     @Test
     void missingNameIsError() {
-        NewActionType at = makeActor(null, "desc", "prompt {{input}}");
+        NewActionType at = makeActor(null, "desc", "prompt text");
 
         assertTrue(ActionTypeValidator.validate(at).hasErrors());
     }
 
     @Test
     void blankNameIsError() {
-        NewActionType at = makeActor("  ", "desc", "prompt {{input}}");
+        NewActionType at = makeActor("  ", "desc", "prompt text");
 
         assertTrue(ActionTypeValidator.validate(at).hasErrors());
     }
@@ -60,7 +62,7 @@ class ActionTypeValidatorTest {
 
     @Test
     void missingDescriptionIsWarning() {
-        NewActionType at = makeActor("test", null, "prompt {{input}}");
+        NewActionType at = makeActor("test", null, "prompt text");
 
         ValidationResult result = ActionTypeValidator.validate(at);
 
@@ -110,7 +112,7 @@ class ActionTypeValidatorTest {
 
     @Test
     void actorPromptWithUnrecognizedPlaceholderIsError() {
-        NewActionType at = makeActor("test", "desc", "Do {{foo}} with {{input}}");
+        NewActionType at = makeActor("test", "desc", "Do {{foo}} thing");
 
         ValidationResult result = ActionTypeValidator.validate(at);
 
@@ -142,11 +144,39 @@ class ActionTypeValidatorTest {
     }
 
     @Test
-    void actorPromptWithRecognizedPlaceholdersIsValid() {
+    void actorPromptWithRemovedPlaceholdersIsError() {
         NewActionType at = makeActor("test", "desc",
                 "{{input}} for {{repository}} ref {{ref}} subject {{subjectName}}");
 
-        assertFalse(ActionTypeValidator.validate(at).hasErrors());
+        ValidationResult result = ActionTypeValidator.validate(at);
+
+        for (String name : List.of("input", "repository", "ref", "subjectName")) {
+            assertTrue(result.errors().stream().anyMatch(m -> m.field().equals("promptTemplate")
+                    && m.message().contains("'{{" + name + "}}' is not supported")), result.toString());
+        }
+    }
+
+    @Test
+    void removedPromptPlaceholderIsRejectedWithHint() {
+        NewActionType def = makeActor("p", "desc", "Triage {{ref}}");
+        ValidationResult result = ActionTypeValidator.validate(def);
+        assertTrue(result.errors().stream().anyMatch(m -> m.message().contains("context.ref")),
+                result.toString());
+    }
+
+    @Test
+    void removedScriptPlaceholderIsRejectedWithEnvHint() {
+        NewActionType def = makeScript("s", "desc", "cd {{workDir}}");
+        ValidationResult result = ActionTypeValidator.validate(def);
+        assertTrue(result.errors().stream().anyMatch(m -> m.message().contains("$AXIOM_WORK_DIR")),
+                result.toString());
+    }
+
+    @Test
+    void declaredInputPlaceholderIsAccepted() {
+        NewActionType def = makeActor("p", "desc", "Triage {{inputs.ref}}");
+        def.setInputs(List.of(field("ref", ActionTypeField.Type.STRING)));
+        assertFalse(ActionTypeValidator.validate(def).hasErrors());
     }
 
     @Test
@@ -174,7 +204,7 @@ class ActionTypeValidatorTest {
     @Test
     void scriptWithDeclaredInputsDottedPlaceholderIsValid() {
         NewActionType at = makeScript("test", "desc",
-                "echo {{inputs.repository}} {{subjectId}}");
+                "echo {{inputs.repository}}");
         at.setInputs(List.of(field("repository", ActionTypeField.Type.STRING)));
 
         assertFalse(ActionTypeValidator.validate(at).hasErrors());
@@ -234,16 +264,23 @@ class ActionTypeValidatorTest {
     }
 
     @Test
-    void scriptWithRecognizedPlaceholdersIsValid() {
+    void scriptWithRemovedPlaceholdersIsError() {
         NewActionType at = makeScript("test", "desc",
                 "echo {{subjectId}} {{taskId}} {{repository}} {{apiBaseUrl}}");
 
-        assertFalse(ActionTypeValidator.validate(at).hasErrors());
+        ValidationResult result = ActionTypeValidator.validate(at);
+
+        for (String name : List.of("subjectId", "taskId", "repository", "apiBaseUrl")) {
+            assertTrue(result.errors().stream().anyMatch(m -> m.field().equals("scriptTemplate")
+                    && m.message().contains("'{{" + name + "}}' is not supported")), result.toString());
+        }
+        assertTrue(result.errors().stream().anyMatch(m -> m.message().contains("$AXIOM_TASK_ID")));
+        assertTrue(result.errors().stream().anyMatch(m -> m.message().contains("$AXIOM_API_URL")));
     }
 
     @Test
     void actorModeDoesNotRequireScript() {
-        NewActionType at = makeActor("test", "desc", "prompt {{input}}");
+        NewActionType at = makeActor("test", "desc", "prompt text");
 
         assertFalse(ActionTypeValidator.validate(at).errors().stream()
                 .anyMatch(m -> m.field().equals("scriptTemplate")));
@@ -253,7 +290,7 @@ class ActionTypeValidatorTest {
 
     @Test
     void toolsetRefToMissingToolsetIsError() {
-        NewActionType at = makeActor("test", "desc", "prompt {{input}}");
+        NewActionType at = makeActor("test", "desc", "prompt text");
         at.setAllowedTools(List.of("@Missing"));
 
         ActionTypeValidator.KnownNames known = new ActionTypeValidator.KnownNames(
@@ -264,7 +301,7 @@ class ActionTypeValidatorTest {
 
     @Test
     void customToolRefToMissingToolIsError() {
-        NewActionType at = makeActor("test", "desc", "prompt {{input}}");
+        NewActionType at = makeActor("test", "desc", "prompt text");
         at.setAllowedTools(List.of("mcp__axiom-tools__nonexistent"));
 
         ActionTypeValidator.KnownNames known = new ActionTypeValidator.KnownNames(
@@ -275,7 +312,7 @@ class ActionTypeValidatorTest {
 
     @Test
     void sdkToolRefToInvalidToolIsError() {
-        NewActionType at = makeActor("test", "desc", "prompt {{input}}");
+        NewActionType at = makeActor("test", "desc", "prompt text");
         at.setAllowedTools(List.of("mcp__axiom-sdk__axiom_fake"));
 
         ActionTypeValidator.KnownNames known = new ActionTypeValidator.KnownNames(
@@ -286,7 +323,7 @@ class ActionTypeValidatorTest {
 
     @Test
     void validToolRefsPass() {
-        NewActionType at = makeActor("test", "desc", "prompt {{input}}");
+        NewActionType at = makeActor("test", "desc", "prompt text");
         at.setAllowedTools(List.of(
                 "@Read-Only Tools",
                 "mcp__axiom-tools__list_github_prs",
@@ -315,7 +352,7 @@ class ActionTypeValidatorTest {
 
     @Test
     void invalidEnvKeyIsError() {
-        NewActionType at = makeActor("test", "desc", "prompt {{input}}");
+        NewActionType at = makeActor("test", "desc", "prompt text");
         io.apitomy.axiom.api.beans.Environment env = new io.apitomy.axiom.api.beans.Environment();
         env.setAdditionalProperty("my-token", "value");
         at.setEnvironment(env);
@@ -325,7 +362,7 @@ class ActionTypeValidatorTest {
 
     @Test
     void missingSecretIsError() {
-        NewActionType at = makeActor("test", "desc", "prompt {{input}}");
+        NewActionType at = makeActor("test", "desc", "prompt text");
         io.apitomy.axiom.api.beans.Environment env = new io.apitomy.axiom.api.beans.Environment();
         env.setAdditionalProperty("TOKEN", "${secret:MISSING}");
         at.setEnvironment(env);
@@ -338,7 +375,7 @@ class ActionTypeValidatorTest {
 
     @Test
     void malformedSecretRefIsError() {
-        NewActionType at = makeActor("test", "desc", "prompt {{input}}");
+        NewActionType at = makeActor("test", "desc", "prompt text");
         io.apitomy.axiom.api.beans.Environment env = new io.apitomy.axiom.api.beans.Environment();
         env.setAdditionalProperty("TOKEN", "${secret:}");
         at.setEnvironment(env);
@@ -348,7 +385,7 @@ class ActionTypeValidatorTest {
 
     @Test
     void validEnvPasses() {
-        NewActionType at = makeActor("test", "desc", "prompt {{input}}");
+        NewActionType at = makeActor("test", "desc", "prompt text");
         io.apitomy.axiom.api.beans.Environment env = new io.apitomy.axiom.api.beans.Environment();
         env.setAdditionalProperty("GH_TOKEN", "${secret:GH_TOKEN}");
         at.setEnvironment(env);
@@ -363,7 +400,7 @@ class ActionTypeValidatorTest {
 
     @Test
     void rejectsDuplicateInputNames() {
-        NewActionType def = makeActor("dup-inputs", "desc", "do {{ref}}");
+        NewActionType def = makeActor("dup-inputs", "desc", "do the thing");
         def.setInputs(List.of(
             field("repo", ActionTypeField.Type.STRING),
             field("repo", ActionTypeField.Type.NUMBER)));
@@ -376,7 +413,7 @@ class ActionTypeValidatorTest {
 
     @Test
     void rejectsInvalidInputIdentifier() {
-        NewActionType def = makeActor("bad-input-name", "desc", "do {{ref}}");
+        NewActionType def = makeActor("bad-input-name", "desc", "do the thing");
         def.setInputs(List.of(field("has space", ActionTypeField.Type.STRING)));
 
         ValidationResult result = ActionTypeValidator.validate(def);
@@ -386,7 +423,7 @@ class ActionTypeValidatorTest {
 
     @Test
     void rejectsBlankOutputName() {
-        NewActionType def = makeActor("blank-output", "desc", "do {{ref}}");
+        NewActionType def = makeActor("blank-output", "desc", "do the thing");
         def.setOutputs(List.of(field("", ActionTypeField.Type.STRING)));
 
         ValidationResult result = ActionTypeValidator.validate(def);
@@ -396,7 +433,7 @@ class ActionTypeValidatorTest {
 
     @Test
     void acceptsValidInputsAndOutputs() {
-        NewActionType def = makeActor("good-io", "desc", "do {{ref}}");
+        NewActionType def = makeActor("good-io", "desc", "do the thing");
         def.setInputs(List.of(field("repository", ActionTypeField.Type.STRING)));
         def.setOutputs(List.of(field("prNumber", ActionTypeField.Type.NUMBER)));
 

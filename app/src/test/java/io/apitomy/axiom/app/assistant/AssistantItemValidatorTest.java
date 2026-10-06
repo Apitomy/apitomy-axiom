@@ -172,7 +172,7 @@ class AssistantItemValidatorTest {
                   "name": "my-action",
                   "description": "A test action",
                   "executionMode": "agent",
-                  "promptTemplate": "Do the thing: {{input}}"
+                  "promptTemplate": "Do the thing"
                 }
                 """);
 

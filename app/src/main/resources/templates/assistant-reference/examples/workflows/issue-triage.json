@@ -12,11 +12,13 @@
          {"name": "event", "type": "object", "required": false, "description": "Triggering event"}
        ]}},
       {"id": "triage", "type": "action", "name": "Triage issue", "position": {"x": 200, "y": 0},
-       "config": {"actionType": "triage-issue", "inputs": {"priorityHint": "'normal'"},
+       "config": {"actionType": "triage-issue", "inputs": {"ref": "context.ref", "repository": "context.repository",
+                                                         "priorityHint": "'normal'"},
                   "outputs": [{"name": "severity", "type": "string", "required": true},
                               {"name": "needsInfo", "type": "boolean", "required": true}]}},
       {"id": "ask", "type": "action", "name": "Request more info", "position": {"x": 400, "y": 0},
-       "config": {"actionType": "request-more-info", "inputs": {}, "outputs": []}},
+       "config": {"actionType": "request-more-info",
+                  "inputs": {"ref": "context.ref", "repository": "context.repository"}, "outputs": []}},
       {"id": "await-reply", "type": "receive-event", "name": "Await reply", "position": {"x": 600, "y": 0},
        "config": {"eventType": "issue.comment.created"}},
       {"id": "end", "type": "end", "name": "End", "position": {"x": 800, "y": 200}, "config": {}}
