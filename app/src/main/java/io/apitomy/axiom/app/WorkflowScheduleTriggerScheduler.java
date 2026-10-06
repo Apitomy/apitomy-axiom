@@ -24,7 +24,10 @@ import java.util.Map;
  * <p>Each firing uses three short transactions so that a failed run start never loses the trigger's
  * bookkeeping: the first claims the firing (advances {@code nextRunAt}, records {@code lastRunAt}, creates the
  * subject and checks for an active run), the second starts the run, and the third records
- * {@code lastOutcome}.</p>
+ * {@code lastOutcome}. If claiming itself fails, a fallback transaction still advances the schedule and records
+ * the failure.</p>
+ *
+ * <p>Firing assumes a single node: {@code ConcurrentExecution.SKIP} only prevents overlap within one instance.</p>
  */
 @ApplicationScoped
 public class WorkflowScheduleTriggerScheduler {
@@ -82,7 +85,14 @@ public class WorkflowScheduleTriggerScheduler {
      * @param now       the firing time
      */
     void fire(long triggerId, Instant now) {
-        Attempt attempt = QuarkusTransaction.requiringNew().call(() -> claim(triggerId, now));
+        Attempt attempt;
+        try {
+            attempt = QuarkusTransaction.requiringNew().call(() -> claim(triggerId, now));
+        } catch (Exception e) {
+            LOG.warnf(e, "Schedule trigger %d could not be claimed", triggerId);
+            recordClaimFailure(triggerId, now, e);
+            return;
+        }
         if (attempt == null) {
             return;
         }
@@ -130,6 +140,27 @@ public class WorkflowScheduleTriggerScheduler {
             return null;
         }
         return new Attempt(subject.id, trigger.definitionId, trigger.inputs);
+    }
+
+    /**
+     * Records a failed claim in a fresh transaction: advances the schedule (disabling the trigger if its cron
+     * can no longer be evaluated) and stores the failure as the outcome.
+     */
+    private void recordClaimFailure(long triggerId, Instant now, Exception failure) {
+        QuarkusTransaction.requiringNew().run(() -> {
+            WorkflowScheduleTriggerEntity trigger = WorkflowScheduleTriggerEntity.findById(triggerId);
+            if (trigger == null) {
+                return;
+            }
+            trigger.lastRunAt = now;
+            trigger.lastOutcome = failedOutcome(failure);
+            try {
+                trigger.nextRunAt = CronSchedules.nextAfter(trigger.cron, now);
+            } catch (IllegalArgumentException e) {
+                trigger.enabled = false;
+                trigger.nextRunAt = null;
+            }
+        });
     }
 
     private void startRun(Attempt attempt) {

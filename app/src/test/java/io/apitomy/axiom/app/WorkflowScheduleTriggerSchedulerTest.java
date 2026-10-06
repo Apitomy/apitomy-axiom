@@ -152,6 +152,23 @@ class WorkflowScheduleTriggerSchedulerTest {
         assertTrue(runsFor(subjects.get(0).id).isEmpty());
     }
 
+    /** If claiming the firing fails (subject cannot be created), the failure is still recorded and the schedule advances. */
+    @Test
+    void claimFailureRecordsOutcomeAndAdvances() {
+        long definitionId = TestFixtures.createWaitDefinition("sched-claimfail-" + UUID.randomUUID());
+        String tooLong = "n".repeat(SubjectEntity.REF_MAX_LENGTH);
+        long triggerId = createTrigger(definitionId, tooLong, true, null);
+
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        scheduler.fire(triggerId, now);
+
+        WorkflowScheduleTriggerEntity trigger = loadTrigger(triggerId);
+        assertTrue(trigger.lastOutcome.startsWith("failed:"), trigger.lastOutcome);
+        assertEquals(now, trigger.lastRunAt);
+        assertTrue(trigger.nextRunAt.isAfter(now));
+        assertTrue(subjectsNamed(tooLong).isEmpty());
+    }
+
     /** Failure reasons longer than the column are truncated. */
     @Test
     void outcomeIsTruncatedToColumnLength() {

@@ -20,6 +20,15 @@ import java.util.List;
 @Table(name = "subject")
 public class SubjectEntity extends PanacheEntity {
 
+    /** Prefix of the ref of schedule-owned subjects (see {@link #findOrCreateByName(String)}). */
+    public static final String SCHEDULE_REF_PREFIX = "schedule:";
+
+    /** Maximum length of {@link #ref}. */
+    public static final int REF_MAX_LENGTH = 255;
+
+    /** Maximum name length of a schedule-owned subject, so that its ref fits {@link #REF_MAX_LENGTH}. */
+    public static final int SCHEDULE_NAME_MAX_LENGTH = REF_MAX_LENGTH - SCHEDULE_REF_PREFIX.length();
+
     @Column(nullable = false)
     public String name;
 
@@ -84,7 +93,7 @@ public class SubjectEntity extends PanacheEntity {
      * @return the existing or newly persisted subject
      */
     public static SubjectEntity findOrCreateByName(String name) {
-        String ref = "schedule:" + name;
+        String ref = SCHEDULE_REF_PREFIX + name;
         SubjectEntity existing = find("ref", ref).firstResult();
         if (existing != null) {
             return existing;

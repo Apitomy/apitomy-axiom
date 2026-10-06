@@ -1,6 +1,7 @@
 package io.apitomy.axiom.app.rest;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.WorkflowResource;
 import io.apitomy.axiom.api.beans.Content;
@@ -15,6 +16,7 @@ import io.apitomy.axiom.api.beans.WorkflowDefinitionVersion;
 import io.apitomy.axiom.app.CronSchedules;
 import io.apitomy.axiom.app.WorkflowExecutionService;
 import io.apitomy.axiom.app.WorkflowRunBeanMapper;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
@@ -37,6 +39,7 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
+import org.jboss.logging.Logger;
 
 import java.io.InputStream;
 import java.time.Instant;
@@ -53,6 +56,8 @@ import java.util.UUID;
 @ApplicationScoped
 @RunOnVirtualThread
 public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
+
+    private static final Logger LOG = Logger.getLogger(WorkflowDefinitionsResourceImpl.class);
 
     @Inject
     ObjectMapper objectMapper;
@@ -264,8 +269,9 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
     private void applyTrigger(WorkflowScheduleTriggerEntity trigger, NewScheduleTrigger data) {
         String cron = data.getCron() != null ? data.getCron().trim() : "";
         String subjectName = data.getSubjectName() != null ? data.getSubjectName().trim() : "";
-        if (subjectName.isEmpty() || subjectName.length() > 255) {
-            throw new WebApplicationException("subjectName must be 1-255 characters", 400);
+        if (subjectName.isEmpty() || subjectName.length() > SubjectEntity.SCHEDULE_NAME_MAX_LENGTH) {
+            throw new WebApplicationException(
+                    "subjectName must be 1-" + SubjectEntity.SCHEDULE_NAME_MAX_LENGTH + " characters", 400);
         }
         Instant nextRunAt;
         try {
@@ -299,12 +305,12 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
         if (trigger.inputs != null) {
             try {
                 Map<String, Object> values = objectMapper.readValue(trigger.inputs,
-                        new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() { });
+                        new TypeReference<Map<String, Object>>() { });
                 Inputs inputs = new Inputs();
                 values.forEach(inputs::setAdditionalProperty);
                 bean.setInputs(inputs);
             } catch (JsonProcessingException e) {
-                throw new IllegalStateException("Corrupt trigger inputs for trigger " + trigger.id, e);
+                LOG.warnf("Omitting corrupt stored inputs of schedule trigger %d: %s", trigger.id, e.getMessage());
             }
         }
         bean.setNextRunAt(trigger.nextRunAt != null ? Date.from(trigger.nextRunAt) : null);

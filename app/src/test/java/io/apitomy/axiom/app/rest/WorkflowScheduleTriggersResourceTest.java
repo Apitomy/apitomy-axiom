@@ -1,6 +1,7 @@
 package io.apitomy.axiom.app.rest;
 
 import io.apitomy.axiom.app.TestFixtures;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.WorkflowScheduleTriggerEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
@@ -86,6 +87,28 @@ class WorkflowScheduleTriggersResourceTest {
                     .post(triggersPath(definitionId))
                 .then()
                     .statusCode(400);
+    }
+
+    /** A subject name whose schedule ref would not fit the ref column is rejected. */
+    @Test
+    void overlongSubjectNameRejected() {
+        long definitionId = TestFixtures.createWaitDefinition("rest-sched-long-" + UUID.randomUUID());
+        String name = "n".repeat(SubjectEntity.SCHEDULE_NAME_MAX_LENGTH + 1);
+        assertEquals(247, name.length());
+        given()
+                .contentType(ContentType.JSON)
+                .body("{\"cron\": \"0 2 * * *\", \"subjectName\": \"" + name + "\"}")
+                .when()
+                    .post(triggersPath(definitionId))
+                .then()
+                    .statusCode(400);
+        given()
+                .contentType(ContentType.JSON)
+                .body("{\"cron\": \"0 2 * * *\", \"subjectName\": \"" + name.substring(1) + "\"}")
+                .when()
+                    .post(triggersPath(definitionId))
+                .then()
+                    .statusCode(200);
     }
 
     /** Creating a trigger for a missing definition returns 404. */
