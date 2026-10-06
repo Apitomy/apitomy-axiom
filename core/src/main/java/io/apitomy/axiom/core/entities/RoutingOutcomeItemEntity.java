@@ -8,8 +8,9 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 
 /**
- * One result of a routing outcome, e.g. a workflow run started by a create-workflow rule. An outcome can have any number of items. Items are
- * deleted with their outcome (ON DELETE CASCADE).
+ * One result of a routing outcome, e.g. a workflow run started by a create-workflow rule.
+ * An outcome can have any number of items. Items are deleted with their outcome
+ * (ON DELETE CASCADE).
  */
 @Entity
 @Table(name = "routing_outcome_item")

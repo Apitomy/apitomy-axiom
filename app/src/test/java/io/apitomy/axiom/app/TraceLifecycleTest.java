@@ -144,7 +144,7 @@ class TraceLifecycleTest {
 
     @Test
     void completedTaskClosesTraceOnlyAfterLastTaskNode() {
-        // Two tasks sharing one trace (as an a single routing can produce)
+        // Two tasks sharing one trace (as a single routing can produce)
         Long projectId = createProject();
         TraceContext ctx = traceService.createTrace("create-workflow", "multi-task", null, null, null,
                 "create-workflow", "root", null, null);
