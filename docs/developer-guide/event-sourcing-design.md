@@ -223,7 +223,7 @@ items of an attempt stay on that attempt's outcome and never appear on a later a
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/stream/events` | Browse events (paginated, filterable by type, eventSourceId, ref) |
+| GET | `/stream/events` | Browse events (paginated; filters `filterType`, `filterEventSourceId`, `filterRef`) |
 | GET | `/stream/events/{eventId}` | Get a single event with full typed payload |
 
 ### Subscriptions
@@ -248,7 +248,7 @@ items of an attempt stay on that attempt's outcome and never appear on a later a
 
 ## Configuration Packs
 
-Event Sources and subscriptions are included in the configuration pack export/import
+Event sources and subscriptions are included in the configuration pack export/import
 system, allowing portable sharing of event system configuration.
 
 ---
