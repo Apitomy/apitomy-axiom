@@ -76,6 +76,16 @@ describe("AppSidebar", () => {
         expect(screen.getByText("Action Types")).toBeVisible();
     });
 
+    it("lists Components items in alphabetical order", async () => {
+        renderWithRouter(<AppSidebar />, "/components/workflows");
+        const toggle = await screen.findByRole("button", { name: "Components" });
+        const group = toggle.closest("li") as HTMLElement;
+        const labels = Array.from(group.querySelectorAll("ul li")).map((li) => li.textContent?.trim() ?? "");
+        const sorted = [...labels].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
+        expect(labels).toHaveLength(8);
+        expect(labels).toEqual(sorted);
+    });
+
     it("shows Subjects and not Projects", async () => {
         renderWithRouter(<AppSidebar />, "/subjects");
         await screen.findByText("Inbox");

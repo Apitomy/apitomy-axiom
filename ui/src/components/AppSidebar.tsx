@@ -102,9 +102,6 @@ export function AppSidebar() {
                             </NavItem>
                         </NavExpandable>
                         <NavExpandable title="Components" isActive={isComponentsActive} isExpanded={isComponentsActive}>
-                            <NavItem isActive={location.pathname.startsWith("/components/workflows")} onClick={() => navigate("/components/workflows")}>
-                                Workflows
-                            </NavItem>
                             <NavItem isActive={location.pathname.startsWith("/action-types")} onClick={() => navigate("/action-types")}>
                                 Action Types
                             </NavItem>
@@ -125,6 +122,9 @@ export function AppSidebar() {
                             </NavItem>
                             <NavItem isActive={location.pathname.startsWith("/toolsets")} onClick={() => navigate("/toolsets")}>
                                 Toolsets
+                            </NavItem>
+                            <NavItem isActive={location.pathname.startsWith("/components/workflows")} onClick={() => navigate("/components/workflows")}>
+                                Workflows
                             </NavItem>
                         </NavExpandable>
                         <NavExpandable title="Settings" isActive={isSettingsActive} isExpanded={isSettingsActive}>
