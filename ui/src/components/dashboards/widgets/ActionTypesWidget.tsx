@@ -35,7 +35,7 @@ function ActionTypesWidget({ config, labels }: WidgetProps) {
     return (
         <Table aria-label="Action Types" variant="compact" isStickyHeader>
             <Thead><Tr>
-                <Th>Name</Th><Th>Mode</Th><Th>Triggers</Th>
+                <Th>Name</Th><Th>Mode</Th>
             </Tr></Thead>
             <Tbody>
                 {actionTypes.map(at => (
@@ -46,15 +46,10 @@ function ActionTypesWidget({ config, labels }: WidgetProps) {
                                 {at.executionMode}
                             </Label>
                         </Td>
-                        <Td>
-                            {at.managerTriggerable && <Label isCompact color="green" style={{ marginRight: "4px" }}>manager</Label>}
-                            {at.userTriggerable && <Label isCompact color="blue">user</Label>}
-                            {!at.managerTriggerable && !at.userTriggerable && "—"}
-                        </Td>
                     </Tr>
                 ))}
                 {actionTypes.length === 0 && (
-                    <Tr><Td colSpan={3}>No action types found.</Td></Tr>
+                    <Tr><Td colSpan={2}>No action types found.</Td></Tr>
                 )}
             </Tbody>
         </Table>

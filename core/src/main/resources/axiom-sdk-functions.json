@@ -31,16 +31,6 @@
     "sdkCallSupported": true
   },
   {
-    "name": "axiom_create_task",
-    "description": "Create a new task on an Axiom project. The task will be queued and executed by an available agent.",
-    "parameters": [
-      { "name": "projectId", "type": "number", "description": "The project ID to create the task on", "required": true },
-      { "name": "actionType", "type": "string", "description": "The action type name (e.g. 'analyze', 'implement')", "required": true },
-      { "name": "input", "type": "string", "description": "Input context or instructions for the task", "required": false }
-    ],
-    "sdkCallSupported": true
-  },
-  {
     "name": "axiom_get_task_status",
     "description": "Get the status and details of a specific task on a project.",
     "parameters": [
@@ -111,7 +101,7 @@
   },
   {
     "name": "axiom_list_action_types",
-    "description": "List all action types configured in Axiom.",
+    "description": "List all action types configured in Axiom. Action types run only from workflow action nodes; they cannot be invoked directly.",
     "parameters": [
       { "name": "filterName", "type": "string", "description": "Filter by action type name (substring match)", "required": false }
     ],

@@ -429,9 +429,6 @@ class ActionTypeValidatorTest {
         at.setDescription(description);
         at.setExecutionMode(NewActionType.ExecutionMode.AGENT);
         at.setPromptTemplate(promptTemplate);
-        at.setUserTriggerable(true);
-        at.setManagerTriggerable(true);
-        at.setEmitsEvent(false);
         return at;
     }
 
@@ -442,9 +439,6 @@ class ActionTypeValidatorTest {
         at.setDescription(description);
         at.setExecutionMode(NewActionType.ExecutionMode.SCRIPT);
         at.setScriptTemplate(scriptTemplate);
-        at.setUserTriggerable(true);
-        at.setManagerTriggerable(false);
-        at.setEmitsEvent(false);
         return at;
     }
 

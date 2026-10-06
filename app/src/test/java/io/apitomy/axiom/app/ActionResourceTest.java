@@ -61,8 +61,10 @@ class ActionResourceTest {
                 .statusCode(200)
                 .body("name", equalTo("close-project"))
                 .body("executionMode", equalTo("script"))
-                .body("userTriggerable", equalTo(true))
-                .body("emitsEvent", equalTo(false));
+                .body("$", not(hasKey("userTriggerable")))
+                .body("$", not(hasKey("managerTriggerable")))
+                .body("$", not(hasKey("emitsEvent")))
+                .body("$", not(hasKey("workflowEnabled")));
     }
 
     @Test
@@ -74,9 +76,7 @@ class ActionResourceTest {
                     "name": "custom-action",
                     "description": "A custom action for testing",
                     "executionMode": "agent",
-                    "promptTemplate": "Do the thing: {{input}}",
-                    "userTriggerable": true,
-                    "emitsEvent": false
+                    "promptTemplate": "Do the thing: {{input}}"
                 }
                 """)
             .when()
@@ -85,8 +85,6 @@ class ActionResourceTest {
                 .statusCode(200)
                 .body("name", equalTo("custom-action"))
                 .body("executionMode", equalTo("agent"))
-                .body("userTriggerable", equalTo(true))
-                .body("emitsEvent", equalTo(false))
                 .extract().path("id");
 
         given()
@@ -149,7 +147,6 @@ class ActionResourceTest {
                     "name": "invalid-field-type-action",
                     "executionMode": "agent",
                     "promptTemplate": "Do: {{input}}",
-                    "workflowEnabled": true,
                     "inputs": [{ "name": "issueNumber", "type": "integer", "required": true }]
                 }
                 """)
@@ -172,8 +169,7 @@ class ActionResourceTest {
                     "name": "updated-action",
                     "description": "Updated description",
                     "executionMode": "script",
-                    "scriptTemplate": "echo updated",
-                    "emitsEvent": true
+                    "scriptTemplate": "echo updated"
                 }
                 """)
             .when()
@@ -182,8 +178,7 @@ class ActionResourceTest {
                 .statusCode(200)
                 .body("name", equalTo("updated-action"))
                 .body("description", equalTo("Updated description"))
-                .body("executionMode", equalTo("script"))
-                .body("emitsEvent", equalTo(true));
+                .body("executionMode", equalTo("script"));
     }
 
     @Test

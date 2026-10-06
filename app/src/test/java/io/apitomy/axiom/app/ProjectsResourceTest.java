@@ -1,8 +1,12 @@
 package io.apitomy.axiom.app;
 
+import io.apitomy.axiom.core.entities.TaskEntity;
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import org.junit.jupiter.api.Test;
+
+import java.time.Instant;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
@@ -282,27 +286,26 @@ class ProjectsResourceTest {
 
     // ── Tasks ─────────────────────────────────────────────────────────
 
+    /**
+     * Action types can only be invoked from workflows; creating a task directly on a project is not allowed.
+     */
     @Test
-    void testCreateAndListTasks() {
-        int projectId = createProject("Task Test", "feature", "owner/repo#400");
+    void creatingTaskDirectlyOnProjectIsNotAllowed() {
+        int projectId = createProject("Direct Task", "feature", "owner/repo#399");
 
         given()
             .contentType(ContentType.JSON)
-            .body("""
-                {
-                    "actionType": "analyze",
-                    "input": "Please analyze this issue"
-                }
-                """)
+            .body("{\"actionType\": \"anything\"}")
             .when()
                 .post(PROJECTS_PATH + "/" + projectId + "/tasks")
             .then()
-                .statusCode(200)
-                .body("actionType", equalTo("analyze"))
-                .body("createdBy", equalTo("user"))
-                .body("status", equalTo("Pending"))
-                .body("input", equalTo("Please analyze this issue"))
-                .body("projectId", equalTo(projectId));
+                .statusCode(405);
+    }
+
+    @Test
+    void testListTasks() {
+        int projectId = createProject("Task Test", "feature", "owner/repo#400");
+        seedTask(projectId, "analyze");
 
         given()
             .when()
@@ -316,25 +319,31 @@ class ProjectsResourceTest {
     @Test
     void testGetTask() {
         int projectId = createProject("Get Task Test", "feature", "owner/repo#401");
-
-        int taskId = given()
-            .contentType(ContentType.JSON)
-            .body("""
-                { "actionType": "implement" }
-                """)
-            .when()
-                .post(PROJECTS_PATH + "/" + projectId + "/tasks")
-            .then()
-                .statusCode(200)
-                .extract().path("id");
+        long taskId = seedTask(projectId, "implement");
 
         given()
             .when()
                 .get(PROJECTS_PATH + "/" + projectId + "/tasks/" + taskId)
             .then()
                 .statusCode(200)
-                .body("id", equalTo(taskId))
+                .body("id", equalTo((int) taskId))
                 .body("actionType", equalTo("implement"));
+    }
+
+    /**
+     * Persists a pending task directly, standing in for a task created by a workflow action node.
+     */
+    private long seedTask(int projectId, String actionType) {
+        return QuarkusTransaction.requiringNew().call(() -> {
+            TaskEntity task = new TaskEntity();
+            task.projectId = (long) projectId;
+            task.actionType = actionType;
+            task.createdBy = "workflow";
+            task.status = "Pending";
+            task.createdOn = Instant.now();
+            task.persist();
+            return task.id;
+        });
     }
 
     @Test

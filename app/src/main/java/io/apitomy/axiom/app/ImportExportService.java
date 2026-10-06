@@ -403,10 +403,6 @@ public class ImportExportService {
             entity.name = item.path("name").asText();
             entity.description = textOrNull(item, "description");
             entity.executionMode = item.path("executionMode").asText("agent");
-            entity.userTriggerable = item.path("userTriggerable").asBoolean(false);
-            entity.managerTriggerable = item.path("managerTriggerable").asBoolean(false);
-            entity.emitsEvent = item.path("emitsEvent").asBoolean(false);
-            entity.workflowEnabled = item.path("workflowEnabled").asBoolean(false);
             entity.inputs.addAll(importFields(item, "inputs"));
             entity.outputs.addAll(importFields(item, "outputs"));
             entity.allowedTools = csvOrNull(item, "allowedTools");
@@ -517,10 +513,6 @@ public class ImportExportService {
             }
             entity.description = textOrNull(item, "description");
             entity.executionMode = item.path("executionMode").asText("agent");
-            entity.userTriggerable = item.path("userTriggerable").asBoolean(false);
-            entity.managerTriggerable = item.path("managerTriggerable").asBoolean(false);
-            entity.emitsEvent = item.path("emitsEvent").asBoolean(false);
-            entity.workflowEnabled = item.path("workflowEnabled").asBoolean(false);
             entity.inputs.clear();
             entity.inputs.addAll(importFields(item, "inputs"));
             entity.outputs.clear();
@@ -661,10 +653,6 @@ public class ImportExportService {
         n.put("name", e.name);
         putIfNotNull(n, "description", e.description);
         n.put("executionMode", e.executionMode);
-        n.put("userTriggerable", e.userTriggerable);
-        n.put("managerTriggerable", e.managerTriggerable);
-        n.put("emitsEvent", e.emitsEvent);
-        n.put("workflowEnabled", e.workflowEnabled);
         if (e.inputs != null && !e.inputs.isEmpty()) {
             var inputsArr = n.putArray("inputs");
             e.inputs.forEach(f -> serializeField(inputsArr.addObject(), f));

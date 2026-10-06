@@ -59,7 +59,7 @@ public class ActionResourceImpl implements ActionResource {
     @Override
     public ActionTypeSearchResults listActionTypes(BigInteger page, BigInteger limit,
                                                    String filterName, String filterMode,
-                                                   String filterLabels, Boolean filterWorkflowEnabled) {
+                                                   String filterLabels) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
@@ -84,10 +84,6 @@ public class ActionResourceImpl implements ActionResource {
                     + " GROUP BY a.id HAVING COUNT(DISTINCT al) = :labelCount)");
             params.put("labels", labels);
             params.put("labelCount", (long) labels.size());
-        }
-
-        if (filterWorkflowEnabled != null && filterWorkflowEnabled) {
-            hql.append(" and workflowEnabled = true");
         }
 
         long totalCount = ActionTypeEntity.count(hql.toString(), params);
@@ -237,9 +233,6 @@ public class ActionResourceImpl implements ActionResource {
         entity.name = data.getName();
         entity.description = data.getDescription();
         entity.executionMode = data.getExecutionMode().value();
-        entity.userTriggerable = data.getUserTriggerable() != null ? data.getUserTriggerable() : false;
-        entity.managerTriggerable = data.getManagerTriggerable() != null ? data.getManagerTriggerable() : true;
-        entity.workflowEnabled = data.getWorkflowEnabled() != null ? data.getWorkflowEnabled() : false;
         entity.inputs.clear();
         entity.inputs.addAll(toEntityFields(data.getInputs()));
         entity.outputs.clear();
@@ -253,7 +246,6 @@ public class ActionResourceImpl implements ActionResource {
         entity.maxSteps = data.getMaxSteps();
         entity.maxBudgetUsd = data.getMaxBudgetUsd();
         entity.timeoutSeconds = data.getTimeoutSeconds();
-        entity.emitsEvent = data.getEmitsEvent() != null ? data.getEmitsEvent() : false;
         entity.environment = environmentToJson(data.getEnvironment());
         entity.labels.clear();
         if (data.getLabels() != null) {
@@ -275,9 +267,6 @@ public class ActionResourceImpl implements ActionResource {
         actionType.setName(entity.name);
         actionType.setDescription(entity.description);
         actionType.setExecutionMode(ActionType.ExecutionMode.fromValue(entity.executionMode));
-        actionType.setUserTriggerable(entity.userTriggerable);
-        actionType.setManagerTriggerable(entity.managerTriggerable);
-        actionType.setWorkflowEnabled(entity.workflowEnabled);
         actionType.setInputs(toBeanFields(entity.inputs));
         actionType.setOutputs(toBeanFields(entity.outputs));
         if (entity.allowedTools != null && !entity.allowedTools.isBlank()) {
@@ -291,7 +280,6 @@ public class ActionResourceImpl implements ActionResource {
         actionType.setMaxSteps(entity.maxSteps);
         actionType.setMaxBudgetUsd(entity.maxBudgetUsd);
         actionType.setTimeoutSeconds(entity.timeoutSeconds);
-        actionType.setEmitsEvent(entity.emitsEvent);
         actionType.setEnvironment(jsonToEnvironment(entity.environment));
         actionType.setLabels(entity.labels);
         return actionType;

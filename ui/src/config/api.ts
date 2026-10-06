@@ -349,22 +349,6 @@ export async function fetchProjectTasks(projectId: number): Promise<Task[]> {
     return response.json();
 }
 
-export interface NewTask {
-    actionType: string;
-    assignedAgent?: number;
-    input?: string;
-}
-
-export async function createTask(projectId: number, task: NewTask): Promise<Task> {
-    const response = await fetch(`${API}/projects/${projectId}/tasks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(task),
-    });
-    if (!response.ok) throw new Error(`Failed to create task: ${response.status}`);
-    return response.json();
-}
-
 export async function fetchTaskExecutionLog(
     projectId: number,
     taskId: number
@@ -390,8 +374,6 @@ export interface ActionType {
     name: string;
     description?: string;
     executionMode: string;
-    userTriggerable: boolean;
-    managerTriggerable: boolean;
     allowedTools?: string[];
     promptTemplate?: string;
     scriptTemplate?: string;
@@ -400,10 +382,8 @@ export interface ActionType {
     maxSteps?: number;
     maxBudgetUsd?: number;
     timeoutSeconds?: number;
-    emitsEvent: boolean;
     environment?: Record<string, string>;
     labels?: string[];
-    workflowEnabled?: boolean;
     inputs?: ActionTypeField[];
     outputs?: ActionTypeField[];
 }
@@ -412,7 +392,7 @@ export type NewActionType = Omit<ActionType, "id">;
 
 export async function fetchActionTypes(
     page = 1, limit = 20, filterName?: string, filterMode?: string,
-    filterLabels?: string, filterWorkflowEnabled?: boolean
+    filterLabels?: string
 ): Promise<SearchResults<ActionType>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
@@ -420,7 +400,6 @@ export async function fetchActionTypes(
     if (filterName) params.set("filterName", filterName);
     if (filterMode) params.set("filterMode", filterMode);
     if (filterLabels) params.set("filterLabels", filterLabels);
-    if (filterWorkflowEnabled) params.set("filterWorkflowEnabled", "true");
     const response = await fetch(`${API}/action-types?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch action types: ${response.status}`);
     return response.json();

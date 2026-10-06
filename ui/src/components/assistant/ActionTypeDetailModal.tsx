@@ -63,10 +63,6 @@ export function ActionTypeDetailModal({ isOpen, onClose, name, content, errors }
 
     const description = (content.description as string) || "";
     const executionMode = (content.executionMode as string) || "agent";
-    const userTriggerable = content.userTriggerable as boolean ?? false;
-    const managerTriggerable = content.managerTriggerable as boolean ?? false;
-    const emitsEvent = content.emitsEvent as boolean ?? false;
-    const workflowEnabled = content.workflowEnabled as boolean ?? false;
     const inputs = Array.isArray(content.inputs) ? content.inputs as { name: string; type: string; required?: boolean; description?: string }[] : [];
     const outputs = Array.isArray(content.outputs) ? content.outputs as { name: string; type: string; required?: boolean; description?: string }[] : [];
     const rawAllowedTools = content.allowedTools;
@@ -118,16 +114,6 @@ export function ActionTypeDetailModal({ isOpen, onClose, name, content, errors }
                                         <Label isCompact color={isAgentMode ? "blue" : "orange"}>
                                             {executionMode}
                                         </Label>
-                                    </DescriptionListDescription>
-                                </DescriptionListGroup>
-                                <DescriptionListGroup>
-                                    <DescriptionListTerm>Flags</DescriptionListTerm>
-                                    <DescriptionListDescription>
-                                        {userTriggerable && <Label isCompact color="green" style={{ marginRight: 4 }}>User Triggerable</Label>}
-                                        {managerTriggerable && <Label isCompact color="blue" style={{ marginRight: 4 }}>Manager Triggerable</Label>}
-                                        {emitsEvent && <Label isCompact color="purple" style={{ marginRight: 4 }}>Emits Event</Label>}
-                                        {workflowEnabled && <Label isCompact color="teal" style={{ marginRight: 4 }}>Workflow Enabled</Label>}
-                                        {!userTriggerable && !managerTriggerable && !emitsEvent && !workflowEnabled && "—"}
                                     </DescriptionListDescription>
                                 </DescriptionListGroup>
                                 {toolsList.length > 0 && (
@@ -193,14 +179,14 @@ export function ActionTypeDetailModal({ isOpen, onClose, name, content, errors }
                             </div>
                         </Tab>
                     ) : null}
-                    {workflowEnabled && inputs.length > 0 && (
+                    {inputs.length > 0 && (
                         <Tab eventKey={2} title={<TabTitleText>Inputs ({inputs.length})</TabTitleText>}>
                             <div style={{ paddingTop: 16 }}>
                                 <FieldsTable fields={inputs} />
                             </div>
                         </Tab>
                     )}
-                    {workflowEnabled && outputs.length > 0 && (
+                    {outputs.length > 0 && (
                         <Tab eventKey={3} title={<TabTitleText>Outputs ({outputs.length})</TabTitleText>}>
                             <div style={{ paddingTop: 16 }}>
                                 <FieldsTable fields={outputs} />

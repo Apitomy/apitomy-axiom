@@ -55,12 +55,6 @@ const HANDLERS = {
     axiom_get_project: async (args) => {
         return await axiomApi("GET", `/projects/${args.projectId}`);
     },
-    axiom_create_task: async (args) => {
-        return await axiomApi("POST", `/projects/${args.projectId}/tasks`, {
-            actionType: args.actionType,
-            input: args.input || null,
-        });
-    },
     axiom_get_task_status: async (args) => {
         const result = await axiomApi("GET", `/tasks?filterProjectId=${args.projectId}&limit=100`);
         const parsed = JSON.parse(result);

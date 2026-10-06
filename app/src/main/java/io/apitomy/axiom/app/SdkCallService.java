@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.SdkFunctionRegistry;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
-import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
 import io.apitomy.axiom.core.lifecycle.ProjectStatus;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -59,7 +58,6 @@ public class SdkCallService {
             case "axiom_update_project" -> updateProject(params);
             case "axiom_add_thread_entry" -> addThreadEntry(params);
             case "axiom_get_project" -> getProject(params);
-            case "axiom_create_task" -> createTask(params);
             case "axiom_fire_event" -> fireEvent(params);
             case "axiom_list_projects" -> listProjects(params);
             case "axiom_create_project" -> createProject(params);
@@ -162,23 +160,6 @@ public class SdkCallService {
                 "ref", project.ref != null ? project.ref : "",
                 "type", project.type != null ? project.type : ""
         ));
-    }
-
-    private SdkCallResult createTask(Map<String, Object> params) {
-        Long projectId = toLong(params.get("projectId"));
-        String actionType = toString(params.get("actionType"));
-        if (projectId == null) return SdkCallResult.error("projectId is required");
-        if (actionType == null) return SdkCallResult.error("actionType is required");
-        TaskEntity task = new TaskEntity();
-        task.projectId = projectId;
-        task.actionType = actionType;
-        task.createdBy = "workflow";
-        task.status = "Pending";
-        task.input = toString(params.get("input"));
-        task.createdOn = Instant.now();
-        task.persist();
-        return SdkCallResult.ok("Task " + task.id + " created",
-                Map.of("taskId", task.id));
     }
 
     private SdkCallResult fireEvent(Map<String, Object> params) {

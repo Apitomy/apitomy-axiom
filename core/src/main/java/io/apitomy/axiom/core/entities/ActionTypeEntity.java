@@ -29,12 +29,6 @@ public class ActionTypeEntity extends PanacheEntity {
     @Column(name = "execution_mode", nullable = false)
     public String executionMode;
 
-    @Column(name = "user_triggerable", nullable = false)
-    public boolean userTriggerable;
-
-    @Column(name = "workflow_enabled", nullable = false)
-    public boolean workflowEnabled;
-
     @Column(name = "allowed_tools", columnDefinition = "TEXT")
     public String allowedTools;
 
@@ -84,9 +78,6 @@ public class ActionTypeEntity extends PanacheEntity {
     @Column(name = "timeout_seconds")
     public Integer timeoutSeconds;
 
-    @Column(name = "manager_triggerable", nullable = false)
-    public boolean managerTriggerable;
-
     /**
      * Optional JSON object of environment variables for the subprocess.
      * Values can reference secrets using ${secret:NAME} syntax.
@@ -94,9 +85,6 @@ public class ActionTypeEntity extends PanacheEntity {
      */
     @Column(columnDefinition = "TEXT")
     public String environment;
-
-    @Column(name = "emits_event", nullable = false)
-    public boolean emitsEvent;
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "action_type_label", joinColumns = @JoinColumn(name = "action_type_id"))

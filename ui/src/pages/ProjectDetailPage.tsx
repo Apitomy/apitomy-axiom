@@ -19,29 +19,19 @@ import {
     EmptyStateBody,
     Flex,
     FlexItem,
-    Form,
     Gallery,
     GalleryItem,
-    FormGroup,
-    FormSelect,
-    FormSelectOption,
     Label,
-    Modal,
-    ModalBody,
-    ModalFooter,
-    ModalHeader,
     PageSection,
     Tab,
     TabTitleText,
     Tabs,
-    TextArea,
     Title,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import ChatIcon from "@patternfly/react-icons/dist/esm/icons/chat-icon";
-import PlayIcon from "@patternfly/react-icons/dist/esm/icons/play-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import PencilAltIcon from "@patternfly/react-icons/dist/esm/icons/pencil-alt-icon";
@@ -54,21 +44,18 @@ import JiraIcon from "@patternfly/react-icons/dist/esm/icons/jira-icon";
 import AngleRightIcon from "@patternfly/react-icons/dist/esm/icons/angle-right-icon";
 import AngleDownIcon from "@patternfly/react-icons/dist/esm/icons/angle-down-icon";
 import {
-    type ActionType,
     type InboxItem,
     type Project,
     type ProjectMetrics,
     type StreamEvent,
     type Task,
     type ThreadEntry,
-    fetchActionTypes,
     fetchAgents,
     fetchProject,
     fetchProjectMetrics,
     fetchProjectTasks,
     fetchStreamEvents,
     fetchThreadEntries,
-    createTask,
     deleteProject,
     updateProject,
     updateProjectBody,
@@ -122,13 +109,7 @@ export function ProjectDetailPage() {
     const editBodyRef = useRef("");
     const [bodySaveError, setBodySaveError] = useState("");
 
-    // Trigger Action state
-    const [isActionModalOpen, setIsActionModalOpen] = useState(false);
     const [isAssistantModalOpen, setIsAssistantModalOpen] = useState(false);
-    const [actionTypes, setActionTypes] = useState<ActionType[]>([]);
-    const [selectedActionType, setSelectedActionType] = useState("");
-    const [actionInput, setActionInput] = useState("");
-    const [submitting, setSubmitting] = useState(false);
 
     const id = Number(projectId);
 
@@ -170,37 +151,6 @@ export function ProjectDetailPage() {
         loadData();
     }, [loadData]);
 
-    const openActionModal = () => {
-        fetchActionTypes(1, 1000)
-            .then((results) => {
-                const triggerable = results.items.filter(
-                    (t) => t.userTriggerable
-                );
-                setActionTypes(triggerable);
-                if (triggerable.length > 0) {
-                    setSelectedActionType(triggerable[0].name);
-                }
-                setActionInput("");
-                setIsActionModalOpen(true);
-            })
-            .catch(console.error);
-    };
-
-    const handleTriggerAction = () => {
-        if (!selectedActionType) return;
-        setSubmitting(true);
-        createTask(id, {
-            actionType: selectedActionType,
-            input: actionInput || undefined,
-        })
-            .then(() => {
-                setIsActionModalOpen(false);
-                loadData();
-            })
-            .catch(console.error)
-            .finally(() => setSubmitting(false));
-    };
-
     if (loading) {
         return (
             <PageSection>
@@ -220,10 +170,6 @@ export function ProjectDetailPage() {
             </PageSection>
         );
     }
-
-    const selectedActionDesc = actionTypes.find(
-        (t) => t.name === selectedActionType
-    )?.description;
 
     return (
         <PageSection isFilled className="project-detail">
@@ -263,14 +209,6 @@ export function ProjectDetailPage() {
                         style={{ marginRight: "8px" }}
                     >
                         Assistant
-                    </Button>
-                    <Button
-                        variant="secondary"
-                        icon={<PlayIcon />}
-                        onClick={openActionModal}
-                        style={{ marginRight: "8px" }}
-                    >
-                        Trigger Action
                     </Button>
                     {project.status === "Completed" && (
                         <Button variant="danger" icon={<TrashIcon />}
@@ -500,72 +438,6 @@ export function ProjectDetailPage() {
                     )}
                 </div>
             </div>
-
-            {/* Trigger Action Modal */}
-            <Modal
-                isOpen={isActionModalOpen}
-                onClose={() => setIsActionModalOpen(false)}
-                variant="medium"
-            >
-                <ModalHeader title="Trigger Action" />
-                <ModalBody>
-                    {actionTypes.length === 0 ? (
-                        <EmptyState>
-                            <EmptyStateBody>
-                                No user-triggerable action types configured.
-                            </EmptyStateBody>
-                        </EmptyState>
-                    ) : (
-                        <Form>
-                            <FormGroup label="Action Type" isRequired fieldId="actionType">
-                                <FormSelect
-                                    id="actionType"
-                                    value={selectedActionType}
-                                    onChange={(_e, v) => setSelectedActionType(v)}
-                                >
-                                    {actionTypes.map((at) => (
-                                        <FormSelectOption
-                                            key={at.name}
-                                            value={at.name}
-                                            label={at.name}
-                                        />
-                                    ))}
-                                </FormSelect>
-                            </FormGroup>
-                            {selectedActionDesc && (
-                                <p className="axiom-text-subtle" style={{ fontSize: "14px", marginTop: "-8px" }}>
-                                    {selectedActionDesc}
-                                </p>
-                            )}
-                            <FormGroup label="Instructions (optional)" fieldId="input">
-                                <TextArea
-                                    id="input"
-                                    placeholder="Additional context or instructions for the agent..."
-                                    value={actionInput}
-                                    onChange={(_e, v) => setActionInput(v)}
-                                    rows={4}
-                                />
-                            </FormGroup>
-                        </Form>
-                    )}
-                </ModalBody>
-                <ModalFooter>
-                    <Button
-                        variant="primary"
-                        onClick={handleTriggerAction}
-                        isDisabled={!selectedActionType || submitting}
-                        isLoading={submitting}
-                    >
-                        {submitting ? "Creating..." : "Trigger"}
-                    </Button>
-                    <Button
-                        variant="link"
-                        onClick={() => setIsActionModalOpen(false)}
-                    >
-                        Cancel
-                    </Button>
-                </ModalFooter>
-            </Modal>
 
             <CreateSessionModal
                 isOpen={isAssistantModalOpen}

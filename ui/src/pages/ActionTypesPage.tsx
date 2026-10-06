@@ -22,16 +22,11 @@ import {
     Toolbar,
     ToolbarContent,
     ToolbarItem,
-    Tooltip,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
-import UserIcon from "@patternfly/react-icons/dist/esm/icons/user-icon";
-import CogIcon from "@patternfly/react-icons/dist/esm/icons/cog-icon";
-import EnvelopeIcon from "@patternfly/react-icons/dist/esm/icons/envelope-icon";
-import ShareSquareIcon from "@patternfly/react-icons/dist/esm/icons/share-square-icon";
 import {
     type ChipFilterCriteria,
     type ChipFilterType,
@@ -143,9 +138,6 @@ export function ActionTypesPage() {
         const data: NewActionType = {
             name: newName,
             executionMode: newMode,
-            userTriggerable: false,
-            managerTriggerable: false,
-            emitsEvent: false,
             promptTemplate: newMode === "agent" ? DEFAULT_PROMPT_TEMPLATE : undefined,
             scriptTemplate: newMode === "script" ? DEFAULT_SCRIPT_TEMPLATE : undefined,
         };
@@ -238,7 +230,6 @@ export function ActionTypesPage() {
                                 <Th>Name</Th>
                                 <Th>Mode</Th>
                                 <Th>Labels</Th>
-                                <Th>Flags</Th>
                                 <Th>Tools</Th>
                                 <Th />
                             </Tr>
@@ -273,30 +264,6 @@ export function ActionTypesPage() {
                                                 {label}
                                             </ColoredLabel>
                                         ))}
-                                    </Td>
-                                    <Td>
-                                        <div style={{ display: "flex", gap: 6 }}>
-                                            {at.userTriggerable && (
-                                                <Tooltip content="User Triggerable">
-                                                    <UserIcon color="var(--pf-t--global--color--status--success--default)" />
-                                                </Tooltip>
-                                            )}
-                                            {at.managerTriggerable && (
-                                                <Tooltip content="Manager Triggerable">
-                                                    <CogIcon color="var(--pf-t--global--color--status--info--default)" />
-                                                </Tooltip>
-                                            )}
-                                            {at.emitsEvent && (
-                                                <Tooltip content="Emits Event">
-                                                    <EnvelopeIcon color="var(--pf-t--global--color--status--warning--default)" />
-                                                </Tooltip>
-                                            )}
-                                            {at.workflowEnabled && (
-                                                <Tooltip content="Workflow Enabled">
-                                                    <ShareSquareIcon color="var(--pf-t--global--color--status--custom--default)" />
-                                                </Tooltip>
-                                            )}
-                                        </div>
                                     </Td>
                                     <Td>{at.executionMode === "agent" ? `${at.allowedTools?.length || 0} tools` : "—"}</Td>
                                     <Td>

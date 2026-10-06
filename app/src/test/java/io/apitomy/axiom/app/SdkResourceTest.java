@@ -26,13 +26,12 @@ class SdkResourceTest {
                 .get(SDK_PATH)
             .then()
                 .statusCode(200)
-                .body("size()", greaterThanOrEqualTo(20))
+                .body("size()", greaterThanOrEqualTo(15))
                 .body("name", hasItems(
                     "axiom_close_project",
                     "axiom_fire_event",
                     "axiom_list_projects",
                     "axiom_get_project",
-                    "axiom_create_task",
                     "axiom_list_agents"))
                 .body("[0].name", notNullValue())
                 .body("[0].description", notNullValue())
@@ -103,6 +102,23 @@ class SdkResourceTest {
                 .body("name", not(hasItems("axiom_list_reports")));
 
         SdkCallService.SdkCallResult result = sdkCallService.execute("axiom_list_reports", Map.of());
+        assertFalse(result.success());
+        assertTrue(result.output().startsWith("Unknown SDK function"), result.output());
+    }
+
+    /**
+     * Action types run only from workflow action nodes, so the SDK no longer offers task creation.
+     */
+    @Test
+    void createTaskFunctionIsUnknown() {
+        given()
+            .when()
+                .get(SDK_PATH)
+            .then()
+                .statusCode(200)
+                .body("name", not(hasItems("axiom_create_task")));
+
+        SdkCallService.SdkCallResult result = sdkCallService.execute("axiom_create_task", Map.of());
         assertFalse(result.success());
         assertTrue(result.output().startsWith("Unknown SDK function"), result.output());
     }

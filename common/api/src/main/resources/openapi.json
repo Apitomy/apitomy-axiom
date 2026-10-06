@@ -497,60 +497,6 @@
           }
         }
       },
-      "post": {
-        "tags": [
-          "Tasks"
-        ],
-        "summary": "Create a task (user-initiated action)",
-        "operationId": "createTask",
-        "parameters": [
-          {
-            "name": "X-Axiom-Trace-Id",
-            "in": "header",
-            "required": false,
-            "description": "Trace of the calling agent; the new task joins it",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "X-Axiom-Parent-Node-Id",
-            "in": "header",
-            "required": false,
-            "description": "Trace node of the calling agent; the new task node is attached under it",
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewTask"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Task created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Task"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
       "parameters": [
         {
           "$ref": "#/components/parameters/ProjectId"
@@ -972,15 +918,6 @@
             "required": false,
             "schema": {
               "type": "string"
-            }
-          },
-          {
-            "name": "filterWorkflowEnabled",
-            "in": "query",
-            "description": "Filter to only action types enabled for workflows",
-            "required": false,
-            "schema": {
-              "type": "boolean"
             }
           }
         ],
@@ -5528,24 +5465,6 @@
           }
         }
       },
-      "NewTask": {
-        "required": [
-          "actionType"
-        ],
-        "type": "object",
-        "properties": {
-          "actionType": {
-            "type": "string"
-          },
-          "assignedAgent": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "input": {
-            "type": "string"
-          }
-        }
-      },
       "Agent": {
         "required": [
           "id",
@@ -5617,9 +5536,7 @@
         "required": [
           "id",
           "name",
-          "executionMode",
-          "userTriggerable",
-          "emitsEvent"
+          "executionMode"
         ],
         "type": "object",
         "properties": {
@@ -5639,15 +5556,6 @@
               "script"
             ],
             "type": "string"
-          },
-          "userTriggerable": {
-            "type": "boolean"
-          },
-          "managerTriggerable": {
-            "type": "boolean"
-          },
-          "emitsEvent": {
-            "type": "boolean"
           },
           "allowedTools": {
             "description": "Tools the agent is allowed to use when performing this action",
@@ -5700,10 +5608,6 @@
             "items": {
               "type": "string"
             }
-          },
-          "workflowEnabled": {
-            "description": "When true, this action type is offered as a building block in the Flow workflow editor palette.",
-            "type": "boolean"
           },
           "inputs": {
             "description": "Typed inputs this action declares when used as a Flow workflow action node.",
@@ -5741,15 +5645,6 @@
             ],
             "type": "string"
           },
-          "userTriggerable": {
-            "type": "boolean"
-          },
-          "managerTriggerable": {
-            "type": "boolean"
-          },
-          "emitsEvent": {
-            "type": "boolean"
-          },
           "allowedTools": {
             "description": "Tools the agent is allowed to use when performing this action",
             "type": "array",
@@ -5801,10 +5696,6 @@
             "items": {
               "type": "string"
             }
-          },
-          "workflowEnabled": {
-            "description": "When true, this action type is offered as a building block in the Flow workflow editor palette.",
-            "type": "boolean"
           },
           "inputs": {
             "description": "Typed inputs this action declares when used as a Flow workflow action node.",

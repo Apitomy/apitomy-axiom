@@ -66,7 +66,7 @@ const TOOLS = [
     },
     {
         name: "axiom_list_action_types",
-        description: "List all existing action types in Axiom. Returns names, descriptions, and execution modes.",
+        description: "List all existing action types in Axiom. Returns names, descriptions, and execution modes. Action types run only from workflow action nodes.",
         parameters: [],
         handler: async () => {
             const response = JSON.parse(await axiomApi("GET", "/action-types"));
@@ -76,8 +76,6 @@ const TOOLS = [
                 name: at.name,
                 description: at.description || "",
                 executionMode: at.executionMode,
-                userTriggerable: at.userTriggerable,
-                managerTriggerable: at.managerTriggerable,
             })), null, 2);
         },
     },

@@ -9,7 +9,6 @@ import io.apitomy.axiom.core.entities.TraceEntity;
 import io.apitomy.axiom.api.beans.NewProject;
 import io.apitomy.axiom.api.beans.NewThreadEntry;
 import io.apitomy.axiom.api.beans.ProjectMetrics;
-import io.apitomy.axiom.api.beans.NewTask;
 import io.apitomy.axiom.api.beans.Project;
 import io.apitomy.axiom.api.beans.ProjectSearchResults;
 import io.apitomy.axiom.api.beans.Task;
@@ -29,7 +28,6 @@ import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.lifecycle.ProjectLifecycle;
 import io.apitomy.axiom.core.lifecycle.ProjectStatus;
 import io.apitomy.axiom.core.services.WorkspaceService;
-import io.apitomy.axiom.core.tracing.TraceContext;
 import io.apitomy.axiom.core.tracing.TraceService;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
@@ -51,7 +49,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Implementation of the Projects REST API (includes tasks and threads).
@@ -85,9 +82,6 @@ public class ProjectsResourceImpl implements ProjectsResource {
 
     @Inject
     WorkflowRunBeanMapper runBeanMapper;
-
-    @Inject
-    CallerTraceContext callerTraceContext;
 
     // ── Projects ──────────────────────────────────────────────────────
 
@@ -272,56 +266,6 @@ public class ProjectsResourceImpl implements ProjectsResource {
                 .stream()
                 .map(this::toTaskBean)
                 .toList();
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    @Transactional
-    public Task createTask(long projectId, String xAxiomTraceId, Long xAxiomParentNodeId,
-                           NewTask data) {
-        findProjectOrThrow(projectId);
-
-        // The trace headers are validated by CallerTraceFilter, which is the source of truth;
-        // the raw header parameters are intentionally ignored here.
-        Optional<TraceContext> callerTrace = callerTraceContext.get();
-        TraceContext traceCtx = callerTrace.orElse(null);
-        if (traceCtx == null) {
-            try {
-                traceCtx = traceService.createTrace("user-action",
-                        "User action: " + data.getActionType(),
-                        null, projectId,
-                        "user-action-triggered", "User triggered action: " + data.getActionType(),
-                        null, null);
-            } catch (Exception e) {
-                LOG.warnf(e, "Failed to create trace for user action on project %d", projectId);
-            }
-        }
-
-        TaskEntity entity = new TaskEntity();
-        entity.projectId = projectId;
-        entity.actionType = data.getActionType();
-        entity.createdBy = "user";
-        entity.assignedAgent = data.getAssignedAgent();
-        entity.status = "Pending";
-        entity.input = data.getInput();
-        entity.createdOn = Instant.now();
-        if (traceCtx != null) {
-            entity.traceId = traceCtx.traceId();
-        }
-        entity.persist();
-
-        if (traceCtx != null) {
-            try {
-                traceService.addNode(traceCtx, "task", "in-progress",
-                        "Task: " + entity.actionType, "task", entity.id);
-            } catch (Exception e) {
-                LOG.warnf(e, "Failed to add task trace node for task %d", entity.id);
-            }
-        }
-
-        return toTaskBean(entity);
     }
 
     /**

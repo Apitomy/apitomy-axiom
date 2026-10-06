@@ -167,8 +167,6 @@ class AssistantItemValidatorTest {
                   "name": "my-action",
                   "description": "A test action",
                   "executionMode": "agent",
-                  "userTriggerable": true,
-                  "managerTriggerable": false,
                   "promptTemplate": "Do the thing: {{input}}"
                 }
                 """);

@@ -7,7 +7,6 @@ import {
     Breadcrumb,
     BreadcrumbItem,
     Button,
-    Checkbox,
     EmptyState,
     EmptyStateBody,
     Flex,
@@ -63,8 +62,7 @@ export function ActionTypeDetailPage() {
 
     const [actionType, setActionType] = useState<ActionType | null>(null);
     const [form, setForm] = useState<NewActionType>({
-        name: "", executionMode: "agent", userTriggerable: false, managerTriggerable: true, emitsEvent: true,
-        workflowEnabled: false, inputs: [], outputs: [],
+        name: "", executionMode: "agent", inputs: [], outputs: [],
     });
     const [tools, setTools] = useState<string[]>([]);
     const [envVars, setEnvVars] = useState<Record<string, string>>({});
@@ -111,10 +109,6 @@ export function ActionTypeDetailPage() {
                     name: at.name,
                     description: at.description,
                     executionMode: at.executionMode,
-                    userTriggerable: at.userTriggerable,
-                    managerTriggerable: at.managerTriggerable,
-                    emitsEvent: at.emitsEvent,
-                    workflowEnabled: at.workflowEnabled || false,
                     inputs: at.inputs || [],
                     outputs: at.outputs || [],
                     allowedTools: at.allowedTools,
@@ -160,17 +154,15 @@ export function ActionTypeDetailPage() {
         if (form.executionMode === "script") {
             visible.add(4);
         }
-        if (form.workflowEnabled) {
-            visible.add(6);
-            visible.add(7);
-        }
+        visible.add(6);
+        visible.add(7);
         if (validationMessages.length > 0) {
             visible.add(5);
         }
         if (!visible.has(activeTab)) {
             setActiveTab(0);
         }
-    }, [form.executionMode, form.workflowEnabled, validationMessages.length, activeTab]);
+    }, [form.executionMode, validationMessages.length, activeTab]);
 
     const updateForm = (updates: Partial<NewActionType>) => {
         if (updates.engine !== undefined && updates.engine !== form.engine) {
@@ -336,28 +328,24 @@ export function ActionTypeDetailPage() {
                         />
                     </TabContent>
                 </Tab>
-                {form.workflowEnabled && (
-                    <Tab eventKey={6} title={<TabTitleText>Inputs ({(form.inputs || []).length})</TabTitleText>}>
-                        <TabContent id="inputs-tab" eventKey={6} activeKey={activeTab} style={{ marginTop: "24px" }}>
-                            <ActionTypeFieldsTab
-                                kind="input"
-                                fields={form.inputs || []}
-                                onChange={(updated) => updateForm({ inputs: updated })}
-                            />
-                        </TabContent>
-                    </Tab>
-                )}
-                {form.workflowEnabled && (
-                    <Tab eventKey={7} title={<TabTitleText>Outputs ({(form.outputs || []).length})</TabTitleText>}>
-                        <TabContent id="outputs-tab" eventKey={7} activeKey={activeTab} style={{ marginTop: "24px" }}>
-                            <ActionTypeFieldsTab
-                                kind="output"
-                                fields={form.outputs || []}
-                                onChange={(updated) => updateForm({ outputs: updated })}
-                            />
-                        </TabContent>
-                    </Tab>
-                )}
+                <Tab eventKey={6} title={<TabTitleText>Inputs ({(form.inputs || []).length})</TabTitleText>}>
+                    <TabContent id="inputs-tab" eventKey={6} activeKey={activeTab} style={{ marginTop: "24px" }}>
+                        <ActionTypeFieldsTab
+                            kind="input"
+                            fields={form.inputs || []}
+                            onChange={(updated) => updateForm({ inputs: updated })}
+                        />
+                    </TabContent>
+                </Tab>
+                <Tab eventKey={7} title={<TabTitleText>Outputs ({(form.outputs || []).length})</TabTitleText>}>
+                    <TabContent id="outputs-tab" eventKey={7} activeKey={activeTab} style={{ marginTop: "24px" }}>
+                        <ActionTypeFieldsTab
+                            kind="output"
+                            fields={form.outputs || []}
+                            onChange={(updated) => updateForm({ outputs: updated })}
+                        />
+                    </TabContent>
+                </Tab>
                 {form.executionMode === "agent" && (
                     <Tab eventKey={3} title={<TabTitleText>Prompt Template</TabTitleText>}>
                         <TabContent id="prompt-tab" eventKey={3} activeKey={activeTab} style={{ marginTop: "24px" }}>
@@ -488,32 +476,6 @@ function InfoTab({ form, updateForm, onEditLabels }: {
                     <FormSelectOption value="agent" label="Agent — executed by an AI agent" />
                     <FormSelectOption value="script" label="Script — executes a bash script" />
                 </FormSelect>
-            </FormGroup>
-            <FormGroup fieldId="flags">
-                <Checkbox
-                    id="userTriggerable"
-                    label="User triggerable — can be manually triggered from the project detail page"
-                    isChecked={form.userTriggerable}
-                    onChange={(_e, v) => updateForm({ userTriggerable: v })}
-                />
-                <Checkbox
-                    id="managerTriggerable"
-                    label="Manager triggerable — can be selected by the AI Manager during event triage"
-                    isChecked={form.managerTriggerable}
-                    onChange={(_e, v) => updateForm({ managerTriggerable: v })}
-                />
-                <Checkbox
-                    id="emitsEvent"
-                    label="Emits internal event on completion — allows workflows to react to the completion"
-                    isChecked={form.emitsEvent}
-                    onChange={(_e, v) => updateForm({ emitsEvent: v })}
-                />
-                <Checkbox
-                    id="workflowEnabled"
-                    label="Workflow enabled — offered as a building block in the Flow workflow editor"
-                    isChecked={form.workflowEnabled}
-                    onChange={(_e, v) => updateForm({ workflowEnabled: v })}
-                />
             </FormGroup>
         </Form>
     );

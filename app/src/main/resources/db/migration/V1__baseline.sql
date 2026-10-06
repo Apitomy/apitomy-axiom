@@ -61,13 +61,9 @@
     create sequence workflow_wait_SEQ start with 1 increment by 50;
 
     create table action_type (
-        emits_event boolean default false not null,
-        manager_triggerable boolean default true not null,
         max_budget_usd float(53),
         max_steps integer,
         timeout_seconds integer,
-        user_triggerable boolean default false not null,
-        workflow_enabled boolean default false not null,
         id bigint not null,
         allowed_tools TEXT,
         description TEXT,

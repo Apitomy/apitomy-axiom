@@ -121,7 +121,7 @@ export function WorkflowDefinitionDetailPage() {
     const spi: EditorSpi = useMemo(() => ({
         actionTypes: async () => {
             const [results, sdkFunctions] = await Promise.all([
-                fetchActionTypes(1, 1000, undefined, undefined, undefined, true),
+                fetchActionTypes(1, 1000),
                 fetchSdkFunctions(),
             ]);
             const configured = results.items.map((at): ActionTypeDescriptor => ({
