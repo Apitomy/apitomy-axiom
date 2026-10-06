@@ -287,7 +287,7 @@ export function EventSourcesPage() {
 
             <ConfirmDeleteModal isOpen={deleteTarget !== null} title="Delete Event Source"
                 onConfirm={confirmDelete} onCancel={() => setDeleteTarget(null)}>
-                Delete this eventSource?
+                Delete this event source?
             </ConfirmDeleteModal>
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} variant="medium">

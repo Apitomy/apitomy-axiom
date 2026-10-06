@@ -417,7 +417,7 @@ function registerElLanguage(monaco: typeof Monaco) {
         event: {
             type: "Normalized event type (e.g., \"issue.created\", \"pr.merged\")",
             source: "Source system: \"github\" or \"jira\"",
-            eventSourceId: "Event Source slug (e.g., \"github-com\")",
+            eventSourceId: "Event source slug (e.g., \"github-com\")",
             ref: "Full URL of the event subject",
             timestamp: "When the event occurred (ISO-8601)",
             actor: actorFields,
@@ -755,7 +755,7 @@ function FilterHelpModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
                     <Tbody>
                         <Tr><Td><code>event.type</code></Td><Td>Normalized event type</Td><Td><code>"issue.created"</code>, <code>"pr.merged"</code>, <code>"push"</code></Td></Tr>
                         <Tr><Td><code>event.source</code></Td><Td>Source system</Td><Td><code>"github"</code>, <code>"jira"</code></Td></Tr>
-                        <Tr><Td><code>event.eventSourceId</code></Td><Td>Event Source slug</Td><Td><code>"github-com"</code>, <code>"jira-prod"</code></Td></Tr>
+                        <Tr><Td><code>event.eventSourceId</code></Td><Td>Event source slug</Td><Td><code>"github-com"</code>, <code>"jira-prod"</code></Td></Tr>
                         <Tr><Td><code>event.ref</code></Td><Td>Full URL of the event subject</Td><Td><code>"https://github.com/owner/repo/issues/123"</code></Td></Tr>
                         <Tr><Td><code>event.timestamp</code></Td><Td>When the event occurred</Td><Td>ISO-8601 string</Td></Tr>
                         <Tr><Td><code>event.actor.login</code></Td><Td>Actor username or account ID</Td><Td><code>"octocat"</code></Td></Tr>

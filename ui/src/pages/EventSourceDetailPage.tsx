@@ -75,28 +75,28 @@ export function EventSourceDetailPage() {
         if (!eventSourceId) return;
         setLoading(true);
         Promise.all([fetchEventSource(eventSourceId), fetchSecrets()])
-            .then(([conn, secs]) => {
-                setEventSource(conn);
+            .then(([es, secs]) => {
+                setEventSource(es);
                 setForm({
-                    id: conn.id,
-                    name: conn.name,
-                    description: conn.description,
-                    sourceType: conn.sourceType,
-                    enabled: conn.enabled,
-                    baseUrl: conn.baseUrl,
-                    pollInterval: conn.pollInterval,
-                    secretName: conn.secretName,
-                    configuration: conn.configuration,
+                    id: es.id,
+                    name: es.name,
+                    description: es.description,
+                    sourceType: es.sourceType,
+                    enabled: es.enabled,
+                    baseUrl: es.baseUrl,
+                    pollInterval: es.pollInterval,
+                    secretName: es.secretName,
+                    configuration: es.configuration,
                 });
                 // Parse configuration for repos/projects
-                const config = conn.configuration as Record<string, unknown> | undefined;
-                if (conn.sourceType === "github" && config?.repositories) {
+                const config = es.configuration as Record<string, unknown> | undefined;
+                if (es.sourceType === "github" && config?.repositories) {
                     const repos = config.repositories as string[];
                     setReposText(Array.isArray(repos) ? repos.join("\n") : "");
                 } else {
                     setReposText("");
                 }
-                if (conn.sourceType === "jira" && config?.projects) {
+                if (es.sourceType === "jira" && config?.projects) {
                     const projects = config.projects as string[];
                     setProjectsText(Array.isArray(projects) ? projects.join("\n") : "");
                 } else {
@@ -163,7 +163,7 @@ export function EventSourceDetailPage() {
     if (!eventSource) {
         return (
             <PageSection>
-                <EmptyState><EmptyStateBody>Event Source not found.</EmptyStateBody></EmptyState>
+                <EmptyState><EmptyStateBody>Event source not found.</EmptyStateBody></EmptyState>
             </PageSection>
         );
     }
@@ -234,7 +234,7 @@ function InfoTab({ form, updateForm, reposText, setReposText, projectsText, setP
         <Form style={{ maxWidth: "600px" }}>
             <FormGroup label="ID" fieldId="id">
                 <TextInput id="id" value={form.id || ""} isDisabled />
-                <HelperText><HelperTextItem>Event Source ID cannot be changed after creation.</HelperTextItem></HelperText>
+                <HelperText><HelperTextItem>Event source ID cannot be changed after creation.</HelperTextItem></HelperText>
             </FormGroup>
             <FormGroup label="Name" isRequired fieldId="name">
                 <TextInput id="name" isRequired value={form.name || ""}

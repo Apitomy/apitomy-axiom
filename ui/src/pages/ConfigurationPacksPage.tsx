@@ -101,13 +101,13 @@ export function ConfigurationPacksPage() {
             fetchSubscriptions(1, 100),
             fetchWorkflowDefinitions(1, 1000),
         ])
-            .then(([at, t, ts, mcp, st, conn, sub, wd]) => {
+            .then(([at, t, ts, mcp, st, eventSourceResults, sub, wd]) => {
                 setActionTypes(at.items);
                 setTools(t.items);
                 setToolsets(ts);
                 setMcpServers(mcp);
                 setSessionTemplates(st.filter((s: SessionTemplate) => !s.builtIn));
-                setEventSources(conn.items);
+                setEventSources(eventSourceResults.items);
                 setSubscriptions(sub.items);
                 setWorkflowDefs(wd.items);
             })
