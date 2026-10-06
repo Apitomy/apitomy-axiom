@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.api.beans.Environment;
 import io.apitomy.axiom.api.AssistantResource;
+import io.apitomy.axiom.api.beans.AssistantApplyError;
 import io.apitomy.axiom.api.beans.AssistantApplyResult;
 import io.apitomy.axiom.api.beans.AssistantItem;
 import io.apitomy.axiom.api.beans.AssistantPermissionResponse;
@@ -478,7 +479,11 @@ public class AssistantResourceImpl implements AssistantResource {
             applyResult.setWorkflowDefinitionsUpdated(result.workflowDefinitionsUpdated());
             return applyResult;
         } catch (ValidationException e) {
-            throw new WebApplicationException(e.getMessage(), 422);
+            AssistantApplyError error = new AssistantApplyError();
+            error.setMessage(e.getMessage());
+            error.setErrors(e.getErrors() == null ? List.of() : new ArrayList<>(e.getErrors()));
+            throw new WebApplicationException(e.getMessage(), Response.status(422)
+                    .type(MediaType.APPLICATION_JSON).entity(error).build());
         } catch (WebApplicationException e) {
             throw e;
         } catch (Exception e) {

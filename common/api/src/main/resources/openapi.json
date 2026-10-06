@@ -2683,6 +2683,16 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "One or more items failed validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantApplyError"
+                }
+              }
+            }
           }
         }
       },
@@ -7003,6 +7013,26 @@
           },
           "validationErrors": {
             "description": "List of validation errors (empty if valid)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "AssistantApplyError": {
+        "description": "Error returned when applying an assistant session fails validation",
+        "required": [
+          "message",
+          "errors"
+        ],
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "errors": {
+            "description": "Per-item validation error messages",
             "type": "array",
             "items": {
               "type": "string"

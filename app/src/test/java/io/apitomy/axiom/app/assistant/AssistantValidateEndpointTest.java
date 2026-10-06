@@ -16,7 +16,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThan;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -105,6 +107,23 @@ class AssistantValidateEndpointTest {
                 .then()
                 .statusCode(200)
                 .body("valid", equalTo(true));
+    }
+
+    @Test
+    void applyWithInvalidWorkflowReturns422WithDetails() throws IOException {
+        Path workDir = assistantSessionManager.getSession(sessionId).getWorkingDirectory();
+        Path workflows = workDir.resolve("workflows");
+        Files.createDirectories(workflows);
+        Files.writeString(workflows.resolve("wf-validate-test.json"), WORKFLOW);
+
+        given()
+                .when()
+                .post("/api/v1/assistant/sessions/{id}/apply", sessionId)
+                .then()
+                .statusCode(422)
+                .body("message", equalTo("Items have validation errors"))
+                .body("errors.size()", greaterThan(0))
+                .body("errors[0]", containsString("at-x"));
     }
 
     @Test
