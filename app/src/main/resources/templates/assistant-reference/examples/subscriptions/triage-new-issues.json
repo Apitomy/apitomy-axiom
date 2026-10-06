@@ -1,0 +1,7 @@
+{
+  "name": "triage-new-issues",
+  "description": "Starts the issue-triage workflow for every new issue from github-com.",
+  "filterExpression": "event.type == 'issue.created' && event.eventSourceId == 'github-com'",
+  "routing": [{"type": "create-workflow", "workflowDefinitionName": "issue-triage"}],
+  "enabled": false
+}

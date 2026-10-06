@@ -1,0 +1,31 @@
+{
+  "name": "issue-triage",
+  "description": "Triages a new issue and, when needed, asks the reporter for more information and waits for a reply.",
+  "content": {
+    "id": "issue-triage",
+    "name": "issue-triage",
+    "nodes": [
+      {"id": "start", "type": "start", "name": "Start", "position": {"x": 0, "y": 0},
+       "config": {"inputs": [
+         {"name": "subjectId", "type": "number", "required": true, "description": "Subject created for the issue"},
+         {"name": "ref", "type": "string", "required": true, "description": "Issue reference"},
+         {"name": "event", "type": "object", "required": false, "description": "Triggering event"}
+       ]}},
+      {"id": "triage", "type": "action", "name": "Triage issue", "position": {"x": 200, "y": 0},
+       "config": {"actionType": "triage-issue", "inputs": {"priorityHint": "'normal'"}}},
+      {"id": "ask", "type": "action", "name": "Request more info", "position": {"x": 400, "y": 0},
+       "config": {"actionType": "request-more-info"}},
+      {"id": "await-reply", "type": "receive-event", "name": "Await reply", "position": {"x": 600, "y": 0},
+       "config": {"eventType": "issue.comment.created"}},
+      {"id": "end", "type": "end", "name": "End", "position": {"x": 800, "y": 200}, "config": {}}
+    ],
+    "edges": [
+      {"id": "e1", "source": "start", "target": "triage", "priority": 0, "isDefault": false},
+      {"id": "e2", "source": "triage", "target": "ask", "condition": "context.needsInfo == true",
+       "priority": 1, "isDefault": false, "label": "needs info"},
+      {"id": "e3", "source": "triage", "target": "end", "priority": 0, "isDefault": true, "label": "triaged"},
+      {"id": "e4", "source": "ask", "target": "await-reply", "priority": 0, "isDefault": false},
+      {"id": "e5", "source": "await-reply", "target": "end", "priority": 0, "isDefault": false}
+    ]
+  }
+}

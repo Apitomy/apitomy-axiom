@@ -1,0 +1,11 @@
+{
+  "id": "github-com",
+  "name": "GitHub.com",
+  "description": "Issues and pull requests from my-org/my-repo.",
+  "sourceType": "github",
+  "baseUrl": "https://api.github.com",
+  "secretName": "GH_TOKEN",
+  "pollInterval": 60,
+  "configuration": {"repositories": ["my-org/my-repo"]},
+  "enabled": false
+}

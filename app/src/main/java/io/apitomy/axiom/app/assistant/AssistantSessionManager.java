@@ -83,6 +83,9 @@ public class AssistantSessionManager {
     AssistantItemValidator itemValidator;
 
     @Inject
+    AssistantReferenceGenerator referenceGenerator;
+
+    @Inject
     ImportExportService importExportService;
 
     @Inject
@@ -633,12 +636,15 @@ public class AssistantSessionManager {
     }
 
     /**
-     * Builds the system prompt, augmenting the template prompt with subject context
-     * if a subject is specified.
+     * Builds the system prompt: replaces {@code {{reference}}} with the generated configuration reference and
+     * augments the template prompt with subject context if a subject is specified.
      */
     private String buildSystemPrompt(SessionTemplateService.SessionTemplate template,
                                      SubjectEntity subject) {
         String prompt = template.systemPrompt() != null ? template.systemPrompt() : "";
+        if (prompt.contains("{{reference}}")) {
+            prompt = prompt.replace("{{reference}}", referenceGenerator.generate());
+        }
 
         if (subject == null) {
             return prompt;

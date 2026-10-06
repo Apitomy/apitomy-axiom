@@ -1,0 +1,11 @@
+{
+  "name": "post-issue-comment",
+  "description": "Posts a comment on a GitHub issue using the gh CLI.",
+  "parameters": [
+    {"name": "repository", "type": "string", "description": "Repository in owner/repo form", "required": true},
+    {"name": "issueNumber", "type": "string", "description": "Issue number", "required": true},
+    {"name": "body", "type": "string", "description": "Markdown comment body", "required": true}
+  ],
+  "scriptTemplate": "#!/bin/bash\nset -euo pipefail\ngh issue comment {{issueNumber}} --repo {{repository}} --body-file {{body_file}}",
+  "labels": ["github"]
+}

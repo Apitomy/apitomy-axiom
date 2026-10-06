@@ -1,0 +1,6 @@
+{
+  "name": "request-more-info",
+  "description": "Asks the issue reporter for more information.",
+  "executionMode": "script",
+  "scriptTemplate": "#!/bin/bash\nset -euo pipefail\ngh issue comment {{ref}} --repo {{repository}} --body \"Thanks for the report! Could you add reproduction steps? (Axiom subject {{subjectId}})\""
+}

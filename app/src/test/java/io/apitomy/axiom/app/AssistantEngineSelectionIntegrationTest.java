@@ -16,7 +16,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static io.restassured.RestAssured.given;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -160,6 +162,32 @@ class AssistantEngineSelectionIntegrationTest {
                     .then()
                     .statusCode(204);
         }
+    }
+
+    @Test
+    void configAssistantSystemPromptContainsGeneratedReference() {
+        String sessionId = given()
+                .contentType(ContentType.JSON)
+                .body("""
+                        {"templateId":"axiom-config-assistant","name":"reference-test"}
+                        """)
+                .when()
+                .post("/api/v1/assistant/sessions")
+                .then()
+                .statusCode(200)
+                .extract()
+                .path("id");
+
+        InteractiveSessionDriverFactory.DriverRequest request = lastRequest.get();
+        assertNotNull(request);
+        assertTrue(request.systemPrompt().contains("issue.comment.created"));
+        assertFalse(request.systemPrompt().contains("{{reference}}"));
+
+        given()
+                .when()
+                .delete("/api/v1/assistant/sessions/{id}", sessionId)
+                .then()
+                .statusCode(204);
     }
 
     private static final class NoopInteractiveSessionDriver implements InteractiveSessionDriver {

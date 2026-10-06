@@ -1,0 +1,5 @@
+{
+  "name": "triage-tools",
+  "description": "Tools available to issue triage agents.",
+  "tools": ["mcp__axiom-tools__post-issue-comment", "mcp__axiom-sdk__axiom_get_workflow_run"]
+}
