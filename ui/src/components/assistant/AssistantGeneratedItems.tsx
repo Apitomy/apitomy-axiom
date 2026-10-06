@@ -20,7 +20,6 @@ import {
 } from "../../config/api";
 import { ToolDetailModal } from "./ToolDetailModal";
 import { ActionTypeDetailModal } from "./ActionTypeDetailModal";
-import { ReportDefinitionDetailModal } from "./ReportDefinitionDetailModal";
 import { ToolsetDetailModal } from "./ToolsetDetailModal";
 import { SessionTemplateDetailModal } from "./SessionTemplateDetailModal";
 import { EventSourceDetailModal } from "./EventSourceDetailModal";
@@ -34,7 +33,6 @@ interface AssistantGeneratedItemsProps {
 const TYPE_LABELS: Record<string, { label: string; color: "blue" | "green" | "purple" | "teal" | "orange" | "grey" }> = {
     "tools": { label: "Tool", color: "blue" },
     "action-types": { label: "Action Type", color: "green" },
-    "report-definitions": { label: "Report", color: "purple" },
     "toolsets": { label: "Toolset", color: "teal" },
     "session-templates": { label: "Template", color: "orange" },
     "event-sources": { label: "Event Source", color: "grey" },
@@ -103,8 +101,8 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger, onItemCount
                 <EmptyState variant="sm">
                     <EmptyStateBody>
                         No items generated yet. Ask the assistant to create tools,
-                        action types, report definitions, toolsets, session
-                        templates, event sources, or scheduled jobs.
+                        action types, toolsets, session templates, event
+                        sources, or scheduled jobs.
                     </EmptyStateBody>
                 </EmptyState>
             )}
@@ -154,15 +152,6 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger, onItemCount
             )}
             {selectedItem?.type === "action-types" && itemContent && (
                 <ActionTypeDetailModal
-                    isOpen
-                    onClose={closeModal}
-                    name={selectedItem.name}
-                    content={itemContent}
-                    errors={selectedItem.validationErrors}
-                />
-            )}
-            {selectedItem?.type === "report-definitions" && itemContent && (
-                <ReportDefinitionDetailModal
                     isOpen
                     onClose={closeModal}
                     name={selectedItem.name}

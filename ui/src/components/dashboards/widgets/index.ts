@@ -6,7 +6,6 @@ import "./InboxWidget";
 import "./RecentEventsWidget";
 import "./AiCostSummaryWidget";
 import "./AiCostByProjectWidget";
-import "./RecentReportsWidget";
 import "./SystemStatusWidget";
 import "./DiskUsageWidget";
 import "./ActionTypesWidget";

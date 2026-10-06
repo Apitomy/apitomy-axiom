@@ -223,9 +223,9 @@ public class McpConfigGenerator {
     }
 
     /**
-     * Cleans up the MCP config directory for a given task/report ID.
+     * Cleans up the MCP config directory for a given task ID.
      *
-     * @param taskId the task or report ID used when generating the files
+     * @param taskId the task ID used when generating the files
      */
     public void cleanupTempFiles(Long taskId) {
         Path taskDir = Path.of(System.getProperty("user.home"), ".axiom", "tasks",

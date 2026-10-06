@@ -96,34 +96,6 @@ const TOOLS = [
         },
     },
     {
-        name: "axiom_list_report_definitions",
-        description: "List all existing report definitions in Axiom. Returns names, descriptions, and schedules.",
-        parameters: [],
-        handler: async () => {
-            const items = JSON.parse(await axiomApi("GET", "/reports/definitions"));
-            if (items.length === 0) return "No report definitions configured.";
-            return JSON.stringify(items.map(rd => ({
-                name: rd.name,
-                description: rd.description || "",
-                schedule: rd.schedule,
-                enabled: rd.enabled,
-            })), null, 2);
-        },
-    },
-    {
-        name: "axiom_get_report_definition",
-        description: "Get full details of a specific report definition by name, including its prompt template, schedule, and allowed tools.",
-        parameters: [
-            { name: "name", type: "string", description: "The report definition name", required: true },
-        ],
-        handler: async (args) => {
-            const items = JSON.parse(await axiomApi("GET", "/reports/definitions"));
-            const rd = items.find(r => r.name === args.name);
-            if (!rd) return `Report definition '${args.name}' not found.`;
-            return JSON.stringify(rd, null, 2);
-        },
-    },
-    {
         name: "axiom_list_mcp_servers",
         description: "List all configured MCP servers in Axiom. Returns names and descriptions.",
         parameters: [],

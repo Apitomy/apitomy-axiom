@@ -2,7 +2,6 @@ package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
-import io.apitomy.axiom.core.entities.ReportEntity;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
@@ -28,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * Tests for {@link HistoryCleanup}: the retention settings for scheduled job runs, reports,
+ * Tests for {@link HistoryCleanup}: the retention settings for scheduled job runs,
  * workflow runs, activity log entries and AI usage records.
  */
 @QuarkusTest
@@ -46,7 +45,7 @@ class HistoryCleanupTest {
     void saveRetention() {
         QuarkusTransaction.requiringNew().run(() -> {
             RetentionConfigEntity c = config();
-            original = new int[] {c.scheduledJobRunRetentionDays, c.reportRetentionDays,
+            original = new int[] {c.scheduledJobRunRetentionDays,
                     c.workflowRunRetentionDays, c.activityLogRetentionDays,
                     c.aiUsageRetentionDays};
         });
@@ -54,7 +53,7 @@ class HistoryCleanupTest {
 
     @AfterEach
     void restoreRetention() {
-        setRetention(original[0], original[1], original[2], original[3], original[4]);
+        setRetention(original[0], original[1], original[2], original[3]);
     }
 
     @Test
@@ -62,7 +61,6 @@ class HistoryCleanupTest {
         QuarkusTransaction.requiringNew().run(() -> {
             RetentionConfigEntity c = config();
             assertEquals(0, c.scheduledJobRunRetentionDays);
-            assertEquals(0, c.reportRetentionDays);
             assertEquals(0, c.workflowRunRetentionDays);
             assertEquals(0, c.activityLogRetentionDays);
             assertEquals(0, c.aiUsageRetentionDays);
@@ -71,30 +69,28 @@ class HistoryCleanupTest {
 
     @Test
     void zeroSettingsKeepEverything() {
-        setRetention(0, 0, 0, 0, 0);
+        setRetention(0, 0, 0, 0);
         long[] ids = QuarkusTransaction.requiringNew().call(() -> new long[] {
-            jobRun("Completed", OLD).id, report("Completed", OLD).id,
+            jobRun("Completed", OLD).id,
             workflowRun("completed", OLD).id, activity(OLD).id, usage(OLD).id});
 
         QuarkusTransaction.requiringNew().run(() -> historyCleanup.doCleanup());
 
         QuarkusTransaction.requiringNew().run(() -> {
             assertNotNull(ScheduledJobRunEntity.findById(ids[0]));
-            assertNotNull(ReportEntity.findById(ids[1]));
-            assertNotNull(WorkflowRunEntity.findById(ids[2]));
-            assertNotNull(ActivityLogEntity.findById(ids[3]));
-            assertNotNull(AiUsageEntity.findById(ids[4]));
+            assertNotNull(WorkflowRunEntity.findById(ids[1]));
+            assertNotNull(ActivityLogEntity.findById(ids[2]));
+            assertNotNull(AiUsageEntity.findById(ids[3]));
             ScheduledJobRunEntity.deleteById(ids[0]);
-            ReportEntity.<ReportEntity>findById(ids[1]).delete();
-            WorkflowRunEntity.deleteById(ids[2]);
-            ActivityLogEntity.deleteById(ids[3]);
-            AiUsageEntity.deleteById(ids[4]);
+            WorkflowRunEntity.deleteById(ids[1]);
+            ActivityLogEntity.deleteById(ids[2]);
+            AiUsageEntity.deleteById(ids[3]);
         });
     }
 
     @Test
     void scheduledJobRunRetentionDeletesOldFinishedRuns() {
-        setRetention(5, 0, 0, 0, 0);
+        setRetention(5, 0, 0, 0);
         long[] ids = QuarkusTransaction.requiringNew().call(() -> new long[] {
             jobRun("Completed", OLD).id, jobRun("Failed", OLD).id,
             jobRun("Running", OLD).id, jobRun("Completed", RECENT).id});
@@ -112,26 +108,8 @@ class HistoryCleanupTest {
     }
 
     @Test
-    void reportRetentionDeletesOldFinishedReports() {
-        setRetention(0, 5, 0, 0, 0);
-        long[] ids = QuarkusTransaction.requiringNew().call(() -> new long[] {
-            report("Completed", OLD).id, report("Generating", OLD).id,
-            report("Completed", RECENT).id});
-
-        QuarkusTransaction.requiringNew().run(() -> historyCleanup.doCleanup());
-
-        QuarkusTransaction.requiringNew().run(() -> {
-            assertNull(ReportEntity.findById(ids[0]));
-            assertNotNull(ReportEntity.findById(ids[1]), "unfinished reports are kept");
-            assertNotNull(ReportEntity.findById(ids[2]));
-            ReportEntity.<ReportEntity>findById(ids[1]).delete();
-            ReportEntity.<ReportEntity>findById(ids[2]).delete();
-        });
-    }
-
-    @Test
     void workflowRunRetentionDeletesOldFinishedRunsAndDependents() {
-        setRetention(0, 0, 5, 0, 0);
+        setRetention(0, 5, 0, 0);
         long[] ids = QuarkusTransaction.requiringNew().call(() -> {
             WorkflowRunEntity old = workflowRun("completed", OLD);
             WorkflowWaitEntity wait = new WorkflowWaitEntity();
@@ -195,7 +173,7 @@ class HistoryCleanupTest {
 
     @Test
     void workflowRunRetentionOnlyDeletesKnownFinishedStatuses() {
-        setRetention(0, 0, 5, 0, 0);
+        setRetention(0, 5, 0, 0);
         long[] ids = QuarkusTransaction.requiringNew().call(() -> new long[] {
             workflowRun("failed", OLD).id, workflowRun("cancelled", OLD).id,
             workflowRun("some-future-status", OLD).id});
@@ -212,7 +190,7 @@ class HistoryCleanupTest {
 
     @Test
     void activityAndAiUsageRetentionDeleteOldRows() {
-        setRetention(0, 0, 0, 5, 5);
+        setRetention(0, 0, 5, 5);
         long[] ids = QuarkusTransaction.requiringNew().call(() -> new long[] {
             activity(OLD).id, activity(RECENT).id, usage(OLD).id, usage(RECENT).id});
 
@@ -234,12 +212,10 @@ class HistoryCleanupTest {
         return RetentionConfigEntity.<RetentionConfigEntity>findAll().firstResult();
     }
 
-    private static void setRetention(int jobRuns, int reports, int workflowRuns, int activity,
-            int aiUsage) {
+    private static void setRetention(int jobRuns, int workflowRuns, int activity, int aiUsage) {
         QuarkusTransaction.requiringNew().run(() -> {
             RetentionConfigEntity c = config();
             c.scheduledJobRunRetentionDays = jobRuns;
-            c.reportRetentionDays = reports;
             c.workflowRunRetentionDays = workflowRuns;
             c.activityLogRetentionDays = activity;
             c.aiUsageRetentionDays = aiUsage;
@@ -254,16 +230,6 @@ class HistoryCleanupTest {
         run.createdOn = createdOn;
         run.persist();
         return run;
-    }
-
-    private static ReportEntity report(String status, Instant createdOn) {
-        ReportEntity report = new ReportEntity();
-        report.definitionId = -1L;
-        report.status = status;
-        report.createdOn = createdOn;
-        report.labels.addAll(List.of("history-cleanup-test"));
-        report.persist();
-        return report;
     }
 
     private static WorkflowRunEntity workflowRun(String status, Instant when) {

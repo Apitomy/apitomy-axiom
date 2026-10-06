@@ -251,105 +251,6 @@ class AssistantItemValidatorTest {
         assertTrue(vr.errors().stream().anyMatch(e -> e.contains("scriptTemplate")));
     }
 
-    // ── Report definition validation ────────────────────────────────
-
-    @Test
-    void validReportDefinitionPassesValidation() throws IOException {
-        Path file = writeJson(tempDir, "report-definitions/weekly.json", """
-                {
-                  "name": "weekly-status",
-                  "description": "Weekly status report",
-                  "schedule": "weekly",
-                  "scheduleTime": "08:00",
-                  "scheduleDayOfWeek": "monday",
-                  "timeWindow": "last-7d",
-                  "promptTemplate": "Generate a report for {{repositories}}"
-                }
-                """);
-
-        AssistantItemValidator.ValidationResult vr = validator.validate(file, "report-definitions");
-        assertTrue(vr.isValid(), "Valid report should have no errors: " + vr.errors());
-    }
-
-    @Test
-    void reportDefinitionMissingScheduleFails() throws IOException {
-        Path file = writeJson(tempDir, "report-definitions/no-schedule.json", """
-                {
-                  "name": "no-schedule",
-                  "description": "Report without schedule",
-                  "promptTemplate": "Generate report"
-                }
-                """);
-
-        AssistantItemValidator.ValidationResult vr = validator.validate(file, "report-definitions");
-        assertFalse(vr.isValid());
-        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("schedule")));
-    }
-
-    @Test
-    void reportDefinitionInvalidScheduleFails() throws IOException {
-        Path file = writeJson(tempDir, "report-definitions/bad-schedule.json", """
-                {
-                  "name": "bad-schedule",
-                  "description": "Report with invalid schedule",
-                  "schedule": "biweekly",
-                  "promptTemplate": "Generate report"
-                }
-                """);
-
-        AssistantItemValidator.ValidationResult vr = validator.validate(file, "report-definitions");
-        assertFalse(vr.isValid());
-        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("schedule") && e.contains("biweekly")));
-    }
-
-    @Test
-    void reportDefinitionCronScheduleIsValid() throws IOException {
-        Path file = writeJson(tempDir, "report-definitions/cron.json", """
-                {
-                  "name": "cron-report",
-                  "description": "Report with cron schedule",
-                  "schedule": "0 8 * * 1",
-                  "timeWindow": "last-7d",
-                  "promptTemplate": "Generate report"
-                }
-                """);
-
-        AssistantItemValidator.ValidationResult vr = validator.validate(file, "report-definitions");
-        assertTrue(vr.isValid(), "Cron schedule should be accepted: " + vr.errors());
-    }
-
-    @Test
-    void reportDefinitionInvalidTimeWindowFails() throws IOException {
-        Path file = writeJson(tempDir, "report-definitions/bad-tw.json", """
-                {
-                  "name": "bad-tw",
-                  "description": "Report with bad time window",
-                  "schedule": "daily",
-                  "timeWindow": "last-year",
-                  "promptTemplate": "Generate report"
-                }
-                """);
-
-        AssistantItemValidator.ValidationResult vr = validator.validate(file, "report-definitions");
-        assertFalse(vr.isValid());
-        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("timeWindow")));
-    }
-
-    @Test
-    void reportDefinitionMissingPromptFails() throws IOException {
-        Path file = writeJson(tempDir, "report-definitions/no-prompt.json", """
-                {
-                  "name": "no-prompt",
-                  "description": "Report without prompt",
-                  "schedule": "daily"
-                }
-                """);
-
-        AssistantItemValidator.ValidationResult vr = validator.validate(file, "report-definitions");
-        assertFalse(vr.isValid());
-        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("promptTemplate")));
-    }
-
     // ── General validation ──────────────────────────────────────────
 
     @Test
@@ -407,10 +308,13 @@ class AssistantItemValidatorTest {
         assertEquals("action-types", validator.detectItemType(file, tempDir));
     }
 
+    /**
+     * Report definitions were removed; their directory is no longer a known item type.
+     */
     @Test
-    void detectItemTypeForReportDefinitions() {
+    void detectItemTypeReturnsNullForRemovedReportsDirectory() {
         Path file = tempDir.resolve("report-definitions/my-report.json");
-        assertEquals("report-definitions", validator.detectItemType(file, tempDir));
+        assertNull(validator.detectItemType(file, tempDir));
     }
 
     @Test

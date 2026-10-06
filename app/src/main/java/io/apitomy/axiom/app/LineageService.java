@@ -34,14 +34,14 @@ import java.util.stream.Collectors;
 
 /**
  * Builds the lineage graph of an entity (#430): the work it came from (upstream) and the work it
- * produced (downstream), across stream events, traces, workflow runs, tasks, scheduled job runs and
- * reports.
+ * produced (downstream), across stream events, traces, workflow runs, tasks and scheduled job
+ * runs.
  *
  * <p>The walk is breadth-first and batched: each level loads the frontier and its links with a fixed
  * number of {@code IN} queries per entity type (split into chunks of {@value #IN_CHUNK} IDs), so the
  * number of queries depends on the depth, not on the number of nodes. Expansion queries are limited to
  * the room left under {@code maxNodes} (plus one row, to detect truncation). Events, tasks, workflow
- * runs, job runs and reports are read as label projections, never as full rows. AI cost is aggregated
+ * runs and job runs are read as label projections, never as full rows. AI cost is aggregated
  * at the end with one grouped query per cost key. See {@code docs/developer-guide/lineage.md}.</p>
  */
 @ApplicationScoped
@@ -49,7 +49,7 @@ public class LineageService {
 
     /** Root entity and node type: stream event. */
     public static final String EVENT = "event";
-    /** Root entity and node type: trace not owned by a run, report or job run. */
+    /** Root entity and node type: trace not owned by a run or job run. */
     public static final String TRACE = "trace";
     /** Root entity and node type: workflow run. */
     public static final String WORKFLOW_RUN = "workflow-run";
@@ -57,8 +57,6 @@ public class LineageService {
     public static final String TASK = "task";
     /** Root entity and node type: scheduled job run. */
     public static final String JOB_RUN = "scheduled-job-run";
-    /** Root entity and node type: report. */
-    public static final String REPORT = "report";
     /** Node type: routing outcome item that is not a task or a workflow run. */
     public static final String OUTCOME = "outcome";
 
@@ -79,13 +77,12 @@ public class LineageService {
 
     private static final int UNBOUNDED = Integer.MAX_VALUE;
 
-    private static final Set<String> ROOT_TYPES = Set.of(EVENT, TRACE, WORKFLOW_RUN, TASK, JOB_RUN, REPORT);
+    private static final Set<String> ROOT_TYPES = Set.of(EVENT, TRACE, WORKFLOW_RUN, TASK, JOB_RUN);
 
     /** Trace types whose trace is represented by the entity that owns it. */
     private static final Map<String, String> OWNED_TRACE_TYPES = Map.of(
             "workflow", WORKFLOW_RUN,
-            "scheduled-job-execution", JOB_RUN,
-            "report-generation", REPORT);
+            "scheduled-job-execution", JOB_RUN);
 
     private static final String EVENT_COLS =
             "select e.id, e.type, e.ref, e.source, e.createdOn from StreamEventEntity e";
@@ -95,8 +92,6 @@ public class LineageService {
             "select r.id, r.status, r.startedOn, r.traceId, r.triggerEventId from WorkflowRunEntity r";
     private static final String JOB_RUN_COLS = "select r.id, r.jobId, r.status, r.trigger, r.createdOn,"
             + " r.traceId, r.triggeredByTraceId from ScheduledJobRunEntity r";
-    private static final String REPORT_COLS = "select r.id, r.title, r.status, r.trigger, r.createdOn,"
-            + " r.traceId, r.triggeredByTraceId from ReportEntity r";
 
     @Inject
     EntityManager em;
@@ -104,8 +99,8 @@ public class LineageService {
     /**
      * Builds the lineage graph of an entity.
      *
-     * @param entityType root entity type ({@code event}, {@code trace}, {@code workflow-run}, {@code task},
-     *                   {@code scheduled-job-run} or {@code report})
+     * @param entityType root entity type ({@code event}, {@code trace}, {@code workflow-run}, {@code task} or
+     *                   {@code scheduled-job-run})
      * @param id         root entity ID (UUID for events and traces, numeric otherwise)
      * @param direction  {@code upstream}, {@code downstream} or {@code both}; null means both
      * @param depth      maximum number of hops in each direction (1 to {@link #MAX_DEPTH})
@@ -228,15 +223,6 @@ public class LineageService {
             UUID triggeredByTraceId) {
         static JobRunInfo of(Object[] r) {
             return new JobRunInfo((Long) r[0], (Long) r[1], (String) r[2], (String) r[3], (Instant) r[4],
-                    (UUID) r[5], (UUID) r[6]);
-        }
-    }
-
-    /** Label and link columns of a report. */
-    record ReportInfo(Long id, String title, String status, String trigger, Instant createdOn, UUID traceId,
-            UUID triggeredByTraceId) {
-        static ReportInfo of(Object[] r) {
-            return new ReportInfo((Long) r[0], (String) r[1], (String) r[2], (String) r[3], (Instant) r[4],
                     (UUID) r[5], (UUID) r[6]);
         }
     }
@@ -401,8 +387,6 @@ public class LineageService {
                     case TASK -> rows(TASK_COLS + " where t.id in :ids", longs(list), UNBOUNDED, TaskInfo::of);
                     case JOB_RUN -> rows(JOB_RUN_COLS + " where r.id in :ids", longs(list), UNBOUNDED,
                             JobRunInfo::of);
-                    case REPORT -> rows(REPORT_COLS + " where r.id in :ids", longs(list), UNBOUNDED,
-                            ReportInfo::of);
                     case OUTCOME -> query(RoutingOutcomeItemEntity.class,
                             "from RoutingOutcomeItemEntity where id in :ids", longs(list), UNBOUNDED);
                     default -> List.of();
@@ -434,8 +418,8 @@ public class LineageService {
         }
 
         /**
-         * Maps trace IDs to the node that represents them: the owning workflow run, scheduled job run
-         * or report for owned trace types, otherwise the trace itself (also when the trace is missing).
+         * Maps trace IDs to the node that represents them: the owning workflow run or scheduled job
+         * run for owned trace types, otherwise the trace itself (also when the trace is missing).
          */
         Map<UUID, Ref> canonical(Collection<UUID> traceIds) {
             Set<UUID> todo = traceIds.stream().filter(Objects::nonNull)
@@ -454,9 +438,8 @@ public class LineageService {
                     List<?> owners = switch (type) {
                         case WORKFLOW_RUN -> rows(RUN_COLS + " where r.traceId in :ids", ids, UNBOUNDED,
                                 RunInfo::of);
-                        case JOB_RUN -> rows(JOB_RUN_COLS + " where r.traceId in :ids", ids, UNBOUNDED,
+                        default -> rows(JOB_RUN_COLS + " where r.traceId in :ids", ids, UNBOUNDED,
                                 JobRunInfo::of);
-                        default -> rows(REPORT_COLS + " where r.traceId in :ids", ids, UNBOUNDED, ReportInfo::of);
                     };
                     owners.forEach(o -> canonicalTraces.put(traceIdOf(o), remember(o)));
                 });
@@ -527,9 +510,6 @@ public class LineageService {
             this.<JobRunInfo>loaded(frontier, JOB_RUN).stream()
                     .filter(r -> r.triggeredByTraceId() != null)
                     .forEach(r -> callers.put(Ref.of(JOB_RUN, r.id()), r.triggeredByTraceId()));
-            this.<ReportInfo>loaded(frontier, REPORT).stream()
-                    .filter(r -> r.triggeredByTraceId() != null)
-                    .forEach(r -> callers.put(Ref.of(REPORT, r.id()), r.triggeredByTraceId()));
             Map<UUID, Ref> callerRefs = canonical(callers.values());
             callers.forEach((ref, trace) -> links.add(new Link(callerRefs.get(trace), ref, "triggered-by-agent")));
             return links;
@@ -595,8 +575,6 @@ public class LineageService {
             }
             this.<JobRunInfo>loaded(frontier, JOB_RUN).stream().filter(r -> r.traceId() != null)
                     .forEach(r -> traceOwners.putIfAbsent(r.traceId(), Ref.of(JOB_RUN, r.id())));
-            this.<ReportInfo>loaded(frontier, REPORT).stream().filter(r -> r.traceId() != null)
-                    .forEach(r -> traceOwners.putIfAbsent(r.traceId(), Ref.of(REPORT, r.id())));
             if (!traceOwners.isEmpty()) {
                 expandTraceWork(traceOwners, links);
             }
@@ -676,7 +654,7 @@ public class LineageService {
         }
 
         /**
-         * Work done inside traces: tasks that ran in (or joined) the trace, and job runs and reports
+         * Work done inside traces: tasks that ran in (or joined) the trace, and job runs
          * that an agent in the trace triggered.
          */
         void expandTraceWork(Map<UUID, Ref> traceOwners, List<Link> links) {
@@ -691,10 +669,6 @@ public class LineageService {
             }
             rows(JOB_RUN_COLS + " where r.triggeredByTraceId in :ids order by r.id", traceOwners.keySet(),
                     expansionLimit(), JobRunInfo::of)
-                    .forEach(r -> links.add(new Link(traceOwners.get(r.triggeredByTraceId()), remember(r),
-                            "triggered-by-agent")));
-            rows(REPORT_COLS + " where r.triggeredByTraceId in :ids order by r.id", traceOwners.keySet(),
-                    expansionLimit(), ReportInfo::of)
                     .forEach(r -> links.add(new Link(traceOwners.get(r.triggeredByTraceId()), remember(r),
                             "triggered-by-agent")));
             loadJobNames();
@@ -758,7 +732,7 @@ public class LineageService {
 
         /**
          * Direct AI cost per node key, with one grouped query per cost key. Usage rows of a trace that
-         * belong to a task, job run or report are counted on that entity, not on the trace.
+         * belong to a task or job run are counted on that entity, not on the trace.
          */
         Map<String, Double> costs() {
             Map<String, Double> costs = new HashMap<>();
@@ -771,7 +745,7 @@ public class LineageService {
                 }
                 String type = placed.ref().type();
                 switch (type) {
-                    case TASK, JOB_RUN, REPORT -> ids.computeIfAbsent(type, k -> new ArrayList<>())
+                    case TASK, JOB_RUN -> ids.computeIfAbsent(type, k -> new ArrayList<>())
                             .add(placed.ref().longId());
                     case TRACE -> traceKeys.put(placed.ref().uuid(), placed.ref().key());
                     case WORKFLOW_RUN -> {
@@ -787,12 +761,11 @@ public class LineageService {
             }
             sumBy("taskId", TASK, ids.get(TASK), costs);
             sumBy("scheduledJobRunId", JOB_RUN, ids.get(JOB_RUN), costs);
-            sumBy("reportId", REPORT, ids.get(REPORT), costs);
             if (!traceKeys.isEmpty()) {
                 traceKeys.values().forEach(k -> costs.put(k, 0.0));
                 query(Object[].class, "select u.traceId, sum(u.costUsd) from AiUsageEntity u"
                         + " where u.traceId in :ids and u.taskId is null and u.scheduledJobRunId is null"
-                        + " and u.reportId is null group by u.traceId", traceKeys.keySet(), UNBOUNDED)
+                        + " group by u.traceId", traceKeys.keySet(), UNBOUNDED)
                         .forEach(r -> costs.put(traceKeys.get((UUID) r[0]), toDouble(r[1])));
             }
             return costs;
@@ -852,13 +825,6 @@ public class LineageService {
                     node.setLinkPath("/logs/job-runs?runId=" + r.id());
                     node.setCreatedOn(date(r.createdOn()));
                 }
-                case ReportInfo r -> {
-                    node.setLabel(r.title() != null && !r.title().isBlank() ? r.title() : "Report #" + r.id());
-                    node.setStatus(r.status());
-                    node.setSubtype(r.trigger());
-                    node.setLinkPath("/reports/" + r.id());
-                    node.setCreatedOn(date(r.createdOn()));
-                }
                 case RoutingOutcomeItemEntity i -> {
                     node.setLabel(i.summary != null && !i.summary.isBlank() ? i.summary : i.itemType);
                     node.setStatus(i.status);
@@ -878,7 +844,6 @@ public class LineageService {
             case RunInfo r -> Ref.of(WORKFLOW_RUN, r.id());
             case TaskInfo t -> Ref.of(TASK, t.id());
             case JobRunInfo r -> Ref.of(JOB_RUN, r.id());
-            case ReportInfo r -> Ref.of(REPORT, r.id());
             case RoutingOutcomeItemEntity i -> Ref.of(OUTCOME, i.id);
             default -> throw new IllegalArgumentException("Unsupported lineage row: " + row);
         };
@@ -888,7 +853,6 @@ public class LineageService {
         return switch (owner) {
             case RunInfo r -> r.traceId();
             case JobRunInfo r -> r.traceId();
-            case ReportInfo r -> r.traceId();
             default -> null;
         };
     }
@@ -900,7 +864,6 @@ public class LineageService {
             case WORKFLOW_RUN -> "Workflow run";
             case TASK -> "Task";
             case JOB_RUN -> "Scheduled job run";
-            case REPORT -> "Report";
             default -> "Outcome";
         };
     }

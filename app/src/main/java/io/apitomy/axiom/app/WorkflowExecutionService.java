@@ -228,7 +228,7 @@ public class WorkflowExecutionService {
             TraceContext traceCtx = traceService.createTrace(
                     "workflow",
                     "Workflow: " + definition.name,
-                    entity.triggerEventId, project.id, null,
+                    entity.triggerEventId, project.id,
                     "workflow", "Workflow: " + definition.name,
                     "workflow-run", entity.id);
             entity.traceId = traceCtx.traceId();

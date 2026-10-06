@@ -5,7 +5,7 @@ import type { ToolValidationMessage } from "../config/api";
 /**
  * Renders a list of validation messages with severity-based styling.
  *
- * Used by ActionTypeDetailPage, ToolDetailPage, and ReportDefinitionDetailPage.
+ * Used by ActionTypeDetailPage and ToolDetailPage.
  */
 export function ValidationProblemsPanel({ messages }: {
     messages: ToolValidationMessage[];

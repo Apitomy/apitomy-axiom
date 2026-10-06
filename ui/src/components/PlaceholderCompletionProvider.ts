@@ -140,13 +140,3 @@ export const SCRIPT_PLACEHOLDERS: PlaceholderItem[] = [
     { name: "apiBaseUrl", description: "Base URL of the Axiom API (e.g. 'http://localhost:8080/api/v1')" },
     { name: "workDir", description: "Absolute path to the project workspace directory" },
 ];
-
-/**
- * Placeholders available in the Report Definition prompt template.
- */
-export const REPORT_PLACEHOLDERS: PlaceholderItem[] = [
-    { name: "repositories", description: "Comma-separated list of repositories to scan" },
-    { name: "timeRangeStart", description: "Start of the report time window (ISO date)" },
-    { name: "timeRangeEnd", description: "End of the report time window (ISO date)" },
-    { name: "timeWindow", description: "Human-readable time window description" },
-];

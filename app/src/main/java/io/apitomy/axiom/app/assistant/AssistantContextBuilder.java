@@ -74,7 +74,6 @@ public class AssistantContextBuilder {
         if ("axiom-config-assistant".equals(templateId)) {
             Files.createDirectories(workDir.resolve("tools"));
             Files.createDirectories(workDir.resolve("action-types"));
-            Files.createDirectories(workDir.resolve("report-definitions"));
             Files.createDirectories(workDir.resolve("toolsets"));
             Files.createDirectories(workDir.resolve("session-templates"));
             Files.createDirectories(workDir.resolve("connections"));

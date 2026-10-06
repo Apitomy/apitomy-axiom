@@ -446,7 +446,6 @@ public class AssistantSessionManager {
 
         collectItems(workDir, "tools", items);
         collectItems(workDir, "action-types", items);
-        collectItems(workDir, "report-definitions", items);
         collectItems(workDir, "toolsets", items);
         collectItems(workDir, "session-templates", items);
         collectItems(workDir, "connections", items);
@@ -461,7 +460,7 @@ public class AssistantSessionManager {
      * Returns the full content of a specific generated item.
      *
      * @param sessionId the session identifier
-     * @param itemType the item type directory (tools, action-types, report-definitions)
+     * @param itemType the item type directory (tools, action-types, toolsets, ...)
      * @param itemName the item file name (without .json extension)
      * @return the parsed JSON content
      * @throws IOException if the file cannot be read
@@ -521,7 +520,6 @@ public class AssistantSessionManager {
         result = new ImportExportService.UpsertResult(
                 result.toolsCreated(), result.toolsUpdated(),
                 result.actionTypesCreated(), result.actionTypesUpdated(),
-                result.reportDefinitionsCreated(), result.reportDefinitionsUpdated(),
                 result.toolsetsCreated(), result.toolsetsUpdated(),
                 result.sessionTemplatesCreated(), result.sessionTemplatesUpdated(),
                 result.scheduledJobsCreated(), result.scheduledJobsUpdated(),
@@ -723,7 +721,6 @@ public class AssistantSessionManager {
             try {
                 validateAndFeedback(workDir, "tools", session, tracker);
                 validateAndFeedback(workDir, "action-types", session, tracker);
-                validateAndFeedback(workDir, "report-definitions", session, tracker);
                 validateAndFeedback(workDir, "toolsets", session, tracker);
                 validateAndFeedback(workDir, "session-templates", session, tracker);
                 validateAndFeedback(workDir, "connections", session, tracker);
@@ -812,7 +809,6 @@ public class AssistantSessionManager {
 
         ArrayNode toolsArr = pack.putArray("tools");
         ArrayNode actionTypesArr = pack.putArray("actionTypes");
-        ArrayNode reportDefsArr = pack.putArray("reportDefinitions");
         ArrayNode toolsetsArr = pack.putArray("toolsets");
         ArrayNode templatesArr = pack.putArray("sessionTemplates");
         ArrayNode connectionsArr = pack.putArray("connections");
@@ -827,7 +823,6 @@ public class AssistantSessionManager {
             switch (item.type()) {
                 case "tools" -> toolsArr.add(content);
                 case "action-types" -> actionTypesArr.add(content);
-                case "report-definitions" -> reportDefsArr.add(content);
                 case "toolsets" -> toolsetsArr.add(content);
                 case "session-templates" -> templatesArr.add(content);
                 case "connections" -> connectionsArr.add(content);
@@ -1171,7 +1166,7 @@ public class AssistantSessionManager {
     /**
      * Describes a generated configuration item with its validation status.
      *
-     * @param type the item type directory (tools, action-types, report-definitions)
+     * @param type the item type directory (tools, action-types, toolsets, ...)
      * @param name the item name (file name without .json)
      * @param errors validation errors that block apply
      * @param warnings advisory messages that don't block apply

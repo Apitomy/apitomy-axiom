@@ -66,7 +66,7 @@ class LogContextTest {
     @Test
     void clearsOnException() {
         assertThrows(IllegalStateException.class, () -> {
-            try (LogContext ignored = LogContext.create().traceId("t1").reportId(3L)) {
+            try (LogContext ignored = LogContext.create().traceId("t1").runId(3L)) {
                 throw new IllegalStateException("boom");
             }
         });

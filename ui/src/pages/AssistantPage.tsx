@@ -208,7 +208,7 @@ export function AssistantPage() {
                 >
                     <EmptyStateBody>
                         Start an interactive AI assistant session to create related sets
-                        of tools, action types, and report definitions through conversation.
+                        of tools, action types, and other configuration through conversation.
                     </EmptyStateBody>
                     <EmptyStateFooter>
                         <EmptyStateActions>

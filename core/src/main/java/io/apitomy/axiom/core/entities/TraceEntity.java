@@ -11,7 +11,7 @@ import java.util.UUID;
 
 /**
  * Root of a complete execution trace — connects every step in a pipeline run
- * or report generation into a directed graph of {@link TraceNodeEntity} spans.
+ * into a directed graph of {@link TraceNodeEntity} spans.
  */
 @Entity
 @Table(name = "trace")
@@ -35,9 +35,6 @@ public class TraceEntity extends PanacheEntityBase {
 
     @Column(name = "project_id")
     public Long projectId;
-
-    @Column(name = "report_id")
-    public Long reportId;
 
     @Column(name = "started_on", nullable = false)
     public Instant startedOn;

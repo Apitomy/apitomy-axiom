@@ -83,19 +83,6 @@ public record SseEvent(
     }
 
     /**
-     * Creates a report-updated event.
-     *
-     * @param reportId the report that changed
-     * @param status the new report status
-     * @return a new SSE event
-     */
-    public static SseEvent reportUpdated(Long reportId, String status) {
-        return new SseEvent("report-updated",
-                "{\"reportId\":" + reportId
-                        + ",\"status\":\"" + status + "\"}");
-    }
-
-    /**
      * Creates a trace-updated event.
      *
      * @param traceId the trace that changed

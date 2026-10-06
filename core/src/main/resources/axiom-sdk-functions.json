@@ -93,45 +93,10 @@
     "sdkCallSupported": true
   },
   {
-    "name": "axiom_add_report_label",
-    "description": "Add a label to a generated Axiom report for categorization and filtering.",
-    "parameters": [
-      { "name": "reportId", "type": "number", "description": "The report ID", "required": true },
-      { "name": "label", "type": "string", "description": "The label to add", "required": true }
-    ],
-    "sdkCallSupported": false
-  },
-  {
-    "name": "axiom_remove_report_label",
-    "description": "Remove a label from a generated Axiom report.",
-    "parameters": [
-      { "name": "reportId", "type": "number", "description": "The report ID", "required": true },
-      { "name": "label", "type": "string", "description": "The label to remove", "required": true }
-    ],
-    "sdkCallSupported": false
-  },
-  {
     "name": "axiom_list_tools",
     "description": "List all custom tool definitions configured in Axiom.",
     "parameters": [
       { "name": "filterName", "type": "string", "description": "Filter by tool name or description (substring match)", "required": false },
-      { "name": "filterLabels", "type": "string", "description": "Filter by labels (comma-separated, AND logic)", "required": false }
-    ],
-    "sdkCallSupported": false
-  },
-  {
-    "name": "axiom_list_report_definitions",
-    "description": "List all report definitions configured in Axiom.",
-    "parameters": [],
-    "sdkCallSupported": false
-  },
-  {
-    "name": "axiom_list_reports",
-    "description": "List generated reports with optional filtering by definition, status, title, and labels.",
-    "parameters": [
-      { "name": "filterDefinitionId", "type": "number", "description": "Filter by report definition ID", "required": false },
-      { "name": "filterStatus", "type": "string", "description": "Filter by status (comma-separated)", "required": false },
-      { "name": "filterTitle", "type": "string", "description": "Filter by title (substring match)", "required": false },
       { "name": "filterLabels", "type": "string", "description": "Filter by labels (comma-separated, AND logic)", "required": false }
     ],
     "sdkCallSupported": false

@@ -38,7 +38,7 @@ class TraceServiceTest {
     @Test
     void createTraceCreatesTraceAndRootNode() {
         TraceContext ctx = traceService.createTrace("event-pipeline",
-                "Processing test event", TEST_EVENT_ID, null, null,
+                "Processing test event", TEST_EVENT_ID, null,
                 "event-ingested", "Event received: test-event",
                 null, null);
 
@@ -53,7 +53,6 @@ class TraceServiceTest {
         assertEquals("Processing test event", trace.summary);
         assertEquals(TEST_EVENT_ID, trace.eventId);
         assertNull(trace.projectId);
-        assertNull(trace.reportId);
         assertNotNull(trace.startedOn);
         assertNull(trace.completedOn);
 
@@ -72,7 +71,7 @@ class TraceServiceTest {
     @Test
     void addNodeCreatesChildWithCorrectParent() {
         TraceContext ctx = traceService.createTrace("test", "test trace",
-                null, null, null, "root", "root node",
+                null, null, "root", "root node",
                 null, null);
 
         Long childId = traceService.addNode(ctx, "manager-evaluation", "in-progress",
@@ -96,7 +95,7 @@ class TraceServiceTest {
     @Test
     void addNodeRespectsStackForNestedChildren() {
         TraceContext ctx = traceService.createTrace("test", "test trace",
-                null, null, null, "root", "root node",
+                null, null, "root", "root node",
                 null, null);
         Long rootNodeId = ctx.currentParentNodeId();
 
@@ -126,7 +125,7 @@ class TraceServiceTest {
     @Test
     void completeNodeSetsTimingAndStatus() {
         TraceContext ctx = traceService.createTrace("test", "test trace",
-                null, null, null, "root", "root node",
+                null, null, "root", "root node",
                 null, null);
         Long nodeId = traceService.addNode(ctx, "work-item", "in-progress",
                 "Doing work", null, null);
@@ -144,7 +143,7 @@ class TraceServiceTest {
     @Test
     void completeNodeWithEntityRefSetsEntityFields() {
         TraceContext ctx = traceService.createTrace("test", "test trace",
-                null, null, null, "root", "root node",
+                null, null, "root", "root node",
                 null, null);
         Long nodeId = traceService.addNode(ctx, "manager-evaluation", "in-progress",
                 "Evaluating", null, null);
@@ -162,7 +161,7 @@ class TraceServiceTest {
     @Test
     void completeTraceSetsCompletionFields() {
         TraceContext ctx = traceService.createTrace("test", "test trace",
-                null, null, null, "root", "root node",
+                null, null, "root", "root node",
                 null, null);
 
         traceService.completeTrace(ctx.traceId(), "completed");
@@ -176,7 +175,7 @@ class TraceServiceTest {
     @Test
     void completeTraceWithFailedStatus() {
         TraceContext ctx = traceService.createTrace("test", "test trace",
-                null, null, null, "root", "root node",
+                null, null, "root", "root node",
                 null, null);
 
         traceService.completeTrace(ctx.traceId(), "failed");
@@ -202,7 +201,7 @@ class TraceServiceTest {
     void fullPipelineFlow() {
         // Simulate a complete event pipeline trace
         TraceContext ctx = traceService.createTrace("event-pipeline",
-                "Processing event #1", TEST_EVENT_ID, null, null,
+                "Processing event #1", TEST_EVENT_ID, null,
                 "event-ingested", "Event received: issue-opened",
                 null, null);
 
@@ -260,7 +259,7 @@ class TraceServiceTest {
     void createTraceTruncatesLongSummary() {
         String longSummary = "A".repeat(2000);
         TraceContext ctx = traceService.createTrace("test", longSummary,
-                null, null, null, "root", longSummary,
+                null, null, "root", longSummary,
                 null, null);
 
         TraceEntity trace = TraceEntity.findById(ctx.traceId());
@@ -275,7 +274,7 @@ class TraceServiceTest {
     @Test
     void addUuidEntityNodeStoresUuidAsEntityId() {
         TraceContext ctx = traceService.createTrace("test", "test trace",
-                null, null, null, "root", "root node",
+                null, null, "root", "root node",
                 null, null);
 
         Long nodeId = traceService.addUuidEntityNode(ctx, "event-received", "completed",

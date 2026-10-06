@@ -53,8 +53,7 @@ public class UsageResourceImpl implements UsageResource {
                                            String filterEngine,
                                            String filterModel,
                                            String filterTraceId,
-                                           String filterScheduledJobRunId,
-                                           String filterReportId) {
+                                           String filterScheduledJobRunId) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
@@ -117,11 +116,6 @@ public class UsageResourceImpl implements UsageResource {
             hql.append(" and scheduledJobRunId = :scheduledJobRunId");
             params.put("scheduledJobRunId",
                     TraceResourceImpl.parseIdParam("filterScheduledJobRunId", filterScheduledJobRunId));
-        }
-        if (filterReportId != null && !filterReportId.isBlank()) {
-            hql.append(" and reportId = :reportId");
-            params.put("reportId",
-                    TraceResourceImpl.parseIdParam("filterReportId", filterReportId));
         }
 
         long totalCount = AiUsageEntity.count(hql.toString(), params);
@@ -240,7 +234,6 @@ public class UsageResourceImpl implements UsageResource {
         usage.setEventId(entity.eventId);
         usage.setTraceId(entity.traceId);
         usage.setScheduledJobRunId(entity.scheduledJobRunId);
-        usage.setReportId(entity.reportId);
         usage.setProjectId(entity.projectId);
         usage.setAgentId(entity.agentId);
         usage.setActionType(entity.actionType);

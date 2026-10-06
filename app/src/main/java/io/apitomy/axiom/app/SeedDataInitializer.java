@@ -147,7 +147,6 @@ public class SeedDataInitializer {
         config.eventRetentionDays = 90;
         // History settings: 0 keeps the rows forever.
         config.scheduledJobRunRetentionDays = 0;
-        config.reportRetentionDays = 0;
         config.workflowRunRetentionDays = 0;
         config.activityLogRetentionDays = 0;
         config.aiUsageRetentionDays = 0;

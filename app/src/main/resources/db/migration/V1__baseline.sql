@@ -24,12 +24,6 @@
 
     create sequence project_SEQ start with 1 increment by 50;
 
-    create sequence report_definition_SEQ start with 1 increment by 50;
-
-    create sequence report_definition_version_SEQ start with 1 increment by 50;
-
-    create sequence report_SEQ start with 1 increment by 50;
-
     create sequence retention_config_SEQ start with 1 increment by 50;
 
     create sequence routing_outcome_item_SEQ start with 1 increment by 50;
@@ -122,8 +116,6 @@
         created_on timestamp(6) not null,
         id bigint not null,
         project_id bigint,
-        report_definition_id bigint,
-        report_id bigint,
         scheduled_job_run_id bigint,
         task_id bigint,
         event_id uuid,
@@ -168,7 +160,6 @@
         input_tokens bigint,
         output_tokens bigint,
         project_id bigint,
-        report_id bigint,
         scheduled_job_run_id bigint,
         task_id bigint,
         event_id uuid,
@@ -288,79 +279,11 @@
         label varchar(255) not null
     );
 
-    create table report (
-        cost_usd float(53),
-        completed_on timestamp(6),
-        config_version_id bigint,
-        created_on timestamp(6) not null,
-        definition_id bigint not null,
-        duration_ms bigint,
-        id bigint not null,
-        time_range_end timestamp(6),
-        time_range_start timestamp(6),
-        trace_id uuid,
-        triggered_by_trace_id uuid,
-        content TEXT,
-        execution_log TEXT,
-        report_trigger varchar(32),
-        status varchar(255) not null,
-        title varchar(255),
-        triggered_by varchar(255),
-        primary key (id)
-    );
-
-    create table report_definition (
-        enabled boolean default false not null,
-        max_budget_usd float(53),
-        max_steps integer,
-        timeout_seconds integer,
-        created_on timestamp(6) not null,
-        id bigint not null,
-        last_run_at timestamp(6),
-        next_run_at timestamp(6),
-        updated_on timestamp(6) not null,
-        allowed_tools TEXT,
-        description TEXT,
-        engine varchar(255),
-        environment TEXT,
-        model varchar(255),
-        name varchar(255) not null,
-        prompt_template TEXT not null,
-        schedule varchar(255) not null,
-        schedule_day_of_week varchar(10),
-        schedule_time varchar(255),
-        slug varchar(255),
-        time_window varchar(255),
-        title_template TEXT,
-        primary key (id)
-    );
-
-    create table report_definition_initial_label (
-        report_definition_id bigint not null,
-        label varchar(255) not null
-    );
-
-    create table report_definition_version (
-        created_on timestamp(6) not null,
-        definition_id bigint not null,
-        id bigint not null,
-        config_hash varchar(64) not null,
-        config_snapshot TEXT not null,
-        primary key (id),
-        constraint uq_rdv_def_hash unique (definition_id, config_hash)
-    );
-
-    create table report_label (
-        report_id bigint not null,
-        label varchar(255) not null
-    );
-
     create table retention_config (
         activity_log_retention_days integer default 0 not null,
         ai_usage_retention_days integer default 0 not null,
         closed_project_retention_days integer default 90 not null,
         event_retention_days integer default 90 not null,
-        report_retention_days integer default 0 not null,
         scheduled_job_run_retention_days integer default 0 not null,
         trace_retention_days integer default 30 not null,
         workflow_run_retention_days integer default 0 not null,
@@ -585,7 +508,6 @@
     create table trace (
         completed_on timestamp(6),
         project_id bigint,
-        report_id bigint,
         started_on timestamp(6) not null,
         event_id uuid,
         trace_id uuid not null,
@@ -711,16 +633,6 @@
        foreign key (project_id) 
        references project on delete cascade;
 
-    alter table if exists report_definition_initial_label 
-       add constraint FKrt7xooecttchflv6rpgs9a9u7 
-       foreign key (report_definition_id) 
-       references report_definition on delete cascade;
-
-    alter table if exists report_label 
-       add constraint FKh2wq33qdvra6t4anv9941s147 
-       foreign key (report_id) 
-       references report on delete cascade;
-
     alter table if exists scheduled_job_label 
        add constraint FKg320v4be9jgfatfqcivv7t956 
        foreign key (scheduled_job_id) 
@@ -746,12 +658,10 @@ CREATE INDEX idx_action_type_label ON action_type_label (label, action_type_id);
 CREATE INDEX idx_activity_log_created_on ON activity_log (created_on);
 CREATE INDEX idx_activity_log_event ON activity_log (event_id);
 CREATE INDEX idx_activity_log_project ON activity_log (project_id);
-CREATE INDEX idx_activity_log_report ON activity_log (report_id);
 CREATE INDEX idx_activity_log_scheduled_job_run ON activity_log (scheduled_job_run_id);
 CREATE INDEX idx_activity_log_trace ON activity_log (trace_id);
 CREATE INDEX idx_ai_usage_created_on ON ai_usage (created_on);
 CREATE INDEX idx_ai_usage_event ON ai_usage (event_id);
-CREATE INDEX idx_ai_usage_report ON ai_usage (report_id);
 CREATE INDEX idx_ai_usage_scheduled_job_run ON ai_usage (scheduled_job_run_id);
 CREATE INDEX idx_ai_usage_trace ON ai_usage (trace_id);
 CREATE INDEX idx_cpl_connection ON connection_poll_log (connection_id);
@@ -761,12 +671,6 @@ CREATE INDEX idx_epl_event ON event_processing_ledger (event_id);
 CREATE INDEX idx_epl_status ON event_processing_ledger (status);
 CREATE INDEX idx_epl_subscription ON event_processing_ledger (subscription_id);
 CREATE INDEX idx_project_label ON project_label (label, project_id);
-CREATE INDEX idx_report_config_version ON report (config_version_id);
-CREATE INDEX idx_report_created_on ON report (created_on);
-CREATE INDEX idx_report_definition ON report (definition_id);
-CREATE INDEX idx_report_status ON report (status);
-CREATE INDEX idx_report_definition_initial_label ON report_definition_initial_label (label, report_definition_id);
-CREATE INDEX idx_report_label ON report_label (label, report_id);
 CREATE INDEX idx_ro_ledger ON routing_outcome (ledger_id);
 CREATE INDEX idx_ro_trace ON routing_outcome (trace_id);
 CREATE INDEX idx_roi_outcome ON routing_outcome_item (outcome_id);
@@ -792,7 +696,6 @@ CREATE INDEX idx_tool_execution_trace ON tool_execution (trace_id);
 CREATE INDEX idx_tool_label ON tool_label (label, tool_id);
 CREATE INDEX idx_trace_event ON trace (event_id);
 CREATE INDEX idx_trace_project ON trace (project_id);
-CREATE INDEX idx_trace_report ON trace (report_id);
 CREATE INDEX idx_trace_started_on ON trace (started_on);
 CREATE INDEX idx_trace_status ON trace (status);
 CREATE INDEX idx_trace_node_entity ON trace_node (entity_type, entity_id);
@@ -818,8 +721,6 @@ alter table agent_lease add foreign key (agent_id) references agent (id);
 alter table connection_poll_log add foreign key (connection_id) references event_source_connection (id) on delete cascade;
 alter table event_processing_ledger add foreign key (event_id) references stream_event (id);
 alter table event_processing_ledger add foreign key (subscription_id) references event_subscription (id) on delete cascade;
-alter table report add foreign key (config_version_id) references report_definition_version (id) on delete set null;
-alter table report_definition_version add foreign key (definition_id) references report_definition (id) on delete cascade;
 alter table routing_outcome add foreign key (ledger_id) references event_processing_ledger (id) on delete cascade;
 alter table routing_outcome_item add foreign key (outcome_id) references routing_outcome (id) on delete cascade;
 alter table scheduled_job_run add foreign key (config_version_id) references scheduled_job_version (id) on delete set null;
@@ -841,9 +742,6 @@ alter table dashboard_label add unique (dashboard_id, label);
 alter table event_processing_ledger add unique (event_id, subscription_id);
 alter table event_subscription_label add unique (event_subscription_id, label);
 alter table project_label add unique (project_id, label);
-alter table report_definition add unique (slug);
-alter table report_definition_initial_label add unique (report_definition_id, label);
-alter table report_label add unique (report_id, label);
 alter table scheduled_job add unique (slug);
 alter table scheduled_job_label add unique (scheduled_job_id, label);
 alter table session_template_allowed_tool add unique (session_template_id, tool_pattern);

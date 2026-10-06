@@ -110,7 +110,7 @@ class LogCorrelationTest {
     void taskLogLinesCarryTraceIdAndMdcIsClearedAfterwards() throws Exception {
         Long projectId = createProject();
         TraceContext ctx = traceService.createTrace("create-workflow", "log correlation", null,
-                projectId, null, "create-workflow", "root", null, null);
+                projectId, "create-workflow", "root", null, null);
         Long taskId = createTask(projectId, ctx.traceId());
         traceService.addNode(ctx, "task", "in-progress", "Task", "task", taskId);
 
@@ -171,7 +171,7 @@ class LogCorrelationTest {
     void taskContextNestsInsideCallerContext() {
         Long projectId = createProject();
         TraceContext ctx = traceService.createTrace("create-workflow", "log correlation fail", null,
-                projectId, null, "create-workflow", "root", null, null);
+                projectId, "create-workflow", "root", null, null);
         Long taskId = createTask(projectId, ctx.traceId());
         Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(),
                 ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Optional.empty());

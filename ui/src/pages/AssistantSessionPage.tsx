@@ -545,8 +545,6 @@ export function AssistantSessionPage() {
                                     {(applyResult.toolsUpdated ?? 0) > 0 && <li>{applyResult.toolsUpdated} tool(s) updated</li>}
                                     {(applyResult.actionTypesCreated ?? 0) > 0 && <li>{applyResult.actionTypesCreated} action type(s) created</li>}
                                     {(applyResult.actionTypesUpdated ?? 0) > 0 && <li>{applyResult.actionTypesUpdated} action type(s) updated</li>}
-                                    {(applyResult.reportDefinitionsCreated ?? 0) > 0 && <li>{applyResult.reportDefinitionsCreated} report definition(s) created</li>}
-                                    {(applyResult.reportDefinitionsUpdated ?? 0) > 0 && <li>{applyResult.reportDefinitionsUpdated} report definition(s) updated</li>}
                                     {(applyResult.toolsetsCreated ?? 0) > 0 && <li>{applyResult.toolsetsCreated} toolset(s) created</li>}
                                     {(applyResult.toolsetsUpdated ?? 0) > 0 && <li>{applyResult.toolsetsUpdated} toolset(s) updated</li>}
                                     {(applyResult.sessionTemplatesCreated ?? 0) > 0 && <li>{applyResult.sessionTemplatesCreated} session template(s) created</li>}

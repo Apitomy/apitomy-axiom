@@ -291,7 +291,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
             try {
                 traceCtx = traceService.createTrace("user-action",
                         "User action: " + data.getActionType(),
-                        null, projectId, null,
+                        null, projectId,
                         "user-action-triggered", "User triggered action: " + data.getActionType(),
                         null, null);
             } catch (Exception e) {

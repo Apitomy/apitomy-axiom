@@ -6,8 +6,6 @@ import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
-import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
-import io.apitomy.axiom.core.entities.ReportEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobEntity;
@@ -69,9 +67,6 @@ class TraceCorrelationTest {
     TaskExecutionService taskExecutionService;
 
     @Inject
-    ReportExecutionService reportExecutionService;
-
-    @Inject
     ScheduledJobExecutionService scheduledJobExecutionService;
 
     @Inject
@@ -102,7 +97,7 @@ class TraceCorrelationTest {
     @Test
     void taskActivityAndAiUsageCarryTaskTrace() {
         Long projectId = createProject();
-        TraceContext ctx = traceService.createTrace("create-workflow", "corr task", null, null, null,
+        TraceContext ctx = traceService.createTrace("create-workflow", "corr task", null, null,
                 "create-workflow", "root", null, null);
         Long taskId = QuarkusTransaction.requiringNew().call(() -> {
             TaskEntity task = new TaskEntity();
@@ -134,45 +129,6 @@ class TraceCorrelationTest {
         assertEquals(ctx.traceId(), usage.get(0).traceId);
     }
 
-    // ── Reports ──────────────────────────────────────────────────────
-
-    @Test
-    void reportFailureActivityCarriesReportTrace() {
-        Long[] ids = createReport();
-        ReportDefinitionEntity def = QuarkusTransaction.requiringNew().call(() ->
-                ReportDefinitionEntity.<ReportDefinitionEntity>findById(ids[0]));
-        String defName = def.name;
-        reportExecutionService.generateReport(def, ids[1]);
-
-        ReportEntity report = QuarkusTransaction.requiringNew().call(() ->
-                ReportEntity.<ReportEntity>findById(ids[1]));
-        assertNotNull(report.traceId);
-        ActivityLogEntity row = activityRow("report-failed", defName);
-        assertEquals(report.traceId, row.traceId);
-    }
-
-    @Test
-    void reportCompletionActivityAndAiUsageCarryReportTrace() {
-        Long[] ids = createReport();
-        String defName = QuarkusTransaction.requiringNew().call(() ->
-                ReportDefinitionEntity.<ReportDefinitionEntity>findById(ids[0]).name);
-        TraceContext ctx = traceService.createTrace("report", "corr report", null, null, null,
-                "report", "root", "report", ids[1]);
-        Instant start = Instant.now();
-
-        reportExecutionService.markGenerating(ids[1], start, start, ctx.traceId());
-        reportExecutionService.onReportCompleted(ids[1], ids[0], AgentResult.success("# Title"),
-                ctx, null);
-
-        assertEquals(ctx.traceId(), activityRow("report-generating", defName).traceId);
-        assertEquals(ctx.traceId(), activityRow("report-completed", defName).traceId);
-        List<AiUsageEntity> usage = QuarkusTransaction.requiringNew().call(() ->
-                AiUsageEntity.<AiUsageEntity>list(
-                        "invocationType = 'report' and createdOn >= ?1", start));
-        assertFalse(usage.isEmpty());
-        usage.forEach(u -> assertEquals(ctx.traceId(), u.traceId));
-    }
-
     // ── Scheduled jobs ───────────────────────────────────────────────
 
     @Test
@@ -197,7 +153,7 @@ class TraceCorrelationTest {
             return new Long[] { job.id, run.id };
         });
         TraceContext ctx = traceService.createTrace("scheduled-job-execution", "corr job",
-                null, null, null, "scheduled-job", "root", null, null);
+                null, null, "scheduled-job", "root", null, null);
         Instant start = Instant.now();
 
         scheduledJobExecutionService.markRunning(ids[1], ctx.traceId());
@@ -261,25 +217,6 @@ class TraceCorrelationTest {
             project.updatedOn = Instant.now();
             project.persist();
             return project.id;
-        });
-    }
-
-    private Long[] createReport() {
-        return QuarkusTransaction.requiringNew().call(() -> {
-            ReportDefinitionEntity def = new ReportDefinitionEntity();
-            def.name = "corr-report-" + UUID.randomUUID();
-            def.schedule = "daily";
-            def.promptTemplate = "Report on {{repositories}}";
-            def.enabled = true;
-            def.createdOn = Instant.now();
-            def.updatedOn = Instant.now();
-            def.persist();
-            ReportEntity report = new ReportEntity();
-            report.definitionId = def.id;
-            report.status = "Pending";
-            report.createdOn = Instant.now();
-            report.persist();
-            return new Long[] { def.id, report.id };
         });
     }
 

@@ -18,7 +18,6 @@ import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
-import io.apitomy.axiom.core.entities.ReportEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ToolExecutionEntity;
 import io.apitomy.axiom.core.entities.TraceEntity;
@@ -62,7 +61,7 @@ public class TraceResourceImpl implements TracesResource {
     public TraceSearchResults listTraces(BigInteger page, BigInteger limit,
             String filterTraceType, String filterStatus,
             String filterEventId, BigInteger filterProjectId,
-            BigInteger filterReportId, String filterScheduledJobRunId) {
+            String filterScheduledJobRunId) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
@@ -92,11 +91,6 @@ public class TraceResourceImpl implements TracesResource {
             hql.append(" and projectId = :projectId");
             params.put("projectId", filterProjectId.longValue());
         }
-        if (filterReportId != null) {
-            hql.append(" and reportId = :reportId");
-            params.put("reportId", filterReportId.longValue());
-        }
-
         if (filterScheduledJobRunId != null && !filterScheduledJobRunId.isBlank()) {
             long runId = parseIdParam("filterScheduledJobRunId", filterScheduledJobRunId);
             ScheduledJobRunEntity run = ScheduledJobRunEntity.findById(runId);
@@ -263,7 +257,6 @@ public class TraceResourceImpl implements TracesResource {
                         case "ai-usage" -> AiUsageEntity.findById(Long.valueOf(entityId));
                         case "tool-execution" -> ToolExecutionEntity.findById(Long.valueOf(entityId));
                         case "task" -> TaskEntity.findById(Long.valueOf(entityId));
-                        case "report" -> ReportEntity.findById(Long.valueOf(entityId));
                         default -> null;
                     };
                     yield entity != null ? objectMapper.convertValue(entity, Map.class) : null;
@@ -451,7 +444,6 @@ public class TraceResourceImpl implements TracesResource {
         bean.setSummary(entity.summary);
         bean.setEventId(entity.eventId);
         bean.setProjectId(entity.projectId);
-        bean.setReportId(entity.reportId);
         bean.setStartedOn(Date.from(entity.startedOn));
         if (entity.completedOn != null) {
             bean.setCompletedOn(Date.from(entity.completedOn));

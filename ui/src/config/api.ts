@@ -142,8 +142,6 @@ export interface ActivityLogEntry {
     eventId?: string;
     traceId?: string;
     scheduledJobRunId?: number;
-    reportId?: number;
-    reportDefinitionId?: number;
     entryType: string;
     summary: string;
     details?: string;
@@ -188,7 +186,6 @@ export interface PackExportRequest {
     toolIds?: number[];
     toolsetIds?: number[];
     mcpServerIds?: number[];
-    reportDefinitionIds?: number[];
     sessionTemplateIds?: string[];
     scheduledJobIds?: number[];
     connectionIds?: string[];
@@ -201,7 +198,6 @@ export interface ImportResult {
     tools?: number;
     toolsets?: number;
     mcpServers?: number;
-    reportDefinitions?: number;
     sessionTemplates?: number;
     scheduledJobs?: number;
     connections?: number;
@@ -212,7 +208,6 @@ export interface ImportResult {
 export interface AssistantApplyResult {
     tools?: number;
     actionTypes?: number;
-    reportDefinitions?: number;
     toolsets?: number;
     sessionTemplates?: number;
     scheduledJobs?: number;
@@ -220,8 +215,6 @@ export interface AssistantApplyResult {
     toolsUpdated?: number;
     actionTypesCreated?: number;
     actionTypesUpdated?: number;
-    reportDefinitionsCreated?: number;
-    reportDefinitionsUpdated?: number;
     toolsetsCreated?: number;
     toolsetsUpdated?: number;
     sessionTemplatesCreated?: number;
@@ -501,7 +494,7 @@ export async function aiEditScript(request: ScriptAiEditRequest): Promise<Script
     return response.json();
 }
 
-export async function aiEditActionPrompt(request: ReportAiEditRequest): Promise<ReportAiEditResponse> {
+export async function aiEditActionPrompt(request: AiEditPromptRequest): Promise<AiEditPromptResponse> {
     const response = await fetch(`${API}/action-types/ai-edit-prompt`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -865,8 +858,6 @@ export interface RetentionConfig {
     eventRetentionDays?: number;
     /** Days to keep finished scheduled job runs; 0 keeps them forever. */
     scheduledJobRunRetentionDays?: number;
-    /** Days to keep finished reports; 0 keeps them forever. */
-    reportRetentionDays?: number;
     /** Days to keep finished workflow runs; 0 keeps them forever. */
     workflowRunRetentionDays?: number;
     /** Days to keep activity log entries; 0 keeps them forever. */
@@ -916,176 +907,20 @@ export async function fetchThreadEntries(projectId: number): Promise<ThreadEntry
     return response.json();
 }
 
-// ── Reports ──────────────────────────────────────────────────────
+// ── AI prompt editing ───────────────────────────────────────────
 
-export interface ReportDefinition {
-    id: number;
-    name: string;
-    description?: string;
-    slug?: string;
-    schedule: string;
-    scheduleTime?: string;
-    scheduleDayOfWeek?: string;
-    timeWindow?: string;
-    promptTemplate: string;
-    titleTemplate?: string;
-    allowedTools?: string[];
-    enabled: boolean;
-    engine?: string;
-    model?: string;
-    maxSteps?: number;
-    maxBudgetUsd?: number;
-    timeoutSeconds?: number;
-    environment?: Record<string, string>;
-    initialLabels?: string[];
-    nextRunAt?: string;
-    lastRunAt?: string;
-    createdOn: string;
-    updatedOn: string;
-}
-
-export type NewReportDefinition = Omit<ReportDefinition, "id" | "createdOn" | "updatedOn" | "nextRunAt" | "lastRunAt">;
-
-export interface Report {
-    id: number;
-    definitionId: number;
-    status: string;
-    title?: string;
-    trigger?: string;
-    triggeredBy?: string;
-    triggeredByTraceId?: string;
-    content?: string;
-    timeRangeStart?: string;
-    timeRangeEnd?: string;
-    costUsd?: number;
-    durationMs?: number;
-    labels?: string[];
-    createdOn: string;
-    completedOn?: string;
-    traceId?: string;
-}
-
-export interface ReportAiEditRequest {
+export interface AiEditPromptRequest {
     message: string;
     currentPromptTemplate?: string;
     currentAllowedTools?: string[];
-    reportName?: string;
-    reportDescription?: string;
+    name?: string;
+    description?: string;
 }
 
-export interface ReportAiEditResponse {
+export interface AiEditPromptResponse {
     promptTemplate?: string;
     allowedTools?: string[];
     explanation?: string;
-}
-
-export async function aiEditReportPrompt(request: ReportAiEditRequest): Promise<ReportAiEditResponse> {
-    const response = await fetch(`${API}/reports/ai-edit-prompt`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(request),
-    });
-    if (!response.ok) throw new Error(`Failed to AI edit report prompt: ${response.status}`);
-    return response.json();
-}
-
-export async function fetchReportDefinitions(): Promise<ReportDefinition[]> {
-    const response = await fetch(`${API}/reports/definitions`);
-    if (!response.ok) throw new Error(`Failed to fetch report definitions: ${response.status}`);
-    return response.json();
-}
-
-export async function fetchReportDefinition(id: number): Promise<ReportDefinition> {
-    const response = await fetch(`${API}/reports/definitions/${id}`);
-    if (!response.ok) throw new Error(`Failed to fetch report definition: ${response.status}`);
-    return response.json();
-}
-
-export async function validateReportDefinition(
-    def: NewReportDefinition
-): Promise<ToolValidationResult> {
-    const response = await fetch(`${API}/reports/definitions/validate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(def),
-    });
-    if (!response.ok) throw new Error(`Failed to validate report definition: ${response.status}`);
-    return response.json();
-}
-
-export async function createReportDefinition(def: NewReportDefinition): Promise<ReportDefinition> {
-    const response = await fetch(`${API}/reports/definitions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(def),
-    });
-    if (!response.ok) throw new Error(`Failed to create report definition: ${response.status}`);
-    return response.json();
-}
-
-export async function updateReportDefinition(id: number, def: NewReportDefinition): Promise<ReportDefinition> {
-    const response = await fetch(`${API}/reports/definitions/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(def),
-    });
-    if (!response.ok) throw new Error(`Failed to update report definition: ${response.status}`);
-    return response.json();
-}
-
-export async function deleteReportDefinition(id: number): Promise<void> {
-    const response = await fetch(`${API}/reports/definitions/${id}`, { method: "DELETE" });
-    if (!response.ok) throw new Error(`Failed to delete report definition: ${response.status}`);
-}
-
-export async function runReportDefinition(id: number): Promise<Report> {
-    const response = await fetch(`${API}/reports/definitions/${id}/run`, { method: "POST" });
-    if (!response.ok) throw new Error(`Failed to run report: ${response.status}`);
-    return response.json();
-}
-
-export async function fetchReports(
-    page = 1, limit = 20,
-    filterDefinitionId?: number, filterStatus?: string, filterTitle?: string,
-    filterLabels?: string
-): Promise<SearchResults<Report>> {
-    const params = new URLSearchParams();
-    params.set("page", String(page));
-    params.set("limit", String(limit));
-    if (filterDefinitionId != null) params.set("filterDefinitionId", String(filterDefinitionId));
-    if (filterStatus) params.set("filterStatus", filterStatus);
-    if (filterTitle) params.set("filterTitle", filterTitle);
-    if (filterLabels) params.set("filterLabels", filterLabels);
-    const response = await fetch(`${API}/reports?${params}`);
-    if (!response.ok) throw new Error(`Failed to fetch reports: ${response.status}`);
-    return response.json();
-}
-
-export async function fetchReportExecutionLog(reportId: number): Promise<string> {
-    const response = await fetch(`${API}/reports/${reportId}/log`);
-    if (!response.ok) throw new Error(`Failed to fetch report log: ${response.status}`);
-    return response.text();
-}
-
-export async function fetchReport(id: number): Promise<Report> {
-    const response = await fetch(`${API}/reports/${id}`);
-    if (!response.ok) throw new Error(`Failed to fetch report: ${response.status}`);
-    return response.json();
-}
-
-export async function updateReportLabels(reportId: number, labels: string[]): Promise<Report> {
-    const response = await fetch(`${API}/reports/${reportId}/labels`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(labels),
-    });
-    if (!response.ok) throw new Error(`Failed to update report labels: ${response.status}`);
-    return response.json();
-}
-
-export async function deleteReport(id: number): Promise<void> {
-    const response = await fetch(`${API}/reports/${id}`, { method: "DELETE" });
-    if (!response.ok) throw new Error(`Failed to delete report: ${response.status}`);
 }
 
 // ── Metrics ──────────────────────────────────────────────────────
@@ -1122,7 +957,6 @@ export interface AiUsage {
     eventId?: string;
     traceId?: string;
     scheduledJobRunId?: number;
-    reportId?: number;
     projectId?: number;
     agentId?: number;
     actionType?: string;
@@ -1148,7 +982,7 @@ export async function fetchUsage(
     filterDateFrom?: string, filterDateTo?: string,
     filterLabels?: string, filterEngine?: string,
     filterModel?: string, filterTraceId?: string,
-    filterScheduledJobRunId?: string, filterReportId?: string
+    filterScheduledJobRunId?: string
 ): Promise<AiUsageSearchResults> {
     const params = new URLSearchParams();
     params.set("page", String(page));
@@ -1164,7 +998,6 @@ export async function fetchUsage(
     if (filterModel) params.set("filterModel", filterModel);
     if (filterTraceId) params.set("filterTraceId", filterTraceId);
     if (filterScheduledJobRunId) params.set("filterScheduledJobRunId", filterScheduledJobRunId);
-    if (filterReportId) params.set("filterReportId", filterReportId);
     const response = await fetch(`${API}/usage/ai?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch usage: ${response.status}`);
     return response.json();
@@ -1205,7 +1038,7 @@ export async function fetchActivityLog(
     filterEventId?: string, filterSummary?: string,
     filterProjectId?: number, filterEntryType?: string,
     filterLabels?: string, filterTraceId?: string,
-    filterScheduledJobRunId?: string, filterReportId?: string
+    filterScheduledJobRunId?: string
 ): Promise<SearchResults<ActivityLogEntry>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
@@ -1217,7 +1050,6 @@ export async function fetchActivityLog(
     if (filterLabels) params.set("filterLabels", filterLabels);
     if (filterTraceId) params.set("filterTraceId", filterTraceId);
     if (filterScheduledJobRunId) params.set("filterScheduledJobRunId", filterScheduledJobRunId);
-    if (filterReportId) params.set("filterReportId", filterReportId);
     const response = await fetch(`${API}/activity?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch activity log: ${response.status}`);
     return response.json();
@@ -1550,7 +1382,6 @@ export interface Trace {
     summary: string;
     eventId?: string;
     projectId?: number;
-    reportId?: number;
     startedOn: string;
     completedOn?: string;
 }
@@ -1593,8 +1424,7 @@ export interface TraceNodeDetailResponse {
 export async function fetchTraces(
     page = 1, limit = 20,
     filterTraceType?: string, filterStatus?: string,
-    filterEventId?: string, filterProjectId?: number,
-    filterReportId?: number
+    filterEventId?: string, filterProjectId?: number
 ): Promise<SearchResults<Trace>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
@@ -1603,7 +1433,6 @@ export async function fetchTraces(
     if (filterStatus) params.set("filterStatus", filterStatus);
     if (filterEventId) params.set("filterEventId", String(filterEventId));
     if (filterProjectId) params.set("filterProjectId", String(filterProjectId));
-    if (filterReportId) params.set("filterReportId", String(filterReportId));
     const response = await fetch(`${API}/traces?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch traces: ${response.status}`);
     return response.json();
@@ -1626,12 +1455,6 @@ export async function fetchTraceNodeDetail(
 export async function fetchProjectTraces(projectId: number): Promise<Trace[]> {
     const response = await fetch(`${API}/projects/${projectId}/traces`);
     if (!response.ok) throw new Error(`Failed to fetch project traces: ${response.status}`);
-    return response.json();
-}
-
-export async function fetchReportTraces(reportId: number): Promise<Trace[]> {
-    const response = await fetch(`${API}/reports/${reportId}/traces`);
-    if (!response.ok) throw new Error(`Failed to fetch report traces: ${response.status}`);
     return response.json();
 }
 
@@ -2584,7 +2407,7 @@ export interface ConfigurationField {
     changed: boolean;
 }
 
-/** The configuration a scheduled job run or report used. */
+/** The configuration a scheduled job run used. */
 export interface ConfigurationSnapshot {
     versionId: number;
     configHash: string;
@@ -2594,7 +2417,7 @@ export interface ConfigurationSnapshot {
     fields: ConfigurationField[];
 }
 
-/** Message prefix of the 404 returned when the run or report exists but has no snapshot. */
+/** Message prefix of the 404 returned when the run exists but has no snapshot. */
 const CONFIG_NOT_RECORDED = "No configuration was recorded";
 
 async function fetchConfigSnapshot(url: string): Promise<ConfigurationSnapshot | null> {
@@ -2612,16 +2435,11 @@ export function fetchScheduledJobRunConfig(runId: number): Promise<Configuration
     return fetchConfigSnapshot(`${API}/scheduled-jobs/runs/${runId}/config`);
 }
 
-/** Returns the configuration a report was generated with, or null if none was recorded. */
-export function fetchReportConfig(reportId: number): Promise<ConfigurationSnapshot | null> {
-    return fetchConfigSnapshot(`${API}/reports/${reportId}/config`);
-}
-
 // ── Lineage (#430) ───────────────────────────────────────────────────
 
 /** Root entity types accepted by `GET /lineage/{entityType}/{id}`. */
 export type LineageEntityType =
-    "event" | "trace" | "workflow-run" | "task" | "scheduled-job-run" | "report";
+    "event" | "trace" | "workflow-run" | "task" | "scheduled-job-run";
 
 export interface LineageNode {
     key: string;

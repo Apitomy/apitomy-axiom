@@ -33,11 +33,10 @@ public class TaskTraceFinalizer {
     /**
      * Trace types whose lifecycle is owned by another service. A task that joined one of these traces
      * (e.g. via caller trace headers) completes only its own node; the owner
-     * ({@code ReportExecutionService}, {@code ScheduledJobExecutionService},
-     * {@code WorkflowExecutionService}) completes the trace.
+     * ({@code ScheduledJobExecutionService}, {@code WorkflowExecutionService}) completes the trace.
      */
     static final Set<String> OWNER_MANAGED_TRACE_TYPES =
-            Set.of("report-generation", "scheduled-job-execution", "workflow");
+            Set.of("scheduled-job-execution", "workflow");
 
     @Inject
     TraceService traceService;

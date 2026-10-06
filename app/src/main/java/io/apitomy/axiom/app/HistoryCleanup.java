@@ -2,7 +2,6 @@ package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
-import io.apitomy.axiom.core.entities.ReportEntity;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
@@ -25,7 +24,7 @@ import java.util.function.IntSupplier;
 
 /**
  * Periodically deletes history rows that have exceeded their configured retention period:
- * finished scheduled job runs, finished reports, finished workflow runs, activity log entries
+ * finished scheduled job runs, finished workflow runs, activity log entries
  * and AI usage records. A retention of {@code 0} days (the default) keeps the rows forever.
  *
  * <p>References to deleted rows are handled as follows:
@@ -33,8 +32,8 @@ import java.util.function.IntSupplier;
  *   <li>Workflow runs: their waits, event subscriptions and resume records are deleted;
  *       {@code task.workflow_run_id} and {@code routing_outcome_item.workflow_run_id} are cleared
  *       (tasks belong to the project and are deleted with it).</li>
- *   <li>Job runs and reports: {@code ai_usage}, {@code activity_log} and {@code trace} keep their
- *       {@code scheduled_job_run_id} / {@code report_id} values, which may then dangle, as
+ *   <li>Job runs: {@code ai_usage}, {@code activity_log} and {@code trace} keep their
+ *       {@code scheduled_job_run_id} values, which may then dangle, as
  *       documented in {@code docs/developer-guide/correlation.md}. Config versions are not
  *       affected.</li>
  * </ul>
@@ -49,7 +48,7 @@ public class HistoryCleanup {
     /** Maximum number of rows deleted per transaction. */
     static final int BATCH_SIZE = 500;
 
-    /** Statuses of scheduled job runs and reports that have finished. */
+    /** Statuses of scheduled job runs that have finished. */
     static final List<String> FINISHED_STATUSES = List.of("Completed", "Failed");
 
     /**
@@ -73,7 +72,6 @@ public class HistoryCleanup {
             concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     void cleanup() {
         runStep("Scheduled job run cleanup", this::deleteJobRunBatch);
-        runStep("Report cleanup", this::deleteReportBatch);
         runStep("Workflow run cleanup", this::deleteWorkflowRunBatch);
         runStep("Activity log cleanup", this::deleteActivityBatch);
         runStep("AI usage cleanup", this::deleteAiUsageBatch);
@@ -85,7 +83,7 @@ public class HistoryCleanup {
      */
     void doCleanup() {
         for (IntSupplier step : List.<IntSupplier>of(this::deleteJobRunBatch,
-                this::deleteReportBatch, this::deleteWorkflowRunBatch, this::deleteActivityBatch,
+                this::deleteWorkflowRunBatch, this::deleteActivityBatch,
                 this::deleteAiUsageBatch)) {
             while (step.getAsInt() >= BATCH_SIZE) {
                 // keep going until a partial batch is deleted
@@ -119,29 +117,6 @@ public class HistoryCleanup {
         }
         ScheduledJobRunEntity.delete("id in ?1", ids);
         LOG.infof("Cleaned up %d scheduled job run(s)", ids.size());
-        return ids.size();
-    }
-
-    /**
-     * Deletes one batch of finished reports (and their labels) older than the retention period.
-     *
-     * @return the number of reports deleted
-     */
-    int deleteReportBatch() {
-        Instant cutoff = cutoff(config().reportRetentionDays);
-        if (cutoff == null) {
-            return 0;
-        }
-        List<Long> ids = finishedIds("select r.id from ReportEntity r "
-                + "where r.status in :finished and r.createdOn < :cutoff", cutoff);
-        if (ids.isEmpty()) {
-            return 0;
-        }
-        em().createNativeQuery("delete from report_label where report_id in (:ids)")
-                .setParameter("ids", ids)
-                .executeUpdate();
-        ReportEntity.delete("id in ?1", ids);
-        LOG.infof("Cleaned up %d report(s)", ids.size());
         return ids.size();
     }
 

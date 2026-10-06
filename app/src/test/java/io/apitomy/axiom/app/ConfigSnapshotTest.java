@@ -1,8 +1,5 @@
 package io.apitomy.axiom.app;
 
-import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
-import io.apitomy.axiom.core.entities.ReportDefinitionVersionEntity;
-import io.apitomy.axiom.core.entities.ReportEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobVersionEntity;
@@ -34,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Verifies that each scheduled job run and report records the configuration it ran with
+ * Verifies that each scheduled job run records the configuration it ran with
  * (#426): snapshots are stored on scheduled and manual paths, survive later edits, are shared
  * by identical configurations, exclude secrets, are exposed by the API and are deleted with
  * their definition.
@@ -45,14 +42,8 @@ class ConfigSnapshotTest {
     @InjectMock
     ScheduledJobQueueConsumer jobQueue;
 
-    @InjectMock
-    ReportQueueConsumer reportQueue;
-
     @Inject
     ScheduledJobScheduler jobScheduler;
-
-    @Inject
-    ReportScheduler reportScheduler;
 
     @Inject
     ConfigSnapshotService snapshots;
@@ -63,9 +54,6 @@ class ConfigSnapshotTest {
             ScheduledJobRunEntity.deleteAll();
             ScheduledJobVersionEntity.deleteAll();
             ScheduledJobEntity.deleteAll();
-            ReportEntity.deleteAll();
-            ReportDefinitionVersionEntity.deleteAll();
-            ReportDefinitionEntity.deleteAll();
         });
     }
 
@@ -210,8 +198,6 @@ class ConfigSnapshotTest {
         });
         given().when().get("/api/v1/scheduled-jobs/runs/" + runId + "/config")
                 .then().statusCode(404).body("message", containsString("No configuration was recorded"));
-        given().when().get("/api/v1/reports/999999999/config")
-                .then().statusCode(404).body("message", containsString("Report not found"));
     }
 
     @Test
@@ -250,73 +236,6 @@ class ConfigSnapshotTest {
         assertTrue(json.contains("\"maxBudgetUsd\":\"5\""), json);
     }
 
-    // ── Reports ─────────────────────────────────────────────────────
-
-    @Test
-    void manualReportStoresSnapshotAndApiReturnsIt() {
-        long defId = createDefinition("Report prompt", "{\"KEY\":\"plain-secret-value\"}");
-
-        long reportId = manualReport(defId);
-        ReportEntity report = findReport(reportId);
-        assertNotNull(report.configVersionId);
-
-        given().when().get("/api/v1/reports/" + reportId + "/config")
-                .then().statusCode(200)
-                .body("changed", is(false))
-                .body("fields.find { it.name == 'promptTemplate' }.value", equalTo("Report prompt"))
-                .body("fields.find { it.name == 'timeWindow' }.value", equalTo("last-24h"))
-                .body(not(containsString("plain-secret-value")));
-    }
-
-    @Test
-    void scheduledReportStoresSnapshot() {
-        long defId = createDefinition("Scheduled report", null);
-        QuarkusTransaction.requiringNew().run(() -> {
-            ReportDefinitionEntity def = ReportDefinitionEntity.findById(defId);
-            def.enabled = true;
-            def.nextRunAt = Instant.now().minus(Duration.ofMinutes(1));
-        });
-
-        reportScheduler.createPendingReports();
-
-        List<ReportEntity> reports = QuarkusTransaction.requiringNew()
-                .call(() -> ReportEntity.<ReportEntity>list("definitionId", defId));
-        assertEquals(1, reports.size());
-        assertNotNull(reports.get(0).configVersionId);
-    }
-
-    @Test
-    void editingDefinitionKeepsOldReportSnapshotAndSharesIdenticalVersions() {
-        long defId = createDefinition("Original report prompt", null);
-        long first = manualReport(defId);
-        long second = manualReport(defId);
-        assertEquals(findReport(first).configVersionId, findReport(second).configVersionId);
-
-        QuarkusTransaction.requiringNew().run(() -> {
-            ReportDefinitionEntity def = ReportDefinitionEntity.findById(defId);
-            def.promptTemplate = "Edited report prompt";
-        });
-
-        given().when().get("/api/v1/reports/" + first + "/config")
-                .then().statusCode(200)
-                .body("changed", is(true))
-                .body("fields.find { it.name == 'promptTemplate' }.value", equalTo("Original report prompt"))
-                .body("fields.find { it.name == 'promptTemplate' }.currentValue",
-                        equalTo("Edited report prompt"));
-    }
-
-    @Test
-    void deletingDefinitionRemovesVersions() {
-        long defId = createDefinition("Prompt", null);
-        manualReport(defId);
-
-        given().when().delete("/api/v1/reports/definitions/" + defId).then().statusCode(204);
-
-        long versions = QuarkusTransaction.requiringNew()
-                .call(() -> ReportDefinitionVersionEntity.count("definitionId", defId));
-        assertEquals(0, versions);
-    }
-
     // ── Helpers ─────────────────────────────────────────────────────
 
     private long createJob(String prompt, String environment) {
@@ -343,31 +262,5 @@ class ConfigSnapshotTest {
 
     private ScheduledJobRunEntity findRun(long runId) {
         return QuarkusTransaction.requiringNew().call(() -> ScheduledJobRunEntity.findById(runId));
-    }
-
-    private long createDefinition(String prompt, String environment) {
-        return QuarkusTransaction.requiringNew().call(() -> {
-            ReportDefinitionEntity def = new ReportDefinitionEntity();
-            def.name = "report-" + UUID.randomUUID();
-            def.schedule = "daily";
-            def.scheduleTime = "08:00";
-            def.timeWindow = "last-24h";
-            def.promptTemplate = prompt;
-            def.environment = environment;
-            def.enabled = false;
-            def.createdOn = Instant.now();
-            def.updatedOn = Instant.now();
-            def.persist();
-            return def.id;
-        });
-    }
-
-    private long manualReport(long defId) {
-        return given().when().post("/api/v1/reports/definitions/" + defId + "/run")
-                .then().statusCode(200).extract().jsonPath().getLong("id");
-    }
-
-    private ReportEntity findReport(long reportId) {
-        return QuarkusTransaction.requiringNew().call(() -> ReportEntity.findById(reportId));
     }
 }

@@ -2,8 +2,8 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.apitomy.axiom.api.beans.ReportAiEditRequest;
-import io.apitomy.axiom.api.beans.ReportAiEditResponse;
+import io.apitomy.axiom.api.beans.AiEditPromptRequest;
+import io.apitomy.axiom.api.beans.AiEditPromptResponse;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.agents.spi.AgentRegistry;
 import io.apitomy.axiom.agents.spi.AgentRequest;
@@ -88,17 +88,17 @@ public class ActionTypeAiService {
      * @param request the user's message and current action type context
      * @return the AI-generated prompt template, tools, and explanation
      */
-    public ReportAiEditResponse editActionPrompt(ReportAiEditRequest request) {
+    public AiEditPromptResponse editActionPrompt(AiEditPromptRequest request) {
         LOG.infof("AI action type edit request: %s",
                 request.getMessage().substring(0, Math.min(request.getMessage().length(), 100)));
 
         StringBuilder userPrompt = new StringBuilder();
 
-        if (request.getReportName() != null) {
+        if (request.getName() != null) {
             userPrompt.append("## Action Type\n\n");
-            userPrompt.append("- **Name:** ").append(request.getReportName()).append("\n");
-            if (request.getReportDescription() != null) {
-                userPrompt.append("- **Description:** ").append(request.getReportDescription()).append("\n");
+            userPrompt.append("- **Name:** ").append(request.getName()).append("\n");
+            if (request.getDescription() != null) {
+                userPrompt.append("- **Description:** ").append(request.getDescription()).append("\n");
             }
             userPrompt.append("\n");
         }
@@ -142,7 +142,7 @@ public class ActionTypeAiService {
 
             if (!result.success()) {
                 LOG.errorf("Action type AI edit failed: %s", result.output());
-                ReportAiEditResponse response = new ReportAiEditResponse();
+                AiEditPromptResponse response = new AiEditPromptResponse();
                 response.setExplanation("Sorry, I encountered an error: " + result.output());
                 return response;
             }
@@ -151,17 +151,17 @@ public class ActionTypeAiService {
 
         } catch (Exception e) {
             LOG.errorf(e, "Action type AI edit failed");
-            ReportAiEditResponse response = new ReportAiEditResponse();
+            AiEditPromptResponse response = new AiEditPromptResponse();
             response.setExplanation("Sorry, an error occurred: " + e.getMessage());
             return response;
         }
     }
 
-    private ReportAiEditResponse parseResponse(String jsonOutput) {
+    private AiEditPromptResponse parseResponse(String jsonOutput) {
         try {
             JsonNode root = objectMapper.readTree(jsonOutput);
 
-            ReportAiEditResponse response = new ReportAiEditResponse();
+            AiEditPromptResponse response = new AiEditPromptResponse();
             response.setPromptTemplate(root.path("promptTemplate").asText(null));
             response.setExplanation(root.path("explanation").asText("Action type prompt generated."));
 
@@ -185,7 +185,7 @@ public class ActionTypeAiService {
         } catch (Exception e) {
             LOG.warnf(e, "Failed to parse AI action type edit response: %s",
                     jsonOutput.substring(0, Math.min(jsonOutput.length(), 200)));
-            ReportAiEditResponse response = new ReportAiEditResponse();
+            AiEditPromptResponse response = new AiEditPromptResponse();
             response.setExplanation("I generated a response but couldn't parse it properly. "
                     + "Please try again with a more specific description.");
             return response;

@@ -261,9 +261,6 @@ public class SystemResourceImpl implements SystemResource {
         if (data.getScheduledJobRunRetentionDays() != null) {
             entity.scheduledJobRunRetentionDays = data.getScheduledJobRunRetentionDays();
         }
-        if (data.getReportRetentionDays() != null) {
-            entity.reportRetentionDays = data.getReportRetentionDays();
-        }
         if (data.getWorkflowRunRetentionDays() != null) {
             entity.workflowRunRetentionDays = data.getWorkflowRunRetentionDays();
         }
@@ -284,7 +281,6 @@ public class SystemResourceImpl implements SystemResource {
         config.setTraceRetentionDays(entity.traceRetentionDays);
         config.setEventRetentionDays(entity.eventRetentionDays);
         config.setScheduledJobRunRetentionDays(entity.scheduledJobRunRetentionDays);
-        config.setReportRetentionDays(entity.reportRetentionDays);
         config.setWorkflowRunRetentionDays(entity.workflowRunRetentionDays);
         config.setActivityLogRetentionDays(entity.activityLogRetentionDays);
         config.setAiUsageRetentionDays(entity.aiUsageRetentionDays);
@@ -301,7 +297,7 @@ public class SystemResourceImpl implements SystemResource {
                         "Closed project, trace and event retention must be at least 1 day", 400);
             }
         }
-        Integer[] values = {data.getScheduledJobRunRetentionDays(), data.getReportRetentionDays(),
+        Integer[] values = {data.getScheduledJobRunRetentionDays(),
             data.getWorkflowRunRetentionDays(), data.getActivityLogRetentionDays(),
             data.getAiUsageRetentionDays()};
         for (Integer value : values) {

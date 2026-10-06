@@ -7,11 +7,11 @@ import jakarta.ws.rs.core.Response;
 
 /**
  * 404 errors of the configuration snapshot endpoints (#426), with a JSON {@link Error} body so
- * clients can tell "run/report not found" from "no configuration recorded".
+ * clients can tell "run not found" from "no configuration recorded".
  */
 final class ConfigSnapshotErrors {
 
-    /** Message prefix used when the run or report exists but has no snapshot. */
+    /** Message prefix used when the run exists but has no snapshot. */
     static final String NOT_RECORDED = "No configuration was recorded for ";
 
     private ConfigSnapshotErrors() {

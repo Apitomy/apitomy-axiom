@@ -425,13 +425,10 @@ public class AssistantResourceImpl implements AssistantResource {
             AssistantApplyResult applyResult = new AssistantApplyResult();
             applyResult.setTools(result.toolsCreated() + result.toolsUpdated());
             applyResult.setActionTypes(result.actionTypesCreated() + result.actionTypesUpdated());
-            applyResult.setReportDefinitions(result.reportDefinitionsCreated() + result.reportDefinitionsUpdated());
             applyResult.setToolsCreated(result.toolsCreated());
             applyResult.setToolsUpdated(result.toolsUpdated());
             applyResult.setActionTypesCreated(result.actionTypesCreated());
             applyResult.setActionTypesUpdated(result.actionTypesUpdated());
-            applyResult.setReportDefinitionsCreated(result.reportDefinitionsCreated());
-            applyResult.setReportDefinitionsUpdated(result.reportDefinitionsUpdated());
             applyResult.setToolsets(result.toolsetsCreated() + result.toolsetsUpdated());
             applyResult.setToolsetsCreated(result.toolsetsCreated());
             applyResult.setToolsetsUpdated(result.toolsetsUpdated());

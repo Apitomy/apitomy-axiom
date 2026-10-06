@@ -19,10 +19,6 @@ import { ActionTypeDetailPage } from "./pages/ActionTypeDetailPage";
 import { ToolsPage } from "./pages/ToolsPage";
 import { McpServersPage } from "./pages/McpServersPage";
 import { McpServerDetailPage } from "./pages/McpServerDetailPage";
-import { ReportsPage } from "./pages/ReportsPage";
-import { ReportDetailPage } from "./pages/ReportDetailPage";
-import { ReportDefinitionsPage } from "./pages/ReportDefinitionsPage";
-import { ReportDefinitionDetailPage } from "./pages/ReportDefinitionDetailPage";
 import { AiUsagePage } from "./pages/AiUsagePage";
 import { DiskUsagePage } from "./pages/DiskUsagePage";
 import { ToolDetailPage } from "./pages/ToolDetailPage";
@@ -145,10 +141,6 @@ export function App() {
                         <Route path="/logs/traces/:traceId" element={<TraceDetailPage />} />
                         <Route path="/logs/workflow-runs" element={<WorkflowRunsPage />} />
                         <Route path="/logs/workflow-runs/:runId" element={<WorkflowRunDetailPage />} />
-                        <Route path="/reports" element={<ReportsPage />} />
-                        <Route path="/reports/:reportId" element={<ReportDetailPage />} />
-                        <Route path="/report-definitions" element={<ReportDefinitionsPage />} />
-                        <Route path="/report-definitions/:definitionId" element={<ReportDefinitionDetailPage />} />
                         <Route path="/metrics/ai-usage" element={<AiUsagePage />} />
                         <Route path="/metrics/disk-usage" element={<DiskUsagePage />} />
                         <Route path="/events/connections" element={<ConnectionsPage />} />

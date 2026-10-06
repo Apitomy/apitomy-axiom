@@ -6,8 +6,6 @@ import io.apitomy.axiom.api.beans.LineageNode;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
-import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
-import io.apitomy.axiom.core.entities.ReportEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobEntity;
@@ -121,10 +119,10 @@ class LineageTest {
         createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_TASK, task1, null);
         createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_TASK, task2, null);
         Long noMatchItem = createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_NO_MATCH, null, null);
-        createUsage(null, eventId, traceId, null, null, 0.10);
-        createUsage(task1, eventId, traceId, null, null, 0.20);
-        createUsage(task1, eventId, traceId, null, null, 0.05);
-        createUsage(task2, eventId, traceId, null, null, 0.30);
+        createUsage(null, eventId, traceId, null, 0.10);
+        createUsage(task1, eventId, traceId, null, 0.20);
+        createUsage(task1, eventId, traceId, null, 0.05);
+        createUsage(task2, eventId, traceId, null, 0.30);
 
         LineageGraph graph = get("event", eventId.toString(), "");
 
@@ -202,7 +200,7 @@ class LineageTest {
         Long rootNode = createTraceNode(runTrace, null, "scheduled-job-run", job[1].toString());
         Long joined = createTask(runTrace, null, null);
         createTraceNode(runTrace, rootNode, "task", joined.toString());
-        createUsage(null, null, runTrace, job[1], null, 1.50);
+        createUsage(null, null, runTrace, job[1], 1.50);
 
         LineageGraph up = get("task", joined.toString(), "?direction=upstream");
         assertEdge(up, "scheduled-job-run:" + job[1], "task:" + joined, "created");
@@ -241,31 +239,6 @@ class LineageTest {
         assertEdge(down, "task:" + agentTask, "task:" + child, "created");
         assertTrue(down.getEdges().stream().noneMatch(e -> e.getTo().equals("task:" + child)
                 && e.getFrom().equals("trace:" + traceId)));
-    }
-
-    // ── Report ──────────────────────────────────────────────────────
-
-    @Test
-    void reportTriggeredByWorkflowAgentWithJoinedTask() {
-        UUID eventId = createEvent();
-        UUID runTrace = createTrace("workflow", eventId);
-        Long runId = createRun(eventId, runTrace);
-        UUID reportTrace = createTrace("report-generation", null);
-        Long reportId = createReport(reportTrace, runTrace);
-        Long joined = createTask(reportTrace, null, null);
-        createUsage(null, null, reportTrace, null, reportId, 0.40);
-
-        LineageGraph graph = get("report", reportId.toString(), "");
-        LineageNode report = node(graph, "report:" + reportId);
-        assertEquals("root", report.getDirection());
-        assertEquals("/reports/" + reportId, report.getLinkPath());
-        assertEquals(0.40, report.getCostUsd(), 0.0001);
-        assertEdge(graph, "workflow-run:" + runId, "report:" + reportId, "triggered-by-agent");
-        assertEdge(graph, "event:" + eventId, "workflow-run:" + runId, "triggered");
-        assertEdge(graph, "report:" + reportId, "task:" + joined, "created");
-
-        LineageGraph trace = get("trace", reportTrace.toString(), "?direction=upstream");
-        assertEdge(trace, "report:" + reportId, "trace:" + reportTrace, "part-of");
     }
 
     // ── Truncation ──────────────────────────────────────────────────
@@ -365,8 +338,7 @@ class LineageTest {
     @Test
     void unknownRootReturns404WithErrorBody() {
         for (String path : List.of("task/999999999", "event/" + UUID.randomUUID(),
-                "trace/" + UUID.randomUUID(), "workflow-run/999999999", "scheduled-job-run/999999999",
-                "report/999999999")) {
+                "trace/" + UUID.randomUUID(), "workflow-run/999999999", "scheduled-job-run/999999999")) {
             given().when().get("/api/v1/lineage/" + path).then()
                     .statusCode(404)
                     .contentType(ContentType.JSON)
@@ -406,18 +378,14 @@ class LineageTest {
         UUID runTrace = createTrace("workflow", eventId);
         Long runId = createRun(eventId, runTrace);
         createTask(runTrace, null, runId);
-        UUID reportTrace = createTrace("report-generation", null);
-        Long reportId = createReport(reportTrace, runTrace);
-        createTask(reportTrace, null, null);
         Long[] job = createJobRun(runTrace);
 
         Statistics stats = statistics();
         stats.clear();
         LineageGraph graph = lineageService.getLineage("event", eventId.toString(), "both", 5, 200);
-        assertNotNull(findNode(graph, "report:" + reportId));
         assertNotNull(findNode(graph, "scheduled-job-run:" + job[1]));
         for (Class<?> type : List.of(StreamEventEntity.class, TaskEntity.class, WorkflowRunEntity.class,
-                ScheduledJobRunEntity.class, ReportEntity.class)) {
+                ScheduledJobRunEntity.class)) {
             assertEquals(0, stats.getEntityStatistics(type.getName()).getLoadCount(),
                     type.getSimpleName() + " rows must be loaded as label projections");
         }
@@ -483,7 +451,7 @@ class LineageTest {
         for (int i = 0; i < taskCount; i++) {
             Long task = createTask(traceId, eventId, null);
             createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_TASK, task, null);
-            createUsage(task, eventId, traceId, null, null, 0.01);
+            createUsage(task, eventId, traceId, null, 0.01);
         }
         Statistics stats = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
         assertTrue(stats.isStatisticsEnabled(), "Hibernate statistics must be enabled in tests");
@@ -660,8 +628,7 @@ class LineageTest {
         });
     }
 
-    private void createUsage(Long taskId, UUID eventId, UUID traceId, Long jobRunId, Long reportId,
-            double cost) {
+    private void createUsage(Long taskId, UUID eventId, UUID traceId, Long jobRunId, double cost) {
         QuarkusTransaction.requiringNew().run(() -> {
             AiUsageEntity usage = new AiUsageEntity();
             usage.invocationType = "test";
@@ -669,7 +636,6 @@ class LineageTest {
             usage.eventId = eventId;
             usage.traceId = traceId;
             usage.scheduledJobRunId = jobRunId;
-            usage.reportId = reportId;
             usage.costUsd = cost;
             usage.createdOn = Instant.now();
             usage.persist();
@@ -706,32 +672,6 @@ class LineageTest {
         QuarkusTransaction.requiringNew().run(() -> {
             ScheduledJobRunEntity run = ScheduledJobRunEntity.findById(runId);
             run.traceId = traceId;
-        });
-    }
-
-    private Long createReport(UUID traceId, UUID triggeredByTrace) {
-        return QuarkusTransaction.requiringNew().call(() -> {
-            ReportDefinitionEntity def = new ReportDefinitionEntity();
-            def.name = "lineage-report-" + UUID.randomUUID();
-            def.schedule = "daily";
-            def.promptTemplate = "Report";
-            def.enabled = false;
-            def.createdOn = Instant.now();
-            def.updatedOn = Instant.now();
-            def.persist();
-            track(ReportDefinitionEntity.class, def.id);
-            ReportEntity report = new ReportEntity();
-            report.definitionId = def.id;
-            report.status = "Completed";
-            report.title = "Lineage report";
-            report.trigger = "manual";
-            report.triggeredBy = "manual";
-            report.triggeredByTraceId = triggeredByTrace;
-            report.traceId = traceId;
-            report.createdOn = Instant.now();
-            report.persist();
-            track(ReportEntity.class, report.id);
-            return report.id;
         });
     }
 }

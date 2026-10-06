@@ -42,7 +42,7 @@ class CallerTraceLogContextTest {
     void callerTraceIdIsInMdcDuringRequestAndNotAfterwards() {
         long projectId = createProject();
         TraceContext caller = QuarkusTransaction.requiringNew().call(() ->
-                traceService.createTrace("event-pipeline", "caller trace", null, null, null,
+                traceService.createTrace("event-pipeline", "caller trace", null, null,
                         "event-ingested", "caller root", null, null));
 
         // Record the MDC trace ID seen by the service the resource calls during the request.

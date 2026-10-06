@@ -75,11 +75,6 @@ class CallerTraceTest {
     }
 
     @Test
-    void joinedTaskDoesNotCompleteReportTrace() {
-        assertOwnerTraceNotCompletedByJoinedTask("report-generation");
-    }
-
-    @Test
     void joinedTaskDoesNotCompleteScheduledJobTrace() {
         assertOwnerTraceNotCompletedByJoinedTask("scheduled-job-execution");
     }
@@ -87,7 +82,7 @@ class CallerTraceTest {
     private void assertOwnerTraceNotCompletedByJoinedTask(String traceType) {
         long projectId = createProject();
         TraceContext owner = QuarkusTransaction.requiringNew().call(() ->
-                traceService.createTrace(traceType, "owner trace", null, null, null,
+                traceService.createTrace(traceType, "owner trace", null, null,
                         "owner-root", "owner root", null, null));
 
         Map<String, Object> task = postTask(projectId,
@@ -169,7 +164,7 @@ class CallerTraceTest {
 
     private TraceContext createCallerTrace() {
         return QuarkusTransaction.requiringNew().call(() ->
-                traceService.createTrace("event-pipeline", "caller trace", null, null, null,
+                traceService.createTrace("event-pipeline", "caller trace", null, null,
                         "event-ingested", "caller root", null, null));
     }
 

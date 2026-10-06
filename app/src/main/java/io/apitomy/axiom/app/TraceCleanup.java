@@ -2,7 +2,6 @@ package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
-import io.apitomy.axiom.core.entities.ReportEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
@@ -104,10 +103,8 @@ public class TraceCleanup {
 
         TaskEntity.update("traceId = null where traceId in ?1", traceIds);
         ScheduledJobRunEntity.update("traceId = null where traceId in ?1", traceIds);
-        ReportEntity.update("traceId = null where traceId in ?1", traceIds);
         ScheduledJobRunEntity.update(
                 "triggeredByTraceId = null where triggeredByTraceId in ?1", traceIds);
-        ReportEntity.update("triggeredByTraceId = null where triggeredByTraceId in ?1", traceIds);
         ActivityLogEntity.update("traceId = null where traceId in ?1", traceIds);
         AiUsageEntity.update("traceId = null where traceId in ?1", traceIds);
         WorkflowRunEntity.update("traceId = null where traceId in ?1", traceIds);

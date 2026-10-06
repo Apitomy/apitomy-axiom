@@ -8,8 +8,6 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import io.apitomy.axiom.api.beans.ConfigurationField;
 import io.apitomy.axiom.api.beans.ConfigurationSnapshot;
-import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
-import io.apitomy.axiom.core.entities.ReportDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobVersionEntity;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -35,12 +33,11 @@ import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 /**
- * Records the execution configuration of scheduled jobs and report definitions (#426).
+ * Records the execution configuration of scheduled jobs (#426).
  *
  * <p>Each distinct configuration of a definition is stored once as a version row, keyed by the
- * SHA-256 hash of its canonical JSON snapshot. Runs and reports point at the version that was
- * current when they were created, so later edits to the definition do not change what an older
- * run or report shows.</p>
+ * SHA-256 hash of its canonical JSON snapshot. Runs point at the version that was current when
+ * they were created, so later edits to the definition do not change what an older run shows.</p>
  *
  * <p>Only fields that affect execution are snapshotted. Names, descriptions, schedules, enabled
  * flags and labels are excluded. Environment values are redacted unless they are exactly a
@@ -102,41 +99,9 @@ public class ConfigSnapshotService {
                 });
     }
 
-    /**
-     * Returns the version row for the report definition's current configuration, creating it
-     * if needed. Same transaction and concurrency behaviour as {@link #recordJobVersion}.
-     *
-     * @param definition the report definition
-     * @return the version ID
-     */
-    public Long recordReportVersion(ReportDefinitionEntity definition) {
-        String json = canonicalJson(reportConfig(definition));
-        String hash = sha256(json);
-        Long definitionId = definition.id;
-        return findOrInsert(
-                () -> findReportVersion(definitionId, hash),
-                () -> {
-                    ReportDefinitionVersionEntity version = new ReportDefinitionVersionEntity();
-                    version.definitionId = definitionId;
-                    version.configHash = hash;
-                    version.configSnapshot = json;
-                    version.createdOn = Instant.now();
-                    version.persistAndFlush();
-                    return version.id;
-                });
-    }
-
     private static Long findJobVersion(Long jobId, String hash) {
         ScheduledJobVersionEntity v = ScheduledJobVersionEntity
                 .<ScheduledJobVersionEntity>find("jobId = ?1 and configHash = ?2", jobId, hash)
-                .firstResult();
-        return v == null ? null : v.id;
-    }
-
-    private static Long findReportVersion(Long definitionId, String hash) {
-        ReportDefinitionVersionEntity v = ReportDefinitionVersionEntity
-                .<ReportDefinitionVersionEntity>find("definitionId = ?1 and configHash = ?2",
-                        definitionId, hash)
                 .firstResult();
         return v == null ? null : v.id;
     }
@@ -189,19 +154,6 @@ public class ConfigSnapshotService {
     }
 
     /**
-     * Builds the API view of a report definition version compared with the current definition.
-     *
-     * @param version the stored version
-     * @param current the definition's current state, or null if it no longer exists
-     * @return the snapshot bean
-     */
-    public ConfigurationSnapshot toBean(ReportDefinitionVersionEntity version,
-                                        ReportDefinitionEntity current) {
-        return compare(version.id, version.configHash, version.configSnapshot, version.createdOn,
-                current == null ? null : reportConfig(current));
-    }
-
-    /**
      * Execution-relevant configuration of a scheduled job, with secrets redacted.
      *
      * @param job the job
@@ -219,27 +171,6 @@ public class ConfigSnapshotService {
         put(config, "maxBudgetUsd", formatBudget(job.maxBudgetUsd));
         put(config, "timeoutSeconds", job.timeoutSeconds);
         put(config, "environment", redactEnvironment(job.environment));
-        return config;
-    }
-
-    /**
-     * Execution-relevant configuration of a report definition, with secrets redacted.
-     *
-     * @param definition the report definition
-     * @return a sorted map of field name to value (unset fields omitted)
-     */
-    public Map<String, Object> reportConfig(ReportDefinitionEntity definition) {
-        Map<String, Object> config = new TreeMap<>();
-        put(config, "promptTemplate", definition.promptTemplate);
-        put(config, "titleTemplate", definition.titleTemplate);
-        put(config, "timeWindow", definition.timeWindow);
-        put(config, "engine", definition.engine);
-        put(config, "model", definition.model);
-        put(config, "allowedTools", definition.allowedTools);
-        put(config, "maxSteps", definition.maxSteps);
-        put(config, "maxBudgetUsd", formatBudget(definition.maxBudgetUsd));
-        put(config, "timeoutSeconds", definition.timeoutSeconds);
-        put(config, "environment", redactEnvironment(definition.environment));
         return config;
     }
 

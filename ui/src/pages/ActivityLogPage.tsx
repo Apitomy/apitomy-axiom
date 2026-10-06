@@ -35,9 +35,6 @@ const ENTRY_TYPE_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "
     "project-reopened": "orange",
     "pipeline-error": "red",
     "task-awaiting-input": "orange",
-    "report-generating": "blue",
-    "report-completed": "green",
-    "report-failed": "red",
 };
 
 const FILTER_TYPES: ChipFilterType[] = [
@@ -47,10 +44,9 @@ const FILTER_TYPES: ChipFilterType[] = [
     { value: "summary", label: "Summary", testId: "activity-filter-summary" },
     { value: "projectId", label: "Project ID", testId: "activity-filter-projectId" },
     { value: "scheduledJobRunId", label: "Job Run ID", testId: "activity-filter-scheduledJobRunId" },
-    { value: "reportId", label: "Report ID", testId: "activity-filter-reportId" },
 ];
 
-const DEEP_LINK_FILTERS = ["traceId", "scheduledJobRunId", "reportId"];
+const DEEP_LINK_FILTERS = ["traceId", "scheduledJobRunId"];
 
 export function ActivityLogPage() {
     const navigate = useNavigate();
@@ -62,7 +58,7 @@ export function ActivityLogPage() {
 
     const [searchParams] = useSearchParams();
     const [filters, setFilters] = useState<ChipFilterCriteria[]>(() => {
-        // Deep links: ?traceId=, ?scheduledJobRunId= and ?reportId= preset the matching filter
+        // Deep links: ?traceId= and ?scheduledJobRunId= preset the matching filter
         return DEEP_LINK_FILTERS.flatMap((key) => {
             const value = searchParams.get(key);
             return value
@@ -87,7 +83,6 @@ export function ActivityLogPage() {
     const filterEventId = filters.find((f) => f.filterBy.value === "eventId")?.filterValue;
     const filterTraceId = filters.find((f) => f.filterBy.value === "traceId")?.filterValue;
     const filterRunId = filters.find((f) => f.filterBy.value === "scheduledJobRunId")?.filterValue;
-    const filterReportId = filters.find((f) => f.filterBy.value === "reportId")?.filterValue;
     const filterSummary = filters.find((f) => f.filterBy.value === "summary")?.filterValue;
     const filterProjectId = filters.find((f) => f.filterBy.value === "projectId")?.filterValue;
     const filterEntryTypes = filters
@@ -106,8 +101,7 @@ export function ActivityLogPage() {
             filterEntryTypes || undefined,
             undefined,
             filterTraceId?.trim() || undefined,
-            filterRunId?.trim() || undefined,
-            filterReportId?.trim() || undefined
+            filterRunId?.trim() || undefined
         )
             .then((results) => {
                 setEntries(results.items);
@@ -116,7 +110,7 @@ export function ActivityLogPage() {
             .catch(console.error)
             .finally(() => setLoading(false));
     }, [page, perPage, filterEventId, filterSummary, filterProjectId, filterEntryTypes, filterTraceId,
-        filterRunId, filterReportId]);
+        filterRunId]);
 
     useEffect(() => {
         loadData();
@@ -129,8 +123,7 @@ export function ActivityLogPage() {
         if (criteria.filterBy.value === "eventId" || criteria.filterBy.value === "traceId"
                 || criteria.filterBy.value === "summary"
                 || criteria.filterBy.value === "projectId"
-                || criteria.filterBy.value === "scheduledJobRunId"
-                || criteria.filterBy.value === "reportId") {
+                || criteria.filterBy.value === "scheduledJobRunId") {
             const withoutSame = updated.filter((f) => f.filterBy.value !== criteria.filterBy.value);
             withoutSame.push(criteria);
             setFilters(withoutSame);
@@ -246,8 +239,7 @@ export function ActivityLogPage() {
                                         ) : "—"}
                                     </Td>
                                     <Td>
-                                        <RunSourceLink reportId={entry.reportId}
-                                            scheduledJobRunId={entry.scheduledJobRunId} />
+                                        <RunSourceLink scheduledJobRunId={entry.scheduledJobRunId} />
                                     </Td>
                                     <Td>
                                         <Label

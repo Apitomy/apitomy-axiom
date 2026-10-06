@@ -14,7 +14,7 @@ import TimesIcon from "@patternfly/react-icons/dist/esm/icons/times-icon";
 /**
  * Editable key-value table for environment variables.
  *
- * Used by ActionTypeDetailPage and ReportDefinitionDetailPage.
+ * Used by ActionTypeDetailPage.
  */
 export function EnvironmentTab({ envVars, onChange }: {
     envVars: Record<string, string>;

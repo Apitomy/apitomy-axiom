@@ -21,4 +21,11 @@ describe("AppSidebar", () => {
         await screen.findByText("Inbox");
         expect(screen.queryByText(/manager/i)).not.toBeInTheDocument();
     });
+
+    it("has no Reports or Report Definitions navigation items", async () => {
+        renderWithRouter(<AppSidebar />, "/action-types");
+        await screen.findByText("Inbox");
+        expect(screen.queryByText("Reports")).not.toBeInTheDocument();
+        expect(screen.queryByText("Report Definitions")).not.toBeInTheDocument();
+    });
 });

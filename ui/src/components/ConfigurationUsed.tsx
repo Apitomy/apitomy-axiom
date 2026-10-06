@@ -12,7 +12,7 @@ import { type ConfigurationSnapshot } from "../config/api";
 interface ConfigurationUsedProps {
     /** Loads the snapshot; resolves to null only when none was recorded, rejects on other errors. */
     load: () => Promise<ConfigurationSnapshot | null>;
-    /** What the configuration belongs to, used in messages ("run" or "report"). */
+    /** What the configuration belongs to, used in messages (e.g. "run"). */
     noun: string;
 }
 
@@ -26,7 +26,7 @@ const preStyle: React.CSSProperties = {
 };
 
 /**
- * Shows the configuration a scheduled job run or report used (#426), with a
+ * Shows the configuration a scheduled job run used (#426), with a
  * "changed since" indicator and a field-by-field comparison with the current definition.
  */
 export function ConfigurationUsed({ load, noun }: ConfigurationUsedProps) {

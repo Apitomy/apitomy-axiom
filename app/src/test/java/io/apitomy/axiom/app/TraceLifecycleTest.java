@@ -2,8 +2,6 @@ package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.agents.spi.AgentResult;
 import io.apitomy.axiom.core.entities.ProjectEntity;
-import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
-import io.apitomy.axiom.core.entities.ReportEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
@@ -41,9 +39,6 @@ class TraceLifecycleTest {
 
     @Inject
     ScheduledJobExecutionService scheduledJobExecutionService;
-
-    @Inject
-    ReportExecutionService reportExecutionService;
 
     @Inject
     TaskExecutionService taskExecutionService;
@@ -92,41 +87,6 @@ class TraceLifecycleTest {
         assertTraceFinal(run.traceId, "failed");
     }
 
-    // ── Reports ──────────────────────────────────────────────────────
-
-    @Test
-    void reportWithNoAgentFailsReportAndClosesLinkedTrace() {
-        Long[] ids = QuarkusTransaction.requiringNew().call(() -> {
-            ReportDefinitionEntity def = new ReportDefinitionEntity();
-            def.name = "trace-report-" + UUID.randomUUID();
-            def.schedule = "daily";
-            def.promptTemplate = "Report on {{repositories}}";
-            def.enabled = true;
-            def.createdOn = Instant.now();
-            def.updatedOn = Instant.now();
-            def.persist();
-            ReportEntity report = new ReportEntity();
-            report.definitionId = def.id;
-            report.status = "Pending";
-            report.createdOn = Instant.now();
-            report.persist();
-            return new Long[] { def.id, report.id };
-        });
-
-        ReportDefinitionEntity def = QuarkusTransaction.requiringNew().call(() ->
-                ReportDefinitionEntity.<ReportDefinitionEntity>findById(ids[0]));
-        reportExecutionService.generateReport(def, ids[1]);
-
-        ReportEntity report = QuarkusTransaction.requiringNew().call(() ->
-                ReportEntity.<ReportEntity>findById(ids[1]));
-        assertEquals("Failed", report.status, "Report must not stay Pending");
-        assertNotNull(report.traceId, "Report must stay linked to its trace");
-        assertTraceFinal(report.traceId, "failed");
-        long traces = QuarkusTransaction.requiringNew().call(() ->
-                TraceEntity.count("reportId", ids[1]));
-        assertEquals(1, traces, "Exactly one trace per report attempt");
-    }
-
     // ── Tasks ────────────────────────────────────────────────────────
 
     @Test
@@ -146,7 +106,7 @@ class TraceLifecycleTest {
     void completedTaskClosesTraceOnlyAfterLastTaskNode() {
         // Two tasks sharing one trace (as a single routing can produce)
         Long projectId = createProject();
-        TraceContext ctx = traceService.createTrace("create-workflow", "multi-task", null, null, null,
+        TraceContext ctx = traceService.createTrace("create-workflow", "multi-task", null, null,
                 "create-workflow", "root", null, null);
         Long first = createTask(projectId, ctx);
         Long second = createTask(projectId, ctx);
@@ -177,7 +137,7 @@ class TraceLifecycleTest {
 
     private Long createTaskWithTrace() {
         Long projectId = createProject();
-        TraceContext ctx = traceService.createTrace("create-workflow", "task trace", null, null, null,
+        TraceContext ctx = traceService.createTrace("create-workflow", "task trace", null, null,
                 "create-workflow", "root", null, null);
         return createTask(projectId, ctx);
     }

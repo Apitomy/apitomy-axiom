@@ -36,7 +36,6 @@ import {
     type ToolDefinition,
     type Toolset,
     type McpServer,
-    type ReportDefinition,
     type ScheduledJob,
     type SessionTemplate,
     type Connection,
@@ -48,7 +47,6 @@ import {
     fetchTools,
     fetchToolsets,
     fetchMcpServers,
-    fetchReportDefinitions,
     fetchScheduledJobs,
     fetchAssistantTemplates,
     fetchConnections,
@@ -63,7 +61,6 @@ export function ConfigurationPacksPage() {
     const [tools, setTools] = useState<ToolDefinition[]>([]);
     const [toolsets, setToolsets] = useState<Toolset[]>([]);
     const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
-    const [reportDefs, setReportDefs] = useState<ReportDefinition[]>([]);
     const [scheduledJobs, setScheduledJobs] = useState<ScheduledJob[]>([]);
     const [sessionTemplates, setSessionTemplates] = useState<SessionTemplate[]>([]);
     const [connections, setConnections] = useState<Connection[]>([]);
@@ -79,7 +76,6 @@ export function ConfigurationPacksPage() {
     const [selectedTools, setSelectedTools] = useState<Set<number>>(new Set());
     const [selectedToolsets, setSelectedToolsets] = useState<Set<number>>(new Set());
     const [selectedMcpServers, setSelectedMcpServers] = useState<Set<number>>(new Set());
-    const [selectedReportDefs, setSelectedReportDefs] = useState<Set<number>>(new Set());
     const [selectedScheduledJobs, setSelectedScheduledJobs] = useState<Set<number>>(new Set());
     const [selectedSessionTemplates, setSelectedSessionTemplates] = useState<Set<string>>(new Set());
     const [selectedConnections, setSelectedConnections] = useState<Set<string>>(new Set());
@@ -104,19 +100,17 @@ export function ConfigurationPacksPage() {
             fetchTools(1, 1000),
             fetchToolsets(),
             fetchMcpServers(),
-            fetchReportDefinitions(),
             fetchScheduledJobs(),
             fetchAssistantTemplates(),
             fetchConnections(1, 100),
             fetchSubscriptions(1, 100),
             fetchWorkflowDefinitions(1, 1000),
         ])
-            .then(([at, t, ts, mcp, rd, sj, st, conn, sub, wd]) => {
+            .then(([at, t, ts, mcp, sj, st, conn, sub, wd]) => {
                 setActionTypes(at.items);
                 setTools(t.items);
                 setToolsets(ts);
                 setMcpServers(mcp);
-                setReportDefs(rd);
                 setScheduledJobs(sj);
                 setSessionTemplates(st.filter((s: SessionTemplate) => !s.builtIn));
                 setConnections(conn.items);
@@ -130,7 +124,7 @@ export function ConfigurationPacksPage() {
     useEffect(() => { loadData(); }, [loadData]);
 
     const totalSelected = selectedActionTypes.size + selectedTools.size
-        + selectedToolsets.size + selectedMcpServers.size + selectedReportDefs.size
+        + selectedToolsets.size + selectedMcpServers.size
         + selectedScheduledJobs.size + selectedSessionTemplates.size
         + selectedConnections.size + selectedSubscriptions.size
         + selectedWorkflowDefs.size;
@@ -145,7 +139,6 @@ export function ConfigurationPacksPage() {
                 toolIds: [...selectedTools],
                 toolsetIds: [...selectedToolsets],
                 mcpServerIds: [...selectedMcpServers],
-                reportDefinitionIds: [...selectedReportDefs],
                 scheduledJobIds: [...selectedScheduledJobs],
                 sessionTemplateIds: [...selectedSessionTemplates],
                 connectionIds: [...selectedConnections],
@@ -181,7 +174,6 @@ export function ConfigurationPacksPage() {
                     if (json.tools?.length) preview["Tools"] = json.tools.length;
                     if (json.toolsets?.length) preview["Toolsets"] = json.toolsets.length;
                     if (json.mcpServers?.length) preview["MCP Servers"] = json.mcpServers.length;
-                    if (json.reportDefinitions?.length) preview["Report Definitions"] = json.reportDefinitions.length;
                     if (json.scheduledJobs?.length) preview["Scheduled Jobs"] = json.scheduledJobs.length;
                     if (json.sessionTemplates?.length) preview["Session Templates"] = json.sessionTemplates.length;
                     if (json.connections?.length) preview["Connections"] = json.connections.length;
@@ -310,7 +302,7 @@ export function ConfigurationPacksPage() {
             </Title>
             <p className="axiom-text-subtle" style={{ marginTop: "8px", marginBottom: "16px" }}>
                 Configuration packs bundle related items — action types, tools, toolsets,
-                MCP servers, report definitions, scheduled jobs, session templates,
+                MCP servers, scheduled jobs, session templates,
                 connections, subscriptions, and workflow definitions — into a portable JSON
                 file. Create a pack to share your setup with others, or import one to quickly
                 add pre-configured functionality to your Axiom instance.
@@ -325,7 +317,7 @@ export function ConfigurationPacksPage() {
                                 <FormGroup label="Pack Name" isRequired fieldId="packName">
                                     <TextInput id="packName" isRequired value={packName}
                                         onChange={(_e, v) => setPackName(v)}
-                                        placeholder="e.g. Weekly Status Report" />
+                                        placeholder="e.g. GitHub Triage" />
                                 </FormGroup>
                                 <FormGroup label="Description" fieldId="packDescription">
                                     <TextArea id="packDescription" value={packDescription}
@@ -406,31 +398,6 @@ export function ConfigurationPacksPage() {
                                 <CheckboxSection title="MCP Servers" items={mcpServers}
                                     selected={selectedMcpServers}
                                     onToggle={(id) => setSelectedMcpServers(toggleSet(selectedMcpServers, id))} />
-                                <SelectedItemsSection title="Report Definitions" allItems={reportDefs}
-                                    selected={selectedReportDefs}
-                                    onAdd={(ids) => {
-                                        setSelectedReportDefs(new Set([...selectedReportDefs, ...ids]));
-                                        autoSelectReferencedItems(
-                                            ids.map((id) => reportDefs.find((r) => r.id === id)?.allowedTools));
-                                    }}
-                                    onRemove={(id) => { const next = new Set(selectedReportDefs); next.delete(id); setSelectedReportDefs(next); }}
-                                    renderItem={(item) => {
-                                        const rd = reportDefs.find((x) => x.id === item.id);
-                                        return (
-                                            <Flex alignItems={{ default: "alignItemsCenter" }} style={{ gap: "8px" }}>
-                                                <FlexItem><span style={{ fontWeight: 600 }}>{item.name}</span></FlexItem>
-                                                <FlexItem>
-                                                    <Label isCompact>{rd?.schedule || "—"}</Label>
-                                                </FlexItem>
-                                                <FlexItem>
-                                                    <Label isCompact color="grey">{rd?.timeWindow || "—"}</Label>
-                                                </FlexItem>
-                                            </Flex>
-                                        );
-                                    }}
-                                    renderModal={(props) => (
-                                        <ReportDefinitionPickerModal {...props} allReportDefs={reportDefs} />
-                                    )} />
                                 <SelectedItemsSection title="Scheduled Jobs" allItems={scheduledJobs}
                                     selected={selectedScheduledJobs}
                                     onAdd={(ids) => {
@@ -575,7 +542,6 @@ export function ConfigurationPacksPage() {
                                         {importResult.toolsets ? <li>{importResult.toolsets} toolset(s)</li> : null}
                                         {importResult.mcpServers ? <li>{importResult.mcpServers} MCP server(s)</li> : null}
                                         {importResult.actionTypes ? <li>{importResult.actionTypes} action type(s)</li> : null}
-                                        {importResult.reportDefinitions ? <li>{importResult.reportDefinitions} report definition(s)</li> : null}
                                         {importResult.scheduledJobs ? <li>{importResult.scheduledJobs} scheduled job(s)</li> : null}
                                         {importResult.sessionTemplates ? <li>{importResult.sessionTemplates} session template(s)</li> : null}
                                         {importResult.connections ? <li>{importResult.connections} connection(s)</li> : null}
@@ -1126,80 +1092,6 @@ function ConnectionCheckboxSection({ connections, selected, onToggle }: {
                 ))}
             </div>
         </div>
-    );
-}
-
-function ReportDefinitionPickerModal({ isOpen, onClose, availableItems, modalSelected, toggleItem, selectAll, onConfirm, allReportDefs }: {
-    isOpen: boolean;
-    onClose: () => void;
-    availableItems: Array<{ id: number; name: string }>;
-    modalSelected: Set<number>;
-    toggleItem: (id: number) => void;
-    selectAll: (ids: number[]) => void;
-    onConfirm: () => void;
-    allReportDefs: ReportDefinition[];
-}) {
-    const [filter, setFilter] = useState("");
-
-    const available = allReportDefs.filter((rd) => availableItems.some((i) => i.id === rd.id));
-    const filtered = filter
-        ? available.filter((rd) =>
-            rd.name.toLowerCase().includes(filter.toLowerCase())
-            || (rd.description && rd.description.toLowerCase().includes(filter.toLowerCase())))
-        : available;
-
-    const allFilteredSelected = filtered.length > 0 && filtered.every((rd) => modalSelected.has(rd.id));
-    const handleSelectAll = () => {
-        if (allFilteredSelected) {
-            selectAll([...modalSelected].filter((id) => !filtered.some((rd) => rd.id === id)));
-        } else {
-            selectAll([...new Set([...modalSelected, ...filtered.map((rd) => rd.id)])]);
-        }
-    };
-
-    return (
-        <Modal isOpen={isOpen} onClose={onClose} variant="large" aria-label="Add Report Definitions">
-            <ModalHeader title="Add Report Definitions" />
-            <ModalBody>
-                <TextInput placeholder="Filter report definitions..." value={filter}
-                    onChange={(_e, v) => setFilter(v)} aria-label="Filter report definitions"
-                    style={{ marginBottom: "16px" }} />
-                {filtered.length === 0 ? (
-                    <p className="axiom-text-subtle" style={{ fontStyle: "italic" }}>
-                        {available.length === 0 ? "All report definitions are already selected." : "No report definitions match the filter."}
-                    </p>
-                ) : (
-                    <Table aria-label="Report Definitions" variant="compact">
-                        <Thead>
-                            <Tr>
-                                <Th style={{ width: "40px" }}><Checkbox id="select-all-reportdefs" isChecked={allFilteredSelected}
-                                    onChange={handleSelectAll} aria-label="Select all" /></Th>
-                                <Th>Name</Th>
-                                <Th>Schedule</Th>
-                                <Th>Time Window</Th>
-                            </Tr>
-                        </Thead>
-                        <Tbody>
-                            {filtered.map((rd) => (
-                                <Tr key={rd.id}>
-                                    <Td><Checkbox id={`rd-pick-${rd.id}`} isChecked={modalSelected.has(rd.id)}
-                                        onChange={() => toggleItem(rd.id)} aria-label={`Select ${rd.name}`} /></Td>
-                                    <Td>{rd.name}</Td>
-                                    <Td><Label isCompact>{rd.schedule}</Label></Td>
-                                    <Td><Label isCompact color="grey">{rd.timeWindow}</Label></Td>
-                                </Tr>
-                            ))}
-                        </Tbody>
-                    </Table>
-                )}
-            </ModalBody>
-            <ModalFooter>
-                <Button variant="primary" onClick={onConfirm} isDisabled={modalSelected.size === 0}>
-                    Add {modalSelected.size > 0 ? `(${modalSelected.size})` : ""}
-                </Button>
-                <Button variant="link" onClick={onClose}>Cancel</Button>
-            </ModalFooter>
-        </Modal>
     );
 }
 

@@ -101,12 +101,6 @@ function renderDetail(nodeType: string, entityType: string | undefined,
     if (nodeType === "decision-processed" && entityType === "activity-log") {
         return <DecisionDetail detail={detail} />;
     }
-    if (nodeType === "report-ai-invoked" && entityType === "report") {
-        return <ReportExecutionLogDetail detail={detail} />;
-    }
-    if (nodeType === "report-triggered" && entityType === "report") {
-        return <ReportLinkDetail detail={detail} />;
-    }
     if ((nodeType === "event-ignored" || nodeType === "escalation") && entityType === "activity-log") {
         return <ReasoningDetail detail={detail} />;
     }
@@ -159,37 +153,6 @@ function ReasoningDetail({ detail }: { detail: Record<string, unknown> }) {
                 isReadOnly
                 height="200px"
                 options={{ wordWrap: "on" }}
-            />
-        </>
-    );
-}
-
-function ReportLinkDetail({ detail }: { detail: Record<string, unknown> }) {
-    const reportId = detail.id;
-    const title = detail.title ? String(detail.title) : `Report #${reportId}`;
-    return (
-        <DescriptionList isHorizontal isCompact>
-            <DescriptionListGroup>
-                <DescriptionListTerm>Report</DescriptionListTerm>
-                <DescriptionListDescription>
-                    <Link to={`/reports/${reportId}`}>{title}</Link>
-                </DescriptionListDescription>
-            </DescriptionListGroup>
-        </DescriptionList>
-    );
-}
-
-function ReportExecutionLogDetail({ detail }: { detail: Record<string, unknown> }) {
-    const effectiveTheme = useEffectiveTheme();
-    return (
-        <>
-            <h4 style={{ marginBottom: "4px", fontWeight: "bold" }}>Execution Log</h4>
-            <CodeEditor
-                code={String(detail.executionLog || "")}
-                language={Language.markdown}
-                isDarkTheme={effectiveTheme === "dark"}
-                isReadOnly
-                height="400px"
             />
         </>
     );

@@ -324,7 +324,7 @@ public class ScheduledJobExecutionService {
         try {
             return traceService.createTrace("scheduled-job-execution",
                     "Executing scheduled job: " + job.name,
-                    null, null, null,
+                    null, null,
                     "scheduled-job-triggered", "Scheduled job triggered: " + job.name,
                     "scheduled-job-run", runId);
         } catch (Exception e) {

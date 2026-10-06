@@ -39,7 +39,6 @@ import {
     fetchAgent,
     fetchAgentTasks,
     fetchActionTypes,
-    fetchReportDefinitions,
     fetchScheduledJobs,
     updateAgent,
 } from "../config/api";
@@ -276,22 +275,18 @@ function CapabilitiesTab({ capabilities, onAdd, onRemove }: {
     onRemove: (c: string) => void;
 }) {
     const [actionTypes, setActionTypes] = useState<ActionType[]>([]);
-    const [reportDefinitions, setReportDefinitions] = useState<Array<{name: string; slug?: string}>>([]);
     const [scheduledJobs, setScheduledJobs] = useState<Array<{name: string; slug?: string}>>([]);
 
     useEffect(() => {
         fetchActionTypes(1, 1000).then((r) => setActionTypes(r.items)).catch(console.error);
-        fetchReportDefinitions().then((defs) => setReportDefinitions(defs)).catch(console.error);
         fetchScheduledJobs().then((jobs) => setScheduledJobs(jobs)).catch(console.error);
     }, []);
 
     const suggestions: TypeaheadAddSuggestion[] = [
         { value: "*" },
         { value: "action:*" },
-        { value: "report:*" },
         { value: "job:*" },
         ...actionTypes.map((at) => ({ value: `action:${at.name}` })),
-        ...reportDefinitions.map((rd) => ({ value: `report:${rd.slug || rd.name}` })),
         ...scheduledJobs.map((sj) => ({ value: `job:${sj.slug || sj.name}` })),
     ];
 
@@ -306,7 +301,7 @@ function CapabilitiesTab({ capabilities, onAdd, onRemove }: {
             <HelperText>
                 <HelperTextItem>
                     Define which workloads this agent can perform. Use glob patterns to match
-                    multiple items: <code>action:*</code>, <code>report:daily-*</code>,{" "}
+                    multiple items: <code>action:*</code>, <code>action:auto-*</code>,{" "}
                     <code>job:github-*</code>, or <code>*</code> for all workloads.
                 </HelperTextItem>
             </HelperText>

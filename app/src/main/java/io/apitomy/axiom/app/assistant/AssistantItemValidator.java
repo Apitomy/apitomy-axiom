@@ -3,7 +3,6 @@ package io.apitomy.axiom.app.assistant;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.beans.NewActionType;
-import io.apitomy.axiom.api.beans.NewReportDefinition;
 import io.apitomy.axiom.api.beans.NewScheduledJob;
 import io.apitomy.axiom.api.beans.NewToolDefinition;
 import io.apitomy.axiom.core.entities.SecretEntity;
@@ -12,7 +11,6 @@ import io.apitomy.axiom.core.entities.ToolsetEntity;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ManagedContext;
 import io.apitomy.axiom.core.services.ActionTypeValidator;
-import io.apitomy.axiom.core.services.ReportDefinitionValidator;
 import io.apitomy.axiom.core.services.ScheduledJobValidator;
 import io.apitomy.axiom.core.services.ToolValidator;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -29,7 +27,7 @@ import java.util.Set;
 /**
  * Validates generated JSON configuration files by delegating to the real
  * validators ({@link ToolValidator}, {@link ActionTypeValidator},
- * {@link ReportDefinitionValidator}).
+ * {@link ScheduledJobValidator}).
  *
  * <p>This replaces the earlier thin JSON-level validation with the full
  * semantic validation including placeholder consistency, cross-references,
@@ -47,7 +45,7 @@ public class AssistantItemValidator {
      * Validates a JSON file and returns errors and warnings as separate lists.
      *
      * @param file the path to the JSON file
-     * @param itemType the item type: "tools", "action-types", or "report-definitions"
+     * @param itemType the item type: e.g. "tools", "action-types", "workflows"
      * @return the validation result with separate error and warning lists
      */
     public ValidationResult validate(Path file, String itemType) {
@@ -83,7 +81,6 @@ public class AssistantItemValidator {
         switch (itemType) {
             case "tools" -> validateTool(content, errors, warnings);
             case "action-types" -> validateActionType(content, workingDirectory, errors, warnings);
-            case "report-definitions" -> validateReportDefinition(content, workingDirectory, errors, warnings);
             case "toolsets" -> validateToolset(content, errors, warnings);
             case "session-templates" -> validateSessionTemplate(content, errors, warnings);
             case "connections" -> validateConnection(content, errors, warnings);
@@ -109,7 +106,6 @@ public class AssistantItemValidator {
         return switch (first) {
             case "tools" -> "tools";
             case "action-types" -> "action-types";
-            case "report-definitions" -> "report-definitions";
             case "toolsets" -> "toolsets";
             case "session-templates" -> "session-templates";
             case "connections" -> "connections";
@@ -146,22 +142,6 @@ public class AssistantItemValidator {
         ActionTypeValidator.KnownNames known = buildActionTypeKnownNames(workingDirectory);
         ActionTypeValidator.ValidationResult result =
                 ActionTypeValidator.validate(actionType, known);
-        collectMessages(result.errors(), result.warnings(), errors, warnings);
-    }
-
-    private void validateReportDefinition(String json, Path workingDirectory,
-                                           List<String> errors, List<String> warnings) {
-        NewReportDefinition reportDef;
-        try {
-            reportDef = objectMapper.readValue(json, NewReportDefinition.class);
-        } catch (Exception e) {
-            errors.add("Invalid JSON: " + e.getMessage());
-            return;
-        }
-
-        ReportDefinitionValidator.KnownNames known = buildReportDefKnownNames(workingDirectory);
-        ReportDefinitionValidator.ValidationResult result =
-                ReportDefinitionValidator.validate(reportDef, known);
         collectMessages(result.errors(), result.warnings(), errors, warnings);
     }
 
@@ -398,13 +378,11 @@ public class AssistantItemValidator {
     }
 
     private String formatMessage(Record msg) {
-        // All three validator message records have field() and message() methods
+        // The validator message records have field() and message() methods
         // but they're different record types. Use reflection-free approach via toString.
         if (msg instanceof ToolValidator.ValidationMessage m) {
             return m.field() + ": " + m.message();
         } else if (msg instanceof ActionTypeValidator.ValidationMessage m) {
-            return m.field() + ": " + m.message();
-        } else if (msg instanceof ReportDefinitionValidator.ValidationMessage m) {
             return m.field() + ": " + m.message();
         } else if (msg instanceof ScheduledJobValidator.ValidationMessage m) {
             return m.field() + ": " + m.message();
@@ -429,31 +407,6 @@ public class AssistantItemValidator {
                     .map(t -> t.name)
                     .collect(java.util.stream.Collectors.toSet());
             return new ActionTypeValidator.KnownNames(secrets, tools, toolsets, null);
-        } catch (Exception e) {
-            LOG.warnf("Failed to build KnownNames for validation: %s", e.getMessage());
-            return null;
-        } finally {
-            if (activated) requestContext.deactivate();
-        }
-    }
-
-    private ReportDefinitionValidator.KnownNames buildReportDefKnownNames(Path workingDirectory) {
-        ManagedContext requestContext = Arc.container() != null
-                ? Arc.container().requestContext() : null;
-        boolean activated = requestContext != null && !requestContext.isActive();
-        if (activated) requestContext.activate();
-        try {
-            Set<String> secrets = SecretEntity.<SecretEntity>listAll().stream()
-                    .map(s -> s.name)
-                    .collect(java.util.stream.Collectors.toSet());
-            Set<String> tools = new java.util.HashSet<>(
-                    ToolDefinitionEntity.<ToolDefinitionEntity>listAll().stream()
-                            .map(t -> t.name).toList());
-            tools.addAll(getSessionToolNames(workingDirectory));
-            Set<String> toolsets = ToolsetEntity.<ToolsetEntity>listAll().stream()
-                    .map(t -> t.name)
-                    .collect(java.util.stream.Collectors.toSet());
-            return new ReportDefinitionValidator.KnownNames(secrets, tools, toolsets, null);
         } catch (Exception e) {
             LOG.warnf("Failed to build KnownNames for validation: %s", e.getMessage());
             return null;

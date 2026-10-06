@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Unified work description for any AI agent invocation — task, report,
+ * Unified work description for any AI agent invocation — task,
  * scheduled job, or utility call. Replaces both {@code ActorContext} and
  * {@code AiEngineConfig}.
  */

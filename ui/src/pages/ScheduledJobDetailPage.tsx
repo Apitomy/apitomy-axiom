@@ -287,7 +287,7 @@ export function ScheduledJobDetailPage() {
                                     this job. Use patterns like <code>Bash(gh issue *)</code> for
                                     specific shell commands and <code>mcp__axiom-tools__*</code> for
                                     MCP tools. Reference a toolset using <code>@ToolsetName</code>{" "}
-                                    (e.g. <code>@Report Tools</code>) to include all tools from that
+                                    (e.g. <code>@Read-Only Tools</code>) to include all tools from that
                                     collection.
                                 </>}
                                 emptyContent={

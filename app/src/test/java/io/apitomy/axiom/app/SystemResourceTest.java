@@ -13,6 +13,14 @@ import static org.hamcrest.Matchers.*;
 @QuarkusTest
 class SystemResourceTest {
 
+    /**
+     * Reports were removed; the endpoint must no longer exist.
+     */
+    @Test
+    void reportsEndpointIsGone() {
+        given().when().get("/api/v1/reports").then().statusCode(404);
+    }
+
     @Test
     void testGetSystemHealth() {
         given()
@@ -131,11 +139,11 @@ class SystemResourceTest {
                 .statusCode(200)
                 .body("traceRetentionDays", notNullValue())
                 .body("scheduledJobRunRetentionDays", equalTo(0))
-                .body("reportRetentionDays", equalTo(0))
                 .body("workflowRunRetentionDays", equalTo(0))
                 .body("activityLogRetentionDays", equalTo(0))
                 .body("aiUsageRetentionDays", equalTo(0))
-                .body("$", not(hasKey("eventSourceLogRetentionDays")));
+                .body("$", not(hasKey("eventSourceLogRetentionDays")))
+                .body("$", not(hasKey("reportRetentionDays")));
     }
 
     @Test
@@ -148,7 +156,7 @@ class SystemResourceTest {
                     .body("""
                             {"closedProjectRetentionDays":90,"traceRetentionDays":30,
                              "eventRetentionDays":90,"scheduledJobRunRetentionDays":11,
-                             "reportRetentionDays":12,"workflowRunRetentionDays":13,
+                             "workflowRunRetentionDays":13,
                              "activityLogRetentionDays":14,"aiUsageRetentionDays":15}
                             """)
                 .when()
@@ -176,7 +184,7 @@ class SystemResourceTest {
                     .get("/api/v1/system/retention")
                 .then()
                     .statusCode(200)
-                    .body("reportRetentionDays", equalTo(12))
+                    .body("workflowRunRetentionDays", equalTo(13))
                     .body("activityLogRetentionDays", equalTo(14));
         } finally {
             given().contentType(ContentType.JSON).body(original)
@@ -191,7 +199,7 @@ class SystemResourceTest {
                 .contentType(ContentType.JSON)
                 .body("""
                         {"closedProjectRetentionDays":90,"traceRetentionDays":30,
-                         "eventRetentionDays":90,"reportRetentionDays":-1}
+                         "eventRetentionDays":90,"workflowRunRetentionDays":-1}
                         """)
             .when()
                 .put("/api/v1/system/retention")
@@ -233,7 +241,7 @@ class SystemResourceTest {
 
             given()
                     .contentType(ContentType.JSON)
-                    .body("{\"reportRetentionDays\":3}")
+                    .body("{\"workflowRunRetentionDays\":3}")
                 .when()
                     .put("/api/v1/system/retention")
                 .then()
@@ -241,7 +249,7 @@ class SystemResourceTest {
                     .body("closedProjectRetentionDays", equalTo(77))
                     .body("traceRetentionDays", equalTo(22))
                     .body("eventRetentionDays", equalTo(66))
-                    .body("reportRetentionDays", equalTo(3));
+                    .body("workflowRunRetentionDays", equalTo(3));
         } finally {
             given().contentType(ContentType.JSON).body(original)
                     .when().put("/api/v1/system/retention")

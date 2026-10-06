@@ -4,8 +4,8 @@ import io.apitomy.axiom.api.ActionResource;
 import io.apitomy.axiom.api.beans.ActionType;
 import io.apitomy.axiom.api.beans.ActionTypeSearchResults;
 import io.apitomy.axiom.api.beans.NewActionType;
-import io.apitomy.axiom.api.beans.ReportAiEditRequest;
-import io.apitomy.axiom.api.beans.ReportAiEditResponse;
+import io.apitomy.axiom.api.beans.AiEditPromptRequest;
+import io.apitomy.axiom.api.beans.AiEditPromptResponse;
 import io.apitomy.axiom.api.beans.ScriptAiEditRequest;
 import io.apitomy.axiom.api.beans.ScriptAiEditResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -309,7 +309,7 @@ public class ActionResourceImpl implements ActionResource {
      * {@inheritDoc}
      */
     @Override
-    public ReportAiEditResponse aiEditActionPrompt(ReportAiEditRequest data) {
+    public AiEditPromptResponse aiEditActionPrompt(AiEditPromptRequest data) {
         return actionTypeAiService.editActionPrompt(data);
     }
 

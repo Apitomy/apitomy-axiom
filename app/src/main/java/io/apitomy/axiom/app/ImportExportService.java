@@ -10,7 +10,6 @@ import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.EventSourceConnectionEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.McpServerEntity;
-import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
 import io.apitomy.axiom.core.entities.ScheduledJobEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.SessionTemplateEntity;
@@ -31,7 +30,7 @@ import java.util.List;
 /**
  * Service for exporting and importing configuration packs.
  * Packs bundle related configuration items (action types, tools, toolsets,
- * MCP servers, report definitions) into a portable JSON format.
+ * MCP servers, and more) into a portable JSON format.
  */
 @ApplicationScoped
 public class ImportExportService {
@@ -90,14 +89,6 @@ public class ImportExportService {
             for (Number id : request.getActionTypeIds()) {
                 ActionTypeEntity entity = ActionTypeEntity.findById(id.longValue());
                 if (entity != null) arr.add(serializeActionType(entity));
-            }
-        }
-
-        if (request.getReportDefinitionIds() != null && !request.getReportDefinitionIds().isEmpty()) {
-            ArrayNode arr = pack.putArray("reportDefinitions");
-            for (Number id : request.getReportDefinitionIds()) {
-                ReportDefinitionEntity entity = ReportDefinitionEntity.findById(id.longValue());
-                if (entity != null) arr.add(serializeReportDefinition(entity));
             }
         }
 
@@ -160,7 +151,6 @@ public class ImportExportService {
         checkConflicts(pack, "toolsets", "name", "toolset", conflicts);
         checkConflicts(pack, "mcpServers", "name", "mcpServer", conflicts);
         checkConflicts(pack, "actionTypes", "name", "actionType", conflicts);
-        checkConflicts(pack, "reportDefinitions", "name", "reportDefinition", conflicts);
         checkConflicts(pack, "sessionTemplates", "templateId", "sessionTemplate", conflicts);
         checkConflicts(pack, "scheduledJobs", "name", "scheduledJob", conflicts);
         checkConflicts(pack, "connections", "id", "connection", conflicts);
@@ -184,7 +174,6 @@ public class ImportExportService {
         int toolsets = importToolsets(pack.path("toolsets"));
         int mcpServers = importMcpServers(pack.path("mcpServers"));
         int actionTypes = importActionTypes(pack.path("actionTypes"));
-        int reportDefinitions = importReportDefinitions(pack.path("reportDefinitions"));
         int sessionTemplates = importSessionTemplates(pack.path("sessionTemplates"));
         int scheduledJobs = importScheduledJobs(pack.path("scheduledJobs"));
         int connections = importConnections(pack.path("connections"));
@@ -193,10 +182,10 @@ public class ImportExportService {
 
         String packName = pack.path("metadata").path("name").asText("unnamed");
         LOG.infof("Imported configuration pack '%s': %d tools, %d toolsets, %d MCP servers, "
-                        + "%d action types, %d report definitions, %d session templates, "
+                        + "%d action types, %d session templates, "
                         + "%d scheduled jobs, %d connections, %d subscriptions, "
                         + "%d workflow definitions",
-                packName, tools, toolsets, mcpServers, actionTypes, reportDefinitions,
+                packName, tools, toolsets, mcpServers, actionTypes,
                 sessionTemplates, scheduledJobs, connections, subscriptions,
                 workflowDefinitions);
 
@@ -205,7 +194,6 @@ public class ImportExportService {
         result.setToolsets(toolsets);
         result.setMcpServers(mcpServers);
         result.setActionTypes(actionTypes);
-        result.setReportDefinitions(reportDefinitions);
         result.setSessionTemplates(sessionTemplates);
         result.setScheduledJobs(scheduledJobs);
         result.setConnections(connections);
@@ -220,7 +208,6 @@ public class ImportExportService {
     public record UpsertResult(
             int toolsCreated, int toolsUpdated,
             int actionTypesCreated, int actionTypesUpdated,
-            int reportDefinitionsCreated, int reportDefinitionsUpdated,
             int toolsetsCreated, int toolsetsUpdated,
             int sessionTemplatesCreated, int sessionTemplatesUpdated,
             int scheduledJobsCreated, int scheduledJobsUpdated,
@@ -241,7 +228,6 @@ public class ImportExportService {
     public UpsertResult importOrUpdatePack(JsonNode pack) {
         int[] tools = upsertTools(pack.path("tools"));
         int[] actionTypes = upsertActionTypes(pack.path("actionTypes"));
-        int[] reportDefinitions = upsertReportDefinitions(pack.path("reportDefinitions"));
         int[] toolsets = upsertToolsets(pack.path("toolsets"));
         int[] sessionTemplates = upsertSessionTemplates(pack.path("sessionTemplates"));
         int[] scheduledJobs = upsertScheduledJobs(pack.path("scheduledJobs"));
@@ -252,7 +238,6 @@ public class ImportExportService {
         String packName = pack.path("metadata").path("name").asText("unnamed");
         LOG.infof("Upserted configuration pack '%s': %d tools created, %d updated; "
                         + "%d action types created, %d updated; "
-                        + "%d report definitions created, %d updated; "
                         + "%d toolsets created, %d updated; "
                         + "%d session templates created, %d updated; "
                         + "%d scheduled jobs created, %d updated; "
@@ -262,7 +247,6 @@ public class ImportExportService {
                 packName,
                 tools[0], tools[1],
                 actionTypes[0], actionTypes[1],
-                reportDefinitions[0], reportDefinitions[1],
                 toolsets[0], toolsets[1],
                 sessionTemplates[0], sessionTemplates[1],
                 scheduledJobs[0], scheduledJobs[1],
@@ -273,7 +257,6 @@ public class ImportExportService {
         return new UpsertResult(
                 tools[0], tools[1],
                 actionTypes[0], actionTypes[1],
-                reportDefinitions[0], reportDefinitions[1],
                 toolsets[0], toolsets[1],
                 sessionTemplates[0], sessionTemplates[1],
                 scheduledJobs[0], scheduledJobs[1],
@@ -363,7 +346,6 @@ public class ImportExportService {
                 case "toolset" -> ToolsetEntity.count("name", name) > 0;
                 case "mcpServer" -> McpServerEntity.count("name", name) > 0;
                 case "actionType" -> ActionTypeEntity.count("name", name) > 0;
-                case "reportDefinition" -> ReportDefinitionEntity.count("name", name) > 0;
                 case "sessionTemplate" -> SessionTemplateEntity.count("templateId", name) > 0;
                 case "scheduledJob" -> ScheduledJobEntity.count("name", name) > 0;
                 case "connection" -> EventSourceConnectionEntity.findById(name) != null;
@@ -460,35 +442,6 @@ public class ImportExportService {
                     entity.labels.add(l.asText());
                 }
             }
-            entity.persist();
-            count++;
-        }
-        return count;
-    }
-
-    private int importReportDefinitions(JsonNode items) {
-        if (!items.isArray()) return 0;
-        int count = 0;
-        for (JsonNode item : items) {
-            ReportDefinitionEntity entity = new ReportDefinitionEntity();
-            entity.name = item.path("name").asText();
-            entity.description = textOrNull(item, "description");
-            entity.schedule = item.path("schedule").asText("none");
-            entity.scheduleTime = textOrNull(item, "scheduleTime");
-            entity.scheduleDayOfWeek = textOrNull(item, "scheduleDayOfWeek");
-            entity.timeWindow = item.path("timeWindow").asText("last-7d");
-            entity.promptTemplate = item.path("promptTemplate").asText("");
-            entity.allowedTools = csvOrNull(item, "allowedTools");
-            entity.environment = jsonOrNull(item, "environment");
-            entity.engine = textOrNull(item, "engine");
-            entity.model = textOrNull(item, "model");
-            if (item.has("maxSteps")) entity.maxSteps = item.path("maxSteps").asInt();
-            if (item.has("maxBudgetUsd")) entity.maxBudgetUsd = item.path("maxBudgetUsd").asDouble();
-            entity.timeoutSeconds = item.has("timeoutSeconds")
-                    ? item.path("timeoutSeconds").asInt() : null;
-            entity.enabled = false;
-            entity.createdOn = Instant.now();
-            entity.updatedOn = Instant.now();
             entity.persist();
             count++;
         }
@@ -606,41 +559,6 @@ public class ImportExportService {
                     entity.labels.add(l.asText());
                 }
             }
-            entity.persist();
-            if (isNew) created++;
-            else updated++;
-        }
-        return new int[]{created, updated};
-    }
-
-    private int[] upsertReportDefinitions(JsonNode items) {
-        if (!items.isArray()) return new int[]{0, 0};
-        int created = 0, updated = 0;
-        for (JsonNode item : items) {
-            String name = item.path("name").asText();
-            ReportDefinitionEntity entity = ReportDefinitionEntity.find("name", name).firstResult();
-            boolean isNew = (entity == null);
-            if (isNew) {
-                entity = new ReportDefinitionEntity();
-                entity.name = name;
-                entity.enabled = false;
-                entity.createdOn = Instant.now();
-            }
-            entity.description = textOrNull(item, "description");
-            entity.schedule = item.path("schedule").asText("none");
-            entity.scheduleTime = textOrNull(item, "scheduleTime");
-            entity.scheduleDayOfWeek = textOrNull(item, "scheduleDayOfWeek");
-            entity.timeWindow = item.path("timeWindow").asText("last-7d");
-            entity.promptTemplate = item.path("promptTemplate").asText("");
-            entity.allowedTools = csvOrNull(item, "allowedTools");
-            entity.environment = jsonOrNull(item, "environment");
-            entity.engine = textOrNull(item, "engine");
-            entity.model = textOrNull(item, "model");
-            if (item.has("maxSteps")) entity.maxSteps = item.path("maxSteps").asInt();
-            if (item.has("maxBudgetUsd")) entity.maxBudgetUsd = item.path("maxBudgetUsd").asDouble();
-            entity.timeoutSeconds = item.has("timeoutSeconds")
-                    ? item.path("timeoutSeconds").asInt() : null;
-            entity.updatedOn = Instant.now();
             entity.persist();
             if (isNew) created++;
             else updated++;
@@ -794,25 +712,6 @@ public class ImportExportService {
         n.put("type", f.type);
         n.put("required", f.required);
         putIfNotNull(n, "description", f.description);
-    }
-
-    private ObjectNode serializeReportDefinition(ReportDefinitionEntity e) {
-        ObjectNode n = objectMapper.createObjectNode();
-        n.put("name", e.name);
-        putIfNotNull(n, "description", e.description);
-        n.put("schedule", e.schedule);
-        putIfNotNull(n, "scheduleTime", e.scheduleTime);
-        putIfNotNull(n, "scheduleDayOfWeek", e.scheduleDayOfWeek);
-        n.put("timeWindow", e.timeWindow);
-        putIfNotNull(n, "promptTemplate", e.promptTemplate);
-        putIfNotNull(n, "allowedTools", e.allowedTools);
-        putJsonIfPossible(n, "environment", e.environment);
-        putIfNotNull(n, "engine", e.engine);
-        putIfNotNull(n, "model", e.model);
-        if (e.maxSteps != null) n.put("maxSteps", e.maxSteps);
-        if (e.maxBudgetUsd != null) n.put("maxBudgetUsd", e.maxBudgetUsd);
-        if (e.timeoutSeconds != null) n.put("timeoutSeconds", e.timeoutSeconds);
-        return n;
     }
 
     private ObjectNode serializeSessionTemplate(SessionTemplateEntity e) {

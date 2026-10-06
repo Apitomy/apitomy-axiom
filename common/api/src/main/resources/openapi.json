@@ -1109,451 +1109,6 @@
         }
       ]
     },
-    "/reports/definitions": {
-      "get": {
-        "tags": [
-          "Reports"
-        ],
-        "summary": "List all report definitions",
-        "operationId": "listReportDefinitions",
-        "responses": {
-          "200": {
-            "description": "List of report definitions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ReportDefinition"
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Reports"
-        ],
-        "summary": "Create a report definition",
-        "operationId": "createReportDefinition",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewReportDefinition"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Report definition created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReportDefinition"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Report definition has validation errors"
-          }
-        }
-      }
-    },
-    "/reports/definitions/{definitionId}": {
-      "get": {
-        "tags": [
-          "Reports"
-        ],
-        "summary": "Get a report definition",
-        "operationId": "getReportDefinition",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReportDefinition"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "Reports"
-        ],
-        "summary": "Update a report definition",
-        "operationId": "updateReportDefinition",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewReportDefinition"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReportDefinition"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "422": {
-            "description": "Report definition has validation errors"
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Reports"
-        ],
-        "summary": "Delete a report definition",
-        "operationId": "deleteReportDefinition",
-        "responses": {
-          "204": {
-            "description": "Deleted"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "name": "definitionId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "format": "int64",
-            "type": "integer"
-          }
-        }
-      ]
-    },
-    "/reports/definitions/{definitionId}/run": {
-      "post": {
-        "tags": [
-          "Reports"
-        ],
-        "summary": "Manually trigger a report generation",
-        "operationId": "runReportDefinition",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Report"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "name": "definitionId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "format": "int64",
-            "type": "integer"
-          }
-        }
-      ]
-    },
-    "/reports/ai-edit-prompt": {
-      "post": {
-        "tags": [
-          "Reports"
-        ],
-        "summary": "AI-assisted report prompt editing",
-        "description": "Invokes Claude Code to generate or update a report definition's prompt template and allowed tools.",
-        "operationId": "aiEditReportPrompt",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReportAiEditRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReportAiEditResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/reports": {
-      "get": {
-        "tags": [
-          "Reports"
-        ],
-        "summary": "List generated reports (paginated)",
-        "operationId": "listReports",
-        "parameters": [
-          {
-            "name": "page",
-            "in": "query",
-            "schema": {
-              "default": 1,
-              "type": "integer"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "default": 20,
-              "type": "integer"
-            }
-          },
-          {
-            "name": "filterDefinitionId",
-            "in": "query",
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "filterStatus",
-            "in": "query",
-            "description": "Comma-separated statuses",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "filterTitle",
-            "in": "query",
-            "description": "Substring match on title",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "filterLabels",
-            "in": "query",
-            "description": "Filter by labels (comma-separated, AND logic)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReportSearchResults"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/reports/{reportId}": {
-      "get": {
-        "tags": [
-          "Reports"
-        ],
-        "summary": "Get a generated report",
-        "operationId": "getReport",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Report"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Reports"
-        ],
-        "summary": "Delete a report",
-        "operationId": "deleteReport",
-        "responses": {
-          "204": {
-            "description": "Report deleted"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "name": "reportId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "format": "int64",
-            "type": "integer"
-          }
-        }
-      ]
-    },
-    "/reports/{reportId}/labels": {
-      "put": {
-        "tags": [
-          "Reports"
-        ],
-        "summary": "Update report labels",
-        "description": "Replace the labels on a generated report.",
-        "operationId": "updateReportLabels",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Report"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "name": "reportId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "format": "int64",
-            "type": "integer"
-          }
-        }
-      ]
-    },
-    "/reports/{reportId}/log": {
-      "get": {
-        "tags": [
-          "Reports"
-        ],
-        "summary": "Get the execution log for a report",
-        "operationId": "getReportExecutionLog",
-        "responses": {
-          "200": {
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Report not found or no log available"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "name": "reportId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "format": "int64",
-            "type": "integer"
-          }
-        }
-      ]
-    },
-    "/reports/{reportId}/config": {
-      "get": {
-        "tags": [
-          "Reports"
-        ],
-        "summary": "Get the configuration a report was generated with",
-        "description": "Returns the execution configuration that was snapshotted when the item was created, compared field by field with the definition's current configuration. Secret values are never included: environment values other than ${secret:NAME} references are redacted.",
-        "operationId": "getReportConfig",
-        "responses": {
-          "200": {
-            "description": "The configuration used",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConfigurationSnapshot"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "The run or report does not exist, or no configuration was recorded for it (created before configuration tracking). The Error message starts with \"No configuration was recorded\" in the latter case.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "parameters": [
-        {
-          "name": "reportId",
-          "in": "path",
-          "description": "Report ID",
-          "required": true,
-          "schema": {
-            "format": "int64",
-            "type": "integer"
-          }
-        }
-      ]
-    },
     "/usage/ai": {
       "get": {
         "tags": [
@@ -1660,16 +1215,6 @@
             "name": "filterScheduledJobRunId",
             "in": "query",
             "description": "Filter by scheduled job run ID (numeric; malformed values return 400)",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "pattern": "^[0-9]+$"
-            }
-          },
-          {
-            "name": "filterReportId",
-            "in": "query",
-            "description": "Filter by report ID (numeric; malformed values return 400)",
             "required": false,
             "schema": {
               "type": "string",
@@ -1908,16 +1453,6 @@
             "name": "filterScheduledJobRunId",
             "in": "query",
             "description": "Filter by scheduled job run ID (numeric; malformed values return 400)",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "pattern": "^[0-9]+$"
-            }
-          },
-          {
-            "name": "filterReportId",
-            "in": "query",
-            "description": "Filter by report ID (numeric; malformed values return 400)",
             "required": false,
             "schema": {
               "type": "string",
@@ -2379,7 +1914,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReportAiEditRequest"
+                "$ref": "#/components/schemas/AiEditPromptRequest"
               }
             }
           },
@@ -2390,7 +1925,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReportAiEditResponse"
+                  "$ref": "#/components/schemas/AiEditPromptResponse"
                 }
               }
             }
@@ -3272,7 +2807,7 @@
         {
           "name": "itemType",
           "in": "path",
-          "description": "Item type (tools, action-types, report-definitions, toolsets, session-templates, event-sources, scheduled-jobs)",
+          "description": "Item type (tools, action-types, toolsets, session-templates, event-sources, scheduled-jobs)",
           "required": true,
           "schema": {
             "type": "string"
@@ -3333,36 +2868,6 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/NewToolDefinition"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Validation result with errors and warnings",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ToolValidationResult"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/reports/definitions/validate": {
-      "post": {
-        "tags": [
-          "Reports"
-        ],
-        "summary": "Validate a report definition without saving it",
-        "operationId": "validateReportDefinition",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewReportDefinition"
               }
             }
           }
@@ -3469,15 +2974,6 @@
             "name": "filterProjectId",
             "in": "query",
             "description": "Filter by project ID",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "filterReportId",
-            "in": "query",
-            "description": "Filter by report ID",
             "required": false,
             "schema": {
               "type": "integer"
@@ -3693,41 +3189,6 @@
           "name": "projectId",
           "in": "path",
           "description": "Project ID",
-          "required": true,
-          "schema": {
-            "type": "integer"
-          }
-        }
-      ]
-    },
-    "/reports/{reportId}/traces": {
-      "get": {
-        "tags": [
-          "traces"
-        ],
-        "summary": "List traces for a report",
-        "operationId": "listReportTraces",
-        "responses": {
-          "200": {
-            "description": "Traces for report",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Trace"
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "parameters": [
-        {
-          "name": "reportId",
-          "in": "path",
-          "description": "Report ID",
           "required": true,
           "schema": {
             "type": "integer"
@@ -4646,7 +4107,7 @@
             }
           },
           "404": {
-            "description": "The run or report does not exist, or no configuration was recorded for it (created before configuration tracking). The Error message starts with \"No configuration was recorded\" in the latter case.",
+            "description": "The run does not exist, or no configuration was recorded for it (created before configuration tracking). The Error message starts with \"No configuration was recorded\" in the latter case.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5858,7 +5319,7 @@
           "Lineage"
         ],
         "summary": "Get the lineage graph of an entity",
-        "description": "Returns the upstream (origin) and downstream (results) graph of work linked to an entity: stream events, traces, workflow runs, tasks, scheduled job runs and reports. Each node carries a status, a UI link and its direct AI cost. Edges always point from the upstream node to the downstream node. The walk is bounded by `depth` (hops in each direction) and `maxNodes`; when either limit cuts the graph short, `truncated` is true. References to rows removed by data retention are returned as nodes with `available` false.",
+        "description": "Returns the upstream (origin) and downstream (results) graph of work linked to an entity: stream events, traces, workflow runs, tasks and scheduled job runs. Each node carries a status, a UI link and its direct AI cost. Edges always point from the upstream node to the downstream node. The walk is bounded by `depth` (hops in each direction) and `maxNodes`; when either limit cuts the graph short, `truncated` is true. References to rows removed by data retention are returned as nodes with `available` false.",
         "operationId": "getLineage",
         "parameters": [
           {
@@ -5868,7 +5329,11 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["upstream", "downstream", "both"],
+              "enum": [
+                "upstream",
+                "downstream",
+                "both"
+              ],
               "default": "both"
             }
           },
@@ -5936,11 +5401,17 @@
         {
           "name": "entityType",
           "in": "path",
-          "description": "Type of the root entity: `event`, `trace`, `workflow-run`, `task`, `scheduled-job-run` or `report`",
+          "description": "Type of the root entity: `event`, `trace`, `workflow-run`, `task` or `scheduled-job-run`",
           "required": true,
           "schema": {
             "type": "string",
-            "enum": ["event", "trace", "workflow-run", "task", "scheduled-job-run", "report"]
+            "enum": [
+              "event",
+              "trace",
+              "workflow-run",
+              "task",
+              "scheduled-job-run"
+            ]
           }
         },
         {
@@ -6052,7 +5523,7 @@
             "type": "string"
           },
           "type": {
-            "description": "Entity type: `event`, `trace`, `workflow-run`, `task`, `scheduled-job-run`, `report` or `outcome` (a routing outcome item such as an ignored or escalated decision)",
+            "description": "Entity type: `event`, `trace`, `workflow-run`, `task`, `scheduled-job-run` or `outcome` (a routing outcome item such as an ignored or escalated decision)",
             "type": "string"
           },
           "id": {
@@ -6806,12 +6277,6 @@
             "minimum": 0,
             "type": "integer"
           },
-          "reportRetentionDays": {
-            "format": "int32",
-            "description": "Number of days to retain finished reports before automatic deletion. 0 (the default) keeps them forever. Omitting the field on update leaves the current value unchanged.",
-            "minimum": 0,
-            "type": "integer"
-          },
           "workflowRunRetentionDays": {
             "format": "int32",
             "description": "Number of days to retain finished workflow runs (with their waits, event subscriptions and resume records) before automatic deletion. 0 (the default) keeps them forever. Omitting the field on update leaves the current value unchanged.",
@@ -6879,16 +6344,6 @@
             "format": "int64",
             "type": "integer",
             "description": "Scheduled job run that wrote this entry"
-          },
-          "reportId": {
-            "format": "int64",
-            "type": "integer",
-            "description": "Report that wrote this entry"
-          },
-          "reportDefinitionId": {
-            "format": "int64",
-            "type": "integer",
-            "description": "Definition of the report that wrote this entry"
           }
         }
       },
@@ -6899,281 +6354,6 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Project"
-            }
-          },
-          "totalCount": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "page": {
-            "type": "integer"
-          },
-          "limit": {
-            "type": "integer"
-          }
-        }
-      },
-      "ReportDefinition": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "name": {
-            "type": "string"
-          },
-          "slug": {
-            "description": "Stable identifier used for agent capability matching. Auto-generated from name if not set.",
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "schedule": {
-            "type": "string"
-          },
-          "scheduleTime": {
-            "type": "string"
-          },
-          "timeWindow": {
-            "type": "string"
-          },
-          "promptTemplate": {
-            "type": "string"
-          },
-          "allowedTools": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "environment": {
-            "description": "Custom environment variables. Values can reference secrets using ${secret:NAME} syntax.",
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "enabled": {
-            "type": "boolean"
-          },
-          "nextRunAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "lastRunAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "createdOn": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "updatedOn": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "scheduleDayOfWeek": {
-            "description": "Day of week for weekly schedules (e.g. monday, tuesday)",
-            "type": "string"
-          },
-          "engine": {
-            "description": "Optional AI engine override",
-            "type": "string"
-          },
-          "model": {
-            "description": "Optional AI model override",
-            "type": "string"
-          },
-          "maxSteps": {
-            "description": "Max agent steps",
-            "type": "integer"
-          },
-          "maxBudgetUsd": {
-            "format": "double",
-            "description": "Max budget in USD",
-            "type": "number"
-          },
-          "timeoutSeconds": {
-            "description": "Optional timeout in seconds for report generation. Overrides the global default when set.",
-            "type": "integer"
-          },
-          "initialLabels": {
-            "description": "Labels automatically applied to new reports generated from this definition",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "titleTemplate": {
-            "description": "Optional template for the report title. Supports placeholders: {{name}}, {{date}}, {{time}}, {{datetime}}, {{timeWindow}}, {{schedule}}. When set, the resolved template is used as the report title instead of extracting the first H1 heading from the generated markdown.",
-            "type": "string"
-          }
-        }
-      },
-      "NewReportDefinition": {
-        "required": [
-          "name",
-          "schedule",
-          "promptTemplate"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "slug": {
-            "description": "Stable identifier used for agent capability matching. Auto-generated from name if not set.",
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "schedule": {
-            "type": "string"
-          },
-          "scheduleTime": {
-            "type": "string"
-          },
-          "timeWindow": {
-            "type": "string"
-          },
-          "promptTemplate": {
-            "type": "string"
-          },
-          "allowedTools": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "environment": {
-            "description": "Custom environment variables. Values can reference secrets using ${secret:NAME} syntax.",
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "enabled": {
-            "type": "boolean"
-          },
-          "scheduleDayOfWeek": {
-            "description": "Day of week for weekly schedules (e.g. monday, tuesday)",
-            "type": "string"
-          },
-          "engine": {
-            "description": "Optional AI engine override",
-            "type": "string"
-          },
-          "model": {
-            "description": "Optional AI model override",
-            "type": "string"
-          },
-          "maxSteps": {
-            "description": "Max agent steps",
-            "type": "integer"
-          },
-          "maxBudgetUsd": {
-            "format": "double",
-            "description": "Max budget in USD",
-            "type": "number"
-          },
-          "timeoutSeconds": {
-            "description": "Optional timeout in seconds for report generation. Overrides the global default when set.",
-            "type": "integer"
-          },
-          "initialLabels": {
-            "description": "Labels automatically applied to new reports generated from this definition",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "titleTemplate": {
-            "description": "Optional template for the report title. Supports placeholders: {{name}}, {{date}}, {{time}}, {{datetime}}, {{timeWindow}}, {{schedule}}. When set, the resolved template is used as the report title instead of extracting the first H1 heading from the generated markdown.",
-            "type": "string"
-          }
-        }
-      },
-      "Report": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "definitionId": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "status": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "content": {
-            "type": "string"
-          },
-          "timeRangeStart": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "timeRangeEnd": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "costUsd": {
-            "format": "double",
-            "type": "number"
-          },
-          "createdOn": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "completedOn": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "durationMs": {
-            "format": "int64",
-            "description": "Report generation duration in milliseconds",
-            "type": "integer"
-          },
-          "labels": {
-            "description": "Free-form labels for categorization and filtering",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "traceId": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "trigger": {
-            "type": "string",
-            "description": "How the report was triggered: scheduled or manual (absent for older reports)"
-          },
-          "triggeredBy": {
-            "type": "string",
-            "description": "Who triggered it: scheduler or manual (Axiom has no authentication, so no user identity is recorded)"
-          },
-          "triggeredByTraceId": {
-            "format": "uuid",
-            "type": "string",
-            "description": "Trace of the caller (typically an agent) that triggered it manually, if known"
-          }
-        }
-      },
-      "ReportSearchResults": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Report"
             }
           },
           "totalCount": {
@@ -7329,11 +6509,6 @@
             "format": "int64",
             "type": "integer",
             "description": "Scheduled job run that made this invocation"
-          },
-          "reportId": {
-            "format": "int64",
-            "type": "integer",
-            "description": "Report that made this invocation"
           }
         }
       },
@@ -7712,57 +6887,6 @@
           }
         }
       },
-      "ReportAiEditRequest": {
-        "required": [
-          "message"
-        ],
-        "type": "object",
-        "properties": {
-          "message": {
-            "description": "The user's instruction for creating or modifying the report prompt",
-            "type": "string"
-          },
-          "currentPromptTemplate": {
-            "description": "The current prompt template, if any",
-            "type": "string"
-          },
-          "currentAllowedTools": {
-            "description": "The current allowed tools list",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "reportName": {
-            "description": "The report definition name for context",
-            "type": "string"
-          },
-          "reportDescription": {
-            "description": "The report definition description for context",
-            "type": "string"
-          }
-        }
-      },
-      "ReportAiEditResponse": {
-        "type": "object",
-        "properties": {
-          "promptTemplate": {
-            "description": "The generated or updated prompt template",
-            "type": "string"
-          },
-          "allowedTools": {
-            "description": "Recommended allowed tools for this report",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "explanation": {
-            "description": "AI's explanation of what was generated or changed",
-            "type": "string"
-          }
-        }
-      },
       "ScriptAiEditRequest": {
         "required": [
           "message"
@@ -7965,13 +7089,6 @@
               "type": "integer"
             }
           },
-          "reportDefinitionIds": {
-            "type": "array",
-            "items": {
-              "format": "int64",
-              "type": "integer"
-            }
-          },
           "sessionTemplateIds": {
             "description": "Template IDs of session templates to include",
             "type": "array",
@@ -8022,9 +7139,6 @@
             "type": "integer"
           },
           "mcpServers": {
-            "type": "integer"
-          },
-          "reportDefinitions": {
             "type": "integer"
           },
           "sessionTemplates": {
@@ -8222,7 +7336,7 @@
         "type": "object",
         "properties": {
           "type": {
-            "description": "Item type directory (tools, action-types, report-definitions, toolsets, session-templates, event-sources, scheduled-jobs)",
+            "description": "Item type directory (tools, action-types, toolsets, session-templates, event-sources, scheduled-jobs)",
             "type": "string"
           },
           "name": {
@@ -8253,10 +7367,6 @@
             "description": "Total number of action types applied (created + updated)",
             "type": "integer"
           },
-          "reportDefinitions": {
-            "description": "Total number of report definitions applied (created + updated)",
-            "type": "integer"
-          },
           "toolsCreated": {
             "description": "Number of new tools created",
             "type": "integer"
@@ -8271,14 +7381,6 @@
           },
           "actionTypesUpdated": {
             "description": "Number of existing action types updated",
-            "type": "integer"
-          },
-          "reportDefinitionsCreated": {
-            "description": "Number of new report definitions created",
-            "type": "integer"
-          },
-          "reportDefinitionsUpdated": {
-            "description": "Number of existing report definitions updated",
             "type": "integer"
           },
           "toolsets": {
@@ -8432,10 +7534,6 @@
             "format": "int64",
             "type": "integer"
           },
-          "reportId": {
-            "format": "int64",
-            "type": "integer"
-          },
           "startedOn": {
             "format": "date-time",
             "type": "string"
@@ -8582,7 +7680,7 @@
             "$ref": "#/components/schemas/TraceNode"
           },
           "detail": {
-            "description": "The referenced detail record; its shape depends on the node's entityType. Supported types: event, activity-log, ai-usage, tool-execution, task, report, workflow-run (adds definitionName and projectName; omits instanceState), workflow-wait and workflow-event-subscription (add status, runId, runStatus, definitionName and projectName; waits add waitType, subscriptions add matchedEventId), scheduled-job-run (adds jobName). Null when the entity type is unknown or the referenced record no longer exists.",
+            "description": "The referenced detail record; its shape depends on the node's entityType. Supported types: event, activity-log, ai-usage, tool-execution, task, workflow-run (adds definitionName and projectName; omits instanceState), workflow-wait and workflow-event-subscription (add status, runId, runStatus, definitionName and projectName; waits add waitType, subscriptions add matchedEventId), scheduled-job-run (adds jobName). Null when the entity type is unknown or the referenced record no longer exists.",
             "type": "object"
           }
         }
@@ -10534,12 +9632,17 @@
         }
       },
       "RoutingRule": {
-        "required": ["type"],
+        "required": [
+          "type"
+        ],
         "type": "object",
         "properties": {
           "type": {
             "type": "string",
-            "enum": ["workflow-dispatch", "create-workflow"],
+            "enum": [
+              "workflow-dispatch",
+              "create-workflow"
+            ],
             "description": "Destination type for matched events"
           },
           "workflowDefinitionId": {
@@ -10664,7 +9767,9 @@
         }
       },
       "SubscriptionPreviewRequest": {
-        "required": ["filterExpression"],
+        "required": [
+          "filterExpression"
+        ],
         "type": "object",
         "properties": {
           "filterExpression": {
@@ -10763,7 +9868,7 @@
         }
       },
       "ConfigurationSnapshot": {
-        "description": "The execution configuration a scheduled job run or report used, compared with the current definition.",
+        "description": "The execution configuration a scheduled job run used, compared with the current definition.",
         "type": "object",
         "required": [
           "versionId",
@@ -10791,7 +9896,7 @@
             "type": "string"
           },
           "changed": {
-            "description": "True when the definition's configuration has changed since this run or report",
+            "description": "True when the definition's configuration has changed since this run",
             "type": "boolean"
           },
           "fields": {
@@ -10816,7 +9921,7 @@
             "type": "string"
           },
           "value": {
-            "description": "Value used by the run or report (null when unset)",
+            "description": "Value used by the run (null when unset)",
             "type": "string"
           },
           "currentValue": {
@@ -10826,6 +9931,57 @@
           "changed": {
             "description": "True when the current value differs from the value used",
             "type": "boolean"
+          }
+        }
+      },
+      "AiEditPromptRequest": {
+        "required": [
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "message": {
+            "description": "The user's instruction for creating or modifying the prompt",
+            "type": "string"
+          },
+          "currentPromptTemplate": {
+            "description": "The current prompt template, if any",
+            "type": "string"
+          },
+          "currentAllowedTools": {
+            "description": "The current allowed tools list",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "description": "The name of the item being edited, for context",
+            "type": "string"
+          },
+          "description": {
+            "description": "The description of the item being edited, for context",
+            "type": "string"
+          }
+        }
+      },
+      "AiEditPromptResponse": {
+        "type": "object",
+        "properties": {
+          "promptTemplate": {
+            "description": "The generated or updated prompt template",
+            "type": "string"
+          },
+          "allowedTools": {
+            "description": "Recommended allowed tools",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "explanation": {
+            "description": "AI's explanation of what was generated or changed",
+            "type": "string"
           }
         }
       }
@@ -10992,7 +10148,7 @@
     },
     {
       "name": "Lineage",
-      "description": "Lineage (origin and results) of events, runs, tasks and reports"
+      "description": "Lineage (origin and results) of events, runs and tasks"
     },
     {
       "name": "SDK",

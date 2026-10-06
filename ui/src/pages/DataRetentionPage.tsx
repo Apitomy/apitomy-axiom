@@ -37,12 +37,6 @@ const HISTORY_FIELDS: {
         help: "Days to retain finished scheduled job runs.",
     },
     {
-        field: "reportRetentionDays",
-        id: "report-retention",
-        label: "Reports",
-        help: "Days to retain finished reports.",
-    },
-    {
         field: "workflowRunRetentionDays",
         id: "workflow-run-retention",
         label: "Workflow runs",

@@ -92,38 +92,12 @@ const HANDLERS = {
         const labels = (project.labels || []).filter(l => l !== args.label);
         return await axiomApi("PUT", `/projects/${args.projectId}`, { labels });
     },
-    axiom_add_report_label: async (args) => {
-        const report = JSON.parse(await axiomApi("GET", `/reports/${args.reportId}`));
-        const labels = report.labels || [];
-        if (!labels.includes(args.label)) {
-            labels.push(args.label);
-            return await axiomApi("PUT", `/reports/${args.reportId}/labels`, labels);
-        }
-        return JSON.stringify(report);
-    },
-    axiom_remove_report_label: async (args) => {
-        const report = JSON.parse(await axiomApi("GET", `/reports/${args.reportId}`));
-        const labels = (report.labels || []).filter(l => l !== args.label);
-        return await axiomApi("PUT", `/reports/${args.reportId}/labels`, labels);
-    },
     axiom_list_tools: async (args) => {
         const params = new URLSearchParams();
         params.set("limit", "100");
         if (args.filterName) params.set("filterName", args.filterName);
         if (args.filterLabels) params.set("filterLabels", args.filterLabels);
         return await axiomApi("GET", `/tools?${params}`);
-    },
-    axiom_list_report_definitions: async () => {
-        return await axiomApi("GET", "/reports/definitions");
-    },
-    axiom_list_reports: async (args) => {
-        const params = new URLSearchParams();
-        params.set("limit", "50");
-        if (args.filterDefinitionId) params.set("filterDefinitionId", String(args.filterDefinitionId));
-        if (args.filterStatus) params.set("filterStatus", args.filterStatus);
-        if (args.filterTitle) params.set("filterTitle", args.filterTitle);
-        if (args.filterLabels) params.set("filterLabels", args.filterLabels);
-        return await axiomApi("GET", `/reports?${params}`);
     },
     axiom_get_project_thread: async (args) => {
         return await axiomApi("GET", `/projects/${args.projectId}/thread`);

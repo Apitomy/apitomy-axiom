@@ -10,7 +10,7 @@ import { AddToolInput } from "./AddToolInput";
 /**
  * Editable list of tool patterns with add/remove and @-prefix toolset styling.
  *
- * Used by ActionTypeDetailPage, ReportDefinitionDetailPage, and ToolsetDetailPage.
+ * Used by ActionTypeDetailPage and ToolsetDetailPage.
  */
 export function ToolListEditor({ tools, onAdd, onRemove, onReplace, helpText, emptyContent }: {
     tools: string[];

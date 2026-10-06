@@ -45,8 +45,8 @@ export function ActionTypeAiModal({
             message,
             currentPromptTemplate: localPrompt || undefined,
             currentAllowedTools: localTools.length > 0 ? localTools : undefined,
-            reportName: actionTypeName,
-            reportDescription: actionTypeDescription,
+            name: actionTypeName,
+            description: actionTypeDescription,
         }).then((response) => {
             if (response.promptTemplate) {
                 setLocalPrompt(response.promptTemplate);

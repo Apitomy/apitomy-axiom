@@ -24,7 +24,6 @@ const TYPE_LABELS: Record<string, string> = {
     "workflow-run": "Workflow run",
     "task": "Task",
     "scheduled-job-run": "Job run",
-    "report": "Report",
     "outcome": "Outcome",
 };
 

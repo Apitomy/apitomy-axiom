@@ -88,9 +88,9 @@ class TraceResourceTest {
         UUID otherEventId = UUID.randomUUID();
 
         TraceContext matching = traceService.createTrace("create-workflow", "matching trace",
-                eventId, null, null, "create-workflow", "root", null, null);
+                eventId, null, "create-workflow", "root", null, null);
         traceService.createTrace("create-workflow", "other trace",
-                otherEventId, null, null, "create-workflow", "root", null, null);
+                otherEventId, null, "create-workflow", "root", null, null);
 
         given()
             .queryParam("filterEventId", eventId.toString())
@@ -124,7 +124,7 @@ class TraceResourceTest {
         eventId = createStreamEvent();
 
         TraceContext ctx = traceService.createTrace("create-workflow", "event trace",
-                eventId, null, null, "create-workflow", "root", null, null);
+                eventId, null, "create-workflow", "root", null, null);
         Long nodeId = traceService.addUuidEntityNode(ctx, "event-received", "completed",
                 "Event received", "event", eventId);
 
@@ -145,7 +145,7 @@ class TraceResourceTest {
     @Test
     void numericEntityTraceNodeDetailStillResolves() {
         TraceContext ctx = traceService.createTrace("test", "numeric trace",
-                null, null, null, "root", "root", null, null);
+                null, null, "root", "root", null, null);
         Long nodeId = traceService.addNode(ctx, "task", "in-progress",
                 "Task", "task", 987654321L);
 
@@ -164,7 +164,7 @@ class TraceResourceTest {
     void workflowRunTraceNodeDetailResolves() {
         createWorkflowRun();
         TraceContext ctx = traceService.createTrace("workflow", "Workflow: WF",
-                null, projectId, null, "workflow", "Workflow: WF", "workflow-run", runId);
+                null, projectId, "workflow", "Workflow: WF", "workflow-run", runId);
 
         given()
             .when()
@@ -267,7 +267,7 @@ class TraceResourceTest {
     @Test
     void malformedEventEntityIdReturnsNodeWithoutDetail() {
         TraceContext ctx = traceService.createTrace("test", "malformed trace",
-                null, null, null, "root", "root", null, null);
+                null, null, "root", "root", null, null);
         Long nodeId = traceService.addNode(ctx, "event-received", "completed",
                 "Event", "event", 42L);
 
@@ -329,7 +329,7 @@ class TraceResourceTest {
             return log.id;
         });
         TraceContext ctx = traceService.createTrace("create-workflow", "create-workflow trace",
-                null, null, null, "event-ingested", "root", null, null);
+                null, null, "event-ingested", "root", null, null);
         Long nodeId = traceService.addNode(ctx, "create-workflow", "in-progress",
                 "Evaluation", null, null);
         traceService.completeNode(nodeId, "completed", "activity-log", activityLogId);
@@ -370,7 +370,7 @@ class TraceResourceTest {
             return run.id;
         });
         TraceContext ctx = traceService.createTrace("scheduled-job-execution", "job",
-                null, null, null, "scheduled-job-triggered", "root",
+                null, null, "scheduled-job-triggered", "root",
                 "scheduled-job-run", jobRunId);
 
         given()
@@ -390,7 +390,7 @@ class TraceResourceTest {
     @Test
     void unknownOrDeletedEntityReturnsNodeWithoutDetail() {
         TraceContext ctx = traceService.createTrace("test", "missing trace",
-                null, null, null, "root", "root", null, null);
+                null, null, "root", "root", null, null);
         Long unknownNode = traceService.addNode(ctx, "task", "completed",
                 "Unknown", "no-such-type", 1L);
         Long deletedRun = traceService.addNode(ctx, "task", "completed",
@@ -447,7 +447,7 @@ class TraceResourceTest {
 
     private TraceContext workflowTrace() {
         TraceContext ctx = traceService.createTrace("workflow", "Workflow: WF",
-                null, projectId, null, "workflow", "Workflow: WF", "workflow-run", runId);
+                null, projectId, "workflow", "Workflow: WF", "workflow-run", runId);
         QuarkusTransaction.requiringNew().run(() -> {
             WorkflowRunEntity run = WorkflowRunEntity.findById(runId);
             run.traceId = ctx.traceId();
