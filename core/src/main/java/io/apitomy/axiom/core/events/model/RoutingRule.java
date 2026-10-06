@@ -7,11 +7,13 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  *
  * @param type                  the destination type
  * @param workflowDefinitionId  required for "create-workflow" type
+ * @param workflowDefinitionName alternative to the id for "create-workflow"; resolved to the id when saved
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record RoutingRule(
         String type,
-        Long workflowDefinitionId
+        Long workflowDefinitionId,
+        String workflowDefinitionName
 ) {
     /** Dispatch to waiting workflow receive-event nodes. */
     public static final String TYPE_WORKFLOW_DISPATCH = "workflow-dispatch";

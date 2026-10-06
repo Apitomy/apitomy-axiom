@@ -1,6 +1,7 @@
 package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.core.entities.StreamEventEntity;
+import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
@@ -282,5 +283,46 @@ class SubscriptionsResourceTest {
             .then()
                 .statusCode(200)
                 .extract().path("id");
+    }
+
+    /**
+     * A create-workflow rule may reference a workflow definition by name; the server stores the id.
+     */
+    @Test
+    void createWorkflowRuleResolvesDefinitionName() {
+        long defId = createWorkflowDefinition("route-by-name-wf");
+        given().contentType(ContentType.JSON).body("""
+            {"name": "by-name-sub", "routing": [{"type": "create-workflow",
+              "workflowDefinitionName": "route-by-name-wf"}]}
+            """)
+        .when().post(SUBSCRIPTIONS_PATH)
+        .then().statusCode(200)
+            .body("routing[0].workflowDefinitionId", equalTo((int) defId))
+            .body("routing[0].workflowDefinitionName", nullValue());
+    }
+
+    /**
+     * An unknown workflow definition name is rejected.
+     */
+    @Test
+    void createWorkflowRuleWithUnknownNameIsRejected() {
+        given().contentType(ContentType.JSON).body("""
+            {"name": "bad-name-sub", "routing": [{"type": "create-workflow",
+              "workflowDefinitionName": "does-not-exist"}]}
+            """)
+        .when().post(SUBSCRIPTIONS_PATH)
+        .then().statusCode(400);
+    }
+
+    private long createWorkflowDefinition(String name) {
+        return QuarkusTransaction.requiringNew().call(() -> {
+            WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
+            def.name = name;
+            def.content = "{}";
+            def.createdOn = Instant.now();
+            def.updatedOn = Instant.now();
+            def.persist();
+            return def.id;
+        });
     }
 }

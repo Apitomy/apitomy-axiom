@@ -175,4 +175,33 @@ class ConfigItemValidationServiceTest {
                 && p.path().equals("content.nodes[1].config.eventType")
                 && p.message().contains("issue.created")), problems.toString());
     }
+
+    @Test
+    void subscriptionMayReferenceWorkflowByName() throws Exception {
+        ValidationContext ctx = new ValidationContext(Set.of(), Set.of(), Set.of(), Set.of("triage"),
+                Set.of(), Set.of(), Set.of());
+        List<ConfigProblem> problems = service.validate(ConfigItemType.SUBSCRIPTION, json("""
+            {"name": "s", "filterExpression": "event.type == 'issue.created'",
+             "routing": [{"type": "create-workflow", "workflowDefinitionName": "triage"}]}
+            """), ctx);
+        assertFalse(ConfigItemValidationService.hasErrors(problems), problems.toString());
+    }
+
+    @Test
+    void subscriptionWithUnknownWorkflowNameFails() throws Exception {
+        ValidationContext ctx = new ValidationContext(Set.of(), Set.of(), Set.of(), Set.of("triage"),
+                Set.of(), Set.of(), Set.of());
+        List<ConfigProblem> problems = service.validate(ConfigItemType.SUBSCRIPTION, json("""
+            {"name": "s", "routing": [{"type": "create-workflow", "workflowDefinitionName": "nope"}]}
+            """), ctx);
+        assertTrue(problems.stream().anyMatch(p -> p.code().equals("UNKNOWN_WORKFLOW_DEFINITION")));
+    }
+
+    @Test
+    void unknownEventTypeInFilterWarns() throws Exception {
+        List<ConfigProblem> problems = service.validate(ConfigItemType.SUBSCRIPTION, json("""
+            {"name": "s", "filterExpression": "event.type == 'issues'"}
+            """), ValidationContext.unchecked());
+        assertTrue(problems.stream().anyMatch(p -> !p.isError() && p.code().equals("UNKNOWN_EVENT_TYPE")));
+    }
 }

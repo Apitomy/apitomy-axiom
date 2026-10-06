@@ -3,6 +3,11 @@ package io.apitomy.axiom.app.rest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.SubscriptionsResource;
+import io.apitomy.axiom.app.validation.ConfigItemType;
+import io.apitomy.axiom.app.validation.ConfigItemValidationService;
+import io.apitomy.axiom.app.validation.ConfigProblem;
+import io.apitomy.axiom.app.validation.SubscriptionRoutingResolver;
+import io.apitomy.axiom.app.validation.ValidationContextFactory;
 import io.apitomy.axiom.api.beans.Actor;
 import io.apitomy.axiom.api.beans.NewSubscription;
 import io.apitomy.axiom.api.beans.Payload;
@@ -47,6 +52,15 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
 
     @Inject
     SubscriptionFilterEvaluator filterEvaluator;
+
+    @Inject
+    ConfigItemValidationService validationService;
+
+    @Inject
+    ValidationContextFactory contextFactory;
+
+    @Inject
+    SubscriptionRoutingResolver routingResolver;
 
     /**
      * {@inheritDoc}
@@ -302,18 +316,11 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
      * @param data the API bean with new values
      */
     private void applyFields(EventSubscriptionEntity entity, NewSubscription data) {
+        validate(data);
         entity.name = data.getName();
         entity.description = data.getDescription();
         entity.enabled = data.getEnabled() != null ? data.getEnabled() : false;
-        if (data.getFilterExpression() != null && !data.getFilterExpression().isBlank()) {
-            if (!filterEvaluator.isValid(data.getFilterExpression())) {
-                throw new WebApplicationException(
-                        "Invalid filter expression: " + data.getFilterExpression(), 400);
-            }
-            entity.filters = data.getFilterExpression();
-        } else {
-            entity.filters = data.getFilterExpression(); // null or blank
-        }
+        entity.filters = data.getFilterExpression();
         entity.labels.clear();
         if (data.getLabels() != null) {
             entity.labels.addAll(data.getLabels());
@@ -323,33 +330,32 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
             entity.processEventsFrom = data.getProcessEventsFrom().toInstant();
         }
 
-        // Routing rules
-        if (data.getRouting() != null) {
-            // Validate routing rules
-            for (io.apitomy.axiom.api.beans.RoutingRule rule : data.getRouting()) {
-                if (rule.getType() == null) {
-                    throw new WebApplicationException("Routing rule missing required 'type' field", 400);
-                }
-                switch (rule.getType()) {
-                    case CREATE_WORKFLOW -> {
-                        if (rule.getWorkflowDefinitionId() == null) {
-                            throw new WebApplicationException(
-                                    "create-workflow routing rule requires workflowDefinitionId", 400);
-                        }
-                    }
-                    case WORKFLOW_DISPATCH -> { /* needs no extra config */ }
-                    default -> throw new WebApplicationException(
-                            "Unsupported routing type: " + rule.getType(), 400);
-                }
-            }
+        // Routing rules (validated in validate(); names resolved to ids here)
+        JsonNode routing = routingResolver.resolve(objectMapper.valueToTree(data.getRouting()));
+        if (routing != null) {
             try {
-                entity.routing = objectMapper.writeValueAsString(data.getRouting());
+                entity.routing = objectMapper.writeValueAsString(routing);
             } catch (Exception e) {
                 throw new WebApplicationException("Failed to serialize routing rules", 500);
             }
         } else {
             entity.routing = null;
         }
+    }
+
+    /**
+     * Validates the subscription with the shared configuration validation service and throws a 400 with the
+     * first error message, if any.
+     *
+     * @param data the API bean to validate
+     */
+    private void validate(NewSubscription data) {
+        JsonNode item = objectMapper.valueToTree(data);
+        List<ConfigProblem> problems = validationService.validate(ConfigItemType.SUBSCRIPTION, item,
+                contextFactory.databaseOnly());
+        problems.stream().filter(ConfigProblem::isError).findFirst().ifPresent(p -> {
+            throw new WebApplicationException(p.message(), 400);
+        });
     }
 
     /**

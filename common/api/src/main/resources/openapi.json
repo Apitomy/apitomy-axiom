@@ -9022,6 +9022,10 @@
             "format": "int64",
             "type": "integer",
             "description": "Required for create-workflow: which workflow definition to instantiate"
+          },
+          "workflowDefinitionName": {
+            "type": "string",
+            "description": "Alternative to workflowDefinitionId for create-workflow: the name of the workflow definition. Resolved to workflowDefinitionId when saved."
           }
         }
       },

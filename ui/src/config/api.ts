@@ -2195,6 +2195,7 @@ export async function fetchEventProcessing(eventId: string): Promise<{
 export interface RoutingRule {
     type: "workflow-dispatch" | "create-workflow";
     workflowDefinitionId?: number;
+    workflowDefinitionName?: string;
 }
 
 export interface Subscription {

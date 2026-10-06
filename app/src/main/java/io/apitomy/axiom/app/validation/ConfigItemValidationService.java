@@ -6,6 +6,7 @@ import io.apitomy.axiom.api.beans.NewActionType;
 import io.apitomy.axiom.api.beans.NewToolDefinition;
 import io.apitomy.axiom.core.SdkFunctionRegistry;
 import io.apitomy.axiom.core.events.model.EventType;
+import io.apitomy.axiom.core.events.model.RoutingRule;
 import io.apitomy.axiom.core.filters.SubscriptionFilterEvaluator;
 import io.apitomy.axiom.core.services.ActionTypeValidator;
 import io.apitomy.axiom.core.services.ToolValidator;
@@ -21,6 +22,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -37,6 +39,8 @@ public class ConfigItemValidationService {
     private static final String WORKFLOW_FORMAT_HINT = "Node types are lowercase (start, end, action, "
             + "human-task, receive-event, wait); edges use id/source/target/condition/priority/isDefault.";
     private static final Pattern GITHUB_REPOSITORY = Pattern.compile("[^/\\s]+/[^/\\s]+");
+    private static final Pattern FILTER_EVENT_TYPE = Pattern.compile(
+            "event\\.type\\s*==\\s*['\"]([^'\"]+)['\"]");
 
     @Inject
     ObjectMapper objectMapper;
@@ -61,9 +65,7 @@ public class ConfigItemValidationService {
             case SESSION_TEMPLATE -> validateSessionTemplate(item, problems);
             case EVENT_SOURCE -> validateEventSource(item, context, problems);
             case WORKFLOW -> validateWorkflow(item, context, problems);
-            case SUBSCRIPTION -> {
-                // Implemented in a later task.
-            }
+            case SUBSCRIPTION -> validateSubscription(item, context, problems);
             default -> throw new IllegalArgumentException("Unsupported item type: " + type);
         }
         return problems;
@@ -238,6 +240,73 @@ public class ConfigItemValidationService {
                             "Event type '" + eventType + "' is not recognized. Valid values: " + valid + "."));
                 }
             }
+        }
+    }
+
+    private void validateSubscription(JsonNode item, ValidationContext context, List<ConfigProblem> problems) {
+        requireText(item, "name", problems);
+
+        String filter = item.path("filterExpression").asText("");
+        if (!filter.isBlank()) {
+            if (!filterEvaluator.isValid(filter)) {
+                problems.add(ConfigProblem.error("filterExpression", "INVALID_FILTER",
+                        "Invalid filter expression: " + filter));
+            }
+            Matcher matcher = FILTER_EVENT_TYPE.matcher(filter);
+            while (matcher.find()) {
+                String eventType = matcher.group(1);
+                if (Arrays.stream(EventType.values()).noneMatch(t -> t.value().equals(eventType))) {
+                    String valid = Arrays.stream(EventType.values()).map(EventType::value)
+                            .collect(Collectors.joining(", "));
+                    problems.add(ConfigProblem.warning("filterExpression", "UNKNOWN_EVENT_TYPE",
+                            "Event type '" + eventType + "' is not recognized. Valid values: " + valid + "."));
+                }
+            }
+        }
+
+        JsonNode routing = item.path("routing");
+        for (int i = 0; i < routing.size(); i++) {
+            validateRoutingRule(routing.get(i), "routing[" + i + "]", context, problems);
+        }
+    }
+
+    private static void validateRoutingRule(JsonNode rule, String path, ValidationContext context,
+                                            List<ConfigProblem> problems) {
+        JsonNode typeNode = rule.path("type");
+        if (typeNode.isMissingNode() || typeNode.isNull()) {
+            problems.add(ConfigProblem.error(path + ".type", "MISSING_FIELD",
+                    "Routing rule missing required 'type' field"));
+            return;
+        }
+        String type = typeNode.asText();
+        if (RoutingRule.TYPE_WORKFLOW_DISPATCH.equals(type)) {
+            return;
+        }
+        if (!RoutingRule.TYPE_CREATE_WORKFLOW.equals(type)) {
+            problems.add(ConfigProblem.error(path + ".type", "UNSUPPORTED_ROUTING_TYPE",
+                    "Unsupported routing type: " + type));
+            return;
+        }
+        JsonNode idNode = rule.path("workflowDefinitionId");
+        JsonNode nameNode = rule.path("workflowDefinitionName");
+        boolean hasId = !idNode.isMissingNode() && !idNode.isNull();
+        boolean hasName = nameNode.isTextual() && !nameNode.asText().isBlank();
+        if (!hasId && !hasName) {
+            problems.add(ConfigProblem.error(path + ".workflowDefinitionId", "MISSING_FIELD",
+                    "create-workflow routing rule requires workflowDefinitionId or workflowDefinitionName"));
+        } else if (hasId && hasName) {
+            problems.add(ConfigProblem.error(path, "AMBIGUOUS_WORKFLOW_REFERENCE",
+                    "Set either workflowDefinitionId or workflowDefinitionName, not both."));
+        } else if (hasId) {
+            if (context.workflowDefinitionIds() != null
+                    && !context.workflowDefinitionIds().contains(idNode.asLong())) {
+                problems.add(ConfigProblem.error(path + ".workflowDefinitionId", "UNKNOWN_WORKFLOW_DEFINITION",
+                        "Workflow definition with id " + idNode.asText() + " does not exist."));
+            }
+        } else if (context.workflowDefinitionNames() != null
+                && !context.workflowDefinitionNames().contains(nameNode.asText())) {
+            problems.add(ConfigProblem.error(path + ".workflowDefinitionName", "UNKNOWN_WORKFLOW_DEFINITION",
+                    "Workflow definition '" + nameNode.asText() + "' does not exist or is pending."));
         }
     }
 
