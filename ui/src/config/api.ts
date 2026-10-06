@@ -141,7 +141,6 @@ export interface ActivityLogEntry {
     taskId?: number;
     eventId?: string;
     traceId?: string;
-    scheduledJobRunId?: number;
     entryType: string;
     summary: string;
     details?: string;
@@ -187,7 +186,6 @@ export interface PackExportRequest {
     toolsetIds?: number[];
     mcpServerIds?: number[];
     sessionTemplateIds?: string[];
-    scheduledJobIds?: number[];
     connectionIds?: string[];
     subscriptionIds?: number[];
     workflowDefinitionIds?: number[];
@@ -199,7 +197,6 @@ export interface ImportResult {
     toolsets?: number;
     mcpServers?: number;
     sessionTemplates?: number;
-    scheduledJobs?: number;
     connections?: number;
     subscriptions?: number;
     workflowDefinitions?: number;
@@ -210,7 +207,6 @@ export interface AssistantApplyResult {
     actionTypes?: number;
     toolsets?: number;
     sessionTemplates?: number;
-    scheduledJobs?: number;
     toolsCreated?: number;
     toolsUpdated?: number;
     actionTypesCreated?: number;
@@ -221,8 +217,6 @@ export interface AssistantApplyResult {
     sessionTemplatesUpdated?: number;
     eventSourcesCreated?: number;
     eventSourcesUpdated?: number;
-    scheduledJobsCreated?: number;
-    scheduledJobsUpdated?: number;
     connectionsCreated?: number;
     connectionsUpdated?: number;
     subscriptionsCreated?: number;
@@ -856,8 +850,6 @@ export interface RetentionConfig {
     closedProjectRetentionDays?: number;
     traceRetentionDays?: number;
     eventRetentionDays?: number;
-    /** Days to keep finished scheduled job runs; 0 keeps them forever. */
-    scheduledJobRunRetentionDays?: number;
     /** Days to keep finished workflow runs; 0 keeps them forever. */
     workflowRunRetentionDays?: number;
     /** Days to keep activity log entries; 0 keeps them forever. */
@@ -956,7 +948,6 @@ export interface AiUsage {
     taskId?: number;
     eventId?: string;
     traceId?: string;
-    scheduledJobRunId?: number;
     projectId?: number;
     agentId?: number;
     actionType?: string;
@@ -981,8 +972,7 @@ export async function fetchUsage(
     filterAgentId?: number, filterActionType?: string,
     filterDateFrom?: string, filterDateTo?: string,
     filterLabels?: string, filterEngine?: string,
-    filterModel?: string, filterTraceId?: string,
-    filterScheduledJobRunId?: string
+    filterModel?: string, filterTraceId?: string
 ): Promise<AiUsageSearchResults> {
     const params = new URLSearchParams();
     params.set("page", String(page));
@@ -997,7 +987,6 @@ export async function fetchUsage(
     if (filterEngine) params.set("filterEngine", filterEngine);
     if (filterModel) params.set("filterModel", filterModel);
     if (filterTraceId) params.set("filterTraceId", filterTraceId);
-    if (filterScheduledJobRunId) params.set("filterScheduledJobRunId", filterScheduledJobRunId);
     const response = await fetch(`${API}/usage/ai?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch usage: ${response.status}`);
     return response.json();
@@ -1037,8 +1026,7 @@ export async function fetchActivityLog(
     page = 1, limit = 20,
     filterEventId?: string, filterSummary?: string,
     filterProjectId?: number, filterEntryType?: string,
-    filterLabels?: string, filterTraceId?: string,
-    filterScheduledJobRunId?: string
+    filterLabels?: string, filterTraceId?: string
 ): Promise<SearchResults<ActivityLogEntry>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
@@ -1049,7 +1037,6 @@ export async function fetchActivityLog(
     if (filterEntryType) params.set("filterEntryType", filterEntryType);
     if (filterLabels) params.set("filterLabels", filterLabels);
     if (filterTraceId) params.set("filterTraceId", filterTraceId);
-    if (filterScheduledJobRunId) params.set("filterScheduledJobRunId", filterScheduledJobRunId);
     const response = await fetch(`${API}/activity?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch activity log: ${response.status}`);
     return response.json();
@@ -1636,151 +1623,6 @@ export async function deleteDashboard(dashboardId: number): Promise<void> {
         method: "DELETE",
     });
     if (!response.ok) throw new Error(`Failed to delete dashboard: ${response.status}`);
-}
-
-// ── Scheduled Jobs ──────────────────────────────────────────────
-
-export interface ScheduledJob {
-    id: number;
-    name: string;
-    description?: string;
-    slug?: string;
-    labels?: string[];
-    enabled: boolean;
-    schedule: string;
-    scheduleTime?: string;
-    scheduleDayOfWeek?: string;
-    nextRunAt?: string;
-    lastRunAt?: string;
-    executionMode: string;
-    promptTemplate?: string;
-    scriptTemplate?: string;
-    model?: string;
-    engine?: string;
-    allowedTools?: string[];
-    maxSteps?: number;
-    maxBudgetUsd?: number;
-    timeoutSeconds?: number;
-    environment?: Record<string, string>;
-    createdOn: string;
-    updatedOn: string;
-}
-
-export type NewScheduledJob = Omit<ScheduledJob, "id" | "createdOn" | "updatedOn" | "nextRunAt" | "lastRunAt">;
-
-export interface ScheduledJobRun {
-    id: number;
-    jobId: number;
-    jobName?: string;
-    status: string;
-    trigger: string;
-    triggeredBy?: string;
-    triggeredByTraceId?: string;
-    startedAt?: string;
-    completedAt?: string;
-    output?: string;
-    error?: string;
-    executionLog?: string;
-    costUsd?: number;
-    durationMs?: number;
-    traceId?: string;
-    createdOn: string;
-}
-
-export async function fetchScheduledJobs(): Promise<ScheduledJob[]> {
-    const response = await fetch(`${API}/scheduled-jobs`);
-    if (!response.ok) throw new Error(`Failed to fetch scheduled jobs: ${response.status}`);
-    return response.json();
-}
-
-export async function fetchScheduledJob(jobId: number): Promise<ScheduledJob> {
-    const response = await fetch(`${API}/scheduled-jobs/${jobId}`);
-    if (!response.ok) throw new Error(`Failed to fetch scheduled job: ${response.status}`);
-    return response.json();
-}
-
-export async function createScheduledJob(data: NewScheduledJob): Promise<ScheduledJob> {
-    const response = await fetch(`${API}/scheduled-jobs`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-    });
-    if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        throw new Error(body?.message || `Failed to create scheduled job: ${response.status}`);
-    }
-    return response.json();
-}
-
-export async function updateScheduledJob(jobId: number, data: NewScheduledJob): Promise<ScheduledJob> {
-    const response = await fetch(`${API}/scheduled-jobs/${jobId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-    });
-    if (!response.ok) {
-        const body = await response.json().catch(() => null);
-        throw new Error(body?.message || `Failed to update scheduled job: ${response.status}`);
-    }
-    return response.json();
-}
-
-export async function deleteScheduledJob(jobId: number): Promise<void> {
-    const response = await fetch(`${API}/scheduled-jobs/${jobId}`, {
-        method: "DELETE",
-    });
-    if (!response.ok) throw new Error(`Failed to delete scheduled job: ${response.status}`);
-}
-
-export async function runScheduledJob(jobId: number): Promise<ScheduledJobRun> {
-    const response = await fetch(`${API}/scheduled-jobs/${jobId}/run`, {
-        method: "POST",
-    });
-    if (!response.ok) throw new Error(`Failed to trigger scheduled job: ${response.status}`);
-    return response.json();
-}
-
-export async function fetchScheduledJobRuns(
-    jobId: number,
-    page = 1,
-    limit = 20
-): Promise<SearchResults<ScheduledJobRun>> {
-    const response = await fetch(
-        `${API}/scheduled-jobs/${jobId}/runs?page=${page}&limit=${limit}`
-    );
-    if (!response.ok) throw new Error(`Failed to fetch job runs: ${response.status}`);
-    return response.json();
-}
-
-export async function fetchAllScheduledJobRuns(
-    page = 1, limit = 20,
-    filterJobName?: string, filterStatus?: string, filterTrigger?: string
-): Promise<SearchResults<ScheduledJobRun>> {
-    const params = new URLSearchParams();
-    params.set("page", String(page));
-    params.set("limit", String(limit));
-    if (filterJobName) params.set("filterJobName", filterJobName);
-    if (filterStatus) params.set("filterStatus", filterStatus);
-    if (filterTrigger) params.set("filterTrigger", filterTrigger);
-    const response = await fetch(`${API}/scheduled-jobs/runs?${params}`);
-    if (!response.ok) throw new Error(`Failed to fetch job runs: ${response.status}`);
-    return response.json();
-}
-
-export async function fetchScheduledJobRun(runId: number): Promise<ScheduledJobRun> {
-    const response = await fetch(`${API}/scheduled-jobs/runs/${runId}`);
-    if (!response.ok) throw new Error(`Failed to fetch job run: ${response.status}`);
-    return response.json();
-}
-
-export async function validateScheduledJob(data: NewScheduledJob): Promise<ToolValidationResult> {
-    const response = await fetch(`${API}/scheduled-jobs/validate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-    });
-    if (!response.ok) throw new Error(`Failed to validate scheduled job: ${response.status}`);
-    return response.json();
 }
 
 // ── Workflow Definitions ──────────────────────────────────────────
@@ -2397,49 +2239,11 @@ export async function previewSubscriptionFilter(
     return response.json();
 }
 
-// ── Configuration snapshots (#426) ──────────────────────────────────
-
-/** One execution-relevant configuration field, compared with the current definition. */
-export interface ConfigurationField {
-    name: string;
-    value?: string | null;
-    currentValue?: string | null;
-    changed: boolean;
-}
-
-/** The configuration a scheduled job run used. */
-export interface ConfigurationSnapshot {
-    versionId: number;
-    configHash: string;
-    currentConfigHash?: string | null;
-    capturedOn?: string;
-    changed: boolean;
-    fields: ConfigurationField[];
-}
-
-/** Message prefix of the 404 returned when the run exists but has no snapshot. */
-const CONFIG_NOT_RECORDED = "No configuration was recorded";
-
-async function fetchConfigSnapshot(url: string): Promise<ConfigurationSnapshot | null> {
-    const response = await fetch(url);
-    if (!response.ok) {
-        const message = await extractErrorMessage(response, "Failed to fetch configuration");
-        if (response.status === 404 && message.startsWith(CONFIG_NOT_RECORDED)) return null;
-        throw new Error(message);
-    }
-    return response.json();
-}
-
-/** Returns the configuration a scheduled job run used, or null if none was recorded. */
-export function fetchScheduledJobRunConfig(runId: number): Promise<ConfigurationSnapshot | null> {
-    return fetchConfigSnapshot(`${API}/scheduled-jobs/runs/${runId}/config`);
-}
-
 // ── Lineage (#430) ───────────────────────────────────────────────────
 
 /** Root entity types accepted by `GET /lineage/{entityType}/{id}`. */
 export type LineageEntityType =
-    "event" | "trace" | "workflow-run" | "task" | "scheduled-job-run";
+    "event" | "trace" | "workflow-run" | "task";
 
 export interface LineageNode {
     key: string;

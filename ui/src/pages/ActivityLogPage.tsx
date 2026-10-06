@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { RunSourceLink } from "../components/RunSourceLink";
 import {
     Button,
     EmptyState,
@@ -43,10 +42,9 @@ const FILTER_TYPES: ChipFilterType[] = [
     { value: "entryType", label: "Entry Type", testId: "activity-filter-entryType" },
     { value: "summary", label: "Summary", testId: "activity-filter-summary" },
     { value: "projectId", label: "Project ID", testId: "activity-filter-projectId" },
-    { value: "scheduledJobRunId", label: "Job Run ID", testId: "activity-filter-scheduledJobRunId" },
 ];
 
-const DEEP_LINK_FILTERS = ["traceId", "scheduledJobRunId"];
+const DEEP_LINK_FILTERS = ["traceId"];
 
 export function ActivityLogPage() {
     const navigate = useNavigate();
@@ -58,7 +56,7 @@ export function ActivityLogPage() {
 
     const [searchParams] = useSearchParams();
     const [filters, setFilters] = useState<ChipFilterCriteria[]>(() => {
-        // Deep links: ?traceId= and ?scheduledJobRunId= preset the matching filter
+        // Deep link: ?traceId= presets the matching filter
         return DEEP_LINK_FILTERS.flatMap((key) => {
             const value = searchParams.get(key);
             return value
@@ -82,7 +80,6 @@ export function ActivityLogPage() {
 
     const filterEventId = filters.find((f) => f.filterBy.value === "eventId")?.filterValue;
     const filterTraceId = filters.find((f) => f.filterBy.value === "traceId")?.filterValue;
-    const filterRunId = filters.find((f) => f.filterBy.value === "scheduledJobRunId")?.filterValue;
     const filterSummary = filters.find((f) => f.filterBy.value === "summary")?.filterValue;
     const filterProjectId = filters.find((f) => f.filterBy.value === "projectId")?.filterValue;
     const filterEntryTypes = filters
@@ -100,8 +97,7 @@ export function ActivityLogPage() {
             filterProjectId ? Number(filterProjectId) : undefined,
             filterEntryTypes || undefined,
             undefined,
-            filterTraceId?.trim() || undefined,
-            filterRunId?.trim() || undefined
+            filterTraceId?.trim() || undefined
         )
             .then((results) => {
                 setEntries(results.items);
@@ -109,8 +105,7 @@ export function ActivityLogPage() {
             })
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [page, perPage, filterEventId, filterSummary, filterProjectId, filterEntryTypes, filterTraceId,
-        filterRunId]);
+    }, [page, perPage, filterEventId, filterSummary, filterProjectId, filterEntryTypes, filterTraceId]);
 
     useEffect(() => {
         loadData();
@@ -122,8 +117,7 @@ export function ActivityLogPage() {
             !(f.filterBy.value === criteria.filterBy.value && f.filterValue === criteria.filterValue));
         if (criteria.filterBy.value === "eventId" || criteria.filterBy.value === "traceId"
                 || criteria.filterBy.value === "summary"
-                || criteria.filterBy.value === "projectId"
-                || criteria.filterBy.value === "scheduledJobRunId") {
+                || criteria.filterBy.value === "projectId") {
             const withoutSame = updated.filter((f) => f.filterBy.value !== criteria.filterBy.value);
             withoutSame.push(criteria);
             setFilters(withoutSame);
@@ -206,7 +200,6 @@ export function ActivityLogPage() {
                                 <Th>Time</Th>
                                 <Th>Event</Th>
                                 <Th>Trace</Th>
-                                <Th>Source</Th>
                                 <Th>Type</Th>
                                 <Th>Summary</Th>
                                 <Th>Project</Th>
@@ -237,9 +230,6 @@ export function ActivityLogPage() {
                                                 {entry.traceId.substring(0, 8)}
                                             </Link>
                                         ) : "—"}
-                                    </Td>
-                                    <Td>
-                                        <RunSourceLink scheduledJobRunId={entry.scheduledJobRunId} />
                                     </Td>
                                     <Td>
                                         <Label

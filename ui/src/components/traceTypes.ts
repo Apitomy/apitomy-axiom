@@ -3,7 +3,6 @@ import type { LabelProps } from "@patternfly/react-core";
 /** Display labels for trace types; unknown types are shown as-is. */
 export const TRACE_TYPE_LABELS: Record<string, string> = {
     workflow: "Workflow",
-    "scheduled-job-execution": "Scheduled job",
     "user-action": "User action",
 };
 

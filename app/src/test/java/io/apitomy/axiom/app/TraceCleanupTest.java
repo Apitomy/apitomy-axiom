@@ -9,7 +9,6 @@ import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunResumeEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
-import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
 import io.apitomy.axiom.core.entities.TraceEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
@@ -115,52 +114,6 @@ class TraceCleanupTest {
         });
     }
 
-    @Test
-    void cleanupClearsTriggeringTraceReferences() {
-        UUID traceId = UUID.randomUUID();
-        Long[] ids = new Long[1];
-
-        QuarkusTransaction.requiringNew().run(() -> {
-            RetentionConfigEntity config = RetentionConfigEntity.<RetentionConfigEntity>findAll()
-                    .firstResult();
-            if (config == null) {
-                config = new RetentionConfigEntity();
-                config.closedProjectRetentionDays = 30;
-                config.eventRetentionDays = 30;
-                config.traceRetentionDays = 30;
-                config.persist();
-            }
-            originalRetentionDays = config.traceRetentionDays;
-            config.traceRetentionDays = 1;
-
-            TraceEntity trace = new TraceEntity();
-            trace.traceId = traceId;
-            trace.traceType = "test";
-            trace.status = "completed";
-            trace.summary = "trigger-cleanup-" + traceId;
-            trace.startedOn = Instant.now().minus(5, ChronoUnit.DAYS);
-            trace.persist();
-
-            ScheduledJobRunEntity run = new ScheduledJobRunEntity();
-            run.jobId = -1L;
-            run.status = "Completed";
-            run.trigger = "manual";
-            run.triggeredBy = "manual";
-            run.triggeredByTraceId = traceId;
-            run.createdOn = Instant.now();
-            run.persist();
-            ids[0] = run.id;
-        });
-
-        QuarkusTransaction.requiringNew().run(() -> traceCleanup.doCleanup());
-
-        QuarkusTransaction.requiringNew().run(() -> {
-            ScheduledJobRunEntity run = ScheduledJobRunEntity.findById(ids[0]);
-            assertNull(run.triggeredByTraceId);
-            run.delete();
-        });
-    }
-
     /**
      * Every column (as {@code table.column}) that references a trace or a trace node, and how
      * {@link TraceCleanup} handles it. Adding a new trace column to an entity makes
@@ -174,8 +127,6 @@ class TraceCleanupTest {
             "tool_execution.trace_id",
             // Cleared (set to null) when the trace is deleted.
             "task.trace_id",
-            "scheduled_job_run.trace_id",
-            "scheduled_job_run.triggered_by_trace_id",
             "activity_log.trace_id",
             "ai_usage.trace_id",
             "workflow_run.trace_id",
@@ -211,7 +162,7 @@ class TraceCleanupTest {
     @Test
     void cleanupClearsRunOutcomeAndTaskTraceReferences() {
         UUID traceId = UUID.randomUUID();
-        Long[] ids = new Long[6];
+        Long[] ids = new Long[5];
 
         QuarkusTransaction.requiringNew().run(() -> {
             shortenTraceRetention();
@@ -272,15 +223,6 @@ class TraceCleanupTest {
             task.createdOn = Instant.now();
             task.persist();
             ids[4] = task.id;
-
-            ScheduledJobRunEntity jobRun = new ScheduledJobRunEntity();
-            jobRun.jobId = -1L;
-            jobRun.status = "Completed";
-            jobRun.trigger = "manual";
-            jobRun.traceId = traceId;
-            jobRun.createdOn = Instant.now();
-            jobRun.persist();
-            ids[5] = jobRun.id;
         });
 
         QuarkusTransaction.requiringNew().run(() -> traceCleanup.doCleanup());
@@ -292,19 +234,16 @@ class TraceCleanupTest {
             RoutingOutcomeItemEntity item = RoutingOutcomeItemEntity.findById(ids[2]);
             WorkflowRunResumeEntity resume = WorkflowRunResumeEntity.findById(ids[3]);
             TaskEntity task = TaskEntity.findById(ids[4]);
-            ScheduledJobRunEntity jobRun = ScheduledJobRunEntity.findById(ids[5]);
             assertNull(run.traceId);
             assertNull(outcome.traceId);
             assertNull(item.traceNodeId);
             assertNull(resume.traceNodeId);
             assertNull(task.traceId);
-            assertNull(jobRun.traceId);
             item.delete();
             outcome.delete();
             resume.delete();
             run.delete();
             task.delete();
-            jobRun.delete();
         });
     }
 

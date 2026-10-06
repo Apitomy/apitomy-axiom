@@ -66,7 +66,7 @@ class LogContextTest {
     @Test
     void clearsOnException() {
         assertThrows(IllegalStateException.class, () -> {
-            try (LogContext ignored = LogContext.create().traceId("t1").runId(3L)) {
+            try (LogContext ignored = LogContext.create().traceId("t1").workflowRunId(3L)) {
                 throw new IllegalStateException("boom");
             }
         });
@@ -90,14 +90,14 @@ class LogContextTest {
         try (LogContext ignored = LogContext.create().traceId("t1").taskId(9L)) {
             snapshot = LogContext.capture();
         }
-        try (LogContext stale = LogContext.create().traceId("stale").runId(77L)) {
+        try (LogContext stale = LogContext.create().traceId("stale").workflowRunId(77L)) {
             try (LogContext restored = LogContext.restore(snapshot)) {
                 assertEquals("t1", MDC.get(LogContext.TRACE_ID));
                 assertEquals("9", MDC.get(LogContext.TASK_ID));
-                assertNull(MDC.get(LogContext.RUN_ID));
+                assertNull(MDC.get(LogContext.WORKFLOW_RUN_ID));
             }
             assertEquals("stale", MDC.get(LogContext.TRACE_ID));
-            assertEquals("77", MDC.get(LogContext.RUN_ID));
+            assertEquals("77", MDC.get(LogContext.WORKFLOW_RUN_ID));
         }
         assertTrue(MDC.getMap().isEmpty());
     }

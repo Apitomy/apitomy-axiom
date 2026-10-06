@@ -39,7 +39,6 @@ import {
     fetchAgent,
     fetchAgentTasks,
     fetchActionTypes,
-    fetchScheduledJobs,
     updateAgent,
 } from "../config/api";
 import { ExecutionLogModal } from "../components/ExecutionLogModal";
@@ -275,19 +274,15 @@ function CapabilitiesTab({ capabilities, onAdd, onRemove }: {
     onRemove: (c: string) => void;
 }) {
     const [actionTypes, setActionTypes] = useState<ActionType[]>([]);
-    const [scheduledJobs, setScheduledJobs] = useState<Array<{name: string; slug?: string}>>([]);
 
     useEffect(() => {
         fetchActionTypes(1, 1000).then((r) => setActionTypes(r.items)).catch(console.error);
-        fetchScheduledJobs().then((jobs) => setScheduledJobs(jobs)).catch(console.error);
     }, []);
 
     const suggestions: TypeaheadAddSuggestion[] = [
         { value: "*" },
         { value: "action:*" },
-        { value: "job:*" },
         ...actionTypes.map((at) => ({ value: `action:${at.name}` })),
-        ...scheduledJobs.map((sj) => ({ value: `job:${sj.slug || sj.name}` })),
     ];
 
     const validateCapability = (cap: string): boolean => {
@@ -302,7 +297,7 @@ function CapabilitiesTab({ capabilities, onAdd, onRemove }: {
                 <HelperTextItem>
                     Define which workloads this agent can perform. Use glob patterns to match
                     multiple items: <code>action:*</code>, <code>action:auto-*</code>,{" "}
-                    <code>job:github-*</code>, or <code>*</code> for all workloads.
+                    or <code>*</code> for all workloads.
                 </HelperTextItem>
             </HelperText>
 

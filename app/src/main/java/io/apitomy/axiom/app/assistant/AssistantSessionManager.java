@@ -451,7 +451,6 @@ public class AssistantSessionManager {
         collectItems(workDir, "connections", items);
         collectItems(workDir, "subscriptions", items);
         collectItems(workDir, "workflows", items);
-        collectItems(workDir, "scheduled-jobs", items);
 
         return items;
     }
@@ -522,7 +521,6 @@ public class AssistantSessionManager {
                 result.actionTypesCreated(), result.actionTypesUpdated(),
                 result.toolsetsCreated(), result.toolsetsUpdated(),
                 result.sessionTemplatesCreated(), result.sessionTemplatesUpdated(),
-                result.scheduledJobsCreated(), result.scheduledJobsUpdated(),
                 result.connectionsCreated(), result.connectionsUpdated(),
                 result.subscriptionsCreated(), result.subscriptionsUpdated(),
                 wfCounts[0], wfCounts[1]);
@@ -726,7 +724,6 @@ public class AssistantSessionManager {
                 validateAndFeedback(workDir, "connections", session, tracker);
                 validateAndFeedback(workDir, "subscriptions", session, tracker);
                 validateAndFeedback(workDir, "workflows", session, tracker);
-                validateAndFeedback(workDir, "scheduled-jobs", session, tracker);
             } catch (Exception e) {
                 LOG.warnf(e, "Validation listener error in session %s",
                         session.getId());
@@ -813,7 +810,6 @@ public class AssistantSessionManager {
         ArrayNode templatesArr = pack.putArray("sessionTemplates");
         ArrayNode connectionsArr = pack.putArray("connections");
         ArrayNode subscriptionsArr = pack.putArray("subscriptions");
-        ArrayNode scheduledJobsArr = pack.putArray("scheduledJobs");
 
         for (AssistantItem item : items) {
             Path file = session.getWorkingDirectory()
@@ -828,7 +824,6 @@ public class AssistantSessionManager {
                 case "connections" -> connectionsArr.add(content);
                 case "subscriptions" -> subscriptionsArr.add(content);
                 case "workflows" -> {} // Handled separately in applyWorkflowDefinitions
-                case "scheduled-jobs" -> scheduledJobsArr.add(content);
             }
         }
 

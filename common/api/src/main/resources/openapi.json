@@ -1210,16 +1210,6 @@
               "type": "string",
               "format": "uuid"
             }
-          },
-          {
-            "name": "filterScheduledJobRunId",
-            "in": "query",
-            "description": "Filter by scheduled job run ID (numeric; malformed values return 400)",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "pattern": "^[0-9]+$"
-            }
           }
         ],
         "responses": {
@@ -1447,16 +1437,6 @@
             "schema": {
               "type": "string",
               "format": "uuid"
-            }
-          },
-          {
-            "name": "filterScheduledJobRunId",
-            "in": "query",
-            "description": "Filter by scheduled job run ID (numeric; malformed values return 400)",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "pattern": "^[0-9]+$"
             }
           }
         ],
@@ -2807,7 +2787,7 @@
         {
           "name": "itemType",
           "in": "path",
-          "description": "Item type (tools, action-types, toolsets, session-templates, event-sources, scheduled-jobs)",
+          "description": "Item type (tools, action-types, toolsets, session-templates, event-sources)",
           "required": true,
           "schema": {
             "type": "string"
@@ -2977,16 +2957,6 @@
             "required": false,
             "schema": {
               "type": "integer"
-            }
-          },
-          {
-            "name": "filterScheduledJobRunId",
-            "in": "query",
-            "description": "Filter by scheduled job run ID (the run's trace) (numeric; malformed values return 400)",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "pattern": "^[0-9]+$"
             }
           }
         ],
@@ -3764,403 +3734,6 @@
           }
         }
       ]
-    },
-    "/scheduled-jobs": {
-      "get": {
-        "tags": [
-          "ScheduledJobs"
-        ],
-        "summary": "List all scheduled jobs",
-        "operationId": "listScheduledJobs",
-        "responses": {
-          "200": {
-            "description": "List of scheduled jobs",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ScheduledJob"
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "ScheduledJobs"
-        ],
-        "summary": "Create a new scheduled job",
-        "operationId": "createScheduledJob",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewScheduledJob"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Created scheduled job",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScheduledJob"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/scheduled-jobs/{jobId}": {
-      "get": {
-        "tags": [
-          "ScheduledJobs"
-        ],
-        "summary": "Get a scheduled job by ID",
-        "operationId": "getScheduledJob",
-        "responses": {
-          "200": {
-            "description": "Scheduled job details",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScheduledJob"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "ScheduledJobs"
-        ],
-        "summary": "Update a scheduled job",
-        "operationId": "updateScheduledJob",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewScheduledJob"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Updated scheduled job",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScheduledJob"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "ScheduledJobs"
-        ],
-        "summary": "Delete a scheduled job",
-        "operationId": "deleteScheduledJob",
-        "responses": {
-          "204": {
-            "description": "Scheduled job deleted"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "name": "jobId",
-          "in": "path",
-          "description": "Scheduled job ID",
-          "required": true,
-          "schema": {
-            "format": "int64",
-            "type": "integer"
-          }
-        }
-      ]
-    },
-    "/scheduled-jobs/{jobId}/run": {
-      "post": {
-        "tags": [
-          "ScheduledJobs"
-        ],
-        "summary": "Manually trigger a scheduled job run",
-        "operationId": "runScheduledJob",
-        "responses": {
-          "200": {
-            "description": "The created job run",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScheduledJobRun"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "name": "jobId",
-          "in": "path",
-          "description": "Scheduled job ID",
-          "required": true,
-          "schema": {
-            "format": "int64",
-            "type": "integer"
-          }
-        }
-      ]
-    },
-    "/scheduled-jobs/{jobId}/runs": {
-      "get": {
-        "tags": [
-          "ScheduledJobs"
-        ],
-        "summary": "List run history for a scheduled job",
-        "operationId": "listScheduledJobRuns",
-        "parameters": [
-          {
-            "name": "page",
-            "in": "query",
-            "description": "Page number (1-indexed)",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Maximum number of results per page",
-            "required": false,
-            "schema": {
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Paginated list of job runs",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScheduledJobRunSearchResults"
-                }
-              }
-            }
-          }
-        }
-      },
-      "parameters": [
-        {
-          "name": "jobId",
-          "in": "path",
-          "description": "Scheduled job ID",
-          "required": true,
-          "schema": {
-            "format": "int64",
-            "type": "integer"
-          }
-        }
-      ]
-    },
-    "/scheduled-jobs/runs": {
-      "get": {
-        "tags": [
-          "ScheduledJobs"
-        ],
-        "summary": "List all scheduled job runs across all jobs",
-        "operationId": "listAllScheduledJobRuns",
-        "parameters": [
-          {
-            "name": "page",
-            "in": "query",
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "filterJobName",
-            "in": "query",
-            "description": "Filter by job name (substring match)",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "filterStatus",
-            "in": "query",
-            "description": "Filter by status (comma-separated for multiple)",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "filterTrigger",
-            "in": "query",
-            "description": "Filter by trigger type (scheduled or manual)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Paginated list of scheduled job runs",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScheduledJobRunSearchResults"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/scheduled-jobs/runs/{runId}": {
-      "get": {
-        "tags": [
-          "ScheduledJobs"
-        ],
-        "summary": "Get a single scheduled job run by ID",
-        "operationId": "getScheduledJobRun",
-        "responses": {
-          "200": {
-            "description": "The scheduled job run",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScheduledJobRun"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "name": "runId",
-          "in": "path",
-          "description": "Scheduled job run ID",
-          "required": true,
-          "schema": {
-            "format": "int64",
-            "type": "integer"
-          }
-        }
-      ]
-    },
-    "/scheduled-jobs/runs/{runId}/config": {
-      "get": {
-        "tags": [
-          "ScheduledJobs"
-        ],
-        "summary": "Get the configuration a scheduled job run used",
-        "description": "Returns the execution configuration that was snapshotted when the item was created, compared field by field with the definition's current configuration. Secret values are never included: environment values other than ${secret:NAME} references are redacted.",
-        "operationId": "getScheduledJobRunConfig",
-        "responses": {
-          "200": {
-            "description": "The configuration used",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConfigurationSnapshot"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "The run does not exist, or no configuration was recorded for it (created before configuration tracking). The Error message starts with \"No configuration was recorded\" in the latter case.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "parameters": [
-        {
-          "name": "runId",
-          "in": "path",
-          "description": "Scheduled job run ID",
-          "required": true,
-          "schema": {
-            "format": "int64",
-            "type": "integer"
-          }
-        }
-      ]
-    },
-    "/scheduled-jobs/validate": {
-      "post": {
-        "tags": [
-          "ScheduledJobs"
-        ],
-        "summary": "Validate a scheduled job definition",
-        "operationId": "validateScheduledJob",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NewScheduledJob"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Validation result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ToolValidationResult"
-                }
-              }
-            }
-          }
-        }
-      }
     },
     "/assistant/sessions/{sessionId}/raw-events": {
       "get": {
@@ -5319,7 +4892,7 @@
           "Lineage"
         ],
         "summary": "Get the lineage graph of an entity",
-        "description": "Returns the upstream (origin) and downstream (results) graph of work linked to an entity: stream events, traces, workflow runs, tasks and scheduled job runs. Each node carries a status, a UI link and its direct AI cost. Edges always point from the upstream node to the downstream node. The walk is bounded by `depth` (hops in each direction) and `maxNodes`; when either limit cuts the graph short, `truncated` is true. References to rows removed by data retention are returned as nodes with `available` false.",
+        "description": "Returns the upstream (origin) and downstream (results) graph of work linked to an entity: stream events, traces, workflow runs and tasks. Each node carries a status, a UI link and its direct AI cost. Edges always point from the upstream node to the downstream node. The walk is bounded by `depth` (hops in each direction) and `maxNodes`; when either limit cuts the graph short, `truncated` is true. References to rows removed by data retention are returned as nodes with `available` false.",
         "operationId": "getLineage",
         "parameters": [
           {
@@ -5401,7 +4974,7 @@
         {
           "name": "entityType",
           "in": "path",
-          "description": "Type of the root entity: `event`, `trace`, `workflow-run`, `task` or `scheduled-job-run`",
+          "description": "Type of the root entity: `event`, `trace`, `workflow-run` or `task`",
           "required": true,
           "schema": {
             "type": "string",
@@ -5409,8 +4982,7 @@
               "event",
               "trace",
               "workflow-run",
-              "task",
-              "scheduled-job-run"
+              "task"
             ]
           }
         },
@@ -5523,7 +5095,7 @@
             "type": "string"
           },
           "type": {
-            "description": "Entity type: `event`, `trace`, `workflow-run`, `task`, `scheduled-job-run` or `outcome` (a routing outcome item such as an ignored or escalated decision)",
+            "description": "Entity type: `event`, `trace`, `workflow-run`, `task` or `outcome` (a routing outcome item such as an ignored or escalated decision)",
             "type": "string"
           },
           "id": {
@@ -5586,7 +5158,7 @@
             "type": "string"
           },
           "relation": {
-            "description": "`triggered`, `created`, `resumed`, `produced`, `part-of` or `triggered-by-agent`",
+            "description": "`triggered`, `created`, `resumed`, `produced` or `part-of`",
             "type": "string"
           }
         }
@@ -6271,12 +5843,6 @@
             "minimum": 1,
             "type": "integer"
           },
-          "scheduledJobRunRetentionDays": {
-            "format": "int32",
-            "description": "Number of days to retain finished scheduled job runs before automatic deletion. 0 (the default) keeps them forever. Omitting the field on update leaves the current value unchanged.",
-            "minimum": 0,
-            "type": "integer"
-          },
           "workflowRunRetentionDays": {
             "format": "int32",
             "description": "Number of days to retain finished workflow runs (with their waits, event subscriptions and resume records) before automatic deletion. 0 (the default) keeps them forever. Omitting the field on update leaves the current value unchanged.",
@@ -6339,11 +5905,6 @@
           "createdOn": {
             "format": "date-time",
             "type": "string"
-          },
-          "scheduledJobRunId": {
-            "format": "int64",
-            "type": "integer",
-            "description": "Scheduled job run that wrote this entry"
           }
         }
       },
@@ -6504,11 +6065,6 @@
           "createdOn": {
             "format": "date-time",
             "type": "string"
-          },
-          "scheduledJobRunId": {
-            "format": "int64",
-            "type": "integer",
-            "description": "Scheduled job run that made this invocation"
           }
         }
       },
@@ -7096,13 +6652,6 @@
               "type": "string"
             }
           },
-          "scheduledJobIds": {
-            "type": "array",
-            "items": {
-              "format": "int64",
-              "type": "integer"
-            }
-          },
           "connectionIds": {
             "description": "Connection slugs to include",
             "type": "array",
@@ -7142,9 +6691,6 @@
             "type": "integer"
           },
           "sessionTemplates": {
-            "type": "integer"
-          },
-          "scheduledJobs": {
             "type": "integer"
           },
           "connections": {
@@ -7336,7 +6882,7 @@
         "type": "object",
         "properties": {
           "type": {
-            "description": "Item type directory (tools, action-types, toolsets, session-templates, event-sources, scheduled-jobs)",
+            "description": "Item type directory (tools, action-types, toolsets, session-templates, event-sources)",
             "type": "string"
           },
           "name": {
@@ -7405,18 +6951,6 @@
           },
           "sessionTemplatesUpdated": {
             "description": "Number of existing session templates updated",
-            "type": "integer"
-          },
-          "scheduledJobs": {
-            "description": "Total number of scheduled jobs applied (created + updated)",
-            "type": "integer"
-          },
-          "scheduledJobsCreated": {
-            "description": "Number of new scheduled jobs created",
-            "type": "integer"
-          },
-          "scheduledJobsUpdated": {
-            "description": "Number of existing scheduled jobs updated",
             "type": "integer"
           },
           "connectionsCreated": {
@@ -7680,7 +7214,7 @@
             "$ref": "#/components/schemas/TraceNode"
           },
           "detail": {
-            "description": "The referenced detail record; its shape depends on the node's entityType. Supported types: event, activity-log, ai-usage, tool-execution, task, workflow-run (adds definitionName and projectName; omits instanceState), workflow-wait and workflow-event-subscription (add status, runId, runStatus, definitionName and projectName; waits add waitType, subscriptions add matchedEventId), scheduled-job-run (adds jobName). Null when the entity type is unknown or the referenced record no longer exists.",
+            "description": "The referenced detail record; its shape depends on the node's entityType. Supported types: event, activity-log, ai-usage, tool-execution, task, workflow-run (adds definitionName and projectName; omits instanceState), workflow-wait and workflow-event-subscription (add status, runId, runStatus, definitionName and projectName; waits add waitType, subscriptions add matchedEventId). Null when the entity type is unknown or the referenced record no longer exists.",
             "type": "object"
           }
         }
@@ -8398,283 +7932,6 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ActionType"
-            }
-          },
-          "totalCount": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "page": {
-            "type": "integer"
-          },
-          "limit": {
-            "type": "integer"
-          }
-        }
-      },
-      "ScheduledJob": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "name": {
-            "type": "string"
-          },
-          "slug": {
-            "description": "Stable identifier used for agent capability matching. Auto-generated from name if not set.",
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "labels": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "enabled": {
-            "type": "boolean"
-          },
-          "schedule": {
-            "description": "Schedule preset: hourly, daily, weekly, monthly, or none",
-            "type": "string"
-          },
-          "scheduleTime": {
-            "description": "Time of day (HH:MM)",
-            "type": "string"
-          },
-          "scheduleDayOfWeek": {
-            "description": "Day of week for weekly schedule",
-            "type": "string"
-          },
-          "nextRunAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "lastRunAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "executionMode": {
-            "description": "Execution mode: agent or script",
-            "type": "string"
-          },
-          "promptTemplate": {
-            "description": "Prompt template for agent mode",
-            "type": "string"
-          },
-          "scriptTemplate": {
-            "description": "Script template for script mode",
-            "type": "string"
-          },
-          "model": {
-            "description": "Optional AI model override",
-            "type": "string"
-          },
-          "engine": {
-            "description": "Optional AI engine override",
-            "type": "string"
-          },
-          "allowedTools": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "maxSteps": {
-            "description": "Max agent steps",
-            "type": "integer"
-          },
-          "maxBudgetUsd": {
-            "format": "double",
-            "description": "Max budget in USD",
-            "type": "number"
-          },
-          "timeoutSeconds": {
-            "description": "Optional timeout in seconds. Overrides the global default when set.",
-            "type": "integer"
-          },
-          "environment": {
-            "description": "Custom environment variables. Values can reference secrets using ${secret:NAME} syntax.",
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "createdOn": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "updatedOn": {
-            "format": "date-time",
-            "type": "string"
-          }
-        }
-      },
-      "NewScheduledJob": {
-        "required": [
-          "name",
-          "schedule",
-          "executionMode"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "slug": {
-            "description": "Stable identifier used for agent capability matching. Auto-generated from name if not set.",
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "labels": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "enabled": {
-            "type": "boolean"
-          },
-          "schedule": {
-            "description": "Schedule preset: hourly, daily, weekly, monthly, or none",
-            "type": "string"
-          },
-          "scheduleTime": {
-            "description": "Time of day (HH:MM)",
-            "type": "string"
-          },
-          "scheduleDayOfWeek": {
-            "description": "Day of week for weekly schedule",
-            "type": "string"
-          },
-          "executionMode": {
-            "description": "Execution mode: agent or script",
-            "type": "string"
-          },
-          "promptTemplate": {
-            "description": "Prompt template for agent mode",
-            "type": "string"
-          },
-          "scriptTemplate": {
-            "description": "Script template for script mode",
-            "type": "string"
-          },
-          "model": {
-            "description": "Optional AI model override",
-            "type": "string"
-          },
-          "engine": {
-            "description": "Optional AI engine override",
-            "type": "string"
-          },
-          "allowedTools": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "maxSteps": {
-            "description": "Max agent steps",
-            "type": "integer"
-          },
-          "maxBudgetUsd": {
-            "format": "double",
-            "description": "Max budget in USD",
-            "type": "number"
-          },
-          "timeoutSeconds": {
-            "description": "Optional timeout in seconds. Overrides the global default when set.",
-            "type": "integer"
-          },
-          "environment": {
-            "description": "Custom environment variables. Values can reference secrets using ${secret:NAME} syntax.",
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "ScheduledJobRun": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "jobId": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "status": {
-            "description": "Run status: Pending, Running, Completed, or Failed",
-            "type": "string"
-          },
-          "trigger": {
-            "description": "How the run was triggered: scheduled or manual",
-            "type": "string"
-          },
-          "startedAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "completedAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "output": {
-            "type": "string"
-          },
-          "error": {
-            "type": "string"
-          },
-          "executionLog": {
-            "type": "string"
-          },
-          "costUsd": {
-            "format": "double",
-            "type": "number"
-          },
-          "durationMs": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "traceId": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "jobName": {
-            "description": "Name of the scheduled job this run belongs to",
-            "type": "string"
-          },
-          "createdOn": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "triggeredBy": {
-            "type": "string",
-            "description": "Who triggered it: scheduler or manual (Axiom has no authentication, so no user identity is recorded)"
-          },
-          "triggeredByTraceId": {
-            "format": "uuid",
-            "type": "string",
-            "description": "Trace of the caller (typically an agent) that triggered it manually, if known"
-          }
-        }
-      },
-      "ScheduledJobRunSearchResults": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ScheduledJobRun"
             }
           },
           "totalCount": {
@@ -9867,73 +9124,6 @@
           }
         }
       },
-      "ConfigurationSnapshot": {
-        "description": "The execution configuration a scheduled job run used, compared with the current definition.",
-        "type": "object",
-        "required": [
-          "versionId",
-          "configHash",
-          "changed",
-          "fields"
-        ],
-        "properties": {
-          "versionId": {
-            "description": "ID of the stored configuration version",
-            "format": "int64",
-            "type": "integer"
-          },
-          "configHash": {
-            "description": "SHA-256 hash of the configuration used",
-            "type": "string"
-          },
-          "currentConfigHash": {
-            "description": "SHA-256 hash of the definition's current configuration; null if the definition no longer exists",
-            "type": "string"
-          },
-          "capturedOn": {
-            "description": "When this configuration version was first recorded",
-            "format": "date-time",
-            "type": "string"
-          },
-          "changed": {
-            "description": "True when the definition's configuration has changed since this run",
-            "type": "boolean"
-          },
-          "fields": {
-            "description": "Field-by-field comparison of the configuration used with the current configuration",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ConfigurationField"
-            }
-          }
-        }
-      },
-      "ConfigurationField": {
-        "description": "One execution-relevant configuration field.",
-        "type": "object",
-        "required": [
-          "name",
-          "changed"
-        ],
-        "properties": {
-          "name": {
-            "description": "Field name, e.g. promptTemplate, model or environment",
-            "type": "string"
-          },
-          "value": {
-            "description": "Value used by the run (null when unset)",
-            "type": "string"
-          },
-          "currentValue": {
-            "description": "Current value in the definition (null when unset)",
-            "type": "string"
-          },
-          "changed": {
-            "description": "True when the current value differs from the value used",
-            "type": "boolean"
-          }
-        }
-      },
       "AiEditPromptRequest": {
         "required": [
           "message"
@@ -10117,10 +9307,6 @@
     {
       "name": "Dashboards",
       "description": "Custom dashboard management"
-    },
-    {
-      "name": "ScheduledJobs",
-      "description": "Scheduled Jobs CRUD and execution"
     },
     {
       "name": "WorkflowDefinitions",

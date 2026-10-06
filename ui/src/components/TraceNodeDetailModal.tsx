@@ -121,8 +121,6 @@ function renderDetail(nodeType: string, entityType: string | undefined,
             return <WorkflowWaitDetail detail={detail} />;
         case "workflow-event-subscription":
             return <WorkflowEventSubscriptionDetail detail={detail} />;
-        case "scheduled-job-run":
-            return <ScheduledJobRunDetail detail={detail} />;
         default:
             return <RawJsonDetail detail={detail} />;
     }
@@ -467,44 +465,6 @@ function WorkflowEventSubscriptionDetail({ detail }: { detail: Record<string, un
             <WorkflowRunGroup detail={detail} />
             <ProjectGroup detail={detail} />
         </DescriptionList>
-    );
-}
-
-function ScheduledJobRunDetail({ detail }: { detail: Record<string, unknown> }) {
-    const effectiveTheme = useEffectiveTheme();
-    const jobName = detail.jobName
-        ? String(detail.jobName)
-        : detail.jobId != null ? `Job #${detail.jobId}` : "—";
-    return (
-        <>
-            <DescriptionList isHorizontal isCompact style={{ marginBottom: "12px" }}>
-                <DescriptionListGroup>
-                    <DescriptionListTerm>Scheduled Job</DescriptionListTerm>
-                    <DescriptionListDescription>
-                        {detail.jobId != null ? (
-                            <Link to={`/scheduled-jobs/${detail.jobId}`}>{jobName}</Link>
-                        ) : jobName}
-                    </DescriptionListDescription>
-                </DescriptionListGroup>
-                <StatusGroup label="Run Status" status={detail.status} />
-                <DescriptionListGroup>
-                    <DescriptionListTerm>Trigger</DescriptionListTerm>
-                    <DescriptionListDescription>{String(detail.trigger || "—")}</DescriptionListDescription>
-                </DescriptionListGroup>
-            </DescriptionList>
-            {detail.executionLog != null && detail.executionLog !== "" && (
-                <>
-                    <h4 style={{ marginBottom: "4px", fontWeight: "bold" }}>Execution Log</h4>
-                    <CodeEditor
-                        code={String(detail.executionLog)}
-                        language={Language.markdown}
-                        isDarkTheme={effectiveTheme === "dark"}
-                        isReadOnly
-                        height="400px"
-                    />
-                </>
-            )}
-        </>
     );
 }
 

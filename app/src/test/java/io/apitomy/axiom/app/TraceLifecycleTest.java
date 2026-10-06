@@ -2,8 +2,6 @@ package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.agents.spi.AgentResult;
 import io.apitomy.axiom.core.entities.ProjectEntity;
-import io.apitomy.axiom.core.entities.ScheduledJobEntity;
-import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.TraceEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
@@ -38,9 +36,6 @@ class TraceLifecycleTest {
     AgentPool agentPool;
 
     @Inject
-    ScheduledJobExecutionService scheduledJobExecutionService;
-
-    @Inject
     TaskExecutionService taskExecutionService;
 
     @Inject
@@ -50,41 +45,6 @@ class TraceLifecycleTest {
     void noAgentsAvailable() {
         Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(),
                 ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Optional.empty());
-    }
-
-    // ── Scheduled jobs ───────────────────────────────────────────────
-
-    @Test
-    void scheduledJobWithNoAgentFailsRunAndClosesLinkedTrace() {
-        String name = "trace-job-" + UUID.randomUUID();
-        Long[] ids = QuarkusTransaction.requiringNew().call(() -> {
-            ScheduledJobEntity job = new ScheduledJobEntity();
-            job.name = name;
-            job.enabled = true;
-            job.schedule = "daily";
-            job.executionMode = "agent";
-            job.promptTemplate = "Do something";
-            job.createdOn = Instant.now();
-            job.updatedOn = Instant.now();
-            job.persist();
-            ScheduledJobRunEntity run = new ScheduledJobRunEntity();
-            run.jobId = job.id;
-            run.status = "Pending";
-            run.trigger = "manual";
-            run.createdOn = Instant.now();
-            run.persist();
-            return new Long[] { job.id, run.id };
-        });
-
-        ScheduledJobEntity job = QuarkusTransaction.requiringNew().call(() ->
-                ScheduledJobEntity.<ScheduledJobEntity>findById(ids[0]));
-        scheduledJobExecutionService.executeRun(job, ids[1]);
-
-        ScheduledJobRunEntity run = QuarkusTransaction.requiringNew().call(() ->
-                ScheduledJobRunEntity.<ScheduledJobRunEntity>findById(ids[1]));
-        assertEquals("Failed", run.status);
-        assertNotNull(run.traceId, "Run must stay linked to its trace");
-        assertTraceFinal(run.traceId, "failed");
     }
 
     // ── Tasks ────────────────────────────────────────────────────────

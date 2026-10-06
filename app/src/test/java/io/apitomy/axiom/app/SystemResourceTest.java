@@ -22,6 +22,11 @@ class SystemResourceTest {
     }
 
     @Test
+    void scheduledJobsEndpointIsGone() {
+        given().when().get("/api/v1/scheduled-jobs").then().statusCode(404);
+    }
+
+    @Test
     void testGetSystemHealth() {
         given()
             .when()
@@ -138,12 +143,12 @@ class SystemResourceTest {
             .then()
                 .statusCode(200)
                 .body("traceRetentionDays", notNullValue())
-                .body("scheduledJobRunRetentionDays", equalTo(0))
                 .body("workflowRunRetentionDays", equalTo(0))
                 .body("activityLogRetentionDays", equalTo(0))
                 .body("aiUsageRetentionDays", equalTo(0))
                 .body("$", not(hasKey("eventSourceLogRetentionDays")))
-                .body("$", not(hasKey("reportRetentionDays")));
+                .body("$", not(hasKey("reportRetentionDays")))
+                .body("$", not(hasKey("scheduledJobRunRetentionDays")));
     }
 
     @Test
@@ -155,8 +160,7 @@ class SystemResourceTest {
                     .contentType(ContentType.JSON)
                     .body("""
                             {"closedProjectRetentionDays":90,"traceRetentionDays":30,
-                             "eventRetentionDays":90,"scheduledJobRunRetentionDays":11,
-                             "workflowRunRetentionDays":13,
+                             "eventRetentionDays":90,"workflowRunRetentionDays":13,
                              "activityLogRetentionDays":14,"aiUsageRetentionDays":15}
                             """)
                 .when()
@@ -176,7 +180,7 @@ class SystemResourceTest {
                     .put("/api/v1/system/retention")
                 .then()
                     .statusCode(200)
-                    .body("scheduledJobRunRetentionDays", equalTo(11))
+                    .body("workflowRunRetentionDays", equalTo(13))
                     .body("aiUsageRetentionDays", equalTo(15));
 
             given()

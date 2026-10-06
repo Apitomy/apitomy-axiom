@@ -8,8 +8,6 @@ import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
-import io.apitomy.axiom.core.entities.ScheduledJobEntity;
-import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.TraceEntity;
@@ -119,10 +117,10 @@ class LineageTest {
         createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_TASK, task1, null);
         createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_TASK, task2, null);
         Long noMatchItem = createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_NO_MATCH, null, null);
-        createUsage(null, eventId, traceId, null, 0.10);
-        createUsage(task1, eventId, traceId, null, 0.20);
-        createUsage(task1, eventId, traceId, null, 0.05);
-        createUsage(task2, eventId, traceId, null, 0.30);
+        createUsage(null, eventId, traceId, 0.10);
+        createUsage(task1, eventId, traceId, 0.20);
+        createUsage(task1, eventId, traceId, 0.05);
+        createUsage(task2, eventId, traceId, 0.30);
 
         LineageGraph graph = get("event", eventId.toString(), "");
 
@@ -186,40 +184,6 @@ class LineageTest {
         assertEdge(run, "event:" + resumeEventId, "workflow-run:" + runId, "resumed");
         assertEdge(run, "workflow-run:" + runId, "task:" + task1, "created");
         assertEquals("upstream", node(run, "event:" + resumeEventId).getDirection());
-    }
-
-    // ── Job run whose agent created a task ──────────────────────────
-
-    @Test
-    void jobRunAgentTaskUpstreamWalk() {
-        UUID eventId = createEvent();
-        UUID routingTrace = createTrace("create-workflow", eventId);
-        Long[] job = createJobRun(routingTrace);
-        UUID runTrace = createTrace("scheduled-job-execution", null);
-        setJobRunTrace(job[1], runTrace);
-        Long rootNode = createTraceNode(runTrace, null, "scheduled-job-run", job[1].toString());
-        Long joined = createTask(runTrace, null, null);
-        createTraceNode(runTrace, rootNode, "task", joined.toString());
-        createUsage(null, null, runTrace, job[1], 1.50);
-
-        LineageGraph up = get("task", joined.toString(), "?direction=upstream");
-        assertEdge(up, "scheduled-job-run:" + job[1], "task:" + joined, "created");
-        assertEdge(up, "trace:" + routingTrace, "scheduled-job-run:" + job[1], "triggered-by-agent");
-        assertEdge(up, "event:" + eventId, "trace:" + routingTrace, "triggered");
-        LineageNode run = node(up, "scheduled-job-run:" + job[1]);
-        assertEquals(1.50, run.getCostUsd(), 0.0001);
-        assertEquals("/logs/job-runs?runId=" + job[1], run.getLinkPath());
-        assertTrue(run.getLabel().contains("lineage-job-"), run.getLabel());
-        assertNull(findNode(up, "trace:" + runTrace));
-
-        LineageGraph down = get("scheduled-job-run", job[1].toString(), "?direction=downstream");
-        assertEdge(down, "scheduled-job-run:" + job[1], "task:" + joined, "created");
-        assertEquals(2, down.getNodes().size());
-
-        LineageGraph fromRouting = get("trace", routingTrace.toString(), "?direction=downstream");
-        assertEdge(fromRouting, "trace:" + routingTrace, "scheduled-job-run:" + job[1],
-                "triggered-by-agent");
-        assertEdge(fromRouting, "scheduled-job-run:" + job[1], "task:" + joined, "created");
     }
 
     @Test
@@ -289,8 +253,6 @@ class LineageTest {
         UUID runTrace = createTrace("workflow", eventId);
         Long runId = createRun(eventId, runTrace);
         Long task = createTask(runTrace, null, runId);
-        UUID callerTrace = createTrace("create-workflow", null);
-        Long[] job = createJobRun(callerTrace);
         UUID otherEvent = createEvent();
         Long outcomeId = createOutcome(otherEvent, "create-workflow", null);
         Long deletedTask = createTask(null, otherEvent, null);
@@ -298,7 +260,6 @@ class LineageTest {
 
         QuarkusTransaction.requiringNew().run(() -> {
             StreamEventEntity.deleteById(eventId);
-            TraceEntity.deleteById(callerTrace);
             TaskEntity.deleteById(deletedTask);
         });
 
@@ -308,9 +269,6 @@ class LineageTest {
         assertEquals("unavailable", event.getStatus());
         assertNull(event.getLinkPath());
         assertTrue(node(run, "task:" + task).getAvailable());
-
-        LineageGraph jobGraph = get("scheduled-job-run", job[1].toString(), "");
-        assertFalse(node(jobGraph, "trace:" + callerTrace).getAvailable());
 
         LineageGraph other = get("event", otherEvent.toString(), "");
         LineageNode gone = node(other, "task:" + deletedTask);
@@ -338,7 +296,7 @@ class LineageTest {
     @Test
     void unknownRootReturns404WithErrorBody() {
         for (String path : List.of("task/999999999", "event/" + UUID.randomUUID(),
-                "trace/" + UUID.randomUUID(), "workflow-run/999999999", "scheduled-job-run/999999999")) {
+                "trace/" + UUID.randomUUID(), "workflow-run/999999999")) {
             given().when().get("/api/v1/lineage/" + path).then()
                     .statusCode(404)
                     .contentType(ContentType.JSON)
@@ -377,15 +335,14 @@ class LineageTest {
         UUID eventId = createEvent();
         UUID runTrace = createTrace("workflow", eventId);
         Long runId = createRun(eventId, runTrace);
-        createTask(runTrace, null, runId);
-        Long[] job = createJobRun(runTrace);
+        Long task = createTask(runTrace, null, runId);
 
         Statistics stats = statistics();
         stats.clear();
         LineageGraph graph = lineageService.getLineage("event", eventId.toString(), "both", 5, 200);
-        assertNotNull(findNode(graph, "scheduled-job-run:" + job[1]));
-        for (Class<?> type : List.of(StreamEventEntity.class, TaskEntity.class, WorkflowRunEntity.class,
-                ScheduledJobRunEntity.class)) {
+        assertNotNull(findNode(graph, "workflow-run:" + runId));
+        assertNotNull(findNode(graph, "task:" + task));
+        for (Class<?> type : List.of(StreamEventEntity.class, TaskEntity.class, WorkflowRunEntity.class)) {
             assertEquals(0, stats.getEntityStatistics(type.getName()).getLoadCount(),
                     type.getSimpleName() + " rows must be loaded as label projections");
         }
@@ -417,14 +374,15 @@ class LineageTest {
     void edgesBetweenKnownNodesAtTheDepthLimitAreKept() {
         UUID eventId = createEvent();
         UUID routingTrace = createTrace("create-workflow", eventId);
-        Long[] job = createJobRun(routingTrace);
-        UUID runTrace = createTrace("scheduled-job-execution", eventId);
-        setJobRunTrace(job[1], runTrace);
+        // The task is reached from the event (an outcome without a trace) and from the trace.
+        Long task = createTask(routingTrace, null, null);
+        Long outcomeId = createOutcome(eventId, "create-workflow", null);
+        createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_TASK, task, null);
 
         LineageGraph graph = get("event", eventId.toString(), "?direction=downstream&depth=1");
         assertEdge(graph, "event:" + eventId, "trace:" + routingTrace, "triggered");
-        assertEdge(graph, "event:" + eventId, "scheduled-job-run:" + job[1], "triggered");
-        assertEdge(graph, "trace:" + routingTrace, "scheduled-job-run:" + job[1], "triggered-by-agent");
+        assertEdge(graph, "event:" + eventId, "task:" + task, "created");
+        assertEdge(graph, "trace:" + routingTrace, "task:" + task, "created");
     }
 
     private Statistics statistics() {
@@ -451,7 +409,7 @@ class LineageTest {
         for (int i = 0; i < taskCount; i++) {
             Long task = createTask(traceId, eventId, null);
             createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_TASK, task, null);
-            createUsage(task, eventId, traceId, null, 0.01);
+            createUsage(task, eventId, traceId, 0.01);
         }
         Statistics stats = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
         assertTrue(stats.isStatisticsEnabled(), "Hibernate statistics must be enabled in tests");
@@ -628,50 +586,17 @@ class LineageTest {
         });
     }
 
-    private void createUsage(Long taskId, UUID eventId, UUID traceId, Long jobRunId, double cost) {
+    private void createUsage(Long taskId, UUID eventId, UUID traceId, double cost) {
         QuarkusTransaction.requiringNew().run(() -> {
             AiUsageEntity usage = new AiUsageEntity();
             usage.invocationType = "test";
             usage.taskId = taskId;
             usage.eventId = eventId;
             usage.traceId = traceId;
-            usage.scheduledJobRunId = jobRunId;
             usage.costUsd = cost;
             usage.createdOn = Instant.now();
             usage.persist();
             track(AiUsageEntity.class, usage.id);
-        });
-    }
-
-    private Long[] createJobRun(UUID triggeredByTrace) {
-        return QuarkusTransaction.requiringNew().call(() -> {
-            ScheduledJobEntity job = new ScheduledJobEntity();
-            job.name = "lineage-job-" + UUID.randomUUID();
-            job.enabled = false;
-            job.schedule = "daily";
-            job.executionMode = "agent";
-            job.promptTemplate = "Do something";
-            job.createdOn = Instant.now();
-            job.updatedOn = Instant.now();
-            job.persist();
-            track(ScheduledJobEntity.class, job.id);
-            ScheduledJobRunEntity run = new ScheduledJobRunEntity();
-            run.jobId = job.id;
-            run.status = "Completed";
-            run.trigger = "manual";
-            run.triggeredBy = "manual";
-            run.triggeredByTraceId = triggeredByTrace;
-            run.createdOn = Instant.now();
-            run.persist();
-            track(ScheduledJobRunEntity.class, run.id);
-            return new Long[] { job.id, run.id };
-        });
-    }
-
-    private void setJobRunTrace(Long runId, UUID traceId) {
-        QuarkusTransaction.requiringNew().run(() -> {
-            ScheduledJobRunEntity run = ScheduledJobRunEntity.findById(runId);
-            run.traceId = traceId;
         });
     }
 }

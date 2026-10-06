@@ -41,9 +41,6 @@ import { TraceDetailPage } from "./pages/TraceDetailPage";
 import { InboxPage } from "./pages/InboxPage";
 import { SessionTemplatesPage } from "./pages/SessionTemplatesPage";
 import { SessionTemplateDetailPage } from "./pages/SessionTemplateDetailPage";
-import { ScheduledJobsPage } from "./pages/ScheduledJobsPage";
-import { ScheduledJobDetailPage } from "./pages/ScheduledJobDetailPage";
-import { ScheduledJobRunsPage } from "./pages/ScheduledJobRunsPage";
 import { WorkflowDefinitionsPage } from "./pages/WorkflowDefinitionsPage";
 import { WorkflowDefinitionDetailPage } from "./pages/WorkflowDefinitionDetailPage";
 import { WorkflowRunsPage } from "./pages/WorkflowRunsPage";
@@ -136,7 +133,6 @@ export function App() {
                         <Route path="/events/stream" element={<EventStreamPage />} />
                         <Route path="/events/stream/:eventId" element={<EventDetailPage />} />
                         <Route path="/logs/tasks" element={<TasksPage />} />
-                        <Route path="/logs/job-runs" element={<ScheduledJobRunsPage />} />
                         <Route path="/logs/traces" element={<TracesPage />} />
                         <Route path="/logs/traces/:traceId" element={<TraceDetailPage />} />
                         <Route path="/logs/workflow-runs" element={<WorkflowRunsPage />} />
@@ -150,8 +146,6 @@ export function App() {
                         <Route path="/secrets" element={<SecretsPage />} />
                         <Route path="/configuration-packs" element={<ConfigurationPacksPage />} />
                         <Route path="/data-retention" element={<DataRetentionPage />} />
-                        <Route path="/scheduled-jobs" element={<ScheduledJobsPage />} />
-                        <Route path="/scheduled-jobs/:jobId" element={<ScheduledJobDetailPage />} />
                         <Route path="/session-templates" element={<SessionTemplatesPage />} />
                         <Route path="/session-templates/:templateId" element={<SessionTemplateDetailPage />} />
                         <Route path="/components/workflows" element={<WorkflowDefinitionsPage />} />

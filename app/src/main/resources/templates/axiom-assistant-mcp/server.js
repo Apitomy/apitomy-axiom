@@ -166,36 +166,6 @@ const TOOLS = [
         },
     },
     {
-        name: "axiom_list_scheduled_jobs",
-        description: "List all scheduled jobs in Axiom. Returns names, schedules, execution modes, and whether they are enabled.",
-        parameters: [],
-        handler: async () => {
-            const items = JSON.parse(await axiomApi("GET", "/scheduled-jobs"));
-            if (items.length === 0) return "No scheduled jobs configured.";
-            return JSON.stringify(items.map(j => ({
-                id: j.id,
-                name: j.name,
-                description: j.description || "",
-                schedule: j.schedule,
-                executionMode: j.executionMode,
-                enabled: j.enabled,
-            })), null, 2);
-        },
-    },
-    {
-        name: "axiom_get_scheduled_job",
-        description: "Get full details of a specific scheduled job by name, including its schedule, execution configuration, allowed tools, and environment.",
-        parameters: [
-            { name: "name", type: "string", description: "The scheduled job name", required: true },
-        ],
-        handler: async (args) => {
-            const items = JSON.parse(await axiomApi("GET", "/scheduled-jobs"));
-            const job = items.find(j => j.name === args.name);
-            if (!job) return `Scheduled job '${args.name}' not found.`;
-            return JSON.stringify(job, null, 2);
-        },
-    },
-    {
         name: "axiom_list_connections",
         description: "List all configured event source connections (GitHub, Jira) with their IDs, names, types, and enabled status.",
         parameters: [],

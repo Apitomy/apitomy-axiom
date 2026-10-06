@@ -37,8 +37,8 @@ export const STATUS_COLORS: Record<string, LabelProps["color"]> = {
 };
 
 /**
- * Looks up the label colour for a status, ignoring case (workflow run and scheduled-job
- * statuses are capitalised, e.g. "Completed").
+ * Looks up the label colour for a status, ignoring case (some statuses are capitalised,
+ * e.g. "Completed").
  */
 export function statusColor(status: string | null | undefined): LabelProps["color"] {
     return status ? STATUS_COLORS[status.toLowerCase()] : undefined;

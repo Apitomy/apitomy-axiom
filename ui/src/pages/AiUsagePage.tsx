@@ -25,7 +25,6 @@ import {
     FilterChips,
 } from "@apitomy/common-ui-components";
 import { Link, useSearchParams } from "react-router-dom";
-import { RunSourceLink } from "../components/RunSourceLink";
 import { type AiUsage, fetchUsage } from "../config/api";
 
 const TYPE_COLORS: Record<string, "blue" | "green"> = {
@@ -47,10 +46,9 @@ const FILTER_TYPES: ChipFilterType[] = [
     { value: "engine", label: "Engine", testId: "usage-filter-engine" },
     { value: "model", label: "Model", testId: "usage-filter-model" },
     { value: "traceId", label: "Trace ID", testId: "usage-filter-traceId" },
-    { value: "scheduledJobRunId", label: "Job Run ID", testId: "usage-filter-scheduledJobRunId" },
 ];
 
-const DEEP_LINK_FILTERS = ["traceId", "scheduledJobRunId"];
+const DEEP_LINK_FILTERS = ["traceId"];
 
 export function AiUsagePage() {
     const [records, setRecords] = useState<AiUsage[]>([]);
@@ -61,7 +59,7 @@ export function AiUsagePage() {
 
     const [searchParams] = useSearchParams();
     const [filters, setFilters] = useState<ChipFilterCriteria[]>(() => {
-        // Deep links: ?traceId= and ?scheduledJobRunId= preset the matching filter
+        // Deep link: ?traceId= presets the matching filter
         return DEEP_LINK_FILTERS.flatMap((key) => {
             const value = searchParams.get(key);
             return value
@@ -82,7 +80,6 @@ export function AiUsagePage() {
     const filterEngine = filters.find((f) => f.filterBy.value === "engine")?.filterValue;
     const filterModel = filters.find((f) => f.filterBy.value === "model")?.filterValue;
     const filterTraceId = filters.find((f) => f.filterBy.value === "traceId")?.filterValue;
-    const filterRunId = filters.find((f) => f.filterBy.value === "scheduledJobRunId")?.filterValue;
     const isFiltered = filters.length > 0 || !!filterDateFrom || !!filterDateTo;
 
     const loadData = useCallback(() => {
@@ -97,8 +94,7 @@ export function AiUsagePage() {
             undefined,
             filterEngine || undefined,
             filterModel || undefined,
-            filterTraceId?.trim() || undefined,
-            filterRunId?.trim() || undefined
+            filterTraceId?.trim() || undefined
         )
             .then((results) => {
                 setRecords(results.items);
@@ -110,7 +106,7 @@ export function AiUsagePage() {
             .catch(console.error)
             .finally(() => setLoading(false));
     }, [page, perPage, filterInvocationType, filterActionType, filterDateFrom, filterDateTo,
-        filterEngine, filterModel, filterTraceId, filterRunId]);
+        filterEngine, filterModel, filterTraceId]);
 
     useEffect(() => { loadData(); }, [loadData]);
 
@@ -265,7 +261,6 @@ export function AiUsagePage() {
                                 <Th>Model</Th>
                                 <Th>Project</Th>
                                 <Th>Trace</Th>
-                                <Th>Source</Th>
                                 <Th>Cost</Th>
                                 <Th>Input Tokens</Th>
                                 <Th>Output Tokens</Th>
@@ -330,9 +325,6 @@ export function AiUsagePage() {
                                                 {r.traceId.substring(0, 8)}
                                             </Link>
                                         ) : "—"}
-                                    </Td>
-                                    <Td>
-                                        <RunSourceLink scheduledJobRunId={r.scheduledJobRunId} />
                                     </Td>
                                     <Td>
                                         {r.costUsd != null

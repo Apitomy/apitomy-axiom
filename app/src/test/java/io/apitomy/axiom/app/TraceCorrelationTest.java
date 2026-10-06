@@ -8,8 +8,6 @@ import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
-import io.apitomy.axiom.core.entities.ScheduledJobEntity;
-import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
@@ -65,9 +63,6 @@ class TraceCorrelationTest {
 
     @Inject
     TaskExecutionService taskExecutionService;
-
-    @Inject
-    ScheduledJobExecutionService scheduledJobExecutionService;
 
     @Inject
     WorkflowExecutionService workflowExecutionService;
@@ -129,47 +124,6 @@ class TraceCorrelationTest {
         assertEquals(ctx.traceId(), usage.get(0).traceId);
     }
 
-    // ── Scheduled jobs ───────────────────────────────────────────────
-
-    @Test
-    void scheduledJobActivityAndAiUsageCarryRunTrace() {
-        String name = "corr-job-" + UUID.randomUUID();
-        Long[] ids = QuarkusTransaction.requiringNew().call(() -> {
-            ScheduledJobEntity job = new ScheduledJobEntity();
-            job.name = name;
-            job.enabled = true;
-            job.schedule = "daily";
-            job.executionMode = "agent";
-            job.promptTemplate = "Do something";
-            job.createdOn = Instant.now();
-            job.updatedOn = Instant.now();
-            job.persist();
-            ScheduledJobRunEntity run = new ScheduledJobRunEntity();
-            run.jobId = job.id;
-            run.status = "Pending";
-            run.trigger = "manual";
-            run.createdOn = Instant.now();
-            run.persist();
-            return new Long[] { job.id, run.id };
-        });
-        TraceContext ctx = traceService.createTrace("scheduled-job-execution", "corr job",
-                null, null, "scheduled-job", "root", null, null);
-        Instant start = Instant.now();
-
-        scheduledJobExecutionService.markRunning(ids[1], ctx.traceId());
-        scheduledJobExecutionService.onAgentCompleted(ids[1], ids[0], AgentResult.success("ok"),
-                ctx, null);
-
-        assertEquals(ctx.traceId(), activityRow("scheduled-job-running", name).traceId);
-        assertEquals(ctx.traceId(), activityRow("scheduled-job-completed", name).traceId);
-        List<AiUsageEntity> usage = QuarkusTransaction.requiringNew().call(() ->
-                AiUsageEntity.<AiUsageEntity>list(
-                        "invocationType = 'scheduled-job' and actionType = ?1", name));
-        assertEquals(1, usage.size());
-        assertEquals(ctx.traceId(), usage.get(0).traceId);
-        assertFalse(usage.get(0).createdOn.isBefore(start));
-    }
-
     // ── Workflows ────────────────────────────────────────────────────
 
     @Test
@@ -218,14 +172,5 @@ class TraceCorrelationTest {
             project.persist();
             return project.id;
         });
-    }
-
-    private ActivityLogEntity activityRow(String entryType, String nameFragment) {
-        ActivityLogEntity row = QuarkusTransaction.requiringNew().call(() ->
-                ActivityLogEntity.<ActivityLogEntity>find(
-                        "entryType = ?1 and summary like ?2", entryType,
-                        "%" + nameFragment + "%").firstResult());
-        assertNotNull(row, "Missing activity row " + entryType + " for " + nameFragment);
-        return row;
     }
 }

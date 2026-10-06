@@ -23,7 +23,6 @@ const TYPE_LABELS: Record<string, string> = {
     "trace": "Trace",
     "workflow-run": "Workflow run",
     "task": "Task",
-    "scheduled-job-run": "Job run",
     "outcome": "Outcome",
 };
 
@@ -34,7 +33,6 @@ const UPSTREAM_WORDING: Record<string, string> = {
     "resumed": "resumed by",
     "produced": "produced by",
     "part-of": "part of",
-    "triggered-by-agent": "triggered by an agent in",
 };
 
 interface LineagePanelProps {

@@ -49,8 +49,6 @@ public final class LogContext implements AutoCloseable {
     public static final String PROJECT_ID = "projectId";
     /** MDC key for the task ID. */
     public static final String TASK_ID = "taskId";
-    /** MDC key for the scheduled job run ID. */
-    public static final String RUN_ID = "runId";
     /** MDC key for the workflow run ID. */
     public static final String WORKFLOW_RUN_ID = "workflowRunId";
     /** MDC key holding a compact rendering of all present correlation keys, used by the log format. */
@@ -58,7 +56,7 @@ public final class LogContext implements AutoCloseable {
 
     /** All correlation keys, in the order they are rendered in {@link #SUMMARY}. */
     public static final List<String> KEYS = List.of(
-            TRACE_ID, EVENT_ID, PROJECT_ID, TASK_ID, RUN_ID, WORKFLOW_RUN_ID);
+            TRACE_ID, EVENT_ID, PROJECT_ID, TASK_ID, WORKFLOW_RUN_ID);
 
     /** Previous MDC values of the keys changed by this context ({@code null} = absent). */
     private final Map<String, Object> previous = new LinkedHashMap<>();
@@ -137,16 +135,6 @@ public final class LogContext implements AutoCloseable {
      */
     public LogContext taskId(Object value) {
         return putIfNotNull(TASK_ID, value);
-    }
-
-    /**
-     * Sets {@value #RUN_ID} (scheduled job run); ignored when {@code value} is null.
-     *
-     * @param value the scheduled job run ID
-     * @return this context
-     */
-    public LogContext runId(Object value) {
-        return putIfNotNull(RUN_ID, value);
     }
 
     /**

@@ -36,7 +36,6 @@ import {
     type ToolDefinition,
     type Toolset,
     type McpServer,
-    type ScheduledJob,
     type SessionTemplate,
     type Connection,
     type Subscription,
@@ -47,7 +46,6 @@ import {
     fetchTools,
     fetchToolsets,
     fetchMcpServers,
-    fetchScheduledJobs,
     fetchAssistantTemplates,
     fetchConnections,
     fetchSubscriptions,
@@ -61,7 +59,6 @@ export function ConfigurationPacksPage() {
     const [tools, setTools] = useState<ToolDefinition[]>([]);
     const [toolsets, setToolsets] = useState<Toolset[]>([]);
     const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
-    const [scheduledJobs, setScheduledJobs] = useState<ScheduledJob[]>([]);
     const [sessionTemplates, setSessionTemplates] = useState<SessionTemplate[]>([]);
     const [connections, setConnections] = useState<Connection[]>([]);
     const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -76,7 +73,6 @@ export function ConfigurationPacksPage() {
     const [selectedTools, setSelectedTools] = useState<Set<number>>(new Set());
     const [selectedToolsets, setSelectedToolsets] = useState<Set<number>>(new Set());
     const [selectedMcpServers, setSelectedMcpServers] = useState<Set<number>>(new Set());
-    const [selectedScheduledJobs, setSelectedScheduledJobs] = useState<Set<number>>(new Set());
     const [selectedSessionTemplates, setSelectedSessionTemplates] = useState<Set<string>>(new Set());
     const [selectedConnections, setSelectedConnections] = useState<Set<string>>(new Set());
     const [selectedSubscriptions, setSelectedSubscriptions] = useState<Set<number>>(new Set());
@@ -100,18 +96,16 @@ export function ConfigurationPacksPage() {
             fetchTools(1, 1000),
             fetchToolsets(),
             fetchMcpServers(),
-            fetchScheduledJobs(),
             fetchAssistantTemplates(),
             fetchConnections(1, 100),
             fetchSubscriptions(1, 100),
             fetchWorkflowDefinitions(1, 1000),
         ])
-            .then(([at, t, ts, mcp, sj, st, conn, sub, wd]) => {
+            .then(([at, t, ts, mcp, st, conn, sub, wd]) => {
                 setActionTypes(at.items);
                 setTools(t.items);
                 setToolsets(ts);
                 setMcpServers(mcp);
-                setScheduledJobs(sj);
                 setSessionTemplates(st.filter((s: SessionTemplate) => !s.builtIn));
                 setConnections(conn.items);
                 setSubscriptions(sub.items);
@@ -125,7 +119,7 @@ export function ConfigurationPacksPage() {
 
     const totalSelected = selectedActionTypes.size + selectedTools.size
         + selectedToolsets.size + selectedMcpServers.size
-        + selectedScheduledJobs.size + selectedSessionTemplates.size
+        + selectedSessionTemplates.size
         + selectedConnections.size + selectedSubscriptions.size
         + selectedWorkflowDefs.size;
 
@@ -139,7 +133,6 @@ export function ConfigurationPacksPage() {
                 toolIds: [...selectedTools],
                 toolsetIds: [...selectedToolsets],
                 mcpServerIds: [...selectedMcpServers],
-                scheduledJobIds: [...selectedScheduledJobs],
                 sessionTemplateIds: [...selectedSessionTemplates],
                 connectionIds: [...selectedConnections],
                 subscriptionIds: [...selectedSubscriptions],
@@ -174,7 +167,6 @@ export function ConfigurationPacksPage() {
                     if (json.tools?.length) preview["Tools"] = json.tools.length;
                     if (json.toolsets?.length) preview["Toolsets"] = json.toolsets.length;
                     if (json.mcpServers?.length) preview["MCP Servers"] = json.mcpServers.length;
-                    if (json.scheduledJobs?.length) preview["Scheduled Jobs"] = json.scheduledJobs.length;
                     if (json.sessionTemplates?.length) preview["Session Templates"] = json.sessionTemplates.length;
                     if (json.connections?.length) preview["Connections"] = json.connections.length;
                     if (json.subscriptions?.length) preview["Subscriptions"] = json.subscriptions.length;
@@ -302,7 +294,7 @@ export function ConfigurationPacksPage() {
             </Title>
             <p className="axiom-text-subtle" style={{ marginTop: "8px", marginBottom: "16px" }}>
                 Configuration packs bundle related items — action types, tools, toolsets,
-                MCP servers, scheduled jobs, session templates,
+                MCP servers, session templates,
                 connections, subscriptions, and workflow definitions — into a portable JSON
                 file. Create a pack to share your setup with others, or import one to quickly
                 add pre-configured functionality to your Axiom instance.
@@ -398,33 +390,6 @@ export function ConfigurationPacksPage() {
                                 <CheckboxSection title="MCP Servers" items={mcpServers}
                                     selected={selectedMcpServers}
                                     onToggle={(id) => setSelectedMcpServers(toggleSet(selectedMcpServers, id))} />
-                                <SelectedItemsSection title="Scheduled Jobs" allItems={scheduledJobs}
-                                    selected={selectedScheduledJobs}
-                                    onAdd={(ids) => {
-                                        setSelectedScheduledJobs(new Set([...selectedScheduledJobs, ...ids]));
-                                        autoSelectReferencedItems(
-                                            ids.map((id) => scheduledJobs.find((sj) => sj.id === id)?.allowedTools));
-                                    }}
-                                    onRemove={(id) => { const next = new Set(selectedScheduledJobs); next.delete(id); setSelectedScheduledJobs(next); }}
-                                    renderItem={(item) => {
-                                        const sj = scheduledJobs.find((x) => x.id === item.id);
-                                        return (
-                                            <Flex alignItems={{ default: "alignItemsCenter" }} style={{ gap: "8px" }}>
-                                                <FlexItem><span style={{ fontWeight: 600 }}>{item.name}</span></FlexItem>
-                                                <FlexItem>
-                                                    <Label isCompact>{sj?.schedule || "—"}</Label>
-                                                </FlexItem>
-                                                <FlexItem>
-                                                    <Label isCompact color={sj?.enabled ? "green" : "grey"}>
-                                                        {sj?.enabled ? "enabled" : "disabled"}
-                                                    </Label>
-                                                </FlexItem>
-                                            </Flex>
-                                        );
-                                    }}
-                                    renderModal={(props) => (
-                                        <ScheduledJobPickerModal {...props} allScheduledJobs={scheduledJobs} />
-                                    )} />
                                 <SessionTemplateCheckboxSection
                                     templates={sessionTemplates}
                                     selected={selectedSessionTemplates}
@@ -542,7 +507,6 @@ export function ConfigurationPacksPage() {
                                         {importResult.toolsets ? <li>{importResult.toolsets} toolset(s)</li> : null}
                                         {importResult.mcpServers ? <li>{importResult.mcpServers} MCP server(s)</li> : null}
                                         {importResult.actionTypes ? <li>{importResult.actionTypes} action type(s)</li> : null}
-                                        {importResult.scheduledJobs ? <li>{importResult.scheduledJobs} scheduled job(s)</li> : null}
                                         {importResult.sessionTemplates ? <li>{importResult.sessionTemplates} session template(s)</li> : null}
                                         {importResult.connections ? <li>{importResult.connections} connection(s)</li> : null}
                                         {importResult.subscriptions ? <li>{importResult.subscriptions} subscription(s)</li> : null}
@@ -1092,83 +1056,5 @@ function ConnectionCheckboxSection({ connections, selected, onToggle }: {
                 ))}
             </div>
         </div>
-    );
-}
-
-function ScheduledJobPickerModal({ isOpen, onClose, availableItems, modalSelected, toggleItem, selectAll, onConfirm, allScheduledJobs }: {
-    isOpen: boolean;
-    onClose: () => void;
-    availableItems: Array<{ id: number; name: string }>;
-    modalSelected: Set<number>;
-    toggleItem: (id: number) => void;
-    selectAll: (ids: number[]) => void;
-    onConfirm: () => void;
-    allScheduledJobs: ScheduledJob[];
-}) {
-    const [filter, setFilter] = useState("");
-
-    const available = allScheduledJobs.filter((sj) => availableItems.some((i) => i.id === sj.id));
-    const filtered = filter
-        ? available.filter((sj) =>
-            sj.name.toLowerCase().includes(filter.toLowerCase())
-            || (sj.description && sj.description.toLowerCase().includes(filter.toLowerCase())))
-        : available;
-
-    const allFilteredSelected = filtered.length > 0 && filtered.every((sj) => modalSelected.has(sj.id));
-    const handleSelectAll = () => {
-        if (allFilteredSelected) {
-            selectAll([...modalSelected].filter((id) => !filtered.some((sj) => sj.id === id)));
-        } else {
-            selectAll([...new Set([...modalSelected, ...filtered.map((sj) => sj.id)])]);
-        }
-    };
-
-    return (
-        <Modal isOpen={isOpen} onClose={onClose} variant="large" aria-label="Add Scheduled Jobs">
-            <ModalHeader title="Add Scheduled Jobs" />
-            <ModalBody>
-                <TextInput placeholder="Filter scheduled jobs..." value={filter}
-                    onChange={(_e, v) => setFilter(v)} aria-label="Filter scheduled jobs"
-                    style={{ marginBottom: "16px" }} />
-                {filtered.length === 0 ? (
-                    <p className="axiom-text-subtle" style={{ fontStyle: "italic" }}>
-                        {available.length === 0 ? "All scheduled jobs are already selected." : "No scheduled jobs match the filter."}
-                    </p>
-                ) : (
-                    <Table aria-label="Scheduled Jobs" variant="compact">
-                        <Thead>
-                            <Tr>
-                                <Th style={{ width: "40px" }}><Checkbox id="select-all-scheduledjobs" isChecked={allFilteredSelected}
-                                    onChange={handleSelectAll} aria-label="Select all" /></Th>
-                                <Th>Name</Th>
-                                <Th>Schedule</Th>
-                                <Th>Status</Th>
-                            </Tr>
-                        </Thead>
-                        <Tbody>
-                            {filtered.map((sj) => (
-                                <Tr key={sj.id}>
-                                    <Td><Checkbox id={`sj-pick-${sj.id}`} isChecked={modalSelected.has(sj.id)}
-                                        onChange={() => toggleItem(sj.id)} aria-label={`Select ${sj.name}`} /></Td>
-                                    <Td>{sj.name}</Td>
-                                    <Td><Label isCompact>{sj.schedule}</Label></Td>
-                                    <Td>
-                                        <Label isCompact color={sj.enabled ? "green" : "grey"}>
-                                            {sj.enabled ? "enabled" : "disabled"}
-                                        </Label>
-                                    </Td>
-                                </Tr>
-                            ))}
-                        </Tbody>
-                    </Table>
-                )}
-            </ModalBody>
-            <ModalFooter>
-                <Button variant="primary" onClick={onConfirm} isDisabled={modalSelected.size === 0}>
-                    Add {modalSelected.size > 0 ? `(${modalSelected.size})` : ""}
-                </Button>
-                <Button variant="link" onClick={onClose}>Cancel</Button>
-            </ModalFooter>
-        </Modal>
     );
 }

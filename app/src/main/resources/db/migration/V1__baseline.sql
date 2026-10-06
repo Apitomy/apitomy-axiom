@@ -30,12 +30,6 @@
 
     create sequence routing_outcome_SEQ start with 1 increment by 50;
 
-    create sequence scheduled_job_run_SEQ start with 1 increment by 50;
-
-    create sequence scheduled_job_SEQ start with 1 increment by 50;
-
-    create sequence scheduled_job_version_SEQ start with 1 increment by 50;
-
     create sequence secret_SEQ start with 1 increment by 50;
 
     create sequence session_template_SEQ start with 1 increment by 50;
@@ -116,7 +110,6 @@
         created_on timestamp(6) not null,
         id bigint not null,
         project_id bigint,
-        scheduled_job_run_id bigint,
         task_id bigint,
         event_id uuid,
         trace_id uuid,
@@ -160,7 +153,6 @@
         input_tokens bigint,
         output_tokens bigint,
         project_id bigint,
-        scheduled_job_run_id bigint,
         task_id bigint,
         event_id uuid,
         trace_id uuid,
@@ -284,7 +276,6 @@
         ai_usage_retention_days integer default 0 not null,
         closed_project_retention_days integer default 90 not null,
         event_retention_days integer default 90 not null,
-        scheduled_job_run_retention_days integer default 0 not null,
         trace_retention_days integer default 30 not null,
         workflow_run_retention_days integer default 0 not null,
         id bigint not null,
@@ -319,67 +310,6 @@
         error_message TEXT,
         summary TEXT,
         primary key (id)
-    );
-
-    create table scheduled_job (
-        enabled boolean default false not null,
-        max_budget_usd float(53),
-        max_steps integer,
-        timeout_seconds integer,
-        created_on timestamp(6) not null,
-        id bigint not null,
-        last_run_at timestamp(6),
-        next_run_at timestamp(6),
-        updated_on timestamp(6) not null,
-        allowed_tools TEXT,
-        description TEXT,
-        engine varchar(255),
-        environment TEXT,
-        execution_mode varchar(20) not null,
-        model varchar(255),
-        name varchar(255) not null unique,
-        prompt_template TEXT,
-        schedule varchar(50) not null,
-        schedule_day_of_week varchar(20),
-        schedule_time varchar(10),
-        script_template TEXT,
-        slug varchar(255),
-        primary key (id)
-    );
-
-    create table scheduled_job_label (
-        scheduled_job_id bigint not null,
-        label varchar(255) not null
-    );
-
-    create table scheduled_job_run (
-        cost_usd float(53),
-        completed_at timestamp(6),
-        config_version_id bigint,
-        created_on timestamp(6) not null,
-        duration_ms bigint,
-        id bigint not null,
-        job_id bigint not null,
-        started_at timestamp(6),
-        trace_id uuid,
-        triggered_by_trace_id uuid,
-        error TEXT,
-        execution_log TEXT,
-        output TEXT,
-        run_trigger varchar(20) default 'scheduled' not null,
-        status varchar(20) not null,
-        triggered_by varchar(255),
-        primary key (id)
-    );
-
-    create table scheduled_job_version (
-        created_on timestamp(6) not null,
-        id bigint not null,
-        job_id bigint not null,
-        config_hash varchar(64) not null,
-        config_snapshot TEXT not null,
-        primary key (id),
-        constraint uq_sjv_job_hash unique (job_id, config_hash)
     );
 
     create table secret (
@@ -633,11 +563,6 @@
        foreign key (project_id) 
        references project on delete cascade;
 
-    alter table if exists scheduled_job_label 
-       add constraint FKg320v4be9jgfatfqcivv7t956 
-       foreign key (scheduled_job_id) 
-       references scheduled_job on delete cascade;
-
     alter table if exists session_template_allowed_tool 
        add constraint FK3rcvftv3im5ore04s9lwclws2 
        foreign key (session_template_id) 
@@ -658,11 +583,9 @@ CREATE INDEX idx_action_type_label ON action_type_label (label, action_type_id);
 CREATE INDEX idx_activity_log_created_on ON activity_log (created_on);
 CREATE INDEX idx_activity_log_event ON activity_log (event_id);
 CREATE INDEX idx_activity_log_project ON activity_log (project_id);
-CREATE INDEX idx_activity_log_scheduled_job_run ON activity_log (scheduled_job_run_id);
 CREATE INDEX idx_activity_log_trace ON activity_log (trace_id);
 CREATE INDEX idx_ai_usage_created_on ON ai_usage (created_on);
 CREATE INDEX idx_ai_usage_event ON ai_usage (event_id);
-CREATE INDEX idx_ai_usage_scheduled_job_run ON ai_usage (scheduled_job_run_id);
 CREATE INDEX idx_ai_usage_trace ON ai_usage (trace_id);
 CREATE INDEX idx_cpl_connection ON connection_poll_log (connection_id);
 CREATE INDEX idx_cpl_created ON connection_poll_log (created_on);
@@ -676,11 +599,6 @@ CREATE INDEX idx_ro_trace ON routing_outcome (trace_id);
 CREATE INDEX idx_roi_outcome ON routing_outcome_item (outcome_id);
 CREATE INDEX idx_roi_trace_node ON routing_outcome_item (trace_node_id);
 CREATE INDEX idx_roi_workflow_run ON routing_outcome_item (workflow_run_id);
-CREATE INDEX idx_scheduled_job_label ON scheduled_job_label (label, scheduled_job_id);
-CREATE INDEX idx_scheduled_job_run_job_id ON scheduled_job_run (job_id);
-CREATE INDEX idx_scheduled_job_run_status ON scheduled_job_run (status);
-CREATE INDEX idx_sjr_config_version ON scheduled_job_run (config_version_id);
-CREATE INDEX idx_sjr_created_on ON scheduled_job_run (created_on);
 CREATE INDEX idx_stream_event_connection ON stream_event (connection_id);
 CREATE INDEX idx_stream_event_created_on ON stream_event (created_on);
 CREATE INDEX idx_stream_event_ref ON stream_event (ref);
@@ -723,9 +641,6 @@ alter table event_processing_ledger add foreign key (event_id) references stream
 alter table event_processing_ledger add foreign key (subscription_id) references event_subscription (id) on delete cascade;
 alter table routing_outcome add foreign key (ledger_id) references event_processing_ledger (id) on delete cascade;
 alter table routing_outcome_item add foreign key (outcome_id) references routing_outcome (id) on delete cascade;
-alter table scheduled_job_run add foreign key (config_version_id) references scheduled_job_version (id) on delete set null;
-alter table scheduled_job_run add foreign key (job_id) references scheduled_job (id) on delete cascade;
-alter table scheduled_job_version add foreign key (job_id) references scheduled_job (id) on delete cascade;
 alter table stream_event add foreign key (connection_id) references event_source_connection (id);
 alter table task add foreign key (workflow_run_id) references workflow_run (id);
 alter table tool_execution add foreign key (trace_id) references trace (trace_id) on delete cascade;
@@ -742,8 +657,6 @@ alter table dashboard_label add unique (dashboard_id, label);
 alter table event_processing_ledger add unique (event_id, subscription_id);
 alter table event_subscription_label add unique (event_subscription_id, label);
 alter table project_label add unique (project_id, label);
-alter table scheduled_job add unique (slug);
-alter table scheduled_job_label add unique (scheduled_job_id, label);
 alter table session_template_allowed_tool add unique (session_template_id, tool_pattern);
 alter table session_template_mcp_server add unique (session_template_id, mcp_server_name);
 alter table tool_label add unique (tool_id, label);

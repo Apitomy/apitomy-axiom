@@ -2,8 +2,6 @@ package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.ProjectEntity;
-import io.apitomy.axiom.core.entities.ScheduledJobEntity;
-import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.TraceEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
@@ -47,7 +45,6 @@ class TraceResourceTest {
     private Long projectId;
     private Long definitionId;
     private Long runId;
-    private Long jobId;
     private Long activityLogId;
 
     @AfterEach
@@ -71,10 +68,6 @@ class TraceResourceTest {
             }
             if (projectId != null) {
                 ProjectEntity.deleteById(projectId);
-            }
-            if (jobId != null) {
-                ScheduledJobRunEntity.delete("jobId", jobId);
-                ScheduledJobEntity.deleteById(jobId);
             }
         });
     }
@@ -342,46 +335,6 @@ class TraceResourceTest {
                 .body("detail.entryType", equalTo("create-workflow"))
                 .body("detail.summary", equalTo("Evaluated event"))
                 .body("detail.details", equalTo("long execution log"));
-    }
-
-    /**
-     * A scheduled-job-run node resolves the run with its job name.
-     */
-    @Test
-    void scheduledJobRunTraceNodeDetailResolves() {
-        Long jobRunId = QuarkusTransaction.requiringNew().call(() -> {
-            ScheduledJobEntity job = new ScheduledJobEntity();
-            job.name = "Trace Detail Job " + UUID.randomUUID();
-            job.enabled = false;
-            job.schedule = "daily";
-            job.executionMode = "agent";
-            job.promptTemplate = "Do something";
-            job.createdOn = Instant.now();
-            job.updatedOn = Instant.now();
-            job.persist();
-            jobId = job.id;
-            ScheduledJobRunEntity run = new ScheduledJobRunEntity();
-            run.jobId = job.id;
-            run.status = "Completed";
-            run.trigger = "manual";
-            run.executionLog = "job log";
-            run.createdOn = Instant.now();
-            run.persist();
-            return run.id;
-        });
-        TraceContext ctx = traceService.createTrace("scheduled-job-execution", "job",
-                null, null, "scheduled-job-triggered", "root",
-                "scheduled-job-run", jobRunId);
-
-        given()
-            .when()
-                .get(TRACES_PATH + "/" + ctx.traceId() + "/nodes/" + ctx.currentParentNodeId())
-            .then()
-                .statusCode(200)
-                .body("detail.id", equalTo(jobRunId.intValue()))
-                .body("detail.jobId", equalTo(jobId.intValue()))
-                .body("detail.jobName", notNullValue())
-                .body("detail.executionLog", equalTo("job log"));
     }
 
     /**

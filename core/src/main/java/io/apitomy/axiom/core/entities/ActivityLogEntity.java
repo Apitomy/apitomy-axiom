@@ -27,10 +27,6 @@ public class ActivityLogEntity extends PanacheEntity {
     @Column(name = "trace_id")
     public UUID traceId;
 
-    /** Scheduled job run that wrote this entry, if any. */
-    @Column(name = "scheduled_job_run_id")
-    public Long scheduledJobRunId;
-
     @Column(name = "entry_type", nullable = false)
     public String entryType;
 

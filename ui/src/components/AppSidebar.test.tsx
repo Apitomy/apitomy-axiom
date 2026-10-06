@@ -28,4 +28,11 @@ describe("AppSidebar", () => {
         expect(screen.queryByText("Reports")).not.toBeInTheDocument();
         expect(screen.queryByText("Report Definitions")).not.toBeInTheDocument();
     });
+
+    it("has no Scheduled Jobs or Job Runs navigation items", async () => {
+        renderWithRouter(<AppSidebar />, "/action-types");
+        await screen.findByText("Inbox");
+        expect(screen.queryByText("Scheduled Jobs")).not.toBeInTheDocument();
+        expect(screen.queryByText("Job Runs")).not.toBeInTheDocument();
+    });
 });

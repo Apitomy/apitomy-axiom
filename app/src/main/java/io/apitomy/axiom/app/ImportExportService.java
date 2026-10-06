@@ -10,7 +10,6 @@ import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.EventSourceConnectionEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.McpServerEntity;
-import io.apitomy.axiom.core.entities.ScheduledJobEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.SessionTemplateEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
@@ -100,14 +99,6 @@ public class ImportExportService {
             }
         }
 
-        if (request.getScheduledJobIds() != null && !request.getScheduledJobIds().isEmpty()) {
-            ArrayNode arr = pack.putArray("scheduledJobs");
-            for (Number id : request.getScheduledJobIds()) {
-                ScheduledJobEntity entity = ScheduledJobEntity.findById(id.longValue());
-                if (entity != null) arr.add(serializeScheduledJob(entity));
-            }
-        }
-
         if (request.getConnectionIds() != null && !request.getConnectionIds().isEmpty()) {
             ArrayNode arr = pack.putArray("connections");
             for (String id : request.getConnectionIds()) {
@@ -152,7 +143,6 @@ public class ImportExportService {
         checkConflicts(pack, "mcpServers", "name", "mcpServer", conflicts);
         checkConflicts(pack, "actionTypes", "name", "actionType", conflicts);
         checkConflicts(pack, "sessionTemplates", "templateId", "sessionTemplate", conflicts);
-        checkConflicts(pack, "scheduledJobs", "name", "scheduledJob", conflicts);
         checkConflicts(pack, "connections", "id", "connection", conflicts);
         checkConflicts(pack, "subscriptions", "name", "subscription", conflicts);
         checkConflicts(pack, "workflowDefinitions", "name", "workflowDefinition", conflicts);
@@ -175,7 +165,6 @@ public class ImportExportService {
         int mcpServers = importMcpServers(pack.path("mcpServers"));
         int actionTypes = importActionTypes(pack.path("actionTypes"));
         int sessionTemplates = importSessionTemplates(pack.path("sessionTemplates"));
-        int scheduledJobs = importScheduledJobs(pack.path("scheduledJobs"));
         int connections = importConnections(pack.path("connections"));
         int subscriptions = importSubscriptions(pack.path("subscriptions"));
         int workflowDefinitions = importWorkflowDefinitions(pack.path("workflowDefinitions"));
@@ -183,10 +172,10 @@ public class ImportExportService {
         String packName = pack.path("metadata").path("name").asText("unnamed");
         LOG.infof("Imported configuration pack '%s': %d tools, %d toolsets, %d MCP servers, "
                         + "%d action types, %d session templates, "
-                        + "%d scheduled jobs, %d connections, %d subscriptions, "
+                        + "%d connections, %d subscriptions, "
                         + "%d workflow definitions",
                 packName, tools, toolsets, mcpServers, actionTypes,
-                sessionTemplates, scheduledJobs, connections, subscriptions,
+                sessionTemplates, connections, subscriptions,
                 workflowDefinitions);
 
         ImportResult result = new ImportResult();
@@ -195,7 +184,6 @@ public class ImportExportService {
         result.setMcpServers(mcpServers);
         result.setActionTypes(actionTypes);
         result.setSessionTemplates(sessionTemplates);
-        result.setScheduledJobs(scheduledJobs);
         result.setConnections(connections);
         result.setSubscriptions(subscriptions);
         result.setWorkflowDefinitions(workflowDefinitions);
@@ -210,7 +198,6 @@ public class ImportExportService {
             int actionTypesCreated, int actionTypesUpdated,
             int toolsetsCreated, int toolsetsUpdated,
             int sessionTemplatesCreated, int sessionTemplatesUpdated,
-            int scheduledJobsCreated, int scheduledJobsUpdated,
             int connectionsCreated, int connectionsUpdated,
             int subscriptionsCreated, int subscriptionsUpdated,
             int workflowDefinitionsCreated, int workflowDefinitionsUpdated
@@ -230,7 +217,6 @@ public class ImportExportService {
         int[] actionTypes = upsertActionTypes(pack.path("actionTypes"));
         int[] toolsets = upsertToolsets(pack.path("toolsets"));
         int[] sessionTemplates = upsertSessionTemplates(pack.path("sessionTemplates"));
-        int[] scheduledJobs = upsertScheduledJobs(pack.path("scheduledJobs"));
         int[] connections = upsertConnections(pack.path("connections"));
         int[] subscriptions = upsertSubscriptions(pack.path("subscriptions"));
         int[] workflowDefs = upsertWorkflowDefinitions(pack.path("workflowDefinitions"));
@@ -240,7 +226,6 @@ public class ImportExportService {
                         + "%d action types created, %d updated; "
                         + "%d toolsets created, %d updated; "
                         + "%d session templates created, %d updated; "
-                        + "%d scheduled jobs created, %d updated; "
                         + "%d connections created, %d updated; "
                         + "%d subscriptions created, %d updated; "
                         + "%d workflow definitions created, %d updated",
@@ -249,7 +234,6 @@ public class ImportExportService {
                 actionTypes[0], actionTypes[1],
                 toolsets[0], toolsets[1],
                 sessionTemplates[0], sessionTemplates[1],
-                scheduledJobs[0], scheduledJobs[1],
                 connections[0], connections[1],
                 subscriptions[0], subscriptions[1],
                 workflowDefs[0], workflowDefs[1]);
@@ -259,7 +243,6 @@ public class ImportExportService {
                 actionTypes[0], actionTypes[1],
                 toolsets[0], toolsets[1],
                 sessionTemplates[0], sessionTemplates[1],
-                scheduledJobs[0], scheduledJobs[1],
                 connections[0], connections[1],
                 subscriptions[0], subscriptions[1],
                 workflowDefs[0], workflowDefs[1]
@@ -347,7 +330,6 @@ public class ImportExportService {
                 case "mcpServer" -> McpServerEntity.count("name", name) > 0;
                 case "actionType" -> ActionTypeEntity.count("name", name) > 0;
                 case "sessionTemplate" -> SessionTemplateEntity.count("templateId", name) > 0;
-                case "scheduledJob" -> ScheduledJobEntity.count("name", name) > 0;
                 case "connection" -> EventSourceConnectionEntity.findById(name) != null;
                 case "subscription" -> EventSubscriptionEntity.count("name", name) > 0;
                 case "workflowDefinition" -> WorkflowDefinitionEntity.count("name", name) > 0;
@@ -735,103 +717,6 @@ public class ImportExportService {
         if (e.allowedTools != null && !e.allowedTools.isEmpty()) {
             ArrayNode arr = n.putArray("allowedTools");
             e.allowedTools.forEach(arr::add);
-        }
-        return n;
-    }
-
-    private int importScheduledJobs(JsonNode items) {
-        if (!items.isArray()) return 0;
-        int count = 0;
-        for (JsonNode item : items) {
-            ScheduledJobEntity entity = new ScheduledJobEntity();
-            entity.name = item.path("name").asText();
-            entity.description = textOrNull(item, "description");
-            entity.schedule = item.path("schedule").asText("none");
-            entity.scheduleTime = textOrNull(item, "scheduleTime");
-            entity.scheduleDayOfWeek = textOrNull(item, "scheduleDayOfWeek");
-            entity.executionMode = item.path("executionMode").asText("agent");
-            entity.promptTemplate = textOrNull(item, "promptTemplate");
-            entity.scriptTemplate = textOrNull(item, "scriptTemplate");
-            entity.model = textOrNull(item, "model");
-            entity.engine = textOrNull(item, "engine");
-            entity.allowedTools = csvOrNull(item, "allowedTools");
-            if (item.has("maxSteps")) entity.maxSteps = item.path("maxSteps").asInt();
-            if (item.has("maxBudgetUsd")) entity.maxBudgetUsd = item.path("maxBudgetUsd").asDouble();
-            if (item.has("timeoutSeconds")) entity.timeoutSeconds = item.path("timeoutSeconds").asInt();
-            entity.environment = jsonOrNull(item, "environment");
-            entity.enabled = false;
-            entity.createdOn = Instant.now();
-            entity.updatedOn = Instant.now();
-            JsonNode labelsNode = item.path("labels");
-            if (labelsNode.isArray()) {
-                for (JsonNode l : labelsNode) entity.labels.add(l.asText());
-            }
-            entity.persist();
-            count++;
-        }
-        return count;
-    }
-
-    private int[] upsertScheduledJobs(JsonNode items) {
-        if (!items.isArray()) return new int[]{0, 0};
-        int created = 0, updated = 0;
-        for (JsonNode item : items) {
-            String name = item.path("name").asText();
-            ScheduledJobEntity entity = ScheduledJobEntity.find("name", name).firstResult();
-            boolean isNew = (entity == null);
-            if (isNew) {
-                entity = new ScheduledJobEntity();
-                entity.name = name;
-                entity.enabled = false;
-                entity.createdOn = Instant.now();
-            }
-            entity.description = textOrNull(item, "description");
-            entity.schedule = item.path("schedule").asText("none");
-            entity.scheduleTime = textOrNull(item, "scheduleTime");
-            entity.scheduleDayOfWeek = textOrNull(item, "scheduleDayOfWeek");
-            entity.executionMode = item.path("executionMode").asText("agent");
-            entity.promptTemplate = textOrNull(item, "promptTemplate");
-            entity.scriptTemplate = textOrNull(item, "scriptTemplate");
-            entity.model = textOrNull(item, "model");
-            entity.engine = textOrNull(item, "engine");
-            entity.allowedTools = csvOrNull(item, "allowedTools");
-            if (item.has("maxSteps")) entity.maxSteps = item.path("maxSteps").asInt();
-            if (item.has("maxBudgetUsd")) entity.maxBudgetUsd = item.path("maxBudgetUsd").asDouble();
-            if (item.has("timeoutSeconds")) entity.timeoutSeconds = item.path("timeoutSeconds").asInt();
-            entity.environment = jsonOrNull(item, "environment");
-            entity.labels.clear();
-            JsonNode labelsNode = item.path("labels");
-            if (labelsNode.isArray()) {
-                for (JsonNode l : labelsNode) entity.labels.add(l.asText());
-            }
-            entity.updatedOn = Instant.now();
-            entity.persist();
-            if (isNew) created++;
-            else updated++;
-        }
-        return new int[]{created, updated};
-    }
-
-    private ObjectNode serializeScheduledJob(ScheduledJobEntity e) {
-        ObjectNode n = objectMapper.createObjectNode();
-        n.put("name", e.name);
-        putIfNotNull(n, "description", e.description);
-        n.put("schedule", e.schedule);
-        putIfNotNull(n, "scheduleTime", e.scheduleTime);
-        putIfNotNull(n, "scheduleDayOfWeek", e.scheduleDayOfWeek);
-        n.put("executionMode", e.executionMode);
-        putIfNotNull(n, "promptTemplate", e.promptTemplate);
-        putIfNotNull(n, "scriptTemplate", e.scriptTemplate);
-        putIfNotNull(n, "model", e.model);
-        putIfNotNull(n, "engine", e.engine);
-        putIfNotNull(n, "allowedTools", e.allowedTools);
-        if (e.maxSteps != null) n.put("maxSteps", e.maxSteps);
-        if (e.maxBudgetUsd != null) n.put("maxBudgetUsd", e.maxBudgetUsd);
-        if (e.timeoutSeconds != null) n.put("timeoutSeconds", e.timeoutSeconds);
-        putJsonIfPossible(n, "environment", e.environment);
-        if (e.labels != null && !e.labels.isEmpty()) {
-            ArrayNode arr = n.putArray("labels");
-            e.labels.forEach(arr::add);
         }
         return n;
     }

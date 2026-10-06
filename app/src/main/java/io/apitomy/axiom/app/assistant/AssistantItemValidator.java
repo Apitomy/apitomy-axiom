@@ -3,7 +3,6 @@ package io.apitomy.axiom.app.assistant;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.beans.NewActionType;
-import io.apitomy.axiom.api.beans.NewScheduledJob;
 import io.apitomy.axiom.api.beans.NewToolDefinition;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
@@ -11,7 +10,6 @@ import io.apitomy.axiom.core.entities.ToolsetEntity;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ManagedContext;
 import io.apitomy.axiom.core.services.ActionTypeValidator;
-import io.apitomy.axiom.core.services.ScheduledJobValidator;
 import io.apitomy.axiom.core.services.ToolValidator;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -26,8 +24,7 @@ import java.util.Set;
 
 /**
  * Validates generated JSON configuration files by delegating to the real
- * validators ({@link ToolValidator}, {@link ActionTypeValidator},
- * {@link ScheduledJobValidator}).
+ * validators ({@link ToolValidator}, {@link ActionTypeValidator}).
  *
  * <p>This replaces the earlier thin JSON-level validation with the full
  * semantic validation including placeholder consistency, cross-references,
@@ -86,7 +83,6 @@ public class AssistantItemValidator {
             case "connections" -> validateConnection(content, errors, warnings);
             case "subscriptions" -> validateSubscription(content, errors, warnings);
             case "workflows" -> validateWorkflowDefinition(content, errors, warnings);
-            case "scheduled-jobs" -> validateScheduledJob(content, workingDirectory, errors, warnings);
             default -> errors.add("Unknown item type: " + itemType);
         }
 
@@ -111,7 +107,6 @@ public class AssistantItemValidator {
             case "connections" -> "connections";
             case "subscriptions" -> "subscriptions";
             case "workflows" -> "workflows";
-            case "scheduled-jobs" -> "scheduled-jobs";
             default -> null;
         };
     }
@@ -202,22 +197,6 @@ public class AssistantItemValidator {
         if (allowedTools.isMissingNode() || (allowedTools.isArray() && allowedTools.isEmpty())) {
             warnings.add("'allowedTools' is empty — the session will have no tool access.");
         }
-    }
-
-    private void validateScheduledJob(String json, Path workingDirectory,
-                                       List<String> errors, List<String> warnings) {
-        NewScheduledJob scheduledJob;
-        try {
-            scheduledJob = objectMapper.readValue(json, NewScheduledJob.class);
-        } catch (Exception e) {
-            errors.add("Invalid JSON: " + e.getMessage());
-            return;
-        }
-
-        ScheduledJobValidator.KnownNames known = buildScheduledJobKnownNames(workingDirectory);
-        ScheduledJobValidator.ValidationResult result =
-                ScheduledJobValidator.validate(scheduledJob, known);
-        collectMessages(result.errors(), result.warnings(), errors, warnings);
     }
 
     private void validateConnection(String json, List<String> errors, List<String> warnings) {
@@ -384,8 +363,6 @@ public class AssistantItemValidator {
             return m.field() + ": " + m.message();
         } else if (msg instanceof ActionTypeValidator.ValidationMessage m) {
             return m.field() + ": " + m.message();
-        } else if (msg instanceof ScheduledJobValidator.ValidationMessage m) {
-            return m.field() + ": " + m.message();
         }
         return msg.toString();
     }
@@ -407,31 +384,6 @@ public class AssistantItemValidator {
                     .map(t -> t.name)
                     .collect(java.util.stream.Collectors.toSet());
             return new ActionTypeValidator.KnownNames(secrets, tools, toolsets, null);
-        } catch (Exception e) {
-            LOG.warnf("Failed to build KnownNames for validation: %s", e.getMessage());
-            return null;
-        } finally {
-            if (activated) requestContext.deactivate();
-        }
-    }
-
-    private ScheduledJobValidator.KnownNames buildScheduledJobKnownNames(Path workingDirectory) {
-        ManagedContext requestContext = Arc.container() != null
-                ? Arc.container().requestContext() : null;
-        boolean activated = requestContext != null && !requestContext.isActive();
-        if (activated) requestContext.activate();
-        try {
-            Set<String> secrets = SecretEntity.<SecretEntity>listAll().stream()
-                    .map(s -> s.name)
-                    .collect(java.util.stream.Collectors.toSet());
-            Set<String> tools = new java.util.HashSet<>(
-                    ToolDefinitionEntity.<ToolDefinitionEntity>listAll().stream()
-                            .map(t -> t.name).toList());
-            tools.addAll(getSessionToolNames(workingDirectory));
-            Set<String> toolsets = ToolsetEntity.<ToolsetEntity>listAll().stream()
-                    .map(t -> t.name)
-                    .collect(java.util.stream.Collectors.toSet());
-            return new ScheduledJobValidator.KnownNames(secrets, tools, toolsets, null);
         } catch (Exception e) {
             LOG.warnf("Failed to build KnownNames for validation: %s", e.getMessage());
             return null;

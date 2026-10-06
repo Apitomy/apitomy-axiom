@@ -12,7 +12,7 @@ import {
 import { fetchInboxCount } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 
-const COMPONENT_PATHS = ["/action-types", "/agents", "/session-templates", "/mcp-servers", "/scheduled-jobs", "/secrets", "/tools", "/toolsets", "/components/workflows"];
+const COMPONENT_PATHS = ["/action-types", "/agents", "/session-templates", "/mcp-servers", "/secrets", "/tools", "/toolsets", "/components/workflows"];
 const EVENTS_PATHS = ["/events/stream", "/events/connections", "/events/subscriptions"];
 const SETTINGS_PATHS = ["/engine", "/data-retention", "/configuration-packs"];
 
@@ -83,9 +83,6 @@ export function AppSidebar() {
                             <NavItem isActive={location.pathname === "/logs/tasks"} onClick={() => navigate("/logs/tasks")}>
                                 Tasks
                             </NavItem>
-                            <NavItem isActive={location.pathname === "/logs/job-runs"} onClick={() => navigate("/logs/job-runs")}>
-                                Job Runs
-                            </NavItem>
                             <NavItem isActive={location.pathname.startsWith("/logs/traces")} onClick={() => navigate("/logs/traces")}>
                                 Traces
                             </NavItem>
@@ -115,9 +112,6 @@ export function AppSidebar() {
                             </NavItem>
                             <NavItem isActive={location.pathname.startsWith("/mcp-servers")} onClick={() => navigate("/mcp-servers")}>
                                 MCP Servers
-                            </NavItem>
-                            <NavItem isActive={location.pathname.startsWith("/scheduled-jobs")} onClick={() => navigate("/scheduled-jobs")}>
-                                Scheduled Jobs
                             </NavItem>
                             <NavItem isActive={location.pathname === "/secrets"} onClick={() => navigate("/secrets")}>
                                 Secrets

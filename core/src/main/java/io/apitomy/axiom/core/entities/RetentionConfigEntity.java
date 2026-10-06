@@ -26,10 +26,6 @@ public class RetentionConfigEntity extends PanacheEntity {
     @Column(name = "event_retention_days", nullable = false)
     public int eventRetentionDays;
 
-    /** Days to keep finished scheduled job runs; {@code 0} keeps them forever. */
-    @Column(name = "scheduled_job_run_retention_days", nullable = false)
-    public int scheduledJobRunRetentionDays;
-
     /** Days to keep finished workflow runs; {@code 0} keeps them forever. */
     @Column(name = "workflow_run_retention_days", nullable = false)
     public int workflowRunRetentionDays;

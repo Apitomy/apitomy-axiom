@@ -4,7 +4,6 @@ import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
-import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.WorkflowEventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
@@ -27,8 +26,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * Tests for {@link HistoryCleanup}: the retention settings for scheduled job runs,
- * workflow runs, activity log entries and AI usage records.
+ * Tests for {@link HistoryCleanup}: the retention settings for workflow
+ * runs, activity log entries and AI usage records.
  */
 @QuarkusTest
 class HistoryCleanupTest {
@@ -45,22 +44,20 @@ class HistoryCleanupTest {
     void saveRetention() {
         QuarkusTransaction.requiringNew().run(() -> {
             RetentionConfigEntity c = config();
-            original = new int[] {c.scheduledJobRunRetentionDays,
-                    c.workflowRunRetentionDays, c.activityLogRetentionDays,
+            original = new int[] {c.workflowRunRetentionDays, c.activityLogRetentionDays,
                     c.aiUsageRetentionDays};
         });
     }
 
     @AfterEach
     void restoreRetention() {
-        setRetention(original[0], original[1], original[2], original[3]);
+        setRetention(original[0], original[1], original[2]);
     }
 
     @Test
     void newSettingsDefaultToKeepForever() {
         QuarkusTransaction.requiringNew().run(() -> {
             RetentionConfigEntity c = config();
-            assertEquals(0, c.scheduledJobRunRetentionDays);
             assertEquals(0, c.workflowRunRetentionDays);
             assertEquals(0, c.activityLogRetentionDays);
             assertEquals(0, c.aiUsageRetentionDays);
@@ -69,47 +66,25 @@ class HistoryCleanupTest {
 
     @Test
     void zeroSettingsKeepEverything() {
-        setRetention(0, 0, 0, 0);
+        setRetention(0, 0, 0);
         long[] ids = QuarkusTransaction.requiringNew().call(() -> new long[] {
-            jobRun("Completed", OLD).id,
             workflowRun("completed", OLD).id, activity(OLD).id, usage(OLD).id});
 
         QuarkusTransaction.requiringNew().run(() -> historyCleanup.doCleanup());
 
         QuarkusTransaction.requiringNew().run(() -> {
-            assertNotNull(ScheduledJobRunEntity.findById(ids[0]));
-            assertNotNull(WorkflowRunEntity.findById(ids[1]));
-            assertNotNull(ActivityLogEntity.findById(ids[2]));
-            assertNotNull(AiUsageEntity.findById(ids[3]));
-            ScheduledJobRunEntity.deleteById(ids[0]);
-            WorkflowRunEntity.deleteById(ids[1]);
-            ActivityLogEntity.deleteById(ids[2]);
-            AiUsageEntity.deleteById(ids[3]);
-        });
-    }
-
-    @Test
-    void scheduledJobRunRetentionDeletesOldFinishedRuns() {
-        setRetention(5, 0, 0, 0);
-        long[] ids = QuarkusTransaction.requiringNew().call(() -> new long[] {
-            jobRun("Completed", OLD).id, jobRun("Failed", OLD).id,
-            jobRun("Running", OLD).id, jobRun("Completed", RECENT).id});
-
-        QuarkusTransaction.requiringNew().run(() -> historyCleanup.doCleanup());
-
-        QuarkusTransaction.requiringNew().run(() -> {
-            assertNull(ScheduledJobRunEntity.findById(ids[0]));
-            assertNull(ScheduledJobRunEntity.findById(ids[1]));
-            assertNotNull(ScheduledJobRunEntity.findById(ids[2]), "unfinished runs are kept");
-            assertNotNull(ScheduledJobRunEntity.findById(ids[3]));
-            ScheduledJobRunEntity.deleteById(ids[2]);
-            ScheduledJobRunEntity.deleteById(ids[3]);
+            assertNotNull(WorkflowRunEntity.findById(ids[0]));
+            assertNotNull(ActivityLogEntity.findById(ids[1]));
+            assertNotNull(AiUsageEntity.findById(ids[2]));
+            WorkflowRunEntity.deleteById(ids[0]);
+            ActivityLogEntity.deleteById(ids[1]);
+            AiUsageEntity.deleteById(ids[2]);
         });
     }
 
     @Test
     void workflowRunRetentionDeletesOldFinishedRunsAndDependents() {
-        setRetention(0, 5, 0, 0);
+        setRetention(5, 0, 0);
         long[] ids = QuarkusTransaction.requiringNew().call(() -> {
             WorkflowRunEntity old = workflowRun("completed", OLD);
             WorkflowWaitEntity wait = new WorkflowWaitEntity();
@@ -173,7 +148,7 @@ class HistoryCleanupTest {
 
     @Test
     void workflowRunRetentionOnlyDeletesKnownFinishedStatuses() {
-        setRetention(0, 5, 0, 0);
+        setRetention(5, 0, 0);
         long[] ids = QuarkusTransaction.requiringNew().call(() -> new long[] {
             workflowRun("failed", OLD).id, workflowRun("cancelled", OLD).id,
             workflowRun("some-future-status", OLD).id});
@@ -190,7 +165,7 @@ class HistoryCleanupTest {
 
     @Test
     void activityAndAiUsageRetentionDeleteOldRows() {
-        setRetention(0, 0, 5, 5);
+        setRetention(0, 5, 5);
         long[] ids = QuarkusTransaction.requiringNew().call(() -> new long[] {
             activity(OLD).id, activity(RECENT).id, usage(OLD).id, usage(RECENT).id});
 
@@ -212,24 +187,13 @@ class HistoryCleanupTest {
         return RetentionConfigEntity.<RetentionConfigEntity>findAll().firstResult();
     }
 
-    private static void setRetention(int jobRuns, int workflowRuns, int activity, int aiUsage) {
+    private static void setRetention(int workflowRuns, int activity, int aiUsage) {
         QuarkusTransaction.requiringNew().run(() -> {
             RetentionConfigEntity c = config();
-            c.scheduledJobRunRetentionDays = jobRuns;
             c.workflowRunRetentionDays = workflowRuns;
             c.activityLogRetentionDays = activity;
             c.aiUsageRetentionDays = aiUsage;
         });
-    }
-
-    private static ScheduledJobRunEntity jobRun(String status, Instant createdOn) {
-        ScheduledJobRunEntity run = new ScheduledJobRunEntity();
-        run.jobId = -1L;
-        run.status = status;
-        run.trigger = "manual";
-        run.createdOn = createdOn;
-        run.persist();
-        return run;
     }
 
     private static WorkflowRunEntity workflowRun(String status, Instant when) {

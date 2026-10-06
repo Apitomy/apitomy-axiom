@@ -75,8 +75,8 @@ class CallerTraceTest {
     }
 
     @Test
-    void joinedTaskDoesNotCompleteScheduledJobTrace() {
-        assertOwnerTraceNotCompletedByJoinedTask("scheduled-job-execution");
+    void joinedTaskDoesNotCompleteWorkflowTrace() {
+        assertOwnerTraceNotCompletedByJoinedTask("workflow");
     }
 
     private void assertOwnerTraceNotCompletedByJoinedTask(String traceType) {

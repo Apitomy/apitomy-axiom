@@ -19,8 +19,8 @@ import java.util.Optional;
 
 /**
  * Concurrency governance service for the agent pool. Manages lease-based
- * assignment of configured agent slots to work items (tasks,
- * scheduled jobs). Each agent slot can only execute one work item at a time.
+ * assignment of configured agent slots to work items (tasks).
+ * Each agent slot can only execute one work item at a time.
  *
  * <p>Resolution order when selecting an agent for a work item:</p>
  * <ol>
@@ -55,7 +55,7 @@ public class AgentPool {
      *
      * @param capability    the capability to match (e.g. action type name), or null
      * @param agentEntityId explicit agent entity ID assignment, or null for auto-resolve
-     * @param workloadType  the type of workload (e.g. "task", "scheduled-job")
+     * @param workloadType  the type of workload (e.g. "task")
      * @param workloadId    the ID of the workload being executed
      * @return an AgentLease if a slot is available, or empty if all agents are busy
      */
@@ -121,7 +121,7 @@ public class AgentPool {
      * Creates a lease for an agent to execute a workload.
      *
      * @param agentEntity  the agent entity to lease
-     * @param workloadType the type of workload (e.g. "task", "scheduled-job")
+     * @param workloadType the type of workload (e.g. "task")
      * @param workloadId   the ID of the workload being executed
      * @return the created AgentLease
      */

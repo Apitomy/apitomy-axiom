@@ -10,7 +10,7 @@ import {
     ModalHeader,
 } from "@patternfly/react-core";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
-import { fetchTaskExecutionLog, fetchActivityLogDetails, fetchScheduledJobRun } from "../config/api";
+import { fetchTaskExecutionLog, fetchActivityLogDetails } from "../config/api";
 
 interface ExecutionLogModalProps {
     isOpen: boolean;
@@ -20,8 +20,6 @@ interface ExecutionLogModalProps {
     taskId?: number | null;
     /** For activity log details : the activity entry ID */
     activityId?: number | null;
-    /** For scheduled job run logs: the run ID */
-    scheduledJobRunId?: number | null;
     onClose: () => void;
 }
 
@@ -29,7 +27,7 @@ interface ExecutionLogModalProps {
  * Modal that displays an execution log.
  */
 export function ExecutionLogModal({ isOpen, projectId, taskId, activityId,
-                                     scheduledJobRunId, onClose }: ExecutionLogModalProps) {
+                                     onClose }: ExecutionLogModalProps) {
     const effectiveTheme = useEffectiveTheme();
     const [content, setContent] = useState("");
     const [loading, setLoading] = useState(false);
@@ -41,10 +39,7 @@ export function ExecutionLogModal({ isOpen, projectId, taskId, activityId,
         setContent("");
 
         let fetchPromise: Promise<string>;
-        if (scheduledJobRunId != null) {
-            fetchPromise = fetchScheduledJobRun(scheduledJobRunId)
-                .then((run) => run.executionLog || "No execution log available.");
-        } else if (activityId != null) {
+        if (activityId != null) {
             fetchPromise = fetchActivityLogDetails(activityId);
         } else if (projectId != null && taskId != null) {
             fetchPromise = fetchTaskExecutionLog(projectId, taskId);
@@ -58,18 +53,16 @@ export function ExecutionLogModal({ isOpen, projectId, taskId, activityId,
             .then(setContent)
             .catch((err) => setContent("Error loading log: " + err.message))
             .finally(() => setLoading(false));
-    }, [isOpen, projectId, taskId, activityId, scheduledJobRunId]);
+    }, [isOpen, projectId, taskId, activityId]);
 
     const handleClose = () => {
         onClose();
         setContent("");
     };
 
-    const title = scheduledJobRunId != null
-        ? `Execution Log — Job Run #${scheduledJobRunId}`
-        : activityId != null
-            ? `Execution Log — Activity #${activityId}`
-            : `Execution Log — Task #${taskId}`;
+    const title = activityId != null
+        ? `Execution Log — Activity #${activityId}`
+        : `Execution Log — Task #${taskId}`;
 
     return (
         <Modal isOpen={isOpen} onClose={handleClose} variant="large">

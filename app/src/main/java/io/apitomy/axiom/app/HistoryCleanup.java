@@ -4,7 +4,6 @@ import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
-import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.WorkflowEventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
@@ -24,18 +23,13 @@ import java.util.function.IntSupplier;
 
 /**
  * Periodically deletes history rows that have exceeded their configured retention period:
- * finished scheduled job runs, finished workflow runs, activity log entries
- * and AI usage records. A retention of {@code 0} days (the default) keeps the rows forever.
+ * finished workflow runs, activity log entries and AI usage records. A retention of {@code 0} days (the default) keeps the rows forever.
  *
  * <p>References to deleted rows are handled as follows:
  * <ul>
  *   <li>Workflow runs: their waits, event subscriptions and resume records are deleted;
  *       {@code task.workflow_run_id} and {@code routing_outcome_item.workflow_run_id} are cleared
  *       (tasks belong to the project and are deleted with it).</li>
- *   <li>Job runs: {@code ai_usage}, {@code activity_log} and {@code trace} keep their
- *       {@code scheduled_job_run_id} values, which may then dangle, as
- *       documented in {@code docs/developer-guide/correlation.md}. Config versions are not
- *       affected.</li>
  * </ul>
  *
  * <p>Each step deletes at most {@link #BATCH_SIZE} rows per transaction.
@@ -47,9 +41,6 @@ public class HistoryCleanup {
 
     /** Maximum number of rows deleted per transaction. */
     static final int BATCH_SIZE = 500;
-
-    /** Statuses of scheduled job runs that have finished. */
-    static final List<String> FINISHED_STATUSES = List.of("Completed", "Failed");
 
     /**
      * Statuses of workflow runs that have finished (lower-case names of the flow engine's
@@ -71,7 +62,6 @@ public class HistoryCleanup {
     @Scheduled(every = "1h", delayed = "9m",
             concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     void cleanup() {
-        runStep("Scheduled job run cleanup", this::deleteJobRunBatch);
         runStep("Workflow run cleanup", this::deleteWorkflowRunBatch);
         runStep("Activity log cleanup", this::deleteActivityBatch);
         runStep("AI usage cleanup", this::deleteAiUsageBatch);
@@ -82,8 +72,7 @@ public class HistoryCleanup {
      * transaction per batch.
      */
     void doCleanup() {
-        for (IntSupplier step : List.<IntSupplier>of(this::deleteJobRunBatch,
-                this::deleteWorkflowRunBatch, this::deleteActivityBatch,
+        for (IntSupplier step : List.<IntSupplier>of(this::deleteWorkflowRunBatch, this::deleteActivityBatch,
                 this::deleteAiUsageBatch)) {
             while (step.getAsInt() >= BATCH_SIZE) {
                 // keep going until a partial batch is deleted
@@ -98,26 +87,6 @@ public class HistoryCleanup {
             CleanupRetry.runWithRetry(LOG, name, () -> shuttingDown,
                     () -> deleted[0] = batch.getAsInt());
         }
-    }
-
-    /**
-     * Deletes one batch of finished scheduled job runs older than the retention period.
-     *
-     * @return the number of runs deleted
-     */
-    int deleteJobRunBatch() {
-        Instant cutoff = cutoff(config().scheduledJobRunRetentionDays);
-        if (cutoff == null) {
-            return 0;
-        }
-        List<Long> ids = finishedIds("select r.id from ScheduledJobRunEntity r "
-                + "where r.status in :finished and r.createdOn < :cutoff", cutoff);
-        if (ids.isEmpty()) {
-            return 0;
-        }
-        ScheduledJobRunEntity.delete("id in ?1", ids);
-        LOG.infof("Cleaned up %d scheduled job run(s)", ids.size());
-        return ids.size();
     }
 
     /**
@@ -211,10 +180,6 @@ public class HistoryCleanup {
 
     private static List<Long> ids(String jpql, Instant cutoff) {
         return query(jpql, cutoff).getResultList();
-    }
-
-    private static List<Long> finishedIds(String jpql, Instant cutoff) {
-        return query(jpql, cutoff).setParameter("finished", FINISHED_STATUSES).getResultList();
     }
 
     private static TypedQuery<Long> query(String jpql, Instant cutoff) {

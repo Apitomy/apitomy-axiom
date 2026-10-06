@@ -31,12 +31,6 @@ const HISTORY_FIELDS: {
     help: string;
 }[] = [
     {
-        field: "scheduledJobRunRetentionDays",
-        id: "job-run-retention",
-        label: "Scheduled job runs",
-        help: "Days to retain finished scheduled job runs.",
-    },
-    {
         field: "workflowRunRetentionDays",
         id: "workflow-run-retention",
         label: "Workflow runs",
