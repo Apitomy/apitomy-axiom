@@ -1,6 +1,7 @@
 package io.apitomy.axiom.app.rest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.api.EventResource;
 import io.apitomy.axiom.api.beans.EventSource;
 import io.apitomy.axiom.api.beans.EventSourcePollLog;
@@ -9,6 +10,10 @@ import io.apitomy.axiom.api.beans.EventSourceSearchResults;
 import io.apitomy.axiom.api.beans.EventSourceStatus;
 import io.apitomy.axiom.api.beans.Configuration;
 import io.apitomy.axiom.api.beans.NewEventSource;
+import io.apitomy.axiom.app.validation.ConfigItemType;
+import io.apitomy.axiom.app.validation.ConfigItemValidationService;
+import io.apitomy.axiom.app.validation.ConfigProblem;
+import io.apitomy.axiom.app.validation.ValidationContextFactory;
 import io.apitomy.axiom.core.entities.EventSourcePollLogEntity;
 import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
@@ -27,7 +32,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 /**
  * Implementation of the Event Sources REST API.
@@ -38,11 +42,18 @@ public class EventSourcesResourceImpl implements EventResource {
 
     private static final Logger LOG = Logger.getLogger(EventSourcesResourceImpl.class);
 
-    private static final Pattern SLUG_PATTERN = Pattern.compile("^[a-z0-9-]+$");
     private static final int SLUG_MAX_LENGTH = 63;
+    private static final String INVALID_ID_MESSAGE =
+            "Invalid event source id: must be 1-63 lowercase letters, numbers, or dashes";
 
     @Inject
     ObjectMapper objectMapper;
+
+    @Inject
+    ConfigItemValidationService validationService;
+
+    @Inject
+    ValidationContextFactory contextFactory;
 
     /**
      * {@inheritDoc}
@@ -87,11 +98,10 @@ public class EventSourcesResourceImpl implements EventResource {
     @Transactional
     public EventSource createEventSource(NewEventSource data) {
         String slug = data.getId();
-        if (slug == null || slug.isEmpty() || slug.length() > SLUG_MAX_LENGTH
-                || !SLUG_PATTERN.matcher(slug).matches()) {
-            throw new WebApplicationException(
-                    "Invalid event source id: must be 1-63 lowercase letters, numbers, or dashes", 400);
+        if (slug != null && slug.length() > SLUG_MAX_LENGTH) {
+            throw new WebApplicationException(INVALID_ID_MESSAGE, 400);
         }
+        validate(data, slug);
 
         EventSourceEntity existing = EventSourceEntity.findById(slug);
         if (existing != null) {
@@ -109,6 +119,26 @@ public class EventSourcesResourceImpl implements EventResource {
     }
 
     /**
+     * Validates the event source with the shared configuration validation service and throws a 400 with the
+     * first error message, if any. Id errors keep the endpoint's historical message.
+     *
+     * @param data the API bean to validate
+     * @param id the event source id to validate against
+     */
+    private void validate(NewEventSource data, String id) {
+        ObjectNode item = objectMapper.valueToTree(data);
+        if (id != null) {
+            item.put("id", id);
+        }
+        List<ConfigProblem> problems = validationService.validate(ConfigItemType.EVENT_SOURCE, item,
+                contextFactory.databaseOnly());
+        problems.stream().filter(ConfigProblem::isError).findFirst().ifPresent(p -> {
+            String message = "id".equals(p.path()) ? INVALID_ID_MESSAGE : p.message();
+            throw new WebApplicationException(message, 400);
+        });
+    }
+
+    /**
      * {@inheritDoc}
      */
     @Override
@@ -123,6 +153,7 @@ public class EventSourcesResourceImpl implements EventResource {
     @Transactional
     public EventSource updateEventSource(String eventSourceId, NewEventSource data) {
         EventSourceEntity entity = findOrThrow(eventSourceId);
+        validate(data, eventSourceId);
         entity.modifiedOn = Instant.now();
         applyFields(entity, data);
         return toBean(entity);

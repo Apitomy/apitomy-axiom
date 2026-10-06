@@ -61,6 +61,27 @@ class EventSourcesResourceTest {
     }
 
     @Test
+    void testCreateEventSourceWithInvalidRepositoryReturns400() {
+        given()
+            .contentType(ContentType.JSON)
+            .body("""
+                {
+                    "id": "bad-repo-conn",
+                    "name": "Bad Repo",
+                    "sourceType": "github",
+                    "enabled": false,
+                    "baseUrl": "https://api.github.com",
+                    "pollInterval": 300,
+                    "configuration": { "repositories": ["bad"] }
+                }
+                """)
+            .when()
+                .post(EVENT_SOURCES_PATH)
+            .then()
+                .statusCode(400);
+    }
+
+    @Test
     void testListEventSources() {
         createEventSource("list-conn-1");
         createEventSource("list-conn-2");
@@ -92,7 +113,7 @@ class EventSourcesResourceTest {
                     "enabled": false,
                     "baseUrl": "https://myorg.atlassian.net",
                     "pollInterval": 600,
-                    "configuration": { "subjects": ["PROJ1"] }
+                    "configuration": { "projects": ["PROJ1"] }
                 }
                 """.formatted(slug))
             .when()
