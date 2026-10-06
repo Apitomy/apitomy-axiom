@@ -55,15 +55,16 @@ public class ValidationContextFactory {
         }
         try {
             List<WorkflowDefinitionEntity> workflows = WorkflowDefinitionEntity.listAll();
+            List<ActionTypeEntity> actionTypes = ActionTypeEntity.listAll();
             return new ValidationContext(
                     collect(ToolDefinitionEntity.<ToolDefinitionEntity>listAll(), t -> t.name),
                     collect(ToolsetEntity.<ToolsetEntity>listAll(), t -> t.name),
-                    collect(ActionTypeEntity.<ActionTypeEntity>listAll(), a -> a.name),
+                    collect(actionTypes, a -> a.name),
                     collect(workflows, w -> w.name),
                     workflows.stream().map(w -> w.id).collect(Collectors.toCollection(HashSet::new)),
                     collect(EventSourceEntity.<EventSourceEntity>listAll(), e -> e.id),
                     collect(SecretEntity.<SecretEntity>listAll(), s -> s.name),
-                    actionTypeInputs(ActionTypeEntity.<ActionTypeEntity>listAll()));
+                    actionTypeInputs(actionTypes));
         } finally {
             if (activated) {
                 requestContext.deactivate();

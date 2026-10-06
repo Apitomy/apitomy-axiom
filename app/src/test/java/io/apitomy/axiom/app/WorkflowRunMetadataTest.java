@@ -128,4 +128,44 @@ class WorkflowRunMetadataTest {
                 ((WorkflowRunEntity) WorkflowRunEntity.findById(run.id)).instanceState);
         assertFalse(state.contains("evil"), state);
     }
+
+    /**
+     * Extra context supplied by the trigger cannot override the subject's repository.
+     */
+    @Test
+    void extraContextCannotOverrideRepository() {
+        long subjectId = QuarkusTransaction.requiringNew().call(() -> {
+            SubjectEntity s = new SubjectEntity();
+            s.name = "ctx-extra-" + UUID.randomUUID();
+            s.type = "other";
+            s.ref = "test/ctx-extra";
+            s.repository = "real/repo";
+            s.createdOn = Instant.now();
+            s.updatedOn = Instant.now();
+            s.persist();
+            return s.id;
+        });
+        long defId = TestFixtures.createWaitDefinition("Ctx Extra " + UUID.randomUUID());
+        Map<String, Object> extra = Map.of("repository", "evil/repo");
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(subjectId, defId, extra, null));
+        String state = QuarkusTransaction.requiringNew().call(() ->
+                ((WorkflowRunEntity) WorkflowRunEntity.findById(run.id)).instanceState);
+        assertTrue(state.contains("\"repository\":\"real/repo\""), state);
+        assertFalse(state.contains("evil/repo"), state);
+    }
+
+    /**
+     * A subject without a repository yields an empty-string repository in the run context.
+     */
+    @Test
+    void nullRepositoryYieldsEmptyString() {
+        long subjectId = TestFixtures.createSubject("ctx-null-repo-" + UUID.randomUUID());
+        long defId = TestFixtures.createWaitDefinition("Ctx Null " + UUID.randomUUID());
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(subjectId, defId, RunRequest.EMPTY, null));
+        String state = QuarkusTransaction.requiringNew().call(() ->
+                ((WorkflowRunEntity) WorkflowRunEntity.findById(run.id)).instanceState);
+        assertTrue(state.contains("\"repository\":\"\""), state);
+    }
 }

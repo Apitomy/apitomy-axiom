@@ -83,8 +83,9 @@ class TaskPromptAssemblyTest {
         SubjectEntity subject = subject();
         String systemPrompt = taskExecutionService.buildSystemPrompt(actionType("prompt-assembly"));
 
-        assertTrue(systemPrompt.contains("prompt-assembly"), systemPrompt);
-        assertTrue(systemPrompt.contains("Triages an issue"), systemPrompt);
+        assertEquals("You are performing the action 'prompt-assembly'.\n"
+                + "Triages an issue\n"
+                + "Your current working directory is the task's workspace.\n", systemPrompt);
         assertFalse(systemPrompt.contains(subject.name), systemPrompt);
         assertFalse(systemPrompt.contains(subject.ref), systemPrompt);
         assertFalse(systemPrompt.contains(subject.body), systemPrompt);
