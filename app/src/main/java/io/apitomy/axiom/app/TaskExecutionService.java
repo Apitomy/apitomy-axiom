@@ -199,11 +199,6 @@ public class TaskExecutionService {
         Map<String, String> env = buildEnvironment(
                 actionTypeEntity != null ? actionTypeEntity.environment : null);
 
-        // Lets SDK tools (e.g. axiom_get_workflow_run) default to the calling task's run
-        if (task.workflowRunId != null) {
-            env.put("AXIOM_WORKFLOW_RUN_ID", String.valueOf(task.workflowRunId));
-        }
-
         // Inject trace env vars for MCP tool callbacks (tool calls become children of the task node)
         if (task.traceId != null) {
             try {

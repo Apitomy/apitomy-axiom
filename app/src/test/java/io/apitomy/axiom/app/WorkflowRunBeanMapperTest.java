@@ -111,7 +111,6 @@ class WorkflowRunBeanMapperTest {
                 .build();
 
         WorkflowRunEntity entity = new WorkflowRunEntity();
-
         entity.title = "Test run";
         entity.subjectId = ids[0];
         entity.definitionId = ids[1];
@@ -207,7 +206,6 @@ class WorkflowRunBeanMapperTest {
                 .build();
 
         WorkflowRunEntity entity = new WorkflowRunEntity();
-
         entity.title = "Test run";
         entity.subjectId = ids[0];
         entity.definitionId = ids[1];

@@ -116,7 +116,6 @@ class InactiveSubjectCleanupTest {
             workspaceService.ensureWorkspace(subject);
 
             WorkflowRunEntity run = new WorkflowRunEntity();
-
             run.title = "Test run";
             run.subjectId = subject.id;
             run.definitionId = definitionId;

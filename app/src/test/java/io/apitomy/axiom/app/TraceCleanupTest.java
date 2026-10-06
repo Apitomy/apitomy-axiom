@@ -177,7 +177,6 @@ class TraceCleanupTest {
             node.persist();
 
             WorkflowRunEntity run = new WorkflowRunEntity();
-
             run.title = "Test run";
             run.subjectId = -1L;
             run.definitionId = -1L;

@@ -61,6 +61,8 @@ public class WorkflowExecutionService {
             Set.of(NodeType.START, NodeType.END, NodeType.ACTION, NodeType.HUMAN_TASK,
                     NodeType.WAIT, NodeType.RECEIVE_EVENT);
 
+    private static final int MAX_TITLE_LENGTH = 500;
+
     @Inject
     ObjectMapper objectMapper;
 
@@ -233,9 +235,7 @@ public class WorkflowExecutionService {
         entity.subjectId = subjectId;
         entity.definitionId = definitionId;
         entity.definitionVersion = definition.currentVersion;
-        entity.title = request.title() != null && !request.title().isBlank()
-                ? request.title()
-                : definition.name + " — " + subject.name;
+        entity.title = resolveTitle(request.title(), definition.name, subject.name);
         entity.labels = toJsonOrNull(request.labels());
         entity.inputs = toJsonOrNull(request.inputs());
         entity.startedOn = Instant.now();
@@ -1049,6 +1049,19 @@ public class WorkflowExecutionService {
         } catch (Exception e) {
             LOG.warnf(e, "Failed to reconcile trace node for workflow task %d", task.id);
         }
+    }
+
+    private static String resolveTitle(String requested, String definitionName, String subjectName) {
+        if (requested != null && !requested.isBlank()) {
+            if (requested.length() > MAX_TITLE_LENGTH) {
+                throw new WebApplicationException(Response.status(400)
+                        .entity(Map.of("message", "Run title must be at most " + MAX_TITLE_LENGTH + " characters"))
+                        .build());
+            }
+            return requested;
+        }
+        String title = definitionName + " — " + subjectName;
+        return title.length() > MAX_TITLE_LENGTH ? title.substring(0, MAX_TITLE_LENGTH) : title;
     }
 
     private String toJsonOrNull(Map<String, ?> values) {

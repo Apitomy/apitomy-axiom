@@ -385,7 +385,6 @@ class TraceResourceTest {
             definitionId = def.id;
 
             WorkflowRunEntity run = new WorkflowRunEntity();
-
             run.title = "Test run";
             run.subjectId = subject.id;
             run.definitionId = def.id;

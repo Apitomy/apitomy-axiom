@@ -77,6 +77,20 @@ class SdkResourceTest {
                     "axiom_get_activity_log")));
     }
 
+    /**
+     * runId is a required parameter of axiom_get_workflow_run (no engine-agnostic calling-task default).
+     */
+    @Test
+    void getWorkflowRunRequiresRunId() {
+        given()
+            .when()
+                .get(SDK_PATH)
+            .then()
+                .statusCode(200)
+                .body("find { it.name == 'axiom_get_workflow_run' }.parameters[0].name", equalTo("runId"))
+                .body("find { it.name == 'axiom_get_workflow_run' }.parameters[0].required", equalTo(true));
+    }
+
     @Test
     void testFunctionHasTypedParameters() {
         given()
@@ -176,6 +190,11 @@ class SdkResourceTest {
                 sdkCallService.execute("axiom_get_workflow_run", Map.of("runId", 99999999L)));
         assertFalse(missing.success());
         assertTrue(missing.output().contains("not found"), missing.output());
+
+        SdkCallService.SdkCallResult noRunId = QuarkusTransaction.requiringNew().call(() ->
+                sdkCallService.execute("axiom_get_workflow_run", Map.of()));
+        assertFalse(noRunId.success());
+        assertEquals("runId is required", noRunId.output());
     }
 
     /**

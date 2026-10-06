@@ -8,7 +8,10 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
+import jakarta.ws.rs.WebApplicationException;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -50,5 +53,34 @@ class WorkflowRunMetadataTest {
                 WorkflowRunEntity.findById(run.id));
         assertEquals("Custom", loaded.title);
         assertTrue(loaded.labels.contains("\"team\":\"core\""));
+    }
+
+    /**
+     * A supplied title longer than 500 characters is rejected with 400.
+     */
+    @Test
+    void overlongTitleIsRejected() {
+        long subjectId = TestFixtures.createSubject("meta-long-title");
+        long defId = TestFixtures.createWaitDefinition("Meta Def 3");
+        RunRequest request = new RunRequest("x".repeat(501), null, null, null);
+
+        WebApplicationException ex = assertThrows(WebApplicationException.class, () ->
+                QuarkusTransaction.requiringNew().call(() ->
+                        workflowExecutionService.triggerWorkflow(subjectId, defId, request, null)));
+        assertEquals(400, ex.getResponse().getStatus());
+    }
+
+    /**
+     * A default title longer than 500 characters is truncated to 500.
+     */
+    @Test
+    void longDefaultTitleIsTruncated() {
+        long subjectId = TestFixtures.createSubject("s".repeat(250));
+        long defId = TestFixtures.createWaitDefinition("d".repeat(250));
+
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(subjectId, defId, RunRequest.EMPTY, null));
+
+        assertEquals(500, run.title.length());
     }
 }

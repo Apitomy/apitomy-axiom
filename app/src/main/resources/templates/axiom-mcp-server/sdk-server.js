@@ -144,12 +144,10 @@ const HANDLERS = {
         return await axiomApi("GET", `/activity?${params}`);
     },
     axiom_get_workflow_run: async (args) => {
-        // Defaults to the run of the calling task (AXIOM_WORKFLOW_RUN_ID is set for workflow tasks)
-        const runId = args.runId || process.env.AXIOM_WORKFLOW_RUN_ID;
-        if (!runId) {
-            throw new Error("runId is required (no calling workflow run)");
+        if (!args.runId) {
+            throw new Error("runId is required");
         }
-        const run = JSON.parse(await axiomApi("GET", `/workflow/runs/${runId}`));
+        const run = JSON.parse(await axiomApi("GET", `/workflow/runs/${args.runId}`));
         return JSON.stringify({
             id: run.id,
             title: run.title,
