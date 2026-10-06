@@ -15,6 +15,7 @@ function log(level, message, data) {
 
 const AXIOM_API_URL = process.env.AXIOM_API_URL || "http://localhost:9090/api/v1";
 const AXIOM_SUBJECT_ID = process.env.AXIOM_SUBJECT_ID;
+const AXIOM_ASSISTANT_SESSION_ID = process.env.AXIOM_ASSISTANT_SESSION_ID;
 
 async function axiomApi(method, path, body) {
     const url = `${AXIOM_API_URL}${path}`;
@@ -253,6 +254,32 @@ const TOOLS = [
             } catch (e) {
                 return `Workflow definition '${args.workflowDefinitionId}' not found.`;
             }
+        },
+    },
+    {
+        name: "axiom_validate_item",
+        description: "Validate a draft configuration item BEFORE writing it to a file. type is one of: tool, "
+            + "action-type, toolset, session-template, workflow, event-source, subscription. item is the full "
+            + "JSON object you intend to write. Items already written in this session count as existing.",
+        parameters: [
+            { name: "type", type: "string", description: "Item type", required: true },
+            { name: "item", type: "object", description: "The complete item JSON", required: true },
+        ],
+        handler: async (args) => {
+            if (!AXIOM_ASSISTANT_SESSION_ID) {
+                return "Validation unavailable: no assistant session id.";
+            }
+            const item = typeof args.item === "string" ? JSON.parse(args.item) : args.item;
+            const result = JSON.parse(await axiomApi("POST",
+                "/assistant/sessions/" + encodeURIComponent(AXIOM_ASSISTANT_SESSION_ID) + "/validate",
+                { type: args.type, item }));
+            if (result.valid && result.problems.length === 0) {
+                return "VALID. You can write this item to its file.";
+            }
+            const lines = result.problems.map(p =>
+                `- [${p.severity.toUpperCase()}] ${p.path || "(root)"} ${p.code}: ${p.message}`);
+            return (result.valid ? "VALID with warnings:\n" : "INVALID — fix these and validate again:\n")
+                + lines.join("\n");
         },
     },
     {

@@ -2698,6 +2698,52 @@
         }
       ]
     },
+    "/assistant/sessions/{sessionId}/validate": {
+      "post": {
+        "tags": [
+          "Assistant"
+        ],
+        "summary": "Validate a draft configuration item in the context of an assistant session",
+        "description": "Validates an item using the same rules as apply. Items already written to the session working directory count as existing.",
+        "operationId": "validateAssistantItem",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantValidateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Validation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantValidateResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "sessionId",
+          "in": "path",
+          "description": "The assistant session identifier",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
     "/tools/validate": {
       "post": {
         "tags": [
@@ -6857,6 +6903,80 @@
         "properties": {
           "name": {
             "description": "New session name",
+            "type": "string"
+          }
+        }
+      },
+      "AssistantValidateRequest": {
+        "required": [
+          "type",
+          "item"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The configuration item type",
+            "enum": [
+              "tool",
+              "action-type",
+              "toolset",
+              "session-template",
+              "workflow",
+              "event-source",
+              "subscription"
+            ],
+            "type": "string"
+          },
+          "item": {
+            "description": "The complete item JSON",
+            "type": "object",
+            "additionalProperties": {}
+          }
+        }
+      },
+      "AssistantValidateResult": {
+        "required": [
+          "valid",
+          "problems"
+        ],
+        "type": "object",
+        "properties": {
+          "valid": {
+            "description": "True when there are no error-severity problems",
+            "type": "boolean"
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConfigProblem"
+            }
+          }
+        }
+      },
+      "ConfigProblem": {
+        "required": [
+          "severity",
+          "code",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "severity": {
+            "enum": [
+              "error",
+              "warning"
+            ],
+            "type": "string"
+          },
+          "path": {
+            "description": "JSON path of the offending field within the item (empty for the item root)",
+            "type": "string"
+          },
+          "code": {
+            "description": "Stable problem code",
+            "type": "string"
+          },
+          "message": {
             "type": "string"
           }
         }

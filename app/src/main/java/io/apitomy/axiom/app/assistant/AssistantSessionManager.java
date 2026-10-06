@@ -11,6 +11,8 @@ import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
 import io.apitomy.axiom.app.assistant.runtime.InteractiveSessionDriver;
 import io.apitomy.axiom.app.assistant.runtime.InteractiveSessionDriverFactory;
 import io.apitomy.axiom.app.assistant.runtime.SessionCompatibilityException;
+import io.apitomy.axiom.app.validation.ConfigItemType;
+import io.apitomy.axiom.app.validation.ConfigProblem;
 import io.apitomy.axiom.app.validation.ConfigValidationException;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.McpServerEntity;
@@ -177,7 +179,7 @@ public class AssistantSessionManager {
             // Resolve MCP servers from template, augmented with any servers
             // implied by the allowed tools list.
             Map<String, AssistantContextBuilder.McpServerConfig> mcpConfigs =
-                    resolveMcpServers(template, subject, sessionDir, resolvedEnv,
+                    resolveMcpServers(sessionId, template, subject, sessionDir, resolvedEnv,
                             resolvedAllowedTools);
 
             // Build and write MCP config JSON to session directory
@@ -323,6 +325,24 @@ public class AssistantSessionManager {
      */
     public AssistantSession getSession(String sessionId) {
         return sessions.get(sessionId);
+    }
+
+    /**
+     * Validates a draft configuration item in the context of a session: items already written to the
+     * session's working directory count as existing.
+     *
+     * @param sessionId the session identifier
+     * @param type the item type (JSON name, e.g. {@code workflow})
+     * @param item the item JSON
+     * @return the problems found (empty when valid)
+     * @throws IllegalArgumentException if the session does not exist
+     */
+    public List<ConfigProblem> validateItem(String sessionId, String type, JsonNode item) {
+        AssistantSession session = sessions.get(sessionId);
+        if (session == null) {
+            throw new IllegalArgumentException("Assistant session not found: " + sessionId);
+        }
+        return itemValidator.validateItem(ConfigItemType.fromName(type), item, session.getWorkingDirectory());
     }
 
     /**
@@ -718,6 +738,9 @@ public class AssistantSessionManager {
                 validateAndFeedback(workDir, "event-sources", session, tracker);
                 validateAndFeedback(workDir, "subscriptions", session, tracker);
                 validateAndFeedback(workDir, "workflows", session, tracker);
+                if (tracker.transitionedToAllValid()) {
+                    session.sendMessage("All configuration items in this session are valid.");
+                }
             } catch (Exception e) {
                 LOG.warnf(e, "Validation listener error in session %s",
                         session.getId());
@@ -788,7 +811,7 @@ public class AssistantSessionManager {
     }
 
     private Map<String, AssistantContextBuilder.McpServerConfig> resolveMcpServers(
-            SessionTemplateService.SessionTemplate template,
+            String sessionId, SessionTemplateService.SessionTemplate template,
             SubjectEntity subject, Path sessionDir,
             Map<String, String> sessionEnv,
             List<String> allowedTools) throws IOException {
@@ -813,6 +836,7 @@ public class AssistantSessionManager {
                 if (subject != null) {
                     env.put("AXIOM_SUBJECT_ID", String.valueOf(subject.id));
                 }
+                env.put("AXIOM_ASSISTANT_SESSION_ID", sessionId);
                 configs.put("axiom", AssistantContextBuilder.McpServerConfig.stdio(
                         "node", List.of(serverJsPath), env));
 

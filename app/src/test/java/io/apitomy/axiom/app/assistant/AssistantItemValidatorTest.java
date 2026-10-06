@@ -1,6 +1,9 @@
 package io.apitomy.axiom.app.assistant;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.app.validation.ConfigItemValidationService;
+import io.apitomy.axiom.core.filters.SubscriptionFilterEvaluator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -9,14 +12,12 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Unit tests for {@link AssistantItemValidator}. Uses a temporary directory
- * for JSON files and directly injects the ObjectMapper — no Quarkus container
- * required.
+ * Unit tests for {@link AssistantItemValidator}. Uses a temporary directory for JSON files and wires the
+ * validation service directly — no Quarkus container, so referenced names are not checked.
  */
 class AssistantItemValidatorTest {
 
@@ -27,10 +28,14 @@ class AssistantItemValidatorTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        ObjectMapper mapper = new ObjectMapper()
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        ConfigItemValidationService service = new ConfigItemValidationService();
+        inject(service, "objectMapper", mapper);
+        inject(service, "filterEvaluator", new SubscriptionFilterEvaluator());
         validator = new AssistantItemValidator();
-        Field omField = AssistantItemValidator.class.getDeclaredField("objectMapper");
-        omField.setAccessible(true);
-        omField.set(validator, new ObjectMapper());
+        validator.objectMapper = mapper;
+        validator.validationService = service;
     }
 
     // ── Tool validation ─────────────────────────────────────────────
@@ -249,6 +254,54 @@ class AssistantItemValidatorTest {
         assertTrue(vr.errors().stream().anyMatch(e -> e.contains("scriptTemplate")));
     }
 
+    // ── Workflow and event source validation ────────────────────────
+
+    private static final String VALID_WORKFLOW = """
+        {"name": "triage", "content": {
+          "id": "triage", "name": "triage",
+          "nodes": [
+            {"id": "s", "type": "start", "name": "Start", "config": {}, "position": {"x": 0, "y": 0}},
+            {"id": "a", "type": "action", "name": "Do", "config": {"actionType": "do-it"},
+             "position": {"x": 200, "y": 0}},
+            {"id": "e", "type": "end", "name": "End", "config": {}, "position": {"x": 400, "y": 0}}
+          ],
+          "edges": [
+            {"id": "e1", "source": "s", "target": "a", "priority": 0, "isDefault": true},
+            {"id": "e2", "source": "a", "target": "e", "priority": 0, "isDefault": true}
+          ]}}
+        """;
+
+    @Test
+    void lowercaseWorkflowPasses() throws IOException {
+        Path file = writeJson(tempDir, "workflows/triage.json", VALID_WORKFLOW);
+
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "workflows");
+        assertTrue(vr.isValid(), "Lowercase workflow should be valid: " + vr.errors());
+    }
+
+    @Test
+    void uppercaseWorkflowNodeTypeFails() throws IOException {
+        Path file = writeJson(tempDir, "workflows/upper.json",
+                VALID_WORKFLOW.replace("\"type\": \"start\"", "\"type\": \"START\""));
+
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "workflows");
+        assertFalse(vr.isValid());
+        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("lowercase")), vr.errors().toString());
+    }
+
+    @Test
+    void eventSourceWithBadRepositoryFails() throws IOException {
+        Path file = writeJson(tempDir, "event-sources/gh.json", """
+                {"id": "gh", "name": "GH", "sourceType": "github", "baseUrl": "https://api.github.com",
+                 "configuration": {"repositories": ["bad"]}}
+                """);
+
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "event-sources");
+        assertFalse(vr.isValid());
+        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("configuration.repositories[0]")),
+                vr.errors().toString());
+    }
+
     // ── General validation ──────────────────────────────────────────
 
     @Test
@@ -322,6 +375,12 @@ class AssistantItemValidatorTest {
     }
 
     // ── Helper ──────────────────────────────────────────────────────
+
+    private static void inject(Object target, String fieldName, Object value) throws Exception {
+        Field field = target.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
 
     private Path writeJson(Path base, String relativePath, String content) throws IOException {
         Path file = base.resolve(relativePath);

@@ -10,6 +10,9 @@ import io.apitomy.axiom.api.beans.AssistantApplyResult;
 import io.apitomy.axiom.api.beans.AssistantItem;
 import io.apitomy.axiom.api.beans.AssistantPermissionResponse;
 import io.apitomy.axiom.api.beans.AssistantSessionInfo;
+import io.apitomy.axiom.api.beans.AssistantValidateRequest;
+import io.apitomy.axiom.api.beans.AssistantValidateResult;
+import io.apitomy.axiom.api.beans.ConfigProblem;
 import io.apitomy.axiom.api.beans.AutoApprovalRule;
 import io.apitomy.axiom.api.beans.CreateAssistantSessionRequest;
 import io.apitomy.axiom.api.beans.CreateAutoApprovalRequest;
@@ -412,6 +415,38 @@ public class AssistantResourceImpl implements AssistantResource {
             throw new WebApplicationException(
                     "Failed to read item: " + e.getMessage(), 500);
         }
+    }
+
+    /**
+     * Validates a draft configuration item in the context of an assistant session.
+     *
+     * @param sessionId the session identifier
+     * @param data the item type and JSON
+     * @return whether the item is valid and the problems found
+     */
+    @Override
+    public AssistantValidateResult validateAssistantItem(String sessionId, AssistantValidateRequest data) {
+        if (data.getType() == null || data.getItem() == null) {
+            throw new WebApplicationException("'type' and 'item' are required", 400);
+        }
+        JsonNode item = objectMapper.valueToTree(data.getItem().getAdditionalProperties());
+        List<io.apitomy.axiom.app.validation.ConfigProblem> problems;
+        try {
+            problems = sessionManager.validateItem(sessionId, data.getType().value(), item);
+        } catch (IllegalArgumentException e) {
+            throw new WebApplicationException(e.getMessage(), 404);
+        }
+        AssistantValidateResult result = new AssistantValidateResult();
+        result.setValid(problems.stream().noneMatch(io.apitomy.axiom.app.validation.ConfigProblem::isError));
+        result.setProblems(problems.stream().map(p -> {
+            ConfigProblem bean = new ConfigProblem();
+            bean.setSeverity(ConfigProblem.Severity.fromValue(p.severity()));
+            bean.setPath(p.path());
+            bean.setCode(p.code());
+            bean.setMessage(p.message());
+            return bean;
+        }).toList());
+        return result;
     }
 
     /** {@inheritDoc} */
