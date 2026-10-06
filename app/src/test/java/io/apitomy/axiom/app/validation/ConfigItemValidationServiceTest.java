@@ -1,5 +1,6 @@
 package io.apitomy.axiom.app.validation;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.filters.SubscriptionFilterEvaluator;
@@ -17,7 +18,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class ConfigItemValidationServiceTest {
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    /** Matches the Quarkus ObjectMapper, which ignores unknown properties. */
+    private final ObjectMapper mapper = new ObjectMapper()
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     private ConfigItemValidationService service;
 
     @BeforeEach
@@ -118,7 +121,8 @@ class ConfigItemValidationServiceTest {
         String bad = VALID_WORKFLOW.replace("\"source\": \"s\", \"target\": \"a\"",
                 "\"sourceNodeId\": \"s\", \"targetNodeId\": \"a\"");
         List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW, json(bad), actionTypes("do-it"));
-        assertTrue(ConfigItemValidationService.hasErrors(problems), problems.toString());
+        assertTrue(problems.stream().anyMatch(p -> p.isError() && p.code().equals("MISSING_EDGE_SOURCE")
+                && p.path().equals("content.edges[0]")), problems.toString());
     }
 
     @Test
@@ -134,5 +138,41 @@ class ConfigItemValidationServiceTest {
                 actionTypes("other"));
         assertTrue(problems.stream().anyMatch(p -> p.code().equals("UNKNOWN_ACTION_TYPE")
                 && p.path().startsWith("content.nodes[1]")), problems.toString());
+    }
+
+    @Test
+    void unknownSdkFunctionIsRejected() throws Exception {
+        String bad = VALID_WORKFLOW.replace("\"actionType\": \"do-it\"", "\"actionType\": \"sdk:nope\"");
+        List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW, json(bad), actionTypes("do-it"));
+        assertTrue(problems.stream().anyMatch(p -> p.isError() && p.code().equals("UNKNOWN_SDK_FUNCTION")
+                && p.path().equals("content.nodes[1].config.actionType")), problems.toString());
+    }
+
+    @Test
+    void missingActionTypeIsRejected() throws Exception {
+        String bad = VALID_WORKFLOW.replace("{\"actionType\": \"do-it\"}", "{}");
+        List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW, json(bad), actionTypes("do-it"));
+        assertTrue(problems.stream().anyMatch(p -> p.isError() && p.code().equals("MISSING_ACTION_TYPE")
+                && p.path().equals("content.nodes[1].config.actionType")), problems.toString());
+    }
+
+    @Test
+    void requiredBuiltInStartInputIsRejected() throws Exception {
+        String bad = VALID_WORKFLOW.replace("\"name\": \"Start\", \"config\": {}",
+                "\"name\": \"Start\", \"config\": {\"inputs\": [{\"name\": \"event\", \"required\": true}]}");
+        List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW, json(bad), actionTypes("do-it"));
+        assertTrue(problems.stream().anyMatch(p -> p.isError() && p.code().equals("INVALID_START_INPUT")
+                && p.path().equals("content.nodes[0].config.inputs")), problems.toString());
+    }
+
+    @Test
+    void unknownReceiveEventTypeIsWarning() throws Exception {
+        String bad = VALID_WORKFLOW.replace(
+                "\"type\": \"action\", \"name\": \"Do\", \"config\": {\"actionType\": \"do-it\"}",
+                "\"type\": \"receive-event\", \"name\": \"Wait\", \"config\": {\"eventType\": \"issues\"}");
+        List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW, json(bad), actionTypes("do-it"));
+        assertTrue(problems.stream().anyMatch(p -> !p.isError() && p.code().equals("UNKNOWN_EVENT_TYPE")
+                && p.path().equals("content.nodes[1].config.eventType")
+                && p.message().contains("issue.created")), problems.toString());
     }
 }

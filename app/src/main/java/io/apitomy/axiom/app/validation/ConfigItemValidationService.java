@@ -9,16 +9,16 @@ import io.apitomy.axiom.core.events.model.EventType;
 import io.apitomy.axiom.core.filters.SubscriptionFilterEvaluator;
 import io.apitomy.axiom.core.services.ActionTypeValidator;
 import io.apitomy.axiom.core.services.ToolValidator;
-import jakarta.enterprise.context.ApplicationScoped;
 import io.apitomy.flow.model.NodeType;
 import io.apitomy.flow.model.Workflow;
 import io.apitomy.flow.model.WorkflowNode;
 import io.apitomy.flow.validation.ValidationProblem;
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Pattern;
