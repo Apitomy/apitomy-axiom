@@ -353,6 +353,12 @@ The assistant understands the relationships between these items. When it creates
 action type that needs a custom tool, it creates the tool first and adds it to the
 action type's allowed tools list automatically.
 
+When it writes action types, the assistant declares an input for everything the action operates on (issue
+reference, repository, ids) and maps those inputs on workflow `action` nodes from `context.*` or earlier
+outputs — action types never rely on ambient subject data. It also leaves output-format instructions out of
+prompts, because Axiom appends the output contract automatically. See
+[Inputs, Placeholders and Mappings](concepts.md#inputs-placeholders-and-mappings).
+
 ### Validation
 
 The assistant follows a **validate-before-write** loop. Before it writes a generated item, it checks the
@@ -423,8 +429,8 @@ The assistant will:
 
 1. Create `fetch_github_labels`, `fetch_github_issue`, and `apply_github_labels` tools
    with appropriate parameters and scripts
-2. Create an `Auto-Label Issue` action type with a prompt template referencing all three
-   tools
+2. Create an `Auto-Label Issue` action type with `ref` and `repository` inputs and a prompt
+   template referencing all three tools
 3. Show all four items in the Generated Items panel with validation status
 
 You can then review each item, ask for changes, and apply them all at once.

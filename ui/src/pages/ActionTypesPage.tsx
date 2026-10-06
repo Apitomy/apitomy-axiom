@@ -45,10 +45,10 @@ import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 // Default templates sent when creating an action type so the POST is complete and
 // passes server-side validation. Users refine these on the detail page afterward.
-// Placeholders must be ones the server's ActionTypeValidator recognizes.
-const DEFAULT_PROMPT_TEMPLATE = "Complete the following task:\n\n{{input}}\n";
+// The only valid placeholder is {{inputs.<name>}} for a declared input; these defaults use none.
+const DEFAULT_PROMPT_TEMPLATE = "Describe the task the agent should perform. Declared inputs are listed\nautomatically in an Inputs section and can be referenced inline.\n";
 const DEFAULT_SCRIPT_TEMPLATE =
-    "#!/usr/bin/env bash\nset -euo pipefail\n\n# TODO: implement this action\necho \"Running action for {{subjectName}}\"\n";
+    "#!/usr/bin/env bash\nset -euo pipefail\n\n# TODO: implement this action\necho \"Running task $AXIOM_TASK_ID\"\n";
 
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "name", label: "Name", testId: "action-type-filter-name" },

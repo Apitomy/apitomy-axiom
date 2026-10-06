@@ -173,6 +173,13 @@ On the detail page, configure the remaining fields:
 |-------|-------|
 | **Description** | Analyze a new GitHub issue and apply relevant labels |
 
+**Inputs tab** — declare what the action operates on:
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `ref` | string | Yes | URL of the issue to label |
+| `repository` | string | Yes | Repository in owner/repo format |
+
 **Allowed Tools tab** — add exactly these three tools:
 
 ```
@@ -190,10 +197,10 @@ is to apply the most relevant labels from the repository's existing label set.
 ## Instructions
 
 1. Fetch the issue details using the `fetch_github_issue` tool with issue URL
-   `{{ref}}`.
+   `{{inputs.ref}}`.
 
 2. Fetch the available labels using the `fetch_github_labels` tool with repository
-   `{{repository}}`.
+   `{{inputs.repository}}`.
 
 3. Based on the issue title and body, select the most relevant labels from the
    available set. Choose labels that accurately categorize the issue. Typically
@@ -201,7 +208,7 @@ is to apply the most relevant labels from the repository's existing label set.
    exist in the repository.
 
 4. Apply the selected labels using the `apply_github_labels` tool with issue URL
-   `{{ref}}`.
+   `{{inputs.ref}}`.
 
 If the issue already has appropriate labels, or if no labels clearly apply, do not
 make any changes.
@@ -215,8 +222,10 @@ Navigate to **Workflows** and click **Create Workflow** with the name
 
 1. Drag an **Auto-Label Issue** action node from the palette (every action type appears there) between
    Start and End
-2. Connect Start → Auto-Label Issue → End
-3. Click **Publish**
+2. On the action node, map its inputs from the run context: `ref` ← `context.ref` and `repository` ←
+   `context.repository`
+3. Connect Start → Auto-Label Issue → End
+4. Click **Publish**
 
 ### Step 6: Add a Subscription
 
@@ -354,6 +363,9 @@ mcp__axiom-sdk__axiom_list_subjects
 mcp__axiom-sdk__axiom_add_thread_entry
 ```
 
+**Inputs tab** — add a required `subjectName` input (string, "Name of the subject to post the summary
+to").
+
 **Prompt Template tab:**
 
 ```markdown
@@ -366,14 +378,15 @@ Summarize all GitHub @mentions from the past 7 days.
    - For each repository (alphabetically), each mention with its title, type, and date
      (newest first) and a one-line note on whether it likely needs a response
    - An "Action Items" section listing mentions that need follow-up (or "None")
-3. Find the ID of the subject named "{{subjectName}}" with `axiom_list_subjects`, then post
+3. Find the ID of the subject named "{{inputs.subjectName}}" with `axiom_list_subjects`, then post
    the summary to that subject's thread with `axiom_add_thread_entry`.
 ```
 
 ### Step 4: Create the Workflow and Schedule Trigger
 
 Navigate to **Workflows**, create a workflow named `Weekly @Mentions`, add a
-**Summarize @Mentions** action node between Start and End, and click **Publish**.
+**Summarize @Mentions** action node between Start and End, map its `subjectName` input from
+`context.subjectName`, and click **Publish**.
 
 On the workflow's **Triggers** tab, add a schedule trigger:
 

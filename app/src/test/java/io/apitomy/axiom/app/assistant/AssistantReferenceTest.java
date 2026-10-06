@@ -101,6 +101,13 @@ class AssistantReferenceTest {
         assertTrue(prompt.contains("axiom_validate_item"));
         assertFalse(prompt.contains("\"START\""));
         assertFalse(prompt.contains("sourceNodeId"));
+        assertTrue(prompt.contains("Declare an input for everything an action operates on"));
+        assertTrue(prompt.contains("Do not write output-format instructions in prompts"));
+        String reference = generator.generate();
+        int hints = reference.indexOf("Other former placeholders are rejected");
+        assertTrue(hints > 0);
+        assertFalse(reference.substring(0, hints).contains("{{ref}}"));
+        assertTrue(reference.substring(hints).contains("{{ref}}"));
     }
 
     private void copyExamples(Path dir) throws IOException {

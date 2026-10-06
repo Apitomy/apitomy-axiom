@@ -46,36 +46,26 @@ public class ScriptAiService {
             You are a script editor for Apicurio Axiom. Your job is to create or update \
             bash script templates for script-mode action types.
 
-            Scripts are bash scripts that run when a script action type is executed. They support these placeholders which are substituted \
-            at runtime:
-            - {{subjectId}} — the Axiom subject ID
-            - {{eventId}} — the event ID that triggered this action
-            - {{taskId}} — the task ID for this execution
-            - {{ref}} — the subject reference (e.g. "owner/repo#42" or "CVE-2024-12345")
-            - {{repository}} — the repository name (e.g. "owner/repo")
-            - {{subjectName}} — the subject name
-            - {{apiBaseUrl}} — the Axiom REST API base URL (e.g. "http://localhost:9090/api/v1")
+            Scripts are bash scripts that run when a script action type is executed. The \
+            only placeholder is {{inputs.<name>}}, which must refer to an input declared on \
+            the action type. Declare an input for everything the script operates on (subject \
+            id, issue reference, repository); workflow nodes map values into them.
 
-            Placeholder values are treated as literal data: each {{...}} is passed to the \
-            script as an environment variable and expands to a quoted shell reference (e.g. \
-            {{subjectName}} becomes "$AXIOM_SUBJECT_NAME"), so values containing shell \
-            metacharacters are never executed. Use a placeholder wherever you would use a \
-            shell variable — do NOT wrap it in extra quotes.
+            Input values are treated as literal data: each {{inputs.<name>}} is passed to the \
+            script as an environment variable and expands to a quoted shell reference, so \
+            values containing shell metacharacters are never executed. Use a placeholder \
+            wherever you would use a shell variable — do NOT wrap it in extra quotes. An \
+            optional input with no value renders empty.
 
-            Environment variables are also available directly:
-            - AXIOM_API_URL — same as {{apiBaseUrl}}
-            - AXIOM_SUBJECT_ID — same as {{subjectId}}
-            - AXIOM_EVENT_ID — same as {{eventId}}
-            - AXIOM_TASK_ID — same as {{taskId}}
-            - AXIOM_REF — same as {{ref}}
-            - AXIOM_REPOSITORY — same as {{repository}}
-            - AXIOM_SUBJECT_NAME — same as {{subjectName}}
-            - AXIOM_WORK_DIR — same as {{workDir}}
+            These environment variables are always available:
+            - AXIOM_API_URL — the Axiom REST API base URL (e.g. "http://localhost:9090/api/v1")
+            - AXIOM_TASK_ID — the task ID for this execution
+            - AXIOM_WORK_DIR — the working directory for this execution
 
-            Common Axiom REST API endpoints the script can call:
-            - GET {{apiBaseUrl}}/subjects/{{subjectId}} — get subject details
-            - PUT {{apiBaseUrl}}/subjects/{{subjectId}} — update subject (name, description, labels, etc.)
-            - GET {{apiBaseUrl}}/subjects/{{subjectId}}/thread — get subject thread
+            Common Axiom REST API endpoints the script can call (declare a subjectId input):
+            - GET $AXIOM_API_URL/subjects/{{inputs.subjectId}} — get subject details
+            - PUT $AXIOM_API_URL/subjects/{{inputs.subjectId}} — update subject (name, description, labels, etc.)
+            - GET $AXIOM_API_URL/subjects/{{inputs.subjectId}}/thread — get subject thread
 
             Common CLI tools available: curl, jq, gh (GitHub CLI), git, standard Unix utilities.
 

@@ -30,7 +30,7 @@ import {
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import HelpIcon from "@patternfly/react-icons/dist/esm/icons/help-icon";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
-import { registerPlaceholderCompletions, ACTION_TYPE_PLACEHOLDERS, SCRIPT_PLACEHOLDERS, type PlaceholderItem } from "../components/PlaceholderCompletionProvider";
+import { registerPlaceholderCompletions, inputPlaceholderItems, SCRIPT_ENV_VARS } from "../components/PlaceholderCompletionProvider";
 import { EditLabelsModal } from "../components/EditLabelsModal";
 import { AiConfigTab } from "../components/AiConfigTab";
 import { EnvironmentTab } from "../components/EnvironmentTab";
@@ -494,13 +494,7 @@ function PromptTemplateTab({ value, onChange, inputs }: {
 
     // Build dynamic placeholders from defined inputs
     const allPlaceholders = useMemo(() => {
-        const inputPlaceholders: PlaceholderItem[] = inputs
-            .filter((i) => i.name)
-            .map((i) => ({
-                name: `inputs.${i.name}`,
-                description: i.description || `Input: ${i.name} (${i.type})`,
-            }));
-        return [...ACTION_TYPE_PLACEHOLDERS, ...inputPlaceholders];
+        return inputPlaceholderItems(inputs);
     }, [inputs]);
 
     // Re-register completions when inputs change
@@ -571,8 +565,9 @@ function PromptTemplateTab({ value, onChange, inputs }: {
                 <ModalHeader title="Prompt Template Placeholders" />
                 <ModalBody>
                     <p style={{ marginBottom: "16px" }}>
-                        These placeholders are replaced with actual values when the action type
-                        is executed. Click a placeholder to insert it into the prompt template.
+                        The only placeholder is {"{{inputs.<name>}}"} for a declared input. Axiom
+                        also appends an Inputs section with every valued input and the output
+                        contract. Click a placeholder to insert it into the prompt template.
                     </p>
                     <Table aria-label="Template placeholders" variant="compact">
                         <Thead>
@@ -614,13 +609,7 @@ function ScriptTab({ value, onChange, inputs }: {
     const [helpOpen, setHelpOpen] = useState(false);
 
     const allPlaceholders = useMemo(() => {
-        const inputPlaceholders: PlaceholderItem[] = inputs
-            .filter((i) => i.name)
-            .map((i) => ({
-                name: `inputs.${i.name}`,
-                description: i.description || `Input: ${i.name} (${i.type})`,
-            }));
-        return [...SCRIPT_PLACEHOLDERS, ...inputPlaceholders];
+        return inputPlaceholderItems(inputs);
     }, [inputs]);
 
     useEffect(() => {
@@ -688,8 +677,8 @@ function ScriptTab({ value, onChange, inputs }: {
                 <ModalHeader title="Script Template Placeholders" />
                 <ModalBody>
                     <p style={{ marginBottom: "16px" }}>
-                        These placeholders are replaced with actual values when the script
-                        is executed. Click a placeholder to insert it into the script template.
+                        The only placeholder is {"{{inputs.<name>}}"} for a declared input. Click a
+                        placeholder to insert it into the script template.
                     </p>
                     <Table aria-label="Script placeholders" variant="compact">
                         <Thead>
@@ -708,6 +697,25 @@ function ScriptTab({ value, onChange, inputs }: {
                                         </code>
                                     </Td>
                                     <Td>{p.description}</Td>
+                                </Tr>
+                            ))}
+                        </Tbody>
+                    </Table>
+                    <p style={{ margin: "16px 0" }}>
+                        These environment variables are always available to the script:
+                    </p>
+                    <Table aria-label="Script environment variables" variant="compact">
+                        <Thead>
+                            <Tr>
+                                <Th>Variable</Th>
+                                <Th>Description</Th>
+                            </Tr>
+                        </Thead>
+                        <Tbody>
+                            {SCRIPT_ENV_VARS.map((v) => (
+                                <Tr key={v.name}>
+                                    <Td><code>{`$${v.name}`}</code></Td>
+                                    <Td>{v.description}</Td>
                                 </Tr>
                             ))}
                         </Tbody>

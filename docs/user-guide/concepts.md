@@ -116,39 +116,57 @@ directly. Every action type is available in the workflow editor palette. Each ac
 
 ### Execution Modes
 
-**Agent mode** — the action is executed by an AI agent. The agent receives the prompt template with
-placeholders substituted:
+**Agent mode** — the action is executed by an AI agent. **Script mode** — a bash script runs directly.
 
-| Placeholder | Value |
+### Inputs, Placeholders and Mappings
+
+An action type declares everything it operates on as **inputs** (for example an issue reference, a
+repository, or a subject id). The only template placeholder is `{{inputs.NAME}}`, where `NAME` must be a
+declared input; any other `{{...}}` placeholder is rejected by validation. Action types never see ambient
+subject data — values reach them only through inputs.
+
+Each workflow `action` node maps values into the action type's inputs, typically from the run context
+(`context.*`) or from outputs of earlier nodes. The run context always provides:
+
+| Context key | Value |
 |-------------|-------|
-| `{{actionType}}` | The action type name |
-| `{{ref}}` | Full URL identifying the subject |
-| `{{repository}}` | Repository, when applicable |
-| `{{subjectName}}` | Subject name |
-| `{{workDir}}` | The subject's workspace directory |
-| `{{inputs.NAME}}` | A named workflow input |
+| `subjectId` | Internal subject ID |
+| `subjectName` | Subject name |
+| `ref` | Full URL identifying the subject (empty when unknown) |
+| `repository` | Repository, when applicable (empty otherwise) |
+| `event` | The triggering event, for event-started runs |
 
-**Script mode** — a bash script runs directly. The script template supports the same placeholders plus
-additional ones:
+These keys cannot be overridden by supplied run inputs. Mapping rules:
 
-| Placeholder | Value |
-|-------------|-------|
-| `{{subjectId}}` | Internal subject ID |
-| `{{eventId}}` | The triggering event ID |
-| `{{taskId}}` | The task ID |
-| `{{apiBaseUrl}}` | Axiom's own API base URL (for callbacks) |
+- Every **required** input must be mapped on the node.
+- Mapping a name that is not a declared input is an error.
+- An **optional** input may be left unmapped; it is then absent, omitted from the Inputs section, and
+  `{{inputs.NAME}}` renders as an empty string.
 
-> **Placeholder values are treated as literal data.** In script mode each placeholder is not inlined into
-> the script text. Instead its value is passed to the script as an environment variable and the
-> placeholder expands to a reference to that variable — for example `echo {{subjectName}}` becomes
-> `echo "${AXIOM_SUBJECT_NAME}"`. This means a value containing shell metacharacters (`$(...)`, backticks,
-> `;`, `&&`, newlines, etc.) is never executed as code. The expansion adapts to the surrounding quotes, so
-> you can place a placeholder wherever you'd use a shell variable and values containing whitespace stay a
-> single argument — whether it is unquoted (`{{subjectName}}`), inside double quotes
-> (`"Fix: {{subjectName}}"`), or inside single quotes (`'{{subjectName}}'`). The matching environment
-> variables — `AXIOM_SUBJECT_ID`, `AXIOM_EVENT_ID`, `AXIOM_TASK_ID`, `AXIOM_REF`, `AXIOM_REPOSITORY`,
-> `AXIOM_SUBJECT_NAME`, `AXIOM_API_URL`, `AXIOM_WORK_DIR`, and `AXIOM_INPUT_<NAME>` for workflow inputs —
-> are also available directly.
+For example, an action type declaring a required `ref` input and an optional `repository` input, used by a
+node that maps `ref` from `context.ref` and `repository` from `context.repository`:
+
+```
+Triage the issue at {{inputs.ref}}.
+```
+
+**Agent prompt.** The agent receives the rendered prompt template followed by an `## Inputs` section that
+lists every declared input that has a value (in declaration order, even if it is also referenced inline),
+and then a `## Required output` contract derived from the declared outputs. Do not write output-format
+instructions in the prompt — Axiom appends the contract automatically.
+
+**Script environment.** Scripts and agents receive the plumbing environment variables `AXIOM_API_URL`
+(Axiom's API base URL), `AXIOM_TASK_ID` and `AXIOM_WORK_DIR`, plus secrets and the action type's
+environment. Subject data is not passed through the environment; declare an input instead, e.g.
+`curl "$AXIOM_API_URL/subjects/{{inputs.subjectId}}"`.
+
+> **Input values are treated as literal data.** In script mode an `{{inputs.NAME}}` placeholder is not
+> inlined into the script text. Instead its value is passed as the environment variable
+> `AXIOM_INPUT_NAME` and the placeholder expands to a reference to that variable — for example
+> `echo {{inputs.ref}}` becomes `echo "${AXIOM_INPUT_ref}"`. A value containing shell metacharacters
+> (`$(...)`, backticks, `;`, `&&`, newlines, etc.) is never executed as code. The expansion adapts to the
+> surrounding quotes, so a placeholder can go wherever you'd use a shell variable — unquoted, inside double
+> quotes (`"Fix: {{inputs.ref}}"`), or inside single quotes (`'{{inputs.ref}}'`).
 
 ### Tasks
 

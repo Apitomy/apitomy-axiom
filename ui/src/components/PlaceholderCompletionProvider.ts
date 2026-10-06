@@ -1,13 +1,13 @@
 /**
  * Registers a Monaco completion provider that suggests placeholder
- * substitutions (e.g. {{source}}, {{actionTypes}}) when the user
+ * substitutions (e.g. {{inputs.ref}}) when the user
  * types "{{" in the editor.
  *
  * Usage with PatternFly CodeEditor:
  * ```tsx
  * <CodeEditor
  *     onEditorDidMount={(editor, monaco) => {
- *         registerPlaceholderCompletions(monaco, "markdown", ACTION_TYPE_PLACEHOLDERS);
+ *         registerPlaceholderCompletions(editor, monaco, "markdown", inputPlaceholderItems(inputs));
  *     }}
  * />
  * ```
@@ -117,26 +117,29 @@ export function registerPlaceholderCompletions(
 }
 
 /**
- * Placeholders available in the Action Type prompt template.
+ * Builds `inputs.<name>` completion items for an action type's declared inputs.
+ * Inputs without a name are skipped.
+ *
+ * @param inputs the declared inputs
+ * @returns one placeholder item per named input, in declaration order
  */
-export const ACTION_TYPE_PLACEHOLDERS: PlaceholderItem[] = [
-    { name: "actionType", description: "The action type name" },
-    { name: "ref", description: "Full URL of the event subject (e.g. 'https://github.com/owner/repo/issues/42')" },
-    { name: "repository", description: "Repository identifier" },
-    { name: "subjectName", description: "Subject name" },
-    { name: "workDir", description: "Absolute path to the subject workspace directory" },
-];
+export function inputPlaceholderItems(
+    inputs: { name: string; description?: string; type?: string }[]
+): PlaceholderItem[] {
+    return inputs
+        .filter((i) => i.name)
+        .map((i) => ({
+            name: `inputs.${i.name}`,
+            description: i.description || `Input: ${i.name}${i.type ? ` (${i.type})` : ""}`,
+        }));
+}
 
 /**
- * Placeholders available in the Action Type script template.
+ * Environment variables available to every script at runtime. These are
+ * documentation entries for the editor help, not `{{…}}` completions.
  */
-export const SCRIPT_PLACEHOLDERS: PlaceholderItem[] = [
-    { name: "subjectId", description: "Numeric ID of the Axiom subject" },
-    { name: "eventId", description: "ID of the triggering event (if applicable)" },
-    { name: "taskId", description: "ID of the task executing this script" },
-    { name: "ref", description: "Full URL of the event subject (e.g. 'https://github.com/owner/repo/issues/42')" },
-    { name: "repository", description: "Repository identifier" },
-    { name: "subjectName", description: "Subject name" },
-    { name: "apiBaseUrl", description: "Base URL of the Axiom API (e.g. 'http://localhost:8080/api/v1')" },
-    { name: "workDir", description: "Absolute path to the subject workspace directory" },
+export const SCRIPT_ENV_VARS: PlaceholderItem[] = [
+    { name: "AXIOM_API_URL", description: "Base URL of the Axiom API (e.g. 'http://localhost:8080/api/v1')" },
+    { name: "AXIOM_TASK_ID", description: "ID of the task executing this script" },
+    { name: "AXIOM_WORK_DIR", description: "Absolute path to the task's working directory" },
 ];

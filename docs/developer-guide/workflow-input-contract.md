@@ -13,21 +13,29 @@ validated against the Start node's declared inputs.
 | `subjectId`   | number | always                                            | yes |
 | `ref`         | string | always                                            | yes |
 | `event`       | object | only when the run was started by a subscription's `create-workflow` routing rule | no — must be optional |
-| `subjectName` | string | never populated automatically (see below)         | no — must be optional |
-| `repository`  | string | never populated automatically (see below)         | no — must be optional |
+| `subjectName` | string | always (empty string when the subject has none)   | no — must be optional |
+| `repository`  | string | always (empty string when the subject has none)   | no — must be optional |
 
 `event` is populated with the triggering event's envelope (`type`, `source`, `eventSourceId`, `ref`,
 `timestamp`, `actor`, `payload`) only when the workflow instance was started by a subscription's
 `create-workflow` routing rule. Runs started manually (from the subject detail page's "Run Workflow"
 dialog) or by a schedule trigger do not populate `event`.
 
-`subjectName` and `repository` are not injected by Axiom; they can only be supplied as run inputs.
-Because they are not always present, they must be declared as optional.
+`subjectName` and `repository` are injected from the subject and are an empty string when the subject has
+no value, so they must be declared as optional.
 
 ## Protected inputs
 
-`subjectId`, `ref` and `event` are always set by Axiom. Supplied run inputs with these names are ignored,
-so a run's subject, ref and triggering event cannot be overridden by the caller or a schedule trigger.
+`subjectId`, `subjectName`, `ref`, `repository` and `event` are always set by Axiom. Supplied run inputs
+with these names are ignored, so a run's subject data and triggering event cannot be overridden by the caller
+or a schedule trigger.
+
+## Passing context to action types
+
+Action types never read the run context directly. Each `action` node maps values into the action type's
+declared inputs, for example `context.ref` into a `ref` input. Every required action-type input must be
+mapped, mapping an undeclared input name is an error, and an unmapped optional input is simply absent. See
+[Inputs, Placeholders and Mappings](../user-guide/concepts.md#inputs-placeholders-and-mappings).
 
 ## Custom inputs
 

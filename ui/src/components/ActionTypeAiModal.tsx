@@ -109,10 +109,8 @@ export function ActionTypeAiModal({
                     Prompt Template
                 </Title>
                 <div className="axiom-text-subtle" style={{ fontSize: "13px", marginTop: "2px" }}>
-                    Placeholders:{" "}
-                    <code>{"{{ref}}"}</code>,{" "}
-                    <code>{"{{repository}}"}</code>,{" "}
-                    <code>{"{{subjectName}}"}</code>
+                    Placeholder: <code>{"{{inputs.<name>}}"}</code> for a declared input.
+                    Axiom appends the Inputs section and output contract automatically.
                 </div>
             </StackItem>
             <StackItem isFilled style={{ paddingLeft: "16px", paddingRight: "16px" }}>

@@ -49,16 +49,19 @@ public class ActionTypeAiService {
             action type is executed, the prompt template is sent \
             to an AI agent (Claude Code) that performs the work in a git repository.
 
-            The prompt template supports these placeholders (substituted at runtime):
-            - {{ref}} — the subject reference (e.g. "owner/repo#42" or "CVE-2024-12345")
-            - {{repository}} — the repository name (e.g. "owner/repo")
-            - {{subjectName}} — the subject name
-            - {{actionType}} — the action type name
+            The only placeholder is {{inputs.<name>}}, which must refer to an input \
+            declared on the action type. Declare an input for everything the action operates \
+            on (issue reference, repository, ids); workflow nodes map values into them. Never \
+            rely on ambient subject data.
+
+            At runtime Axiom appends to the rendered prompt an "## Inputs" section listing \
+            every declared input that has a value, followed by a "## Required output" contract \
+            derived from the declared outputs. Do not write output-format instructions in the \
+            prompt; the contract is added automatically.
 
             The prompt should instruct the AI agent on:
             - What to do (analyze code, fix a bug, review changes, etc.)
             - How to approach the task (read files first, check tests, etc.)
-            - What output to produce (summary, code changes, comments, etc.)
 
             Allowed tools control what the AI agent can use. Common tools include:
             - Read, Glob, Grep — for reading files

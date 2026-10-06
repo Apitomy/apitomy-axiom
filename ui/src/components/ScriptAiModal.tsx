@@ -7,6 +7,7 @@ import {
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { aiEditScript } from "../config/api";
 import { AiEditModal } from "./AiEditModal";
+import { SCRIPT_ENV_VARS } from "./PlaceholderCompletionProvider";
 
 interface ScriptAiModalProps {
     isOpen: boolean;
@@ -62,14 +63,11 @@ export function ScriptAiModal({
                     Script Template
                 </Title>
                 <div className="axiom-text-subtle" style={{ fontSize: "13px", marginTop: "4px" }}>
-                    Available placeholders:{" "}
-                    <code>{"{{subjectId}}"}</code>,{" "}
-                    <code>{"{{eventId}}"}</code>,{" "}
-                    <code>{"{{taskId}}"}</code>,{" "}
-                    <code>{"{{ref}}"}</code>,{" "}
-                    <code>{"{{repository}}"}</code>,{" "}
-                    <code>{"{{subjectName}}"}</code>,{" "}
-                    <code>{"{{apiBaseUrl}}"}</code>
+                    Placeholder: <code>{"{{inputs.<name>}}"}</code> for a declared input.
+                    Environment:{" "}
+                    {SCRIPT_ENV_VARS.map((v, i) => (
+                        <span key={v.name}>{i > 0 && ", "}<code>{`$${v.name}`}</code></span>
+                    ))}
                 </div>
             </StackItem>
             <StackItem isFilled style={{ paddingLeft: "16px", paddingRight: "16px" }}>

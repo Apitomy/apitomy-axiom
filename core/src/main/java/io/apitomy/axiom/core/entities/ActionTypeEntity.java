@@ -37,7 +37,7 @@ public class ActionTypeEntity extends PanacheEntity {
 
     /**
      * Bash script template for script-mode action types.
-     * Supports placeholders like {{subjectId}}, {{apiBaseUrl}}, etc.
+     * The only placeholder is {{inputs.<name>}} for a declared input.
      */
     @Column(name = "script_template", columnDefinition = "TEXT")
     public String scriptTemplate;

@@ -32,7 +32,11 @@ are scaffolded with a Start node (declaring `subjectId`, `ref`, and an optional 
 input) connected directly to an End node — extend the graph from there.
 
 The workflow editor lets you add and connect nodes, configure each node's inputs and
-outputs, and edit conditional edges. Changes are saved as **draft content** on the
+outputs, and edit conditional edges. An `action` node must map every required input of its action type,
+usually from the run context (`context.subjectId`, `context.subjectName`, `context.ref`,
+`context.repository`, `context.event`) or from outputs of earlier nodes; optional inputs may be left
+unmapped. See [Inputs, Placeholders and Mappings](concepts.md#inputs-placeholders-and-mappings).
+Changes are saved as **draft content** on the
 definition; they are not usable by running instances until you **publish**.
 
 ### Publishing and Versions
@@ -57,8 +61,8 @@ executing.
 A workflow run can be started in three ways:
 
 - **Manually** — from a subject's detail page, choose **Run Workflow** and select a published
-  definition. You may supply a run title, labels, and inputs. The run starts with `subjectId` and `ref`
-  in its context, plus any supplied inputs.
+  definition. You may supply a run title, labels, and inputs. The run starts with `subjectId`, `subjectName`,
+  `ref` and `repository` in its context, plus any supplied inputs.
 - **From a subscription** — a subscription routing rule of type `create-workflow` finds or creates a
   subject from the triggering event's `ref`, then starts the specified definition with `subjectId`, `ref`,
   and `event` (the triggering event's envelope) in its context.
@@ -70,8 +74,8 @@ Every run has a **title**, which defaults to `<definition name> — <subject nam
 characters. Runs also carry free-form key/value **labels** (runs started by a schedule trigger are
 labeled `trigger: schedule`) and the **inputs** they were started with. Supplied inputs join the run's
 initial context and are validated against the Start node's declared inputs (see
-[Workflow Input Contract](../developer-guide/workflow-input-contract.md)); `subjectId`, `ref` and `event`
-are protected and cannot be overridden by supplied inputs.
+[Workflow Input Contract](../developer-guide/workflow-input-contract.md)); `subjectId`, `subjectName`, `ref`,
+`repository` and `event` are protected and cannot be overridden by supplied inputs.
 
 Besides the built-in inputs (`subjectId`, `ref`, `event`, `subjectName`, `repository`), the Start node may
 declare **custom inputs** such as `environment`. Custom input names must be valid identifiers (letters,
