@@ -15,6 +15,7 @@ import io.apitomy.axiom.api.SystemResource;
 import io.apitomy.axiom.agents.spi.Agent;
 import io.apitomy.axiom.app.ImportExportService;
 import io.apitomy.axiom.app.StartupCheckService;
+import io.apitomy.axiom.app.validation.ConfigValidationException;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
 import io.apitomy.axiom.core.entities.SystemConfigEntity;
 import io.apitomy.axiom.agents.spi.AgentRegistry;
@@ -30,7 +31,9 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Implementation of the System API endpoints.
@@ -129,7 +132,7 @@ public class SystemResourceImpl implements SystemResource {
     public SystemConfig updateSystemConfig(UpdateSystemConfigRequest data) {
         if (data == null || data.getDefaultEngine() == null
                 || data.getDefaultEngine().isBlank()) {
-            throw new jakarta.ws.rs.WebApplicationException(
+            throw new WebApplicationException(
                     "Missing required 'defaultEngine' field", 400);
         }
 
@@ -139,7 +142,7 @@ public class SystemResourceImpl implements SystemResource {
                 .findFirst()
                 .orElse(null);
         if (resolvedAgent == null) {
-            throw new jakarta.ws.rs.WebApplicationException(
+            throw new WebApplicationException(
                     "Unknown engine type: " + defaultEngine, 400);
         }
 
@@ -190,7 +193,7 @@ public class SystemResourceImpl implements SystemResource {
     @Override
     public Response exportPack(PackExportRequest data) {
         if (data == null || data.getName() == null || data.getName().isBlank()) {
-            throw new jakarta.ws.rs.WebApplicationException(
+            throw new WebApplicationException(
                     "Missing required 'name' field", 400);
         }
         JsonNode pack = importExportService.exportPack(data);
@@ -208,16 +211,16 @@ public class SystemResourceImpl implements SystemResource {
         try {
             JsonNode pack = packObjectMapper.readTree(data);
             return importExportService.importPack(pack);
-        } catch (io.apitomy.axiom.app.validation.ConfigValidationException e) {
-            java.util.Map<String, Object> body = new java.util.LinkedHashMap<>();
+        } catch (ConfigValidationException e) {
+            Map<String, Object> body = new LinkedHashMap<>();
             body.put("message", "Configuration pack has invalid items");
             body.put("problems", e.problemsByItem());
-            throw new jakarta.ws.rs.WebApplicationException(
+            throw new WebApplicationException(
                     Response.status(400).entity(body).build());
-        } catch (jakarta.ws.rs.WebApplicationException e) {
+        } catch (WebApplicationException e) {
             throw e;
         } catch (Exception e) {
-            throw new jakarta.ws.rs.WebApplicationException(
+            throw new WebApplicationException(
                     "Failed to parse pack JSON: " + e.getMessage(), 400);
         }
     }

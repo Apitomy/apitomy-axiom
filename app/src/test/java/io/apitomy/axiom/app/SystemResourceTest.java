@@ -4,6 +4,8 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import org.junit.jupiter.api.Test;
 
+import java.util.UUID;
+
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 
@@ -259,5 +261,21 @@ class SystemResourceTest {
                     .when().put("/api/v1/system/retention")
                     .then().statusCode(200);
         }
+    }
+
+    /** Importing a pack with an invalid item returns 400 with the problems keyed by item. */
+    @Test
+    void importInvalidPackReturnsProblems() {
+        String name = "bad-wf-" + UUID.randomUUID().toString().substring(0, 8);
+        given()
+                .contentType(ContentType.JSON)
+                .body("{\"workflowDefinitions\": [{\"name\": \"" + name + "\"}]}")
+            .when()
+                .post("/api/v1/system/packs/import")
+            .then()
+                .statusCode(400)
+                .body("message", equalTo("Configuration pack has invalid items"))
+                .body("problems.'workflow/" + name + "'", not(empty()))
+                .body("problems.'workflow/" + name + "'[0].path", equalTo("content"));
     }
 }

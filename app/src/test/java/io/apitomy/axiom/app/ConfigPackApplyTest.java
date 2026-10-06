@@ -2,10 +2,12 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.app.validation.ConfigValidationException;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
+import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
@@ -77,8 +79,7 @@ class ConfigPackApplyTest {
     void stringWorkflowContentIsAccepted() throws Exception {
         String sfx = UUID.randomUUID().toString().substring(0, 8);
         JsonNode pack = mapper.readTree(PACK_TEMPLATE.replace("SFX", sfx));
-        com.fasterxml.jackson.databind.node.ObjectNode wf =
-                (com.fasterxml.jackson.databind.node.ObjectNode) pack.path("workflowDefinitions").get(0);
+        ObjectNode wf = (ObjectNode) pack.path("workflowDefinitions").get(0);
         wf.put("content", wf.get("content").toString());
         importExportService.importOrUpdatePack(pack);
         QuarkusTransaction.requiringNew().run(() -> {
@@ -128,5 +129,51 @@ class ConfigPackApplyTest {
         ConfigValidationException ex = assertThrows(ConfigValidationException.class,
                 () -> importExportService.importOrUpdatePack(pack));
         assertTrue(ex.problemsByItem().containsKey("subscription/sub-" + sfx), ex.problemsByItem().toString());
+    }
+
+    /** The create-only import publishes workflows through the publisher (version 1). */
+    @Test
+    void importPackPublishesWorkflows() throws Exception {
+        String sfx = UUID.randomUUID().toString().substring(0, 8);
+        importExportService.importPack(mapper.readTree(PACK_TEMPLATE.replace("SFX", sfx)));
+        QuarkusTransaction.requiringNew().run(() -> {
+            WorkflowDefinitionEntity def = WorkflowDefinitionEntity.find("name", "wf-" + sfx).firstResult();
+            assertNotNull(def);
+            assertEquals(1, def.currentVersion);
+            assertEquals(1, WorkflowDefinitionVersionEntity.count("definitionId", def.id));
+            EventSubscriptionEntity sub = EventSubscriptionEntity.find("name", "sub-" + sfx).firstResult();
+            assertTrue(sub.routing.contains("\"workflowDefinitionId\":" + def.id), sub.routing);
+        });
+    }
+
+    /** An invalid workflow in the create-only import writes nothing. */
+    @Test
+    void importPackRejectsInvalidWorkflow() throws Exception {
+        String sfx = UUID.randomUUID().toString().substring(0, 8);
+        JsonNode pack = mapper.readTree(PACK_TEMPLATE.replace("SFX", sfx)
+                .replace("\"type\": \"end\"", "\"type\": \"END\""));
+        assertThrows(ConfigValidationException.class, () -> importExportService.importPack(pack));
+        QuarkusTransaction.requiringNew().run(() -> {
+            assertNull(ActionTypeEntity.find("name", "at-" + sfx).firstResult());
+            assertNull(WorkflowDefinitionEntity.find("name", "wf-" + sfx).firstResult());
+        });
+    }
+
+    /** Re-applying unchanged workflow content does not publish a new version; changed content does. */
+    @Test
+    void reapplyPublishesOnlyWhenContentChanges() throws Exception {
+        String sfx = UUID.randomUUID().toString().substring(0, 8);
+        String json = PACK_TEMPLATE.replace("SFX", sfx);
+        importExportService.importOrUpdatePack(mapper.readTree(json));
+        importExportService.importOrUpdatePack(mapper.readTree(json));
+        assertEquals(1, currentVersion("wf-" + sfx));
+        importExportService.importOrUpdatePack(mapper.readTree(json.replace("\"name\": \"Do\"",
+                "\"name\": \"Do it\"")));
+        assertEquals(2, currentVersion("wf-" + sfx));
+    }
+
+    private Integer currentVersion(String name) {
+        return QuarkusTransaction.requiringNew().call(() -> WorkflowDefinitionEntity
+                .<WorkflowDefinitionEntity>find("name", name).firstResult().currentVersion);
     }
 }

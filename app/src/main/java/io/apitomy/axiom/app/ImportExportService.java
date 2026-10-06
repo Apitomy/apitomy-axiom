@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.api.beans.ImportResult;
 import io.apitomy.axiom.api.beans.PackExportRequest;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
+import io.apitomy.axiom.core.entities.ActionTypeField;
 import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.McpServerEntity;
@@ -28,13 +29,18 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Service for exporting and importing configuration packs.
@@ -191,7 +197,7 @@ public class ImportExportService {
                 conflict.put("name", parts[1]);
             }
             throw new WebApplicationException(
-                    jakarta.ws.rs.core.Response.status(409).entity(error).build());
+                    Response.status(409).entity(error).build());
         }
 
         int tools = importTools(pack.path("tools"));
@@ -349,11 +355,11 @@ public class ImportExportService {
 
     // ── Conflict detection ───────────────────────────────────────────
 
-    private static final java.util.Set<String> VALID_FIELD_TYPES =
-            java.util.Set.of("string", "number", "boolean", "object");
+    private static final Set<String> VALID_FIELD_TYPES =
+            Set.of("string", "number", "boolean", "object");
 
-    private static final java.util.regex.Pattern VALID_FIELD_NAME_PATTERN =
-            java.util.regex.Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
+    private static final Pattern VALID_FIELD_NAME_PATTERN =
+            Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
     /**
      * Reads and validates the {@code inputs}/{@code outputs} field list from an
@@ -368,11 +374,11 @@ public class ImportExportService {
      * @param key  either {@code "inputs"} or {@code "outputs"}
      * @return the parsed, validated field list
      */
-    private List<io.apitomy.axiom.core.entities.ActionTypeField> importFields(JsonNode item, String key) {
-        List<io.apitomy.axiom.core.entities.ActionTypeField> out = new java.util.ArrayList<>();
+    private List<ActionTypeField> importFields(JsonNode item, String key) {
+        List<ActionTypeField> out = new ArrayList<>();
         JsonNode arr = item.path(key);
         if (arr.isArray()) {
-            java.util.Set<String> seen = new java.util.HashSet<>();
+            Set<String> seen = new HashSet<>();
             for (JsonNode f : arr) {
                 String name = f.path("name").asText(null);
                 if (name == null || name.isBlank()) {
@@ -391,7 +397,7 @@ public class ImportExportService {
                             type, name);
                     type = "string";
                 }
-                out.add(new io.apitomy.axiom.core.entities.ActionTypeField(
+                out.add(new ActionTypeField(
                         name,
                         type,
                         f.path("required").asBoolean(false),
@@ -412,7 +418,7 @@ public class ImportExportService {
         ObjectNode error = objectMapper.createObjectNode();
         error.put("message", message);
         return new WebApplicationException(
-                jakarta.ws.rs.core.Response.status(400).entity(error).build());
+                Response.status(400).entity(error).build());
     }
 
     private void checkConflicts(JsonNode pack, String section, String nameField,
@@ -530,7 +536,7 @@ public class ImportExportService {
         for (JsonNode item : items) {
             String templateId = item.path("templateId").asText(null);
             if (templateId == null || templateId.isBlank()) {
-                templateId = java.util.UUID.randomUUID().toString();
+                templateId = UUID.randomUUID().toString();
             }
             if (sessionTemplateService.isBuiltIn(templateId)) {
                 LOG.warnf("Skipping built-in session template '%s' — cannot be imported", templateId);
@@ -664,7 +670,7 @@ public class ImportExportService {
         for (JsonNode item : items) {
             String templateId = item.path("templateId").asText(null);
             if (templateId == null || templateId.isBlank()) {
-                templateId = java.util.UUID.randomUUID().toString();
+                templateId = UUID.randomUUID().toString();
             }
 
             // Guard against overwriting built-in templates
@@ -775,7 +781,7 @@ public class ImportExportService {
         return n;
     }
 
-    private void serializeField(ObjectNode n, io.apitomy.axiom.core.entities.ActionTypeField f) {
+    private void serializeField(ObjectNode n, ActionTypeField f) {
         n.put("name", f.name);
         n.put("type", f.type);
         n.put("required", f.required);
@@ -888,7 +894,7 @@ public class ImportExportService {
             entity.filters = textOrNull(item, "filterExpression");
             JsonNode routing = routingResolver.resolve(item.get("routing"));
             entity.routing = routing != null ? routing.toString() : null;
-            entity.labels = new java.util.ArrayList<>();
+            entity.labels = new ArrayList<>();
             JsonNode labelsNode = item.path("labels");
             if (labelsNode.isArray()) {
                 for (JsonNode l : labelsNode) entity.labels.add(l.asText());
@@ -990,23 +996,11 @@ public class ImportExportService {
             WorkflowDefinitionEntity entity = new WorkflowDefinitionEntity();
             entity.name = item.path("name").asText();
             entity.description = textOrNull(item, "description");
+            entity.content = jsonOrNull(item, "content");
             entity.createdOn = Instant.now();
             entity.updatedOn = Instant.now();
             entity.persist();
-
-            JsonNode content = item.path("content");
-            if (!content.isMissingNode() && !content.isNull()) {
-                String contentStr = content.isObject() ? content.toString() : content.asText();
-                entity.content = contentStr;
-
-                WorkflowDefinitionVersionEntity version = new WorkflowDefinitionVersionEntity();
-                version.definitionId = entity.id;
-                version.version = 1;
-                version.content = contentStr;
-                version.createdOn = Instant.now();
-                version.persist();
-                entity.currentVersion = 1;
-            }
+            workflowPublisher.publish(entity);
             count++;
         }
         return count;
@@ -1028,10 +1022,33 @@ public class ImportExportService {
             entity.updatedOn = Instant.now();
             entity.content = jsonOrNull(item, "content");
             entity.persist();
-            workflowPublisher.publish(entity);
+            if (isNew || !sameAsPublished(entity)) {
+                workflowPublisher.publish(entity);
+            }
             if (isNew) created++; else updated++;
         }
         return new int[]{created, updated};
+    }
+
+    /**
+     * Returns true when the entity's draft content is JSON-equal to its currently published version, so that
+     * re-applying an unchanged workflow does not create a redundant version.
+     */
+    private boolean sameAsPublished(WorkflowDefinitionEntity entity) {
+        if (entity.currentVersion == null || entity.content == null) {
+            return false;
+        }
+        WorkflowDefinitionVersionEntity version = WorkflowDefinitionVersionEntity
+                .find("definitionId = ?1 and version = ?2", entity.id, entity.currentVersion)
+                .firstResult();
+        if (version == null || version.content == null) {
+            return false;
+        }
+        try {
+            return objectMapper.readTree(version.content).equals(objectMapper.readTree(entity.content));
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private void putIfNotNull(ObjectNode node, String field, String value) {
