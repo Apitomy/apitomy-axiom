@@ -75,4 +75,29 @@ public class SubjectEntity extends PanacheEntity {
                 "select distinct r.subjectId from WorkflowRunEntity r where r.status in ?1",
                 java.util.List.of("running", "waiting")).project(Long.class).list());
     }
+
+    /**
+     * Finds the schedule-owned subject with the given name, creating it if it does not exist. Schedule
+     * subjects have type and ref source {@code "schedule"} and ref {@code "schedule:<name>"}.
+     *
+     * @param name the subject name
+     * @return the existing or newly persisted subject
+     */
+    public static SubjectEntity findOrCreateByName(String name) {
+        String ref = "schedule:" + name;
+        SubjectEntity existing = find("ref", ref).firstResult();
+        if (existing != null) {
+            return existing;
+        }
+        SubjectEntity subject = new SubjectEntity();
+        subject.name = name;
+        subject.type = "schedule";
+        subject.refSource = "schedule";
+        subject.ref = ref;
+        Instant now = Instant.now();
+        subject.createdOn = now;
+        subject.updatedOn = now;
+        subject.persist();
+        return subject;
+    }
 }

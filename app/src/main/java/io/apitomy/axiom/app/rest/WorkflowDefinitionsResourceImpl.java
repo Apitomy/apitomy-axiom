@@ -4,11 +4,15 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.WorkflowResource;
 import io.apitomy.axiom.api.beans.Content;
+import io.apitomy.axiom.api.beans.Inputs;
+import io.apitomy.axiom.api.beans.NewScheduleTrigger;
 import io.apitomy.axiom.api.beans.NewWorkflowDefinition;
+import io.apitomy.axiom.api.beans.ScheduleTrigger;
 import io.apitomy.axiom.api.beans.UpdateWorkflowDefinition;
 import io.apitomy.axiom.api.beans.WorkflowDefinition;
 import io.apitomy.axiom.api.beans.WorkflowDefinitionSearchResults;
 import io.apitomy.axiom.api.beans.WorkflowDefinitionVersion;
+import io.apitomy.axiom.app.CronSchedules;
 import io.apitomy.axiom.app.WorkflowExecutionService;
 import io.apitomy.axiom.app.WorkflowRunBeanMapper;
 import io.apitomy.axiom.core.entities.TaskEntity;
@@ -17,6 +21,7 @@ import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.WorkflowEventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunResumeEntity;
+import io.apitomy.axiom.core.entities.WorkflowScheduleTriggerEntity;
 import io.apitomy.axiom.core.entities.WorkflowWaitEntity;
 import io.apitomy.flow.model.Workflow;
 import io.apitomy.flow.model.WorkflowNode;
@@ -183,11 +188,131 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
             WorkflowRunEntity.delete("definitionId", workflowDefinitionId);
         }
 
+        // Delete the schedule triggers of the definition.
+        WorkflowScheduleTriggerEntity.delete("definitionId", workflowDefinitionId);
+
         // Delete the published versions of the definition.
         WorkflowDefinitionVersionEntity.delete("definitionId", workflowDefinitionId);
 
         // Finally delete the definition itself.
         entity.delete();
+    }
+
+    // ── Schedule triggers ───────────────────────────────────────────
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List<ScheduleTrigger> listWorkflowScheduleTriggers(long workflowDefinitionId) {
+        findOrThrow(workflowDefinitionId);
+        return WorkflowScheduleTriggerEntity
+                .<WorkflowScheduleTriggerEntity>list("definitionId", Sort.ascending("id"), workflowDefinitionId)
+                .stream()
+                .map(this::toTriggerBean)
+                .toList();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    @Transactional
+    public ScheduleTrigger createWorkflowScheduleTrigger(long workflowDefinitionId, NewScheduleTrigger data) {
+        findOrThrow(workflowDefinitionId);
+        WorkflowScheduleTriggerEntity trigger = new WorkflowScheduleTriggerEntity();
+        trigger.definitionId = workflowDefinitionId;
+        trigger.createdOn = Instant.now();
+        applyTrigger(trigger, data);
+        trigger.persist();
+        return toTriggerBean(trigger);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    @Transactional
+    public ScheduleTrigger updateWorkflowScheduleTrigger(long workflowDefinitionId, long triggerId,
+                                                         NewScheduleTrigger data) {
+        WorkflowScheduleTriggerEntity trigger = findTriggerOrThrow(workflowDefinitionId, triggerId);
+        applyTrigger(trigger, data);
+        return toTriggerBean(trigger);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    @Transactional
+    public void deleteWorkflowScheduleTrigger(long workflowDefinitionId, long triggerId) {
+        findTriggerOrThrow(workflowDefinitionId, triggerId).delete();
+    }
+
+    private WorkflowScheduleTriggerEntity findTriggerOrThrow(long workflowDefinitionId, long triggerId) {
+        WorkflowScheduleTriggerEntity trigger = WorkflowScheduleTriggerEntity.findById(triggerId);
+        if (trigger == null || trigger.definitionId != workflowDefinitionId) {
+            throw new WebApplicationException("Schedule trigger not found", 404);
+        }
+        return trigger;
+    }
+
+    /**
+     * Validates the request and copies it onto the trigger, recomputing the next run time (null when
+     * disabled).
+     */
+    private void applyTrigger(WorkflowScheduleTriggerEntity trigger, NewScheduleTrigger data) {
+        String cron = data.getCron() != null ? data.getCron().trim() : "";
+        String subjectName = data.getSubjectName() != null ? data.getSubjectName().trim() : "";
+        if (subjectName.isEmpty() || subjectName.length() > 255) {
+            throw new WebApplicationException("subjectName must be 1-255 characters", 400);
+        }
+        Instant nextRunAt;
+        try {
+            if (cron.isEmpty() || cron.length() > 100) {
+                throw new IllegalArgumentException("cron must be 1-100 characters");
+            }
+            nextRunAt = CronSchedules.nextAfter(cron, Instant.now());
+        } catch (IllegalArgumentException e) {
+            throw new WebApplicationException("Invalid cron expression: " + e.getMessage(), 400);
+        }
+        trigger.cron = cron;
+        trigger.subjectName = subjectName;
+        trigger.enabled = data.getEnabled() == null || data.getEnabled();
+        trigger.nextRunAt = trigger.enabled ? nextRunAt : null;
+        try {
+            trigger.inputs = data.getInputs() == null ? null
+                    : objectMapper.writeValueAsString(data.getInputs().getAdditionalProperties());
+        } catch (JsonProcessingException e) {
+            throw new WebApplicationException("Invalid inputs", 400);
+        }
+        trigger.updatedOn = Instant.now();
+    }
+
+    private ScheduleTrigger toTriggerBean(WorkflowScheduleTriggerEntity trigger) {
+        ScheduleTrigger bean = new ScheduleTrigger();
+        bean.setId(trigger.id);
+        bean.setDefinitionId(trigger.definitionId);
+        bean.setCron(trigger.cron);
+        bean.setSubjectName(trigger.subjectName);
+        bean.setEnabled(trigger.enabled);
+        if (trigger.inputs != null) {
+            try {
+                Map<String, Object> values = objectMapper.readValue(trigger.inputs,
+                        new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() { });
+                Inputs inputs = new Inputs();
+                values.forEach(inputs::setAdditionalProperty);
+                bean.setInputs(inputs);
+            } catch (JsonProcessingException e) {
+                throw new IllegalStateException("Corrupt trigger inputs for trigger " + trigger.id, e);
+            }
+        }
+        bean.setNextRunAt(trigger.nextRunAt != null ? Date.from(trigger.nextRunAt) : null);
+        bean.setLastRunAt(trigger.lastRunAt != null ? Date.from(trigger.lastRunAt) : null);
+        bean.setLastOutcome(trigger.lastOutcome);
+        bean.setCreatedOn(Date.from(trigger.createdOn));
+        bean.setUpdatedOn(Date.from(trigger.updatedOn));
+        return bean;
     }
 
     // ── Update content ──────────────────────────────────────────────

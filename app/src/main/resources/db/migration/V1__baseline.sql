@@ -58,6 +58,8 @@
 
     create sequence workflow_run_SEQ start with 1 increment by 50;
 
+    create sequence workflow_schedule_trigger_SEQ start with 1 increment by 50;
+
     create sequence workflow_wait_SEQ start with 1 increment by 50;
 
     create table action_type (
@@ -519,6 +521,21 @@
         primary key (id)
     );
 
+    create table workflow_schedule_trigger (
+        enabled boolean not null,
+        created_on timestamp(6) not null,
+        definition_id bigint not null,
+        id bigint not null,
+        last_run_at timestamp(6),
+        next_run_at timestamp(6),
+        updated_on timestamp(6) not null,
+        cron varchar(100) not null,
+        last_outcome varchar(1000),
+        subject_name varchar(255) not null,
+        inputs TEXT,
+        primary key (id)
+    );
+
     create table workflow_wait (
         created_on timestamp(6) not null,
         id bigint not null,
@@ -628,6 +645,7 @@ CREATE INDEX idx_wf_run_trigger_event ON workflow_run (trigger_event_id);
 CREATE INDEX idx_wf_run_resume_event ON workflow_run_resume (event_id);
 CREATE INDEX idx_wf_run_resume_run ON workflow_run_resume (run_id);
 CREATE INDEX idx_wrr_trace_node ON workflow_run_resume (trace_node_id);
+CREATE INDEX idx_wf_schedule_trigger_due ON workflow_schedule_trigger (enabled, next_run_at);
 CREATE INDEX idx_workflow_wait_resume_at ON workflow_wait (resume_at);
 CREATE INDEX idx_workflow_wait_run ON workflow_wait (run_id);
 
@@ -649,6 +667,7 @@ alter table workflow_event_subscription add foreign key (run_id) references work
 alter table workflow_run add foreign key (definition_id) references workflow_definition (id);
 alter table workflow_run add foreign key (subject_id) references subject (id);
 alter table workflow_run_resume add foreign key (run_id) references workflow_run (id) on delete cascade;
+alter table workflow_schedule_trigger add foreign key (definition_id) references workflow_definition (id) on delete cascade;
 alter table workflow_wait add foreign key (run_id) references workflow_run (id);
 alter table action_type_label add unique (action_type_id, label);
 alter table dashboard_label add unique (dashboard_id, label);

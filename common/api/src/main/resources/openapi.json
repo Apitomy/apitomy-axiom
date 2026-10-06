@@ -3735,6 +3735,141 @@
         }
       ]
     },
+    "/workflow/definitions/{workflowDefinitionId}/triggers/schedules": {
+      "get": {
+        "tags": [
+          "WorkflowDefinitions"
+        ],
+        "summary": "List schedule triggers of a workflow definition",
+        "operationId": "listWorkflowScheduleTriggers",
+        "responses": {
+          "200": {
+            "description": "The schedule triggers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ScheduleTrigger"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "WorkflowDefinitions"
+        ],
+        "summary": "Create a schedule trigger",
+        "description": "Creates a cron schedule (Unix 5-field, UTC) that starts runs of the workflow definition against a fixed subject.",
+        "operationId": "createWorkflowScheduleTrigger",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewScheduleTrigger"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Schedule trigger created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleTrigger"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid cron expression or blank subject name"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/WorkflowDefinitionId"
+        }
+      ]
+    },
+    "/workflow/definitions/{workflowDefinitionId}/triggers/schedules/{triggerId}": {
+      "put": {
+        "tags": [
+          "WorkflowDefinitions"
+        ],
+        "summary": "Update a schedule trigger",
+        "operationId": "updateWorkflowScheduleTrigger",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewScheduleTrigger"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Schedule trigger updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleTrigger"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid cron expression or blank subject name"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "WorkflowDefinitions"
+        ],
+        "summary": "Delete a schedule trigger",
+        "operationId": "deleteWorkflowScheduleTrigger",
+        "responses": {
+          "204": {
+            "description": "Schedule trigger deleted"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/WorkflowDefinitionId"
+        },
+        {
+          "name": "triggerId",
+          "in": "path",
+          "description": "Schedule trigger ID",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
     "/workflow/definitions/{workflowDefinitionId}/publish": {
       "post": {
         "tags": [
@@ -7882,6 +8017,93 @@
             "type": "string"
           },
           "description": {
+            "type": "string"
+          }
+        }
+      },
+      "NewScheduleTrigger": {
+        "required": [
+          "cron",
+          "subjectName"
+        ],
+        "type": "object",
+        "properties": {
+          "cron": {
+            "description": "Unix (5-field) cron expression, evaluated in UTC",
+            "type": "string"
+          },
+          "subjectName": {
+            "description": "Name of the fixed subject every run attaches to; created on first firing",
+            "type": "string"
+          },
+          "inputs": {
+            "description": "Static workflow inputs passed to every run",
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "ScheduleTrigger": {
+        "required": [
+          "id",
+          "definitionId",
+          "cron",
+          "subjectName",
+          "enabled"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "definitionId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "cron": {
+            "description": "Unix (5-field) cron expression, evaluated in UTC",
+            "type": "string"
+          },
+          "subjectName": {
+            "description": "Name of the fixed subject every run attaches to; created on first firing",
+            "type": "string"
+          },
+          "inputs": {
+            "description": "Static workflow inputs passed to every run",
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "nextRunAt": {
+            "description": "When the trigger fires next; null when disabled",
+            "format": "date-time",
+            "type": "string"
+          },
+          "lastRunAt": {
+            "description": "When the trigger last fired",
+            "format": "date-time",
+            "type": "string"
+          },
+          "lastOutcome": {
+            "description": "Outcome of the last firing: started, skipped or failed: <reason>",
+            "type": "string"
+          },
+          "createdOn": {
+            "description": "Creation time",
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedOn": {
+            "description": "Last update time",
+            "format": "date-time",
             "type": "string"
           }
         }
