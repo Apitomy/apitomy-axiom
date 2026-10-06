@@ -1,7 +1,7 @@
 # Tracing
 
 Axiom's tracing subsystem records a hierarchical tree of every step that occurs during
-an event pipeline run or report generation. Each trace is a tree of lightweight
+a workflow run. Each trace is a tree of lightweight
 **trace nodes** that reference more detailed records elsewhere in the system, keeping
 nodes small and fast to query while providing full drill-down capability.
 
@@ -38,20 +38,13 @@ The root of a complete execution trace (table `trace`). It uses a UUID primary k
 ID doubles as the correlation identifier threaded through subprocess environment
 variables and API callbacks. Each trace has a `traceType` (see below), a status
 (`in-progress`, `completed`, or `failed`), a human-readable summary, optional
-`eventId`/`projectId`/`reportId` associations, and start/completion timestamps. `eventId` is the
+`eventId`/`subjectId` associations, and start/completion timestamps. `eventId` is the
 UUID of the originating `stream_event` row. It is a soft reference (no foreign key): stream events are
 purged by the event retention policy while traces are retained, so the UUID may outlive its event.
 
-Current trace types:
-
-| Trace Type | Trigger |
-|------------|---------|
-| `manager` | A subscription routes an event to the Manager for evaluation |
-| `manager-dry-run` | A user runs a manual Manager evaluation (`POST /manager/evaluate/{eventId}`); the decisions are not acted on |
-| `workflow` | A workflow instance is triggered |
-| `scheduled-job-execution` | A scheduled job run starts |
-| `report-generation` | A report definition runs (scheduled or ad hoc) |
-| `user-action` | A user manually triggers an action type from the project detail page |
+Every trace is currently of type `workflow`, created when a workflow run starts (manually, by a
+`create-workflow` routing rule, or by a schedule trigger). Tasks created by the run's action and human-task
+nodes, and tool calls made by their agents, are recorded as nodes of the run's trace.
 
 ### TraceNodeEntity
 
@@ -69,17 +62,8 @@ enum, so treat this as the currently observed set rather than an exhaustive cont
 
 | Node Type | Meaning | Typical Entity Reference |
 |-----------|---------|--------------------------|
-| `event-ingested` | The event routed to the Manager (root node of a `manager` trace) | — |
-| `manager-evaluation` | AI Manager was invoked for the event | `activity-log` (`manager-evaluated` / `manager-error`) |
-| `manager-decision` | One decision returned by the Manager; the summary holds the decision and its reasoning | `activity-log` (`event-ignored` / `manager-escalation`) |
-| `task` | A task was created and assigned | `task` |
-| `report-triggered` | Report generation started (root node of a `report-generation` trace) | `report` |
-| `report-ai-invoked` | AI agent launched for the report | `report` |
-| `scheduled-job-triggered` | Scheduled job run started (root node of a `scheduled-job-execution` trace) | `scheduled-job-run` |
-| `scheduled-job-ai-invoked` | AI agent launched for the job run (agent mode) | — |
-| `scheduled-job-script-executed` | Script launched for the job run (script mode) | — |
-| `workflow` | Workflow instance started (root node of a `workflow` trace) | `workflow-run` |
-| `workflow-wait` | Workflow parked at a `wait` or `receive-event` node | — |
+| `workflow` | Workflow run started (root node of a `workflow` trace) | `workflow-run` |
+| `task` | A workflow step: a task created by an action or human-task node, or a run parked at a `wait` or `receive-event` node | `task`, `workflow-wait`, or `workflow-event-subscription` |
 | `tool-execution` | An MCP tool was invoked | `tool-execution` |
 
 #### Entity Types
@@ -93,11 +77,9 @@ The `entityType` field determines which entity table the `entityId` references:
 | `task` | `TaskEntity` | Task details — action type, agent, status, output |
 | `tool-execution` | `ToolExecutionEntity` | Full JSON input and output |
 | `ai-usage` | `AiUsageEntity` | Token counts, cost, model |
-| `report` | `ReportEntity` | Report metadata and content |
-| `workflow-run` | `WorkflowRunEntity` | Run status, current node, times, definition and project names |
+| `workflow-run` | `WorkflowRunEntity` | Run status, current node, times, definition and subject names |
 | `workflow-wait` | `WorkflowWaitEntity` | Wait type, resume time, status (`waiting`/`resolved`/`cancelled`), run |
-| `workflow-event-subscription` | `WorkflowEventSubscriptionEntity` | Awaited event type, status, run, project |
-| `scheduled-job-run` | `ScheduledJobRunEntity` | Run status, trigger, execution log, job name |
+| `workflow-event-subscription` | `WorkflowEventSubscriptionEntity` | Awaited event type, status, run, subject |
 
 `GET /traces/{traceId}/nodes/{nodeId}` resolves these into the node's `detail` object (see
 `TraceResourceImpl.resolveDetail`). An unknown entity type, a malformed ID or a deleted record yields the
@@ -105,7 +87,7 @@ node with a null `detail`. The one exception is workflow waits and event subscri
 deleted when the parked node resumes, so the detail is rebuilt from the trace node and its workflow run,
 with status `resolved` (node completed) or `cancelled`. The event that satisfied a subscription is not
 recorded, so `matchedEventId` is always null. The `workflow-run` detail omits the engine's
-`instanceState`. Scheduled job traces reference their `scheduled-job-run` from the root node.
+`instanceState`.
 
 ### ToolExecutionEntity
 
@@ -119,7 +101,7 @@ name, its JSON input/output, a status, and a duration.
 ## TraceService API
 
 `TraceService` is the central service for creating and managing traces. It lives in
-the `core` module so both `app` and `manager` can use it without circular dependencies.
+the `core` module so any module can use it without circular dependencies.
 
 **Location:** `core/src/main/java/io/apitomy/axiom/core/tracing/TraceService.java`
 
@@ -129,11 +111,10 @@ Creates a new trace and its root node in a single transaction, then fires an SSE
 
 ```java
 public TraceContext createTrace(
-    String traceType,        // e.g. "manager", "workflow", "scheduled-job-execution", "report-generation"
+    String traceType,        // e.g. "workflow"
     String summary,          // human-readable trace description
     UUID eventId,            // associated stream event ID (nullable)
-    Long projectId,          // associated project ID (nullable)
-    Long reportId,           // associated report ID (nullable)
+    Long subjectId,          // associated subject ID (nullable)
     String rootNodeType,     // node type for the root node
     String rootNodeSummary,  // summary for the root node
     String rootEntityType,   // entity type for the root node (nullable)
@@ -194,120 +175,31 @@ public void completeTrace(UUID traceId, String status)
 Every unit of work ends with exactly one trace in a final state (`completed` or `failed`). No trace or
 `task` node may stay `in-progress` once its work item is final, and a trace is never completed twice.
 
-| Work item | Who completes the trace | Early-exit behaviour |
-|---|---|---|
-| Scheduled job run | `ScheduledJobExecutionService` when the agent or script finishes | No agent / startup error / missing script: run is `Failed`, trace and AI or script node closed as `failed`, `run.traceId` still set |
-| Report | `ReportExecutionService` when the agent finishes | No agent / startup error: report is `Failed` (not left `Pending`), trace closed as `failed`, `report.traceId` still set |
-| Invoke-action task | `TaskTraceFinalizer` when the task reaches a final state | Error before the task is created: trace closed as `failed` |
-| Manager evaluation | Last task created by the evaluation (`TaskTraceFinalizer`); the orchestrator only completes it when no task node is open | Manager failure (AI error or unparseable output): trace and `manager-evaluation` node closed as `failed`, outcome and ledger entry `failed` (retried with backoff up to `axiom.stream-pipeline.max-attempts`, then `exhausted`) |
-| Workflow run | `WorkflowExecutionService` when the run is terminal (including runs that finish synchronously on start) | — |
+| Work item | Who completes the trace |
+|---|---|
+| Workflow run | `WorkflowExecutionService` when the run is terminal (`completed`, `failed`, or `cancelled`), including runs that finish synchronously on start |
 
 `TaskTraceFinalizer` is used by both the agent and script task paths (including `failTask`). It always
-completes the task's `task` node, never completes a workflow-owned trace, and completes any other trace only
-once no other `task` node in it is still `in-progress` — `failed` if any task node failed.
-
-
-### Scheduled job trace structure
-
-Agent-mode and script-mode runs produce the same `scheduled-job-execution` trace. The only difference is
-the child node: script-mode runs have a script node and no AI node.
-
-```
-scheduled-job-triggered          (root, entity scheduled-job-run = run ID)
-├── scheduled-job-ai-invoked     in-progress → completed | failed   (agent mode)
-└── scheduled-job-script-executed in-progress → completed | failed  (script mode; exit code 0 = completed)
-```
-
-`run.traceId` is set when the run starts (`markRunning`), so `GET /scheduled-jobs/runs/{id}` links to the
-trace and `GET /traces?filterScheduledJobRunId={id}` links back. Script-mode runs did not create a trace
-before #424.
-
-### Manager trace structure
-
-`EventStreamOrchestrator.routeToManager` creates one `manager` trace per evaluation, with `eventId` set
-to the stream event. The tree is:
-
-```
-event-ingested             root, completed on creation
-└── manager-evaluation     completed | failed   (activity-log: manager-evaluated / manager-error)
-    ├── manager-decision   completed | failed   (activity-log: event-ignored / manager-escalation)
-    │   └── task           in-progress → completed | failed   (create_task / script_action only)
-    └── manager-decision   ...
-```
-
-- `ManagerService.evaluateStreamEvent(event, traceId)` returns a `ManagerEvaluationResult`
-  (`decisions`, `failed`, `errorMessage`, `activityLogId`). A failed evaluation (the AI call failed or its
-  output had no `decisions` array) is distinct from a successful one with an empty decision list.
-- The `manager-evaluated` / `manager-error` activity row and the Manager's `ai_usage` row carry the event
-  ID and trace ID. The `manager-evaluation` node references the activity row, which holds the execution
-  log.
-- Each decision node's summary records the decision, action type, confidence and reasoning. Decisions
-  below the confidence threshold are labelled `Escalated (low confidence)`. Tasks created by a decision
-  carry the event ID and trace ID, and their `task` node is a child of the decision node.
-- If processing one decision fails (for example an unknown decision type), its node is closed as `failed` with
-  the error prefixed to the summary, any `task` node left open under it is closed as `failed`, the error is
-  appended to the routing outcome summary, and the decision's routing outcome item is `failed` with the error.
-  Other decisions still run, and the ledger entry is not failed, so the decisions that succeeded are not
-  repeated by a retry. The trace therefore ends `completed` even though that decision node is `failed`. This
-  is intended: failing the trace and retrying would create duplicate tasks for the decisions that succeeded.
-- When the evaluation fails, the `manager-evaluation` node and the trace are closed as `failed`, the
-  routing outcome is `failed` with the error (and keeps the trace ID), and the ledger entry is `failed`
-  so `retryFailedEntries` retries it once its backoff delay has passed. Each retry creates a new trace,
-  and its routing outcome records the attempt number. Retries are capped by
-  `axiom.stream-pipeline.max-attempts` (default 3, counting the first try, tracked in the ledger's
-  `attempt_count`): when the last attempt fails the entry becomes `exhausted` with "(giving up after N
-  attempts)" appended to its error message. See the event sourcing design for the backoff.
-- An empty decision list is a success: outcome `completed` with summary `No decisions`, trace `completed`.
-- Each decision is recorded as a `routing_outcome_item` (task, ignored, escalated, or decision for an
-  unknown type) whose `trace_node_id` is the decision's `manager-decision` node, so the event detail page
-  lists every result of the evaluation (see the event sourcing design). An empty decision list or a failed
-  evaluation records no items.
-- When the decisions involve exactly one project (a created task's project, or the project an escalation
-  was posted to), the trace's `projectId` is set, so it appears in `GET /projects/{id}/traces`.
-- Evaluation and decision nodes are always completed before `routeToManager` returns, so only `task`
-  nodes can keep the trace open (see the lifecycle rules above).
+completes the task's `task` node and never completes a workflow-owned trace — the workflow run owns its
+trace lifecycle.
 
 ### Workflow traces and events
 
 - A run started by a `create-workflow` routing rule gets a `workflow` trace with `eventId` set to the
-  stream event, so the trace appears in `GET /traces?filterEventId=...` next to the event's Manager
-  traces. The routing outcome's `traceId` is the run's trace. Runs started manually have no `eventId`.
+  stream event, so the trace appears in `GET /traces?filterEventId=...`. The routing outcome's `traceId`
+  is the run's trace. Runs started manually or by a schedule trigger have no `eventId`.
+- A `create-workflow` rule that is skipped because the subject already has an active run of the definition
+  creates no run and no trace.
 - When a stream event resumes a run parked at a receive-event step, the receive-event `task` node
   (entity type `workflow-event-subscription`) is completed and its summary gets
   "— resumed by event <id>". The `workflow-resumed` routing outcome item's `trace_node_id` points to that
   node, and a `workflow_run_resume` row records the event (see the event sourcing design).
 
-### Manager dry-run trace structure
-
-The debug endpoint `POST /manager/evaluate/{eventId}` (`ManagerResourceImpl.evaluateEvent`) runs the
-Manager but never acts on its decisions: it creates no tasks, routing outcome or ledger entry. Each call is
-recorded as a `manager-dry-run` trace with `eventId` set to the stream event, so it appears in
-`GET /traces?filterEventId=…` and in the **Dry-run evaluations** section of the event detail page's
-Processing tab. The tree reuses the Manager structure, without task nodes:
-
-```
-event-ingested             root, completed on creation   ("[dry run] Event: …")
-└── manager-evaluation     completed | failed   (activity-log: manager-evaluated / manager-error)
-    ├── manager-decision   completed            ("[dry run] Decision: …" with the reasoning)
-    └── manager-decision   ...
-```
-
-- Every node summary is prefixed with `[dry run]`. The trace summary is
-  `Manager dry run (manual): <event type> — <ref>`. Axiom has no authentication, so there is no user to
-  record as the trigger; `manual` marks it as user-triggered.
-- The trace ID is passed to `ManagerService.evaluateStreamEvent(event, traceId)`, so the
-  `manager-evaluated` / `manager-error` activity row and the `ai_usage` row carry it.
-- All nodes and the trace are completed before the endpoint returns. When the evaluation fails, the
-  `manager-evaluation` node and the trace are `failed`; the response is unchanged (`200` with `[]`).
-- The response body stays a plain decision list. The trace ID is returned in the `X-Axiom-Trace-Id`
-  response header (absent if the trace could not be created).
-- The node-building code (trace creation, evaluation and decision nodes, completion) is shared with
-  `EventStreamOrchestrator` through `ManagerTraceRecorder`.
 ---
 
 ## TraceContext
 
-`TraceContext` is a mutable context object threaded through pipeline and report
+`TraceContext` is a mutable context object threaded through workflow and task
 processing. It tracks the current position in the trace tree using an internal stack.
 
 **Location:** `core/src/main/java/io/apitomy/axiom/core/tracing/TraceContext.java`
@@ -326,14 +218,14 @@ created within that scope become its children. Pop when returning to the parent 
 
 ```java
 // Create a parent node
-Long parentId = traceService.addNode(traceCtx, "manager-evaluation",
-    "in-progress", "Evaluating event", null, null);
+Long parentId = traceService.addNode(traceCtx, "my-step",
+    "in-progress", "Doing something", null, null);
 traceCtx.push(parentId);
 
 try {
     // Any nodes created here become children of parentId
-    traceService.addNode(traceCtx, "decision-processed",
-        "completed", "Decision: create task", "activity-log", logId);
+    traceService.addNode(traceCtx, "my-child-step",
+        "completed", "Child step", "activity-log", logId);
 } finally {
     traceCtx.pop();
     traceService.completeNode(parentId, "completed");
@@ -362,12 +254,10 @@ Returns a paginated list of traces with optional filtering.
 |-----------|------|---------|-------------|
 | `page` | integer | 1 | Page number (1-indexed) |
 | `limit` | integer | 20 | Page size |
-| `filterTraceType` | string | — | Filter by trace type (e.g. `"manager"`, `"manager-dry-run"`, `"workflow"`, `"scheduled-job-execution"`, `"report-generation"`) |
+| `filterTraceType` | string | — | Filter by trace type (currently always `"workflow"`) |
 | `filterStatus` | string | — | Filter by status (comma-separated, e.g. `"in-progress,completed"`) |
 | `filterEventId` | string (UUID) | — | Filter by stream event ID (400 if not a valid UUID) |
-| `filterProjectId` | integer | — | Filter by project ID |
-| `filterReportId` | integer | — | Filter by report ID |
-| `filterScheduledJobRunId` | string (numeric) | — | The trace of a scheduled job run: the trace stored on the run, or whose root node references it (400 if not numeric) |
+| `filterSubjectId` | integer | — | Filter by subject ID |
 
 **Response:** `TraceSearchResults`
 
@@ -376,12 +266,11 @@ Returns a paginated list of traces with optional filtering.
   "items": [
     {
       "traceId": "a1b2c3d4-...",
-      "traceType": "manager",
+      "traceType": "workflow",
       "status": "completed",
-      "summary": "Manager evaluation: issue.created — https://github.com/owner/repo/issues/42",
+      "summary": "Workflow: Auto-Label New Issues",
       "eventId": null,
-      "projectId": 7,
-      "reportId": null,
+      "subjectId": 7,
       "startedOn": "2026-06-29T10:00:00Z",
       "completedOn": "2026-06-29T10:00:05Z"
     }
@@ -394,20 +283,14 @@ Returns a paginated list of traces with optional filtering.
 
 ### Convenience: List Traces by Entity
 
-The API also provides convenience endpoints that return traces for a specific project
-or report. These return a JSON array of `Trace` objects (not paginated).
+The API also provides a convenience endpoint that returns the traces for a specific subject as a JSON
+array of `Trace` objects (not paginated):
 
 ```
-GET /api/v1/projects/{projectId}/traces
-GET /api/v1/reports/{reportId}/traces
+GET /api/v1/subjects/{subjectId}/traces
 ```
 
-| Endpoint | Path Parameter | Description |
-|----------|----------------|-------------|
-| `GET /projects/{projectId}/traces` | `projectId` (integer) | All traces associated with the given project |
-| `GET /reports/{reportId}/traces` | `reportId` (integer) | All traces associated with the given report |
-
-These are equivalent to calling `GET /traces` with the corresponding filter parameter,
+This is equivalent to calling `GET /traces?filterSubjectId=...`,
 but are more convenient when you already have the entity ID.
 
 ### Get Trace Detail
@@ -430,10 +313,10 @@ Returns a trace and all of its nodes.
 {
   "trace": {
     "traceId": "a1b2c3d4-...",
-    "traceType": "manager",
+    "traceType": "workflow",
     "status": "completed",
-    "summary": "Manager evaluation: issue.created — https://github.com/owner/repo/issues/42",
-    "projectId": 7,
+    "summary": "Workflow: Auto-Label New Issues",
+    "subjectId": 7,
     "startedOn": "2026-06-29T10:00:00Z",
     "completedOn": "2026-06-29T10:00:05Z"
   },
@@ -442,9 +325,9 @@ Returns a trace and all of its nodes.
       "id": 1,
       "traceId": "a1b2c3d4-...",
       "parentNodeId": null,
-      "nodeType": "manager-evaluation",
+      "nodeType": "workflow",
       "status": "completed",
-      "summary": "Manager evaluation: issue.created",
+      "summary": "Workflow: Auto-Label New Issues",
       "startedOn": "2026-06-29T10:00:00Z",
       "completedOn": "2026-06-29T10:00:00Z",
       "durationMs": 0,
@@ -516,7 +399,7 @@ POST /api/v1/traces/tool-calls
 ```
 
 Creates a new tool-call trace node and its associated `ToolExecutionEntity`. Called by
-MCP tool wrappers during task or report execution.
+MCP tool wrappers during task execution.
 
 **Request Body:** `ToolCallRequest`
 
@@ -589,19 +472,19 @@ TraceService traceService;
 
 ### Step 2: Create a Trace or Add a Node
 
-If your code is the entry point for a new pipeline (like `EventStreamOrchestrator` or
-`ReportExecutionService`), create a new trace:
+If your code is the entry point for a new kind of traced work (like `WorkflowExecutionService`), create a
+new trace:
 
 ```java
 TraceContext traceCtx = traceService.createTrace(
     "my-pipeline",
     "Processing something: " + description,
-    eventId, projectId, reportId,   // eventId is the stream event UUID (nullable)
+    eventId, subjectId,   // eventId is the stream event UUID (nullable)
     "my-root-node", "Root: " + description,
     null, null);
 ```
 
-If your code runs within an existing trace (like `ManagerService`), receive the
+If your code runs within an existing trace (like task execution within a workflow run), receive the
 `TraceContext` as a parameter and add nodes to it:
 
 ```java
@@ -700,17 +583,15 @@ MCP Tool Wrapper executes
   └─ PUT /api/v1/traces/tool-calls/{nodeId}  →  sends output + status
 ```
 
-This flow is implemented in `TaskExecutionService` (for tasks) and
-`ReportExecutionService` (for reports). Both look up the trace node ID for the current
-task or report AI invocation and inject it as `AXIOM_PARENT_NODE_ID` so tool calls
-become children of the correct node in the tree.
+This flow is implemented in `TaskExecutionService`, which looks up the trace node ID for the current task
+and injects it as `AXIOM_PARENT_NODE_ID` so tool calls become children of the correct node in the tree.
 
 If the trace callback fails (network error, missing trace, etc.), the tool execution
 continues normally — tracing is best-effort and never blocks work.
 
 ## Correlation
 
-The trace ID is also Axiom's correlation ID. Activity log rows, AI usage rows, tasks, runs and reports store
+The trace ID is also Axiom's correlation ID. Activity log rows, AI usage rows, tasks and workflow runs store
 the trace ID of the work that produced them, and agents can join their caller's trace through the
 `X-Axiom-Trace-Id` and `X-Axiom-Parent-Node-Id` headers. See [Correlation by Trace ID](correlation.md).
 

@@ -55,44 +55,26 @@ SubscriptionFilterEvaluator
   │
   ▼
 Routing dispatch (in order, per matched subscription)
-  ├── manager           → ManagerService.evaluateStreamEvent()
-  ├── workflow-dispatch  → offers the event to parked receive-event workflow nodes
-  ├── create-workflow    → finds/creates a project, starts a new workflow instance
-  └── invoke-action      → finds/creates a project, creates a TaskEntity directly
+  ├── create-workflow    → finds/creates the Subject from the event ref, starts a new workflow run
+  │                        (skipped and recorded if the subject already has an active run of that definition)
+  └── workflow-dispatch  → broadcasts the event to every waiting run parked at a matching receive-event node
 ```
 
 A durable processing ledger records the outcome of every (event, subscription) pair
 (`skipped`, `completed`, or `failed`), so processing survives restarts and failed
 routing is retried automatically on each tick.
 
-### Manager Evaluation
-
-```
-ManagerService.evaluateStreamEvent(event)
-  │  Invokes an AI agent with a structured output schema
-  │  Returns List<ManagerDecision>
-  │
-  ▼
-Decision dispatch
-  ├── create_task / script_action → find/create Project, create TaskEntity
-  ├── ignore                       → mark processed, log
-  └── escalate                     → create an Inbox task for human review
-```
-
-Decisions below the configured confidence threshold are automatically escalated
-regardless of their decision type.
-
 ### Task Execution
 
 ```
 TaskQueuePoller
-  │  @Scheduled — finds projects with pending tasks
+  │  @Scheduled — finds subjects with pending tasks
   │
   ▼
-TaskExecutionService.executeNextTask(projectId)
+TaskExecutionService.executeNextTask(subjectId)
   │  Requests a lease from AgentPool using a capability string (e.g. "action:Name")
   │  Builds an AgentRequest (tools, prompt, env, MCP config)
-  │  Enforces project-level serialization (one task at a time)
+  │  Enforces subject-level serialization (one task at a time per subject)
   │
   ▼
 Agent.execute(request)
@@ -105,49 +87,17 @@ AiUsageEntity created with cost/token data
 AgentPool lease released
 ```
 
-### Report Generation
-
-```
-ReportScheduler
-  │  @Scheduled — checks for due report definitions
-  │  Creates ReportEntity (status: Pending)
-  │
-  ▼
-ReportQueueConsumer
-  │  Sequential FIFO queue (one report at a time)
-  │  Daemon thread blocks on BlockingQueue.take()
-  │
-  ▼
-ReportExecutionService
-  │  Requests a lease from AgentPool using capability "report:<slug>"
-  │  Invokes the leased agent with the report prompt and tools
-  │  Writes generated Markdown to ReportEntity
-```
-
-### Scheduled Job Execution
-
-```
-ScheduledJobScheduler
-  │  @Scheduled — checks for due scheduled jobs
-  │  Creates ScheduledJobRunEntity (status: Pending)
-  │
-  ▼
-ScheduledJobQueueConsumer
-  │  Sequential FIFO queue (one job at a time)
-  │  Daemon thread blocks on BlockingQueue.take()
-  │
-  ▼
-ScheduledJobExecutionService
-  │  Agent mode: requests a lease using capability "job:<slug>", invokes the agent
-  │  Script mode: runs bash script via ProcessBuilder
-  │  Writes output to ScheduledJobRunEntity
-```
+Tasks are created only by workflow `action` and `human-task` nodes. Because tasks are serialized per subject,
+concurrent runs of different definitions on the same subject take turns executing their tasks.
 
 ### Workflow Execution
 
 ```
-WorkflowExecutionService.triggerWorkflow(projectId, definitionId)
-  │  Manual trigger, or a subscription's "create-workflow"/"workflow-dispatch" rule
+WorkflowExecutionService.triggerWorkflow(subjectId, definitionId, RunRequest)
+  │  Manual trigger (Run Workflow), a subscription's "create-workflow" rule, or a schedule trigger
+  │  RunRequest carries the optional title, labels, and inputs
+  │  Rejects a second active (running/waiting) run of the same definition on the subject
+  │  (WorkflowRunConflictException → HTTP 409, or a recorded "skipped" for routing and schedules)
   │
   ▼
 WorkflowEngine (from the shared flow-engine library)
@@ -159,6 +109,24 @@ WorkflowEngine (from the shared flow-engine library)
   ▼
 WorkflowRunEntity updated with instance state, current node, and status
 ```
+
+### Schedule Triggers
+
+```
+WorkflowScheduleTriggerScheduler
+  │  @Scheduled every axiom.workflow.schedule-poll-interval (default 30s)
+  │  Claims due, enabled WorkflowScheduleTriggerEntity rows (nextRunAt <= now)
+  │  Computes the next firing from the 5-field Unix cron expression (UTC)
+  │
+  ▼
+Find or create the fixed Subject (ref "schedule:<subjectName>")
+  │
+  ▼
+WorkflowExecutionService.triggerWorkflow(subjectId, definitionId, inputs, label trigger=schedule)
+  │  lastOutcome = started | skipped (active run exists) | failed: <reason>
+```
+
+Schedule firing assumes a single Axiom node; there is no cross-node locking.
 
 See [Workflows](../user-guide/workflows.md) for the authoring and run-time reference.
 
@@ -251,8 +219,8 @@ non-Long primary keys) and use the active record pattern — queries are static 
 on the entity class:
 
 ```java
-ProjectEntity project = ProjectEntity.findById(id);
-List<TaskEntity> tasks = TaskEntity.find("projectId", projectId).list();
+SubjectEntity subject = SubjectEntity.findById(id);
+List<TaskEntity> tasks = TaskEntity.find("subjectId", subjectId).list();
 entity.persist();
 ```
 
@@ -270,12 +238,11 @@ non-blocking.
 
 ### Tracing
 
-Every manager evaluation, workflow run, scheduled job run, and report generation
-produces a **trace** — a tree of lightweight nodes recording each step. The tracing
+Every workflow run produces a **trace** — a tree of lightweight nodes recording each step. The tracing
 subsystem follows several key design principles:
 
-- **`TraceService` lives in `core`** — all producers of traces (`app` and `manager`
-  modules) inject it directly, avoiding circular dependencies
+- **`TraceService` lives in `core`** — producers of traces inject it directly, avoiding circular
+  dependencies
 - **Stack-based context** — `TraceContext` maintains a mutable node stack. Call
   `push(nodeId)` when descending into a child scope and `pop()` when returning. The
   current top of the stack is the parent for new nodes.
@@ -296,5 +263,5 @@ REST endpoint reference.
 
 All background processing uses Quarkus `@Scheduled` with
 `concurrentExecution = SKIP` to prevent overlapping executions, including the
-connection pollers, the event stream orchestrator, the task queue poller, and the
-report and scheduled job schedulers.
+connection pollers, the event stream orchestrator, the task queue poller, the workflow
+wait scheduler, and the workflow schedule trigger scheduler.

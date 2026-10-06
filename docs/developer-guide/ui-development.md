@@ -14,7 +14,8 @@ in the Axiom React UI.
 | TypeScript | Type-safe JavaScript |
 | Vite | Build tool and dev server |
 | Monaco Editor | Code editors (prompt templates, scripts, logs) |
-| react-markdown | Markdown rendering (reports, thread entries) |
+| react-markdown | Markdown rendering (subject bodies, thread entries) |
+| Vitest + Testing Library | Unit and component tests (`npm test`) |
 | `@apitomy/common-ui-components` | Shared filtering components |
 
 ---
@@ -29,15 +30,17 @@ ui/src/
 │   ├── api.ts              REST API client layer (all fetch functions + types)
 │   └── sse.ts              Server-Sent Events client (auto-reconnect)
 ├── pages/                  One component per route
-│   ├── DashboardPage.tsx
-│   ├── ProjectsPage.tsx
-│   ├── ProjectDetailPage.tsx
+│   ├── WorkflowRunsPage.tsx     Runs list — the landing page (/runs)
+│   ├── WorkflowRunDetailPage.tsx
+│   ├── SubjectsPage.tsx
+│   ├── SubjectDetailPage.tsx
 │   ├── ActionTypesPage.tsx
 │   ├── AssistantPage.tsx
 │   ├── AssistantSessionPage.tsx
 │   ├── SessionTemplatesPage.tsx
 │   ├── SessionTemplateDetailPage.tsx
 │   └── ...
+├── test/                   Vitest setup (setup.ts) and helpers (renderWithRouter.tsx)
 ├── components/             Reusable UI components
 │   ├── AppMasthead.tsx
 │   ├── AppSidebar.tsx
@@ -60,9 +63,9 @@ ui/src/
 
 All backend communication goes through `ui/src/config/api.ts`. This file contains:
 
-- **TypeScript interfaces** for every API entity (`Project`, `Task`, `ActionType`,
+- **TypeScript interfaces** for every API entity (`Subject`, `Task`, `ActionType`,
   `ToolDefinition`, etc.)
-- **Fetch functions** for every REST endpoint (`fetchProjects()`, `createTool()`,
+- **Fetch functions** for every REST endpoint (`fetchSubjects()`, `createTool()`,
   `updateActionType()`, etc.)
 - **Pagination type** — `SearchResults<T>` with `items`, `totalCount`, `page`, `limit`
 
@@ -82,18 +85,18 @@ const API_BASE = `${getApiBaseUrl()}/api/v1`;
 Every function follows the same pattern:
 
 ```typescript
-export async function fetchProjects(
+export async function fetchSubjects(
     page: number,
     limit: number,
     name?: string,
-): Promise<SearchResults<Project>> {
+): Promise<SearchResults<Subject>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
     params.set("limit", String(limit));
     if (name) params.set("name", name);
 
-    const resp = await fetch(`${API_BASE}/projects?${params}`);
-    if (!resp.ok) throw new Error("Failed to fetch projects");
+    const resp = await fetch(`${API_BASE}/subjects?${params}`);
+    if (!resp.ok) throw new Error("Failed to fetch subjects");
     return resp.json();
 }
 ```
@@ -106,7 +109,7 @@ return typed JSON.
 ## SSE System
 
 Axiom uses Server-Sent Events for real-time UI updates (task status changes, new
-activity log entries, report progress, etc.).
+activity log entries, workflow run updates, etc.).
 
 ### Frontend: `SseClient` (`sse.ts`)
 
@@ -265,3 +268,6 @@ import { CodeEditor, Language } from "@patternfly/react-code-editor";
    on port 9090
 3. Hot module replacement (HMR) updates the browser instantly when you save a file
 4. Run `npm run build` (which runs `tsc -b && vite build`) to type-check before committing
+5. Run `npm test` (Vitest, configured in `vitest.config.ts`) to run the UI unit and component tests.
+   Tests live next to the code they cover as `*.test.ts(x)` files (e.g. `pages/WorkflowRunsPage.test.tsx`).
+   `./build.sh -Pui` builds the UI and runs these tests as part of the Maven build

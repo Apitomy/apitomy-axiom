@@ -64,10 +64,10 @@ Each resource class implements the corresponding generated interface:
 
 ```java
 @ApplicationScoped
-public class ProjectsResourceImpl implements ProjectsResource {
+public class SubjectsResourceImpl implements SubjectsResource {
 
     @Override
-    public Response getProjects(/* params */) {
+    public SubjectSearchResults listSubjects(/* params */) {
         // implementation
     }
 }

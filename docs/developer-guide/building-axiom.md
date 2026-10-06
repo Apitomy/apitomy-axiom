@@ -28,7 +28,20 @@ Builds the backend and runs unit tests. Does **not** build the UI.
 ./build.sh
 ```
 
-Runs: `mvn clean package`
+Runs: `mvn clean package`. Extra arguments are passed to Maven, so `./build.sh -Pui` also builds the UI
+and runs the UI unit tests (see below).
+
+### UI Tests
+
+The UI has unit and component tests written with [Vitest](https://vitest.dev/) and Testing Library. Run
+them on their own with:
+
+```bash
+cd ui && npm test
+```
+
+They also run as part of any Maven build with the `-Pui` profile (`./build.sh -Pui`,
+`./build-release.sh`), so a failing UI test fails the build.
 
 ### `build-release.sh` — Release Build
 
@@ -41,7 +54,7 @@ Builds the complete application with the React UI bundled into a single runnable
 Runs: `mvn clean package -Pui,prod`
 
 The `-Pui` profile activates the `ui-bundle` module, which uses the
-`frontend-maven-plugin` to install Node.js, run `npm install` and `npm run build`,
+`frontend-maven-plugin` to install Node.js, run `npm install`, `npm run build` and `npm test`,
 and package the resulting `dist/` folder into `META-INF/resources/` inside the JAR.
 
 The `-Pprod` profile configures Quarkus to produce an uber-jar.

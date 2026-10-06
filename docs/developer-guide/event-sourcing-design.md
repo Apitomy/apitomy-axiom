@@ -10,8 +10,8 @@ and reacting to changes:
 2. **Event Stream** — a single database table of typed, schema-validated events from
    all connections, browsable via REST API and UI
 3. **Subscriptions** — filtered views over the event stream with EL expression matching
-   and configurable routing rules that send matched events to destinations (Manager
-   triage, workflow dispatch, workflow creation, action invocation)
+   and configurable routing rules that send matched events to workflows (workflow creation
+   and workflow dispatch)
 
 ## Architecture
 
@@ -80,14 +80,12 @@ The event is exposed as an `event` variable with fields: `type`, `source`, `conn
 ### Routing Rules
 
 Each subscription defines zero or more routing rules. When an event matches the filter
-expression, each routing rule executes in order:
+expression, each routing rule executes in order. There are exactly two routing types:
 
 | Destination Type | Config Required | What Happens |
 |------------------|-----------------|--------------|
-| `manager` | None | Sends the event to the AI Manager for triage. Manager returns decisions (create_task, ignore, script_action, escalate) which are processed: tasks are created, projects auto-created, scripts executed, escalations logged with SSE notifications. Decisions below the confidence threshold are auto-escalated. |
-| `workflow-dispatch` | None | Offers the event to any workflow instances parked at `receive-event` nodes. Matching uses the flow engine's `matchesEvent` with event type and EL expressions. |
-| `create-workflow` | `workflowDefinitionId` | Finds or auto-creates a project from the event's `ref` URL, then starts a new workflow instance from the specified definition on that project. |
-| `invoke-action` | `actionTypeId` | Finds or auto-creates a project, then creates a `TaskEntity` with status "Pending" for the specified action type. The task queue picks it up for execution. |
+| `create-workflow` | `workflowDefinitionId` | Finds or auto-creates a Subject from the event's `ref` URL, then starts a new workflow run of the specified definition on that subject, with `subjectId`, `ref`, and `event` in its context. If the subject already has an active (`running` or `waiting`) run of that definition, no run is started or queued: the outcome records a `skipped` `workflow-run` item. |
+| `workflow-dispatch` | None | Broadcasts the event to **every** workflow run parked at a `receive-event` node whose event type and EL expression match (flow engine `matchesEvent`). When the event's `ref` correlates to a subject, delivery is limited to waiting runs on that subject (all of them, across definitions); otherwise all waiting runs with a matching event type are offered the event. |
 
 A subscription with no routing rules matches events silently (useful for previewing
 matches before committing to a routing destination).
@@ -113,7 +111,7 @@ Each `(event_id, subscription_id)` pair gets a ledger entry with one of four sta
   events whose `timestamp` is at or after that cutoff are ever evaluated against the
   subscription. Enabling a subscription does not retroactively evaluate events that
   occurred before its cutoff.
-- **Retry:** Each ledger entry tracks its attempts (V69, #422): `attempt_count` (the first try
+- **Retry:** Each ledger entry tracks its attempts: `attempt_count` (the first try
   included), `last_attempt_at` and, while it is `failed`, `next_attempt_at`. A failed attempt sets
   `next_attempt_at = now + min(retry-initial-delay * 2^(n-1), retry-max-delay)` where `n` is the number of
   the attempt that failed (defaults 30s and 1h: 30s, 1m, 2m, ... capped at 1h). The retry pass selects
@@ -136,12 +134,7 @@ Each `(event_id, subscription_id)` pair gets a ledger entry with one of four sta
   if it fails it is exhausted again.
 - **Attempt history:** Every `routing_outcome` records its `attempt_number`, so the outcomes of an entry
   group into attempts; the processing API returns them all with the entry's attempt fields and the
-  configured maximum. V69 backfills `attempt_number` (1 + failed outcomes recorded before it) and
-  `attempt_count` (failed outcomes, plus one for a `completed` entry), marks failed entries with 3 or more
-  attempts (the old default cap) `exhausted` and makes the other failed entries due immediately.
-- **Upgrade:** the V69 backfill assumes the old default cap of 3, since a migration cannot read the
-  configuration. Failed entries with 3 or more attempts therefore become `exhausted` even when
-  `axiom.stream-pipeline.max-attempts` is set higher; retry them manually if needed.
+  configured maximum.
 - **Configuration validation:** startup fails with a message naming the property when
   `max-attempts` < 1, `retry-initial-delay` <= 0 or `retry-max-delay` < `retry-initial-delay`. Invalid
   values are rejected rather than clamped, so a misconfiguration is never silently replaced.
@@ -166,23 +159,18 @@ Each `(event_id, subscription_id)` pair gets a ledger entry with one of four sta
 ### Routing outcomes and items
 
 Each routing rule run records one `routing_outcome` row per attempt (routing type, status, summary,
-trace ID, error). Everything the rule produced is recorded as `routing_outcome_item` rows (V67, #418),
+trace ID, error). Everything the rule produced is recorded as `routing_outcome_item` rows,
 children of the outcome deleted with it (`ON DELETE CASCADE`; `StreamEventCleanup` also deletes them
 explicitly):
 
 | Item type | Written by | Links |
 |-----------|------------|-------|
-| `task` | Manager `create_task` / `script_action` decision; `invoke-action` rule | `task_id`, `project_id` |
-| `workflow-run` | `create-workflow` rule | `workflow_run_id`, `project_id` |
-| `workflow-resumed` | `workflow-dispatch` rule, one per run the event resumed | `workflow_run_id`, `project_id`, `trace_node_id` (the receive-event node) |
+| `workflow-run` | `create-workflow` rule (status `skipped` when the subject already had an active run of the definition) | `workflow_run_id` (not set when skipped), `subject_id` |
+| `workflow-resumed` | `workflow-dispatch` rule, one per run the event resumed | `workflow_run_id`, `subject_id`, `trace_node_id` (the receive-event node) |
 | `no-match` | `workflow-dispatch` rule that resumed no run | — |
-| `ignored` | Manager `ignore` decision | — |
-| `escalated` | Manager `escalate` decision, or any decision below the confidence threshold | `project_id` if the escalation was posted to a project |
-| `decision` | Manager decision of an unknown type (always `failed`) | — |
 
-Each item has a `status` (`completed` or `failed`), a `summary` and, when failed, an `error_message`.
-Manager items have one row per decision, including decisions that failed, and `trace_node_id` points to
-the decision's `manager-decision` trace node. A `workflow-dispatch` rule writes one `workflow-resumed`
+Each item has a `status` (`completed`, `failed`, or `skipped`), a `summary` and, when failed, an
+`error_message`. A `workflow-dispatch` rule writes one `workflow-resumed`
 item per resumed run, or a single `no-match` item (outcome summary "No waiting workflow run matched the
 event") when nothing matched, so "nothing happened" is recorded explicitly. A run that matched but
 failed to resume gets a `failed` `workflow-resumed` item with the error; the outcome stays `completed`
@@ -190,20 +178,19 @@ so the rule is not retried (a retry would re-dispatch the event to every run). T
 run's `traceId` to `workflow-run` and `workflow-resumed` items, so the event page links to the run and its
 trace.
 
-The outcome's own `project_id` and `task_id` columns are kept for backward compatibility. They still hold
-only the **first** project and task; readers should use the items. Outcomes recorded before V67 have no
-items.
+The outcome's own `subject_id` and `task_id` columns hold only the **first** subject and task; readers
+should use the items.
 
 ### Links between events and workflow runs
 
-Events and workflow runs are linked both ways (V68, #420, #421). None of these links are foreign keys:
+Events and workflow runs are linked both ways. None of these links are foreign keys:
 event retention deletes events and ledger entries while runs are kept (but never while the run is still
 running or waiting).
 
 - **Started runs (`create-workflow`).** The run stores `trigger_event_id` and `trigger_ledger_id`; the
   run's `workflow` trace has `eventId` set to the event; the run's context has the event ID as
   `event.id`; and the outcome's `trace_id` is the run's trace. Runs started any other way (e.g.
-  `POST /projects/{id}/workflow`) have null trigger fields.
+  `POST /subjects/{id}/workflow` or a schedule trigger) have null trigger fields.
 - **Resumed runs (`workflow-dispatch`).** `WorkflowEventDispatcher.dispatchStreamEvent` returns the
   runs it resumed (run, node, trace and receive-event trace node). The `workflow_event_subscription` row
   is deleted when it is consumed, so each resumption is recorded as a `workflow_run_resume` row (run,

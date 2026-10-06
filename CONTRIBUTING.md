@@ -27,17 +27,17 @@ See the [README](README.md) for installation and setup instructions.
 ### Building and Testing
 
 ```bash
-# Install dependencies
-npm install
+# Build the backend and run all Java tests
+./build.sh
 
-# Build the project
-npm run build
+# Build the backend and the UI, running the UI unit tests (Vitest) as part of the build
+./build.sh -Pui
 
-# Run linter
-npm run lint
+# Run the UI unit tests (Vitest) on their own
+cd ui && npm install && npm test
 
-# Fix linting issues automatically
-npm run lint:fix
+# Build the UI on its own
+cd ui && npm run build
 ```
 
 ## Coding Standards

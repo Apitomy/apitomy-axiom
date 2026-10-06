@@ -25,8 +25,8 @@ configuration or, for agent pool work, by capability matching.
 
 ## Adding an AI Agent
 
-An agent provides the ability to invoke an LLM for Manager evaluations, task
-execution, report generation, and agent-mode scheduled jobs. Axiom ships with three
+An agent provides the ability to invoke an LLM for task execution (workflow action
+nodes), the AI helper services, and AI Assistant sessions. Axiom ships with three
 agent implementations: Claude Code, OpenCode, and GitHub Copilot CLI.
 
 ### Interface: `Agent`
@@ -87,10 +87,9 @@ type when the `Agent` implementation also implements `AgentMcpManager`.
 
 Registered agents don't self-select work — `AgentPool` leases an enabled, idle
 `AgentEntity` to a caller based on a requested capability string (e.g.
-`action:Auto-Label Issue`, `report:weekly-status`, `job:cleanup`). See
-[AI Agents](../user-guide/concepts.md#ai-agents) for the capability-matching model
-that all agent-consuming services (`TaskExecutionService`, `ReportExecutionService`,
-`ScheduledJobExecutionService`) share.
+`action:Auto-Label Issue`). `TaskExecutionService` requests `action:<action type>` for every task
+created by a workflow action node. See [AI Agents](../user-guide/concepts.md#ai-agents) for the
+capability-matching model.
 
 ### Interactive Assistant Session Drivers
 
@@ -135,8 +134,8 @@ Location: `events/core/src/main/java/io/apitomy/axiom/events/core/EventStreamSer
 7. Record the poll result in `ConnectionPollLogEntity`
 
 New connections do not need any corresponding Subscription configuration to start
-recording events — subscriptions are what route recorded events onward to the Manager,
-a workflow, or an action.
+recording events — subscriptions are what route recorded events onward to workflows
+(`create-workflow` and `workflow-dispatch` routing rules).
 
 ### Reference Implementations
 
@@ -147,6 +146,30 @@ a workflow, or an action.
 
 See [Event System — Design Document](event-sourcing-design.md) for the full event
 schema and per-source normalization details.
+
+---
+
+## Adding an Axiom SDK Function
+
+The Axiom SDK is the set of `axiom_*` functions agents call through the `axiom-sdk` MCP server and that
+workflows call directly from `sdk:` action nodes (see
+[Axiom SDK Functions](../user-guide/workflows.md#axiom-sdk-functions) for the current list). An SDK change
+must update all of these consistently:
+
+| Location | Purpose |
+|----------|---------|
+| `core/src/main/resources/axiom-sdk-functions.json` | Authoritative function definitions (name, description, parameters) |
+| `core/.../SdkFunctionRegistry.java` | Loads the definitions |
+| `app/.../SdkCallService.java` | Implementations used by `sdk:` action nodes |
+| `app/.../rest/SdkResource.java` | REST endpoint used by the MCP server |
+| `app/src/main/resources/templates/axiom-mcp-server/sdk-server.js` | The `axiom-sdk` MCP server |
+| `app/src/main/resources/templates/axiom-assistant-mcp/server.js`, `templates/assistant-templates/axiom-config-assistant.json` | Assistant templates that reference SDK tools |
+| `core/.../services/ActionTypeValidator.java` | Validates SDK tool names in an action type's allowed tools |
+| `ui/src/config/sdkTools.ts`, `ui/src/components/assistant/toolNames.ts` | UI tool pickers and display names |
+| `SdkResourceTest`, `McpConfigGeneratorTest`, `ActionTypeValidatorTest` | Tests |
+
+SDK functions must not start work outside a workflow: there are no functions for creating tasks directly,
+closing or reopening subjects, or reports.
 
 ---
 

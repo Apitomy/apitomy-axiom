@@ -2,16 +2,19 @@
 
 # Apitomy Axiom
 
-Event-driven project orchestration platform that monitors GitHub and Jira issues, creates
-long-lived projects around them, and delegates work to human and AI actors.
+Workflow-first, event-driven orchestration platform that monitors GitHub and Jira activity and runs
+versioned workflows that delegate work to AI agents, scripts, and humans.
 
 ## What It Does
 
-- Watches GitHub/Jira repositories for issue activity (webhooks or polling)
-- An AI Manager triages events and decides what actions to take
-- Tasks are assigned to Actors (AI agents or humans)
-- Projects track the full lifecycle of work tied to each issue
-- A UI provides visibility into projects, tasks, activity, and configuration
+- Polls GitHub/Jira for activity and records it in a normalized event stream
+- Subscriptions route matching events to workflows: `create-workflow` starts a run on the event's subject,
+  `workflow-dispatch` delivers the event to runs waiting for it
+- Schedule triggers start workflow runs on a cron schedule against a fixed subject
+- Workflow action nodes run action types through a pool of AI agents (or as scripts); human-task nodes
+  wait in the Inbox
+- Subjects (issues, pull requests, named subjects) hold the workspace and thread shared by their runs
+- A UI with Runs as its landing page provides visibility into runs, subjects, tasks, and configuration
 
 ## Tech Stack
 
@@ -48,6 +51,12 @@ Only the selected engine's binary needs to be installed. Both can coexist for te
 ```bash
 # Standard build (backend only, no UI)
 ./build.sh
+
+# Backend + UI build, including the UI unit tests (Vitest)
+./build.sh -Pui
+
+# UI unit tests only
+cd ui && npm test
 
 # Release build (backend + UI bundled into uber-jar)
 ./build-release.sh
@@ -89,62 +98,41 @@ To run the backend only (no UI):
 
 ```
 common/api/          OpenAPI contract + generated JAX-RS interfaces
-core/                Domain entities, lifecycle, workspace management
-engine/spi/          Pluggable AI engine abstraction layer
-engine/opencode/     OpenCode engine implementation
-manager/             AI Manager (event triage and decision-making)
-actors/spi/          Actor interface
-actors/claude-code/  Claude Code CLI subprocess actor + engine
-actors/human/        Human actor (notification-driven)
-events/core/         Event queue and pipeline orchestrator
-events/github/       GitHub webhooks + API polling
-events/jira/         Jira integration (planned)
-notifications/       Slack, Telegram channels (planned)
+core/                Domain entities, workspace management, SDK function registry
+agents/spi/          Pluggable AI agent abstraction (agent pool)
+agents/claude-code/  Claude Code CLI agent
+agents/opencode/     OpenCode agent
+agents/copilot/      GitHub Copilot CLI agent
+events/core/         Event stream and pipeline support
+events/github/       GitHub connection poller
+events/jira/         Jira connection poller
+notifications/       Notification channels (Slack, Telegram)
 app/                 Quarkus application (assembles everything)
 ui/                  React frontend
+ui-bundle/           Maven module that builds and tests the UI for release builds
 ```
 
 ## Database Migrations (Flyway)
 
 Schema migrations are managed by [Flyway](https://flywaydb.org/) and run automatically on
-startup for persistent databases (the `persist` and `prod` profiles). Migration files are
-located in `app/src/main/resources/db/migration/`.
-
-### How it works
+startup for persistent databases (the `persist` and `prod` profiles). The schema is a single baseline
+file, `app/src/main/resources/db/migration/V1__baseline.sql`.
 
 - **Dev mode** (`quarkus:dev`): Uses Hibernate's `drop-and-create` — no Flyway, schema is
-  recreated on every restart. Fast for development.
+  recreated on every restart.
 - **Persist/Prod mode**: Flyway runs migrations at startup. Hibernate schema generation is
   set to `none` — Flyway owns the schema.
 
-### Adding a new migration
-
-1. Create a new SQL file in `app/src/main/resources/db/migration/` following the naming
-   convention: `V<number>__<description>.sql` (e.g. `V3__add_priority_to_task.sql`)
-2. Write standard SQL DDL statements. Use `IF NOT EXISTS` / `IF EXISTS` guards for safety.
-3. The migration runs automatically on the next startup of a persistent database.
-
-### Existing databases
-
-Flyway is configured with `baseline-on-migrate=true` and `baseline-version=1`. This means
-existing databases that were created before Flyway was introduced will be automatically
-baselined — Flyway skips V1 (the full schema creation) and applies only new migrations
-(V2+).
-
-### Example migration
-
-```sql
--- V3__add_priority_to_task.sql
-ALTER TABLE task ADD COLUMN IF NOT EXISTS priority VARCHAR(255) DEFAULT 'normal';
-```
+Until the first release, schema changes are made by **editing `V1__baseline.sql` in place** — do not add
+`V2__…` files. There is no data migration: an existing persistent database must be deleted when the
+baseline changes. `MigrationSchemaValidationTest` verifies that the baseline matches the entity model.
+See [Database & Migrations](docs/developer-guide/database-and-migrations.md).
 
 ## Documentation
 
-- [Functional Design](docs/design-v2.md)
-- [Architecture](docs/architecture-v2.md)
-- [Implementation Plan](docs/implementation-plan.md)
-- [OpenCode Migration Plan](docs/opencode-migration-plan.md)
-- [Claude Code Integration Research](docs/research-claude-code-integration.md)
+- [Concepts](docs/user-guide/concepts.md)
+- [Workflows](docs/user-guide/workflows.md)
+- [Stack & Architecture](docs/developer-guide/stack-and-architecture.md)
 
 ## License
 

@@ -7,10 +7,10 @@ tailored to specific workflows, from generating Axiom configuration to general-p
 coding assistance.
 
 Out of the box, Axiom ships three built-in templates: a **Configuration Assistant** for
-creating and updating tools, action types, report definitions, scheduled jobs, toolsets,
+creating and updating tools, action types, toolsets,
 connections, subscriptions, workflows, and session templates, a **General Assistant** for
-open-ended tasks, and a **Project Assistant** for working within the context of a
-specific project. You can also create your own templates to define custom workflows.
+open-ended tasks, and a **Subject Assistant** for working within the context of a
+specific subject. You can also create your own templates to define custom workflows.
 
 !!! note
     The AI Assistant requires at least one registered agent that supports interactive
@@ -27,9 +27,9 @@ specific project. You can also create your own templates to define custom workfl
     warning message with the error reported by OpenCode.
 
     OpenCode sessions run in the same working directory as Claude Code sessions: the template's working
-    directory if set, otherwise the project workspace for project sessions, otherwise a directory created
-    inside the session directory. The template's environment variables and, for project sessions only,
-    `AXIOM_PROJECT_ID`, `AXIOM_PROJECT_NAME`, `AXIOM_REF`, and `AXIOM_REPOSITORY` are passed to the
+    directory if set, otherwise the subject workspace for subject sessions, otherwise a directory created
+    inside the session directory. The template's environment variables and, for subject sessions only,
+    `AXIOM_SUBJECT_ID`, `AXIOM_SUBJECT_NAME`, `AXIOM_REF`, and `AXIOM_REPOSITORY` are passed to the
     session's `opencode serve` process, so they are available to OpenCode's tools and MCP servers.
     Environment variables (including template secrets) are visible to the agent's tools, for example its
     shell tool. Like Claude Code with `CLAUDE.md`, OpenCode also loads project-level configuration
@@ -46,7 +46,7 @@ specific project. You can also create your own templates to define custom workfl
     OpenCode may ask a second time for the same tool call, for example to access a directory outside
     the session working directory; this prompt appears on the same tool block.
 
-    The template's system prompt, including project context for project sessions, is applied to both engines.
+    The template's system prompt, including subject context for subject sessions, is applied to both engines.
     Claude Code receives it with `--append-system-prompt`; OpenCode receives it as the system prompt of every
     message, added to OpenCode's own system prompt.
 
@@ -91,8 +91,8 @@ Each template specifies:
 | **System Prompt** | Markdown instructions passed to the active interactive engine. |
 | **Welcome Message** | First message shown in the chat, attributed to the assistant. |
 | **Agent Type** | Optional override selecting which registered agent type (`claude-code`, `opencode`) drives sessions created from this template. Falls back to the instance's default agent type when unset. |
-| **Working Directory** | Absolute path for the session. If empty, Axiom creates a temporary directory under `~/.axiom/assistant/sessions/`. For project-scoped sessions, defaults to the project workspace. |
-| **Initial Message** | Optional message automatically sent to the AI when a session starts. Supports `{{projectName}}` placeholder. |
+| **Working Directory** | Absolute path for the session. If empty, Axiom creates a temporary directory under `~/.axiom/assistant/sessions/`. For subject-scoped sessions, defaults to the subject workspace. |
+| **Initial Message** | Optional message automatically sent to the AI when a session starts. Supports `{{subjectName}}` placeholder. |
 | **Model** | Optional AI model override (e.g., a specific Claude model). |
 | **MCP Servers** | Named MCP server configurations to include in the session. |
 | **Allowed Tools** | Tool patterns for `--allowedTools` (e.g., `Read(*)`, `Bash(ls *)`). Use `@ToolsetName` to include all tools from a toolset. |
@@ -104,13 +104,13 @@ Each template specifies:
 Axiom ships three immutable built-in templates:
 
 - **Configuration Assistant** (`axiom-config-assistant`) — purpose-built for creating
-  and updating Axiom configuration items (tools, action types, report definitions,
-  scheduled jobs, toolsets, and session templates) with a two-panel layout and Apply
+  and updating Axiom configuration items (tools, action types, toolsets, connections,
+  subscriptions, workflows, and session templates) with a two-panel layout and Apply
   workflow.
 - **General Assistant** (`general-assistant`) — a minimal template for open-ended tasks
   with no sidebar or special behavior.
-- **Project Assistant** (`project-assistant`) — scoped to a specific Axiom project, with
-  the working directory set to the project workspace and access to project-specific MCP
+- **Subject Assistant** (`subject-assistant`) — scoped to a specific Axiom subject, with
+  the working directory set to the subject workspace and access to subject-specific MCP
   tools for querying tasks, events, and the discussion thread.
 
 Built-in templates cannot be modified or deleted, but you can clone them to create
@@ -338,9 +338,7 @@ can work with these types of configuration items:
 | Type | What it produces |
 |------|-----------------|
 | **Tools** | Script-based tools with parameters, descriptions, and bash script templates |
-| **Action Types** | Agent or script-mode action types with prompt templates, allowed tools, and trigger settings |
-| **Report Definitions** | Scheduled or ad-hoc reports with prompt templates, allowed tools, and time windows |
-| **Scheduled Jobs** | CRON-style automation with prompt or script templates, allowed tools, and schedule settings |
+| **Action Types** | Agent or script-mode action types with prompt templates, allowed tools, and inputs/outputs |
 | **Toolsets** | Named groups of tools that can be referenced in action types and session templates using `@ToolsetName` |
 | **Session Templates** | Custom AI Assistant session configurations with a persona, system prompt, MCP servers, and allowed tools |
 | **Connections** | Links to GitHub or Jira for the event stream pipeline |
@@ -381,7 +379,7 @@ updated"). After applying, the session ends and you are returned to the sessions
 
 The Configuration Assistant has access to an MCP server that lets it query your
 existing Axiom configuration — it can list your current tools, action types, event
-sources, scheduled jobs, and more to understand what is already set up. This is
+sources, workflows, and more to understand what is already set up. This is
 especially useful when updating existing items, as the assistant fetches the current
 definition before making changes.
 
@@ -437,7 +435,7 @@ modal.
   and what to change. It will fetch the current definition, apply your changes, and
   write the updated JSON. When you apply, matching names are updated in place.
 - **Ask about existing configuration.** The assistant can query your current tools,
-  action types, scheduled jobs, toolsets, session templates, and other configuration
+  action types, workflows, toolsets, session templates, and other configuration
   to understand your setup before creating or updating items.
 
 ### General Tips

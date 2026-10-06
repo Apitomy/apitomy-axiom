@@ -33,8 +33,7 @@ When making changes, use this guide to find the right module:
 | Change | Module |
 |--------|--------|
 | REST API endpoint | `common/api` (OpenAPI spec) + `app/rest/` (implementation) |
-| Domain entity or lifecycle | `core/` |
-| Manager behavior | `manager/` |
+| Domain entity or SDK function definitions | `core/` |
 | Claude Code agent | `agents/claude-code/` |
 | OpenCode agent | `agents/opencode/` |
 | GitHub Copilot CLI agent | `agents/copilot/` |
@@ -43,7 +42,7 @@ When making changes, use this guide to find the right module:
 | Event stream routing, workflow, and pipeline orchestration | `app/` (`EventStreamOrchestrator`, `TaskExecutionService`, `WorkflowExecutionService`, etc.) |
 | UI page or component | `ui/src/pages/` or `ui/src/components/` |
 | API client functions | `ui/src/config/api.ts` |
-| Database migration | `app/src/main/resources/db/migration/` |
+| Database schema | `app/src/main/resources/db/migration/V1__baseline.sql` (edit in place until the first release) |
 
 ---
 
@@ -124,6 +123,11 @@ All submissions require code review before merging.
 
 Standard Maven tests — run with `mvn test` from the project root or a specific module
 directory.
+
+### UI Tests
+
+UI unit and component tests use Vitest — run them with `cd ui && npm test`. They also run as part of
+`./build.sh -Pui`.
 
 ### Integration Tests
 
