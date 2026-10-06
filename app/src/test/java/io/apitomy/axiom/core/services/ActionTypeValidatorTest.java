@@ -363,7 +363,7 @@ class ActionTypeValidatorTest {
 
     @Test
     void rejectsDuplicateInputNames() {
-        NewActionType def = makeActor("dup-inputs", "desc", "do {{managerInput}}");
+        NewActionType def = makeActor("dup-inputs", "desc", "do {{ref}}");
         def.setInputs(List.of(
             field("repo", ActionTypeField.Type.STRING),
             field("repo", ActionTypeField.Type.NUMBER)));
@@ -376,7 +376,7 @@ class ActionTypeValidatorTest {
 
     @Test
     void rejectsInvalidInputIdentifier() {
-        NewActionType def = makeActor("bad-input-name", "desc", "do {{managerInput}}");
+        NewActionType def = makeActor("bad-input-name", "desc", "do {{ref}}");
         def.setInputs(List.of(field("has space", ActionTypeField.Type.STRING)));
 
         ValidationResult result = ActionTypeValidator.validate(def);
@@ -386,7 +386,7 @@ class ActionTypeValidatorTest {
 
     @Test
     void rejectsBlankOutputName() {
-        NewActionType def = makeActor("blank-output", "desc", "do {{managerInput}}");
+        NewActionType def = makeActor("blank-output", "desc", "do {{ref}}");
         def.setOutputs(List.of(field("", ActionTypeField.Type.STRING)));
 
         ValidationResult result = ActionTypeValidator.validate(def);
@@ -396,7 +396,7 @@ class ActionTypeValidatorTest {
 
     @Test
     void acceptsValidInputsAndOutputs() {
-        NewActionType def = makeActor("good-io", "desc", "do {{managerInput}}");
+        NewActionType def = makeActor("good-io", "desc", "do {{ref}}");
         def.setInputs(List.of(field("repository", ActionTypeField.Type.STRING)));
         def.setOutputs(List.of(field("prNumber", ActionTypeField.Type.NUMBER)));
 

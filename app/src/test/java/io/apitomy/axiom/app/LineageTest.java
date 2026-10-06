@@ -114,10 +114,10 @@ class LineageTest {
     @Test
     void eventToRoutingTraceToTwoTasksWithCost() {
         UUID eventId = createEvent();
-        UUID traceId = createTrace("invoke-action", eventId);
+        UUID traceId = createTrace("create-workflow", eventId);
         Long task1 = createTask(traceId, eventId, null);
         Long task2 = createTask(traceId, eventId, null);
-        Long outcomeId = createOutcome(eventId, "invoke-action", traceId);
+        Long outcomeId = createOutcome(eventId, "create-workflow", traceId);
         createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_TASK, task1, null);
         createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_TASK, task2, null);
         Long noMatchItem = createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_NO_MATCH, null, null);
@@ -134,7 +134,7 @@ class LineageTest {
         assertEquals("root", root.getDirection());
         assertEquals("/events/stream/" + eventId, root.getLinkPath());
         LineageNode trace = node(graph, "trace:" + traceId);
-        assertEquals("invoke-action", trace.getSubtype());
+        assertEquals("create-workflow", trace.getSubtype());
         assertEquals(0.10, trace.getCostUsd(), 0.0001);
         assertEquals("downstream", trace.getDirection());
         assertEquals(0.25, node(graph, "task:" + task1).getCostUsd(), 0.0001);
@@ -195,7 +195,7 @@ class LineageTest {
     @Test
     void jobRunAgentTaskUpstreamWalk() {
         UUID eventId = createEvent();
-        UUID routingTrace = createTrace("invoke-action", eventId);
+        UUID routingTrace = createTrace("create-workflow", eventId);
         Long[] job = createJobRun(routingTrace);
         UUID runTrace = createTrace("scheduled-job-execution", null);
         setJobRunTrace(job[1], runTrace);
@@ -227,7 +227,7 @@ class LineageTest {
     @Test
     void taskCreatedByAgentTaskLinksToParentTask() {
         UUID eventId = createEvent();
-        UUID traceId = createTrace("invoke-action", eventId);
+        UUID traceId = createTrace("create-workflow", eventId);
         Long agentTask = createTask(traceId, eventId, null);
         Long agentNode = createTraceNode(traceId, null, "task", agentTask.toString());
         Long child = createTask(traceId, null, null);
@@ -273,7 +273,7 @@ class LineageTest {
     @Test
     void nodeCapTruncates() {
         UUID eventId = createEvent();
-        UUID traceId = createTrace("invoke-action", eventId);
+        UUID traceId = createTrace("create-workflow", eventId);
         for (int i = 0; i < 5; i++) {
             createTask(traceId, eventId, null);
         }
@@ -294,7 +294,7 @@ class LineageTest {
     @Test
     void depthLimitTruncates() {
         UUID eventId = createEvent();
-        UUID traceId = createTrace("invoke-action", eventId);
+        UUID traceId = createTrace("create-workflow", eventId);
         Long task = createTask(traceId, eventId, null);
 
         LineageGraph shallow = get("event", eventId.toString(), "?depth=1");
@@ -316,10 +316,10 @@ class LineageTest {
         UUID runTrace = createTrace("workflow", eventId);
         Long runId = createRun(eventId, runTrace);
         Long task = createTask(runTrace, null, runId);
-        UUID callerTrace = createTrace("invoke-action", null);
+        UUID callerTrace = createTrace("create-workflow", null);
         Long[] job = createJobRun(callerTrace);
         UUID otherEvent = createEvent();
-        Long outcomeId = createOutcome(otherEvent, "invoke-action", null);
+        Long outcomeId = createOutcome(otherEvent, "create-workflow", null);
         Long deletedTask = createTask(null, otherEvent, null);
         createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_TASK, deletedTask, null);
 
@@ -380,8 +380,8 @@ class LineageTest {
     @Test
     void maxNodesBoundsTheRowsLoaded() {
         UUID eventId = createEvent();
-        UUID traceId = createTrace("invoke-action", eventId);
-        Long outcomeId = createOutcome(eventId, "invoke-action", traceId);
+        UUID traceId = createTrace("create-workflow", eventId);
+        Long outcomeId = createOutcome(eventId, "create-workflow", traceId);
         for (int i = 0; i < 30; i++) {
             Long task = createTask(traceId, eventId, null);
             createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_TASK, task, null);
@@ -426,7 +426,7 @@ class LineageTest {
     @Test
     void cappedGraphHasNoOrphanNodes() {
         UUID eventId = createEvent();
-        UUID traceId = createTrace("invoke-action", eventId);
+        UUID traceId = createTrace("create-workflow", eventId);
         // The child task has the lower ID, so it is found before the agent task that created it.
         Long child = createTask(traceId, null, null);
         Long agentTask = createTask(traceId, eventId, null);
@@ -448,7 +448,7 @@ class LineageTest {
     @Test
     void edgesBetweenKnownNodesAtTheDepthLimitAreKept() {
         UUID eventId = createEvent();
-        UUID routingTrace = createTrace("invoke-action", eventId);
+        UUID routingTrace = createTrace("create-workflow", eventId);
         Long[] job = createJobRun(routingTrace);
         UUID runTrace = createTrace("scheduled-job-execution", eventId);
         setJobRunTrace(job[1], runTrace);
@@ -478,8 +478,8 @@ class LineageTest {
 
     private long countQueries(int taskCount) {
         UUID eventId = createEvent();
-        UUID traceId = createTrace("invoke-action", eventId);
-        Long outcomeId = createOutcome(eventId, "invoke-action", traceId);
+        UUID traceId = createTrace("create-workflow", eventId);
+        Long outcomeId = createOutcome(eventId, "create-workflow", traceId);
         for (int i = 0; i < taskCount; i++) {
             Long task = createTask(traceId, eventId, null);
             createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_TASK, task, null);

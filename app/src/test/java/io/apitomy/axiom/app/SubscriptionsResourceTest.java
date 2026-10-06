@@ -126,6 +126,23 @@ class SubscriptionsResourceTest {
     }
 
     @Test
+    void invokeActionRoutingTypeIsRejected() {
+        given()
+            .contentType(ContentType.JSON)
+            .body("""
+                {
+                    "name": "invoke-action-sub",
+                    "enabled": true,
+                    "routing": [{"type": "invoke-action", "actionTypeId": 1}]
+                }
+                """)
+            .when()
+                .post(SUBSCRIPTIONS_PATH)
+            .then()
+                .statusCode(400);
+    }
+
+    @Test
     void testGetSubscriptionNotFound() {
         given()
             .when()

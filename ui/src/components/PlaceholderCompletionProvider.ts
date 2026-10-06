@@ -120,8 +120,6 @@ export function registerPlaceholderCompletions(
  * Placeholders available in the Action Type prompt template.
  */
 export const ACTION_TYPE_PLACEHOLDERS: PlaceholderItem[] = [
-    { name: "managerInput", description: "Context passed to the action, or a formatted event summary for invoke-action routing" },
-    { name: "event", description: "Full normalized event payload JSON (available for invoke-action routing)" },
     { name: "actionType", description: "The action type name" },
     { name: "ref", description: "Full URL of the event subject (e.g. 'https://github.com/owner/repo/issues/42')" },
     { name: "repository", description: "Repository identifier" },
@@ -139,7 +137,6 @@ export const SCRIPT_PLACEHOLDERS: PlaceholderItem[] = [
     { name: "ref", description: "Full URL of the event subject (e.g. 'https://github.com/owner/repo/issues/42')" },
     { name: "repository", description: "Repository identifier" },
     { name: "projectName", description: "Project name" },
-    { name: "managerInput", description: "Context passed to the action, or event summary" },
     { name: "apiBaseUrl", description: "Base URL of the Axiom API (e.g. 'http://localhost:8080/api/v1')" },
     { name: "workDir", description: "Absolute path to the project workspace directory" },
 ];

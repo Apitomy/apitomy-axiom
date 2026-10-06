@@ -54,7 +54,7 @@ class ScriptExecutionServiceTest {
         ScriptExecutionService svc = newService();
         Map<String, String> env = new LinkedHashMap<>();
         String template = "echo {{projectId}} {{taskId}} {{ref}} {{repository}} "
-                + "{{projectName}} {{apiBaseUrl}} {{workDir}} {{managerInput}}";
+                + "{{projectName}} {{apiBaseUrl}} {{workDir}}";
 
         String resolved = svc.substitutePlaceholders(template,
                 task(7L, 42L, "do the thing"),
@@ -63,7 +63,7 @@ class ScriptExecutionServiceTest {
         // No raw values are inlined; each placeholder is a quoted env reference.
         assertEquals("echo \"${AXIOM_PROJECT_ID}\" \"${AXIOM_TASK_ID}\" \"${AXIOM_REF}\" "
                 + "\"${AXIOM_REPOSITORY}\" \"${AXIOM_PROJECT_NAME}\" \"${AXIOM_API_URL}\" "
-                + "\"${AXIOM_WORK_DIR}\" \"${AXIOM_MANAGER_INPUT}\"", resolved);
+                + "\"${AXIOM_WORK_DIR}\"", resolved);
 
         assertEquals("42", env.get("AXIOM_PROJECT_ID"));
         assertEquals("7", env.get("AXIOM_TASK_ID"));
@@ -71,7 +71,6 @@ class ScriptExecutionServiceTest {
         assertEquals("owner/repo", env.get("AXIOM_REPOSITORY"));
         assertEquals("My Project", env.get("AXIOM_PROJECT_NAME"));
         assertEquals("http://localhost:9090/api/v1", env.get("AXIOM_API_URL"));
-        assertEquals("do the thing", env.get("AXIOM_MANAGER_INPUT"));
     }
 
     @Test
@@ -83,7 +82,6 @@ class ScriptExecutionServiceTest {
                 project("r", "repo", "n"), env);
 
         assertTrue(env.containsKey("AXIOM_REF"));
-        assertFalse(env.containsKey("AXIOM_MANAGER_INPUT"));
         assertFalse(env.containsKey("AXIOM_PROJECT_NAME"));
     }
 
@@ -93,12 +91,12 @@ class ScriptExecutionServiceTest {
         Map<String, String> env = new LinkedHashMap<>();
         String payload = "$(touch /tmp/pwned); `id`; rm -rf /";
 
-        String resolved = svc.substitutePlaceholders("echo {{managerInput}}",
-                task(1L, 2L, payload), project("r", "repo", "n"), env);
+        String resolved = svc.substitutePlaceholders("echo {{projectName}}",
+                task(1L, 2L, null), project("r", "repo", payload), env);
 
         // The dangerous characters live only in the env value, not the script.
-        assertEquals("echo \"${AXIOM_MANAGER_INPUT}\"", resolved);
-        assertEquals(payload, env.get("AXIOM_MANAGER_INPUT"));
+        assertEquals("echo \"${AXIOM_PROJECT_NAME}\"", resolved);
+        assertEquals(payload, env.get("AXIOM_PROJECT_NAME"));
         assertFalse(resolved.contains("touch"));
         assertFalse(resolved.contains("rm -rf"));
     }
@@ -125,13 +123,13 @@ class ScriptExecutionServiceTest {
         Map<String, String> env = new LinkedHashMap<>();
 
         String resolved = svc.substitutePlaceholders(
-                "git commit -m \"Automated fix: {{managerInput}}\"",
-                task(1L, 2L, "fix login bug"), project("r", "repo", "n"), env);
+                "git commit -m \"Automated fix: {{projectName}}\"",
+                task(1L, 2L, null), project("r", "repo", "fix login bug"), env);
 
         // Inside an existing double-quoted string the reference must NOT add its
         // own quotes, otherwise the value would word-split (issue: PR #280 review).
-        assertEquals("git commit -m \"Automated fix: ${AXIOM_MANAGER_INPUT}\"", resolved);
-        assertEquals("fix login bug", env.get("AXIOM_MANAGER_INPUT"));
+        assertEquals("git commit -m \"Automated fix: ${AXIOM_PROJECT_NAME}\"", resolved);
+        assertEquals("fix login bug", env.get("AXIOM_PROJECT_NAME"));
     }
 
     @Test
@@ -139,14 +137,14 @@ class ScriptExecutionServiceTest {
         ScriptExecutionService svc = newService();
         Map<String, String> env = new LinkedHashMap<>();
 
-        String resolved = svc.substitutePlaceholders("echo '{{managerInput}}'",
-                task(1L, 2L, "hello world"), project("r", "repo", "n"), env);
+        String resolved = svc.substitutePlaceholders("echo '{{projectName}}'",
+                task(1L, 2L, null), project("r", "repo", "hello world"), env);
 
         // Single quotes suppress expansion, so the reference closes the region,
         // expands within double quotes, then reopens it. The template's own
         // quotes remain, yielding empty-string + expansion + empty-string.
-        assertEquals("echo ''\"${AXIOM_MANAGER_INPUT}\"''", resolved);
-        assertEquals("hello world", env.get("AXIOM_MANAGER_INPUT"));
+        assertEquals("echo ''\"${AXIOM_PROJECT_NAME}\"''", resolved);
+        assertEquals("hello world", env.get("AXIOM_PROJECT_NAME"));
     }
 
     @Test
@@ -158,8 +156,8 @@ class ScriptExecutionServiceTest {
         // Print the argument count and the first argument so we can confirm the
         // whitespace-bearing value was passed as exactly one argument.
         String resolved = svc.substitutePlaceholders(
-                "set -- \"Automated fix: {{managerInput}}\"\nprintf '%s|%s' \"$#\" \"$1\"",
-                task(1L, 2L, "fix login bug"), project("r", "repo", "n"), env);
+                "set -- \"Automated fix: {{projectName}}\"\nprintf '%s|%s' \"$#\" \"$1\"",
+                task(1L, 2L, null), project("r", "repo", "fix login bug"), env);
 
         String output = runScript(resolved, env);
         assertEquals("1|Automated fix: fix login bug", output);
@@ -172,8 +170,8 @@ class ScriptExecutionServiceTest {
         Map<String, String> env = new LinkedHashMap<>();
 
         String resolved = svc.substitutePlaceholders(
-                "set -- '{{managerInput}}'\nprintf '%s|%s' \"$#\" \"$1\"",
-                task(1L, 2L, "fix login bug"), project("r", "repo", "n"), env);
+                "set -- '{{projectName}}'\nprintf '%s|%s' \"$#\" \"$1\"",
+                task(1L, 2L, null), project("r", "repo", "fix login bug"), env);
 
         String output = runScript(resolved, env);
         assertEquals("1|fix login bug", output);
@@ -205,8 +203,8 @@ class ScriptExecutionServiceTest {
         Files.deleteIfExists(marker);
         String payload = "$(touch " + marker + ")";
 
-        String resolved = svc.substitutePlaceholders("printf '%s' {{managerInput}}",
-                task(1L, 2L, payload), project("r", "repo", "n"), env);
+        String resolved = svc.substitutePlaceholders("printf '%s' {{projectName}}",
+                task(1L, 2L, null), project("r", "repo", payload), env);
 
         Path scriptFile = Files.createTempFile("axiom-inject-script-", ".sh");
         try {

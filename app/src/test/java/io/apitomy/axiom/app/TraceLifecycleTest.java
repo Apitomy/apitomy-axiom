@@ -144,10 +144,10 @@ class TraceLifecycleTest {
 
     @Test
     void completedTaskClosesTraceOnlyAfterLastTaskNode() {
-        // Two tasks sharing one trace (as an invoke-action routing can produce)
+        // Two tasks sharing one trace (as an a single routing can produce)
         Long projectId = createProject();
-        TraceContext ctx = traceService.createTrace("invoke-action", "multi-task", null, null, null,
-                "invoke-action", "root", null, null);
+        TraceContext ctx = traceService.createTrace("create-workflow", "multi-task", null, null, null,
+                "create-workflow", "root", null, null);
         Long first = createTask(projectId, ctx);
         Long second = createTask(projectId, ctx);
 
@@ -177,8 +177,8 @@ class TraceLifecycleTest {
 
     private Long createTaskWithTrace() {
         Long projectId = createProject();
-        TraceContext ctx = traceService.createTrace("invoke-action", "task trace", null, null, null,
-                "invoke-action", "root", null, null);
+        TraceContext ctx = traceService.createTrace("create-workflow", "task trace", null, null, null,
+                "create-workflow", "root", null, null);
         return createTask(projectId, ctx);
     }
 

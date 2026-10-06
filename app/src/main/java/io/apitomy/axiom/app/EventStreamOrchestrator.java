@@ -2,7 +2,6 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
@@ -10,7 +9,6 @@ import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
-import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.events.SseEvent;
@@ -574,7 +572,7 @@ public class EventStreamOrchestrator {
             }
             // Each rule starts its own trace: a per-rule context scopes the trace ID to it.
             try (LogContext ruleLog = LogContext.create()) {
-                routeRule(event, sub, rule, eventMap, ledgerId, attempt, ruleLog);
+                routeRule(event, sub, rule, eventMap, ledgerId, attempt);
             }
         }
     }
@@ -583,15 +581,13 @@ public class EventStreamOrchestrator {
      * Runs a single routing rule and persists its outcome (completed or failed).
      */
     private void routeRule(StreamEventEntity event, SubscriptionWithFilters sub, RoutingRule rule,
-                           Map<String, Object> eventMap, Long ledgerId, int attempt,
-                           LogContext ruleLog) {
+                           Map<String, Object> eventMap, Long ledgerId, int attempt) {
         try {
             RoutingOutcomeEntity outcome = switch (rule.type()) {
                 case RoutingRule.TYPE_WORKFLOW_DISPATCH ->
                         routeToWorkflowDispatch(event, eventMap, ledgerId);
                 case RoutingRule.TYPE_CREATE_WORKFLOW ->
                         routeToCreateWorkflow(event, rule, ledgerId);
-                case RoutingRule.TYPE_INVOKE_ACTION -> routeToInvokeAction(event, rule, ruleLog);
                 default -> throw new IllegalStateException(
                         "Unsupported routing type: " + rule.type());
             };
@@ -767,163 +763,6 @@ public class EventStreamOrchestrator {
         item.workflowRunId = run != null ? run.id : null;
         outcome.pendingItems.add(item);
         return outcome;
-    }
-
-    private RoutingOutcomeEntity routeToInvokeAction(StreamEventEntity event, RoutingRule rule,
-                                                     LogContext ruleLog) {
-        if (rule.actionTypeId() == null) {
-            throw new IllegalStateException(
-                    "invoke-action routing rule missing actionTypeId");
-        }
-
-        ActionTypeEntity actionType = QuarkusTransaction.requiringNew().call(() ->
-                ActionTypeEntity.findById(rule.actionTypeId()));
-        if (actionType == null) {
-            throw new IllegalStateException(
-                    "Action type " + rule.actionTypeId() + " not found");
-        }
-
-        // Create a trace for this invoke-action routing
-        TraceContext traceCtx = null;
-        try {
-            traceCtx = traceService.createTrace(
-                    "invoke-action",
-                    "Invoke action: " + actionType.name + " — " + event.ref,
-                    event.id, null, null,
-                    "invoke-action", "Invoke action: " + actionType.name,
-                    null, null);
-        } catch (Exception e) {
-            LOG.warnf(e, "Failed to create trace for invoke-action of event %s", event.id);
-        }
-        if (traceCtx != null) {
-            ruleLog.traceId(traceCtx.traceId());
-        }
-
-        final io.apitomy.axiom.core.tracing.TraceContext finalTraceCtx = traceCtx;
-        Long projectId;
-        Long taskId;
-        try {
-            projectId = findOrCreateProjectForEvent(event,
-                    traceCtx != null ? traceCtx.traceId() : null);
-
-            // Build a structured input with a human-readable summary for {{managerInput}}
-            // and the raw event payload for {{event}}
-            String taskInput = buildInvokeActionInput(event);
-            taskId = createInvokeActionTask(event, actionType, projectId, taskInput,
-                    finalTraceCtx);
-        } catch (RuntimeException e) {
-            // The task was never created, so nothing else will close this trace.
-            completeTraceQuietly(traceCtx, "failed");
-            throw e;
-        }
-
-        // The trace is intentionally left in-progress: TaskExecutionService completes it
-        // (and the task node) when the task reaches a final state.
-        sseEvents.fire(SseEvent.taskUpdated(projectId, taskId, "Pending"));
-        sseEvents.fire(SseEvent.projectUpdated(projectId));
-
-        RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
-        outcome.status = "completed";
-        outcome.summary = "Invoked action: " + actionType.name;
-        outcome.projectId = projectId;
-        outcome.taskId = taskId;
-        RoutingOutcomeItemEntity item = newItem(RoutingOutcomeItemEntity.TYPE_TASK, "completed",
-                "Task: " + actionType.name);
-        item.projectId = projectId;
-        item.taskId = taskId;
-        outcome.pendingItems.add(item);
-        if (traceCtx != null) {
-            outcome.traceId = traceCtx.traceId();
-        }
-        return outcome;
-    }
-
-    private Long createInvokeActionTask(StreamEventEntity event, ActionTypeEntity actionType,
-            Long projectId, String taskInput,
-            io.apitomy.axiom.core.tracing.TraceContext finalTraceCtx) {
-        return QuarkusTransaction.requiringNew().call(() -> {
-            TaskEntity task = new TaskEntity();
-            task.projectId = projectId;
-            task.actionType = actionType.name;
-            task.createdBy = "subscription";
-            task.status = "Pending";
-            task.input = taskInput;
-            task.eventId = event.id;
-            task.createdOn = Instant.now();
-            if (finalTraceCtx != null) {
-                task.traceId = finalTraceCtx.traceId();
-            }
-            task.persist();
-
-            // Add a trace node for the task
-            if (finalTraceCtx != null) {
-                try {
-                    traceService.addNode(finalTraceCtx, "task", "in-progress",
-                            "Task: " + task.actionType, "task", task.id);
-                } catch (Exception e) {
-                    LOG.warnf(e, "Failed to add task trace node for task %d", task.id);
-                }
-            }
-
-            // Log activity
-            logActivity(projectId, task.id, event.id, "task-created",
-                    "Subscription invoked action: " + task.actionType, task.traceId);
-
-            LOG.infof("Created task for action '%s' from event %s",
-                    actionType.name, event.id);
-            return task.id;
-        });
-    }
-
-    /**
-     * Builds the task input for invoke-action routing. Contains a JSON object with:
-     * - "summary": a human-readable description of the event for {{managerInput}}
-     * - "event": the raw event payload for {{event}}
-     */
-    private String buildInvokeActionInput(StreamEventEntity event) {
-        try {
-            var node = objectMapper.createObjectNode();
-
-            // Build human-readable summary
-            StringBuilder summary = new StringBuilder();
-            summary.append("Event: ").append(event.type).append("\n");
-            summary.append("Source: ").append(event.source).append("\n");
-            summary.append("Ref: ").append(event.ref).append("\n");
-
-            // Extract key details from payload
-            try {
-                JsonNode payload = objectMapper.readTree(event.payload);
-                JsonNode issue = payload.path("issue");
-                JsonNode pr = payload.path("pullRequest");
-                if (!issue.isMissingNode()) {
-                    summary.append("Title: ").append(issue.path("title").asText("")).append("\n");
-                    String body = issue.path("body").asText(null);
-                    if (body != null && !body.isBlank()) {
-                        summary.append("Body: ").append(body.length() > 500
-                                ? body.substring(0, 500) + "..." : body).append("\n");
-                    }
-                    summary.append("State: ").append(issue.path("state").asText("")).append("\n");
-                } else if (!pr.isMissingNode()) {
-                    summary.append("Title: ").append(pr.path("title").asText("")).append("\n");
-                    String body = pr.path("body").asText(null);
-                    if (body != null && !body.isBlank()) {
-                        summary.append("Body: ").append(body.length() > 500
-                                ? body.substring(0, 500) + "..." : body).append("\n");
-                    }
-                    summary.append("Base branch: ").append(pr.path("baseBranch").asText("")).append("\n");
-                }
-            } catch (Exception e) {
-                LOG.debugf("Failed to extract details from event payload: %s", e.getMessage());
-            }
-
-            node.put("summary", summary.toString());
-            node.set("event", objectMapper.readTree(event.payload));
-
-            return objectMapper.writeValueAsString(node);
-        } catch (Exception e) {
-            LOG.warnf(e, "Failed to build invoke-action input for event %s", event.id);
-            return event.payload;
-        }
     }
 
     private Long findOrCreateProjectForEvent(StreamEventEntity event, UUID traceId) {

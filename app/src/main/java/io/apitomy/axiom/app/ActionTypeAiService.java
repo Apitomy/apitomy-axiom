@@ -50,7 +50,6 @@ public class ActionTypeAiService {
             to an AI agent (Claude Code) that performs the work in a git repository.
 
             The prompt template supports these placeholders (substituted at runtime):
-            - {{managerInput}} — context and instructions passed to the action
             - {{ref}} — the project reference (e.g. "owner/repo#42" or "CVE-2024-12345")
             - {{repository}} — the repository name (e.g. "owner/repo")
             - {{projectName}} — the project name

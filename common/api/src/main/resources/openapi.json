@@ -6614,11 +6614,11 @@
             }
           },
           "promptTemplate": {
-            "description": "Prompt template sent to the AI agent when executing this action type. Supports placeholders: {{managerInput}}, {{issueRef}}, {{repository}}, {{projectName}}, {{issueTitle}}",
+            "description": "Prompt template sent to the AI agent when executing this action type. Supports placeholders: {{issueRef}}, {{repository}}, {{projectName}}, {{issueTitle}}",
             "type": "string"
           },
           "scriptTemplate": {
-            "description": "Bash script template for script-mode action types. Supports placeholders: {{projectId}}, {{eventId}}, {{taskId}}, {{issueRef}}, {{repository}}, {{projectName}}, {{managerInput}}, {{apiBaseUrl}}",
+            "description": "Bash script template for script-mode action types. Supports placeholders: {{projectId}}, {{eventId}}, {{taskId}}, {{issueRef}}, {{repository}}, {{projectName}}, {{apiBaseUrl}}",
             "type": "string"
           },
           "model": {
@@ -6715,11 +6715,11 @@
             }
           },
           "promptTemplate": {
-            "description": "Prompt template sent to the AI agent when executing this action type. Supports placeholders: {{managerInput}}, {{issueRef}}, {{repository}}, {{projectName}}, {{issueTitle}}",
+            "description": "Prompt template sent to the AI agent when executing this action type. Supports placeholders: {{issueRef}}, {{repository}}, {{projectName}}, {{issueTitle}}",
             "type": "string"
           },
           "scriptTemplate": {
-            "description": "Bash script template for script-mode action types. Supports placeholders: {{projectId}}, {{eventId}}, {{taskId}}, {{issueRef}}, {{repository}}, {{projectName}}, {{managerInput}}, {{apiBaseUrl}}",
+            "description": "Bash script template for script-mode action types. Supports placeholders: {{projectId}}, {{eventId}}, {{taskId}}, {{issueRef}}, {{repository}}, {{projectName}}, {{apiBaseUrl}}",
             "type": "string"
           },
           "model": {
@@ -10425,7 +10425,7 @@
         "properties": {
           "type": {
             "type": "string",
-            "description": "Routing type that produced this outcome: workflow-dispatch, create-workflow, invoke-action, or processing (a failure outside any routing rule, e.g. building the event context)"
+            "description": "Routing type that produced this outcome: workflow-dispatch, create-workflow, or processing (a failure outside any routing rule, e.g. building the event context)"
           },
           "status": {
             "type": "string",
@@ -10539,18 +10539,13 @@
         "properties": {
           "type": {
             "type": "string",
-            "enum": ["workflow-dispatch", "create-workflow", "invoke-action"],
+            "enum": ["workflow-dispatch", "create-workflow"],
             "description": "Destination type for matched events"
           },
           "workflowDefinitionId": {
             "format": "int64",
             "type": "integer",
             "description": "Required for create-workflow: which workflow definition to instantiate"
-          },
-          "actionTypeId": {
-            "format": "int64",
-            "type": "integer",
-            "description": "Required for invoke-action: which action type to invoke"
           }
         }
       },

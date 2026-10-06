@@ -54,12 +54,11 @@ public class ScriptAiService {
             - {{ref}} — the project reference (e.g. "owner/repo#42" or "CVE-2024-12345")
             - {{repository}} — the repository name (e.g. "owner/repo")
             - {{projectName}} — the project name
-            - {{managerInput}} — context/instructions passed to the action
             - {{apiBaseUrl}} — the Axiom REST API base URL (e.g. "http://localhost:9090/api/v1")
 
             Placeholder values are treated as literal data: each {{...}} is passed to the \
             script as an environment variable and expands to a quoted shell reference (e.g. \
-            {{managerInput}} becomes "$AXIOM_MANAGER_INPUT"), so values containing shell \
+            {{projectName}} becomes "$AXIOM_PROJECT_NAME"), so values containing shell \
             metacharacters are never executed. Use a placeholder wherever you would use a \
             shell variable — do NOT wrap it in extra quotes.
 
@@ -71,7 +70,6 @@ public class ScriptAiService {
             - AXIOM_REF — same as {{ref}}
             - AXIOM_REPOSITORY — same as {{repository}}
             - AXIOM_PROJECT_NAME — same as {{projectName}}
-            - AXIOM_MANAGER_INPUT — same as {{managerInput}}
             - AXIOM_WORK_DIR — same as {{workDir}}
 
             Common Axiom REST API endpoints the script can call:

@@ -102,8 +102,8 @@ class TraceCorrelationTest {
     @Test
     void taskActivityAndAiUsageCarryTaskTrace() {
         Long projectId = createProject();
-        TraceContext ctx = traceService.createTrace("invoke-action", "corr task", null, null, null,
-                "invoke-action", "root", null, null);
+        TraceContext ctx = traceService.createTrace("create-workflow", "corr task", null, null, null,
+                "create-workflow", "root", null, null);
         Long taskId = QuarkusTransaction.requiringNew().call(() -> {
             TaskEntity task = new TaskEntity();
             task.projectId = projectId;

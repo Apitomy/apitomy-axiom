@@ -100,7 +100,7 @@ class WorkflowDispatchFailureTest {
                         ArgumentMatchers.any(), ArgumentMatchers.any());
         // The dispatch completes (with a failed item); the next rule fails the ledger entry.
         createEventAndSubscription(awaitedType,
-                "[{\"type\":\"workflow-dispatch\"},{\"type\":\"invoke-action\",\"actionTypeId\":-1}]");
+                "[{\"type\":\"workflow-dispatch\"},{\"type\":\"create-workflow\",\"workflowDefinitionId\":-1}]");
 
         orchestrator.processNewEvents();
         QuarkusTransaction.requiringNew().run(() -> EventProcessingLedgerEntity.update(
@@ -117,7 +117,7 @@ class WorkflowDispatchFailureTest {
         assertEquals(Integer.valueOf(1), dispatch.get(0).attemptNumber);
         List<RoutingOutcomeEntity> failed = QuarkusTransaction.requiringNew().call(() ->
                 RoutingOutcomeEntity.<RoutingOutcomeEntity>list(
-                        "routingType = ?1 order by id", "invoke-action"));
+                        "routingType = ?1 order by id", "create-workflow"));
         assertEquals(2, failed.size());
         assertEquals(Integer.valueOf(1), failed.get(0).attemptNumber);
         assertEquals(Integer.valueOf(2), failed.get(1).attemptNumber);

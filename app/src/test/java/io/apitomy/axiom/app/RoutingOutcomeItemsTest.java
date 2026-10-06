@@ -1,13 +1,11 @@
 package io.apitomy.axiom.app;
 
-import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
-import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.InjectMock;
@@ -54,7 +52,6 @@ class RoutingOutcomeItemsTest {
     StreamEventCleanup streamEventCleanup;
 
     private final List<UUID> eventIds = new ArrayList<>();
-    private final List<String> actionNames = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -68,35 +65,10 @@ class RoutingOutcomeItemsTest {
             RoutingOutcomeItemEntity.deleteAll();
             RoutingOutcomeEntity.deleteAll();
             EventProcessingLedgerEntity.deleteAll();
-            for (UUID id : eventIds) {
-                TaskEntity.delete("eventId", id);
-            }
-            for (String name : actionNames) {
-                ActionTypeEntity.delete("name", name);
-            }
             StreamEventEntity.deleteAll();
             EventSubscriptionEntity.deleteAll();
         });
         eventIds.clear();
-        actionNames.clear();
-    }
-
-    @Test
-    void invokeActionProducesTaskItem() {
-        Long actionTypeId = createActionType();
-        UUID eventId = createEventAndSubscription(
-                "[{\"type\":\"invoke-action\",\"actionTypeId\":" + actionTypeId + "}]");
-
-        orchestrator.processNewEvents();
-
-        List<RoutingOutcomeItemEntity> items = items(singleOutcome("invoke-action").id);
-        assertEquals(1, items.size());
-        TaskEntity task = QuarkusTransaction.requiringNew().call(() ->
-                TaskEntity.<TaskEntity>find("eventId", eventId).firstResult());
-        assertEquals(RoutingOutcomeItemEntity.TYPE_TASK, items.get(0).itemType);
-        assertEquals("completed", items.get(0).status);
-        assertEquals(task.id, items.get(0).taskId);
-        assertEquals(task.projectId, items.get(0).projectId);
     }
 
     @Test
@@ -121,23 +93,26 @@ class RoutingOutcomeItemsTest {
 
     @Test
     void processingApiReturnsItems() {
-        Long actionTypeId = createActionType();
+        WorkflowRunEntity run = new WorkflowRunEntity();
+        run.id = 987653L;
+        Mockito.when(workflowExecutionService.triggerWorkflow(ArgumentMatchers.anyLong(),
+                ArgumentMatchers.anyLong(), ArgumentMatchers.any(), ArgumentMatchers.any()))
+                .thenReturn(run);
         UUID eventId = createEventAndSubscription(
-                "[{\"type\":\"invoke-action\",\"actionTypeId\":" + actionTypeId + "}]");
+                "[{\"type\":\"create-workflow\",\"workflowDefinitionId\":42}]");
 
         orchestrator.processNewEvents();
 
-        TaskEntity task = QuarkusTransaction.requiringNew().call(() ->
-                TaskEntity.<TaskEntity>find("eventId", eventId).firstResult());
+        RoutingOutcomeEntity outcome = singleOutcome("create-workflow");
         given()
             .when()
                 .get("/api/v1/stream/events/" + eventId + "/processing")
             .then()
                 .statusCode(200)
                 .body("items[0].outcomes[0].items", hasSize(1))
-                .body("items[0].outcomes[0].items.type", hasItems("task"))
-                .body("items[0].outcomes[0].items[0].taskId", is(task.id.intValue()))
-                .body("items[0].outcomes[0].items[0].projectId", is(task.projectId.intValue()))
+                .body("items[0].outcomes[0].items.type", hasItems("workflow-run"))
+                .body("items[0].outcomes[0].items[0].workflowRunId", is(987653))
+                .body("items[0].outcomes[0].items[0].projectId", is(outcome.projectId.intValue()))
                 .body("items[0].outcomes[0].items[0].status", is("completed"));
     }
 
@@ -235,25 +210,31 @@ class RoutingOutcomeItemsTest {
 
     @Test
     void retriesNeitherDuplicateNorMoveItemsOfCompletedRules() {
-        // The create-workflow rule completes (with an item), the invoke-action rule keeps failing.
+        // The first create-workflow rule completes (with an item), the second keeps failing.
         WorkflowRunEntity run = new WorkflowRunEntity();
         run.id = 987656L;
         Mockito.when(workflowExecutionService.triggerWorkflow(ArgumentMatchers.anyLong(),
                 ArgumentMatchers.anyLong(), ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenReturn(run);
+        Mockito.when(workflowExecutionService.triggerWorkflow(ArgumentMatchers.anyLong(),
+                ArgumentMatchers.eq(-1L), ArgumentMatchers.any(), ArgumentMatchers.any()))
+                .thenThrow(new IllegalStateException("no such workflow definition"));
         UUID eventId = createEventAndSubscription(
                 "[{\"type\":\"create-workflow\",\"workflowDefinitionId\":42},"
-                        + "{\"type\":\"invoke-action\",\"actionTypeId\":-1}]");
+                        + "{\"type\":\"create-workflow\",\"workflowDefinitionId\":-1}]");
 
         for (int i = 0; i < 5; i++) {
             orchestrator.processNewEvents();
             makeDue();
         }
 
-        assertEquals(1, outcomes("create-workflow").size(), "Completed rule is not replayed");
-        RoutingOutcomeEntity completed = outcomes("create-workflow").get(0);
+        List<RoutingOutcomeEntity> completedOutcomes = outcomes("create-workflow").stream()
+                .filter(o -> "completed".equals(o.status)).toList();
+        assertEquals(1, completedOutcomes.size(), "Completed rule is not replayed");
+        RoutingOutcomeEntity completed = completedOutcomes.get(0);
         assertEquals(1, items(completed.id).size());
-        List<RoutingOutcomeEntity> failed = outcomes("invoke-action");
+        List<RoutingOutcomeEntity> failed = outcomes("create-workflow").stream()
+                .filter(o -> !"completed".equals(o.status)).toList();
         assertEquals(3, failed.size(), "Items do not change the attempt count");
         failed.forEach(o -> {
             assertEquals("failed", o.status);
@@ -272,23 +253,6 @@ class RoutingOutcomeItemsTest {
         QuarkusTransaction.requiringNew().run(() -> EventProcessingLedgerEntity.update(
                 "nextAttemptAt = ?1 where nextAttemptAt is not null",
                 Instant.now().minusSeconds(1)));
-    }
-
-    private Long createActionType() {
-        String name = "items-action-" + UUID.randomUUID();
-        actionNames.add(name);
-        return QuarkusTransaction.requiringNew().call(() -> {
-            ActionTypeEntity at = new ActionTypeEntity();
-            at.name = name;
-            at.description = "Outcome item test";
-            at.executionMode = "agent";
-            at.managerTriggerable = false;
-            at.userTriggerable = false;
-            at.workflowEnabled = false;
-            at.emitsEvent = false;
-            at.persist();
-            return at.id;
-        });
     }
 
     private UUID createEventAndSubscription(String routing) {

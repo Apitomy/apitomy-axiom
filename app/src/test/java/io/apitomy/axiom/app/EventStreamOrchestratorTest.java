@@ -10,9 +10,6 @@ import io.apitomy.axiom.core.entities.ProjectEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
-import io.apitomy.axiom.core.entities.TraceEntity;
-import io.apitomy.axiom.core.entities.TraceNodeEntity;
-import io.apitomy.axiom.agents.spi.AgentResult;
 import io.quarkus.arc.ClientProxy;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
@@ -263,11 +260,11 @@ class EventStreamOrchestratorTest {
     void failedEntriesAreRetried() {
         UUID eventId = insertStreamEvent("ev-retry-1", "issue.created", "conn-1", "https://github.com/org/repo/issues/1");
 
-        // Create subscription with invoke-action pointing to non-existent action type
-        String routing = "[{\"type\":\"invoke-action\",\"actionTypeId\":99999}]";
+        // Create subscription with create-workflow pointing to a non-existent definition
+        String routing = "[{\"type\":\"create-workflow\",\"workflowDefinitionId\":99999}]";
         Long subId = insertSubscription("retry-test", null, true, routing);
 
-        // First run: routing fails (action type 99999 doesn't exist)
+        // First run: routing fails (workflow definition 99999 doesn't exist)
         orchestrator.processNewEvents();
 
         String status = QuarkusTransaction.requiringNew().call(() -> {
@@ -276,10 +273,10 @@ class EventStreamOrchestratorTest {
             assertNotNull(entry, "Ledger entry should exist");
             return entry.status;
         });
-        assertEquals("failed", status, "Should be failed due to missing action type");
+        assertEquals("failed", status, "Should be failed due to missing workflow definition");
 
         // Second run, once the retry is due: retry is attempted (but will fail again since
-        // action type still doesn't exist)
+        // the workflow definition still doesn't exist)
         QuarkusTransaction.requiringNew().run(() -> EventProcessingLedgerEntity.update(
                 "nextAttemptAt = ?1 where nextAttemptAt is not null",
                 Instant.now().minusSeconds(1)));
@@ -386,101 +383,13 @@ class EventStreamOrchestratorTest {
     // ── Routing Rule Tests ───────────────────────────────────────────
 
     @Test
-    void invokeActionCreatesTask() {
-        // Create an action type for routing
-        Long actionTypeId = QuarkusTransaction.requiringNew().call(() -> {
-            ActionTypeEntity at = new ActionTypeEntity();
-            at.name = "test-action";
-            at.description = "Test action for routing";
-            at.executionMode = "agent";
-            at.managerTriggerable = false;
-            at.userTriggerable = false;
-            at.workflowEnabled = false;
-            at.emitsEvent = false;
-            at.persist();
-            return at.id;
-        });
-
-        UUID eventId = insertStreamEvent("ev-action-1", "issue.created", "conn-1",
-            "https://github.com/test-org/test-repo/issues/42");
-
-        String routing = "[{\"type\":\"invoke-action\",\"actionTypeId\":" + actionTypeId + "}]";
-        insertSubscription("action-test", null, true, routing);
-
-        orchestrator.processNewEvents();
-
-        // Verify a task was created
-        QuarkusTransaction.requiringNew().run(() -> {
-            TaskEntity task = TaskEntity.find("actionType = ?1 and createdBy = 'subscription'",
-                "test-action").firstResult();
-            assertNotNull(task, "Task should have been created by invoke-action routing");
-            assertEquals("Pending", task.status);
-            assertNotNull(task.projectId, "Task should be linked to a project");
-        });
-    }
-
-    @Test
-    void invokeActionTraceCompletesOnlyWhenTaskFinishes() {
-        Long actionTypeId = QuarkusTransaction.requiringNew().call(() -> {
-            ActionTypeEntity at = new ActionTypeEntity();
-            at.name = "test-action";
-            at.description = "Test action for trace lifecycle";
-            at.executionMode = "agent";
-            at.managerTriggerable = false;
-            at.userTriggerable = false;
-            at.workflowEnabled = false;
-            at.emitsEvent = false;
-            at.persist();
-            return at.id;
-        });
-        insertStreamEvent("ev-trace-1", "issue.created", "conn-1",
-            "https://github.com/test-org/test-repo/issues/4242");
-        String routing = "[{\"type\":\"invoke-action\",\"actionTypeId\":" + actionTypeId + "}]";
-        insertSubscription("trace-test", null, true, routing);
-
-        orchestrator.processNewEvents();
-
-        TaskEntity task = QuarkusTransaction.requiringNew().call(() ->
-            TaskEntity.<TaskEntity>find("actionType = ?1 and createdBy = 'subscription'",
-                "test-action").firstResult());
-        assertNotNull(task);
-        assertNotNull(task.traceId);
-        UUID traceId = task.traceId;
-        assertEquals("in-progress", QuarkusTransaction.requiringNew().call(() ->
-                TraceEntity.<TraceEntity>findById(traceId).status),
-            "Trace must stay open while the task is pending");
-
-        taskExecutionService.onTaskCompleted(task.id, AgentResult.success("done"));
-
-        TraceEntity trace = QuarkusTransaction.requiringNew().call(() ->
-            TraceEntity.<TraceEntity>findById(traceId));
-        assertEquals("completed", trace.status);
-        assertNotNull(trace.completedOn);
-        long openNodes = QuarkusTransaction.requiringNew().call(() ->
-            TraceNodeEntity.count("traceId = ?1 and status = 'in-progress'", traceId));
-        assertEquals(0, openNodes, "Task node must be completed with the trace");
-    }
-
-    @Test
     void projectAutoCreatedFromEventRef() {
         // Use a unique ref that won't match any existing project
         String uniqueRef = "https://github.com/test-org/test-repo/issues/99999";
 
-        Long actionTypeId = QuarkusTransaction.requiringNew().call(() -> {
-            ActionTypeEntity at = new ActionTypeEntity();
-            at.name = "test-action";
-            at.description = "Test";
-            at.executionMode = "agent";
-            at.managerTriggerable = false;
-            at.userTriggerable = false;
-            at.workflowEnabled = false;
-            at.emitsEvent = false;
-            at.persist();
-            return at.id;
-        });
-
         insertStreamEvent("ev-proj-1", "issue.created", "conn-1", uniqueRef);
-        String routing = "[{\"type\":\"invoke-action\",\"actionTypeId\":" + actionTypeId + "}]";
+        // Workflow creation fails (no such definition) after the project is resolved
+        String routing = "[{\"type\":\"create-workflow\",\"workflowDefinitionId\":99999}]";
         insertSubscription("project-test", null, true, routing);
 
         orchestrator.processNewEvents();
@@ -497,24 +406,12 @@ class EventStreamOrchestratorTest {
     void projectReusedForSameRef() {
         String ref = "https://github.com/test-org/test-repo/issues/88888";
 
-        Long actionTypeId = QuarkusTransaction.requiringNew().call(() -> {
-            ActionTypeEntity at = new ActionTypeEntity();
-            at.name = "test-action";
-            at.description = "Test";
-            at.executionMode = "agent";
-            at.managerTriggerable = false;
-            at.userTriggerable = false;
-            at.workflowEnabled = false;
-            at.emitsEvent = false;
-            at.persist();
-            return at.id;
-        });
-
         // Insert two events with the same ref
         insertStreamEvent("ev-reuse-1", "issue.created", "conn-1", ref);
         insertStreamEvent("ev-reuse-2", "issue.updated", "conn-1", ref);
 
-        String routing = "[{\"type\":\"invoke-action\",\"actionTypeId\":" + actionTypeId + "}]";
+        // Workflow creation fails (no such definition) after the project is resolved
+        String routing = "[{\"type\":\"create-workflow\",\"workflowDefinitionId\":99999}]";
         insertSubscription("reuse-test", null, true, routing);
 
         orchestrator.processNewEvents();
@@ -523,11 +420,6 @@ class EventStreamOrchestratorTest {
         long projectCount = QuarkusTransaction.requiringNew().call(() ->
             ProjectEntity.count("ref", ref));
         assertEquals(1, projectCount, "Should reuse the same project for both events");
-
-        // But two tasks should exist
-        long taskCount = QuarkusTransaction.requiringNew().call(() ->
-            TaskEntity.count("actionType = ?1 and createdBy = 'subscription'", "test-action"));
-        assertEquals(2, taskCount, "Should have created two tasks (one per event)");
     }
 
     @Test

@@ -110,7 +110,6 @@ export function ActionTypeAiModal({
                 </Title>
                 <div className="axiom-text-subtle" style={{ fontSize: "13px", marginTop: "2px" }}>
                     Placeholders:{" "}
-                    <code>{"{{managerInput}}"}</code>,{" "}
                     <code>{"{{ref}}"}</code>,{" "}
                     <code>{"{{repository}}"}</code>,{" "}
                     <code>{"{{projectName}}"}</code>

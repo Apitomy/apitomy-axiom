@@ -47,14 +47,12 @@ import { LabelInput } from "../components/LabelInput";
 import { StreamEventDetailModal } from "../components/StreamEventDetailModal";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import {
-    type ActionType,
     type NewSubscription,
     type RoutingRule,
     type StreamEvent,
     type Subscription,
     type SubscriptionPreviewResult,
     type WorkflowDefinition,
-    fetchActionTypes,
     fetchSubscription,
     fetchWorkflowDefinitions,
     previewSubscriptionFilter,
@@ -838,7 +836,6 @@ function FilterHelpModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
 const ROUTING_TYPES: { value: RoutingRule["type"]; label: string }[] = [
     { value: "workflow-dispatch", label: "Dispatch to Workflows" },
     { value: "create-workflow", label: "Create Workflow" },
-    { value: "invoke-action", label: "Invoke Action" },
 ];
 
 function RoutingTab({ routing, setRouting }: {
@@ -846,11 +843,9 @@ function RoutingTab({ routing, setRouting }: {
     setRouting: (v: RoutingRule[]) => void;
 }) {
     const [workflowDefs, setWorkflowDefs] = useState<WorkflowDefinition[]>([]);
-    const [actionTypes, setActionTypes] = useState<ActionType[]>([]);
 
     useEffect(() => {
         fetchWorkflowDefinitions(1, 100).then(r => setWorkflowDefs(r.items)).catch(console.error);
-        fetchActionTypes(1, 100).then(r => setActionTypes(r.items)).catch(console.error);
     }, []);
 
     const addRule = () => {
@@ -867,7 +862,6 @@ function RoutingTab({ routing, setRouting }: {
         // Clear irrelevant fields when type changes
         if (updates.type) {
             if (updates.type !== "create-workflow") delete rule.workflowDefinitionId;
-            if (updates.type !== "invoke-action") delete rule.actionTypeId;
         }
         updated[index] = rule;
         setRouting(updated);
@@ -926,18 +920,6 @@ function RoutingTab({ routing, setRouting }: {
                                             itemToString={(item) => item?.name || ""}
                                             noSelectionLabel="Select a workflow definition..."
                                             testId={`routing-workflow-${index}`}
-                                        />
-                                    )}
-                                    {rule.type === "invoke-action" && (
-                                        <ObjectSelect
-                                            value={actionTypes.find(at => at.id === rule.actionTypeId) || null}
-                                            items={actionTypes}
-                                            onSelect={(item) =>
-                                                updateRule(index, { actionTypeId: item?.id })
-                                            }
-                                            itemToString={(item) => item?.name || ""}
-                                            noSelectionLabel="Select an action type..."
-                                            testId={`routing-action-${index}`}
                                         />
                                     )}
                                     {rule.type === "workflow-dispatch" && (

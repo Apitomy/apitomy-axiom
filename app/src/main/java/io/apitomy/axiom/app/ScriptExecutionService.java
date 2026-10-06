@@ -234,7 +234,7 @@ public class ScriptExecutionService {
      * inlined into the script text. Instead each value is exported as an
      * environment variable (collected into {@code env}) and the placeholder is
      * replaced with a shell expansion of that variable — e.g.
-     * {@code {{managerInput}}} becomes a reference to {@code AXIOM_MANAGER_INPUT}.
+     * {@code {{projectName}}} becomes a reference to {@code AXIOM_PROJECT_NAME}.
      * Because bash does not re-parse the contents of a variable expansion for
      * command substitution, a value containing {@code $(...)}, backticks,
      * {@code ;}, {@code &&}, newlines, etc. is treated as literal data rather
@@ -285,8 +285,6 @@ public class ScriptExecutionService {
                 project != null && project.repository != null ? project.repository : "");
         addBinding(bindings, values, "{{projectName}}", "AXIOM_PROJECT_NAME",
                 project != null && project.name != null ? project.name : "");
-        addBinding(bindings, values, "{{managerInput}}", "AXIOM_MANAGER_INPUT",
-                task.input != null ? task.input : "");
         addBinding(bindings, values, "{{apiBaseUrl}}", "AXIOM_API_URL", apiBaseUrl);
         addBinding(bindings, values, "{{workDir}}", "AXIOM_WORK_DIR", workDir);
 

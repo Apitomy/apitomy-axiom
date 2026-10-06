@@ -69,7 +69,6 @@ export function ScriptAiModal({
                     <code>{"{{ref}}"}</code>,{" "}
                     <code>{"{{repository}}"}</code>,{" "}
                     <code>{"{{projectName}}"}</code>,{" "}
-                    <code>{"{{managerInput}}"}</code>,{" "}
                     <code>{"{{apiBaseUrl}}"}</code>
                 </div>
             </StackItem>

@@ -87,10 +87,10 @@ class TraceResourceTest {
         eventId = createStreamEvent();
         UUID otherEventId = UUID.randomUUID();
 
-        TraceContext matching = traceService.createTrace("invoke-action", "matching trace",
-                eventId, null, null, "invoke-action", "root", null, null);
-        traceService.createTrace("invoke-action", "other trace",
-                otherEventId, null, null, "invoke-action", "root", null, null);
+        TraceContext matching = traceService.createTrace("create-workflow", "matching trace",
+                eventId, null, null, "create-workflow", "root", null, null);
+        traceService.createTrace("create-workflow", "other trace",
+                otherEventId, null, null, "create-workflow", "root", null, null);
 
         given()
             .queryParam("filterEventId", eventId.toString())
@@ -123,8 +123,8 @@ class TraceResourceTest {
     void eventTraceNodeDetailResolves() {
         eventId = createStreamEvent();
 
-        TraceContext ctx = traceService.createTrace("invoke-action", "event trace",
-                eventId, null, null, "invoke-action", "root", null, null);
+        TraceContext ctx = traceService.createTrace("create-workflow", "event trace",
+                eventId, null, null, "create-workflow", "root", null, null);
         Long nodeId = traceService.addUuidEntityNode(ctx, "event-received", "completed",
                 "Event received", "event", eventId);
 
@@ -321,16 +321,16 @@ class TraceResourceTest {
     void activityLogTraceNodeDetailResolves() {
         activityLogId = QuarkusTransaction.requiringNew().call(() -> {
             ActivityLogEntity log = new ActivityLogEntity();
-            log.entryType = "invoke-action";
+            log.entryType = "create-workflow";
             log.summary = "Evaluated event";
             log.details = "long execution log";
             log.createdOn = Instant.now();
             log.persist();
             return log.id;
         });
-        TraceContext ctx = traceService.createTrace("invoke-action", "invoke-action trace",
+        TraceContext ctx = traceService.createTrace("create-workflow", "create-workflow trace",
                 null, null, null, "event-ingested", "root", null, null);
-        Long nodeId = traceService.addNode(ctx, "invoke-action", "in-progress",
+        Long nodeId = traceService.addNode(ctx, "create-workflow", "in-progress",
                 "Evaluation", null, null);
         traceService.completeNode(nodeId, "completed", "activity-log", activityLogId);
 
@@ -339,7 +339,7 @@ class TraceResourceTest {
                 .get(TRACES_PATH + "/" + ctx.traceId() + "/nodes/" + nodeId)
             .then()
                 .statusCode(200)
-                .body("detail.entryType", equalTo("invoke-action"))
+                .body("detail.entryType", equalTo("create-workflow"))
                 .body("detail.summary", equalTo("Evaluated event"))
                 .body("detail.details", equalTo("long execution log"));
     }

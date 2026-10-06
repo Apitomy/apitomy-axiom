@@ -8,15 +8,14 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 
 /**
- * One result of a routing outcome, e.g. a task created by invoke-action or a workflow
- * run started by a create-workflow rule. An outcome can have any number of items. Items are
+ * One result of a routing outcome, e.g. a workflow run started by a create-workflow rule. An outcome can have any number of items. Items are
  * deleted with their outcome (ON DELETE CASCADE).
  */
 @Entity
 @Table(name = "routing_outcome_item")
 public class RoutingOutcomeItemEntity extends PanacheEntity {
 
-    /** A task was created (invoke-action). */
+    /** A task was created. */
     public static final String TYPE_TASK = "task";
     /** A workflow run was started (create-workflow). */
     public static final String TYPE_WORKFLOW_RUN = "workflow-run";
