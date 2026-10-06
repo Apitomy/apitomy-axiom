@@ -42,6 +42,33 @@ describe("AppSidebar", () => {
         expect(screen.queryByText("Job Runs")).not.toBeInTheDocument();
     });
 
+    it("keeps only Runs, Subjects, Inbox and Dashboards as top-level items", async () => {
+        const { container } = renderWithRouter(<AppSidebar />);
+        await screen.findByText("Inbox");
+        const rootList = container.querySelector(".pf-v6-c-nav__list") as HTMLElement;
+        const topLevel = Array.from(rootList.querySelectorAll(":scope > li"))
+            .filter((li) => li.querySelector("button[aria-expanded]") === null)
+            .map((li) => li.textContent?.trim());
+        expect(topLevel).toEqual(["Runs", "Subjects", "Inbox", "Dashboards"]);
+    });
+
+    it("groups event pages under an expanded Events section", async () => {
+        renderWithRouter(<AppSidebar />, "/events/subscriptions");
+        const toggle = await screen.findByRole("button", { name: "Events" });
+        expect(toggle).toHaveAttribute("aria-expanded", "true");
+        expect(screen.getByText("Event Sources")).toBeVisible();
+        expect(screen.getByText("Subscriptions")).toBeVisible();
+        expect(screen.getByText("Event Stream")).toBeVisible();
+    });
+
+    it("groups Workflows and Action Types under an expanded Components section", async () => {
+        renderWithRouter(<AppSidebar />, "/components/workflows");
+        const toggle = await screen.findByRole("button", { name: "Components" });
+        expect(toggle).toHaveAttribute("aria-expanded", "true");
+        expect(screen.getByText("Workflows")).toBeVisible();
+        expect(screen.getByText("Action Types")).toBeVisible();
+    });
+
     it("shows Subjects and not Projects", async () => {
         renderWithRouter(<AppSidebar />, "/subjects");
         await screen.findByText("Inbox");
