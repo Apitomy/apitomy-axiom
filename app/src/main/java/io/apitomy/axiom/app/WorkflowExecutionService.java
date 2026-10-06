@@ -95,9 +95,27 @@ public class WorkflowExecutionService {
     }
 
     /**
+     * Triggers a workflow on a subject with optional run metadata (title, labels, inputs) and extra
+     * context. When {@code origin} is non-null the run records the event and ledger entry that
+     * started it, and its trace records the event.
+     *
+     * @param subjectId    the subject to run the workflow on
+     * @param definitionId the workflow definition to instantiate
+     * @param request      optional run parameters; null is treated as {@link RunRequest#EMPTY}
+     * @param origin       the event that started the run; null if not started by an event
+     * @return the created workflow run entity
+     */
+    @Transactional
+    public WorkflowRunEntity triggerWorkflow(long subjectId, long definitionId,
+                                              RunRequest request, EventOrigin origin) {
+        RunRequest effective = request != null ? request : RunRequest.EMPTY;
+        try (LogContext logCtx = LogContext.create().subjectId(subjectId)) {
+            return startRun(subjectId, definitionId, effective, origin, logCtx);
+        }
+    }
+
+    /**
      * Triggers a workflow on a subject because of a stream event (create-workflow routing).
-     * The run records the event and ledger entry that started it, and its trace records the
-     * event.
      *
      * @param subjectId    the subject to run the workflow on
      * @param definitionId the workflow definition to instantiate
@@ -110,7 +128,8 @@ public class WorkflowExecutionService {
     public WorkflowRunEntity triggerWorkflow(long subjectId, long definitionId,
                                               Map<String, Object> extraContext,
                                               EventOrigin origin) {
-        return doTriggerWorkflow(subjectId, definitionId, extraContext, origin);
+        return triggerWorkflow(subjectId, definitionId,
+                new RunRequest(null, null, null, extraContext), origin);
     }
 
     /**
@@ -126,7 +145,7 @@ public class WorkflowExecutionService {
     @Transactional
     public WorkflowRunEntity triggerWorkflow(long subjectId, long definitionId,
                                               Map<String, Object> extraContext) {
-        return doTriggerWorkflow(subjectId, definitionId, extraContext, null);
+        return triggerWorkflow(subjectId, definitionId, extraContext, null);
     }
 
     /**
@@ -138,19 +157,10 @@ public class WorkflowExecutionService {
      */
     @Transactional
     public WorkflowRunEntity triggerWorkflow(long subjectId, long definitionId) {
-        return doTriggerWorkflow(subjectId, definitionId, null, null);
+        return triggerWorkflow(subjectId, definitionId, RunRequest.EMPTY, null);
     }
 
-    private WorkflowRunEntity doTriggerWorkflow(long subjectId, long definitionId,
-                                                  Map<String, Object> extraContext,
-                                                  EventOrigin origin) {
-        try (LogContext logCtx = LogContext.create().subjectId(subjectId)) {
-            return startRun(subjectId, definitionId, extraContext, origin, logCtx);
-        }
-    }
-
-    private WorkflowRunEntity startRun(long subjectId, long definitionId,
-                                       Map<String, Object> extraContext,
+    private WorkflowRunEntity startRun(long subjectId, long definitionId, RunRequest request,
                                        EventOrigin origin, LogContext logCtx) {
         SubjectEntity subject = SubjectEntity.findById(subjectId);
         if (subject == null) {
@@ -195,8 +205,17 @@ public class WorkflowExecutionService {
         context.put("ref", subject.ref != null ? subject.ref : "");
 
         // Merge extra context (e.g., event data from create-workflow routing)
-        if (extraContext != null) {
-            context.putAll(extraContext);
+        if (request.extraContext() != null) {
+            context.putAll(request.extraContext());
+        }
+        // Supplied inputs join the initial context; the engine validates them against the Start
+        // node's declared inputs. Canonical inputs (subjectId, ref) cannot be overridden.
+        if (request.inputs() != null) {
+            request.inputs().forEach((key, value) -> {
+                if (!"subjectId".equals(key) && !"ref".equals(key)) {
+                    context.put(key, value);
+                }
+            });
         }
 
         WorkflowInstance instance;
@@ -214,6 +233,11 @@ public class WorkflowExecutionService {
         entity.subjectId = subjectId;
         entity.definitionId = definitionId;
         entity.definitionVersion = definition.currentVersion;
+        entity.title = request.title() != null && !request.title().isBlank()
+                ? request.title()
+                : definition.name + " — " + subject.name;
+        entity.labels = toJsonOrNull(request.labels());
+        entity.inputs = toJsonOrNull(request.inputs());
         entity.startedOn = Instant.now();
         if (origin != null) {
             entity.triggerEventId = origin.eventId();
@@ -748,6 +772,8 @@ public class WorkflowExecutionService {
         }
         // Always inject subjectId from the workflow run
         params.putIfAbsent("subjectId", entity.subjectId);
+        // The calling run is the default run for run-scoped SDK functions
+        params.putIfAbsent("runId", entity.id);
 
         LOG.infof("Executing SDK call %s for workflow %d node %s", functionName, entity.id, nodeId);
 
@@ -1022,6 +1048,17 @@ public class WorkflowExecutionService {
             }
         } catch (Exception e) {
             LOG.warnf(e, "Failed to reconcile trace node for workflow task %d", task.id);
+        }
+    }
+
+    private String toJsonOrNull(Map<String, ?> values) {
+        if (values == null || values.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(values);
+        } catch (JsonProcessingException e) {
+            throw new WebApplicationException("Run metadata is not serializable: " + e.getMessage(), 400);
         }
     }
 

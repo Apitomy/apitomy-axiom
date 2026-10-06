@@ -5,11 +5,18 @@ import io.apitomy.axiom.core.SdkFunctionRegistry;
 import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
+import io.apitomy.axiom.core.entities.WorkflowRunEntity;
+import io.quarkus.panache.common.Sort;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -59,6 +66,8 @@ public class SdkCallService {
             case "axiom_list_subjects" -> listSubjects(params);
             case "axiom_create_subject" -> createSubject(params);
             case "axiom_update_subject_body" -> updateSubjectBody(params);
+            case "axiom_get_workflow_run" -> getWorkflowRun(params);
+            case "axiom_list_subject_runs" -> listSubjectRuns(params);
             default -> SdkCallResult.error("Unknown SDK function: " + functionName);
         };
     }
@@ -228,6 +237,62 @@ public class SdkCallService {
         subject.body = body;
         subject.updatedOn = Instant.now();
         return SdkCallResult.ok("Subject " + subjectId + " body updated");
+    }
+
+    /**
+     * Returns a run's metadata. {@code runId} defaults to the calling run, which the workflow
+     * engine injects into the params of direct SDK calls.
+     */
+    private SdkCallResult getWorkflowRun(Map<String, Object> params) {
+        Long runId = toLong(params.get("runId"));
+        if (runId == null) return SdkCallResult.error("runId is required");
+        WorkflowRunEntity run = WorkflowRunEntity.findById(runId);
+        if (run == null) return SdkCallResult.error("Workflow run not found: " + runId);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("id", run.id);
+        result.put("title", run.title);
+        result.put("status", run.status);
+        result.put("definitionId", run.definitionId);
+        result.put("definitionVersion", run.definitionVersion);
+        result.put("subjectId", run.subjectId);
+        result.put("labels", readJsonObject(run.labels));
+        result.put("inputs", readJsonObject(run.inputs));
+        result.put("currentNodeId", run.currentNodeId);
+        result.put("startedOn", run.startedOn.toString());
+        result.put("completedOn", run.completedOn != null ? run.completedOn.toString() : null);
+        return SdkCallResult.ok("Workflow run found", result);
+    }
+
+    private SdkCallResult listSubjectRuns(Map<String, Object> params) {
+        Long subjectId = toLong(params.get("subjectId"));
+        if (subjectId == null) return SdkCallResult.error("subjectId is required");
+        String status = toString(params.get("status"));
+        List<WorkflowRunEntity> runs = status != null && !status.isBlank()
+                ? WorkflowRunEntity.<WorkflowRunEntity>find("subjectId = ?1 and status = ?2",
+                        Sort.descending("startedOn", "id"), subjectId, status).page(0, 50).list()
+                : WorkflowRunEntity.<WorkflowRunEntity>find("subjectId", Sort.descending("startedOn", "id"),
+                        subjectId).page(0, 50).list();
+        List<Map<String, Object>> items = runs.stream().map(run -> {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", run.id);
+            item.put("title", run.title);
+            item.put("status", run.status);
+            item.put("definitionId", run.definitionId);
+            item.put("startedOn", run.startedOn.toString());
+            item.put("completedOn", run.completedOn != null ? run.completedOn.toString() : null);
+            return item;
+        }).toList();
+        return SdkCallResult.ok("Found " + items.size() + " workflow runs",
+                Map.of("runs", items, "count", items.size()));
+    }
+
+    private Map<String, Object> readJsonObject(String json) {
+        if (json == null || json.isBlank()) return Map.of();
+        try {
+            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() { });
+        } catch (JsonProcessingException e) {
+            return Map.of();
+        }
     }
 
     private Long toLong(Object value) {

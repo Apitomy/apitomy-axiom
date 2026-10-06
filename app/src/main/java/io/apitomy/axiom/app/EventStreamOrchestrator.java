@@ -747,7 +747,8 @@ public class EventStreamOrchestrator {
         try {
             run = QuarkusTransaction.requiringNew().call(() ->
                     workflowExecutionService.triggerWorkflow(subjectId, rule.workflowDefinitionId(),
-                            extraContext, new EventOrigin(event.id, ledgerId)));
+                            new RunRequest(null, null, null, extraContext),
+                            new EventOrigin(event.id, ledgerId)));
         } catch (WorkflowRunConflictException e) {
             String summary = "Skipped: subject already has an active run of definition "
                     + rule.workflowDefinitionId();

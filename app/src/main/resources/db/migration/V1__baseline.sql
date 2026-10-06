@@ -502,6 +502,9 @@
         current_node_id varchar(255),
         failure_reason TEXT,
         instance_state TEXT not null,
+        title varchar(500) not null,
+        labels TEXT,
+        inputs TEXT,
         primary key (id)
     );
 

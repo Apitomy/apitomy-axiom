@@ -74,9 +74,10 @@ class RoutingOutcomeItemsTest {
     @Test
     void createWorkflowProducesWorkflowRunItem() {
         WorkflowRunEntity run = new WorkflowRunEntity();
+        run.title = "Test run";
         run.id = 987654L;
         Mockito.when(workflowExecutionService.triggerWorkflow(ArgumentMatchers.anyLong(),
-                ArgumentMatchers.anyLong(), ArgumentMatchers.any(), ArgumentMatchers.any()))
+                ArgumentMatchers.anyLong(), ArgumentMatchers.any(RunRequest.class), ArgumentMatchers.any()))
                 .thenReturn(run);
         createEventAndSubscription("[{\"type\":\"create-workflow\",\"workflowDefinitionId\":42}]");
 
@@ -94,9 +95,10 @@ class RoutingOutcomeItemsTest {
     @Test
     void processingApiReturnsItems() {
         WorkflowRunEntity run = new WorkflowRunEntity();
+        run.title = "Test run";
         run.id = 987653L;
         Mockito.when(workflowExecutionService.triggerWorkflow(ArgumentMatchers.anyLong(),
-                ArgumentMatchers.anyLong(), ArgumentMatchers.any(), ArgumentMatchers.any()))
+                ArgumentMatchers.anyLong(), ArgumentMatchers.any(RunRequest.class), ArgumentMatchers.any()))
                 .thenReturn(run);
         UUID eventId = createEventAndSubscription(
                 "[{\"type\":\"create-workflow\",\"workflowDefinitionId\":42}]");
@@ -184,9 +186,10 @@ class RoutingOutcomeItemsTest {
     void itemsOfAnAttemptStayWithThatAttemptsOutcome() {
         // Attempt 1: workflow creation fails. Attempt 2 (retry): it succeeds with one run.
         WorkflowRunEntity run = new WorkflowRunEntity();
+        run.title = "Test run";
         run.id = 987655L;
         Mockito.when(workflowExecutionService.triggerWorkflow(ArgumentMatchers.anyLong(),
-                ArgumentMatchers.anyLong(), ArgumentMatchers.any(), ArgumentMatchers.any()))
+                ArgumentMatchers.anyLong(), ArgumentMatchers.any(RunRequest.class), ArgumentMatchers.any()))
                 .thenThrow(new IllegalStateException("temporarily broken"))
                 .thenReturn(run);
         createEventAndSubscription("[{\"type\":\"create-workflow\",\"workflowDefinitionId\":42}]");
@@ -212,12 +215,13 @@ class RoutingOutcomeItemsTest {
     void retriesNeitherDuplicateNorMoveItemsOfCompletedRules() {
         // The first create-workflow rule completes (with an item), the second keeps failing.
         WorkflowRunEntity run = new WorkflowRunEntity();
+        run.title = "Test run";
         run.id = 987656L;
         Mockito.when(workflowExecutionService.triggerWorkflow(ArgumentMatchers.anyLong(),
-                ArgumentMatchers.anyLong(), ArgumentMatchers.any(), ArgumentMatchers.any()))
+                ArgumentMatchers.anyLong(), ArgumentMatchers.any(RunRequest.class), ArgumentMatchers.any()))
                 .thenReturn(run);
         Mockito.when(workflowExecutionService.triggerWorkflow(ArgumentMatchers.anyLong(),
-                ArgumentMatchers.eq(-1L), ArgumentMatchers.any(), ArgumentMatchers.any()))
+                ArgumentMatchers.eq(-1L), ArgumentMatchers.any(RunRequest.class), ArgumentMatchers.any()))
                 .thenThrow(new IllegalStateException("no such workflow definition"));
         UUID eventId = createEventAndSubscription(
                 "[{\"type\":\"create-workflow\",\"workflowDefinitionId\":42},"

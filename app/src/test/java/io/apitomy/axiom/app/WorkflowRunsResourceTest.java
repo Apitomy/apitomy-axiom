@@ -465,6 +465,52 @@ class WorkflowRunsResourceTest {
                 .then().statusCode(404);
     }
 
+    /**
+     * Runs can be filtered by subject, definition and label; the run carries its title and labels.
+     */
+    @Test
+    void filtersRunsBySubjectAndLabel() {
+        long subjectA = TestFixtures.createSubject("filter-subject-a");
+        long subjectB = TestFixtures.createSubject("filter-subject-b");
+        long definitionId = TestFixtures.createWaitDefinition("Filter WF");
+
+        Integer runA = given()
+                .contentType(ContentType.JSON)
+                .body("{\"workflowDefinitionId\": %d, \"title\": \"Run A\", \"labels\": {\"filter\": \"alpha\"}}"
+                        .formatted(definitionId))
+                .when().post(SUBJECTS_PATH + "/" + subjectA + "/workflow")
+                .then().statusCode(200).body("title", equalTo("Run A")).extract().path("runId");
+        given()
+                .contentType(ContentType.JSON)
+                .body("{\"workflowDefinitionId\": %d, \"labels\": {\"filter\": \"beta\"}}"
+                        .formatted(definitionId))
+                .when().post(SUBJECTS_PATH + "/" + subjectB + "/workflow")
+                .then().statusCode(200).body("title", equalTo("Filter WF — filter-subject-b"));
+
+        given()
+                .when().get("/api/v1/workflow/runs?label=filter:alpha&definitionId=" + definitionId)
+                .then()
+                    .statusCode(200)
+                    .body("totalCount", equalTo(1))
+                    .body("items[0].runId", equalTo(runA))
+                    .body("items[0].title", equalTo("Run A"))
+                    .body("items[0].labels.filter", equalTo("alpha"));
+
+        given()
+                .when().get("/api/v1/workflow/runs?status=waiting&subjectId=" + subjectB
+                        + "&label=filter:beta")
+                .then()
+                    .statusCode(200)
+                    .body("totalCount", equalTo(1))
+                    .body("items[0].subjectId", equalTo((int) subjectB));
+
+        given()
+                .when().get("/api/v1/workflow/runs?subjectId=" + subjectA + "&label=filter:beta")
+                .then()
+                    .statusCode(200)
+                    .body("totalCount", equalTo(0));
+    }
+
     @Test
     void listRunsForDefinition() {
         int subjectId = createSubject("WF DefRuns Subject");

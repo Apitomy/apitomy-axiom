@@ -441,8 +441,9 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
      */
     @Override
     public io.apitomy.axiom.api.beans.WorkflowRunSearchResults listWorkflowRuns(
-            Long subjectId, String status, java.math.BigInteger page, java.math.BigInteger limit) {
-        return runBeanMapper.search(subjectId, null, status, page, limit);
+            Long subjectId, String status, Long definitionId, java.util.List<String> label,
+            java.math.BigInteger page, java.math.BigInteger limit) {
+        return runBeanMapper.search(subjectId, definitionId, status, label, page, limit);
     }
 
     /**

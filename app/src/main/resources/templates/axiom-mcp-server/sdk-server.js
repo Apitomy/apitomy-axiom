@@ -143,6 +143,43 @@ const HANDLERS = {
         if (args.subjectId) params.set("filterSubjectId", String(args.subjectId));
         return await axiomApi("GET", `/activity?${params}`);
     },
+    axiom_get_workflow_run: async (args) => {
+        // Defaults to the run of the calling task (AXIOM_WORKFLOW_RUN_ID is set for workflow tasks)
+        const runId = args.runId || process.env.AXIOM_WORKFLOW_RUN_ID;
+        if (!runId) {
+            throw new Error("runId is required (no calling workflow run)");
+        }
+        const run = JSON.parse(await axiomApi("GET", `/workflow/runs/${runId}`));
+        return JSON.stringify({
+            id: run.id,
+            title: run.title,
+            status: run.status,
+            definitionId: run.definitionId,
+            definitionVersion: run.definitionVersion,
+            subjectId: run.subjectId,
+            labels: run.labels || {},
+            inputs: run.inputs || {},
+            currentNodeId: run.currentNodeId || null,
+            startedOn: run.startedOn,
+            completedOn: run.completedOn || null,
+        }, null, 2);
+    },
+    axiom_list_subject_runs: async (args) => {
+        const params = new URLSearchParams();
+        params.set("limit", "50");
+        params.set("subjectId", String(args.subjectId));
+        if (args.status) params.set("status", args.status);
+        const result = JSON.parse(await axiomApi("GET", `/workflow/runs?${params}`));
+        const runs = (result.items || []).map(r => ({
+            id: r.runId,
+            title: r.title,
+            status: r.status,
+            definitionId: r.definitionId,
+            startedOn: r.startedOn,
+            completedOn: r.completedOn || null,
+        }));
+        return JSON.stringify({ runs, count: runs.length }, null, 2);
+    },
 };
 
 async function loadRegistry() {

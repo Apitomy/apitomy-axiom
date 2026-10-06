@@ -156,5 +156,22 @@
       { "name": "limit", "type": "number", "description": "Maximum number of entries to return (default 50)", "required": false }
     ],
     "sdkCallSupported": false
+  },
+  {
+    "name": "axiom_get_workflow_run",
+    "description": "Get a workflow run (title, status, subject, definition, labels, inputs, current node). Defaults to the run of the calling task.",
+    "parameters": [
+      { "name": "runId", "type": "number", "description": "The workflow run ID (defaults to the calling task's run)", "required": false }
+    ],
+    "sdkCallSupported": true
+  },
+  {
+    "name": "axiom_list_subject_runs",
+    "description": "List workflow runs for a subject, newest first.",
+    "parameters": [
+      { "name": "subjectId", "type": "number", "description": "The subject ID", "required": true },
+      { "name": "status", "type": "string", "description": "Filter by run status (e.g. 'running', 'waiting', 'completed')", "required": false }
+    ],
+    "sdkCallSupported": true
   }
 ]

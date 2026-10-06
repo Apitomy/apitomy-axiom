@@ -15,6 +15,7 @@ import io.apitomy.axiom.api.beans.Task;
 import io.apitomy.axiom.api.beans.ThreadEntry;
 import io.apitomy.axiom.api.beans.TriggerWorkflow;
 import io.apitomy.axiom.api.beans.UpdateSubject;
+import io.apitomy.axiom.app.RunRequest;
 import io.apitomy.axiom.app.WorkflowExecutionService;
 import io.apitomy.axiom.app.WorkflowRunBeanMapper;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
@@ -386,8 +387,12 @@ public class SubjectsResourceImpl implements SubjectsResource {
             throw new WebApplicationException(
                     "Missing required 'workflowDefinitionId' field", 400);
         }
+        RunRequest request = new RunRequest(data.getTitle(),
+                toStringMap(data.getLabels() != null ? data.getLabels().getAdditionalProperties() : null),
+                data.getInputs() != null ? data.getInputs().getAdditionalProperties() : null,
+                null);
         WorkflowRunEntity entity = workflowExecutionService
-                .triggerWorkflow(subjectId, data.getWorkflowDefinitionId());
+                .triggerWorkflow(subjectId, data.getWorkflowDefinitionId(), request, null);
         return toWorkflowInstanceBean(entity);
     }
 
@@ -407,6 +412,15 @@ public class SubjectsResourceImpl implements SubjectsResource {
     private io.apitomy.axiom.api.beans.WorkflowInstance toWorkflowInstanceBean(
             WorkflowRunEntity entity) {
         return runBeanMapper.toBean(entity);
+    }
+
+    private static Map<String, String> toStringMap(Map<String, Object> values) {
+        if (values == null) {
+            return null;
+        }
+        Map<String, String> result = new java.util.LinkedHashMap<>();
+        values.forEach((key, value) -> result.put(key, value != null ? String.valueOf(value) : null));
+        return result;
     }
 
     private void validateRequired(String value, String fieldName) {

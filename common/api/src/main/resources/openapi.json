@@ -4059,6 +4059,25 @@
             }
           },
           {
+            "name": "definitionId",
+            "in": "query",
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "name": "label",
+            "in": "query",
+            "description": "Filter by label in key:value form; repeatable (all must match)",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
             "name": "page",
             "in": "query",
             "schema": {
@@ -8014,6 +8033,19 @@
           "definitionName": {
             "type": "string"
           },
+          "title": {
+            "type": "string"
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "inputs": {
+            "type": "object",
+            "additionalProperties": {}
+          },
           "status": {
             "type": "string"
           },
@@ -8119,6 +8151,21 @@
           "workflowDefinitionId": {
             "format": "int64",
             "type": "integer"
+          },
+          "title": {
+            "type": "string",
+            "description": "Run title; defaults to \"<definition name> — <subject name>\""
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "inputs": {
+            "type": "object",
+            "description": "Workflow inputs, validated against the Start node's declared inputs",
+            "additionalProperties": {}
           }
         }
       },
@@ -8142,6 +8189,19 @@
           },
           "definitionName": {
             "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "inputs": {
+            "type": "object",
+            "additionalProperties": {}
           },
           "definitionVersion": {
             "format": "int32",

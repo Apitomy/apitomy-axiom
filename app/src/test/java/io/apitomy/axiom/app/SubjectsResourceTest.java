@@ -400,6 +400,7 @@ class SubjectsResourceTest {
             def.updatedOn = Instant.now();
             def.persist();
             WorkflowRunEntity run = new WorkflowRunEntity();
+            run.title = "Test run";
             run.subjectId = (long) id;
             run.definitionId = def.id;
             run.definitionVersion = 1;

@@ -25,6 +25,18 @@ public class WorkflowRunEntity extends PanacheEntity {
     @Column(name = "definition_version", nullable = false)
     public int definitionVersion;
 
+    /** Human-readable run title; defaults to "&lt;definition name&gt; — &lt;subject name&gt;". */
+    @Column(length = 500, nullable = false)
+    public String title;
+
+    /** Run labels as a JSON object of string values; null for none. */
+    @Column(columnDefinition = "TEXT")
+    public String labels;
+
+    /** Workflow inputs supplied when the run was started, as a JSON object; null for none. */
+    @Column(columnDefinition = "TEXT")
+    public String inputs;
+
     @Column(name = "instance_state", columnDefinition = "TEXT", nullable = false)
     public String instanceState;
 

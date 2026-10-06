@@ -198,6 +198,7 @@ class HistoryCleanupTest {
 
     private static WorkflowRunEntity workflowRun(String status, Instant when) {
         WorkflowRunEntity run = new WorkflowRunEntity();
+        run.title = "Test run";
         run.subjectId = -1L;
         run.definitionId = -1L;
         run.definitionVersion = 1;

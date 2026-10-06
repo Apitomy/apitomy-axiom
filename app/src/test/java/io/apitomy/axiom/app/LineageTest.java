@@ -521,6 +521,7 @@ class LineageTest {
     private Long createRun(UUID eventId, UUID traceId) {
         return QuarkusTransaction.requiringNew().call(() -> {
             WorkflowRunEntity run = new WorkflowRunEntity();
+            run.title = "Test run";
             run.subjectId = subjectId;
             run.definitionId = 1L;
             run.definitionVersion = 1;

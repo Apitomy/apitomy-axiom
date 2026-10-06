@@ -1746,6 +1746,9 @@ export interface WorkflowInstanceInfo {
     definitionId: number;
     definitionVersion: number;
     definitionName: string;
+    title: string;
+    labels?: Record<string, string>;
+    inputs?: Record<string, unknown>;
     status: string;
     currentNodeId?: string;
     currentNodeName?: string;
@@ -1851,6 +1854,9 @@ export interface WorkflowRunSummary {
     definitionId: number;
     definitionName?: string;
     definitionVersion: number;
+    title: string;
+    labels?: Record<string, string>;
+    inputs?: Record<string, unknown>;
     status: string;
     currentNodeName?: string;
     traceId?: string;
