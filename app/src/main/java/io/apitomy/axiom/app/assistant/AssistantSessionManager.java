@@ -262,7 +262,7 @@ public class AssistantSessionManager {
                             systemPrompt,
                             resolvedAllowedTools));
 
-            AssistantSession session = new AssistantSession(sessionName, templateId, sessionDir,
+            AssistantSession session = new AssistantSession(sessionId, sessionName, templateId, sessionDir,
                     workDir, command, resolvedEnv, agent.getType(), subjectId, subjectName, driver);
             sessionRef.set(session);
             session.start();

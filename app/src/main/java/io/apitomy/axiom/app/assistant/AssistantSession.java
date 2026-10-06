@@ -124,7 +124,31 @@ public class AssistantSession {
                               Path workingDirectory, List<String> command,
                               Map<String, String> environment, String engineType, Long subjectId,
                               String subjectName, InteractiveSessionDriver driver) {
-        this.id = UUID.randomUUID().toString();
+        this(UUID.randomUUID().toString(), name, templateId, sessionDirectory, workingDirectory, command,
+                environment, engineType, subjectId, subjectName, driver);
+    }
+
+    /**
+     * Creates a new assistant session with an explicit id and an injected runtime driver. The id must be the
+     * same one used for the session directory and handed to the session's MCP servers.
+     *
+     * @param id the session id
+     * @param name the user-visible session name
+     * @param templateId the template this session was created from
+     * @param sessionDirectory the Axiom-managed session directory (always deleted on end)
+     * @param workingDirectory the assistant working directory
+     * @param command the legacy command line used by Claude runtime mode
+     * @param environment resolved environment variables used by Claude runtime mode
+     * @param engineType the interactive engine type resolved for this session
+     * @param subjectId optional subject ID if session is scoped to a subject
+     * @param subjectName optional subject name if session is scoped to a subject
+     * @param driver runtime driver used for interactive session I/O
+     */
+    public AssistantSession(String id, String name, String templateId, Path sessionDirectory,
+                              Path workingDirectory, List<String> command,
+                              Map<String, String> environment, String engineType, Long subjectId,
+                              String subjectName, InteractiveSessionDriver driver) {
+        this.id = id;
         this.name = name;
         this.templateId = templateId;
         this.sessionDirectory = sessionDirectory;

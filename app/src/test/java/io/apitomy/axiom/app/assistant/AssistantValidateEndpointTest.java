@@ -1,6 +1,7 @@
 package io.apitomy.axiom.app.assistant;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.app.assistant.runtime.InteractiveSessionDriver;
 import io.apitomy.axiom.app.assistant.runtime.InteractiveSessionDriverFactory;
 import io.quarkus.test.InjectMock;
@@ -19,6 +20,7 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -74,6 +76,30 @@ class AssistantValidateEndpointTest {
 
     private static String request(String type, String item) {
         return "{\"type\": \"" + type + "\", \"item\": " + item + "}";
+    }
+
+    /**
+     * Regression test: the MCP server's {@code AXIOM_ASSISTANT_SESSION_ID} must be the session's public id,
+     * otherwise {@code axiom_validate_item} calls the validate endpoint with an unknown id and gets 404.
+     *
+     * @throws IOException if mcp-config.json cannot be read
+     */
+    @Test
+    void mcpServerSessionIdMatchesPublicSessionId() throws IOException {
+        Path sessionDir = assistantSessionManager.getSession(sessionId).getSessionDirectory();
+        JsonNode mcpConfig = new ObjectMapper()
+                .readTree(Files.readString(sessionDir.resolve("mcp-config.json")));
+        String mcpSessionId = mcpConfig.path("mcpServers").path("axiom").path("env")
+                .path("AXIOM_ASSISTANT_SESSION_ID").asText();
+        assertEquals(sessionId, mcpSessionId);
+
+        given()
+                .contentType(ContentType.JSON)
+                .body(request("workflow", WORKFLOW))
+                .when()
+                .post("/api/v1/assistant/sessions/{id}/validate", mcpSessionId)
+                .then()
+                .statusCode(200);
     }
 
     @Test
