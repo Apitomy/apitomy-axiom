@@ -68,15 +68,13 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
     @Inject
     WorkflowExecutionService workflowExecutionService;
 
-    /** Inputs Axiom always injects when starting a workflow (may be marked required). */
-    private static final Set<String> ALWAYS_PRESENT_INPUTS =
-            Set.of("subjectId", "ref");
+    /** Built-in inputs that are not always present and therefore may not be marked required. */
+    private static final Set<String> OPTIONAL_BUILT_IN_INPUTS =
+            Set.of("subjectName", "repository", "event");
 
-    /** All inputs Axiom may inject (always-present plus conditionally-present). */
-    private static final List<String> CANONICAL_INPUT_NAMES =
-            List.of("subjectId", "subjectName", "repository", "ref", "event");
-
-    private static final Set<String> CANONICAL_INPUTS = Set.copyOf(CANONICAL_INPUT_NAMES);
+    /** Valid Start-node input names: identifiers usable in expressions. */
+    private static final java.util.regex.Pattern INPUT_NAME_PATTERN =
+            java.util.regex.Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 
     // ── List ────────────────────────────────────────────────────────
 
@@ -444,9 +442,10 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
     }
 
     /**
-     * Validates that a workflow's Start node only declares inputs from the canonical
-     * input contract, and only marks always-present inputs as required. Throws a 400
-     * WebApplicationException on any violation.
+     * Validates a workflow's Start node inputs: every name must be a valid identifier, and the
+     * built-in inputs Axiom does not always provide ({@code event}, {@code subjectName},
+     * {@code repository}) may not be marked required. Custom inputs may be required. Throws a
+     * 400 WebApplicationException on any violation.
      */
     private void validateStartInputs(Workflow workflow) {
         WorkflowNode startNode = workflow.findStartNode().orElse(null);
@@ -463,22 +462,21 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
             }
             Object nameObj = input.get("name");
             String name = nameObj != null ? nameObj.toString() : null;
-            if (name == null || !CANONICAL_INPUTS.contains(name)) {
+            if (name == null || !INPUT_NAME_PATTERN.matcher(name).matches()) {
                 throw new WebApplicationException(
                         Response.status(400).entity(Map.of("message",
-                                "Start node input '" + name + "' is not part of the "
-                                        + "workflow input contract. Allowed inputs: "
-                                        + String.join(", ", CANONICAL_INPUT_NAMES)))
+                                "Start node input '" + name + "' is not a valid input name. "
+                                        + "Names must start with a letter or underscore and "
+                                        + "contain only letters, digits and underscores."))
                                 .build());
             }
             if (Boolean.TRUE.equals(input.get("required"))
-                    && !ALWAYS_PRESENT_INPUTS.contains(name)) {
+                    && OPTIONAL_BUILT_IN_INPUTS.contains(name)) {
                 throw new WebApplicationException(
                         Response.status(400).entity(Map.of("message",
                                 "Start node input '" + name + "' cannot be marked "
                                         + "required because Axiom does not always provide "
-                                        + "it. Only subjectId and ref may be "
-                                        + "required.")).build());
+                                        + "it.")).build());
             }
         }
     }

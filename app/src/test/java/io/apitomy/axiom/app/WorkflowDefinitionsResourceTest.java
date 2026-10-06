@@ -287,8 +287,8 @@ class WorkflowDefinitionsResourceTest {
     }
 
     @Test
-    void testPublishRejectsNonCanonicalStartInput() {
-        int id = createDefinition("Non-Canonical Input WF");
+    void testPublishAcceptsCustomRequiredStartInput() {
+        int id = createDefinition("Custom Input WF");
 
         given()
                 .contentType(ContentType.JSON)
@@ -299,7 +299,47 @@ class WorkflowDefinitionsResourceTest {
                         "nodes": [
                             {"id": "s1", "type": "start", "name": "Start",
                              "config": {"inputs": [
-                                 {"name": "issueNumber", "type": "string",
+                                 {"name": "environment", "type": "string",
+                                  "required": true}
+                             ]},
+                             "position": {"x": 100, "y": 100}},
+                            {"id": "e1", "type": "end", "name": "End",
+                             "config": {}, "position": {"x": 100, "y": 300}}
+                        ],
+                        "edges": [
+                            {"id": "edge1", "source": "s1", "target": "e1",
+                             "priority": 0, "isDefault": true}
+                        ]
+                    }
+                    """)
+                .when()
+                    .put(BASE_PATH + "/" + id + "/content")
+                .then()
+                    .statusCode(204);
+
+        given()
+                .when()
+                    .post(BASE_PATH + "/" + id + "/publish")
+                .then()
+                    .statusCode(200)
+                    .body("version", equalTo(1));
+    }
+
+
+    @Test
+    void testPublishRejectsInvalidStartInputName() {
+        int id = createDefinition("Invalid Input Name WF");
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "id": "wf-nc",
+                        "name": "Non-Canonical",
+                        "nodes": [
+                            {"id": "s1", "type": "start", "name": "Start",
+                             "config": {"inputs": [
+                                 {"name": "not a name!", "type": "string",
                                   "required": true}
                              ]},
                              "position": {"x": 100, "y": 100}},

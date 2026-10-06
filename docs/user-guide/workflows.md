@@ -42,9 +42,9 @@ a new immutable version. Publishing fails with a description of the problem if:
 
 - The graph is structurally invalid (e.g. disconnected nodes, missing Start/End)
 - The graph contains a node type Axiom doesn't support
-- The Start node declares an input outside the
-  [canonical input contract](../developer-guide/workflow-input-contract.md), or marks
-  an input other than `subjectId`/`ref` as required
+- The Start node declares an input whose name is not a valid identifier, or marks
+  `event`, `subjectName` or `repository` as required (see the
+  [Workflow Input Contract](../developer-guide/workflow-input-contract.md))
 
 Each publish creates a new version. The **Versions** tab lists every published version,
 lets you diff any two versions side by side, and shows which version is currently
@@ -70,8 +70,14 @@ Every run has a **title**, which defaults to `<definition name> — <subject nam
 characters. Runs also carry free-form key/value **labels** (runs started by a schedule trigger are
 labeled `trigger: schedule`) and the **inputs** they were started with. Supplied inputs join the run's
 initial context and are validated against the Start node's declared inputs (see
-[Workflow Input Contract](../developer-guide/workflow-input-contract.md)); `subjectId` and `ref` cannot be
-overridden.
+[Workflow Input Contract](../developer-guide/workflow-input-contract.md)); `subjectId`, `ref` and `event`
+are protected and cannot be overridden by supplied inputs.
+
+Besides the built-in inputs (`subjectId`, `ref`, `event`, `subjectName`, `repository`), the Start node may
+declare **custom inputs** such as `environment`. Custom input names must be valid identifiers (letters,
+digits and underscores, not starting with a digit) and may be marked required; a run started without a
+required custom input fails to start (a schedule trigger records `failed: <reason>` as its last outcome).
+Supplied custom inputs are available in the run's context alongside the built-in inputs.
 
 Workflow runs have **no outputs**. The result of each step is available from the task output of the
 corresponding `action` node (and the submitted answers of each `human-task` node).
@@ -93,7 +99,8 @@ A trigger that would violate the rule is handled as follows:
 ### Schedule Triggers
 
 A workflow definition can have zero or more schedule triggers, managed on the **Triggers** tab of the
-workflow definition page (REST: `/api/v1/workflow/definitions/{workflowDefinitionId}/triggers/schedules`). Each trigger has:
+workflow definition page (REST:
+`/api/v1/workflow/definitions/{workflowDefinitionId}/triggers/schedules`). Each trigger has:
 
 | Field | Purpose |
 |-------|---------|

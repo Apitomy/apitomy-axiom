@@ -63,6 +63,9 @@ public class WorkflowExecutionService {
 
     private static final int MAX_TITLE_LENGTH = 500;
 
+    /** Built-in inputs that supplied run inputs may never override. */
+    private static final Set<String> PROTECTED_INPUTS = Set.of("subjectId", "ref", "event");
+
     @Inject
     ObjectMapper objectMapper;
 
@@ -211,10 +214,10 @@ public class WorkflowExecutionService {
             context.putAll(request.extraContext());
         }
         // Supplied inputs join the initial context; the engine validates them against the Start
-        // node's declared inputs. Canonical inputs (subjectId, ref) cannot be overridden.
+        // node's declared inputs. Protected inputs (subjectId, ref, event) cannot be overridden.
         if (request.inputs() != null) {
             request.inputs().forEach((key, value) -> {
-                if (!"subjectId".equals(key) && !"ref".equals(key)) {
+                if (!PROTECTED_INPUTS.contains(key)) {
                     context.put(key, value);
                 }
             });
