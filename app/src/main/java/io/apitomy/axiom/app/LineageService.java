@@ -40,7 +40,7 @@ import java.util.stream.Collectors;
  * number of {@code IN} queries per entity type (split into chunks of {@value #IN_CHUNK} IDs), so the
  * number of queries depends on the depth, not on the number of nodes. Expansion queries are limited to
  * the room left under {@code maxNodes} (plus one row, to detect truncation). Events, tasks, workflow
- * runs are read as label projections, never as full rows. AI cost is aggregated
+ * runs are read as label subjections, never as full rows. AI cost is aggregated
  * at the end with one grouped query per cost key. See {@code docs/developer-guide/lineage.md}.</p>
  */
 @ApplicationScoped

@@ -496,8 +496,8 @@ function TaskHistoryTab({ tasks, totalCount, page, perPage, filterActionType, fi
                             <Tr key={task.id}>
                                 <Td>{task.actionType}</Td>
                                 <Td>
-                                    <Link to={`/projects/${task.projectId}`}>
-                                        Project #{task.projectId}
+                                    <Link to={`/projects/${task.subjectId}`}>
+                                        Project #{task.subjectId}
                                     </Link>
                                 </Td>
                                 <Td>
@@ -516,7 +516,7 @@ function TaskHistoryTab({ tasks, totalCount, page, perPage, filterActionType, fi
                                 <Td>
                                     {(task.status === "Completed" || task.status === "Failed") && (
                                         <Button variant="link" isInline
-                                            onClick={() => onViewLog(task.projectId, task.id)}>
+                                            onClick={() => onViewLog(task.subjectId, task.id)}>
                                             View Log
                                         </Button>
                                     )}

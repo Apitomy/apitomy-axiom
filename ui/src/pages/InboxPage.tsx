@@ -196,10 +196,10 @@ export function InboxPage() {
                                     </Td>
                                     <Td>
                                         <Link
-                                            to={`/projects/${item.projectId}`}
+                                            to={`/projects/${item.subjectId}`}
                                             onClick={(e) => e.stopPropagation()}
                                         >
-                                            {item.projectName || `Project #${item.projectId}`}
+                                            {item.subjectName || `Project #${item.subjectId}`}
                                         </Link>
                                     </Td>
                                     <Td>
@@ -289,9 +289,9 @@ export function InboxPage() {
                             <Split hasGutter>
                                 <SplitItem>
                                     <strong>Project:</strong>{" "}
-                                    <Link to={`/projects/${selectedItem.projectId}`}>
-                                        {selectedItem.projectName ||
-                                            `Project #${selectedItem.projectId}`}
+                                    <Link to={`/projects/${selectedItem.subjectId}`}>
+                                        {selectedItem.subjectName ||
+                                            `Project #${selectedItem.subjectId}`}
                                     </Link>
                                 </SplitItem>
                                 <SplitItem>

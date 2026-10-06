@@ -52,7 +52,7 @@ class TraceServiceTest {
         assertEquals("in-progress", trace.status);
         assertEquals("Processing test event", trace.summary);
         assertEquals(TEST_EVENT_ID, trace.eventId);
-        assertNull(trace.projectId);
+        assertNull(trace.subjectId);
         assertNotNull(trace.startedOn);
         assertNull(trace.completedOn);
 

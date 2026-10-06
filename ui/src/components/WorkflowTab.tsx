@@ -66,7 +66,7 @@ export function WorkflowTab({
         const handler = (event: MessageEvent) => {
             try {
                 const data = JSON.parse(event.data);
-                if (data.projectId === projectId) {
+                if (data.subjectId === projectId) {
                     loadInstance();
                     onRefresh();
                 }

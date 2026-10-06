@@ -6,7 +6,7 @@ import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
@@ -47,10 +47,10 @@ class EventStreamOrchestratorTest {
         StreamEventEntity.deleteAll();
         EventSubscriptionEntity.deleteAll();
         TaskEntity.delete("createdBy", "subscription");
-        // Delete activity log and thread entries for test projects before deleting projects
-        ActivityLogEntity.delete("projectId IN (SELECT p.id FROM ProjectEntity p WHERE p.type = ?1)", "test-event");
-        ThreadEntryEntity.delete("projectId IN (SELECT p.id FROM ProjectEntity p WHERE p.type = ?1)", "test-event");
-        ProjectEntity.delete("type", "test-event");
+        // Delete activity log and thread entries for test subjects before deleting subjects
+        ActivityLogEntity.delete("subjectId IN (SELECT p.id FROM SubjectEntity p WHERE p.type = ?1)", "test-event");
+        ThreadEntryEntity.delete("subjectId IN (SELECT p.id FROM SubjectEntity p WHERE p.type = ?1)", "test-event");
+        SubjectEntity.delete("type", "test-event");
         ActionTypeEntity.delete("name", "test-action");
     }
 
@@ -383,43 +383,43 @@ class EventStreamOrchestratorTest {
     // ── Routing Rule Tests ───────────────────────────────────────────
 
     @Test
-    void projectAutoCreatedFromEventRef() {
-        // Use a unique ref that won't match any existing project
+    void subjectAutoCreatedFromEventRef() {
+        // Use a unique ref that won't match any existing subject
         String uniqueRef = "https://github.com/test-org/test-repo/issues/99999";
 
         insertStreamEvent("ev-proj-1", "issue.created", "conn-1", uniqueRef);
-        // Workflow creation fails (no such definition) after the project is resolved
+        // Workflow creation fails (no such definition) after the subject is resolved
         String routing = "[{\"type\":\"create-workflow\",\"workflowDefinitionId\":99999}]";
-        insertSubscription("project-test", null, true, routing);
+        insertSubscription("subject-test", null, true, routing);
 
         orchestrator.processNewEvents();
 
-        // Verify project was auto-created with correct type
+        // Verify subject was auto-created with correct type
         QuarkusTransaction.requiringNew().run(() -> {
-            ProjectEntity project = ProjectEntity.find("ref", uniqueRef).firstResult();
-            assertNotNull(project, "Project should have been auto-created");
-            assertEquals("issue", project.type, "Project type should be 'issue' for issue events");
+            SubjectEntity subject = SubjectEntity.find("ref", uniqueRef).firstResult();
+            assertNotNull(subject, "Subject should have been auto-created");
+            assertEquals("issue", subject.type, "Subject type should be 'issue' for issue events");
         });
     }
 
     @Test
-    void projectReusedForSameRef() {
+    void subjectReusedForSameRef() {
         String ref = "https://github.com/test-org/test-repo/issues/88888";
 
         // Insert two events with the same ref
         insertStreamEvent("ev-reuse-1", "issue.created", "conn-1", ref);
         insertStreamEvent("ev-reuse-2", "issue.updated", "conn-1", ref);
 
-        // Workflow creation fails (no such definition) after the project is resolved
+        // Workflow creation fails (no such definition) after the subject is resolved
         String routing = "[{\"type\":\"create-workflow\",\"workflowDefinitionId\":99999}]";
         insertSubscription("reuse-test", null, true, routing);
 
         orchestrator.processNewEvents();
 
-        // Verify only one project was created
-        long projectCount = QuarkusTransaction.requiringNew().call(() ->
-            ProjectEntity.count("ref", ref));
-        assertEquals(1, projectCount, "Should reuse the same project for both events");
+        // Verify only one subject was created
+        long subjectCount = QuarkusTransaction.requiringNew().call(() ->
+            SubjectEntity.count("ref", ref));
+        assertEquals(1, subjectCount, "Should reuse the same subject for both events");
     }
 
     @Test

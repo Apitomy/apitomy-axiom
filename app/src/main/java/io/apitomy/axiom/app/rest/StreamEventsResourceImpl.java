@@ -14,7 +14,7 @@ import io.apitomy.axiom.api.beans.StreamEvent;
 import io.apitomy.axiom.api.beans.StreamEventSearchResults;
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
@@ -206,22 +206,22 @@ public class StreamEventsResourceImpl implements StreamResource {
                             .computeIfAbsent(i.outcomeId, k -> new java.util.ArrayList<>()).add(i));
         }
 
-        // Load project names for outcome and item project IDs
-        java.util.Set<Long> outcomeProjectIds = new java.util.HashSet<>();
+        // Load subject names for outcome and item subject IDs
+        java.util.Set<Long> outcomeSubjectIds = new java.util.HashSet<>();
         for (List<RoutingOutcomeEntity> ocs : outcomesByLedger.values()) {
             for (RoutingOutcomeEntity o : ocs) {
-                if (o.projectId != null) outcomeProjectIds.add(o.projectId);
+                if (o.subjectId != null) outcomeSubjectIds.add(o.subjectId);
             }
         }
         itemsByOutcome.values().stream().flatMap(List::stream)
-                .filter(i -> i.projectId != null)
-                .forEach(i -> outcomeProjectIds.add(i.projectId));
-        Map<Long, String> projectNames = new HashMap<>();
-        if (!outcomeProjectIds.isEmpty()) {
-            List<ProjectEntity> projects = ProjectEntity
-                    .find("id IN ?1", new java.util.ArrayList<>(outcomeProjectIds)).list();
-            for (ProjectEntity p : projects) {
-                projectNames.put(p.id, p.name);
+                .filter(i -> i.subjectId != null)
+                .forEach(i -> outcomeSubjectIds.add(i.subjectId));
+        Map<Long, String> subjectNames = new HashMap<>();
+        if (!outcomeSubjectIds.isEmpty()) {
+            List<SubjectEntity> subjects = SubjectEntity
+                    .find("id IN ?1", new java.util.ArrayList<>(outcomeSubjectIds)).list();
+            for (SubjectEntity p : subjects) {
+                subjectNames.put(p.id, p.name);
             }
         }
 
@@ -291,13 +291,13 @@ public class StreamEventsResourceImpl implements StreamResource {
                 outcome.setAttemptNumber(o.attemptNumber);
                 outcome.setErrorMessage(o.errorMessage);
                 outcome.setSummary(o.summary);
-                outcome.setProjectId(o.projectId);
-                if (o.projectId != null) outcome.setProjectName(projectNames.get(o.projectId));
+                outcome.setSubjectId(o.subjectId);
+                if (o.subjectId != null) outcome.setSubjectName(subjectNames.get(o.subjectId));
                 outcome.setTaskId(o.taskId);
                 if (o.taskId != null) outcome.setTaskStatus(taskStatuses.get(o.taskId));
                 outcome.setTraceId(o.traceId);
                 outcome.setItems(itemsByOutcome.getOrDefault(o.id, List.of()).stream()
-                        .map(i -> toItemBean(i, projectNames, taskStatuses, runTraceIds))
+                        .map(i -> toItemBean(i, subjectNames, taskStatuses, runTraceIds))
                         .toList());
                 return outcome;
             }).toList();
@@ -310,7 +310,7 @@ public class StreamEventsResourceImpl implements StreamResource {
     }
 
     private static EventProcessingOutcomeItem toItemBean(RoutingOutcomeItemEntity i,
-                                                         Map<Long, String> projectNames,
+                                                         Map<Long, String> subjectNames,
                                                          Map<Long, String> taskStatuses,
                                                          Map<Long, UUID> runTraceIds) {
         EventProcessingOutcomeItem item = new EventProcessingOutcomeItem();
@@ -318,8 +318,8 @@ public class StreamEventsResourceImpl implements StreamResource {
         item.setStatus(i.status);
         item.setSummary(i.summary);
         item.setErrorMessage(i.errorMessage);
-        item.setProjectId(i.projectId);
-        if (i.projectId != null) item.setProjectName(projectNames.get(i.projectId));
+        item.setSubjectId(i.subjectId);
+        if (i.subjectId != null) item.setSubjectName(subjectNames.get(i.subjectId));
         item.setTaskId(i.taskId);
         if (i.taskId != null) item.setTaskStatus(taskStatuses.get(i.taskId));
         item.setWorkflowRunId(i.workflowRunId);

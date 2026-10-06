@@ -63,12 +63,12 @@ export function ScriptAiModal({
                 </Title>
                 <div className="axiom-text-subtle" style={{ fontSize: "13px", marginTop: "4px" }}>
                     Available placeholders:{" "}
-                    <code>{"{{projectId}}"}</code>,{" "}
+                    <code>{"{{subjectId}}"}</code>,{" "}
                     <code>{"{{eventId}}"}</code>,{" "}
                     <code>{"{{taskId}}"}</code>,{" "}
                     <code>{"{{ref}}"}</code>,{" "}
                     <code>{"{{repository}}"}</code>,{" "}
-                    <code>{"{{projectName}}"}</code>,{" "}
+                    <code>{"{{subjectName}}"}</code>,{" "}
                     <code>{"{{apiBaseUrl}}"}</code>
                 </div>
             </StackItem>

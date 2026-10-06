@@ -1,7 +1,7 @@
 package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.agents.spi.AgentResult;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.TraceEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
@@ -65,11 +65,11 @@ class TraceLifecycleTest {
     @Test
     void completedTaskClosesTraceOnlyAfterLastTaskNode() {
         // Two tasks sharing one trace (as a single routing can produce)
-        Long projectId = createProject();
+        Long subjectId = createSubject();
         TraceContext ctx = traceService.createTrace("create-workflow", "multi-task", null, null,
                 "create-workflow", "root", null, null);
-        Long first = createTask(projectId, ctx);
-        Long second = createTask(projectId, ctx);
+        Long first = createTask(subjectId, ctx);
+        Long second = createTask(subjectId, ctx);
 
         taskExecutionService.onTaskCompleted(first, AgentResult.success("ok"));
         assertEquals("in-progress", traceStatus(ctx.traceId()),
@@ -81,30 +81,30 @@ class TraceLifecycleTest {
 
     // ── Helpers ──────────────────────────────────────────────────────
 
-    private Long createProject() {
+    private Long createSubject() {
         return QuarkusTransaction.requiringNew().call(() -> {
-            ProjectEntity project = new ProjectEntity();
-            project.name = "trace-lifecycle-" + UUID.randomUUID();
-            project.type = "test-trace";
-            project.ref = "https://example.com/" + UUID.randomUUID();
-            project.createdOn = Instant.now();
-            project.updatedOn = Instant.now();
-            project.persist();
-            return project.id;
+            SubjectEntity subject = new SubjectEntity();
+            subject.name = "trace-lifecycle-" + UUID.randomUUID();
+            subject.type = "test-trace";
+            subject.ref = "https://example.com/" + UUID.randomUUID();
+            subject.createdOn = Instant.now();
+            subject.updatedOn = Instant.now();
+            subject.persist();
+            return subject.id;
         });
     }
 
     private Long createTaskWithTrace() {
-        Long projectId = createProject();
+        Long subjectId = createSubject();
         TraceContext ctx = traceService.createTrace("create-workflow", "task trace", null, null,
                 "create-workflow", "root", null, null);
-        return createTask(projectId, ctx);
+        return createTask(subjectId, ctx);
     }
 
-    private Long createTask(Long projectId, TraceContext ctx) {
+    private Long createTask(Long subjectId, TraceContext ctx) {
         Long taskId = QuarkusTransaction.requiringNew().call(() -> {
             TaskEntity task = new TaskEntity();
-            task.projectId = projectId;
+            task.subjectId = subjectId;
             task.actionType = "trace-lifecycle-action";
             task.createdBy = "test";
             task.status = "InProgress";

@@ -331,14 +331,14 @@ export function AssistantSessionPage() {
                             </Label>
                         </Tooltip>
                     )}
-                    {session.projectId && session.projectName && (
+                    {session.subjectId && session.subjectName && (
                         <Label
                             color="teal"
                             isCompact
                             className="axiom-session-page__header-label--clickable"
-                            onClick={() => navigate(`/projects/${session.projectId}`)}
+                            onClick={() => navigate(`/projects/${session.subjectId}`)}
                         >
-                            {session.projectName}
+                            {session.subjectName}
                         </Label>
                     )}
                 </FlexItem>

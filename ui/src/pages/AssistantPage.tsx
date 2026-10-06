@@ -234,11 +234,11 @@ export function AssistantPage() {
                                 <div className="axiom-assistant-page__session-card__name">{s.name}</div>
                                 <div className="axiom-assistant-page__session-card__meta">
                                     {templateMap[s.templateId] || s.templateId}
-                                    {s.projectName && (
+                                    {s.subjectName && (
                                         <>
                                             {" · "}
                                             <Label isCompact color="teal">
-                                                {s.projectName}
+                                                {s.subjectName}
                                             </Label>
                                         </>
                                     )}

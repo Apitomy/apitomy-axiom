@@ -5,7 +5,7 @@ import io.apitomy.axiom.api.beans.LineageGraph;
 import io.apitomy.axiom.api.beans.LineageNode;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
@@ -49,7 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @QuarkusTest
 class LineageTest {
 
-    private static Long projectId;
+    private static Long subjectId;
 
     @Inject
     LineageService lineageService;
@@ -64,22 +64,22 @@ class LineageTest {
     private final List<Object[]> created = new ArrayList<>();
 
     @BeforeAll
-    static void createProject() {
-        projectId = QuarkusTransaction.requiringNew().call(() -> {
-            ProjectEntity project = new ProjectEntity();
-            project.name = "lineage-" + UUID.randomUUID();
-            project.type = "other";
-            project.ref = "test/lineage-" + UUID.randomUUID();
-            project.createdOn = Instant.now();
-            project.updatedOn = Instant.now();
-            project.persist();
-            return project.id;
+    static void createSubject() {
+        subjectId = QuarkusTransaction.requiringNew().call(() -> {
+            SubjectEntity subject = new SubjectEntity();
+            subject.name = "lineage-" + UUID.randomUUID();
+            subject.type = "other";
+            subject.ref = "test/lineage-" + UUID.randomUUID();
+            subject.createdOn = Instant.now();
+            subject.updatedOn = Instant.now();
+            subject.persist();
+            return subject.id;
         });
     }
 
     @AfterAll
-    static void deleteProject() {
-        QuarkusTransaction.requiringNew().run(() -> ProjectEntity.deleteById(projectId));
+    static void deleteSubject() {
+        QuarkusTransaction.requiringNew().run(() -> SubjectEntity.deleteById(subjectId));
     }
 
     /**
@@ -343,7 +343,7 @@ class LineageTest {
         assertNotNull(findNode(graph, "task:" + task));
         for (Class<?> type : List.of(StreamEventEntity.class, TaskEntity.class, WorkflowRunEntity.class)) {
             assertEquals(0, stats.getEntityStatistics(type.getName()).getLoadCount(),
-                    type.getSimpleName() + " rows must be loaded as label projections");
+                    type.getSimpleName() + " rows must be loaded as label subjections");
         }
     }
 
@@ -504,7 +504,7 @@ class LineageTest {
     private Long createTask(UUID traceId, UUID eventId, Long runId) {
         return QuarkusTransaction.requiringNew().call(() -> {
             TaskEntity task = new TaskEntity();
-            task.projectId = projectId;
+            task.subjectId = subjectId;
             task.actionType = "lineage-action";
             task.createdBy = "subscription";
             task.status = "Completed";
@@ -521,7 +521,7 @@ class LineageTest {
     private Long createRun(UUID eventId, UUID traceId) {
         return QuarkusTransaction.requiringNew().call(() -> {
             WorkflowRunEntity run = new WorkflowRunEntity();
-            run.projectId = projectId;
+            run.subjectId = subjectId;
             run.definitionId = 1L;
             run.definitionVersion = 1;
             run.instanceState = "{}";

@@ -67,8 +67,8 @@ public class AssistantSession {
     private volatile boolean allowAll;
     private final Set<String> subagentAllowAll = ConcurrentHashMap.newKeySet();
     private final Map<String, String> subagentTaskToToolUseId = new ConcurrentHashMap<>();
-    private final Long projectId;
-    private final String projectName;
+    private final Long subjectId;
+    private final String subjectName;
 
     /**
      * A session-scoped rule for automatically approving tool permissions.
@@ -95,15 +95,15 @@ public class AssistantSession {
      * @param command the legacy command line for direct subprocess mode
      * @param environment resolved environment variables for direct subprocess mode
      * @param engineType the interactive engine type resolved for this session
-     * @param projectId optional project ID if session is scoped to a project
-     * @param projectName optional project name if session is scoped to a project
+     * @param subjectId optional subject ID if session is scoped to a subject
+     * @param subjectName optional subject name if session is scoped to a subject
      */
     public AssistantSession(String name, String templateId, Path sessionDirectory,
                               Path workingDirectory, List<String> command,
-                              Map<String, String> environment, String engineType, Long projectId,
-                              String projectName) {
+                              Map<String, String> environment, String engineType, Long subjectId,
+                              String subjectName) {
         this(name, templateId, sessionDirectory, workingDirectory, command,
-                environment, engineType, projectId, projectName, null);
+                environment, engineType, subjectId, subjectName, null);
     }
 
     /**
@@ -116,14 +116,14 @@ public class AssistantSession {
      * @param command the legacy command line used by Claude runtime mode
      * @param environment resolved environment variables used by Claude runtime mode
      * @param engineType the interactive engine type resolved for this session
-     * @param projectId optional project ID if session is scoped to a project
-     * @param projectName optional project name if session is scoped to a project
+     * @param subjectId optional subject ID if session is scoped to a subject
+     * @param subjectName optional subject name if session is scoped to a subject
      * @param driver runtime driver used for interactive session I/O
      */
     public AssistantSession(String name, String templateId, Path sessionDirectory,
                               Path workingDirectory, List<String> command,
-                              Map<String, String> environment, String engineType, Long projectId,
-                              String projectName, InteractiveSessionDriver driver) {
+                              Map<String, String> environment, String engineType, Long subjectId,
+                              String subjectName, InteractiveSessionDriver driver) {
         this.id = UUID.randomUUID().toString();
         this.name = name;
         this.templateId = templateId;
@@ -134,8 +134,8 @@ public class AssistantSession {
         this.engineType = engineType;
         this.createdAt = Instant.now();
         this.lastActivityAt = this.createdAt;
-        this.projectId = projectId;
-        this.projectName = projectName;
+        this.subjectId = subjectId;
+        this.subjectName = subjectName;
         AssistantEventParser eventParser = new AssistantEventParser();
         this.driver = driver != null
                 ? driver
@@ -445,17 +445,17 @@ public class AssistantSession {
     }
 
     /**
-     * @return the project ID if this session is scoped to a project, null otherwise
+     * @return the subject ID if this session is scoped to a subject, null otherwise
      */
-    public Long getProjectId() {
-        return projectId;
+    public Long getSubjectId() {
+        return subjectId;
     }
 
     /**
-     * @return the project name if this session is scoped to a project, null otherwise
+     * @return the subject name if this session is scoped to a subject, null otherwise
      */
-    public String getProjectName() {
-        return projectName;
+    public String getSubjectName() {
+        return subjectName;
     }
 
     /**

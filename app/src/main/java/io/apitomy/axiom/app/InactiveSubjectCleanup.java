@@ -1,6 +1,6 @@
 package io.apitomy.axiom.app;
 
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.annotation.PreDestroy;
@@ -14,20 +14,20 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 /**
- * Periodically deletes inactive projects that have exceeded the configured
- * retention period. A project is inactive when it has no running or waiting
+ * Periodically deletes inactive subjects that have exceeded the configured
+ * retention period. A subject is inactive when it has no running or waiting
  * workflow run; it is eligible for deletion once its most recent run completed
  * before the retention cutoff. Runs once per hour.
  */
 @ApplicationScoped
-public class InactiveProjectCleanup {
+public class InactiveSubjectCleanup {
 
-    private static final Logger LOG = Logger.getLogger(InactiveProjectCleanup.class);
+    private static final Logger LOG = Logger.getLogger(InactiveSubjectCleanup.class);
 
     private static final List<String> ACTIVE_STATUSES = List.of("running", "waiting");
 
     @Inject
-    ProjectDeletionService projectDeletionService;
+    SubjectDeletionService subjectDeletionService;
 
     private volatile boolean shuttingDown = false;
 
@@ -37,7 +37,7 @@ public class InactiveProjectCleanup {
     }
 
     /**
-     * Finds and deletes inactive projects whose last run completed before the retention period.
+     * Finds and deletes inactive subjects whose last run completed before the retention period.
      */
     @Scheduled(every = "1h", concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     @Transactional
@@ -51,21 +51,21 @@ public class InactiveProjectCleanup {
             return;
         }
 
-        Instant cutoff = Instant.now().minus(config.inactiveProjectRetentionDays, ChronoUnit.DAYS);
-        List<ProjectEntity> staleProjects = ProjectEntity
-                .find("id in (select r.projectId from WorkflowRunEntity r"
-                        + " group by r.projectId having max(r.completedOn) < ?1)"
-                        + " and id not in (select a.projectId from WorkflowRunEntity a"
+        Instant cutoff = Instant.now().minus(config.inactiveSubjectRetentionDays, ChronoUnit.DAYS);
+        List<SubjectEntity> staleSubjects = SubjectEntity
+                .find("id in (select r.subjectId from WorkflowRunEntity r"
+                        + " group by r.subjectId having max(r.completedOn) < ?1)"
+                        + " and id not in (select a.subjectId from WorkflowRunEntity a"
                         + " where a.status in ?2)", cutoff, ACTIVE_STATUSES)
                 .list();
 
-        if (!staleProjects.isEmpty()) {
-            for (ProjectEntity project : staleProjects) {
-                LOG.infof("Cleaning up inactive project %d (%s)", project.id, project.name);
-                projectDeletionService.deleteProject(project);
+        if (!staleSubjects.isEmpty()) {
+            for (SubjectEntity subject : staleSubjects) {
+                LOG.infof("Cleaning up inactive subject %d (%s)", subject.id, subject.name);
+                subjectDeletionService.deleteSubject(subject);
             }
-            LOG.infof("Cleaned up %d inactive project(s) older than %d days",
-                    staleProjects.size(), config.inactiveProjectRetentionDays);
+            LOG.infof("Cleaned up %d inactive subject(s) older than %d days",
+                    staleSubjects.size(), config.inactiveSubjectRetentionDays);
         }
     }
 }

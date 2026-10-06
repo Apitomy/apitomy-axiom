@@ -1,6 +1,6 @@
 package io.apitomy.axiom.core.services;
 
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -10,7 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Manages work directories for projects. Each project gets an independent
+ * Manages work directories for subjects. Each subject gets an independent
  * directory where agents can perform their work (clone repos, generate
  * files, etc.).
  */
@@ -23,36 +23,36 @@ public class WorkspaceService {
     String workspaceRoot;
 
     /**
-     * Returns the workspace path for a project.
+     * Returns the workspace path for a subject.
      *
-     * @param project the project
+     * @param subject the subject
      * @return the workspace directory path
      */
-    public Path getWorkspacePath(ProjectEntity project) {
-        return Path.of(workspaceRoot, "project-" + project.id);
+    public Path getWorkspacePath(SubjectEntity subject) {
+        return Path.of(workspaceRoot, "subject-" + subject.id);
     }
 
     /**
-     * Ensures a work directory exists for the given project. Creates
+     * Ensures a work directory exists for the given subject. Creates
      * the directory if it doesn't exist. Does not clone any repository —
      * users can configure clone tools for action types that need a checkout.
      *
-     * @param project the project to create a workspace for
+     * @param subject the subject to create a workspace for
      * @return the workspace directory path
      */
-    public Path ensureWorkspace(ProjectEntity project) {
-        Path workspace = getWorkspacePath(project);
+    public Path ensureWorkspace(SubjectEntity subject) {
+        Path workspace = getWorkspacePath(subject);
 
         if (Files.exists(workspace)) {
-            LOG.debugf("Workspace already exists for project %d at %s", project.id, workspace);
+            LOG.debugf("Workspace already exists for subject %d at %s", subject.id, workspace);
             return workspace;
         }
 
-        LOG.infof("Creating workspace for project %d at %s", project.id, workspace);
+        LOG.infof("Creating workspace for subject %d at %s", subject.id, workspace);
         try {
             Files.createDirectories(workspace);
         } catch (IOException e) {
-            LOG.errorf(e, "Failed to create workspace directory for project %d", project.id);
+            LOG.errorf(e, "Failed to create workspace directory for subject %d", subject.id);
             throw new WorkspaceException("Failed to create workspace directory: " + e.getMessage(), e);
         }
 
@@ -60,30 +60,30 @@ public class WorkspaceService {
     }
 
     /**
-     * Deletes the workspace directory for a project.
+     * Deletes the workspace directory for a subject.
      *
-     * @param project the project whose workspace should be deleted
+     * @param subject the subject whose workspace should be deleted
      */
-    public void deleteWorkspace(ProjectEntity project) {
-        Path workspace = getWorkspacePath(project);
+    public void deleteWorkspace(SubjectEntity subject) {
+        Path workspace = getWorkspacePath(subject);
         if (Files.exists(workspace)) {
-            LOG.infof("Deleting workspace for project %d at %s", project.id, workspace);
+            LOG.infof("Deleting workspace for subject %d at %s", subject.id, workspace);
             try {
                 deleteRecursively(workspace);
             } catch (IOException e) {
-                LOG.warnf(e, "Failed to delete workspace for project %d", project.id);
+                LOG.warnf(e, "Failed to delete workspace for subject %d", subject.id);
             }
         }
     }
 
     /**
-     * Computes the total disk usage of a project's workspace directory in bytes.
+     * Computes the total disk usage of a subject's workspace directory in bytes.
      *
-     * @param project the project whose workspace size to compute
+     * @param subject the subject whose workspace size to compute
      * @return the total size in bytes, or 0 if the workspace doesn't exist
      */
-    public long computeDiskUsage(ProjectEntity project) {
-        Path workspace = getWorkspacePath(project);
+    public long computeDiskUsage(SubjectEntity subject) {
+        Path workspace = getWorkspacePath(subject);
         if (!Files.exists(workspace)) {
             return 0;
         }
@@ -98,7 +98,7 @@ public class WorkspaceService {
                 return Long.parseLong(output.split("\\s+")[0]);
             }
         } catch (Exception e) {
-            LOG.debugf("du command failed for project %d, falling back to file walk", project.id);
+            LOG.debugf("du command failed for subject %d, falling back to file walk", subject.id);
         }
 
         try (var stream = Files.walk(workspace)) {
@@ -110,7 +110,7 @@ public class WorkspaceService {
                     })
                     .sum();
         } catch (IOException e) {
-            LOG.warnf(e, "Failed to compute disk usage for project %d", project.id);
+            LOG.warnf(e, "Failed to compute disk usage for subject %d", subject.id);
             return 0;
         }
     }

@@ -22,7 +22,7 @@ function DiskUsageWidget({ config }: WidgetProps) {
             .then(result => {
                 if (cancelled) return;
                 const items = result.items
-                    .map(p => ({ name: p.projectName, bytes: p.diskUsageBytes }))
+                    .map(p => ({ name: p.subjectName, bytes: p.diskUsageBytes }))
                     .filter(p => p.bytes > 0);
                 setData(items);
                 setTotalBytes(result.totalDiskUsageBytes);

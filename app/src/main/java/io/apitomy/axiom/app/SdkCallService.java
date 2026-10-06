@@ -2,7 +2,7 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.SdkFunctionRegistry;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -50,15 +50,15 @@ public class SdkCallService {
         LOG.infof("SDK call: %s(%s)", functionName, params);
 
         return switch (functionName) {
-            case "axiom_add_project_label" -> addProjectLabel(params);
-            case "axiom_remove_project_label" -> removeProjectLabel(params);
-            case "axiom_update_project" -> updateProject(params);
+            case "axiom_add_subject_label" -> addSubjectLabel(params);
+            case "axiom_remove_subject_label" -> removeSubjectLabel(params);
+            case "axiom_update_subject" -> updateSubject(params);
             case "axiom_add_thread_entry" -> addThreadEntry(params);
-            case "axiom_get_project" -> getProject(params);
+            case "axiom_get_subject" -> getSubject(params);
             case "axiom_fire_event" -> fireEvent(params);
-            case "axiom_list_projects" -> listProjects(params);
-            case "axiom_create_project" -> createProject(params);
-            case "axiom_update_project_body" -> updateProjectBody(params);
+            case "axiom_list_subjects" -> listSubjects(params);
+            case "axiom_create_subject" -> createSubject(params);
+            case "axiom_update_subject_body" -> updateSubjectBody(params);
             default -> SdkCallResult.error("Unknown SDK function: " + functionName);
         };
     }
@@ -71,69 +71,69 @@ public class SdkCallService {
         return SdkFunctionRegistry.isValidSdkCall(functionName);
     }
 
-    private SdkCallResult addProjectLabel(Map<String, Object> params) {
-        Long projectId = toLong(params.get("projectId"));
+    private SdkCallResult addSubjectLabel(Map<String, Object> params) {
+        Long subjectId = toLong(params.get("subjectId"));
         String label = toString(params.get("label"));
-        if (projectId == null) return SdkCallResult.error("projectId is required");
+        if (subjectId == null) return SdkCallResult.error("subjectId is required");
         if (label == null) return SdkCallResult.error("label is required");
-        ProjectEntity project = ProjectEntity.findById(projectId);
-        if (project == null) return SdkCallResult.error("Project not found: " + projectId);
-        if (!project.labels.contains(label)) {
-            project.labels.add(label);
-            project.updatedOn = Instant.now();
+        SubjectEntity subject = SubjectEntity.findById(subjectId);
+        if (subject == null) return SdkCallResult.error("Subject not found: " + subjectId);
+        if (!subject.labels.contains(label)) {
+            subject.labels.add(label);
+            subject.updatedOn = Instant.now();
         }
-        return SdkCallResult.ok("Label '" + label + "' added to project " + projectId);
+        return SdkCallResult.ok("Label '" + label + "' added to subject " + subjectId);
     }
 
-    private SdkCallResult removeProjectLabel(Map<String, Object> params) {
-        Long projectId = toLong(params.get("projectId"));
+    private SdkCallResult removeSubjectLabel(Map<String, Object> params) {
+        Long subjectId = toLong(params.get("subjectId"));
         String label = toString(params.get("label"));
-        if (projectId == null) return SdkCallResult.error("projectId is required");
+        if (subjectId == null) return SdkCallResult.error("subjectId is required");
         if (label == null) return SdkCallResult.error("label is required");
-        ProjectEntity project = ProjectEntity.findById(projectId);
-        if (project == null) return SdkCallResult.error("Project not found: " + projectId);
-        project.labels.remove(label);
-        project.updatedOn = Instant.now();
-        return SdkCallResult.ok("Label '" + label + "' removed from project " + projectId);
+        SubjectEntity subject = SubjectEntity.findById(subjectId);
+        if (subject == null) return SdkCallResult.error("Subject not found: " + subjectId);
+        subject.labels.remove(label);
+        subject.updatedOn = Instant.now();
+        return SdkCallResult.ok("Label '" + label + "' removed from subject " + subjectId);
     }
 
-    private SdkCallResult updateProject(Map<String, Object> params) {
-        Long projectId = toLong(params.get("projectId"));
-        if (projectId == null) return SdkCallResult.error("projectId is required");
-        ProjectEntity project = ProjectEntity.findById(projectId);
-        if (project == null) return SdkCallResult.error("Project not found: " + projectId);
+    private SdkCallResult updateSubject(Map<String, Object> params) {
+        Long subjectId = toLong(params.get("subjectId"));
+        if (subjectId == null) return SdkCallResult.error("subjectId is required");
+        SubjectEntity subject = SubjectEntity.findById(subjectId);
+        if (subject == null) return SdkCallResult.error("Subject not found: " + subjectId);
         String name = toString(params.get("name"));
-        if (name != null) project.name = name;
-        project.updatedOn = Instant.now();
-        return SdkCallResult.ok("Project " + projectId + " updated");
+        if (name != null) subject.name = name;
+        subject.updatedOn = Instant.now();
+        return SdkCallResult.ok("Subject " + subjectId + " updated");
     }
 
     private SdkCallResult addThreadEntry(Map<String, Object> params) {
-        Long projectId = toLong(params.get("projectId"));
+        Long subjectId = toLong(params.get("subjectId"));
         String content = toString(params.get("content"));
-        if (projectId == null) return SdkCallResult.error("projectId is required");
+        if (subjectId == null) return SdkCallResult.error("subjectId is required");
         if (content == null) return SdkCallResult.error("content is required");
         ThreadEntryEntity entry = new ThreadEntryEntity();
-        entry.projectId = projectId;
+        entry.subjectId = subjectId;
         entry.authorType = toString(params.getOrDefault("authorType", "system"));
         entry.entryType = toString(params.getOrDefault("entryType", "message"));
         entry.content = content;
         entry.createdOn = Instant.now();
         entry.persist();
-        return SdkCallResult.ok("Thread entry added to project " + projectId);
+        return SdkCallResult.ok("Thread entry added to subject " + subjectId);
     }
 
-    private SdkCallResult getProject(Map<String, Object> params) {
-        Long projectId = toLong(params.get("projectId"));
-        if (projectId == null) return SdkCallResult.error("projectId is required");
-        ProjectEntity project = ProjectEntity.findById(projectId);
-        if (project == null) return SdkCallResult.error("Project not found: " + projectId);
-        return SdkCallResult.ok("Project found", Map.of(
-                "id", project.id,
-                "name", project.name != null ? project.name : "",
-                "active", ProjectEntity.isActive(project.id),
-                "ref", project.ref != null ? project.ref : "",
-                "type", project.type != null ? project.type : ""
+    private SdkCallResult getSubject(Map<String, Object> params) {
+        Long subjectId = toLong(params.get("subjectId"));
+        if (subjectId == null) return SdkCallResult.error("subjectId is required");
+        SubjectEntity subject = SubjectEntity.findById(subjectId);
+        if (subject == null) return SdkCallResult.error("Subject not found: " + subjectId);
+        return SdkCallResult.ok("Subject found", Map.of(
+                "id", subject.id,
+                "name", subject.name != null ? subject.name : "",
+                "active", SubjectEntity.isActive(subject.id),
+                "ref", subject.ref != null ? subject.ref : "",
+                "type", subject.type != null ? subject.type : ""
         ));
     }
 
@@ -162,7 +162,7 @@ public class SdkCallService {
                 Map.of("eventId", event.id.toString()));
     }
 
-    private SdkCallResult listProjects(Map<String, Object> params) {
+    private SdkCallResult listSubjects(Map<String, Object> params) {
         String filterName = toString(params.get("filterName"));
         String filterRef = toString(params.get("filterRef"));
 
@@ -178,12 +178,12 @@ public class SdkCallService {
             queryParams.put("ref", filterRef);
         }
 
-        var projects = ProjectEntity.<ProjectEntity>find(hql.toString(),
+        var subjects = SubjectEntity.<SubjectEntity>find(hql.toString(),
                 io.quarkus.panache.common.Sort.descending("createdOn"), queryParams)
                 .page(0, 50).list();
 
-        java.util.Set<Long> activeIds = ProjectEntity.findActiveProjectIds();
-        var items = projects.stream().map(p -> Map.<String, Object>of(
+        java.util.Set<Long> activeIds = SubjectEntity.findActiveSubjectIds();
+        var items = subjects.stream().map(p -> Map.<String, Object>of(
                 "id", p.id,
                 "name", p.name != null ? p.name : "",
                 "active", activeIds.contains(p.id),
@@ -191,11 +191,11 @@ public class SdkCallService {
                 "type", p.type != null ? p.type : ""
         )).toList();
 
-        return SdkCallResult.ok("Found " + items.size() + " projects",
-                Map.of("projects", items, "count", items.size()));
+        return SdkCallResult.ok("Found " + items.size() + " subjects",
+                Map.of("subjects", items, "count", items.size()));
     }
 
-    private SdkCallResult createProject(Map<String, Object> params) {
+    private SdkCallResult createSubject(Map<String, Object> params) {
         String name = toString(params.get("name"));
         String type = toString(params.get("type"));
         String ref = toString(params.get("ref"));
@@ -203,31 +203,31 @@ public class SdkCallService {
         if (type == null) return SdkCallResult.error("type is required");
         if (ref == null) return SdkCallResult.error("ref is required");
 
-        ProjectEntity project = new ProjectEntity();
-        project.name = name;
-        project.type = type;
-        project.ref = ref;
-        project.refSource = toString(params.get("refSource"));
-        project.repository = toString(params.get("repository"));
-        project.body = toString(params.get("body"));
-        project.createdOn = Instant.now();
-        project.updatedOn = Instant.now();
-        project.persist();
+        SubjectEntity subject = new SubjectEntity();
+        subject.name = name;
+        subject.type = type;
+        subject.ref = ref;
+        subject.refSource = toString(params.get("refSource"));
+        subject.repository = toString(params.get("repository"));
+        subject.body = toString(params.get("body"));
+        subject.createdOn = Instant.now();
+        subject.updatedOn = Instant.now();
+        subject.persist();
 
-        return SdkCallResult.ok("Project " + project.id + " created",
-                Map.of("projectId", project.id));
+        return SdkCallResult.ok("Subject " + subject.id + " created",
+                Map.of("subjectId", subject.id));
     }
 
-    private SdkCallResult updateProjectBody(Map<String, Object> params) {
-        Long projectId = toLong(params.get("projectId"));
+    private SdkCallResult updateSubjectBody(Map<String, Object> params) {
+        Long subjectId = toLong(params.get("subjectId"));
         String body = toString(params.get("body"));
-        if (projectId == null) return SdkCallResult.error("projectId is required");
+        if (subjectId == null) return SdkCallResult.error("subjectId is required");
         if (body == null) return SdkCallResult.error("body is required");
-        ProjectEntity project = ProjectEntity.findById(projectId);
-        if (project == null) return SdkCallResult.error("Project not found: " + projectId);
-        project.body = body;
-        project.updatedOn = Instant.now();
-        return SdkCallResult.ok("Project " + projectId + " body updated");
+        SubjectEntity subject = SubjectEntity.findById(subjectId);
+        if (subject == null) return SdkCallResult.error("Subject not found: " + subjectId);
+        subject.body = body;
+        subject.updatedOn = Instant.now();
+        return SdkCallResult.ok("Subject " + subjectId + " body updated");
     }
 
     private Long toLong(Object value) {

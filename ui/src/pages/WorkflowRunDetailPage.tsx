@@ -229,7 +229,7 @@ export function WorkflowRunDetailPage() {
 
             <ExecutionLogModal
                 isOpen={isLogOpen}
-                projectId={run.projectId}
+                projectId={run.subjectId}
                 taskId={logTaskId}
                 onClose={() => setIsLogOpen(false)}
             />

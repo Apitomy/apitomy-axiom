@@ -3,10 +3,10 @@ package io.apitomy.axiom.app.rest;
 import io.apitomy.axiom.api.UsageResource;
 import io.apitomy.axiom.api.beans.AiUsage;
 import io.apitomy.axiom.api.beans.AiUsageSearchResults;
-import io.apitomy.axiom.api.beans.DiskUsageProject;
+import io.apitomy.axiom.api.beans.DiskUsageSubject;
 import io.apitomy.axiom.api.beans.DiskUsageSearchResults;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.quarkus.hibernate.orm.panache.PanacheQuery;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
@@ -44,7 +44,7 @@ public class UsageResourceImpl implements UsageResource {
     @Override
     public AiUsageSearchResults listAiUsage(BigInteger page, BigInteger limit,
                                            String filterInvocationType,
-                                           BigInteger filterProjectId,
+                                           BigInteger filterSubjectId,
                                            BigInteger filterAgentId,
                                            String filterActionType,
                                            String filterDateFrom,
@@ -63,9 +63,9 @@ public class UsageResourceImpl implements UsageResource {
             hql.append(" and invocationType = :invocationType");
             params.put("invocationType", filterInvocationType);
         }
-        if (filterProjectId != null) {
-            hql.append(" and projectId = :projectId");
-            params.put("projectId", filterProjectId.longValue());
+        if (filterSubjectId != null) {
+            hql.append(" and subjectId = :subjectId");
+            params.put("subjectId", filterSubjectId.longValue());
         }
         if (filterAgentId != null) {
             hql.append(" and agentId = :agentId");
@@ -91,7 +91,7 @@ public class UsageResourceImpl implements UsageResource {
         if (filterLabels != null && !filterLabels.isBlank()) {
             List<String> labels = Arrays.stream(filterLabels.split(","))
                     .map(String::trim).filter(s -> !s.isEmpty()).toList();
-            hql.append(" and projectId in (SELECT p.id FROM ProjectEntity p"
+            hql.append(" and subjectId in (SELECT p.id FROM SubjectEntity p"
                     + " JOIN p.labels pl WHERE pl IN :labels"
                     + " GROUP BY p.id HAVING COUNT(DISTINCT pl) = :labelCount)");
             params.put("labels", labels);
@@ -160,22 +160,22 @@ public class UsageResourceImpl implements UsageResource {
             params.put("name", "%" + filterName.toLowerCase() + "%");
         }
 
-        long totalCount = ProjectEntity.count(hql.toString(), params);
+        long totalCount = SubjectEntity.count(hql.toString(), params);
 
         String sortField = "diskUsageBytes".equals(sortBy) ? "diskUsageBytes" : "name";
         boolean descending = "desc".equalsIgnoreCase(sortOrder);
 
-        PanacheQuery<ProjectEntity> query;
+        PanacheQuery<SubjectEntity> query;
         if ("diskUsageBytes".equals(sortField)) {
             String dir = descending ? "DESC" : "ASC";
             String fullHql = hql + " ORDER BY COALESCE(diskUsageBytes, 0) " + dir;
-            query = ProjectEntity.find(fullHql, params);
+            query = SubjectEntity.find(fullHql, params);
         } else {
             Sort sort = descending ? Sort.descending("name") : Sort.ascending("name");
-            query = ProjectEntity.find(hql.toString(), sort, params);
+            query = SubjectEntity.find(hql.toString(), sort, params);
         }
 
-        List<DiskUsageProject> items = query
+        List<DiskUsageSubject> items = query
                 .page(Page.of(pageNum - 1, pageSize))
                 .list()
                 .stream()
@@ -183,7 +183,7 @@ public class UsageResourceImpl implements UsageResource {
                 .toList();
 
         String aggregateHql = "SELECT COALESCE(SUM(diskUsageBytes), 0) "
-                + "FROM ProjectEntity WHERE " + hql;
+                + "FROM SubjectEntity WHERE " + hql;
         Query aggregateQuery = entityManager.createQuery(aggregateHql);
         for (Map.Entry<String, Object> entry : params.entrySet()) {
             aggregateQuery.setParameter(entry.getKey(), entry.getValue());
@@ -196,16 +196,16 @@ public class UsageResourceImpl implements UsageResource {
         results.setPage(pageNum);
         results.setLimit(pageSize);
         results.setTotalDiskUsageBytes(totalDiskUsageBytes);
-        results.setProjectCount(totalCount);
+        results.setSubjectCount(totalCount);
         return results;
     }
 
-    private DiskUsageProject toDiskUsageBean(ProjectEntity entity) {
-        DiskUsageProject project = new DiskUsageProject();
-        project.setProjectId(entity.id);
-        project.setProjectName(entity.name);
-        project.setDiskUsageBytes(entity.diskUsageBytes != null ? entity.diskUsageBytes : 0L);
-        return project;
+    private DiskUsageSubject toDiskUsageBean(SubjectEntity entity) {
+        DiskUsageSubject subject = new DiskUsageSubject();
+        subject.setSubjectId(entity.id);
+        subject.setSubjectName(entity.name);
+        subject.setDiskUsageBytes(entity.diskUsageBytes != null ? entity.diskUsageBytes : 0L);
+        return subject;
     }
 
     /**
@@ -226,7 +226,7 @@ public class UsageResourceImpl implements UsageResource {
         usage.setTaskId(entity.taskId);
         usage.setEventId(entity.eventId);
         usage.setTraceId(entity.traceId);
-        usage.setProjectId(entity.projectId);
+        usage.setSubjectId(entity.subjectId);
         usage.setAgentId(entity.agentId);
         usage.setActionType(entity.actionType);
         usage.setEngine(entity.engine);

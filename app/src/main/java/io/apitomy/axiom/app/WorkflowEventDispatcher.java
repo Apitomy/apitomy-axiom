@@ -25,8 +25,8 @@ import java.util.Map;
 /**
  * Matches allowed pipeline events against parked receive-event workflow
  * branches and resumes the ones that match. Scoping is hybrid: an event that
- * correlates to a project (by {@code issueRef} → {@code project.ref}, else
- * {@code event.projectId}) is offered only to that project's subscriptions;
+ * correlates to a subject (by {@code issueRef} → {@code subject.ref}, else
+ * {@code event.subjectId}) is offered only to that subject's subscriptions;
  * an uncorrelated event is broadcast to all subscriptions of its event type.
  * Matching itself (event type, WAITING status, {@code match} EL expressions)
  * is delegated to the Flow engine's {@code matchesEvent}, so stale
@@ -110,7 +110,7 @@ public class WorkflowEventDispatcher {
                 if (matched[0] != null) {
                     String error = e.getMessage() != null
                             ? e.getMessage() : e.getClass().getSimpleName();
-                    resumed.add(new ResumedRun(matched[0].runId(), matched[0].projectId(),
+                    resumed.add(new ResumedRun(matched[0].runId(), matched[0].subjectId(),
                             matched[0].nodeId(), null, null, error));
                 }
             }
@@ -120,7 +120,7 @@ public class WorkflowEventDispatcher {
 
     /**
      * Read phase for stream events: prefilters subscriptions by event type.
-     * Stream events don't have project scoping the way old events do — the
+     * Stream events don't have subject scoping the way old events do — the
      * subscription's filter rules handle scoping instead.
      */
     private List<Long> planStreamDispatch(String eventType, Map<String, Object> eventMap) {
@@ -164,7 +164,7 @@ public class WorkflowEventDispatcher {
 
         long runId = sub.runId;
         String nodeId = sub.nodeId;
-        matched[0] = new MatchedSubscription(runId, run.projectId, nodeId);
+        matched[0] = new MatchedSubscription(runId, run.subjectId, nodeId);
         sub.delete();
         ResumedRun resumed = workflowExecutionService.onEventReceived(runId, nodeId, eventMap,
                 origin, subscriptionId);
@@ -174,7 +174,7 @@ public class WorkflowEventDispatcher {
     }
 
     /** The run and node of a subscription that matched the event. */
-    private record MatchedSubscription(long runId, Long projectId, String nodeId) {
+    private record MatchedSubscription(long runId, Long subjectId, String nodeId) {
     }
 
     private Workflow loadWorkflowContent(long definitionId, int definitionVersion) {

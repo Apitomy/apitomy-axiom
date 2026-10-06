@@ -41,24 +41,24 @@ class LogContextTest {
 
     @Test
     void nullValuesAreIgnored() {
-        try (LogContext ignored = LogContext.create().traceId(null).projectId(7L)) {
+        try (LogContext ignored = LogContext.create().traceId(null).subjectId(7L)) {
             assertNull(MDC.get(LogContext.TRACE_ID));
-            assertEquals("[projectId=7] ", MDC.get(LogContext.SUMMARY));
+            assertEquals("[subjectId=7] ", MDC.get(LogContext.SUMMARY));
         }
         assertTrue(MDC.getMap().isEmpty());
     }
 
     @Test
     void nestedContextsRestoreOuterValues() {
-        try (LogContext outer = LogContext.create().traceId("t-outer").projectId(1L)) {
+        try (LogContext outer = LogContext.create().traceId("t-outer").subjectId(1L)) {
             try (LogContext inner = LogContext.create().traceId("t-inner").taskId(5L)) {
                 assertEquals("t-inner", MDC.get(LogContext.TRACE_ID));
-                assertEquals("1", MDC.get(LogContext.PROJECT_ID));
+                assertEquals("1", MDC.get(LogContext.SUBJECT_ID));
                 assertEquals("5", MDC.get(LogContext.TASK_ID));
             }
             assertEquals("t-outer", MDC.get(LogContext.TRACE_ID));
             assertNull(MDC.get(LogContext.TASK_ID));
-            assertEquals("[traceId=t-outer projectId=1] ", MDC.get(LogContext.SUMMARY));
+            assertEquals("[traceId=t-outer subjectId=1] ", MDC.get(LogContext.SUMMARY));
         }
         assertTrue(MDC.getMap().isEmpty());
     }

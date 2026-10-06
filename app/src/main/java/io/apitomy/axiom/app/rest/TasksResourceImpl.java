@@ -17,7 +17,7 @@ import java.util.Map;
 
 /**
  * Implementation of the global Tasks REST API. Provides paginated,
- * filterable access to all tasks across all projects.
+ * filterable access to all tasks across all subjects.
  */
 @ApplicationScoped
 @RunOnVirtualThread
@@ -29,7 +29,7 @@ public class TasksResourceImpl implements TasksResource {
     @Override
     public TaskSearchResults listAllTasks(BigInteger page, BigInteger limit,
                                            String filterActionType, String filterStatus,
-                                           BigInteger filterProjectId) {
+                                           BigInteger filterSubjectId) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
@@ -45,9 +45,9 @@ public class TasksResourceImpl implements TasksResource {
             hql.append(" and status in :statuses");
             params.put("statuses", statuses);
         }
-        if (filterProjectId != null) {
-            hql.append(" and projectId = :projectId");
-            params.put("projectId", filterProjectId.longValue());
+        if (filterSubjectId != null) {
+            hql.append(" and subjectId = :subjectId");
+            params.put("subjectId", filterSubjectId.longValue());
         }
 
         long totalCount = TaskEntity.count(hql.toString(), params);
@@ -70,7 +70,7 @@ public class TasksResourceImpl implements TasksResource {
     private Task toBean(TaskEntity entity) {
         Task task = new Task();
         task.setId(entity.id);
-        task.setProjectId(entity.projectId);
+        task.setSubjectId(entity.subjectId);
         task.setEventId(entity.eventId);
         task.setActionType(entity.actionType);
         task.setCreatedBy(Task.CreatedBy.fromValue(entity.createdBy));

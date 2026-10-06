@@ -56,7 +56,7 @@ export function DiskUsagePage() {
                 setProjects(results.items);
                 setTotalCount(results.totalCount);
                 setTotalDiskUsageBytes(results.totalDiskUsageBytes || 0);
-                setProjectCount(results.projectCount || 0);
+                setProjectCount(results.subjectCount || 0);
             })
             .catch(console.error)
             .finally(() => setLoading(false));
@@ -189,9 +189,9 @@ export function DiskUsagePage() {
                     </Thead>
                     <Tbody>
                         {projects.map((p) => (
-                            <Tr key={p.projectId} isClickable
-                                onRowClick={() => navigate(`/projects/${p.projectId}`)}>
-                                <Td>{p.projectName}</Td>
+                            <Tr key={p.subjectId} isClickable
+                                onRowClick={() => navigate(`/projects/${p.subjectId}`)}>
+                                <Td>{p.subjectName}</Td>
                                 <Td>{formatBytes(p.diskUsageBytes)}</Td>
                             </Tr>
                         ))}

@@ -140,13 +140,13 @@ export function DataRetentionPage() {
                 <FormGroup label="Inactive projects" fieldId="inactive-project-retention">
                     <NumberInput
                         id="inactive-project-retention"
-                        value={config.inactiveProjectRetentionDays ?? 90}
+                        value={config.inactiveSubjectRetentionDays ?? 90}
                         min={1}
-                        onMinus={() => updateField("inactiveProjectRetentionDays",
-                            (config.inactiveProjectRetentionDays ?? 90) - 1)}
-                        onPlus={() => updateField("inactiveProjectRetentionDays",
-                            (config.inactiveProjectRetentionDays ?? 90) + 1)}
-                        onChange={(event) => updateField("inactiveProjectRetentionDays",
+                        onMinus={() => updateField("inactiveSubjectRetentionDays",
+                            (config.inactiveSubjectRetentionDays ?? 90) - 1)}
+                        onPlus={() => updateField("inactiveSubjectRetentionDays",
+                            (config.inactiveSubjectRetentionDays ?? 90) + 1)}
+                        onChange={(event) => updateField("inactiveSubjectRetentionDays",
                             Number((event.target as HTMLInputElement).value))}
                         widthChars={4}
                     />

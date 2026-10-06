@@ -8,7 +8,7 @@ import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AgentEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
@@ -37,7 +37,7 @@ import java.util.UUID;
 
 /**
  * Orchestrates task execution. Resolves the appropriate Agent implementation
- * via the AgentPool, enforces project-level task serialization, manages the
+ * via the AgentPool, enforces subject-level task serialization, manages the
  * task lifecycle, and records results.
  */
 @ApplicationScoped
@@ -85,25 +85,25 @@ public class TaskExecutionService {
     ObjectMapper objectMapper;
 
     /**
-     * Attempts to execute the next pending task for the given project.
-     * Does nothing if there is already an active task for the project.
+     * Attempts to execute the next pending task for the given subject.
+     * Does nothing if there is already an active task for the subject.
      *
-     * @param projectId the project to check for pending tasks
+     * @param subjectId the subject to check for pending tasks
      */
-    public void executeNextTask(Long projectId) {
+    public void executeNextTask(Long subjectId) {
         // Check for active tasks (serialization enforcement)
         long activeTasks = TaskEntity.count(
-                "projectId = ?1 and (status = 'InProgress' or status = 'AwaitingInput')",
-                projectId);
+                "subjectId = ?1 and (status = 'InProgress' or status = 'AwaitingInput')",
+                subjectId);
         if (activeTasks > 0) {
-            LOG.debugf("Project %d has an active task, skipping", projectId);
+            LOG.debugf("Subject %d has an active task, skipping", subjectId);
             return;
         }
 
         // Find the next pending task
         TaskEntity task = TaskEntity.find(
-                "projectId = ?1 and status = 'Pending' order by createdOn asc",
-                projectId).firstResult();
+                "subjectId = ?1 and status = 'Pending' order by createdOn asc",
+                subjectId).firstResult();
         if (task == null) {
             return;
         }
@@ -123,7 +123,7 @@ public class TaskExecutionService {
     }
 
     /**
-     * Opens a logging context carrying the task's correlation IDs (trace, event, project, task and
+     * Opens a logging context carrying the task's correlation IDs (trace, event, subject, task and
      * workflow run). The caller must close it, normally with try-with-resources.
      *
      * @param task the task whose IDs are put into the MDC
@@ -133,7 +133,7 @@ public class TaskExecutionService {
         return LogContext.create()
                 .traceId(task.traceId)
                 .eventId(task.eventId)
-                .projectId(task.projectId)
+                .subjectId(task.subjectId)
                 .taskId(task.id)
                 .workflowRunId(task.workflowRunId);
     }
@@ -183,13 +183,13 @@ public class TaskExecutionService {
         markTaskInProgress(task.id, agentEntityId, agentName);
 
         // Build the agent request
-        ProjectEntity project = ProjectEntity.findById(task.projectId);
+        SubjectEntity subject = SubjectEntity.findById(task.subjectId);
 
         // Ensure the workspace directory exists before launching the agent workload;
         // otherwise the subprocess fails to start with "No such file or directory".
         Path workspace;
         try {
-            workspace = workspaceService.ensureWorkspace(project);
+            workspace = workspaceService.ensureWorkspace(subject);
         } catch (WorkspaceService.WorkspaceException e) {
             agentPool.release(lease);
             LOG.errorf(e, "Failed to prepare workspace for task %d", task.id);
@@ -226,11 +226,11 @@ public class TaskExecutionService {
             LOG.warnf(e, "Failed to configure agent MCP servers for task %d", task.id);
         }
 
-        String prompt = resolvePromptTemplate(actionTypeEntity, task, project, workspace);
+        String prompt = resolvePromptTemplate(actionTypeEntity, task, subject, workspace);
         AgentRequest request = AgentRequest.builder()
                 .prompt(prompt != null ? prompt : task.input)
                 .workingDirectory(workspace)
-                .systemPrompt(buildSystemPrompt(task, project))
+                .systemPrompt(buildSystemPrompt(task, subject))
                 .allowedTools(allowedTools)
                 .mcpConfigFile(mcpConfig)
                 .environment(env)
@@ -308,10 +308,10 @@ public class TaskExecutionService {
 
     /**
      * Resolves the prompt template for the action type, substituting placeholders
-     * with values from the task and project. Returns null if no template is configured.
+     * with values from the task and subject. Returns null if no template is configured.
      */
     private String resolvePromptTemplate(ActionTypeEntity actionType, TaskEntity task,
-                                          ProjectEntity project, Path workspace) {
+                                          SubjectEntity subject, Path workspace) {
         if (actionType == null || actionType.promptTemplate == null
                 || actionType.promptTemplate.isBlank()) {
             return null;
@@ -320,9 +320,9 @@ public class TaskExecutionService {
         String resolved = actionType.promptTemplate;
 
         resolved = resolved.replace("{{actionType}}", task.actionType != null ? task.actionType : "");
-        resolved = resolved.replace("{{ref}}", project.ref != null ? project.ref : "");
-        resolved = resolved.replace("{{repository}}", project.repository != null ? project.repository : "");
-        resolved = resolved.replace("{{projectName}}", project.name != null ? project.name : "");
+        resolved = resolved.replace("{{ref}}", subject.ref != null ? subject.ref : "");
+        resolved = resolved.replace("{{repository}}", subject.repository != null ? subject.repository : "");
+        resolved = resolved.replace("{{subjectName}}", subject.name != null ? subject.name : "");
         resolved = resolved.replace("{{workDir}}", workspace != null ? workspace.toAbsolutePath().toString() : "");
 
         // Bind named workflow inputs as {{inputs.NAME}}.
@@ -346,13 +346,13 @@ public class TaskExecutionService {
         return InputBindingResolver.parseInputs(task.input, objectMapper);
     }
 
-    private String buildSystemPrompt(TaskEntity task, ProjectEntity project) {
+    private String buildSystemPrompt(TaskEntity task, SubjectEntity subject) {
         StringBuilder sb = new StringBuilder();
-        sb.append("You are working on project: ").append(project.name).append("\n");
-        sb.append("Reference: ").append(project.ref).append("\n");
+        sb.append("You are working on subject: ").append(subject.name).append("\n");
+        sb.append("Reference: ").append(subject.ref).append("\n");
         sb.append("Action type: ").append(task.actionType).append("\n");
-        if (project.body != null) {
-            sb.append("Project description: ").append(project.body).append("\n");
+        if (subject.body != null) {
+            sb.append("Subject description: ").append(subject.body).append("\n");
         }
         return sb.toString();
     }
@@ -365,17 +365,17 @@ public class TaskExecutionService {
             task.assignedAgent = agentEntityId;
 
             // Log to activity
-            logActivity(task.projectId, taskId, task.eventId, "task-started",
+            logActivity(task.subjectId, taskId, task.eventId, "task-started",
                     "Task started: " + task.actionType + " (agent: " + agentName + ")", task.traceId);
 
             // Log to thread
-            addThreadEntry(task.projectId, "system", "update",
+            addThreadEntry(task.subjectId, "system", "update",
                     "Task started: " + task.actionType + "\nAssigned to: " + agentName);
 
             // Fire SSE events
-            sseEvents.fire(SseEvent.taskUpdated(task.projectId, taskId, "InProgress"));
-            sseEvents.fire(SseEvent.projectUpdated(task.projectId));
-            sseEvents.fire(SseEvent.threadEntry(task.projectId));
+            sseEvents.fire(SseEvent.taskUpdated(task.subjectId, taskId, "InProgress"));
+            sseEvents.fire(SseEvent.subjectUpdated(task.subjectId));
+            sseEvents.fire(SseEvent.threadEntry(task.subjectId));
         }
     }
 
@@ -392,18 +392,18 @@ public class TaskExecutionService {
             task.status = "AwaitingInput";
 
             // Log to activity
-            logActivity(task.projectId, taskId, task.eventId, "task-awaiting-input",
+            logActivity(task.subjectId, taskId, task.eventId, "task-awaiting-input",
                     "Task awaiting human input: " + task.actionType, task.traceId);
 
             // Log to thread
-            addThreadEntry(task.projectId, "system", "update",
+            addThreadEntry(task.subjectId, "system", "update",
                     "Task awaiting human input: " + task.actionType
                             + (task.input != null ? "\n\n" + task.input : ""));
 
             // Fire SSE events
-            sseEvents.fire(SseEvent.taskUpdated(task.projectId, taskId, "AwaitingInput"));
-            sseEvents.fire(SseEvent.projectUpdated(task.projectId));
-            sseEvents.fire(SseEvent.threadEntry(task.projectId));
+            sseEvents.fire(SseEvent.taskUpdated(task.subjectId, taskId, "AwaitingInput"));
+            sseEvents.fire(SseEvent.subjectUpdated(task.subjectId));
+            sseEvents.fire(SseEvent.threadEntry(task.subjectId));
 
             // Notify inbox subscribers
             long inboxCount = TaskEntity.count("status", "AwaitingInput");
@@ -461,13 +461,13 @@ public class TaskExecutionService {
         if (model == null || model.isBlank()) {
             model = actionTypeEntity != null ? actionTypeEntity.model : null;
         }
-        recordAiUsage("task", taskId, task.eventId, task.projectId,
+        recordAiUsage("task", taskId, task.eventId, task.subjectId,
                 task.assignedAgent, task.actionType, engine, model,
                 result.costUsd(), result.inputTokens(), result.outputTokens(),
                 task.traceId);
 
         // Log to activity
-        logActivity(task.projectId, taskId, task.eventId, "task-" + statusText,
+        logActivity(task.subjectId, taskId, task.eventId, "task-" + statusText,
                 "Task " + statusText + ": " + task.actionType, task.traceId);
 
         // Log to thread
@@ -478,11 +478,11 @@ public class TaskExecutionService {
         if (result.errorMessage() != null) {
             threadContent += "\n\nError: " + result.errorMessage();
         }
-        addThreadEntry(task.projectId, "system", "result", threadContent);
+        addThreadEntry(task.subjectId, "system", "result", threadContent);
 
         // Fire SSE events
-        sseEvents.fire(SseEvent.taskUpdated(task.projectId, taskId, task.status));
-        sseEvents.fire(SseEvent.threadEntry(task.projectId));
+        sseEvents.fire(SseEvent.taskUpdated(task.subjectId, taskId, task.status));
+        sseEvents.fire(SseEvent.threadEntry(task.subjectId));
         sseEvents.fire(SseEvent.activity("task-" + statusText,
                 "Task " + statusText + ": " + task.actionType));
         if (!result.success()) {
@@ -503,7 +503,7 @@ public class TaskExecutionService {
         mcpConfigGenerator.cleanupTempFiles(task.id);
 
         // Refresh disk usage and start the next pending task, if any
-        afterTaskFinished(task.projectId);
+        afterTaskFinished(task.subjectId);
 
         // Advance workflow if this task is part of one. This runs output-contract
         // validation and may transition the task to Failed. It shares this
@@ -526,18 +526,18 @@ public class TaskExecutionService {
             task.output = reason;
             task.completedOn = Instant.now();
 
-            logActivity(task.projectId, taskId, task.eventId, "task-failed",
+            logActivity(task.subjectId, taskId, task.eventId, "task-failed",
                     "Task failed: " + task.actionType + " — " + reason, task.traceId);
-            addThreadEntry(task.projectId, "system", "result",
+            addThreadEntry(task.subjectId, "system", "result",
                     "Task failed: " + task.actionType + "\n\nError: " + reason);
 
-            sseEvents.fire(SseEvent.taskUpdated(task.projectId, taskId, task.status));
+            sseEvents.fire(SseEvent.taskUpdated(task.subjectId, taskId, task.status));
 
             // Close the task's trace node (and the trace, for non-workflow tasks)
             taskTraceFinalizer.finalizeTaskTrace(task, "failed");
 
             mcpConfigGenerator.cleanupTempFiles(taskId);
-            afterTaskFinished(task.projectId);
+            afterTaskFinished(task.subjectId);
 
             // Advance workflow if this task is part of one
             if (task.workflowRunId != null) {
@@ -546,29 +546,29 @@ public class TaskExecutionService {
         }
     }
 
-    private void afterTaskFinished(Long projectId) {
+    private void afterTaskFinished(Long subjectId) {
         long activeTasks = TaskEntity.count(
-                "projectId = ?1 and (status = 'InProgress' or status = 'AwaitingInput')",
-                projectId);
+                "subjectId = ?1 and (status = 'InProgress' or status = 'AwaitingInput')",
+                subjectId);
         long pendingTasks = TaskEntity.count(
-                "projectId = ?1 and status = 'Pending'", projectId);
+                "subjectId = ?1 and status = 'Pending'", subjectId);
 
-        // Update disk usage for the project workspace
-        ProjectEntity project = ProjectEntity.findById(projectId);
-        if (project != null) {
-            project.diskUsageBytes = workspaceService.computeDiskUsage(project);
+        // Update disk usage for the subject workspace
+        SubjectEntity subject = SubjectEntity.findById(subjectId);
+        if (subject != null) {
+            subject.diskUsageBytes = workspaceService.computeDiskUsage(subject);
         }
 
         // If there are pending tasks, trigger the next one
         if (activeTasks == 0 && pendingTasks > 0) {
-            executeNextTask(projectId);
+            executeNextTask(subjectId);
         }
     }
 
-    private void logActivity(Long projectId, Long taskId, UUID eventId,
+    private void logActivity(Long subjectId, Long taskId, UUID eventId,
                               String entryType, String summary, UUID traceId) {
         ActivityLogEntity log = new ActivityLogEntity();
-        log.projectId = projectId;
+        log.subjectId = subjectId;
         log.taskId = taskId;
         log.eventId = eventId;
         log.entryType = entryType;
@@ -580,10 +580,10 @@ public class TaskExecutionService {
         log.persist();
     }
 
-    private void addThreadEntry(Long projectId, String authorType, String entryType,
+    private void addThreadEntry(Long subjectId, String authorType, String entryType,
                                 String content) {
         ThreadEntryEntity entry = new ThreadEntryEntity();
-        entry.projectId = projectId;
+        entry.subjectId = subjectId;
         entry.authorType = authorType;
         entry.entryType = entryType;
         entry.content = content;
@@ -592,7 +592,7 @@ public class TaskExecutionService {
     }
 
     private void recordAiUsage(String invocationType, Long taskId, UUID eventId,
-                                Long projectId, Long agentId, String actionType,
+                                Long subjectId, Long agentId, String actionType,
                                 String engine, String model,
                                 Double costUsd, Long inputTokens, Long outputTokens,
                                 UUID traceId) {
@@ -600,7 +600,7 @@ public class TaskExecutionService {
         usage.invocationType = invocationType;
         usage.taskId = taskId;
         usage.eventId = eventId;
-        usage.projectId = projectId;
+        usage.subjectId = subjectId;
         usage.agentId = agentId;
         usage.actionType = actionType;
         usage.engine = engine;

@@ -15,7 +15,7 @@ import "./TraceGraphNode.css";
 const NODE_TYPE_ICONS: Record<string, React.ComponentType> = {
     "event-ingested": BoltIcon,
     "decision-processed": CheckCircleIcon,
-    "project-created": FolderIcon,
+    "subject-created": FolderIcon,
     "task": PlayIcon,
     "task-completed": CheckCircleIcon,
     "task-failed": TimesCircleIcon,

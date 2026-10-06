@@ -14,7 +14,7 @@ import io.apitomy.axiom.app.assistant.runtime.InteractiveSessionDriverFactory;
 import io.apitomy.axiom.app.assistant.runtime.SessionCompatibilityException;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.McpServerEntity;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.SystemConfigEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
@@ -113,14 +113,14 @@ public class AssistantSessionManager {
      *
      * @param name the user-visible session name
      * @param templateId the template to create the session from
-     * @param projectId optional project ID to scope the session to
+     * @param subjectId optional subject ID to scope the session to
      * @return the started session
      * @throws IOException if the session cannot be created
      * @throws IllegalStateException if the AI engine is not Claude Code or the
      *         session limit has been reached
      */
     public AssistantSession createSession(String name, String templateId,
-                                          Long projectId) throws IOException {
+                                          Long subjectId) throws IOException {
         SessionTemplateService.SessionTemplate template = templateService.getTemplate(templateId);
         if (template == null) {
             throw new IllegalArgumentException("Template not found: " + templateId);
@@ -142,12 +142,12 @@ public class AssistantSessionManager {
         }
 
         try {
-            // Look up project if scoped
-            ProjectEntity project = null;
-            if (projectId != null) {
-                project = ProjectEntity.findById(projectId);
-                if (project == null) {
-                    throw new IllegalArgumentException("Project not found: " + projectId);
+            // Look up subject if scoped
+            SubjectEntity subject = null;
+            if (subjectId != null) {
+                subject = SubjectEntity.findById(subjectId);
+                if (subject == null) {
+                    throw new IllegalArgumentException("Subject not found: " + subjectId);
                 }
             }
 
@@ -158,12 +158,12 @@ public class AssistantSessionManager {
                 resolvedEnv.putAll(environmentResolver.resolve(template.environment()));
             }
 
-            // Inject project environment variables
-            if (project != null) {
-                resolvedEnv.put("AXIOM_PROJECT_ID", String.valueOf(project.id));
-                resolvedEnv.put("AXIOM_PROJECT_NAME", project.name);
-                resolvedEnv.put("AXIOM_REF", project.ref);
-                resolvedEnv.put("AXIOM_REPOSITORY", project.repository != null ? project.repository : "");
+            // Inject subject environment variables
+            if (subject != null) {
+                resolvedEnv.put("AXIOM_SUBJECT_ID", String.valueOf(subject.id));
+                resolvedEnv.put("AXIOM_SUBJECT_NAME", subject.name);
+                resolvedEnv.put("AXIOM_REF", subject.ref);
+                resolvedEnv.put("AXIOM_REPOSITORY", subject.repository != null ? subject.repository : "");
             }
 
             // Create session directory first — MCP server resolution may need
@@ -179,7 +179,7 @@ public class AssistantSessionManager {
             // Resolve MCP servers from template, augmented with any servers
             // implied by the allowed tools list.
             Map<String, AssistantContextBuilder.McpServerConfig> mcpConfigs =
-                    resolveMcpServers(template, project, sessionDir, resolvedEnv,
+                    resolveMcpServers(template, subject, sessionDir, resolvedEnv,
                             resolvedAllowedTools);
 
             // Build and write MCP config JSON to session directory
@@ -196,10 +196,10 @@ public class AssistantSessionManager {
                     throw new IOException("Template working directory does not exist: "
                             + template.workingDirectory());
                 }
-            } else if (project != null) {
-                Path projectWorkspace = workspaceService.getWorkspacePath(project);
-                if (Files.isDirectory(projectWorkspace)) {
-                    workDir = projectWorkspace;
+            } else if (subject != null) {
+                Path subjectWorkspace = workspaceService.getWorkspacePath(subject);
+                if (Files.isDirectory(subjectWorkspace)) {
+                    workDir = subjectWorkspace;
                 } else {
                     workDir = contextBuilder.createWorkingDirectory(sessionDir, templateId);
                 }
@@ -213,17 +213,17 @@ public class AssistantSessionManager {
                         template.initScriptType());
             }
 
-            // Build system prompt, augmenting with project context if applicable
-            String systemPrompt = buildSystemPrompt(template, project);
+            // Build system prompt, augmenting with subject context if applicable
+            String systemPrompt = buildSystemPrompt(template, subject);
 
-            // Build welcome message, substituting project placeholders
+            // Build welcome message, substituting subject placeholders
             String welcomeMessage = template.welcomeMessage();
-            if (project != null && welcomeMessage != null) {
-                welcomeMessage = welcomeMessage.replace("{{projectName}}", project.name);
+            if (subject != null && welcomeMessage != null) {
+                welcomeMessage = welcomeMessage.replace("{{subjectName}}", subject.name);
             }
 
             String sessionName = name != null && !name.isBlank() ? name : "Assistant Session";
-            String projectName = project != null ? project.name : null;
+            String subjectName = subject != null ? subject.name : null;
 
             List<String> command = buildCommand(workDir, sessionDir, systemPrompt,
                     template.model(), resolvedAllowedTools, mcpConfig != null);
@@ -249,8 +249,8 @@ public class AssistantSessionManager {
                             workDir,
                             command,
                             resolvedEnv,
-                            projectId,
-                            projectName,
+                            subjectId,
+                            subjectName,
                             eventSink,
                             autoApprovalSink,
                             template.model(),
@@ -260,7 +260,7 @@ public class AssistantSessionManager {
                             resolvedAllowedTools));
 
             AssistantSession session = new AssistantSession(sessionName, templateId, sessionDir,
-                    workDir, command, resolvedEnv, agent.getType(), projectId, projectName, driver);
+                    workDir, command, resolvedEnv, agent.getType(), subjectId, subjectName, driver);
             sessionRef.set(session);
             session.start();
 
@@ -295,8 +295,8 @@ public class AssistantSessionManager {
 
             // Send initial user message if configured
             String initialMessage = template.initialMessage();
-            if (project != null && initialMessage != null) {
-                initialMessage = initialMessage.replace("{{projectName}}", project.name);
+            if (subject != null && initialMessage != null) {
+                initialMessage = initialMessage.replace("{{subjectName}}", subject.name);
             }
             if (initialMessage != null && !initialMessage.isBlank()) {
                 session.sendMessage(initialMessage);
@@ -619,50 +619,50 @@ public class AssistantSessionManager {
     }
 
     /**
-     * Builds the system prompt, augmenting the template prompt with project context
-     * if a project is specified.
+     * Builds the system prompt, augmenting the template prompt with subject context
+     * if a subject is specified.
      */
     private String buildSystemPrompt(SessionTemplateService.SessionTemplate template,
-                                     ProjectEntity project) {
+                                     SubjectEntity subject) {
         String prompt = template.systemPrompt() != null ? template.systemPrompt() : "";
 
-        if (project == null) {
+        if (subject == null) {
             return prompt;
         }
 
         StringBuilder context = new StringBuilder();
-        context.append("\n\n## Project Context\n\n");
-        context.append("This session is scoped to the following project:\n\n");
-        context.append("- **Name**: ").append(project.name).append("\n");
-        if (project.body != null && !project.body.isBlank()) {
-            context.append("- **Description**: ").append(project.body).append("\n");
+        context.append("\n\n## Subject Context\n\n");
+        context.append("This session is scoped to the following subject:\n\n");
+        context.append("- **Name**: ").append(subject.name).append("\n");
+        if (subject.body != null && !subject.body.isBlank()) {
+            context.append("- **Description**: ").append(subject.body).append("\n");
         }
-        context.append("- **Type**: ").append(project.type).append("\n");
-        context.append("- **Active**: ").append(ProjectEntity.isActive(project.id)).append("\n");
-        if (project.refSource != null && !project.refSource.isBlank()) {
-            context.append("- **Source**: ").append(project.refSource).append("\n");
+        context.append("- **Type**: ").append(subject.type).append("\n");
+        context.append("- **Active**: ").append(SubjectEntity.isActive(subject.id)).append("\n");
+        if (subject.refSource != null && !subject.refSource.isBlank()) {
+            context.append("- **Source**: ").append(subject.refSource).append("\n");
         }
-        context.append("- **Reference**: ").append(project.ref).append("\n");
-        if (project.repository != null && !project.repository.isBlank()) {
-            context.append("- **Repository**: ").append(project.repository).append("\n");
+        context.append("- **Reference**: ").append(subject.ref).append("\n");
+        if (subject.repository != null && !subject.repository.isBlank()) {
+            context.append("- **Repository**: ").append(subject.repository).append("\n");
         }
-        if (project.labels != null && !project.labels.isEmpty()) {
-            context.append("- **Labels**: ").append(String.join(", ", project.labels)).append("\n");
+        if (subject.labels != null && !subject.labels.isEmpty()) {
+            context.append("- **Labels**: ").append(String.join(", ", subject.labels)).append("\n");
         }
-        context.append("\nUse the project-scoped MCP tools (prefixed with `axiom_project_`) to ")
-                .append("access project tasks, discussion thread, events, and traces.\n");
+        context.append("\nUse the subject-scoped MCP tools (prefixed with `axiom_subject_`) to ")
+                .append("access subject tasks, discussion thread, events, and traces.\n");
 
-        String projectContext = context.toString();
+        String subjectContext = context.toString();
 
-        // Substitute {{projectContext}} placeholder if present, otherwise append
-        if (prompt.contains("{{projectContext}}")) {
-            prompt = prompt.replace("{{projectContext}}", projectContext);
+        // Substitute {{subjectContext}} placeholder if present, otherwise append
+        if (prompt.contains("{{subjectContext}}")) {
+            prompt = prompt.replace("{{subjectContext}}", subjectContext);
         } else {
-            prompt = prompt + projectContext;
+            prompt = prompt + subjectContext;
         }
 
-        // Substitute {{projectName}} placeholder
-        prompt = prompt.replace("{{projectName}}", project.name);
+        // Substitute {{subjectName}} placeholder
+        prompt = prompt.replace("{{subjectName}}", subject.name);
 
         return prompt;
     }
@@ -910,7 +910,7 @@ public class AssistantSessionManager {
 
     private Map<String, AssistantContextBuilder.McpServerConfig> resolveMcpServers(
             SessionTemplateService.SessionTemplate template,
-            ProjectEntity project, Path sessionDir,
+            SubjectEntity subject, Path sessionDir,
             Map<String, String> sessionEnv,
             List<String> allowedTools) throws IOException {
         Map<String, AssistantContextBuilder.McpServerConfig> configs = new LinkedHashMap<>();
@@ -925,21 +925,21 @@ public class AssistantSessionManager {
 
         for (String serverName : serverNames) {
             if ("@axiom-assistant".equals(serverName)) {
-                // Built-in MCP server for project-scoped assistant tools
+                // Built-in MCP server for subject-scoped assistant tools
                 Path mcpServerDir = ensureAssistantMcpServerInstalled();
                 String serverJsPath = mcpServerDir.resolve("server.js")
                         .toAbsolutePath().toString();
                 Map<String, String> env = new LinkedHashMap<>();
                 env.put("AXIOM_API_URL", apiUrl);
-                if (project != null) {
-                    env.put("AXIOM_PROJECT_ID", String.valueOf(project.id));
+                if (subject != null) {
+                    env.put("AXIOM_SUBJECT_ID", String.valueOf(subject.id));
                 }
                 configs.put("axiom", AssistantContextBuilder.McpServerConfig.stdio(
                         "node", List.of(serverJsPath), env));
 
             } else if ("@axiom-tools".equals(serverName)) {
                 // Built-in MCP server for user-defined script tools.
-                // Same server project as the task execution path — loads
+                // Same server subject as the task execution path — loads
                 // tool definitions from a generated tools.json file.
                 List<ToolDefinitionEntity> scriptTools =
                         ToolDefinitionEntity.listAll();
@@ -961,7 +961,7 @@ public class AssistantSessionManager {
                 }
 
             } else if ("@axiom-sdk".equals(serverName)) {
-                // Built-in MCP server for Axiom SDK tools (project/task management)
+                // Built-in MCP server for Axiom SDK tools (subject/task management)
                 Path serverDir = mcpConfigGenerator.ensureMcpServerInstalled();
                 Map<String, String> env = new LinkedHashMap<>();
                 env.put("AXIOM_API_URL", apiUrl);
@@ -1101,7 +1101,7 @@ public class AssistantSessionManager {
     }
 
     /**
-     * Ensures the assistant MCP server Node.js project is installed at
+     * Ensures the assistant MCP server Node.js subject is installed at
      * {@code ~/.axiom/assistant-mcp-server/}.
      */
     private Path ensureAssistantMcpServerInstalled() throws IOException {

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Apicurio Axiom API",
-    "description": "REST API for the Apicurio Axiom event-driven project orchestration platform.",
+    "description": "REST API for the Apicurio Axiom event-driven subject orchestration platform.",
     "license": {
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0"
@@ -195,18 +195,18 @@
             }
           },
           "400": {
-            "description": "A retention value is out of range: closed project, trace and event retention must be at least 1, the other settings at least 0."
+            "description": "A retention value is out of range: closed subject, trace and event retention must be at least 1, the other settings at least 0."
           }
         }
       }
     },
-    "/projects": {
+    "/subjects": {
       "get": {
         "tags": [
-          "Projects"
+          "Subjects"
         ],
-        "summary": "List projects (paginated)",
-        "operationId": "listProjects",
+        "summary": "List subjects (paginated)",
+        "operationId": "listSubjects",
         "parameters": [
           {
             "name": "page",
@@ -229,7 +229,7 @@
           {
             "name": "filterName",
             "in": "query",
-            "description": "Substring filter on project name or issue reference",
+            "description": "Substring filter on subject name or issue reference",
             "schema": {
               "type": "string"
             }
@@ -237,7 +237,7 @@
           {
             "name": "filterActive",
             "in": "query",
-            "description": "If true, only projects with a running or waiting workflow run; if false, only projects without one",
+            "description": "If true, only subjects with a running or waiting workflow run; if false, only subjects without one",
             "required": false,
             "schema": {
               "type": "boolean"
@@ -255,7 +255,7 @@
           {
             "name": "filterRef",
             "in": "query",
-            "description": "Exact-match filter on the project issue reference (e.g. 'owner/repo#42')",
+            "description": "Exact-match filter on the subject issue reference (e.g. 'owner/repo#42')",
             "required": false,
             "schema": {
               "type": "string"
@@ -264,11 +264,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Paginated list of projects",
+            "description": "Paginated list of subjects",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProjectSearchResults"
+                  "$ref": "#/components/schemas/SubjectSearchResults"
                 }
               }
             }
@@ -277,15 +277,15 @@
       },
       "post": {
         "tags": [
-          "Projects"
+          "Subjects"
         ],
-        "summary": "Create a new project",
-        "operationId": "createProject",
+        "summary": "Create a new subject",
+        "operationId": "createSubject",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NewProject"
+                "$ref": "#/components/schemas/NewSubject"
               }
             }
           },
@@ -293,11 +293,11 @@
         },
         "responses": {
           "201": {
-            "description": "Project created",
+            "description": "Subject created",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Project"
+                  "$ref": "#/components/schemas/Subject"
                 }
               }
             }
@@ -305,20 +305,20 @@
         }
       }
     },
-    "/projects/{projectId}": {
+    "/subjects/{subjectId}": {
       "get": {
         "tags": [
-          "Projects"
+          "Subjects"
         ],
-        "summary": "Get a project by ID",
-        "operationId": "getProject",
+        "summary": "Get a subject by ID",
+        "operationId": "getSubject",
         "responses": {
           "200": {
-            "description": "The project",
+            "description": "The subject",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Project"
+                  "$ref": "#/components/schemas/Subject"
                 }
               }
             }
@@ -330,15 +330,15 @@
       },
       "put": {
         "tags": [
-          "Projects"
+          "Subjects"
         ],
-        "summary": "Update a project",
-        "operationId": "updateProject",
+        "summary": "Update a subject",
+        "operationId": "updateSubject",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateProject"
+                "$ref": "#/components/schemas/UpdateSubject"
               }
             }
           },
@@ -346,11 +346,11 @@
         },
         "responses": {
           "200": {
-            "description": "Project updated",
+            "description": "Subject updated",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Project"
+                  "$ref": "#/components/schemas/Subject"
                 }
               }
             }
@@ -362,13 +362,13 @@
       },
       "delete": {
         "tags": [
-          "Projects"
+          "Subjects"
         ],
-        "summary": "Delete a project",
-        "operationId": "deleteProject",
+        "summary": "Delete a subject",
+        "operationId": "deleteSubject",
         "responses": {
           "204": {
-            "description": "Project deleted"
+            "description": "Subject deleted"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -377,18 +377,18 @@
       },
       "parameters": [
         {
-          "$ref": "#/components/parameters/ProjectId"
+          "$ref": "#/components/parameters/SubjectId"
         }
       ]
     },
-    "/projects/{projectId}/body": {
+    "/subjects/{subjectId}/body": {
       "put": {
         "tags": [
-          "Projects"
+          "Subjects"
         ],
-        "summary": "Update a project's body",
-        "description": "Replaces the project body with the supplied markdown content.",
-        "operationId": "updateProjectBody",
+        "summary": "Update a subject's body",
+        "description": "Replaces the subject body with the supplied markdown content.",
+        "operationId": "updateSubjectBody",
         "requestBody": {
           "content": {
             "text/markdown": {
@@ -410,17 +410,17 @@
       },
       "parameters": [
         {
-          "$ref": "#/components/parameters/ProjectId"
+          "$ref": "#/components/parameters/SubjectId"
         }
       ]
     },
-    "/projects/{projectId}/tasks": {
+    "/subjects/{subjectId}/tasks": {
       "get": {
         "tags": [
           "Tasks"
         ],
-        "summary": "List tasks for a project",
-        "operationId": "listProjectTasks",
+        "summary": "List tasks for a subject",
+        "operationId": "listSubjectTasks",
         "responses": {
           "200": {
             "description": "List of tasks",
@@ -442,11 +442,11 @@
       },
       "parameters": [
         {
-          "$ref": "#/components/parameters/ProjectId"
+          "$ref": "#/components/parameters/SubjectId"
         }
       ]
     },
-    "/projects/{projectId}/tasks/{taskId}": {
+    "/subjects/{subjectId}/tasks/{taskId}": {
       "get": {
         "tags": [
           "Tasks"
@@ -471,19 +471,19 @@
       },
       "parameters": [
         {
-          "$ref": "#/components/parameters/ProjectId"
+          "$ref": "#/components/parameters/SubjectId"
         },
         {
           "$ref": "#/components/parameters/TaskId"
         }
       ]
     },
-    "/projects/{projectId}/thread": {
+    "/subjects/{subjectId}/thread": {
       "get": {
         "tags": [
           "Threads"
         ],
-        "summary": "List conversation thread entries for a project",
+        "summary": "List conversation thread entries for a subject",
         "operationId": "listThreadEntries",
         "responses": {
           "200": {
@@ -506,9 +506,9 @@
       },
       "post": {
         "tags": [
-          "Projects"
+          "Subjects"
         ],
-        "summary": "Add an entry to the project thread",
+        "summary": "Add an entry to the subject thread",
         "operationId": "addThreadEntry",
         "requestBody": {
           "content": {
@@ -527,17 +527,17 @@
       },
       "parameters": [
         {
-          "$ref": "#/components/parameters/ProjectId"
+          "$ref": "#/components/parameters/SubjectId"
         }
       ]
     },
-    "/projects/{projectId}/workflow": {
+    "/subjects/{subjectId}/workflow": {
       "get": {
         "tags": [
           "WorkflowInstances"
         ],
-        "summary": "Get the workflow instance for a project",
-        "operationId": "getProjectWorkflowInstance",
+        "summary": "Get the workflow instance for a subject",
+        "operationId": "getSubjectWorkflowInstance",
         "responses": {
           "200": {
             "description": "The workflow instance",
@@ -558,8 +558,8 @@
         "tags": [
           "WorkflowInstances"
         ],
-        "summary": "Trigger a workflow on a project",
-        "operationId": "triggerProjectWorkflow",
+        "summary": "Trigger a workflow on a subject",
+        "operationId": "triggerSubjectWorkflow",
         "requestBody": {
           "content": {
             "application/json": {
@@ -588,13 +588,13 @@
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "description": "Project already has an active run of this workflow definition"
+            "description": "Subject already has an active run of this workflow definition"
           }
         }
       },
       "parameters": [
         {
-          "$ref": "#/components/parameters/ProjectId"
+          "$ref": "#/components/parameters/SubjectId"
         }
       ]
     },
@@ -1004,7 +1004,7 @@
             }
           },
           {
-            "name": "filterProjectId",
+            "name": "filterSubjectId",
             "in": "query",
             "schema": {
               "type": "integer"
@@ -1043,7 +1043,7 @@
           {
             "name": "filterLabels",
             "in": "query",
-            "description": "Comma-separated list of project labels to filter by (AND logic)",
+            "description": "Comma-separated list of subject labels to filter by (AND logic)",
             "schema": {
               "type": "string"
             }
@@ -1093,7 +1093,7 @@
         "tags": [
           "Usage"
         ],
-        "summary": "List disk usage by project (paginated)",
+        "summary": "List disk usage by subject (paginated)",
         "operationId": "listDiskUsage",
         "parameters": [
           {
@@ -1115,7 +1115,7 @@
           {
             "name": "filterName",
             "in": "query",
-            "description": "Filter by project name (substring match)",
+            "description": "Filter by subject name (substring match)",
             "schema": {
               "type": "string"
             }
@@ -1151,7 +1151,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Paginated disk usage by project",
+            "description": "Paginated disk usage by subject",
             "content": {
               "application/json": {
                 "schema": {
@@ -1204,9 +1204,9 @@
             }
           },
           {
-            "name": "filterProjectId",
+            "name": "filterSubjectId",
             "in": "query",
-            "description": "Filter by project ID",
+            "description": "Filter by subject ID",
             "schema": {
               "type": "integer"
             }
@@ -1269,9 +1269,9 @@
             }
           },
           {
-            "name": "filterProjectId",
+            "name": "filterSubjectId",
             "in": "query",
-            "description": "Filter by exact project ID",
+            "description": "Filter by exact subject ID",
             "schema": {
               "type": "integer"
             }
@@ -1287,7 +1287,7 @@
           {
             "name": "filterLabels",
             "in": "query",
-            "description": "Comma-separated list of project labels to filter by (AND logic)",
+            "description": "Comma-separated list of subject labels to filter by (AND logic)",
             "schema": {
               "type": "string"
             }
@@ -1353,7 +1353,7 @@
         }
       ]
     },
-    "/projects/{projectId}/tasks/{taskId}/cancel": {
+    "/subjects/{subjectId}/tasks/{taskId}/cancel": {
       "post": {
         "tags": [
           "Tasks"
@@ -1378,7 +1378,7 @@
       },
       "parameters": [
         {
-          "$ref": "#/components/parameters/ProjectId"
+          "$ref": "#/components/parameters/SubjectId"
         },
         {
           "name": "taskId",
@@ -1391,7 +1391,7 @@
         }
       ]
     },
-    "/projects/{projectId}/tasks/{taskId}/log": {
+    "/subjects/{subjectId}/tasks/{taskId}/log": {
       "get": {
         "tags": [
           "Tasks"
@@ -1417,9 +1417,9 @@
       },
       "parameters": [
         {
-          "name": "projectId",
+          "name": "subjectId",
           "in": "path",
-          "description": "Project ID",
+          "description": "Subject ID",
           "required": true,
           "schema": {
             "type": "integer"
@@ -1436,21 +1436,21 @@
         }
       ]
     },
-    "/projects/{projectId}/metrics": {
+    "/subjects/{subjectId}/metrics": {
       "get": {
         "tags": [
           "Metrics"
         ],
-        "summary": "Get metrics for a project",
-        "description": "Returns per-project disk usage and AI cost metrics.",
-        "operationId": "getProjectMetrics",
+        "summary": "Get metrics for a subject",
+        "description": "Returns per-subject disk usage and AI cost metrics.",
+        "operationId": "getSubjectMetrics",
         "responses": {
           "200": {
-            "description": "Project metrics",
+            "description": "Subject metrics",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProjectMetrics"
+                  "$ref": "#/components/schemas/SubjectMetrics"
                 }
               }
             }
@@ -1462,7 +1462,7 @@
       },
       "parameters": [
         {
-          "$ref": "#/components/parameters/ProjectId"
+          "$ref": "#/components/parameters/SubjectId"
         }
       ]
     },
@@ -2813,9 +2813,9 @@
             }
           },
           {
-            "name": "filterProjectId",
+            "name": "filterSubjectId",
             "in": "query",
-            "description": "Filter by project ID",
+            "description": "Filter by subject ID",
             "required": false,
             "schema": {
               "type": "integer"
@@ -2993,16 +2993,16 @@
         }
       ]
     },
-    "/projects/{projectId}/traces": {
+    "/subjects/{subjectId}/traces": {
       "get": {
         "tags": [
           "traces"
         ],
-        "summary": "List traces for a project",
-        "operationId": "listProjectTraces",
+        "summary": "List traces for a subject",
+        "operationId": "listSubjectTraces",
         "responses": {
           "200": {
-            "description": "Traces for project",
+            "description": "Traces for subject",
             "content": {
               "application/json": {
                 "schema": {
@@ -3018,9 +3018,9 @@
       },
       "parameters": [
         {
-          "name": "projectId",
+          "name": "subjectId",
           "in": "path",
-          "description": "Project ID",
+          "description": "Subject ID",
           "required": true,
           "schema": {
             "type": "integer"
@@ -3055,7 +3055,7 @@
           {
             "name": "filterLabels",
             "in": "query",
-            "description": "Comma-separated list of project labels to filter by (AND logic)",
+            "description": "Comma-separated list of subject labels to filter by (AND logic)",
             "required": false,
             "schema": {
               "type": "string"
@@ -3102,7 +3102,7 @@
             }
           },
           "404": {
-            "description": "Project not found",
+            "description": "Subject not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -4039,11 +4039,11 @@
         "tags": [
           "WorkflowRuns"
         ],
-        "summary": "List workflow runs across all projects",
+        "summary": "List workflow runs across all subjects",
         "operationId": "listWorkflowRuns",
         "parameters": [
           {
-            "name": "projectId",
+            "name": "subjectId",
             "in": "query",
             "schema": {
               "format": "int64",
@@ -5191,7 +5191,7 @@
           "type": "boolean"
         }
       },
-      "Project": {
+      "Subject": {
         "required": [
           "id",
           "name",
@@ -5250,13 +5250,13 @@
             "type": "boolean"
           },
           "active": {
-            "description": "True if the project has at least one running or waiting workflow run",
+            "description": "True if the subject has at least one running or waiting workflow run",
             "type": "boolean",
             "readOnly": true
           }
         }
       },
-      "NewProject": {
+      "NewSubject": {
         "required": [
           "name",
           "type",
@@ -5291,7 +5291,7 @@
           }
         }
       },
-      "UpdateProject": {
+      "UpdateSubject": {
         "type": "object",
         "properties": {
           "name": {
@@ -5322,7 +5322,7 @@
       "Task": {
         "required": [
           "id",
-          "projectId",
+          "subjectId",
           "actionType",
           "createdBy",
           "status",
@@ -5334,7 +5334,7 @@
             "format": "int64",
             "type": "integer"
           },
-          "projectId": {
+          "subjectId": {
             "format": "int64",
             "type": "integer"
           },
@@ -5508,11 +5508,11 @@
             }
           },
           "promptTemplate": {
-            "description": "Prompt template sent to the AI agent when executing this action type. Supports placeholders: {{issueRef}}, {{repository}}, {{projectName}}, {{issueTitle}}",
+            "description": "Prompt template sent to the AI agent when executing this action type. Supports placeholders: {{issueRef}}, {{repository}}, {{subjectName}}, {{issueTitle}}",
             "type": "string"
           },
           "scriptTemplate": {
-            "description": "Bash script template for script-mode action types. Supports placeholders: {{projectId}}, {{eventId}}, {{taskId}}, {{issueRef}}, {{repository}}, {{projectName}}, {{apiBaseUrl}}",
+            "description": "Bash script template for script-mode action types. Supports placeholders: {{subjectId}}, {{eventId}}, {{taskId}}, {{issueRef}}, {{repository}}, {{subjectName}}, {{apiBaseUrl}}",
             "type": "string"
           },
           "model": {
@@ -5596,11 +5596,11 @@
             }
           },
           "promptTemplate": {
-            "description": "Prompt template sent to the AI agent when executing this action type. Supports placeholders: {{issueRef}}, {{repository}}, {{projectName}}, {{issueTitle}}",
+            "description": "Prompt template sent to the AI agent when executing this action type. Supports placeholders: {{issueRef}}, {{repository}}, {{subjectName}}, {{issueTitle}}",
             "type": "string"
           },
           "scriptTemplate": {
-            "description": "Bash script template for script-mode action types. Supports placeholders: {{projectId}}, {{eventId}}, {{taskId}}, {{issueRef}}, {{repository}}, {{projectName}}, {{apiBaseUrl}}",
+            "description": "Bash script template for script-mode action types. Supports placeholders: {{subjectId}}, {{eventId}}, {{taskId}}, {{issueRef}}, {{repository}}, {{subjectName}}, {{apiBaseUrl}}",
             "type": "string"
           },
           "model": {
@@ -5659,9 +5659,9 @@
       "RetentionConfig": {
         "type": "object",
         "properties": {
-          "inactiveProjectRetentionDays": {
+          "inactiveSubjectRetentionDays": {
             "format": "int32",
-            "description": "Number of days an inactive project (no running or waiting workflow run) is retained after its last run completed before its workspace is deleted. Must be at least 1. Omitting the field on update leaves the current value unchanged.",
+            "description": "Number of days an inactive subject (no running or waiting workflow run) is retained after its last run completed before the subject and its workspace are deleted. Must be at least 1. Omitting the field on update leaves the current value unchanged.",
             "minimum": 1,
             "type": "integer"
           },
@@ -5715,7 +5715,7 @@
             "format": "int64",
             "type": "integer"
           },
-          "projectId": {
+          "subjectId": {
             "format": "int64",
             "type": "integer"
           },
@@ -5742,13 +5742,13 @@
           }
         }
       },
-      "ProjectSearchResults": {
+      "SubjectSearchResults": {
         "type": "object",
         "properties": {
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Project"
+              "$ref": "#/components/schemas/Subject"
             }
           },
           "totalCount": {
@@ -5763,10 +5763,10 @@
           }
         }
       },
-      "ProjectMetrics": {
+      "SubjectMetrics": {
         "type": "object",
         "properties": {
-          "projectId": {
+          "subjectId": {
             "format": "int64",
             "type": "integer"
           },
@@ -5798,7 +5798,7 @@
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/DiskUsageProject"
+              "$ref": "#/components/schemas/DiskUsageSubject"
             }
           },
           "totalCount": {
@@ -5813,24 +5813,24 @@
           },
           "totalDiskUsageBytes": {
             "format": "int64",
-            "description": "Sum across all matching projects",
+            "description": "Sum across all matching subjects",
             "type": "integer"
           },
-          "projectCount": {
+          "subjectCount": {
             "format": "int64",
-            "description": "Count of all matching projects",
+            "description": "Count of all matching subjects",
             "type": "integer"
           }
         }
       },
-      "DiskUsageProject": {
+      "DiskUsageSubject": {
         "type": "object",
         "properties": {
-          "projectId": {
+          "subjectId": {
             "format": "int64",
             "type": "integer"
           },
-          "projectName": {
+          "subjectName": {
             "type": "string"
           },
           "diskUsageBytes": {
@@ -5862,7 +5862,7 @@
             "format": "uuid",
             "type": "string"
           },
-          "projectId": {
+          "subjectId": {
             "format": "int64",
             "type": "integer"
           },
@@ -5983,7 +5983,7 @@
       "ThreadEntry": {
         "required": [
           "id",
-          "projectId",
+          "subjectId",
           "authorType",
           "entryType",
           "content",
@@ -5995,7 +5995,7 @@
             "format": "int64",
             "type": "integer"
           },
-          "projectId": {
+          "subjectId": {
             "format": "int64",
             "type": "integer"
           },
@@ -6621,13 +6621,13 @@
             "description": "Number of completed turns",
             "type": "integer"
           },
-          "projectId": {
+          "subjectId": {
             "format": "int64",
-            "description": "Project ID if session is scoped to a project",
+            "description": "Subject ID if session is scoped to a subject",
             "type": "integer"
           },
-          "projectName": {
-            "description": "Project name if session is scoped to a project",
+          "subjectName": {
+            "description": "Subject name if session is scoped to a subject",
             "type": "string"
           },
           "allowAll": {
@@ -6650,9 +6650,9 @@
             "description": "Template ID to create the session from",
             "type": "string"
           },
-          "projectId": {
+          "subjectId": {
             "format": "int64",
-            "description": "Optional project ID to scope the session to a specific project",
+            "description": "Optional subject ID to scope the session to a specific subject",
             "type": "integer"
           }
         }
@@ -6898,7 +6898,7 @@
             "format": "uuid",
             "type": "string"
           },
-          "projectId": {
+          "subjectId": {
             "format": "int64",
             "type": "integer"
           },
@@ -7048,7 +7048,7 @@
             "$ref": "#/components/schemas/TraceNode"
           },
           "detail": {
-            "description": "The referenced detail record; its shape depends on the node's entityType. Supported types: event, activity-log, ai-usage, tool-execution, task, workflow-run (adds definitionName and projectName; omits instanceState), workflow-wait and workflow-event-subscription (add status, runId, runStatus, definitionName and projectName; waits add waitType, subscriptions add matchedEventId). Null when the entity type is unknown or the referenced record no longer exists.",
+            "description": "The referenced detail record; its shape depends on the node's entityType. Supported types: event, activity-log, ai-usage, tool-execution, task, workflow-run (adds definitionName and subjectName; omits instanceState), workflow-wait and workflow-event-subscription (add status, runId, runStatus, definitionName and subjectName; waits add waitType, subscriptions add matchedEventId). Null when the entity type is unknown or the referenced record no longer exists.",
             "type": "object"
           }
         }
@@ -7214,7 +7214,7 @@
       "InboxItem": {
         "required": [
           "id",
-          "projectId",
+          "subjectId",
           "actionType",
           "status",
           "createdOn"
@@ -7225,11 +7225,11 @@
             "format": "int64",
             "type": "integer"
           },
-          "projectId": {
+          "subjectId": {
             "format": "int64",
             "type": "integer"
           },
-          "projectName": {
+          "subjectName": {
             "type": "string"
           },
           "actionType": {
@@ -7301,15 +7301,15 @@
       },
       "NewInboxItem": {
         "required": [
-          "projectId",
+          "subjectId",
           "actionType",
           "humanContext"
         ],
         "type": "object",
         "properties": {
-          "projectId": {
+          "subjectId": {
             "format": "int64",
-            "description": "Project to associate the task with",
+            "description": "Subject to associate the task with",
             "type": "integer"
           },
           "actionType": {
@@ -7610,7 +7610,7 @@
             "type": "string"
           },
           "type": {
-            "description": "Widget registry key, e.g. active-projects",
+            "description": "Widget registry key, e.g. active-subjects",
             "type": "string"
           },
           "config": {
@@ -7987,7 +7987,7 @@
       "WorkflowInstance": {
         "required": [
           "id",
-          "projectId",
+          "subjectId",
           "definitionId",
           "definitionVersion",
           "status",
@@ -7999,7 +7999,7 @@
             "format": "int64",
             "type": "integer"
           },
-          "projectId": {
+          "subjectId": {
             "format": "int64",
             "type": "integer"
           },
@@ -8129,11 +8129,11 @@
             "format": "int64",
             "type": "integer"
           },
-          "projectId": {
+          "subjectId": {
             "format": "int64",
             "type": "integer"
           },
-          "projectName": {
+          "subjectName": {
             "type": "string"
           },
           "definitionId": {
@@ -8577,7 +8577,7 @@
             "items": {
               "$ref": "#/components/schemas/EventProcessingOutcome"
             },
-            "description": "What the routing produced (projects, tasks, decisions)"
+            "description": "What the routing produced (subjects, tasks, decisions)"
           },
           "createdOn": {
             "format": "date-time",
@@ -8632,11 +8632,11 @@
           "summary": {
             "type": "string"
           },
-          "projectId": {
+          "subjectId": {
             "format": "int64",
             "type": "integer"
           },
-          "projectName": {
+          "subjectName": {
             "type": "string"
           },
           "taskId": {
@@ -8653,7 +8653,7 @@
           },
           "items": {
             "type": "array",
-            "description": "Every result of this outcome (one per task or workflow run). Empty for outcomes recorded before items existed; projectId and taskId then hold the only (first) result.",
+            "description": "Every result of this outcome (one per task or workflow run). Empty for outcomes recorded before items existed; subjectId and taskId then hold the only (first) result.",
             "items": {
               "$ref": "#/components/schemas/EventProcessingOutcomeItem"
             }
@@ -8677,11 +8677,11 @@
           "errorMessage": {
             "type": "string"
           },
-          "projectId": {
+          "subjectId": {
             "format": "int64",
             "type": "integer"
           },
-          "projectName": {
+          "subjectName": {
             "type": "string"
           },
           "taskId": {
@@ -9023,10 +9023,10 @@
       }
     },
     "parameters": {
-      "ProjectId": {
-        "name": "projectId",
+      "SubjectId": {
+        "name": "subjectId",
         "in": "path",
-        "description": "Project ID",
+        "description": "Subject ID",
         "required": true,
         "schema": {
           "format": "int64",
@@ -9091,16 +9091,16 @@
       "description": "System health and configuration"
     },
     {
-      "name": "Projects",
-      "description": "Project management"
+      "name": "Subjects",
+      "description": "Subject management"
     },
     {
       "name": "Tasks",
-      "description": "Task management within projects"
+      "description": "Task management within subjects"
     },
     {
       "name": "Threads",
-      "description": "Conversation threads within projects"
+      "description": "Conversation threads within subjects"
     },
     {
       "name": "Agents",

@@ -173,7 +173,7 @@ class McpConfigGeneratorTest {
     // ── MCP server installation ──────────────────────────────────────
 
     @Test
-    void testMcpServerProjectInstalled() throws Exception {
+    void testMcpServerSubjectInstalled() throws Exception {
         generator.generateMcpConfig(9007L, Map.of(), null);
 
         Path serverDir = Path.of(System.getProperty("user.home"), ".axiom", "mcp-server");
@@ -224,7 +224,7 @@ class McpConfigGeneratorTest {
     @Test
     void testOnlySdkToolsNoToolsServer() throws Exception {
         Path configFile = generator.generateMcpConfig(9017L, Map.of(),
-                List.of("mcp__axiom-sdk__axiom_list_projects"));
+                List.of("mcp__axiom-sdk__axiom_list_subjects"));
         assertNotNull(configFile);
 
         JsonNode config = objectMapper.readTree(Files.readString(configFile));

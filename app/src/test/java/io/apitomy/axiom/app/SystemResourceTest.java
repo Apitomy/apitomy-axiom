@@ -159,7 +159,7 @@ class SystemResourceTest {
             given()
                     .contentType(ContentType.JSON)
                     .body("""
-                            {"inactiveProjectRetentionDays":90,"traceRetentionDays":30,
+                            {"inactiveSubjectRetentionDays":90,"traceRetentionDays":30,
                              "eventRetentionDays":90,"workflowRunRetentionDays":13,
                              "activityLogRetentionDays":14,"aiUsageRetentionDays":15}
                             """)
@@ -173,7 +173,7 @@ class SystemResourceTest {
             given()
                     .contentType(ContentType.JSON)
                     .body("""
-                            {"inactiveProjectRetentionDays":90,"traceRetentionDays":30,
+                            {"inactiveSubjectRetentionDays":90,"traceRetentionDays":30,
                              "eventRetentionDays":90}
                             """)
                 .when()
@@ -202,7 +202,7 @@ class SystemResourceTest {
         given()
                 .contentType(ContentType.JSON)
                 .body("""
-                        {"inactiveProjectRetentionDays":90,"traceRetentionDays":30,
+                        {"inactiveSubjectRetentionDays":90,"traceRetentionDays":30,
                          "eventRetentionDays":90,"workflowRunRetentionDays":-1}
                         """)
             .when()
@@ -213,7 +213,7 @@ class SystemResourceTest {
 
     @Test
     void testUpdateRetentionConfigRejectsCoreSettingsBelowOne() {
-        for (String field : new String[] {"inactiveProjectRetentionDays", "traceRetentionDays",
+        for (String field : new String[] {"inactiveSubjectRetentionDays", "traceRetentionDays",
                 "eventRetentionDays"}) {
             for (int value : new int[] {0, -5}) {
                 given()
@@ -235,7 +235,7 @@ class SystemResourceTest {
             given()
                     .contentType(ContentType.JSON)
                     .body("""
-                            {"inactiveProjectRetentionDays":77,"traceRetentionDays":22,
+                            {"inactiveSubjectRetentionDays":77,"traceRetentionDays":22,
                              "eventRetentionDays":66}
                             """)
                 .when()
@@ -250,7 +250,7 @@ class SystemResourceTest {
                     .put("/api/v1/system/retention")
                 .then()
                     .statusCode(200)
-                    .body("inactiveProjectRetentionDays", equalTo(77))
+                    .body("inactiveSubjectRetentionDays", equalTo(77))
                     .body("traceRetentionDays", equalTo(22))
                     .body("eventRetentionDays", equalTo(66))
                     .body("workflowRunRetentionDays", equalTo(3));

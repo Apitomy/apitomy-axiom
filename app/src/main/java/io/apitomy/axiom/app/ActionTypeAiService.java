@@ -50,9 +50,9 @@ public class ActionTypeAiService {
             to an AI agent (Claude Code) that performs the work in a git repository.
 
             The prompt template supports these placeholders (substituted at runtime):
-            - {{ref}} — the project reference (e.g. "owner/repo#42" or "CVE-2024-12345")
+            - {{ref}} — the subject reference (e.g. "owner/repo#42" or "CVE-2024-12345")
             - {{repository}} — the repository name (e.g. "owner/repo")
-            - {{projectName}} — the project name
+            - {{subjectName}} — the subject name
             - {{actionType}} — the action type name
 
             The prompt should instruct the AI agent on:

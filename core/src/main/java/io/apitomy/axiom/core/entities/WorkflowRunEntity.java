@@ -9,15 +9,15 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * A single execution (run) of a workflow definition against a project.
- * Runs accumulate as history; at most one non-terminal run exists per (project, definition).
+ * A single execution (run) of a workflow definition against a subject.
+ * Runs accumulate as history; at most one non-terminal run exists per (subject, definition).
  */
 @Entity
 @Table(name = "workflow_run")
 public class WorkflowRunEntity extends PanacheEntity {
 
-    @Column(name = "project_id", nullable = false)
-    public Long projectId;
+    @Column(name = "subject_id", nullable = false)
+    public Long subjectId;
 
     @Column(name = "definition_id", nullable = false)
     public Long definitionId;

@@ -14,20 +14,20 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 
 /**
- * Tests for the Projects REST API endpoints, including tasks and threads.
+ * Tests for the Subjects REST API endpoints, including tasks and threads.
  */
 @QuarkusTest
-class ProjectsResourceTest {
+class SubjectsResourceTest {
 
-    private static final String PROJECTS_PATH = "/api/v1/projects";
+    private static final String SUBJECTS_PATH = "/api/v1/subjects";
 
-    // ── Projects CRUD ─────────────────────────────────────────────────
+    // ── Subjects CRUD ─────────────────────────────────────────────────
 
     @Test
-    void testListProjectsReturnsSearchResults() {
+    void testListSubjectsReturnsSearchResults() {
         given()
             .when()
-                .get(PROJECTS_PATH)
+                .get(SUBJECTS_PATH)
             .then()
                 .statusCode(200)
                 .contentType(ContentType.JSON)
@@ -38,13 +38,13 @@ class ProjectsResourceTest {
     }
 
     @Test
-    void testCreateAndGetProject() {
+    void testCreateAndGetSubject() {
         int id = given()
             .contentType(ContentType.JSON)
             .body("""
                 {
-                    "name": "Test Project",
-                    "body": "A test project",
+                    "name": "Test Subject",
+                    "body": "A test subject",
                     "type": "bug-fix",
                     "refSource": "github",
                     "ref": "owner/repo#1",
@@ -52,11 +52,11 @@ class ProjectsResourceTest {
                 }
                 """)
             .when()
-                .post(PROJECTS_PATH)
+                .post(SUBJECTS_PATH)
             .then()
                 .statusCode(200)
-                .body("name", equalTo("Test Project"))
-                .body("body", equalTo("A test project"))
+                .body("name", equalTo("Test Subject"))
+                .body("body", equalTo("A test subject"))
                 .body("type", equalTo("bug-fix"))
                 .body("active", equalTo(false))
                 .body("refSource", equalTo("github"))
@@ -69,16 +69,16 @@ class ProjectsResourceTest {
 
         given()
             .when()
-                .get(PROJECTS_PATH + "/" + id)
+                .get(SUBJECTS_PATH + "/" + id)
             .then()
                 .statusCode(200)
-                .body("name", equalTo("Test Project"))
+                .body("name", equalTo("Test Subject"))
                 .body("id", equalTo(id));
     }
 
     @Test
-    void testUpdateProject() {
-        int id = createProject("Update Test", "feature", "owner/repo#100");
+    void testUpdateSubject() {
+        int id = createSubject("Update Test", "feature", "owner/repo#100");
 
         given()
             .contentType(ContentType.JSON)
@@ -89,7 +89,7 @@ class ProjectsResourceTest {
                 }
                 """)
             .when()
-                .put(PROJECTS_PATH + "/" + id)
+                .put(SUBJECTS_PATH + "/" + id)
             .then()
                 .statusCode(200)
                 .body("name", equalTo("Updated Name"))
@@ -98,40 +98,40 @@ class ProjectsResourceTest {
     }
 
     @Test
-    void testDeleteProject() {
-        int id = createProject("Delete Test", "other", "owner/repo#200");
+    void testDeleteSubject() {
+        int id = createSubject("Delete Test", "other", "owner/repo#200");
 
         given()
             .when()
-                .delete(PROJECTS_PATH + "/" + id)
+                .delete(SUBJECTS_PATH + "/" + id)
             .then()
                 .statusCode(204);
 
         given()
             .when()
-                .get(PROJECTS_PATH + "/" + id)
+                .get(SUBJECTS_PATH + "/" + id)
             .then()
                 .statusCode(404);
     }
 
     @Test
-    void testCreateProjectMissingType() {
+    void testCreateSubjectMissingType() {
         given()
             .contentType(ContentType.JSON)
             .body("""
                 {
-                    "name": "No Type Project",
+                    "name": "No Type Subject",
                     "ref": "owner/repo#missing-type"
                 }
                 """)
             .when()
-                .post(PROJECTS_PATH)
+                .post(SUBJECTS_PATH)
             .then()
                 .statusCode(400);
     }
 
     @Test
-    void testCreateProjectMissingName() {
+    void testCreateSubjectMissingName() {
         given()
             .contentType(ContentType.JSON)
             .body("""
@@ -141,90 +141,88 @@ class ProjectsResourceTest {
                 }
                 """)
             .when()
-                .post(PROJECTS_PATH)
+                .post(SUBJECTS_PATH)
             .then()
                 .statusCode(400);
     }
 
     @Test
-    void testCreateProjectMissingRef() {
+    void testCreateSubjectMissingRef() {
         given()
             .contentType(ContentType.JSON)
             .body("""
                 {
-                    "name": "No Ref Project",
+                    "name": "No Ref Subject",
                     "type": "bug-fix"
                 }
                 """)
             .when()
-                .post(PROJECTS_PATH)
+                .post(SUBJECTS_PATH)
             .then()
                 .statusCode(400);
     }
 
     @Test
-    void testGetProjectNotFound() {
+    void testGetSubjectNotFound() {
         given()
             .when()
-                .get(PROJECTS_PATH + "/999999")
+                .get(SUBJECTS_PATH + "/999999")
             .then()
                 .statusCode(404);
     }
 
     @Test
-    void testUpdateProjectBody() {
-        int id = createProject("Body Test", "feature", "owner/repo#150");
+    void testUpdateSubjectBody() {
+        int id = createSubject("Body Test", "feature", "owner/repo#150");
 
         given()
             .contentType("text/markdown")
             .body("# Hello\n\nThis is **markdown** body content.")
             .when()
-                .put(PROJECTS_PATH + "/" + id + "/body")
+                .put(SUBJECTS_PATH + "/" + id + "/body")
             .then()
                 .statusCode(204);
 
         given()
             .when()
-                .get(PROJECTS_PATH + "/" + id)
+                .get(SUBJECTS_PATH + "/" + id)
             .then()
                 .statusCode(200)
                 .body("body", equalTo("# Hello\n\nThis is **markdown** body content."));
     }
 
     @Test
-    void testUpdateProjectBodyNotFound() {
+    void testUpdateSubjectBodyNotFound() {
         given()
             .contentType("text/markdown")
             .body("some content")
             .when()
-                .put(PROJECTS_PATH + "/999999/body")
+                .put(SUBJECTS_PATH + "/999999/body")
             .then()
                 .statusCode(404);
     }
 
-    // ── Project Lifecycle ─────────────────────────────────────────────
-
     @Test
-    void creatingTaskDirectlyOnProjectIsNotAllowed() {
-        int projectId = createProject("Direct Task", "feature", "owner/repo#399");
+    void creatingTaskDirectlyOnSubjectIsNotAllowed() {
+        int subjectId = createSubject("Direct Task", "feature", "owner/repo#399");
 
         given()
             .contentType(ContentType.JSON)
             .body("{\"actionType\": \"anything\"}")
             .when()
-                .post(PROJECTS_PATH + "/" + projectId + "/tasks")
+                .post(SUBJECTS_PATH + "/" + subjectId + "/tasks")
             .then()
                 .statusCode(405);
     }
 
     @Test
     void testListTasks() {
-        int projectId = createProject("Task Test", "feature", "owner/repo#400");
-        seedTask(projectId, "analyze");
+        int subjectId = createSubject("Task Test", "feature", "owner/repo#400");
+        seedTask(subjectId, "analyze");
 
         given()
             .when()
-                .get(PROJECTS_PATH + "/" + projectId + "/tasks")
+                .get(SUBJECTS_PATH + "/" + subjectId + "/tasks")
             .then()
                 .statusCode(200)
                 .body("$.size()", equalTo(1))
@@ -233,12 +231,12 @@ class ProjectsResourceTest {
 
     @Test
     void testGetTask() {
-        int projectId = createProject("Get Task Test", "feature", "owner/repo#401");
-        long taskId = seedTask(projectId, "implement");
+        int subjectId = createSubject("Get Task Test", "feature", "owner/repo#401");
+        long taskId = seedTask(subjectId, "implement");
 
         given()
             .when()
-                .get(PROJECTS_PATH + "/" + projectId + "/tasks/" + taskId)
+                .get(SUBJECTS_PATH + "/" + subjectId + "/tasks/" + taskId)
             .then()
                 .statusCode(200)
                 .body("id", equalTo((int) taskId))
@@ -248,10 +246,10 @@ class ProjectsResourceTest {
     /**
      * Persists a pending task directly, standing in for a task created by a workflow action node.
      */
-    private long seedTask(int projectId, String actionType) {
+    private long seedTask(int subjectId, String actionType) {
         return QuarkusTransaction.requiringNew().call(() -> {
             TaskEntity task = new TaskEntity();
-            task.projectId = (long) projectId;
+            task.subjectId = (long) subjectId;
             task.actionType = actionType;
             task.createdBy = "workflow";
             task.status = "Pending";
@@ -262,10 +260,10 @@ class ProjectsResourceTest {
     }
 
     @Test
-    void testTasksForNonexistentProject() {
+    void testTasksForNonexistentSubject() {
         given()
             .when()
-                .get(PROJECTS_PATH + "/999999/tasks")
+                .get(SUBJECTS_PATH + "/999999/tasks")
             .then()
                 .statusCode(404);
     }
@@ -274,21 +272,21 @@ class ProjectsResourceTest {
 
     @Test
     void testListThreadEntriesEmpty() {
-        int projectId = createProject("Thread Test", "feature", "owner/repo#500");
+        int subjectId = createSubject("Thread Test", "feature", "owner/repo#500");
 
         given()
             .when()
-                .get(PROJECTS_PATH + "/" + projectId + "/thread")
+                .get(SUBJECTS_PATH + "/" + subjectId + "/thread")
             .then()
                 .statusCode(200)
                 .body("$.size()", equalTo(0));
     }
 
     @Test
-    void testThreadEntriesForNonexistentProject() {
+    void testThreadEntriesForNonexistentSubject() {
         given()
             .when()
-                .get(PROJECTS_PATH + "/999999/thread")
+                .get(SUBJECTS_PATH + "/999999/thread")
             .then()
                 .statusCode(404);
     }
@@ -297,13 +295,13 @@ class ProjectsResourceTest {
 
     @Test
     void testPaginationDefaults() {
-        // Create a few projects to have data
-        createProject("Page Test 1", "bug-fix", "owner/repo#600");
-        createProject("Page Test 2", "feature", "owner/repo#601");
+        // Create a few subjects to have data
+        createSubject("Page Test 1", "bug-fix", "owner/repo#600");
+        createSubject("Page Test 2", "feature", "owner/repo#601");
 
         given()
             .when()
-                .get(PROJECTS_PATH)
+                .get(SUBJECTS_PATH)
             .then()
                 .statusCode(200)
                 .body("page", equalTo(1))
@@ -314,15 +312,15 @@ class ProjectsResourceTest {
 
     @Test
     void testPaginationWithPageSize() {
-        createProject("Small Page 1", "bug-fix", "owner/repo#610");
-        createProject("Small Page 2", "feature", "owner/repo#611");
-        createProject("Small Page 3", "other", "owner/repo#612");
+        createSubject("Small Page 1", "bug-fix", "owner/repo#610");
+        createSubject("Small Page 2", "feature", "owner/repo#611");
+        createSubject("Small Page 3", "other", "owner/repo#612");
 
         given()
             .queryParam("page", 1)
             .queryParam("limit", 2)
             .when()
-                .get(PROJECTS_PATH)
+                .get(SUBJECTS_PATH)
             .then()
                 .statusCode(200)
                 .body("page", equalTo(1))
@@ -333,13 +331,13 @@ class ProjectsResourceTest {
 
     @Test
     void testFilterByName() {
-        createProject("Unique Alpha Project", "bug-fix", "owner/repo#620");
-        createProject("Unique Beta Project", "feature", "owner/repo#621");
+        createSubject("Unique Alpha Subject", "bug-fix", "owner/repo#620");
+        createSubject("Unique Beta Subject", "feature", "owner/repo#621");
 
         given()
             .queryParam("filterName", "Alpha")
             .when()
-                .get(PROJECTS_PATH)
+                .get(SUBJECTS_PATH)
             .then()
                 .statusCode(200)
                 .body("items.size()", greaterThanOrEqualTo(1))
@@ -348,12 +346,12 @@ class ProjectsResourceTest {
 
     @Test
     void testFilterByIssueRef() {
-        createProject("IssueRef Filter Test", "bug-fix", "filter-org/filter-repo#999");
+        createSubject("IssueRef Filter Test", "bug-fix", "filter-org/filter-repo#999");
 
         given()
             .queryParam("filterName", "filter-org/filter-repo")
             .when()
-                .get(PROJECTS_PATH)
+                .get(SUBJECTS_PATH)
             .then()
                 .statusCode(200)
                 .body("items.size()", greaterThanOrEqualTo(1))
@@ -363,9 +361,9 @@ class ProjectsResourceTest {
     @Test
     void testFilterNoResults() {
         given()
-            .queryParam("filterName", "zzz_nonexistent_project_name_zzz")
+            .queryParam("filterName", "zzz_nonexistent_subject_name_zzz")
             .when()
-                .get(PROJECTS_PATH)
+                .get(SUBJECTS_PATH)
             .then()
                 .statusCode(200)
                 .body("items.size()", equalTo(0))
@@ -375,16 +373,16 @@ class ProjectsResourceTest {
     @Test
     void testFilterWithPagination() {
         // Filters should affect totalCount (not just the current page)
-        createProject("Paginated Filter A1", "bug-fix", "owner/repo#650");
-        createProject("Paginated Filter A2", "bug-fix", "owner/repo#651");
-        createProject("Paginated Filter B1", "feature", "owner/repo#652");
+        createSubject("Paginated Filter A1", "bug-fix", "owner/repo#650");
+        createSubject("Paginated Filter A2", "bug-fix", "owner/repo#651");
+        createSubject("Paginated Filter B1", "feature", "owner/repo#652");
 
         given()
             .queryParam("filterName", "Paginated Filter A")
             .queryParam("page", 1)
             .queryParam("limit", 1)
             .when()
-                .get(PROJECTS_PATH)
+                .get(SUBJECTS_PATH)
             .then()
                 .statusCode(200)
                 .body("items.size()", equalTo(1))
@@ -393,7 +391,7 @@ class ProjectsResourceTest {
 
     @Test
     void testActiveReflectsRunningOrWaitingRuns() {
-        int id = createProject("Active Test", "other", "owner/repo#700");
+        int id = createSubject("Active Test", "other", "owner/repo#700");
         long runId = QuarkusTransaction.requiringNew().call(() -> {
             WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
             def.name = "active-test-def-" + id;
@@ -402,7 +400,7 @@ class ProjectsResourceTest {
             def.updatedOn = Instant.now();
             def.persist();
             WorkflowRunEntity run = new WorkflowRunEntity();
-            run.projectId = (long) id;
+            run.subjectId = (long) id;
             run.definitionId = def.id;
             run.definitionVersion = 1;
             run.instanceState = "{}";
@@ -414,14 +412,14 @@ class ProjectsResourceTest {
 
         given()
             .when()
-                .get(PROJECTS_PATH + "/" + id)
+                .get(SUBJECTS_PATH + "/" + id)
             .then()
                 .statusCode(200)
                 .body("active", equalTo(true));
         given()
             .queryParam("filterRef", "owner/repo#700")
             .when()
-                .get(PROJECTS_PATH)
+                .get(SUBJECTS_PATH)
             .then()
                 .statusCode(200)
                 .body("items[0].active", equalTo(true));
@@ -429,7 +427,7 @@ class ProjectsResourceTest {
             .queryParam("filterActive", true)
             .queryParam("filterRef", "owner/repo#700")
             .when()
-                .get(PROJECTS_PATH)
+                .get(SUBJECTS_PATH)
             .then()
                 .statusCode(200)
                 .body("totalCount", equalTo(1));
@@ -437,14 +435,14 @@ class ProjectsResourceTest {
             .queryParam("filterActive", false)
             .queryParam("filterRef", "owner/repo#700")
             .when()
-                .get(PROJECTS_PATH)
+                .get(SUBJECTS_PATH)
             .then()
                 .statusCode(200)
                 .body("totalCount", equalTo(0));
-        // Projects with an active run cannot be deleted
+        // Subjects with an active run cannot be deleted
         given()
             .when()
-                .delete(PROJECTS_PATH + "/" + id)
+                .delete(SUBJECTS_PATH + "/" + id)
             .then()
                 .statusCode(409);
 
@@ -455,7 +453,7 @@ class ProjectsResourceTest {
         });
         given()
             .when()
-                .get(PROJECTS_PATH + "/" + id)
+                .get(SUBJECTS_PATH + "/" + id)
             .then()
                 .statusCode(200)
                 .body("active", equalTo(false));
@@ -463,7 +461,7 @@ class ProjectsResourceTest {
 
     // ── Helpers ───────────────────────────────────────────────────────
 
-    private int createProject(String name, String type, String ref) {
+    private int createSubject(String name, String type, String ref) {
         return given()
             .contentType(ContentType.JSON)
             .body(String.format("""
@@ -476,7 +474,7 @@ class ProjectsResourceTest {
                 }
                 """, name, type, ref))
             .when()
-                .post(PROJECTS_PATH)
+                .post(SUBJECTS_PATH)
             .then()
                 .statusCode(200)
                 .extract().path("id");

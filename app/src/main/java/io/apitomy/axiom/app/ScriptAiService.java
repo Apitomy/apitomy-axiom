@@ -48,34 +48,34 @@ public class ScriptAiService {
 
             Scripts are bash scripts that run when a script action type is executed. They support these placeholders which are substituted \
             at runtime:
-            - {{projectId}} — the Axiom project ID
+            - {{subjectId}} — the Axiom subject ID
             - {{eventId}} — the event ID that triggered this action
             - {{taskId}} — the task ID for this execution
-            - {{ref}} — the project reference (e.g. "owner/repo#42" or "CVE-2024-12345")
+            - {{ref}} — the subject reference (e.g. "owner/repo#42" or "CVE-2024-12345")
             - {{repository}} — the repository name (e.g. "owner/repo")
-            - {{projectName}} — the project name
+            - {{subjectName}} — the subject name
             - {{apiBaseUrl}} — the Axiom REST API base URL (e.g. "http://localhost:9090/api/v1")
 
             Placeholder values are treated as literal data: each {{...}} is passed to the \
             script as an environment variable and expands to a quoted shell reference (e.g. \
-            {{projectName}} becomes "$AXIOM_PROJECT_NAME"), so values containing shell \
+            {{subjectName}} becomes "$AXIOM_SUBJECT_NAME"), so values containing shell \
             metacharacters are never executed. Use a placeholder wherever you would use a \
             shell variable — do NOT wrap it in extra quotes.
 
             Environment variables are also available directly:
             - AXIOM_API_URL — same as {{apiBaseUrl}}
-            - AXIOM_PROJECT_ID — same as {{projectId}}
+            - AXIOM_SUBJECT_ID — same as {{subjectId}}
             - AXIOM_EVENT_ID — same as {{eventId}}
             - AXIOM_TASK_ID — same as {{taskId}}
             - AXIOM_REF — same as {{ref}}
             - AXIOM_REPOSITORY — same as {{repository}}
-            - AXIOM_PROJECT_NAME — same as {{projectName}}
+            - AXIOM_SUBJECT_NAME — same as {{subjectName}}
             - AXIOM_WORK_DIR — same as {{workDir}}
 
             Common Axiom REST API endpoints the script can call:
-            - GET {{apiBaseUrl}}/projects/{{projectId}} — get project details
-            - PUT {{apiBaseUrl}}/projects/{{projectId}} — update project (name, description, labels, etc.)
-            - GET {{apiBaseUrl}}/projects/{{projectId}}/thread — get project thread
+            - GET {{apiBaseUrl}}/subjects/{{subjectId}} — get subject details
+            - PUT {{apiBaseUrl}}/subjects/{{subjectId}} — update subject (name, description, labels, etc.)
+            - GET {{apiBaseUrl}}/subjects/{{subjectId}}/thread — get subject thread
 
             Common CLI tools available: curl, jq, gh (GitHub CLI), git, standard Unix utilities.
 

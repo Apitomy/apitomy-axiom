@@ -3,7 +3,8 @@ package io.apitomy.axiom.app;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
+import io.apitomy.axiom.core.services.WorkspaceService;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
@@ -36,7 +37,7 @@ import java.util.regex.Pattern;
 /**
  * Executes script-mode action types by running a user-defined bash script.
  * The script template is stored on the ActionTypeEntity and supports
- * placeholder substitution for project/event context and the API base URL.
+ * placeholder substitution for subject/event context and the API base URL.
  */
 @ApplicationScoped
 public class ScriptExecutionService {
@@ -71,6 +72,9 @@ public class ScriptExecutionService {
     @Inject
     WorkflowExecutionService workflowExecutionService;
 
+    @Inject
+    WorkspaceService workspaceService;
+
     @ConfigProperty(name = "quarkus.http.port", defaultValue = "9090")
     int httpPort;
 
@@ -87,16 +91,16 @@ public class ScriptExecutionService {
     }
 
     /**
-     * Executes the script for a task asynchronously, using the supplied project
-     * for template variable resolution. If {@code project} is {@code null}, the
-     * project is loaded from the database — callers that already hold a managed
+     * Executes the script for a task asynchronously, using the supplied subject
+     * for template variable resolution. If {@code subject} is {@code null}, the
+     * subject is loaded from the database — callers that already hold a managed
      * entity (e.g. inside an uncommitted transaction) should pass it directly to
      * avoid a race between the async thread and the transaction commit.
      *
      * @param task    the task whose action type defines the script to run
-     * @param project the project to use for placeholder substitution, or {@code null}
+     * @param subject the subject to use for placeholder substitution, or {@code null}
      */
-    public void executeScript(TaskEntity task, ProjectEntity project) {
+    public void executeScript(TaskEntity task, SubjectEntity subject) {
         try (LogContext ignored = TaskExecutionService.taskLogContext(task)) {
             markTaskInProgress(task.id);
         }
@@ -106,7 +110,7 @@ public class ScriptExecutionService {
         CompletableFuture.runAsync(() -> {
             Arc.container().requestContext().activate();
             try (LogContext ignored = TaskExecutionService.taskLogContext(task)) {
-                RunResult result = runScript(task, project);
+                RunResult result = runScript(task, subject);
                 completeTask(task.id, result.output, result.exitCode == 0,
                         result.executionLog);
             } catch (Exception e) {
@@ -118,7 +122,7 @@ public class ScriptExecutionService {
         });
     }
 
-    private RunResult runScript(TaskEntity task, ProjectEntity project)
+    private RunResult runScript(TaskEntity task, SubjectEntity subject)
             throws IOException, InterruptedException {
         ActionTypeEntity actionType = ActionTypeEntity.find("name", task.actionType).firstResult();
         if (actionType == null || actionType.scriptTemplate == null
@@ -128,11 +132,11 @@ public class ScriptExecutionService {
                     null);
         }
 
-        if (project == null) {
-            project = ProjectEntity.findById(task.projectId);
+        if (subject == null) {
+            subject = SubjectEntity.findById(task.subjectId);
         }
         Map<String, String> placeholderEnv = new LinkedHashMap<>();
-        String script = substitutePlaceholders(actionType.scriptTemplate, task, project,
+        String script = substitutePlaceholders(actionType.scriptTemplate, task, subject,
                 placeholderEnv);
         Instant startTime = Instant.now();
 
@@ -147,7 +151,7 @@ public class ScriptExecutionService {
             ProcessBuilder pb = new ProcessBuilder("/bin/bash", scriptFile.toString())
                     .redirectErrorStream(true);
             pb.environment().put("AXIOM_API_URL", "http://localhost:" + httpPort + "/api/v1");
-            pb.environment().put("AXIOM_PROJECT_ID", String.valueOf(task.projectId));
+            pb.environment().put("AXIOM_SUBJECT_ID", String.valueOf(task.subjectId));
             pb.environment().put("AXIOM_TASK_ID", String.valueOf(task.id));
 
             // Inject environment variables (custom or all secrets as fallback)
@@ -203,7 +207,7 @@ public class ScriptExecutionService {
         log.append("═══════════════════════════════════════════════════════════════\n");
         log.append("  Task:        #").append(task.id).append("\n");
         log.append("  Action Type: ").append(task.actionType).append("\n");
-        log.append("  Project:     #").append(task.projectId).append("\n");
+        log.append("  Subject:     #").append(task.subjectId).append("\n");
         log.append("  Started:     ").append(startTime).append("\n");
         log.append("  Duration:    ").append(durationMs).append(" ms\n");
         log.append("  Exit Code:   ").append(exitCode).append("\n");
@@ -234,7 +238,7 @@ public class ScriptExecutionService {
      * inlined into the script text. Instead each value is exported as an
      * environment variable (collected into {@code env}) and the placeholder is
      * replaced with a shell expansion of that variable — e.g.
-     * {@code {{projectName}}} becomes a reference to {@code AXIOM_PROJECT_NAME}.
+     * {@code {{subjectName}}} becomes a reference to {@code AXIOM_SUBJECT_NAME}.
      * Because bash does not re-parse the contents of a variable expansion for
      * command substitution, a value containing {@code $(...)}, backticks,
      * {@code ;}, {@code &&}, newlines, etc. is treated as literal data rather
@@ -259,32 +263,33 @@ public class ScriptExecutionService {
      *
      * @param template the raw script template
      * @param task     the task providing context values
-     * @param project  the project providing context values, may be {@code null}
+     * @param subject  the subject providing context values, may be {@code null}
      * @param env      output map that receives the environment variables the
      *                 resolved script references; the caller must inject these
      *                 into the script's process environment
      * @return the resolved script with placeholders replaced by shell references
      */
     String substitutePlaceholders(String template, TaskEntity task,
-                                           ProjectEntity project, Map<String, String> env) {
+                                           SubjectEntity subject, Map<String, String> env) {
         String apiBaseUrl = "http://localhost:" + httpPort + "/api/v1";
-        String workDir = System.getProperty("user.home")
-                + "/.axiom/workspaces/project-" + task.projectId;
+        String workDir = subject != null
+                ? workspaceService.getWorkspacePath(subject).toString()
+                : "";
 
         // Collect every candidate placeholder and its target environment
         // variable. Longer placeholders are matched first during rendering so
         // that e.g. {{inputs.title}} wins over any shorter prefix match.
         Map<String, String> bindings = new LinkedHashMap<>();
         Map<String, String> values = new LinkedHashMap<>();
-        addBinding(bindings, values, "{{projectId}}", "AXIOM_PROJECT_ID", str(task.projectId));
+        addBinding(bindings, values, "{{subjectId}}", "AXIOM_SUBJECT_ID", str(task.subjectId));
         addBinding(bindings, values, "{{eventId}}", "AXIOM_EVENT_ID", str(task.eventId));
         addBinding(bindings, values, "{{taskId}}", "AXIOM_TASK_ID", str(task.id));
         addBinding(bindings, values, "{{ref}}", "AXIOM_REF",
-                project != null && project.ref != null ? project.ref : "");
+                subject != null && subject.ref != null ? subject.ref : "");
         addBinding(bindings, values, "{{repository}}", "AXIOM_REPOSITORY",
-                project != null && project.repository != null ? project.repository : "");
-        addBinding(bindings, values, "{{projectName}}", "AXIOM_PROJECT_NAME",
-                project != null && project.name != null ? project.name : "");
+                subject != null && subject.repository != null ? subject.repository : "");
+        addBinding(bindings, values, "{{subjectName}}", "AXIOM_SUBJECT_NAME",
+                subject != null && subject.name != null ? subject.name : "");
         addBinding(bindings, values, "{{apiBaseUrl}}", "AXIOM_API_URL", apiBaseUrl);
         addBinding(bindings, values, "{{workDir}}", "AXIOM_WORK_DIR", workDir);
 
@@ -421,13 +426,13 @@ public class ScriptExecutionService {
         if (task != null) {
             task.status = "InProgress";
 
-            logActivity(task.projectId, taskId, task.eventId, "task-started",
+            logActivity(task.subjectId, taskId, task.eventId, "task-started",
                     "Script task started: " + task.actionType, task.traceId);
-            addThreadEntry(task.projectId, "system", "update",
+            addThreadEntry(task.subjectId, "system", "update",
                     "Script task started: " + task.actionType);
 
-            sseEvents.fire(SseEvent.taskUpdated(task.projectId, taskId, "InProgress"));
-            sseEvents.fire(SseEvent.projectUpdated(task.projectId));
+            sseEvents.fire(SseEvent.taskUpdated(task.subjectId, taskId, "InProgress"));
+            sseEvents.fire(SseEvent.subjectUpdated(task.subjectId));
         }
     }
 
@@ -444,17 +449,17 @@ public class ScriptExecutionService {
         String statusText = success ? "completed" : "failed";
         LOG.infof("Script task %d %s", taskId, statusText);
 
-        logActivity(task.projectId, taskId, task.eventId, "task-" + statusText,
+        logActivity(task.subjectId, taskId, task.eventId, "task-" + statusText,
                 "Script task " + statusText + ": " + task.actionType, task.traceId);
 
         String threadContent = "Script task " + statusText + ": " + task.actionType;
         if (output != null && !output.isBlank()) {
             threadContent += "\n\nOutput:\n" + output;
         }
-        addThreadEntry(task.projectId, "system", "result", threadContent);
+        addThreadEntry(task.subjectId, "system", "result", threadContent);
 
-        sseEvents.fire(SseEvent.taskUpdated(task.projectId, taskId, task.status));
-        sseEvents.fire(SseEvent.threadEntry(task.projectId));
+        sseEvents.fire(SseEvent.taskUpdated(task.subjectId, taskId, task.status));
+        sseEvents.fire(SseEvent.threadEntry(task.subjectId));
         if (!success) {
             sseEvents.fire(SseEvent.notification(
                     "Script task failed: " + task.actionType, "error"));
@@ -474,10 +479,10 @@ public class ScriptExecutionService {
         completeTask(taskId, reason, false, null);
     }
 
-    private void logActivity(Long projectId, Long taskId, UUID eventId,
+    private void logActivity(Long subjectId, Long taskId, UUID eventId,
                               String entryType, String summary, UUID traceId) {
         ActivityLogEntity log = new ActivityLogEntity();
-        log.projectId = projectId;
+        log.subjectId = subjectId;
         log.taskId = taskId;
         log.eventId = eventId;
         log.entryType = entryType;
@@ -489,10 +494,10 @@ public class ScriptExecutionService {
         log.persist();
     }
 
-    private void addThreadEntry(Long projectId, String authorType, String entryType,
+    private void addThreadEntry(Long subjectId, String authorType, String entryType,
                                 String content) {
         ThreadEntryEntity entry = new ThreadEntryEntity();
-        entry.projectId = projectId;
+        entry.subjectId = subjectId;
         entry.authorType = authorType;
         entry.entryType = entryType;
         entry.content = content;

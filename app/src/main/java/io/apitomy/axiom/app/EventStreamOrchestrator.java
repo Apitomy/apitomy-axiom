@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
@@ -696,13 +696,13 @@ public class EventStreamOrchestrator {
             if (run.failed()) {
                 item.errorMessage = truncate(run.errorMessage(), 2000);
             }
-            item.projectId = run.projectId();
+            item.subjectId = run.subjectId();
             item.workflowRunId = run.runId();
             item.traceNodeId = run.traceNodeId();
             outcome.pendingItems.add(item);
-            // Backward compatibility: the outcome holds the first project and trace
-            if (outcome.projectId == null) {
-                outcome.projectId = run.projectId();
+            // Backward compatibility: the outcome holds the first subject and trace
+            if (outcome.subjectId == null) {
+                outcome.subjectId = run.subjectId();
             }
             if (outcome.traceId == null) {
                 outcome.traceId = run.traceId();
@@ -717,7 +717,7 @@ public class EventStreamOrchestrator {
             throw new IllegalStateException(
                     "create-workflow routing rule missing workflowDefinitionId");
         }
-        Long projectId = findOrCreateProjectForEvent(event, null);
+        Long subjectId = findOrCreateSubjectForEvent(event, null);
 
         // Build the event as a JsonNode so the workflow context can access
         // event fields via EL expressions (e.g., context.event.type,
@@ -746,58 +746,58 @@ public class EventStreamOrchestrator {
         WorkflowRunEntity run;
         try {
             run = QuarkusTransaction.requiringNew().call(() ->
-                    workflowExecutionService.triggerWorkflow(projectId, rule.workflowDefinitionId(),
+                    workflowExecutionService.triggerWorkflow(subjectId, rule.workflowDefinitionId(),
                             extraContext, new EventOrigin(event.id, ledgerId)));
         } catch (WorkflowRunConflictException e) {
             String summary = "Skipped: subject already has an active run of definition "
                     + rule.workflowDefinitionId();
-            LOG.infof("%s (event %s, project %d)", summary, event.id, projectId);
+            LOG.infof("%s (event %s, subject %d)", summary, event.id, subjectId);
             RoutingOutcomeEntity skipped = new RoutingOutcomeEntity();
             skipped.status = "completed";
             skipped.summary = summary;
-            skipped.projectId = projectId;
+            skipped.subjectId = subjectId;
             RoutingOutcomeItemEntity item = newItem(RoutingOutcomeItemEntity.TYPE_WORKFLOW_RUN,
                     "skipped", summary);
-            item.projectId = projectId;
+            item.subjectId = subjectId;
             skipped.pendingItems.add(item);
             return skipped;
         }
-        LOG.infof("Created workflow (definition %d) for event %s on project %d",
-                rule.workflowDefinitionId(), event.id, projectId);
+        LOG.infof("Created workflow (definition %d) for event %s on subject %d",
+                rule.workflowDefinitionId(), event.id, subjectId);
 
-        sseEvents.fire(SseEvent.projectUpdated(projectId));
+        sseEvents.fire(SseEvent.subjectUpdated(subjectId));
 
         RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
         outcome.status = "completed";
         outcome.summary = "Created workflow from definition " + rule.workflowDefinitionId();
-        outcome.projectId = projectId;
+        outcome.subjectId = subjectId;
         outcome.traceId = run != null ? run.traceId : null;
         RoutingOutcomeItemEntity item = newItem(RoutingOutcomeItemEntity.TYPE_WORKFLOW_RUN,
                 "completed", "Workflow run from definition " + rule.workflowDefinitionId());
-        item.projectId = projectId;
+        item.subjectId = subjectId;
         item.workflowRunId = run != null ? run.id : null;
         outcome.pendingItems.add(item);
         return outcome;
     }
 
-    private Long findOrCreateProjectForEvent(StreamEventEntity event, UUID traceId) {
+    private Long findOrCreateSubjectForEvent(StreamEventEntity event, UUID traceId) {
         return QuarkusTransaction.requiringNew().call(() ->
-                findOrCreateProjectForStreamEvent(event, traceId).id);
+                findOrCreateSubjectForStreamEvent(event, traceId).id);
     }
 
-    private ProjectEntity findOrCreateProjectForStreamEvent(StreamEventEntity event,
+    private SubjectEntity findOrCreateSubjectForStreamEvent(StreamEventEntity event,
                                                             UUID traceId) {
-        // Try to find existing project by ref
-        ProjectEntity project = ProjectEntity.find("ref", event.ref).firstResult();
-        if (project != null) return project;
+        // Try to find existing subject by ref
+        SubjectEntity subject = SubjectEntity.find("ref", event.ref).firstResult();
+        if (subject != null) return subject;
 
         // Auto-create with metadata from the payload
-        project = new ProjectEntity();
-        project.ref = event.ref;
-        project.refSource = event.source;
-        project.type = determineProjectType(event.type);
-        project.createdOn = Instant.now();
-        project.updatedOn = Instant.now();
+        subject = new SubjectEntity();
+        subject.ref = event.ref;
+        subject.refSource = event.source;
+        subject.type = determineSubjectType(event.type);
+        subject.createdOn = Instant.now();
+        subject.updatedOn = Instant.now();
 
         // Extract title and body from the normalized payload
         try {
@@ -805,35 +805,35 @@ public class EventStreamOrchestrator {
             // The normalized payload uses "issue.title" or "pullRequest.title"
             String title = payload.path("issue").path("title").asText(null);
             if (title == null) title = payload.path("pullRequest").path("title").asText(null);
-            project.name = title != null ? title : event.ref;
+            subject.name = title != null ? title : event.ref;
 
             String body = payload.path("issue").path("body").asText(null);
             if (body == null) body = payload.path("pullRequest").path("body").asText(null);
-            project.body = body;
+            subject.body = body;
         } catch (Exception e) {
-            project.name = event.ref;
+            subject.name = event.ref;
         }
 
-        project.persist();
+        subject.persist();
 
-        LOG.infof("Auto-created project %d for %s", project.id, event.ref);
+        LOG.infof("Auto-created subject %d for %s", subject.id, event.ref);
 
-        logActivity(project.id, null, event.id, "project-created",
-                "Project auto-created from " + event.type + " event", traceId);
-        addThreadEntry(project.id, "system", "message",
-                "Project created from " + event.source + " event: " + event.type);
+        logActivity(subject.id, null, event.id, "subject-created",
+                "Subject auto-created from " + event.type + " event", traceId);
+        addThreadEntry(subject.id, "system", "message",
+                "Subject created from " + event.source + " event: " + event.type);
 
         // Ensure the workspace directory exists
         try {
-            workspaceService.ensureWorkspace(project);
+            workspaceService.ensureWorkspace(subject);
         } catch (Exception e) {
-            LOG.warnf(e, "Failed to create workspace for project %d", project.id);
+            LOG.warnf(e, "Failed to create workspace for subject %d", subject.id);
         }
 
-        return project;
+        return subject;
     }
 
-    private String determineProjectType(String eventType) {
+    private String determineSubjectType(String eventType) {
         if (eventType != null) {
             if (eventType.startsWith("issue.")) return "issue";
             if (eventType.startsWith("pr.")) return "pull-request";
@@ -907,10 +907,10 @@ public class EventStreamOrchestrator {
 
     // ── Activity and thread logging ────────────────────────────────
 
-    private Long logActivity(Long projectId, Long taskId, UUID eventId,
+    private Long logActivity(Long subjectId, Long taskId, UUID eventId,
                              String entryType, String summary, UUID traceId) {
         ActivityLogEntity log = new ActivityLogEntity();
-        log.projectId = projectId;
+        log.subjectId = subjectId;
         log.taskId = taskId;
         log.eventId = eventId;
         log.entryType = entryType;
@@ -923,10 +923,10 @@ public class EventStreamOrchestrator {
         return log.id;
     }
 
-    private void addThreadEntry(Long projectId, String authorType, String entryType,
+    private void addThreadEntry(Long subjectId, String authorType, String entryType,
                                   String content) {
         ThreadEntryEntity entry = new ThreadEntryEntity();
-        entry.projectId = projectId;
+        entry.subjectId = subjectId;
         entry.authorType = authorType;
         entry.entryType = entryType;
         entry.content = content;

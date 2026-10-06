@@ -130,7 +130,7 @@ export function TasksPage() {
 
     const confirmCancel = () => {
         if (cancelTarget) {
-            cancelTask(cancelTarget.projectId, cancelTarget.id)
+            cancelTask(cancelTarget.subjectId, cancelTarget.id)
                 .then(loadData)
                 .catch(console.error);
             setCancelTarget(null);
@@ -216,8 +216,8 @@ export function TasksPage() {
                                     <Td>{task.id}</Td>
                                     <Td>{task.actionType}</Td>
                                     <Td>
-                                        <Link to={`/projects/${task.projectId}`}>
-                                            Project #{task.projectId}
+                                        <Link to={`/projects/${task.subjectId}`}>
+                                            Project #{task.subjectId}
                                         </Link>
                                     </Td>
                                     <Td>
@@ -253,7 +253,7 @@ export function TasksPage() {
                                         </Button>
                                         {(task.status === "Completed" || task.status === "Failed") && (
                                             <Button variant="link" isInline
-                                                onClick={() => handleViewLog(task.projectId, task.id)}>
+                                                onClick={() => handleViewLog(task.subjectId, task.id)}>
                                                 View Log
                                             </Button>
                                         )}

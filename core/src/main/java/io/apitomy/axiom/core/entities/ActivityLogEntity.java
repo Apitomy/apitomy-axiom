@@ -15,8 +15,8 @@ import java.util.UUID;
 @Table(name = "activity_log")
 public class ActivityLogEntity extends PanacheEntity {
 
-    @Column(name = "project_id")
-    public Long projectId;
+    @Column(name = "subject_id")
+    public Long subjectId;
 
     @Column(name = "task_id")
     public Long taskId;

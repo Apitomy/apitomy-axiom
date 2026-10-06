@@ -228,7 +228,7 @@ public class AgentsResourceImpl {
     private Task toTaskBean(TaskEntity entity) {
         Task task = new Task();
         task.setId(entity.id);
-        task.setProjectId(entity.projectId);
+        task.setSubjectId(entity.subjectId);
         task.setEventId(entity.eventId);
         task.setActionType(entity.actionType);
         task.setCreatedBy(Task.CreatedBy.fromValue(entity.createdBy));

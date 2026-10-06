@@ -67,7 +67,7 @@ class TraceCleanupTest {
                     .firstResult();
             if (config == null) {
                 config = new RetentionConfigEntity();
-                config.inactiveProjectRetentionDays = 30;
+                config.inactiveSubjectRetentionDays = 30;
                 config.eventRetentionDays = 30;
                 config.traceRetentionDays = 30;
                 config.persist();
@@ -177,7 +177,7 @@ class TraceCleanupTest {
             node.persist();
 
             WorkflowRunEntity run = new WorkflowRunEntity();
-            run.projectId = -1L;
+            run.subjectId = -1L;
             run.definitionId = -1L;
             run.definitionVersion = 1;
             run.instanceState = "{}";
@@ -215,7 +215,7 @@ class TraceCleanupTest {
             ids[3] = resume.id;
 
             TaskEntity task = new TaskEntity();
-            task.projectId = -1L;
+            task.subjectId = -1L;
             task.actionType = "test";
             task.createdBy = "test";
             task.status = "Completed";

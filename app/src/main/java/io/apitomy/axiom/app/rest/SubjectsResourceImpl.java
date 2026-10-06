@@ -1,25 +1,25 @@
 package io.apitomy.axiom.app.rest;
 
 import io.apitomy.axiom.agents.spi.AgentResult;
-import io.apitomy.axiom.app.ProjectDeletionService;
+import io.apitomy.axiom.app.SubjectDeletionService;
 import io.apitomy.axiom.app.TaskExecutionService;
-import io.apitomy.axiom.api.ProjectsResource;
+import io.apitomy.axiom.api.SubjectsResource;
 import io.apitomy.axiom.api.beans.Trace;
 import io.apitomy.axiom.core.entities.TraceEntity;
-import io.apitomy.axiom.api.beans.NewProject;
+import io.apitomy.axiom.api.beans.NewSubject;
 import io.apitomy.axiom.api.beans.NewThreadEntry;
-import io.apitomy.axiom.api.beans.ProjectMetrics;
-import io.apitomy.axiom.api.beans.Project;
-import io.apitomy.axiom.api.beans.ProjectSearchResults;
+import io.apitomy.axiom.api.beans.SubjectMetrics;
+import io.apitomy.axiom.api.beans.Subject;
+import io.apitomy.axiom.api.beans.SubjectSearchResults;
 import io.apitomy.axiom.api.beans.Task;
 import io.apitomy.axiom.api.beans.ThreadEntry;
 import io.apitomy.axiom.api.beans.TriggerWorkflow;
-import io.apitomy.axiom.api.beans.UpdateProject;
+import io.apitomy.axiom.api.beans.UpdateSubject;
 import io.apitomy.axiom.app.WorkflowExecutionService;
 import io.apitomy.axiom.app.WorkflowRunBeanMapper;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
@@ -50,13 +50,13 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Implementation of the Projects REST API (includes tasks and threads).
+ * Implementation of the Subjects REST API (includes tasks and threads).
  */
 @ApplicationScoped
 @RunOnVirtualThread
-public class ProjectsResourceImpl implements ProjectsResource {
+public class SubjectsResourceImpl implements SubjectsResource {
 
-    private static final Logger LOG = Logger.getLogger(ProjectsResourceImpl.class);
+    private static final Logger LOG = Logger.getLogger(SubjectsResourceImpl.class);
 
     @Inject
     EntityManager entityManager;
@@ -74,7 +74,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
     TraceService traceService;
 
     @Inject
-    ProjectDeletionService projectDeletionService;
+    SubjectDeletionService subjectDeletionService;
 
     @Inject
     TaskExecutionService taskExecutionService;
@@ -82,13 +82,13 @@ public class ProjectsResourceImpl implements ProjectsResource {
     @Inject
     WorkflowRunBeanMapper runBeanMapper;
 
-    // ── Projects ──────────────────────────────────────────────────────
+    // ── Subjects ──────────────────────────────────────────────────────
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public ProjectSearchResults listProjects(BigInteger page, BigInteger limit,
+    public SubjectSearchResults listSubjects(BigInteger page, BigInteger limit,
                                               String filterName, Boolean filterActive,
                                               String filterLabels, String filterRef) {
         int pageNum = page != null ? page.intValue() : 1;
@@ -103,13 +103,13 @@ public class ProjectsResourceImpl implements ProjectsResource {
         }
         if (filterActive != null) {
             hql.append(filterActive ? " and id in" : " and id not in");
-            hql.append(" (select r.projectId from WorkflowRunEntity r where r.status in :activeStatuses)");
+            hql.append(" (select r.subjectId from WorkflowRunEntity r where r.status in :activeStatuses)");
             params.put("activeStatuses", List.of("running", "waiting"));
         }
         if (filterLabels != null && !filterLabels.isBlank()) {
             List<String> labels = Arrays.stream(filterLabels.split(","))
                     .map(String::trim).filter(s -> !s.isEmpty()).toList();
-            hql.append(" and id in (SELECT p.id FROM ProjectEntity p"
+            hql.append(" and id in (SELECT p.id FROM SubjectEntity p"
                     + " JOIN p.labels pl WHERE pl IN :labels"
                     + " GROUP BY p.id HAVING COUNT(DISTINCT pl) = :labelCount)");
             params.put("labels", labels);
@@ -120,17 +120,17 @@ public class ProjectsResourceImpl implements ProjectsResource {
             params.put("ref", filterRef);
         }
 
-        long totalCount = ProjectEntity.count(hql.toString(), params);
-        Set<Long> activeIds = ProjectEntity.findActiveProjectIds();
-        List<Project> items = ProjectEntity.<ProjectEntity>find(hql.toString(),
+        long totalCount = SubjectEntity.count(hql.toString(), params);
+        Set<Long> activeIds = SubjectEntity.findActiveSubjectIds();
+        List<Subject> items = SubjectEntity.<SubjectEntity>find(hql.toString(),
                         Sort.descending("updatedOn"), params)
                 .page(Page.of(pageNum - 1, pageSize))
                 .list()
                 .stream()
-                .map(entity -> toProjectBean(entity, activeIds.contains(entity.id)))
+                .map(entity -> toSubjectBean(entity, activeIds.contains(entity.id)))
                 .toList();
 
-        ProjectSearchResults results = new ProjectSearchResults();
+        SubjectSearchResults results = new SubjectSearchResults();
         results.setItems(items);
         results.setTotalCount(totalCount);
         results.setPage(pageNum);
@@ -143,12 +143,12 @@ public class ProjectsResourceImpl implements ProjectsResource {
      */
     @Override
     @Transactional
-    public Project createProject(NewProject data) {
+    public Subject createSubject(NewSubject data) {
         validateRequired(data.getName(), "name");
         validateRequired(data.getType(), "type");
         validateRequired(data.getRef(), "ref");
 
-        ProjectEntity entity = new ProjectEntity();
+        SubjectEntity entity = new SubjectEntity();
         entity.name = data.getName();
         entity.body = data.getBody();
         entity.type = data.getType();
@@ -158,15 +158,15 @@ public class ProjectsResourceImpl implements ProjectsResource {
         entity.createdOn = Instant.now();
         entity.updatedOn = Instant.now();
         entity.persist();
-        return toProjectBean(entity);
+        return toSubjectBean(entity);
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public Project getProject(long projectId) {
-        return toProjectBean(findProjectOrThrow(projectId));
+    public Subject getSubject(long subjectId) {
+        return toSubjectBean(findSubjectOrThrow(subjectId));
     }
 
     /**
@@ -174,8 +174,8 @@ public class ProjectsResourceImpl implements ProjectsResource {
      */
     @Override
     @Transactional
-    public Project updateProject(long projectId, UpdateProject data) {
-        ProjectEntity entity = findProjectOrThrow(projectId);
+    public Subject updateSubject(long subjectId, UpdateSubject data) {
+        SubjectEntity entity = findSubjectOrThrow(subjectId);
         if (data.getName() != null) {
             entity.name = data.getName();
         }
@@ -190,7 +190,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
             entity.labels.addAll(data.getLabels());
         }
         entity.updatedOn = Instant.now();
-        return toProjectBean(entity);
+        return toSubjectBean(entity);
     }
 
     /**
@@ -198,13 +198,13 @@ public class ProjectsResourceImpl implements ProjectsResource {
      */
     @Override
     @Transactional
-    public void deleteProject(long projectId) {
-        ProjectEntity entity = findProjectOrThrow(projectId);
-        if (ProjectEntity.isActive(projectId)) {
+    public void deleteSubject(long subjectId) {
+        SubjectEntity entity = findSubjectOrThrow(subjectId);
+        if (SubjectEntity.isActive(subjectId)) {
             throw new WebApplicationException(
-                    "Projects with a running or waiting workflow run cannot be deleted", 409);
+                    "Subjects with a running or waiting workflow run cannot be deleted", 409);
         }
-        projectDeletionService.deleteProject(entity);
+        subjectDeletionService.deleteSubject(entity);
     }
 
     /**
@@ -212,8 +212,8 @@ public class ProjectsResourceImpl implements ProjectsResource {
      */
     @Override
     @Transactional
-    public void updateProjectBody(long projectId, String body) {
-        ProjectEntity entity = findProjectOrThrow(projectId);
+    public void updateSubjectBody(long subjectId, String body) {
+        SubjectEntity entity = findSubjectOrThrow(subjectId);
         entity.body = body;
         entity.updatedOn = Instant.now();
     }
@@ -224,9 +224,9 @@ public class ProjectsResourceImpl implements ProjectsResource {
      * {@inheritDoc}
      */
     @Override
-    public List<Task> listProjectTasks(long projectId) {
-        findProjectOrThrow(projectId);
-        return TaskEntity.<TaskEntity>list("projectId", projectId)
+    public List<Task> listSubjectTasks(long subjectId) {
+        findSubjectOrThrow(subjectId);
+        return TaskEntity.<TaskEntity>list("subjectId", subjectId)
                 .stream()
                 .map(this::toTaskBean)
                 .toList();
@@ -236,10 +236,10 @@ public class ProjectsResourceImpl implements ProjectsResource {
      * {@inheritDoc}
      */
     @Override
-    public Task getTask(long projectId, long taskId) {
-        findProjectOrThrow(projectId);
+    public Task getTask(long subjectId, long taskId) {
+        findSubjectOrThrow(subjectId);
         TaskEntity entity = TaskEntity.findById(taskId);
-        if (entity == null || entity.projectId != projectId) {
+        if (entity == null || entity.subjectId != subjectId) {
             throw new WebApplicationException("Task not found: " + taskId, 404);
         }
         return toTaskBean(entity);
@@ -251,9 +251,9 @@ public class ProjectsResourceImpl implements ProjectsResource {
      * {@inheritDoc}
      */
     @Override
-    public List<ThreadEntry> listThreadEntries(long projectId) {
-        findProjectOrThrow(projectId);
-        return ThreadEntryEntity.<ThreadEntryEntity>list("projectId", projectId)
+    public List<ThreadEntry> listThreadEntries(long subjectId) {
+        findSubjectOrThrow(subjectId);
+        return ThreadEntryEntity.<ThreadEntryEntity>list("subjectId", subjectId)
                 .stream()
                 .map(this::toThreadEntryBean)
                 .toList();
@@ -264,10 +264,10 @@ public class ProjectsResourceImpl implements ProjectsResource {
      */
     @Override
     @Transactional
-    public void addThreadEntry(long projectId, NewThreadEntry data) {
-        findProjectOrThrow(projectId);
+    public void addThreadEntry(long subjectId, NewThreadEntry data) {
+        findSubjectOrThrow(subjectId);
         ThreadEntryEntity entry = new ThreadEntryEntity();
-        entry.projectId = projectId;
+        entry.subjectId = subjectId;
         entry.authorType = "agent";
         entry.entryType = "message";
         entry.content = data.getContent();
@@ -275,26 +275,26 @@ public class ProjectsResourceImpl implements ProjectsResource {
         entry.persist();
     }
 
-    // ── Project Metrics ────────────────────────────────────────────────
+    // ── Subject Metrics ────────────────────────────────────────────────
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public ProjectMetrics getProjectMetrics(long projectId) {
-        ProjectEntity project = findProjectOrThrow(projectId);
+    public SubjectMetrics getSubjectMetrics(long subjectId) {
+        SubjectEntity subject = findSubjectOrThrow(subjectId);
 
-        // Aggregate AI usage for this project
+        // Aggregate AI usage for this subject
         Object[] aggregates = (Object[]) entityManager.createQuery(
                 "SELECT COUNT(id), COALESCE(SUM(costUsd), 0), "
                         + "COALESCE(SUM(inputTokens), 0), COALESCE(SUM(outputTokens), 0) "
-                        + "FROM AiUsageEntity WHERE projectId = :pid")
-                .setParameter("pid", projectId)
+                        + "FROM AiUsageEntity WHERE subjectId = :pid")
+                .setParameter("pid", subjectId)
                 .getSingleResult();
 
-        ProjectMetrics metrics = new ProjectMetrics();
-        metrics.setProjectId(project.id);
-        metrics.setDiskUsageBytes(project.diskUsageBytes != null ? project.diskUsageBytes : 0L);
+        SubjectMetrics metrics = new SubjectMetrics();
+        metrics.setSubjectId(subject.id);
+        metrics.setDiskUsageBytes(subject.diskUsageBytes != null ? subject.diskUsageBytes : 0L);
         metrics.setInvocationCount(((Number) aggregates[0]).longValue());
         metrics.setTotalCostUsd(((Number) aggregates[1]).doubleValue());
         metrics.setTotalInputTokens(((Number) aggregates[2]).longValue());
@@ -309,11 +309,11 @@ public class ProjectsResourceImpl implements ProjectsResource {
      */
     @Override
     @Transactional
-    public Task cancelTask(long projectId, long taskId) {
-        findProjectOrThrow(projectId);
+    public Task cancelTask(long subjectId, long taskId) {
+        findSubjectOrThrow(subjectId);
 
         TaskEntity task = TaskEntity.findById(taskId);
-        if (task == null || task.projectId != projectId) {
+        if (task == null || task.subjectId != subjectId) {
             throw new WebApplicationException("Task not found: " + taskId, 404);
         }
         if ("Completed".equals(task.status) || "Failed".equals(task.status)) {
@@ -348,14 +348,14 @@ public class ProjectsResourceImpl implements ProjectsResource {
      * {@inheritDoc}
      */
     @Override
-    public String getTaskExecutionLog(BigInteger projectId, BigInteger taskId) {
-        long pid = projectId.longValue();
+    public String getTaskExecutionLog(BigInteger subjectId, BigInteger taskId) {
+        long pid = subjectId.longValue();
         long tid = taskId.longValue();
 
-        findProjectOrThrow(pid);
+        findSubjectOrThrow(pid);
 
         TaskEntity entity = TaskEntity.findById(tid);
-        if (entity == null || entity.projectId != pid) {
+        if (entity == null || entity.subjectId != pid) {
             throw new WebApplicationException("Task not found: " + tid, 404);
         }
         if (entity.executionLog == null || entity.executionLog.isEmpty()) {
@@ -371,32 +371,32 @@ public class ProjectsResourceImpl implements ProjectsResource {
      * {@inheritDoc}
      */
     @Override
-    public List<Trace> listProjectTraces(BigInteger projectId) {
-        return TraceEntity.<TraceEntity>list("projectId", Sort.descending("startedOn"),
-                projectId.longValue())
+    public List<Trace> listSubjectTraces(BigInteger subjectId) {
+        return TraceEntity.<TraceEntity>list("subjectId", Sort.descending("startedOn"),
+                subjectId.longValue())
                 .stream()
                 .map(TraceMapper::toTraceBean)
                 .toList();
     }
 
     @Override
-    public io.apitomy.axiom.api.beans.WorkflowInstance triggerProjectWorkflow(
-            long projectId, TriggerWorkflow data) {
+    public io.apitomy.axiom.api.beans.WorkflowInstance triggerSubjectWorkflow(
+            long subjectId, TriggerWorkflow data) {
         if (data == null || data.getWorkflowDefinitionId() == null) {
             throw new WebApplicationException(
                     "Missing required 'workflowDefinitionId' field", 400);
         }
         WorkflowRunEntity entity = workflowExecutionService
-                .triggerWorkflow(projectId, data.getWorkflowDefinitionId());
+                .triggerWorkflow(subjectId, data.getWorkflowDefinitionId());
         return toWorkflowInstanceBean(entity);
     }
 
     @Override
-    public io.apitomy.axiom.api.beans.WorkflowInstance getProjectWorkflowInstance(
-            long projectId) {
+    public io.apitomy.axiom.api.beans.WorkflowInstance getSubjectWorkflowInstance(
+            long subjectId) {
         WorkflowRunEntity entity = WorkflowRunEntity
-                .find("projectId", io.quarkus.panache.common.Sort.descending("startedOn"),
-                        projectId)
+                .find("subjectId", io.quarkus.panache.common.Sort.descending("startedOn"),
+                        subjectId)
                 .firstResult();
         if (entity == null) {
             throw new WebApplicationException(404);
@@ -415,40 +415,40 @@ public class ProjectsResourceImpl implements ProjectsResource {
         }
     }
 
-    private ProjectEntity findProjectOrThrow(long id) {
-        ProjectEntity entity = ProjectEntity.findById(id);
+    private SubjectEntity findSubjectOrThrow(long id) {
+        SubjectEntity entity = SubjectEntity.findById(id);
         if (entity == null) {
-            throw new WebApplicationException("Project not found: " + id, 404);
+            throw new WebApplicationException("Subject not found: " + id, 404);
         }
         return entity;
     }
 
-    private Project toProjectBean(ProjectEntity entity) {
-        return toProjectBean(entity, ProjectEntity.isActive(entity.id));
+    private Subject toSubjectBean(SubjectEntity entity) {
+        return toSubjectBean(entity, SubjectEntity.isActive(entity.id));
     }
 
-    private Project toProjectBean(ProjectEntity entity, boolean active) {
-        Project project = new Project();
-        project.setId(entity.id);
-        project.setName(entity.name);
-        project.setBody(entity.body);
-        project.setType(entity.type);
-        project.setRefSource(entity.refSource);
-        project.setRef(entity.ref);
-        project.setRepository(entity.repository);
-        project.setCreatedOn(Date.from(entity.createdOn));
-        project.setUpdatedOn(Date.from(entity.updatedOn));
-        project.setLabels(entity.labels);
-        project.setHasWorkflowInstance(
-                WorkflowRunEntity.count("projectId", entity.id) > 0);
-        project.setActive(active);
-        return project;
+    private Subject toSubjectBean(SubjectEntity entity, boolean active) {
+        Subject subject = new Subject();
+        subject.setId(entity.id);
+        subject.setName(entity.name);
+        subject.setBody(entity.body);
+        subject.setType(entity.type);
+        subject.setRefSource(entity.refSource);
+        subject.setRef(entity.ref);
+        subject.setRepository(entity.repository);
+        subject.setCreatedOn(Date.from(entity.createdOn));
+        subject.setUpdatedOn(Date.from(entity.updatedOn));
+        subject.setLabels(entity.labels);
+        subject.setHasWorkflowInstance(
+                WorkflowRunEntity.count("subjectId", entity.id) > 0);
+        subject.setActive(active);
+        return subject;
     }
 
     private Task toTaskBean(TaskEntity entity) {
         Task task = new Task();
         task.setId(entity.id);
-        task.setProjectId(entity.projectId);
+        task.setSubjectId(entity.subjectId);
         task.setEventId(entity.eventId);
         task.setActionType(entity.actionType);
         task.setCreatedBy(Task.CreatedBy.fromValue(entity.createdBy));
@@ -474,7 +474,7 @@ public class ProjectsResourceImpl implements ProjectsResource {
     private ThreadEntry toThreadEntryBean(ThreadEntryEntity entity) {
         ThreadEntry entry = new ThreadEntry();
         entry.setId(entity.id);
-        entry.setProjectId(entity.projectId);
+        entry.setSubjectId(entity.subjectId);
         String authorType = "actor".equals(entity.authorType) ? "agent" : entity.authorType;
         entry.setAuthorType(ThreadEntry.AuthorType.fromValue(authorType));
         entry.setAuthorId(entity.authorId);

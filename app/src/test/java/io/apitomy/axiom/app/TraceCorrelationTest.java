@@ -5,7 +5,7 @@ import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
@@ -91,12 +91,12 @@ class TraceCorrelationTest {
 
     @Test
     void taskActivityAndAiUsageCarryTaskTrace() {
-        Long projectId = createProject();
+        Long subjectId = createSubject();
         TraceContext ctx = traceService.createTrace("create-workflow", "corr task", null, null,
                 "create-workflow", "root", null, null);
         Long taskId = QuarkusTransaction.requiringNew().call(() -> {
             TaskEntity task = new TaskEntity();
-            task.projectId = projectId;
+            task.subjectId = subjectId;
             task.actionType = "trace-correlation-action";
             task.createdBy = "test";
             task.status = "InProgress";
@@ -128,7 +128,7 @@ class TraceCorrelationTest {
 
     @Test
     void workflowStartedActivityCarriesRunTrace() {
-        Long projectId = createProject();
+        Long subjectId = createSubject();
         Long defId = QuarkusTransaction.requiringNew().call(() -> {
             WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
             def.name = "corr-wf-" + UUID.randomUUID();
@@ -147,12 +147,12 @@ class TraceCorrelationTest {
         });
 
         WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
-                workflowExecutionService.triggerWorkflow(projectId, defId));
+                workflowExecutionService.triggerWorkflow(subjectId, defId));
         assertNotNull(run.traceId);
 
         ActivityLogEntity row = QuarkusTransaction.requiringNew().call(() ->
                 ActivityLogEntity.<ActivityLogEntity>find(
-                        "projectId = ?1 and entryType = 'workflow-started'", projectId)
+                        "subjectId = ?1 and entryType = 'workflow-started'", subjectId)
                         .firstResult());
         assertNotNull(row);
         assertEquals(run.traceId, row.traceId);
@@ -160,16 +160,16 @@ class TraceCorrelationTest {
 
     // ── Helpers ──────────────────────────────────────────────────────
 
-    private Long createProject() {
+    private Long createSubject() {
         return QuarkusTransaction.requiringNew().call(() -> {
-            ProjectEntity project = new ProjectEntity();
-            project.name = "trace-correlation-" + UUID.randomUUID();
-            project.type = "test-trace";
-            project.ref = "https://example.com/" + UUID.randomUUID();
-            project.createdOn = Instant.now();
-            project.updatedOn = Instant.now();
-            project.persist();
-            return project.id;
+            SubjectEntity subject = new SubjectEntity();
+            subject.name = "trace-correlation-" + UUID.randomUUID();
+            subject.type = "test-trace";
+            subject.ref = "https://example.com/" + UUID.randomUUID();
+            subject.createdOn = Instant.now();
+            subject.updatedOn = Instant.now();
+            subject.persist();
+            return subject.id;
         });
     }
 }

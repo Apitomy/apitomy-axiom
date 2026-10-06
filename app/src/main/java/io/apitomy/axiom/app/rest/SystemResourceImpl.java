@@ -226,7 +226,7 @@ public class SystemResourceImpl implements SystemResource {
 
         if (entity == null) {
             entity = new RetentionConfigEntity();
-            entity.inactiveProjectRetentionDays = 90;
+            entity.inactiveSubjectRetentionDays = 90;
             entity.traceRetentionDays = 30;
             entity.eventRetentionDays = 90;
         }
@@ -243,14 +243,14 @@ public class SystemResourceImpl implements SystemResource {
                 .firstResult();
         if (entity == null) {
             entity = new RetentionConfigEntity();
-            entity.inactiveProjectRetentionDays = 90;
+            entity.inactiveSubjectRetentionDays = 90;
             entity.traceRetentionDays = 30;
             entity.eventRetentionDays = 90;
         }
         validateRetentionDays(data);
         // Every setting is optional: a null field keeps its current value.
-        if (data.getInactiveProjectRetentionDays() != null) {
-            entity.inactiveProjectRetentionDays = data.getInactiveProjectRetentionDays();
+        if (data.getInactiveSubjectRetentionDays() != null) {
+            entity.inactiveSubjectRetentionDays = data.getInactiveSubjectRetentionDays();
         }
         if (data.getTraceRetentionDays() != null) {
             entity.traceRetentionDays = data.getTraceRetentionDays();
@@ -274,7 +274,7 @@ public class SystemResourceImpl implements SystemResource {
 
     private static RetentionConfig toRetentionBean(RetentionConfigEntity entity) {
         RetentionConfig config = new RetentionConfig();
-        config.setInactiveProjectRetentionDays(entity.inactiveProjectRetentionDays);
+        config.setInactiveSubjectRetentionDays(entity.inactiveSubjectRetentionDays);
         config.setTraceRetentionDays(entity.traceRetentionDays);
         config.setEventRetentionDays(entity.eventRetentionDays);
         config.setWorkflowRunRetentionDays(entity.workflowRunRetentionDays);
@@ -285,12 +285,12 @@ public class SystemResourceImpl implements SystemResource {
 
     private static void validateRetentionDays(RetentionConfig data) {
         // 0 would delete everything for these settings, so at least 1 day is required.
-        Integer[] coreValues = {data.getInactiveProjectRetentionDays(), data.getTraceRetentionDays(),
+        Integer[] coreValues = {data.getInactiveSubjectRetentionDays(), data.getTraceRetentionDays(),
             data.getEventRetentionDays()};
         for (Integer value : coreValues) {
             if (value != null && value < 1) {
                 throw new WebApplicationException(
-                        "Inactive project, trace and event retention must be at least 1 day", 400);
+                        "Inactive subject, trace and event retention must be at least 1 day", 400);
             }
         }
         Integer[] values = {data.getWorkflowRunRetentionDays(), data.getActivityLogRetentionDays(),

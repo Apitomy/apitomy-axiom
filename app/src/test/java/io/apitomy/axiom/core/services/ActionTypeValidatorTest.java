@@ -31,8 +31,8 @@ class ActionTypeValidatorTest {
 
     @Test
     void validScriptActionTypePassesWithNoErrors() {
-        NewActionType at = makeScript("close-project", "Closes project",
-                "echo closing {{projectId}}");
+        NewActionType at = makeScript("close-subject", "Closes subject",
+                "echo closing {{subjectId}}");
 
         ValidationResult result = ActionTypeValidator.validate(at);
 
@@ -144,7 +144,7 @@ class ActionTypeValidatorTest {
     @Test
     void actorPromptWithRecognizedPlaceholdersIsValid() {
         NewActionType at = makeActor("test", "desc",
-                "{{input}} for {{repository}} ref {{ref}} project {{projectName}}");
+                "{{input}} for {{repository}} ref {{ref}} subject {{subjectName}}");
 
         assertFalse(ActionTypeValidator.validate(at).hasErrors());
     }
@@ -174,7 +174,7 @@ class ActionTypeValidatorTest {
     @Test
     void scriptWithDeclaredInputsDottedPlaceholderIsValid() {
         NewActionType at = makeScript("test", "desc",
-                "echo {{inputs.repository}} {{projectId}}");
+                "echo {{inputs.repository}} {{subjectId}}");
         at.setInputs(List.of(field("repository", ActionTypeField.Type.STRING)));
 
         assertFalse(ActionTypeValidator.validate(at).hasErrors());
@@ -224,7 +224,7 @@ class ActionTypeValidatorTest {
 
     @Test
     void scriptWithMalformedPlaceholderIsError() {
-        NewActionType at = makeScript("test", "desc", "echo {{ projectId }}");
+        NewActionType at = makeScript("test", "desc", "echo {{ subjectId }}");
 
         ValidationResult result = ActionTypeValidator.validate(at);
 
@@ -236,7 +236,7 @@ class ActionTypeValidatorTest {
     @Test
     void scriptWithRecognizedPlaceholdersIsValid() {
         NewActionType at = makeScript("test", "desc",
-                "echo {{projectId}} {{taskId}} {{repository}} {{apiBaseUrl}}");
+                "echo {{subjectId}} {{taskId}} {{repository}} {{apiBaseUrl}}");
 
         assertFalse(ActionTypeValidator.validate(at).hasErrors());
     }
@@ -279,7 +279,7 @@ class ActionTypeValidatorTest {
         at.setAllowedTools(List.of("mcp__axiom-sdk__axiom_fake"));
 
         ActionTypeValidator.KnownNames known = new ActionTypeValidator.KnownNames(
-                null, null, null, Set.of("mcp__axiom-sdk__axiom_list_projects"));
+                null, null, null, Set.of("mcp__axiom-sdk__axiom_list_subjects"));
 
         assertTrue(ActionTypeValidator.validate(at, known).hasErrors());
     }
@@ -290,14 +290,14 @@ class ActionTypeValidatorTest {
         at.setAllowedTools(List.of(
                 "@Read-Only Tools",
                 "mcp__axiom-tools__list_github_prs",
-                "mcp__axiom-sdk__axiom_list_projects",
+                "mcp__axiom-sdk__axiom_list_subjects",
                 "Read", "Bash(gh pr *)"));
 
         ActionTypeValidator.KnownNames known = new ActionTypeValidator.KnownNames(
                 null,
                 Set.of("list_github_prs"),
                 Set.of("Read-Only Tools"),
-                Set.of("mcp__axiom-sdk__axiom_list_projects"));
+                Set.of("mcp__axiom-sdk__axiom_list_subjects"));
 
         assertFalse(ActionTypeValidator.validate(at, known).hasErrors());
     }

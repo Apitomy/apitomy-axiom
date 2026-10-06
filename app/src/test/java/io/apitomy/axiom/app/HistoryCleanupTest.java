@@ -97,7 +97,7 @@ class HistoryCleanupTest {
             sub.runId = old.id;
             sub.nodeId = "receive";
             sub.eventType = "pr.opened";
-            sub.projectId = -1L;
+            sub.subjectId = -1L;
             sub.createdOn = OLD;
             sub.persist();
             WorkflowRunResumeEntity resume = new WorkflowRunResumeEntity();
@@ -107,7 +107,7 @@ class HistoryCleanupTest {
             resume.resumedOn = OLD;
             resume.persist();
             TaskEntity task = new TaskEntity();
-            task.projectId = -1L;
+            task.subjectId = -1L;
             task.actionType = "test";
             task.createdBy = "test";
             task.status = "Completed";
@@ -133,7 +133,7 @@ class HistoryCleanupTest {
             assertEquals(0, WorkflowEventSubscriptionEntity.count("runId", ids[0]));
             assertEquals(0, WorkflowRunResumeEntity.count("runId", ids[0]));
             TaskEntity task = TaskEntity.findById(ids[3]);
-            assertNotNull(task, "tasks are kept with the project");
+            assertNotNull(task, "tasks are kept with the subject");
             assertNull(task.workflowRunId);
             RoutingOutcomeItemEntity item = RoutingOutcomeItemEntity.findById(ids[4]);
             assertNull(item.workflowRunId);
@@ -198,7 +198,7 @@ class HistoryCleanupTest {
 
     private static WorkflowRunEntity workflowRun(String status, Instant when) {
         WorkflowRunEntity run = new WorkflowRunEntity();
-        run.projectId = -1L;
+        run.subjectId = -1L;
         run.definitionId = -1L;
         run.definitionVersion = 1;
         run.instanceState = "{}";

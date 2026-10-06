@@ -8,14 +8,14 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 
 /**
- * A conversation thread entry within a Project.
+ * A conversation thread entry within a Subject.
  */
 @Entity
 @Table(name = "thread_entry")
 public class ThreadEntryEntity extends PanacheEntity {
 
-    @Column(name = "project_id", nullable = false)
-    public Long projectId;
+    @Column(name = "subject_id", nullable = false)
+    public Long subjectId;
 
     @Column(name = "author_type", nullable = false)
     public String authorType;

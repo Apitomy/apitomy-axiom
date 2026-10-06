@@ -1,6 +1,6 @@
 package io.apitomy.axiom.app;
 
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
@@ -22,32 +22,32 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * Tests for {@link ProjectDeletionService}: deleting a project must leave no row pointing at the
- * project or at its deleted tasks and workflow runs.
+ * Tests for {@link SubjectDeletionService}: deleting a subject must leave no row pointing at the
+ * subject or at its deleted tasks and workflow runs.
  */
 @QuarkusTest
-class ProjectDeletionServiceTest {
+class SubjectDeletionServiceTest {
 
     @Inject
-    ProjectDeletionService projectDeletionService;
+    SubjectDeletionService subjectDeletionService;
 
     @Test
-    void deletionKeepsTracesAndOutcomesButClearsProjectReferences() {
+    void deletionKeepsTracesAndOutcomesButClearsSubjectReferences() {
         UUID traceId = UUID.randomUUID();
         long[] ids = new long[8];
 
         QuarkusTransaction.requiringNew().run(() -> {
-            ProjectEntity project = new ProjectEntity();
-            project.name = "deletion-test";
-            project.type = "test";
-            project.ref = "deletion-test-" + traceId;
-            project.createdOn = Instant.now();
-            project.updatedOn = Instant.now();
-            project.persist();
-            ids[0] = project.id;
+            SubjectEntity subject = new SubjectEntity();
+            subject.name = "deletion-test";
+            subject.type = "test";
+            subject.ref = "deletion-test-" + traceId;
+            subject.createdOn = Instant.now();
+            subject.updatedOn = Instant.now();
+            subject.persist();
+            ids[0] = subject.id;
 
             TaskEntity task = new TaskEntity();
-            task.projectId = project.id;
+            task.subjectId = subject.id;
             task.actionType = "test";
             task.createdBy = "test";
             task.status = "Completed";
@@ -55,7 +55,7 @@ class ProjectDeletionServiceTest {
             task.persist();
 
             WorkflowRunEntity run = new WorkflowRunEntity();
-            run.projectId = project.id;
+            run.subjectId = subject.id;
             run.definitionId = -1L;
             run.definitionVersion = 1;
             run.instanceState = "{}";
@@ -75,7 +75,7 @@ class ProjectDeletionServiceTest {
             sub.runId = run.id;
             sub.nodeId = "receive";
             sub.eventType = "pr.opened";
-            sub.projectId = project.id;
+            sub.subjectId = subject.id;
             sub.createdOn = Instant.now();
             sub.persist();
 
@@ -91,7 +91,7 @@ class ProjectDeletionServiceTest {
             trace.traceType = "workflow";
             trace.status = "completed";
             trace.summary = "deletion-test";
-            trace.projectId = project.id;
+            trace.subjectId = subject.id;
             trace.startedOn = Instant.now();
             trace.persist();
 
@@ -99,7 +99,7 @@ class ProjectDeletionServiceTest {
             outcome.ledgerId = -1L;
             outcome.routingType = "workflow-dispatch";
             outcome.status = "succeeded";
-            outcome.projectId = project.id;
+            outcome.subjectId = subject.id;
             outcome.taskId = task.id;
             outcome.createdOn = Instant.now();
             outcome.persist();
@@ -109,7 +109,7 @@ class ProjectDeletionServiceTest {
             item.outcomeId = outcome.id;
             item.itemType = RoutingOutcomeItemEntity.TYPE_WORKFLOW_RUN;
             item.status = "succeeded";
-            item.projectId = project.id;
+            item.subjectId = subject.id;
             item.workflowRunId = run.id;
             item.createdOn = Instant.now();
             item.persist();
@@ -119,7 +119,7 @@ class ProjectDeletionServiceTest {
             taskItem.outcomeId = outcome.id;
             taskItem.itemType = RoutingOutcomeItemEntity.TYPE_TASK;
             taskItem.status = "succeeded";
-            taskItem.projectId = project.id;
+            taskItem.subjectId = subject.id;
             taskItem.taskId = task.id;
             taskItem.createdOn = Instant.now();
             taskItem.persist();
@@ -127,10 +127,10 @@ class ProjectDeletionServiceTest {
         });
 
         QuarkusTransaction.requiringNew().run(() ->
-                projectDeletionService.deleteProject(ProjectEntity.findById(ids[0])));
+                subjectDeletionService.deleteSubject(SubjectEntity.findById(ids[0])));
 
         QuarkusTransaction.requiringNew().run(() -> {
-            assertNull(ProjectEntity.findById(ids[0]));
+            assertNull(SubjectEntity.findById(ids[0]));
             assertNull(WorkflowRunEntity.findById(ids[1]));
             assertEquals(0, WorkflowWaitEntity.count("runId", ids[1]));
             assertEquals(0, WorkflowEventSubscriptionEntity.count("runId", ids[1]));
@@ -138,18 +138,18 @@ class ProjectDeletionServiceTest {
 
             TraceEntity trace = TraceEntity.findById(traceId);
             assertNotNull(trace, "trace history is kept");
-            assertNull(trace.projectId);
+            assertNull(trace.subjectId);
 
             RoutingOutcomeEntity outcome = RoutingOutcomeEntity.findById(ids[2]);
             assertNotNull(outcome, "event routing history is kept");
-            assertNull(outcome.projectId);
+            assertNull(outcome.subjectId);
             assertNull(outcome.taskId);
 
             RoutingOutcomeItemEntity item = RoutingOutcomeItemEntity.findById(ids[3]);
-            assertNull(item.projectId);
+            assertNull(item.subjectId);
             assertNull(item.workflowRunId);
             RoutingOutcomeItemEntity taskItem = RoutingOutcomeItemEntity.findById(ids[4]);
-            assertNull(taskItem.projectId);
+            assertNull(taskItem.subjectId);
             assertNull(taskItem.taskId);
 
             item.delete();

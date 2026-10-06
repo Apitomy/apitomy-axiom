@@ -11,7 +11,7 @@ import java.time.Instant;
  * A parked receive-event branch of a running {@link WorkflowRunEntity}. Exists
  * from the moment a workflow instance enters a {@code RECEIVE_EVENT} node until
  * a matching event arrives and the dispatcher resumes the branch, at which
- * point the row is deleted. {@code eventType} and {@code projectId} are
+ * point the row is deleted. {@code eventType} and {@code subjectId} are
  * denormalized (from node config and the owning run respectively) so the
  * dispatcher can prefilter candidates cheaply.
  */
@@ -28,8 +28,8 @@ public class WorkflowEventSubscriptionEntity extends PanacheEntity {
     @Column(name = "event_type", nullable = false)
     public String eventType;
 
-    @Column(name = "project_id", nullable = false)
-    public Long projectId;
+    @Column(name = "subject_id", nullable = false)
+    public Long subjectId;
 
     @Column(name = "created_on", nullable = false)
     public Instant createdOn;

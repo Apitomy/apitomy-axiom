@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.beans.OutputSchema;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
@@ -95,11 +95,11 @@ public class WorkflowExecutionService {
     }
 
     /**
-     * Triggers a workflow on a project because of a stream event (create-workflow routing).
+     * Triggers a workflow on a subject because of a stream event (create-workflow routing).
      * The run records the event and ledger entry that started it, and its trace records the
      * event.
      *
-     * @param projectId    the project to run the workflow on
+     * @param subjectId    the subject to run the workflow on
      * @param definitionId the workflow definition to instantiate
      * @param extraContext additional key-value pairs merged into the workflow
      *                     context (e.g., event data as a JsonNode)
@@ -107,62 +107,62 @@ public class WorkflowExecutionService {
      * @return the created workflow run entity
      */
     @Transactional
-    public WorkflowRunEntity triggerWorkflow(long projectId, long definitionId,
+    public WorkflowRunEntity triggerWorkflow(long subjectId, long definitionId,
                                               Map<String, Object> extraContext,
                                               EventOrigin origin) {
-        return doTriggerWorkflow(projectId, definitionId, extraContext, origin);
+        return doTriggerWorkflow(subjectId, definitionId, extraContext, origin);
     }
 
     /**
-     * Triggers a workflow on a project with additional context variables
+     * Triggers a workflow on a subject with additional context variables
      * merged into the initial workflow context.
      *
-     * @param projectId    the project to run the workflow on
+     * @param subjectId    the subject to run the workflow on
      * @param definitionId the workflow definition to instantiate
      * @param extraContext additional key-value pairs merged into the workflow
      *                     context (e.g., event data as a JsonNode)
      * @return the created workflow run entity
      */
     @Transactional
-    public WorkflowRunEntity triggerWorkflow(long projectId, long definitionId,
+    public WorkflowRunEntity triggerWorkflow(long subjectId, long definitionId,
                                               Map<String, Object> extraContext) {
-        return doTriggerWorkflow(projectId, definitionId, extraContext, null);
+        return doTriggerWorkflow(subjectId, definitionId, extraContext, null);
     }
 
     /**
-     * Triggers a workflow on a project (e.g. manually). The run has no trigger event.
+     * Triggers a workflow on a subject (e.g. manually). The run has no trigger event.
      *
-     * @param projectId    the project to run the workflow on
+     * @param subjectId    the subject to run the workflow on
      * @param definitionId the workflow definition to instantiate
      * @return the created workflow run entity
      */
     @Transactional
-    public WorkflowRunEntity triggerWorkflow(long projectId, long definitionId) {
-        return doTriggerWorkflow(projectId, definitionId, null, null);
+    public WorkflowRunEntity triggerWorkflow(long subjectId, long definitionId) {
+        return doTriggerWorkflow(subjectId, definitionId, null, null);
     }
 
-    private WorkflowRunEntity doTriggerWorkflow(long projectId, long definitionId,
+    private WorkflowRunEntity doTriggerWorkflow(long subjectId, long definitionId,
                                                   Map<String, Object> extraContext,
                                                   EventOrigin origin) {
-        try (LogContext logCtx = LogContext.create().projectId(projectId)) {
-            return startRun(projectId, definitionId, extraContext, origin, logCtx);
+        try (LogContext logCtx = LogContext.create().subjectId(subjectId)) {
+            return startRun(subjectId, definitionId, extraContext, origin, logCtx);
         }
     }
 
-    private WorkflowRunEntity startRun(long projectId, long definitionId,
+    private WorkflowRunEntity startRun(long subjectId, long definitionId,
                                        Map<String, Object> extraContext,
                                        EventOrigin origin, LogContext logCtx) {
-        ProjectEntity project = ProjectEntity.findById(projectId);
-        if (project == null) {
-            throw new WebApplicationException("Project not found", 404);
+        SubjectEntity subject = SubjectEntity.findById(subjectId);
+        if (subject == null) {
+            throw new WebApplicationException("Subject not found", 404);
         }
 
         WorkflowRunEntity activeRun = WorkflowRunEntity
-                .find("projectId = ?1 and definitionId = ?2 and status in ?3",
-                        projectId, definitionId, List.of("running", "waiting"))
+                .find("subjectId = ?1 and definitionId = ?2 and status in ?3",
+                        subjectId, definitionId, List.of("running", "waiting"))
                 .firstResult();
         if (activeRun != null) {
-            throw new WorkflowRunConflictException(projectId, definitionId);
+            throw new WorkflowRunConflictException(subjectId, definitionId);
         }
 
         WorkflowDefinitionEntity definition =
@@ -191,8 +191,8 @@ public class WorkflowExecutionService {
         validateNodeTypes(workflow);
 
         Map<String, Object> context = new HashMap<>();
-        context.put("projectId", project.id);
-        context.put("ref", project.ref != null ? project.ref : "");
+        context.put("subjectId", subject.id);
+        context.put("ref", subject.ref != null ? subject.ref : "");
 
         // Merge extra context (e.g., event data from create-workflow routing)
         if (extraContext != null) {
@@ -211,7 +211,7 @@ public class WorkflowExecutionService {
         }
 
         WorkflowRunEntity entity = new WorkflowRunEntity();
-        entity.projectId = projectId;
+        entity.subjectId = subjectId;
         entity.definitionId = definitionId;
         entity.definitionVersion = definition.currentVersion;
         entity.startedOn = Instant.now();
@@ -227,7 +227,7 @@ public class WorkflowExecutionService {
             TraceContext traceCtx = traceService.createTrace(
                     "workflow",
                     "Workflow: " + definition.name,
-                    entity.triggerEventId, project.id,
+                    entity.triggerEventId, subject.id,
                     "workflow", "Workflow: " + definition.name,
                     "workflow-run", entity.id);
             entity.traceId = traceCtx.traceId();
@@ -249,10 +249,10 @@ public class WorkflowExecutionService {
                     instance.status() == InstanceStatus.COMPLETED ? "completed" : "failed");
         }
 
-        logActivity(projectId, "workflow-started",
+        logActivity(subjectId, "workflow-started",
                 "Workflow started: " + definition.name, entity.traceId);
         sseEvents.fire(SseEvent.workflowUpdated(
-                entity.projectId, entity.id, entity.status));
+                entity.subjectId, entity.id, entity.status));
 
         return entity;
     }
@@ -268,7 +268,7 @@ public class WorkflowExecutionService {
         }
         try (LogContext ignored = LogContext.create()
                 .traceId(task.traceId)
-                .projectId(task.projectId)
+                .subjectId(task.subjectId)
                 .taskId(task.id)
                 .workflowRunId(task.workflowRunId)) {
             advanceAfterTask(task);
@@ -311,7 +311,7 @@ public class WorkflowExecutionService {
                     task.status = "Failed";
                     task.executionLog = appendReason(task.executionLog, reason);
                     reconcileTaskTraceNodeFailed(task);
-                    sseEvents.fire(SseEvent.taskUpdated(task.projectId, task.id, "Failed"));
+                    sseEvents.fire(SseEvent.taskUpdated(task.subjectId, task.id, "Failed"));
                     result = new NodeResult(NodeResultStatus.FAILED, Map.of());
                 } else {
                     result = new NodeResult(NodeResultStatus.COMPLETED, outputMap);
@@ -360,7 +360,7 @@ public class WorkflowExecutionService {
                     runId, nodeId);
             return;
         }
-        logCtx.traceId(entity.traceId).projectId(entity.projectId);
+        logCtx.traceId(entity.traceId).subjectId(entity.subjectId);
 
         completeParkedTraceNode(entity, "workflow-wait", waitId);
 
@@ -423,7 +423,7 @@ public class WorkflowExecutionService {
                     runId, nodeId);
             return null;
         }
-        logCtx.traceId(entity.traceId).projectId(entity.projectId);
+        logCtx.traceId(entity.traceId).subjectId(entity.subjectId);
 
         Long traceNodeId = completeParkedTraceNode(entity, "workflow-event-subscription",
                 subscriptionId);
@@ -438,7 +438,7 @@ public class WorkflowExecutionService {
         NodeResult result = new NodeResult(
                 NodeResultStatus.COMPLETED, Map.of("event", eventMap));
         advanceWorkflow(entity, workflow, instance, nodeId, result);
-        return new ResumedRun(entity.id, entity.projectId, nodeId, entity.traceId, traceNodeId);
+        return new ResumedRun(entity.id, entity.subjectId, nodeId, entity.traceId, traceNodeId);
     }
 
     /**
@@ -489,7 +489,7 @@ public class WorkflowExecutionService {
             WorkflowInstance instance, String nodeId, NodeResult result) {
         try (LogContext ignored = LogContext.create()
                 .traceId(entity.traceId)
-                .projectId(entity.projectId)
+                .subjectId(entity.subjectId)
                 .workflowRunId(entity.id)) {
             doAdvanceWorkflow(entity, workflow, instance, nodeId, result);
         }
@@ -507,19 +507,19 @@ public class WorkflowExecutionService {
         } else if (advanced.status() == InstanceStatus.COMPLETED) {
             entity.completedOn = Instant.now();
             completeRunTrace(entity, "completed");
-            logActivity(entity.projectId, "workflow-completed",
+            logActivity(entity.subjectId, "workflow-completed",
                     "Workflow completed", entity.traceId);
         } else if (advanced.status() == InstanceStatus.FAILED) {
             entity.completedOn = Instant.now();
             completeRunTrace(entity, "failed");
-            logActivity(entity.projectId, "workflow-failed",
+            logActivity(entity.subjectId, "workflow-failed",
                     "Workflow failed: " + advanced.failureReason(), entity.traceId);
             sseEvents.fire(SseEvent.notification(
-                    "Workflow failed for project", "error"));
+                    "Workflow failed for subject", "error"));
         }
 
         sseEvents.fire(SseEvent.workflowUpdated(
-                entity.projectId, entity.id, entity.status));
+                entity.subjectId, entity.id, entity.status));
     }
 
     /**
@@ -562,9 +562,9 @@ public class WorkflowExecutionService {
             activeTask.completedOn = Instant.now();
         }
 
-        logActivity(entity.projectId, "workflow-cancelled", "Workflow cancelled", entity.traceId);
+        logActivity(entity.subjectId, "workflow-cancelled", "Workflow cancelled", entity.traceId);
         sseEvents.fire(SseEvent.workflowUpdated(
-                entity.projectId, entity.id, entity.status));
+                entity.subjectId, entity.id, entity.status));
     }
 
     // -- Private helpers --
@@ -705,7 +705,7 @@ public class WorkflowExecutionService {
         }
 
         TaskEntity task = new TaskEntity();
-        task.projectId = entity.projectId;
+        task.subjectId = entity.subjectId;
         task.actionType = actionTypeStr;
         task.createdBy = "workflow";
         task.status = "Pending";
@@ -729,7 +729,7 @@ public class WorkflowExecutionService {
         LOG.infof("Created task %d for workflow instance %d (action: %s)",
                 task.id, entity.id, actionInfo.actionType());
 
-        sseEvents.fire(SseEvent.taskUpdated(entity.projectId, task.id, task.status));
+        sseEvents.fire(SseEvent.taskUpdated(entity.subjectId, task.id, task.status));
     }
 
     /**
@@ -746,8 +746,8 @@ public class WorkflowExecutionService {
         if (actionInfo.resolvedInputs() != null) {
             params.putAll(actionInfo.resolvedInputs());
         }
-        // Always inject projectId from the workflow run
-        params.putIfAbsent("projectId", entity.projectId);
+        // Always inject subjectId from the workflow run
+        params.putIfAbsent("subjectId", entity.subjectId);
 
         LOG.infof("Executing SDK call %s for workflow %d node %s", functionName, entity.id, nodeId);
 
@@ -780,7 +780,7 @@ public class WorkflowExecutionService {
     private void createHumanTaskForNode(WorkflowRunEntity entity,
             String nodeId, HumanTaskInfo humanTaskInfo) {
         TaskEntity task = new TaskEntity();
-        task.projectId = entity.projectId;
+        task.subjectId = entity.subjectId;
         String nodeName = humanTaskInfo.nodeName();
         task.actionType = nodeName != null && !nodeName.isBlank() ? nodeName : "Human Task";
         task.createdBy = "workflow";
@@ -867,7 +867,7 @@ public class WorkflowExecutionService {
         sub.runId = entity.id;
         sub.nodeId = receiveEventInfo.nodeId();
         sub.eventType = receiveEventInfo.eventType();
-        sub.projectId = entity.projectId;
+        sub.subjectId = entity.subjectId;
         sub.createdOn = Instant.now();
         sub.persist();
 
@@ -1038,10 +1038,10 @@ public class WorkflowExecutionService {
         }
     }
 
-    private void logActivity(Long projectId, String entryType,
+    private void logActivity(Long subjectId, String entryType,
             String summary, UUID traceId) {
         ActivityLogEntity log = new ActivityLogEntity();
-        log.projectId = projectId;
+        log.subjectId = subjectId;
         log.entryType = entryType;
         log.summary = summary;
         log.createdOn = Instant.now();

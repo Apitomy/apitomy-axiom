@@ -312,7 +312,7 @@ export function ProjectDetailPage() {
                     <DescriptionListTerm>Workspace</DescriptionListTerm>
                     <DescriptionListDescription>
                         <code style={{ fontSize: "13px" }}>
-                            ~/.axiom/workspaces/project-{project.id}
+                            ~/.axiom/workspaces/subject-{project.id}
                         </code>
                     </DescriptionListDescription>
                 </DescriptionListGroup>

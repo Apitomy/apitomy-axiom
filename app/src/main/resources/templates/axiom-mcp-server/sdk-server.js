@@ -43,41 +43,41 @@ const HANDLERS = {
             payload: args.payload,
         });
     },
-    axiom_list_projects: async (args) => {
+    axiom_list_subjects: async (args) => {
         const params = new URLSearchParams();
         params.set("limit", "50");
         if (args.filterName) params.set("filterName", args.filterName);
         if (args.filterLabels) params.set("filterLabels", args.filterLabels);
         if (args.filterRef) params.set("filterRef", args.filterRef);
-        return await axiomApi("GET", `/projects?${params}`);
+        return await axiomApi("GET", `/subjects?${params}`);
     },
-    axiom_get_project: async (args) => {
-        return await axiomApi("GET", `/projects/${args.projectId}`);
+    axiom_get_subject: async (args) => {
+        return await axiomApi("GET", `/subjects/${args.subjectId}`);
     },
     axiom_get_task_status: async (args) => {
-        const result = await axiomApi("GET", `/tasks?filterProjectId=${args.projectId}&limit=100`);
+        const result = await axiomApi("GET", `/tasks?filterSubjectId=${args.subjectId}&limit=100`);
         const parsed = JSON.parse(result);
         const task = (parsed.items || []).find(t => t.id === Number(args.taskId));
-        return task ? JSON.stringify(task, null, 2) : `Task #${args.taskId} not found in project #${args.projectId}`;
+        return task ? JSON.stringify(task, null, 2) : `Task #${args.taskId} not found in subject #${args.subjectId}`;
     },
     axiom_add_thread_entry: async (args) => {
-        return await axiomApi("POST", `/projects/${args.projectId}/thread`, {
+        return await axiomApi("POST", `/subjects/${args.subjectId}/thread`, {
             content: args.content,
         });
     },
-    axiom_add_project_label: async (args) => {
-        const project = JSON.parse(await axiomApi("GET", `/projects/${args.projectId}`));
-        const labels = project.labels || [];
+    axiom_add_subject_label: async (args) => {
+        const subject = JSON.parse(await axiomApi("GET", `/subjects/${args.subjectId}`));
+        const labels = subject.labels || [];
         if (!labels.includes(args.label)) {
             labels.push(args.label);
-            return await axiomApi("PUT", `/projects/${args.projectId}`, { labels });
+            return await axiomApi("PUT", `/subjects/${args.subjectId}`, { labels });
         }
-        return JSON.stringify(project);
+        return JSON.stringify(subject);
     },
-    axiom_remove_project_label: async (args) => {
-        const project = JSON.parse(await axiomApi("GET", `/projects/${args.projectId}`));
-        const labels = (project.labels || []).filter(l => l !== args.label);
-        return await axiomApi("PUT", `/projects/${args.projectId}`, { labels });
+    axiom_remove_subject_label: async (args) => {
+        const subject = JSON.parse(await axiomApi("GET", `/subjects/${args.subjectId}`));
+        const labels = (subject.labels || []).filter(l => l !== args.label);
+        return await axiomApi("PUT", `/subjects/${args.subjectId}`, { labels });
     },
     axiom_list_tools: async (args) => {
         const params = new URLSearchParams();
@@ -86,8 +86,8 @@ const HANDLERS = {
         if (args.filterLabels) params.set("filterLabels", args.filterLabels);
         return await axiomApi("GET", `/tools?${params}`);
     },
-    axiom_get_project_thread: async (args) => {
-        return await axiomApi("GET", `/projects/${args.projectId}/thread`);
+    axiom_get_subject_thread: async (args) => {
+        return await axiomApi("GET", `/subjects/${args.subjectId}/thread`);
     },
     axiom_list_action_types: async (args) => {
         const params = new URLSearchParams();
@@ -98,28 +98,28 @@ const HANDLERS = {
     axiom_list_agents: async () => {
         return await axiomApi("GET", "/actors");
     },
-    axiom_update_project: async (args) => {
+    axiom_update_subject: async (args) => {
         const payload = {};
         if (args.name) payload.name = args.name;
         if (args.body) payload.body = args.body;
         if (args.labels) payload.labels = args.labels.split(",").map(l => l.trim()).filter(Boolean);
-        return await axiomApi("PUT", `/projects/${args.projectId}`, payload);
+        return await axiomApi("PUT", `/subjects/${args.subjectId}`, payload);
     },
-    axiom_update_project_body: async (args) => {
-        await axiomApi("PUT", `/projects/${args.projectId}/body`, args.body, {
+    axiom_update_subject_body: async (args) => {
+        await axiomApi("PUT", `/subjects/${args.subjectId}/body`, args.body, {
             contentType: "text/markdown", rawBody: true,
         });
         return "OK";
     },
     axiom_list_events: async (args) => {
-        return await axiomApi("GET", `/projects/${args.projectId}/events`);
+        return await axiomApi("GET", `/subjects/${args.subjectId}/events`);
     },
     axiom_respond_to_task: async (args) => {
-        return await axiomApi("POST", `/projects/${args.projectId}/tasks/${args.taskId}/respond`, {
+        return await axiomApi("POST", `/subjects/${args.subjectId}/tasks/${args.taskId}/respond`, {
             response: args.response,
         });
     },
-    axiom_create_project: async (args) => {
+    axiom_create_subject: async (args) => {
         const body = {
             name: args.name,
             type: args.type,
@@ -135,12 +135,12 @@ const HANDLERS = {
                 throw new Error(`Invalid JSON in metadata parameter: ${e.message}`);
             }
         }
-        return await axiomApi("POST", "/projects", body);
+        return await axiomApi("POST", "/subjects", body);
     },
     axiom_get_activity_log: async (args) => {
         const params = new URLSearchParams();
         params.set("limit", String(args.limit || 50));
-        if (args.projectId) params.set("filterProjectId", String(args.projectId));
+        if (args.subjectId) params.set("filterSubjectId", String(args.subjectId));
         return await axiomApi("GET", `/activity?${params}`);
     },
 };

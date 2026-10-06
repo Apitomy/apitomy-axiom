@@ -87,8 +87,8 @@ class RoutingOutcomeItemsTest {
         assertEquals(1, items.size());
         assertEquals(RoutingOutcomeItemEntity.TYPE_WORKFLOW_RUN, items.get(0).itemType);
         assertEquals(987654L, items.get(0).workflowRunId);
-        assertEquals(outcome.projectId, items.get(0).projectId);
-        assertNotNull(items.get(0).projectId);
+        assertEquals(outcome.subjectId, items.get(0).subjectId);
+        assertNotNull(items.get(0).subjectId);
     }
 
     @Test
@@ -112,7 +112,7 @@ class RoutingOutcomeItemsTest {
                 .body("items[0].outcomes[0].items", hasSize(1))
                 .body("items[0].outcomes[0].items.type", hasItems("workflow-run"))
                 .body("items[0].outcomes[0].items[0].workflowRunId", is(987653))
-                .body("items[0].outcomes[0].items[0].projectId", is(outcome.projectId.intValue()))
+                .body("items[0].outcomes[0].items[0].subjectId", is(outcome.subjectId.intValue()))
                 .body("items[0].outcomes[0].items[0].status", is("completed"));
     }
 
@@ -126,7 +126,7 @@ class RoutingOutcomeItemsTest {
                     .firstResult();
             if (config == null) {
                 config = new RetentionConfigEntity();
-                config.inactiveProjectRetentionDays = 30;
+                config.inactiveSubjectRetentionDays = 30;
                 config.eventRetentionDays = 30;
                 config.traceRetentionDays = 30;
                 config.persist();

@@ -13,7 +13,7 @@ import java.util.UUID;
  * cost, token, and metadata for aggregation and reporting.
  *
  * <p>Every time an agent is invoked — e.g. for a task execution — a row is written to this table. The metadata
- * columns allow querying and aggregating by agent, project, action type,
+ * columns allow querying and aggregating by agent, subject, action type,
  * invocation type, and time range.</p>
  */
 @Entity
@@ -46,10 +46,10 @@ public class AiUsageEntity extends PanacheEntity {
 
 
     /**
-     * Project ID (if associated with a project).
+     * Subject ID (if associated with a subject).
      */
-    @Column(name = "project_id")
-    public Long projectId;
+    @Column(name = "subject_id")
+    public Long subjectId;
 
     /**
      * Agent ID (the AI agent that performed the invocation).

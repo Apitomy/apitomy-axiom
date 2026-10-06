@@ -14,7 +14,7 @@ import io.apitomy.axiom.api.beans.TraceNodeDetail;
 import io.apitomy.axiom.api.beans.TraceSearchResults;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ToolExecutionEntity;
@@ -58,7 +58,7 @@ public class TraceResourceImpl implements TracesResource {
     @Override
     public TraceSearchResults listTraces(BigInteger page, BigInteger limit,
             String filterTraceType, String filterStatus,
-            String filterEventId, BigInteger filterProjectId) {
+            String filterEventId, BigInteger filterSubjectId) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
@@ -84,9 +84,9 @@ public class TraceResourceImpl implements TracesResource {
             hql.append(" and eventId = :eventId");
             params.put("eventId", parseEventId(filterEventId));
         }
-        if (filterProjectId != null) {
-            hql.append(" and projectId = :projectId");
-            params.put("projectId", filterProjectId.longValue());
+        if (filterSubjectId != null) {
+            hql.append(" and subjectId = :subjectId");
+            params.put("subjectId", filterSubjectId.longValue());
         }
 
         long totalCount = TraceEntity.count(hql.toString(), params);
@@ -253,7 +253,7 @@ public class TraceResourceImpl implements TracesResource {
 
     /**
      * Builds the detail for a workflow run: the run's fields (without the bulky
-     * engine instance state) plus its definition and project names.
+     * engine instance state) plus its definition and subject names.
      */
     @SuppressWarnings("unchecked")
     private Map<String, Object> workflowRunDetail(Long runId) {
@@ -330,18 +330,18 @@ public class TraceResourceImpl implements TracesResource {
     }
 
     /**
-     * Adds the run ID, run status, definition name and project name of a workflow run.
+     * Adds the run ID, run status, definition name and subject name of a workflow run.
      */
     private void addRunContext(Map<String, Object> properties, WorkflowRunEntity run) {
         if (run == null) {
             return;
         }
         WorkflowDefinitionEntity definition = WorkflowDefinitionEntity.findById(run.definitionId);
-        ProjectEntity project = ProjectEntity.findById(run.projectId);
+        SubjectEntity subject = SubjectEntity.findById(run.subjectId);
         properties.put("runId", run.id);
-        properties.putIfAbsent("projectId", run.projectId);
+        properties.putIfAbsent("subjectId", run.subjectId);
         properties.put("definitionName", definition != null ? definition.name : null);
-        properties.put("projectName", project != null ? project.name : null);
+        properties.put("subjectName", subject != null ? subject.name : null);
     }
 
     /** Adds the owning run's status as {@code runStatus} for parked-node details. */
@@ -390,7 +390,7 @@ public class TraceResourceImpl implements TracesResource {
         bean.setStatus(entity.status);
         bean.setSummary(entity.summary);
         bean.setEventId(entity.eventId);
-        bean.setProjectId(entity.projectId);
+        bean.setSubjectId(entity.subjectId);
         bean.setStartedOn(Date.from(entity.startedOn));
         if (entity.completedOn != null) {
             bean.setCompletedOn(Date.from(entity.completedOn));

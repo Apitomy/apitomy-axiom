@@ -42,14 +42,14 @@ public class SeedDataInitializer {
 
         LOG.info("Seeding built-in action types");
 
-        seedActionType("close-project",
-                "Mark the project as completed. Use this script action when an "
+        seedActionType("close-subject",
+                "Mark the subject as completed. Use this script action when an "
                         + "issue-closed event is received, indicating the issue has "
-                        + "been resolved and the project should be marked as done.",
+                        + "been resolved and the subject should be marked as done.",
                 "script", null, null,
                 """
                 #!/bin/bash
-                curl -s -X POST "{{apiBaseUrl}}/projects/{{projectId}}/close"
+                curl -s -X POST "{{apiBaseUrl}}/subjects/{{subjectId}}/close"
                 """);
 
         LOG.infof("Seeded %d built-in action types", ActionTypeEntity.count());
@@ -142,7 +142,7 @@ public class SeedDataInitializer {
         }
 
         RetentionConfigEntity config = new RetentionConfigEntity();
-        config.inactiveProjectRetentionDays = 90;
+        config.inactiveSubjectRetentionDays = 90;
         config.traceRetentionDays = 30;
         config.eventRetentionDays = 90;
         // History settings: 0 keeps the rows forever.

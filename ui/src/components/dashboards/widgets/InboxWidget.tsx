@@ -39,7 +39,7 @@ function InboxWidget({ config, labels }: WidgetProps) {
                 {items.map(item => (
                     <Tr key={item.id} isClickable
                         onRowClick={() => navigate(`/inbox`)}>
-                        <Td>{item.projectName || "—"}</Td>
+                        <Td>{item.subjectName || "—"}</Td>
                         <Td><Label isCompact>{item.actionType}</Label></Td>
                         <Td>{formatAge(item.createdOn)}</Td>
                     </Tr>

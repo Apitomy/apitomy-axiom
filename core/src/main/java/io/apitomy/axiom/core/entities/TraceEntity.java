@@ -33,8 +33,8 @@ public class TraceEntity extends PanacheEntityBase {
     @Column(name = "event_id")
     public UUID eventId;
 
-    @Column(name = "project_id")
-    public Long projectId;
+    @Column(name = "subject_id")
+    public Long subjectId;
 
     @Column(name = "started_on", nullable = false)
     public Instant startedOn;

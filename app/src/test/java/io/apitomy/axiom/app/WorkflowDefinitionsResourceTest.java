@@ -375,7 +375,7 @@ class WorkflowDefinitionsResourceTest {
                         "nodes": [
                             {"id": "s1", "type": "start", "name": "Start",
                              "config": {"inputs": [
-                                 {"name": "projectId", "type": "number",
+                                 {"name": "subjectId", "type": "number",
                                   "required": true},
                                  {"name": "repository", "type": "string",
                                   "required": false}
@@ -459,7 +459,7 @@ class WorkflowDefinitionsResourceTest {
                     .body("content.nodes[0].type", equalTo("start"))
                     .body("content.nodes[0].config.inputs.size()", equalTo(3))
                     .body("content.nodes[0].config.inputs.name",
-                            hasItems("projectId", "ref", "event"));
+                            hasItems("subjectId", "ref", "event"));
     }
 
     // -- Helpers --

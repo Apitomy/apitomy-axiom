@@ -353,13 +353,13 @@ function StatusGroup({ label, status }: { label: string; status: unknown }) {
 }
 
 function ProjectGroup({ detail }: { detail: Record<string, unknown> }) {
-    if (detail.projectId == null) return null;
-    const name = detail.projectName ? String(detail.projectName) : `Project #${detail.projectId}`;
+    if (detail.subjectId == null) return null;
+    const name = detail.subjectName ? String(detail.subjectName) : `Project #${detail.subjectId}`;
     return (
         <DescriptionListGroup>
             <DescriptionListTerm>Project</DescriptionListTerm>
             <DescriptionListDescription>
-                <Link to={`/projects/${detail.projectId}`}>{name}</Link>
+                <Link to={`/projects/${detail.subjectId}`}>{name}</Link>
             </DescriptionListDescription>
         </DescriptionListGroup>
     );

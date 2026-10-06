@@ -29,7 +29,7 @@ import java.util.function.IntSupplier;
  * <ul>
  *   <li>Workflow runs: their waits, event subscriptions and resume records are deleted;
  *       {@code task.workflow_run_id} and {@code routing_outcome_item.workflow_run_id} are cleared
- *       (tasks belong to the project and are deleted with it).</li>
+ *       (tasks belong to the subject and are deleted with it).</li>
  * </ul>
  *
  * <p>Each step deletes at most {@link #BATCH_SIZE} rows per transaction.

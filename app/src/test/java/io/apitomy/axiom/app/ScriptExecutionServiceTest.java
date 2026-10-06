@@ -1,8 +1,9 @@
 package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
+import io.apitomy.axiom.core.services.WorkspaceService;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -29,48 +30,56 @@ class ScriptExecutionServiceTest {
         ScriptExecutionService svc = new ScriptExecutionService();
         svc.objectMapper = new ObjectMapper();
         svc.httpPort = 9090;
+        svc.workspaceService = new WorkspaceService() {
+            @Override
+            public Path getWorkspacePath(SubjectEntity subject) {
+                return Path.of("/ws", "subject-" + subject.id);
+            }
+        };
         return svc;
     }
 
-    private TaskEntity task(long id, Long projectId, String input) {
+    private TaskEntity task(long id, Long subjectId, String input) {
         TaskEntity task = new TaskEntity();
         task.id = id;
-        task.projectId = projectId;
+        task.subjectId = subjectId;
         task.eventId = UUID.fromString("00000000-0000-0000-0000-000000000055");
         task.input = input;
         return task;
     }
 
-    private ProjectEntity project(String ref, String repository, String name) {
-        ProjectEntity project = new ProjectEntity();
-        project.ref = ref;
-        project.repository = repository;
-        project.name = name;
-        return project;
+    private SubjectEntity subject(String ref, String repository, String name) {
+        SubjectEntity subject = new SubjectEntity();
+        subject.ref = ref;
+        subject.repository = repository;
+        subject.name = name;
+        subject.id = 42L;
+        return subject;
     }
 
     @Test
     void standardPlaceholdersBecomeQuotedEnvReferences() {
         ScriptExecutionService svc = newService();
         Map<String, String> env = new LinkedHashMap<>();
-        String template = "echo {{projectId}} {{taskId}} {{ref}} {{repository}} "
-                + "{{projectName}} {{apiBaseUrl}} {{workDir}}";
+        String template = "echo {{subjectId}} {{taskId}} {{ref}} {{repository}} "
+                + "{{subjectName}} {{apiBaseUrl}} {{workDir}}";
 
         String resolved = svc.substitutePlaceholders(template,
                 task(7L, 42L, "do the thing"),
-                project("owner/repo#42", "owner/repo", "My Project"), env);
+                subject("owner/repo#42", "owner/repo", "My Subject"), env);
 
         // No raw values are inlined; each placeholder is a quoted env reference.
-        assertEquals("echo \"${AXIOM_PROJECT_ID}\" \"${AXIOM_TASK_ID}\" \"${AXIOM_REF}\" "
-                + "\"${AXIOM_REPOSITORY}\" \"${AXIOM_PROJECT_NAME}\" \"${AXIOM_API_URL}\" "
+        assertEquals("echo \"${AXIOM_SUBJECT_ID}\" \"${AXIOM_TASK_ID}\" \"${AXIOM_REF}\" "
+                + "\"${AXIOM_REPOSITORY}\" \"${AXIOM_SUBJECT_NAME}\" \"${AXIOM_API_URL}\" "
                 + "\"${AXIOM_WORK_DIR}\"", resolved);
 
-        assertEquals("42", env.get("AXIOM_PROJECT_ID"));
+        assertEquals("42", env.get("AXIOM_SUBJECT_ID"));
         assertEquals("7", env.get("AXIOM_TASK_ID"));
         assertEquals("owner/repo#42", env.get("AXIOM_REF"));
         assertEquals("owner/repo", env.get("AXIOM_REPOSITORY"));
-        assertEquals("My Project", env.get("AXIOM_PROJECT_NAME"));
+        assertEquals("My Subject", env.get("AXIOM_SUBJECT_NAME"));
         assertEquals("http://localhost:9090/api/v1", env.get("AXIOM_API_URL"));
+        assertEquals("/ws/subject-42", env.get("AXIOM_WORK_DIR"));
     }
 
     @Test
@@ -79,10 +88,10 @@ class ScriptExecutionServiceTest {
         Map<String, String> env = new LinkedHashMap<>();
 
         svc.substitutePlaceholders("echo {{ref}}", task(1L, 2L, null),
-                project("r", "repo", "n"), env);
+                subject("r", "repo", "n"), env);
 
         assertTrue(env.containsKey("AXIOM_REF"));
-        assertFalse(env.containsKey("AXIOM_PROJECT_NAME"));
+        assertFalse(env.containsKey("AXIOM_SUBJECT_NAME"));
     }
 
     @Test
@@ -91,12 +100,12 @@ class ScriptExecutionServiceTest {
         Map<String, String> env = new LinkedHashMap<>();
         String payload = "$(touch /tmp/pwned); `id`; rm -rf /";
 
-        String resolved = svc.substitutePlaceholders("echo {{projectName}}",
-                task(1L, 2L, null), project("r", "repo", payload), env);
+        String resolved = svc.substitutePlaceholders("echo {{subjectName}}",
+                task(1L, 2L, null), subject("r", "repo", payload), env);
 
         // The dangerous characters live only in the env value, not the script.
-        assertEquals("echo \"${AXIOM_PROJECT_NAME}\"", resolved);
-        assertEquals(payload, env.get("AXIOM_PROJECT_NAME"));
+        assertEquals("echo \"${AXIOM_SUBJECT_NAME}\"", resolved);
+        assertEquals(payload, env.get("AXIOM_SUBJECT_NAME"));
         assertFalse(resolved.contains("touch"));
         assertFalse(resolved.contains("rm -rf"));
     }
@@ -110,7 +119,7 @@ class ScriptExecutionServiceTest {
 
         String resolved = svc.substitutePlaceholders(
                 "echo {{inputs.title}} {{inputs.count}}", task,
-                project("r", "repo", "n"), env);
+                subject("r", "repo", "n"), env);
 
         assertEquals("echo \"${AXIOM_INPUT_title}\" \"${AXIOM_INPUT_count}\"", resolved);
         assertEquals("$(evil)", env.get("AXIOM_INPUT_title"));
@@ -123,13 +132,13 @@ class ScriptExecutionServiceTest {
         Map<String, String> env = new LinkedHashMap<>();
 
         String resolved = svc.substitutePlaceholders(
-                "git commit -m \"Automated fix: {{projectName}}\"",
-                task(1L, 2L, null), project("r", "repo", "fix login bug"), env);
+                "git commit -m \"Automated fix: {{subjectName}}\"",
+                task(1L, 2L, null), subject("r", "repo", "fix login bug"), env);
 
         // Inside an existing double-quoted string the reference must NOT add its
         // own quotes, otherwise the value would word-split (issue: PR #280 review).
-        assertEquals("git commit -m \"Automated fix: ${AXIOM_PROJECT_NAME}\"", resolved);
-        assertEquals("fix login bug", env.get("AXIOM_PROJECT_NAME"));
+        assertEquals("git commit -m \"Automated fix: ${AXIOM_SUBJECT_NAME}\"", resolved);
+        assertEquals("fix login bug", env.get("AXIOM_SUBJECT_NAME"));
     }
 
     @Test
@@ -137,14 +146,14 @@ class ScriptExecutionServiceTest {
         ScriptExecutionService svc = newService();
         Map<String, String> env = new LinkedHashMap<>();
 
-        String resolved = svc.substitutePlaceholders("echo '{{projectName}}'",
-                task(1L, 2L, null), project("r", "repo", "hello world"), env);
+        String resolved = svc.substitutePlaceholders("echo '{{subjectName}}'",
+                task(1L, 2L, null), subject("r", "repo", "hello world"), env);
 
         // Single quotes suppress expansion, so the reference closes the region,
         // expands within double quotes, then reopens it. The template's own
         // quotes remain, yielding empty-string + expansion + empty-string.
-        assertEquals("echo ''\"${AXIOM_PROJECT_NAME}\"''", resolved);
-        assertEquals("hello world", env.get("AXIOM_PROJECT_NAME"));
+        assertEquals("echo ''\"${AXIOM_SUBJECT_NAME}\"''", resolved);
+        assertEquals("hello world", env.get("AXIOM_SUBJECT_NAME"));
     }
 
     @Test
@@ -156,8 +165,8 @@ class ScriptExecutionServiceTest {
         // Print the argument count and the first argument so we can confirm the
         // whitespace-bearing value was passed as exactly one argument.
         String resolved = svc.substitutePlaceholders(
-                "set -- \"Automated fix: {{projectName}}\"\nprintf '%s|%s' \"$#\" \"$1\"",
-                task(1L, 2L, null), project("r", "repo", "fix login bug"), env);
+                "set -- \"Automated fix: {{subjectName}}\"\nprintf '%s|%s' \"$#\" \"$1\"",
+                task(1L, 2L, null), subject("r", "repo", "fix login bug"), env);
 
         String output = runScript(resolved, env);
         assertEquals("1|Automated fix: fix login bug", output);
@@ -170,8 +179,8 @@ class ScriptExecutionServiceTest {
         Map<String, String> env = new LinkedHashMap<>();
 
         String resolved = svc.substitutePlaceholders(
-                "set -- '{{projectName}}'\nprintf '%s|%s' \"$#\" \"$1\"",
-                task(1L, 2L, null), project("r", "repo", "fix login bug"), env);
+                "set -- '{{subjectName}}'\nprintf '%s|%s' \"$#\" \"$1\"",
+                task(1L, 2L, null), subject("r", "repo", "fix login bug"), env);
 
         String output = runScript(resolved, env);
         assertEquals("1|fix login bug", output);
@@ -203,8 +212,8 @@ class ScriptExecutionServiceTest {
         Files.deleteIfExists(marker);
         String payload = "$(touch " + marker + ")";
 
-        String resolved = svc.substitutePlaceholders("printf '%s' {{projectName}}",
-                task(1L, 2L, null), project("r", "repo", payload), env);
+        String resolved = svc.substitutePlaceholders("printf '%s' {{subjectName}}",
+                task(1L, 2L, null), subject("r", "repo", payload), env);
 
         Path scriptFile = Files.createTempFile("axiom-inject-script-", ".sh");
         try {

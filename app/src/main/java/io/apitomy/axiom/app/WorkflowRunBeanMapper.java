@@ -6,7 +6,7 @@ import io.apitomy.axiom.api.beans.WorkflowContent;
 import io.apitomy.axiom.api.beans.WorkflowRunSearchResults;
 import io.apitomy.axiom.api.beans.WorkflowRunResume;
 import io.apitomy.axiom.api.beans.WorkflowRunSummary;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
 
 /**
  * Maps {@link WorkflowRunEntity} rows to the generated REST beans, shared by the
- * project workflow endpoint and the workflow-runs endpoints.
+ * subject workflow endpoint and the workflow-runs endpoints.
  */
 @ApplicationScoped
 public class WorkflowRunBeanMapper {
@@ -58,7 +58,7 @@ public class WorkflowRunBeanMapper {
         if (entity.triggerLedgerId != null) {
             bean.setTriggerLedgerId(entity.triggerLedgerId);
         }
-        bean.setProjectId(entity.projectId);
+        bean.setSubjectId(entity.subjectId);
         bean.setDefinitionId(entity.definitionId);
         bean.setDefinitionVersion(entity.definitionVersion);
         bean.setStatus(entity.status);
@@ -201,25 +201,25 @@ public class WorkflowRunBeanMapper {
     }
 
     /**
-     * Searches runs with optional project/definition/status filters, newest first.
+     * Searches runs with optional subject/definition/status filters, newest first.
      *
-     * @param projectId    optional project filter (nullable)
+     * @param subjectId    optional subject filter (nullable)
      * @param definitionId optional definition filter (nullable; used by the per-definition endpoint)
      * @param status       optional comma-separated status filter (nullable)
      * @param page         1-based page number (nullable → 1)
      * @param limit        page size (nullable → 20)
      * @return paginated run summaries
      */
-    public WorkflowRunSearchResults search(Long projectId, Long definitionId, String status,
+    public WorkflowRunSearchResults search(Long subjectId, Long definitionId, String status,
                                            BigInteger page, BigInteger limit) {
         int pageNum = page != null ? Math.max(1, page.intValue()) : 1;
         int pageSize = limit != null ? Math.max(1, limit.intValue()) : 20;
 
         StringBuilder hql = new StringBuilder("1=1");
         Map<String, Object> params = new HashMap<>();
-        if (projectId != null) {
-            hql.append(" and projectId = :projectId");
-            params.put("projectId", projectId);
+        if (subjectId != null) {
+            hql.append(" and subjectId = :subjectId");
+            params.put("subjectId", subjectId);
         }
         if (definitionId != null) {
             hql.append(" and definitionId = :definitionId");
@@ -237,12 +237,12 @@ public class WorkflowRunBeanMapper {
                 .page(Page.of(pageNum - 1, pageSize))
                 .list();
 
-        Map<Long, String> projectNames = resolveProjectNames(runs);
+        Map<Long, String> subjectNames = resolveSubjectNames(runs);
         Map<Long, String> definitionNames = resolveDefinitionNames(runs);
 
         WorkflowRunSearchResults results = new WorkflowRunSearchResults();
         results.setItems(runs.stream()
-                .map(r -> toSummary(r, projectNames, definitionNames))
+                .map(r -> toSummary(r, subjectNames, definitionNames))
                 .toList());
         results.setTotalCount(totalCount);
         results.setPage(pageNum);
@@ -250,12 +250,12 @@ public class WorkflowRunBeanMapper {
         return results;
     }
 
-    private Map<Long, String> resolveProjectNames(List<WorkflowRunEntity> runs) {
-        Set<Long> ids = runs.stream().map(r -> r.projectId).collect(Collectors.toSet());
+    private Map<Long, String> resolveSubjectNames(List<WorkflowRunEntity> runs) {
+        Set<Long> ids = runs.stream().map(r -> r.subjectId).collect(Collectors.toSet());
         if (ids.isEmpty()) {
             return Map.of();
         }
-        return ProjectEntity.<ProjectEntity>find("id in :ids", Map.of("ids", ids)).list().stream()
+        return SubjectEntity.<SubjectEntity>find("id in :ids", Map.of("ids", ids)).list().stream()
                 .collect(Collectors.toMap(p -> p.id, p -> p.name));
     }
 
@@ -269,12 +269,12 @@ public class WorkflowRunBeanMapper {
                 .collect(Collectors.toMap(d -> d.id, d -> d.name));
     }
 
-    private WorkflowRunSummary toSummary(WorkflowRunEntity run, Map<Long, String> projectNames,
+    private WorkflowRunSummary toSummary(WorkflowRunEntity run, Map<Long, String> subjectNames,
                                          Map<Long, String> definitionNames) {
         WorkflowRunSummary summary = new WorkflowRunSummary();
         summary.setRunId(run.id);
-        summary.setProjectId(run.projectId);
-        summary.setProjectName(projectNames.getOrDefault(run.projectId, "Unknown"));
+        summary.setSubjectId(run.subjectId);
+        summary.setSubjectName(subjectNames.getOrDefault(run.subjectId, "Unknown"));
         summary.setDefinitionId(run.definitionId);
         summary.setDefinitionName(definitionNames.getOrDefault(run.definitionId, "Unknown"));
         summary.setDefinitionVersion(run.definitionVersion);

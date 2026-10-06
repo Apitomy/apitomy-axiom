@@ -29,7 +29,7 @@ const ENTRY_TYPE_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "
     "task-started": "green",
     "task-completed": "green",
     "task-failed": "red",
-    "project-created": "blue",
+    "subject-created": "blue",
     "project-closed": "grey",
     "project-reopened": "orange",
     "pipeline-error": "red",
@@ -251,26 +251,26 @@ export function ActivityLogPage() {
                                     <Td>
                                         {entry.summary}
                                         {(entry.entryType === "task-completed" || entry.entryType === "task-failed")
-                                                && entry.projectId && entry.taskId && (
+                                                && entry.subjectId && entry.taskId && (
                                             <>
                                                 {" — "}
                                                 <Button variant="link" isInline
-                                                    onClick={() => handleViewTaskLog(entry.projectId!, entry.taskId!)}>
+                                                    onClick={() => handleViewTaskLog(entry.subjectId!, entry.taskId!)}>
                                                     View Log
                                                 </Button>
                                             </>
                                         )}
                                     </Td>
                                     <Td>
-                                        {entry.projectId ? (
+                                        {entry.subjectId ? (
                                             <Button
                                                 variant="link"
                                                 isInline
                                                 onClick={() =>
-                                                    navigate(`/projects/${entry.projectId}`)
+                                                    navigate(`/projects/${entry.subjectId}`)
                                                 }
                                             >
-                                                Project #{entry.projectId}
+                                                Project #{entry.subjectId}
                                             </Button>
                                         ) : (
                                             "—"

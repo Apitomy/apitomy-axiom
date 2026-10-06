@@ -1,6 +1,6 @@
 package io.apitomy.axiom.app;
 
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
@@ -23,14 +23,14 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests for {@link InactiveProjectCleanup}: projects with no active run whose last run completed before the
- * retention cutoff are deleted (including their workspace); active or recently completed projects remain.
+ * Tests for {@link InactiveSubjectCleanup}: subjects with no active run whose last run completed before the
+ * retention cutoff are deleted (including their workspace); active or recently completed subjects remain.
  */
 @QuarkusTest
-class InactiveProjectCleanupTest {
+class InactiveSubjectCleanupTest {
 
     @Inject
-    InactiveProjectCleanup cleanup;
+    InactiveSubjectCleanup cleanup;
 
     @Inject
     WorkspaceService workspaceService;
@@ -44,35 +44,35 @@ class InactiveProjectCleanupTest {
             QuarkusTransaction.requiringNew().run(() -> {
                 RetentionConfigEntity config = RetentionConfigEntity.<RetentionConfigEntity>findAll()
                         .firstResult();
-                config.inactiveProjectRetentionDays = days;
+                config.inactiveSubjectRetentionDays = days;
             });
             originalRetentionDays = null;
         }
     }
 
     @Test
-    void deletesOnlyProjectsInactiveBeyondRetention() {
+    void deletesOnlySubjectsInactiveBeyondRetention() {
         QuarkusTransaction.requiringNew().run(() -> {
             RetentionConfigEntity config = RetentionConfigEntity.<RetentionConfigEntity>findAll()
                     .firstResult();
             if (config == null) {
                 config = new RetentionConfigEntity();
-                config.inactiveProjectRetentionDays = 90;
+                config.inactiveSubjectRetentionDays = 90;
                 config.eventRetentionDays = 90;
                 config.traceRetentionDays = 30;
                 config.persist();
             }
-            originalRetentionDays = config.inactiveProjectRetentionDays;
-            config.inactiveProjectRetentionDays = 30;
+            originalRetentionDays = config.inactiveSubjectRetentionDays;
+            config.inactiveSubjectRetentionDays = 30;
         });
 
         long definitionId = createDefinition();
-        long projectA = createProjectWithRun(definitionId, "completed", Instant.now().minus(40, ChronoUnit.DAYS));
-        long projectB = createProjectWithRun(definitionId, "waiting", null);
-        long projectC = createProjectWithRun(definitionId, "completed", Instant.now().minus(1, ChronoUnit.DAYS));
-        Path workspaceA = workspacePath(projectA);
-        Path workspaceB = workspacePath(projectB);
-        Path workspaceC = workspacePath(projectC);
+        long subjectA = createSubjectWithRun(definitionId, "completed", Instant.now().minus(40, ChronoUnit.DAYS));
+        long subjectB = createSubjectWithRun(definitionId, "waiting", null);
+        long subjectC = createSubjectWithRun(definitionId, "completed", Instant.now().minus(1, ChronoUnit.DAYS));
+        Path workspaceA = workspacePath(subjectA);
+        Path workspaceB = workspacePath(subjectB);
+        Path workspaceC = workspacePath(subjectC);
         assertTrue(Files.exists(workspaceA));
 
         QuarkusTransaction.requiringNew().run(() -> cleanup.cleanup());
@@ -81,15 +81,15 @@ class InactiveProjectCleanupTest {
         assertTrue(Files.exists(workspaceB));
         assertTrue(Files.exists(workspaceC));
         QuarkusTransaction.requiringNew().run(() -> {
-            assertNull(ProjectEntity.findById(projectA));
-            assertNotNull(ProjectEntity.findById(projectB));
-            assertNotNull(ProjectEntity.findById(projectC));
+            assertNull(SubjectEntity.findById(subjectA));
+            assertNotNull(SubjectEntity.findById(subjectB));
+            assertNotNull(SubjectEntity.findById(subjectC));
         });
     }
 
-    private Path workspacePath(long projectId) {
+    private Path workspacePath(long subjectId) {
         return QuarkusTransaction.requiringNew().call(() ->
-                workspaceService.getWorkspacePath(ProjectEntity.findById(projectId)));
+                workspaceService.getWorkspacePath(SubjectEntity.findById(subjectId)));
     }
 
     private long createDefinition() {
@@ -104,19 +104,19 @@ class InactiveProjectCleanupTest {
         });
     }
 
-    private long createProjectWithRun(long definitionId, String status, Instant completedOn) {
+    private long createSubjectWithRun(long definitionId, String status, Instant completedOn) {
         return QuarkusTransaction.requiringNew().call(() -> {
-            ProjectEntity project = new ProjectEntity();
-            project.name = "cleanup-" + status;
-            project.type = "other";
-            project.ref = "test/cleanup-" + UUID.randomUUID();
-            project.createdOn = Instant.now();
-            project.updatedOn = Instant.now();
-            project.persist();
-            workspaceService.ensureWorkspace(project);
+            SubjectEntity subject = new SubjectEntity();
+            subject.name = "cleanup-" + status;
+            subject.type = "other";
+            subject.ref = "test/cleanup-" + UUID.randomUUID();
+            subject.createdOn = Instant.now();
+            subject.updatedOn = Instant.now();
+            subject.persist();
+            workspaceService.ensureWorkspace(subject);
 
             WorkflowRunEntity run = new WorkflowRunEntity();
-            run.projectId = project.id;
+            run.subjectId = subject.id;
             run.definitionId = definitionId;
             run.definitionVersion = 1;
             run.instanceState = "{}";
@@ -124,7 +124,7 @@ class InactiveProjectCleanupTest {
             run.startedOn = completedOn != null ? completedOn.minus(1, ChronoUnit.HOURS) : Instant.now();
             run.completedOn = completedOn;
             run.persist();
-            return project.id;
+            return subject.id;
         });
     }
 }

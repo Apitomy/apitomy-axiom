@@ -15,7 +15,7 @@ import io.apitomy.axiom.app.TaskExecutionService;
 import io.apitomy.axiom.api.beans.OutputSchema;
 import io.apitomy.axiom.api.beans.OutputSchemaField;
 import io.apitomy.axiom.api.beans.OutputSchemaFieldOption;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
@@ -69,7 +69,7 @@ public class InboxResourceImpl implements InboxResource {
         if (filterLabels != null && !filterLabels.isBlank()) {
             List<String> labels = Arrays.stream(filterLabels.split(","))
                     .map(String::trim).filter(s -> !s.isEmpty()).toList();
-            hql.append(" and projectId in (SELECT p.id FROM ProjectEntity p"
+            hql.append(" and subjectId in (SELECT p.id FROM SubjectEntity p"
                     + " JOIN p.labels pl WHERE pl IN :labels"
                     + " GROUP BY p.id HAVING COUNT(DISTINCT pl) = :labelCount)");
             params.put("labels", labels);
@@ -82,20 +82,20 @@ public class InboxResourceImpl implements InboxResource {
                 .page(Page.of(pageNum - 1, pageSize))
                 .list();
 
-        // Batch-fetch project names to avoid N+1 queries
-        Map<Long, String> projectNames = new java.util.HashMap<>();
+        // Batch-fetch subject names to avoid N+1 queries
+        Map<Long, String> subjectNames = new java.util.HashMap<>();
         for (TaskEntity t : taskEntities) {
-            projectNames.putIfAbsent(t.projectId, null);
+            subjectNames.putIfAbsent(t.subjectId, null);
         }
-        for (Long pid : projectNames.keySet()) {
-            ProjectEntity p = ProjectEntity.findById(pid);
+        for (Long pid : subjectNames.keySet()) {
+            SubjectEntity p = SubjectEntity.findById(pid);
             if (p != null) {
-                projectNames.put(pid, p.name);
+                subjectNames.put(pid, p.name);
             }
         }
 
         List<InboxItem> items = taskEntities.stream()
-                .map(entity -> toInboxItem(entity, projectNames.get(entity.projectId)))
+                .map(entity -> toInboxItem(entity, subjectNames.get(entity.subjectId)))
                 .toList();
 
         InboxSearchResults results = new InboxSearchResults();
@@ -123,10 +123,10 @@ public class InboxResourceImpl implements InboxResource {
     @Override
     @Transactional
     public InboxItem createInboxItem(NewInboxItem data) {
-        long projectId = data.getProjectId();
-        ProjectEntity project = ProjectEntity.findById(projectId);
-        if (project == null) {
-            throw new WebApplicationException("Project not found: " + projectId, 404);
+        long subjectId = data.getSubjectId();
+        SubjectEntity subject = SubjectEntity.findById(subjectId);
+        if (subject == null) {
+            throw new WebApplicationException("Subject not found: " + subjectId, 404);
         }
 
         // Serialize humanContext and outputSchema beans to JSON for storage
@@ -150,7 +150,7 @@ public class InboxResourceImpl implements InboxResource {
 
         // Create and persist the task entity
         TaskEntity task = new TaskEntity();
-        task.projectId = projectId;
+        task.subjectId = subjectId;
         task.actionType = data.getActionType();
         task.createdBy = "user";
         task.status = "Pending";
@@ -159,13 +159,13 @@ public class InboxResourceImpl implements InboxResource {
         task.createdOn = Instant.now();
         task.persist();
 
-        LOG.infof("Created direct human task %d (%s) for project %d",
-                task.id, task.actionType, projectId);
+        LOG.infof("Created direct human task %d (%s) for subject %d",
+                task.id, task.actionType, subjectId);
 
         // Mark the task as awaiting human input
         taskExecutionService.markTaskAwaitingInput(task.id);
 
-        return toInboxItem(task, project.name);
+        return toInboxItem(task, subject.name);
     }
 
     /**
@@ -180,9 +180,9 @@ public class InboxResourceImpl implements InboxResource {
             throw new WebApplicationException("Inbox item not found: " + tid, 404);
         }
 
-        ProjectEntity project = ProjectEntity.findById(task.projectId);
-        String projectName = project != null ? project.name : null;
-        return toInboxItem(task, projectName);
+        SubjectEntity subject = SubjectEntity.findById(task.subjectId);
+        String subjectName = subject != null ? subject.name : null;
+        return toInboxItem(task, subjectName);
     }
 
     /**
@@ -220,10 +220,10 @@ public class InboxResourceImpl implements InboxResource {
         }
     }
 
-    private InboxItem toInboxItem(TaskEntity entity, String projectName) {
+    private InboxItem toInboxItem(TaskEntity entity, String subjectName) {
         InboxItem item = new InboxItem();
         item.setId(entity.id);
-        item.setProjectId(entity.projectId);
+        item.setSubjectId(entity.subjectId);
         item.setActionType(entity.actionType);
         item.setStatus(entity.status);
         item.setInput(entity.input);
@@ -233,8 +233,8 @@ public class InboxResourceImpl implements InboxResource {
             item.setTraceId(entity.traceId);
         }
 
-        if (projectName != null) {
-            item.setProjectName(projectName);
+        if (subjectName != null) {
+            item.setSubjectName(subjectName);
         }
 
         // Parse humanContext JSON

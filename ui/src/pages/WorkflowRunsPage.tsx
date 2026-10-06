@@ -117,8 +117,8 @@ export function WorkflowRunsPage() {
                                     </Label>
                                 </Td>
                                 <Td>
-                                    <Link to={`/projects/${run.projectId}`}>
-                                        {run.projectName || `Project #${run.projectId}`}
+                                    <Link to={`/projects/${run.subjectId}`}>
+                                        {run.subjectName || `Project #${run.subjectId}`}
                                     </Link>
                                 </Td>
                                 <Td>

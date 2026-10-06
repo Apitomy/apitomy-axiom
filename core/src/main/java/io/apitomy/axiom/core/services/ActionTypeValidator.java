@@ -29,10 +29,10 @@ public final class ActionTypeValidator {
             Pattern.compile("\\{\\{\\s+|\\s+\\}\\}|\\{\\{[^}]*$");
     private static final Set<String> RECOGNIZED_PROMPT_PLACEHOLDERS = Set.of(
             "input", "actionType", "ref", "repository",
-            "projectName", "workDir");
+            "subjectName", "workDir");
     private static final Set<String> RECOGNIZED_SCRIPT_PLACEHOLDERS = Set.of(
-            "projectId", "eventId", "taskId", "ref", "repository",
-            "projectName", "apiBaseUrl", "workDir");
+            "subjectId", "eventId", "taskId", "ref", "repository",
+            "subjectName", "apiBaseUrl", "workDir");
     private static final Pattern SECRET_REF_PATTERN =
             Pattern.compile("\\$\\{secret:([^}]+)\\}");
     private static final Pattern MALFORMED_SECRET_REF_PATTERN =

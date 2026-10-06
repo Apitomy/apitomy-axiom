@@ -12,55 +12,55 @@
     "sdkCallSupported": true
   },
   {
-    "name": "axiom_list_projects",
-    "description": "List existing Axiom projects with optional filtering by name, labels, and ref. Each result includes an active flag (true if the project has a running or waiting workflow run).",
+    "name": "axiom_list_subjects",
+    "description": "List existing Axiom subjects with optional filtering by name, labels, and ref. Each result includes an active flag (true if the subject has a running or waiting workflow run).",
     "parameters": [
-      { "name": "filterName", "type": "string", "description": "Filter by project name or issue ref (substring match)", "required": false },
+      { "name": "filterName", "type": "string", "description": "Filter by subject name or issue ref (substring match)", "required": false },
       { "name": "filterLabels", "type": "string", "description": "Filter by labels (comma-separated, AND logic)", "required": false },
-      { "name": "filterRef", "type": "string", "description": "Exact-match filter on the project reference", "required": false }
+      { "name": "filterRef", "type": "string", "description": "Exact-match filter on the subject reference", "required": false }
     ],
     "sdkCallSupported": true
   },
   {
-    "name": "axiom_get_project",
-    "description": "Get details of a specific Axiom project including metadata, reference, and whether it is active (has a running or waiting workflow run).",
+    "name": "axiom_get_subject",
+    "description": "Get details of a specific Axiom subject including metadata, reference, and whether it is active (has a running or waiting workflow run).",
     "parameters": [
-      { "name": "projectId", "type": "number", "description": "The project ID", "required": true }
+      { "name": "subjectId", "type": "number", "description": "The subject ID", "required": true }
     ],
     "sdkCallSupported": true
   },
   {
     "name": "axiom_get_task_status",
-    "description": "Get the status and details of a specific task on a project.",
+    "description": "Get the status and details of a specific task on a subject.",
     "parameters": [
-      { "name": "projectId", "type": "number", "description": "The project ID", "required": true },
+      { "name": "subjectId", "type": "number", "description": "The subject ID", "required": true },
       { "name": "taskId", "type": "number", "description": "The task ID", "required": true }
     ],
     "sdkCallSupported": false
   },
   {
     "name": "axiom_add_thread_entry",
-    "description": "Post an update or message to a project's conversation thread.",
+    "description": "Post an update or message to a subject's conversation thread.",
     "parameters": [
-      { "name": "projectId", "type": "number", "description": "The project ID", "required": true },
+      { "name": "subjectId", "type": "number", "description": "The subject ID", "required": true },
       { "name": "content", "type": "string", "description": "The message content to post", "required": true }
     ],
     "sdkCallSupported": true
   },
   {
-    "name": "axiom_add_project_label",
-    "description": "Add a label to an Axiom project for categorization and filtering.",
+    "name": "axiom_add_subject_label",
+    "description": "Add a label to an Axiom subject for categorization and filtering.",
     "parameters": [
-      { "name": "projectId", "type": "number", "description": "The project ID", "required": true },
+      { "name": "subjectId", "type": "number", "description": "The subject ID", "required": true },
       { "name": "label", "type": "string", "description": "The label to add", "required": true }
     ],
     "sdkCallSupported": true
   },
   {
-    "name": "axiom_remove_project_label",
-    "description": "Remove a label from an Axiom project.",
+    "name": "axiom_remove_subject_label",
+    "description": "Remove a label from an Axiom subject.",
     "parameters": [
-      { "name": "projectId", "type": "number", "description": "The project ID", "required": true },
+      { "name": "subjectId", "type": "number", "description": "The subject ID", "required": true },
       { "name": "label", "type": "string", "description": "The label to remove", "required": true }
     ],
     "sdkCallSupported": true
@@ -75,10 +75,10 @@
     "sdkCallSupported": false
   },
   {
-    "name": "axiom_get_project_thread",
-    "description": "Read the conversation thread for a project.",
+    "name": "axiom_get_subject_thread",
+    "description": "Read the conversation thread for a subject.",
     "parameters": [
-      { "name": "projectId", "type": "number", "description": "The project ID", "required": true }
+      { "name": "subjectId", "type": "number", "description": "The subject ID", "required": true }
     ],
     "sdkCallSupported": false
   },
@@ -97,30 +97,30 @@
     "sdkCallSupported": false
   },
   {
-    "name": "axiom_update_project",
-    "description": "Update an Axiom project's metadata such as name, body, or labels.",
+    "name": "axiom_update_subject",
+    "description": "Update an Axiom subject's metadata such as name, body, or labels.",
     "parameters": [
-      { "name": "projectId", "type": "number", "description": "The project ID to update", "required": true },
-      { "name": "name", "type": "string", "description": "New project name", "required": false },
-      { "name": "body", "type": "string", "description": "New project body (markdown)", "required": false },
-      { "name": "labels", "type": "string", "description": "Comma-separated list of labels to set on the project", "required": false }
+      { "name": "subjectId", "type": "number", "description": "The subject ID to update", "required": true },
+      { "name": "name", "type": "string", "description": "New subject name", "required": false },
+      { "name": "body", "type": "string", "description": "New subject body (markdown)", "required": false },
+      { "name": "labels", "type": "string", "description": "Comma-separated list of labels to set on the subject", "required": false }
     ],
     "sdkCallSupported": true
   },
   {
-    "name": "axiom_update_project_body",
-    "description": "Update an Axiom project's body with markdown content.",
+    "name": "axiom_update_subject_body",
+    "description": "Update an Axiom subject's body with markdown content.",
     "parameters": [
-      { "name": "projectId", "type": "number", "description": "The project ID", "required": true },
+      { "name": "subjectId", "type": "number", "description": "The subject ID", "required": true },
       { "name": "body", "type": "string", "description": "The markdown body content", "required": true }
     ],
     "sdkCallSupported": true
   },
   {
     "name": "axiom_list_events",
-    "description": "List events related to an Axiom project.",
+    "description": "List events related to an Axiom subject.",
     "parameters": [
-      { "name": "projectId", "type": "number", "description": "The project ID", "required": true }
+      { "name": "subjectId", "type": "number", "description": "The subject ID", "required": true }
     ],
     "sdkCallSupported": false
   },
@@ -128,19 +128,19 @@
     "name": "axiom_respond_to_task",
     "description": "Submit a response to a task that is waiting for human input.",
     "parameters": [
-      { "name": "projectId", "type": "number", "description": "The project ID", "required": true },
+      { "name": "subjectId", "type": "number", "description": "The subject ID", "required": true },
       { "name": "taskId", "type": "number", "description": "The task ID awaiting a response", "required": true },
       { "name": "response", "type": "string", "description": "The response content to submit", "required": true }
     ],
     "sdkCallSupported": false
   },
   {
-    "name": "axiom_create_project",
-    "description": "Create a new Axiom project programmatically.",
+    "name": "axiom_create_subject",
+    "description": "Create a new Axiom subject programmatically.",
     "parameters": [
-      { "name": "name", "type": "string", "description": "The project name", "required": true },
-      { "name": "type", "type": "string", "description": "The project type (e.g. 'bug-fix', 'feature', 'issue', 'pull-request')", "required": true },
-      { "name": "ref", "type": "string", "description": "Project reference URL", "required": true },
+      { "name": "name", "type": "string", "description": "The subject name", "required": true },
+      { "name": "type", "type": "string", "description": "The subject type (e.g. 'bug-fix', 'feature', 'issue', 'pull-request')", "required": true },
+      { "name": "ref", "type": "string", "description": "Subject reference URL", "required": true },
       { "name": "refSource", "type": "string", "description": "Reference source (e.g. 'github', 'jira')", "required": false },
       { "name": "repository", "type": "string", "description": "Repository identifier (e.g. 'owner/repo')", "required": false },
       { "name": "body", "type": "string", "description": "Optional markdown body content", "required": false },
@@ -150,9 +150,9 @@
   },
   {
     "name": "axiom_get_activity_log",
-    "description": "Get the global activity log, optionally filtered by project.",
+    "description": "Get the global activity log, optionally filtered by subject.",
     "parameters": [
-      { "name": "projectId", "type": "number", "description": "Filter by project ID", "required": false },
+      { "name": "subjectId", "type": "number", "description": "Filter by subject ID", "required": false },
       { "name": "limit", "type": "number", "description": "Maximum number of entries to return (default 50)", "required": false }
     ],
     "sdkCallSupported": false

@@ -24,7 +24,7 @@ class ActionResourceTest {
                 .statusCode(200)
                 .contentType(ContentType.JSON)
                 .body("items.size()", greaterThanOrEqualTo(1))
-                .body("items.name", hasItems("close-project"));
+                .body("items.name", hasItems("close-subject"));
     }
 
     @Test
@@ -34,14 +34,14 @@ class ActionResourceTest {
                 .get(ACTION_TYPES_PATH)
             .then()
                 .statusCode(200)
-                .extract().path("items.find { it.name == 'close-project' }.id");
+                .extract().path("items.find { it.name == 'close-subject' }.id");
 
         given()
             .when()
                 .get(ACTION_TYPES_PATH + "/" + id)
             .then()
                 .statusCode(200)
-                .body("name", equalTo("close-project"))
+                .body("name", equalTo("close-subject"))
                 .body("executionMode", equalTo("script"));
     }
 
@@ -52,14 +52,14 @@ class ActionResourceTest {
                 .get(ACTION_TYPES_PATH)
             .then()
                 .statusCode(200)
-                .extract().path("items.find { it.name == 'close-project' }.id");
+                .extract().path("items.find { it.name == 'close-subject' }.id");
 
         given()
             .when()
                 .get(ACTION_TYPES_PATH + "/" + id)
             .then()
                 .statusCode(200)
-                .body("name", equalTo("close-project"))
+                .body("name", equalTo("close-subject"))
                 .body("executionMode", equalTo("script"))
                 .body("$", not(hasKey("userTriggerable")))
                 .body("$", not(hasKey("managerTriggerable")))

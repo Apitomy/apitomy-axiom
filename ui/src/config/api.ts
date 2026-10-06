@@ -110,7 +110,7 @@ export interface NewProject {
 
 export interface Task {
     id: number;
-    projectId: number;
+    subjectId: number;
     eventId?: string;
     actionType: string;
     createdBy: string;
@@ -128,7 +128,7 @@ export interface Task {
 
 export interface ThreadEntry {
     id: number;
-    projectId: number;
+    subjectId: number;
     authorType: string;
     authorId?: string;
     entryType: string;
@@ -138,7 +138,7 @@ export interface ThreadEntry {
 
 export interface ActivityLogEntry {
     id: number;
-    projectId?: number;
+    subjectId?: number;
     taskId?: number;
     eventId?: string;
     traceId?: string;
@@ -274,19 +274,19 @@ export async function fetchProjects(
     if (filterName) params.set("filterName", filterName);
     if (filterActive !== undefined) params.set("filterActive", String(filterActive));
     if (filterLabels) params.set("filterLabels", filterLabels);
-    const response = await fetch(`${API}/projects?${params}`);
+    const response = await fetch(`${API}/subjects?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch projects: ${response.status}`);
     return response.json();
 }
 
 export async function fetchProject(id: number): Promise<Project> {
-    const response = await fetch(`${API}/projects/${id}`);
+    const response = await fetch(`${API}/subjects/${id}`);
     if (!response.ok) throw new Error(`Failed to fetch project: ${response.status}`);
     return response.json();
 }
 
 export async function updateProject(id: number, data: Partial<Project>): Promise<Project> {
-    const response = await fetch(`${API}/projects/${id}`, {
+    const response = await fetch(`${API}/subjects/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -296,7 +296,7 @@ export async function updateProject(id: number, data: Partial<Project>): Promise
 }
 
 export async function createProject(project: NewProject): Promise<Project> {
-    const response = await fetch(`${API}/projects`, {
+    const response = await fetch(`${API}/subjects`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(project),
@@ -306,12 +306,12 @@ export async function createProject(project: NewProject): Promise<Project> {
 }
 
 export async function deleteProject(id: number): Promise<void> {
-    const response = await fetch(`${API}/projects/${id}`, { method: "DELETE" });
+    const response = await fetch(`${API}/subjects/${id}`, { method: "DELETE" });
     if (!response.ok) throw new Error(`Failed to delete project: ${response.status}`);
 }
 
 export async function updateProjectBody(id: number, body: string): Promise<void> {
-    const response = await fetch(`${API}/projects/${id}/body`, {
+    const response = await fetch(`${API}/subjects/${id}/body`, {
         method: "PUT",
         headers: { "Content-Type": "text/markdown" },
         body,
@@ -330,14 +330,14 @@ export async function fetchAllTasks(
     params.set("limit", String(limit));
     if (filterActionType) params.set("filterActionType", filterActionType);
     if (filterStatus) params.set("filterStatus", filterStatus);
-    if (filterProjectId != null) params.set("filterProjectId", String(filterProjectId));
+    if (filterProjectId != null) params.set("filterSubjectId", String(filterProjectId));
     const response = await fetch(`${API}/tasks?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch tasks: ${response.status}`);
     return response.json();
 }
 
 export async function cancelTask(projectId: number, taskId: number): Promise<Task> {
-    const response = await fetch(`${API}/projects/${projectId}/tasks/${taskId}/cancel`, {
+    const response = await fetch(`${API}/subjects/${projectId}/tasks/${taskId}/cancel`, {
         method: "POST",
     });
     if (!response.ok) throw new Error(`Failed to cancel task: ${response.status}`);
@@ -345,7 +345,7 @@ export async function cancelTask(projectId: number, taskId: number): Promise<Tas
 }
 
 export async function fetchProjectTasks(projectId: number): Promise<Task[]> {
-    const response = await fetch(`${API}/projects/${projectId}/tasks`);
+    const response = await fetch(`${API}/subjects/${projectId}/tasks`);
     if (!response.ok) throw new Error(`Failed to fetch tasks: ${response.status}`);
     return response.json();
 }
@@ -355,7 +355,7 @@ export async function fetchTaskExecutionLog(
     taskId: number
 ): Promise<string> {
     const response = await fetch(
-        `${API}/projects/${projectId}/tasks/${taskId}/log`
+        `${API}/subjects/${projectId}/tasks/${taskId}/log`
     );
     if (!response.ok) throw new Error(`Failed to fetch execution log: ${response.status}`);
     return response.text();
@@ -827,7 +827,7 @@ export async function deleteSecret(id: number): Promise<void> {
 // ── Retention Configuration ─────────────────────────────────────
 
 export interface RetentionConfig {
-    inactiveProjectRetentionDays?: number;
+    inactiveSubjectRetentionDays?: number;
     traceRetentionDays?: number;
     eventRetentionDays?: number;
     /** Days to keep finished workflow runs; 0 keeps them forever. */
@@ -874,7 +874,7 @@ export interface EventSourceFilters {
 // ── Thread ────────────────────────────────────────────────────────
 
 export async function fetchThreadEntries(projectId: number): Promise<ThreadEntry[]> {
-    const response = await fetch(`${API}/projects/${projectId}/thread`);
+    const response = await fetch(`${API}/subjects/${projectId}/thread`);
     if (!response.ok) throw new Error(`Failed to fetch thread: ${response.status}`);
     return response.json();
 }
@@ -898,7 +898,7 @@ export interface AiEditPromptResponse {
 // ── Metrics ──────────────────────────────────────────────────────
 
 export interface ProjectMetrics {
-    projectId: number;
+    subjectId: number;
     diskUsageBytes: number;
     totalCostUsd: number;
     totalInputTokens: number;
@@ -907,7 +907,7 @@ export interface ProjectMetrics {
 }
 
 export async function fetchProjectMetrics(projectId: number): Promise<ProjectMetrics> {
-    const response = await fetch(`${API}/projects/${projectId}/metrics`);
+    const response = await fetch(`${API}/subjects/${projectId}/metrics`);
     if (!response.ok) throw new Error(`Failed to fetch project metrics: ${response.status}`);
     return response.json();
 }
@@ -928,7 +928,7 @@ export interface AiUsage {
     taskId?: number;
     eventId?: string;
     traceId?: string;
-    projectId?: number;
+    subjectId?: number;
     agentId?: number;
     actionType?: string;
     engine?: string;
@@ -958,7 +958,7 @@ export async function fetchUsage(
     params.set("page", String(page));
     params.set("limit", String(limit));
     if (filterInvocationType) params.set("filterInvocationType", filterInvocationType);
-    if (filterProjectId != null) params.set("filterProjectId", String(filterProjectId));
+    if (filterProjectId != null) params.set("filterSubjectId", String(filterProjectId));
     if (filterAgentId != null) params.set("filterAgentId", String(filterAgentId));
     if (filterActionType) params.set("filterActionType", filterActionType);
     if (filterDateFrom) params.set("filterDateFrom", filterDateFrom);
@@ -975,14 +975,14 @@ export async function fetchUsage(
 // ── Disk Usage ──────────────────────────────────────────────────
 
 export interface DiskUsageProject {
-    projectId: number;
-    projectName: string;
+    subjectId: number;
+    subjectName: string;
     diskUsageBytes: number;
 }
 
 export interface DiskUsageSearchResults extends SearchResults<DiskUsageProject> {
     totalDiskUsageBytes: number;
-    projectCount: number;
+    subjectCount: number;
 }
 
 export async function fetchDiskUsage(
@@ -1013,7 +1013,7 @@ export async function fetchActivityLog(
     params.set("limit", String(limit));
     if (filterEventId) params.set("filterEventId", String(filterEventId));
     if (filterSummary) params.set("filterSummary", filterSummary);
-    if (filterProjectId != null) params.set("filterProjectId", String(filterProjectId));
+    if (filterProjectId != null) params.set("filterSubjectId", String(filterProjectId));
     if (filterEntryType) params.set("filterEntryType", filterEntryType);
     if (filterLabels) params.set("filterLabels", filterLabels);
     if (filterTraceId) params.set("filterTraceId", filterTraceId);
@@ -1077,8 +1077,8 @@ export interface AssistantSessionInfo {
     totalInputTokens?: number;
     totalOutputTokens?: number;
     turnCount?: number;
-    projectId?: number;
-    projectName?: string;
+    subjectId?: number;
+    subjectName?: string;
     allowAll?: boolean;
     engine?: string;
 }
@@ -1098,7 +1098,7 @@ export async function createAssistantSession(
     const response = await fetch(`${API}/assistant/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, templateId, projectId }),
+        body: JSON.stringify({ name, templateId, subjectId: projectId }),
     });
     if (!response.ok) {
         const body = await response.json().catch(() => null);
@@ -1348,7 +1348,7 @@ export interface Trace {
     status: string;
     summary: string;
     eventId?: string;
-    projectId?: number;
+    subjectId?: number;
     startedOn: string;
     completedOn?: string;
 }
@@ -1399,7 +1399,7 @@ export async function fetchTraces(
     if (filterTraceType) params.set("filterTraceType", filterTraceType);
     if (filterStatus) params.set("filterStatus", filterStatus);
     if (filterEventId) params.set("filterEventId", String(filterEventId));
-    if (filterProjectId) params.set("filterProjectId", String(filterProjectId));
+    if (filterProjectId) params.set("filterSubjectId", String(filterProjectId));
     const response = await fetch(`${API}/traces?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch traces: ${response.status}`);
     return response.json();
@@ -1420,7 +1420,7 @@ export async function fetchTraceNodeDetail(
 }
 
 export async function fetchProjectTraces(projectId: number): Promise<Trace[]> {
-    const response = await fetch(`${API}/projects/${projectId}/traces`);
+    const response = await fetch(`${API}/subjects/${projectId}/traces`);
     if (!response.ok) throw new Error(`Failed to fetch project traces: ${response.status}`);
     return response.json();
 }
@@ -1460,8 +1460,8 @@ export interface OutputSchema {
 
 export interface InboxItem {
     id: number;
-    projectId: number;
-    projectName?: string;
+    subjectId: number;
+    subjectName?: string;
     actionType: string;
     status: string;
     input?: string;
@@ -1489,7 +1489,7 @@ export async function fetchInboxItems(
 }
 
 export interface NewInboxItem {
-    projectId: number;
+    subjectId: number;
     actionType: string;
     humanContext: HumanContext;
     outputSchema?: OutputSchema;
@@ -1742,7 +1742,7 @@ export interface ActiveBranchInfo {
 
 export interface WorkflowInstanceInfo {
     id: number;
-    projectId: number;
+    subjectId: number;
     definitionId: number;
     definitionVersion: number;
     definitionName: string;
@@ -1795,7 +1795,7 @@ export async function triggerWorkflow(
     projectId: number, data: TriggerWorkflowRequest
 ): Promise<WorkflowInstanceInfo> {
     const response = await fetch(
-        `${API}/projects/${projectId}/workflow`, {
+        `${API}/subjects/${projectId}/workflow`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(data),
@@ -1822,7 +1822,7 @@ export async function getWorkflowInstance(
     projectId: number
 ): Promise<WorkflowInstanceInfo> {
     const response = await fetch(
-        `${API}/projects/${projectId}/workflow`);
+        `${API}/subjects/${projectId}/workflow`);
     if (!response.ok) {
         if (response.status === 404) return null as any;
         throw new Error(
@@ -1846,8 +1846,8 @@ export async function cancelWorkflowRun(
 
 export interface WorkflowRunSummary {
     runId: number;
-    projectId: number;
-    projectName?: string;
+    subjectId: number;
+    subjectName?: string;
     definitionId: number;
     definitionName?: string;
     definitionVersion: number;
@@ -1866,7 +1866,7 @@ export async function fetchWorkflowRuns(
     const params = new URLSearchParams();
     params.set("page", String(page));
     params.set("limit", String(limit));
-    if (projectId != null) params.set("projectId", String(projectId));
+    if (projectId != null) params.set("subjectId", String(projectId));
     if (status) params.set("status", status);
     const response = await fetch(`${API}/workflow/runs?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch workflow runs: ${response.status}`);
@@ -2050,8 +2050,8 @@ export interface EventProcessingOutcome {
     errorMessage?: string;
     type: string;
     summary: string;
-    projectId?: number;
-    projectName?: string;
+    subjectId?: number;
+    subjectName?: string;
     taskId?: number;
     taskStatus?: string;
     traceId?: string;
@@ -2065,8 +2065,8 @@ export interface EventProcessingOutcomeItem {
     status: "completed" | "failed" | "skipped" | string;
     summary?: string;
     errorMessage?: string;
-    projectId?: number;
-    projectName?: string;
+    subjectId?: number;
+    subjectName?: string;
     taskId?: number;
     taskStatus?: string;
     workflowRunId?: number;

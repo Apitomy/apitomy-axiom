@@ -40,8 +40,8 @@ public class RoutingOutcomeItemEntity extends PanacheEntity {
     @Column(name = "error_message", columnDefinition = "TEXT")
     public String errorMessage;
 
-    @Column(name = "project_id")
-    public Long projectId;
+    @Column(name = "subject_id")
+    public Long subjectId;
 
     @Column(name = "task_id")
     public Long taskId;

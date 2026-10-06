@@ -17,8 +17,8 @@ import java.util.List;
  * Represents a tracked unit of work tied to a single external issue.
  */
 @Entity
-@Table(name = "project")
-public class ProjectEntity extends PanacheEntity {
+@Table(name = "subject")
+public class SubjectEntity extends PanacheEntity {
 
     @Column(nullable = false)
     public String name;
@@ -32,7 +32,7 @@ public class ProjectEntity extends PanacheEntity {
     @Column(name = "ref_source")
     public String refSource;
 
-    @Column(name = "project_ref", nullable = false, unique = true)
+    @Column(name = "subject_ref", nullable = false, unique = true)
     public String ref;
 
     public String repository;
@@ -50,29 +50,29 @@ public class ProjectEntity extends PanacheEntity {
     public Long diskUsageBytes;
 
     @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "project_label", joinColumns = @JoinColumn(name = "project_id"))
+    @CollectionTable(name = "subject_label", joinColumns = @JoinColumn(name = "subject_id"))
     @Column(name = "label")
     public List<String> labels = new ArrayList<>();
 
     /**
-     * Whether the project has any active (running or waiting) workflow run.
+     * Whether the subject has any active (running or waiting) workflow run.
      *
-     * @param projectId the project id
+     * @param subjectId the subject id
      * @return true if at least one run is running or waiting
      */
-    public static boolean isActive(long projectId) {
-        return WorkflowRunEntity.count("projectId = ?1 and status in ?2",
-                projectId, java.util.List.of("running", "waiting")) > 0;
+    public static boolean isActive(long subjectId) {
+        return WorkflowRunEntity.count("subjectId = ?1 and status in ?2",
+                subjectId, java.util.List.of("running", "waiting")) > 0;
     }
 
     /**
-     * Returns the ids of all projects that have at least one active (running or waiting) workflow run.
+     * Returns the ids of all subjects that have at least one active (running or waiting) workflow run.
      *
-     * @return the set of active project ids
+     * @return the set of active subject ids
      */
-    public static java.util.Set<Long> findActiveProjectIds() {
+    public static java.util.Set<Long> findActiveSubjectIds() {
         return new java.util.HashSet<>(WorkflowRunEntity.find(
-                "select distinct r.projectId from WorkflowRunEntity r where r.status in ?1",
+                "select distinct r.subjectId from WorkflowRunEntity r where r.status in ?1",
                 java.util.List.of("running", "waiting")).project(Long.class).list());
     }
 }

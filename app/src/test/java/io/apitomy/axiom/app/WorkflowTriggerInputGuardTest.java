@@ -1,6 +1,6 @@
 package io.apitomy.axiom.app;
 
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
@@ -49,13 +49,13 @@ class WorkflowTriggerInputGuardTest {
     @Test
     void testTriggerWithMissingRequiredInputReturns400() {
         long[] ids = QuarkusTransaction.requiringNew().call(() -> {
-            ProjectEntity project = new ProjectEntity();
-            project.name = "Input Guard Project";
-            project.type = "other";
-            project.ref = "test/input-guard";
-            project.createdOn = Instant.now();
-            project.updatedOn = Instant.now();
-            project.persist();
+            SubjectEntity subject = new SubjectEntity();
+            subject.name = "Input Guard Subject";
+            subject.type = "other";
+            subject.ref = "test/input-guard";
+            subject.createdOn = Instant.now();
+            subject.updatedOn = Instant.now();
+            subject.persist();
 
             WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
             def.name = "Input Guard WF";
@@ -73,7 +73,7 @@ class WorkflowTriggerInputGuardTest {
             version.createdOn = Instant.now();
             version.persist();
 
-            return new long[] { project.id, def.id };
+            return new long[] { subject.id, def.id };
         });
 
         WebApplicationException ex = assertThrows(

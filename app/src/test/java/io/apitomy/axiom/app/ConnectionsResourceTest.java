@@ -92,7 +92,7 @@ class ConnectionsResourceTest {
                     "enabled": false,
                     "baseUrl": "https://myorg.atlassian.net",
                     "pollInterval": 600,
-                    "configuration": { "projects": ["PROJ1"] }
+                    "configuration": { "subjects": ["PROJ1"] }
                 }
                 """.formatted(slug))
             .when()

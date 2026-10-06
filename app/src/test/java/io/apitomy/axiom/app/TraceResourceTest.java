@@ -1,7 +1,7 @@
 package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.TraceEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
@@ -42,7 +42,7 @@ class TraceResourceTest {
 
     private UUID eventId;
 
-    private Long projectId;
+    private Long subjectId;
     private Long definitionId;
     private Long runId;
     private Long activityLogId;
@@ -66,8 +66,8 @@ class TraceResourceTest {
             if (definitionId != null) {
                 WorkflowDefinitionEntity.deleteById(definitionId);
             }
-            if (projectId != null) {
-                ProjectEntity.deleteById(projectId);
+            if (subjectId != null) {
+                SubjectEntity.deleteById(subjectId);
             }
         });
     }
@@ -151,13 +151,13 @@ class TraceResourceTest {
     }
 
     /**
-     * A workflow-run node resolves the run with its definition and project names.
+     * A workflow-run node resolves the run with its definition and subject names.
      */
     @Test
     void workflowRunTraceNodeDetailResolves() {
         createWorkflowRun();
         TraceContext ctx = traceService.createTrace("workflow", "Workflow: WF",
-                null, projectId, "workflow", "Workflow: WF", "workflow-run", runId);
+                null, subjectId, "workflow", "Workflow: WF", "workflow-run", runId);
 
         given()
             .when()
@@ -168,8 +168,8 @@ class TraceResourceTest {
                 .body("detail.id", equalTo(runId.intValue()))
                 .body("detail.status", equalTo("waiting"))
                 .body("detail.definitionName", equalTo("Trace Detail WF"))
-                .body("detail.projectId", equalTo(projectId.intValue()))
-                .body("detail.projectName", equalTo("Trace Detail Project"))
+                .body("detail.subjectId", equalTo(subjectId.intValue()))
+                .body("detail.subjectName", equalTo("Trace Detail Subject"))
                 .body("detail.currentNodeId", equalTo("wait-1"))
                 .body("detail.startedOn", notNullValue())
                 .body("detail", not(hasKey("instanceState")));
@@ -284,7 +284,7 @@ class TraceResourceTest {
             sub.runId = runId;
             sub.nodeId = "receive-1";
             sub.eventType = "pull_request.merged";
-            sub.projectId = projectId;
+            sub.subjectId = subjectId;
             sub.createdOn = Instant.now();
             sub.persist();
             return sub.id;
@@ -303,7 +303,7 @@ class TraceResourceTest {
                 .body("detail.eventType", equalTo("pull_request.merged"))
                 .body("detail.status", equalTo("waiting"))
                 .body("detail.runId", equalTo(runId.intValue()))
-                .body("detail.projectName", equalTo("Trace Detail Project"))
+                .body("detail.subjectName", equalTo("Trace Detail Subject"))
                 .body("detail.matchedEventId", nullValue());
     }
 
@@ -366,14 +366,14 @@ class TraceResourceTest {
 
     private void createWorkflowRun() {
         QuarkusTransaction.requiringNew().run(() -> {
-            ProjectEntity project = new ProjectEntity();
-            project.name = "Trace Detail Project";
-            project.type = "other";
-            project.ref = "test/trace-detail-" + UUID.randomUUID();
-            project.createdOn = Instant.now();
-            project.updatedOn = Instant.now();
-            project.persist();
-            projectId = project.id;
+            SubjectEntity subject = new SubjectEntity();
+            subject.name = "Trace Detail Subject";
+            subject.type = "other";
+            subject.ref = "test/trace-detail-" + UUID.randomUUID();
+            subject.createdOn = Instant.now();
+            subject.updatedOn = Instant.now();
+            subject.persist();
+            subjectId = subject.id;
 
             WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
             def.name = "Trace Detail WF";
@@ -385,7 +385,7 @@ class TraceResourceTest {
             definitionId = def.id;
 
             WorkflowRunEntity run = new WorkflowRunEntity();
-            run.projectId = project.id;
+            run.subjectId = subject.id;
             run.definitionId = def.id;
             run.definitionVersion = 1;
             run.instanceState = "{\"big\":\"state\"}";
@@ -399,7 +399,7 @@ class TraceResourceTest {
 
     private TraceContext workflowTrace() {
         TraceContext ctx = traceService.createTrace("workflow", "Workflow: WF",
-                null, projectId, "workflow", "Workflow: WF", "workflow-run", runId);
+                null, subjectId, "workflow", "Workflow: WF", "workflow-run", runId);
         QuarkusTransaction.requiringNew().run(() -> {
             WorkflowRunEntity run = WorkflowRunEntity.findById(runId);
             run.traceId = ctx.traceId();

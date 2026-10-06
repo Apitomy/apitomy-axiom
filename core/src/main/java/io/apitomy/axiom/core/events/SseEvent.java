@@ -8,7 +8,7 @@ import java.util.UUID;
  */
 public record SseEvent(
         /**
-         * Event type: "project-updated", "task-updated", "thread-entry",
+         * Event type: "subject-updated", "task-updated", "thread-entry",
          * "notification", "activity"
          */
         String type,
@@ -20,27 +20,27 @@ public record SseEvent(
 ) {
 
     /**
-     * Creates a project-updated event.
+     * Creates a subject-updated event.
      *
-     * @param projectId the project that changed
+     * @param subjectId the subject that changed
      * @return a new SSE event
      */
-    public static SseEvent projectUpdated(Long projectId) {
-        return new SseEvent("project-updated",
-                "{\"projectId\":" + projectId + "}");
+    public static SseEvent subjectUpdated(Long subjectId) {
+        return new SseEvent("subject-updated",
+                "{\"subjectId\":" + subjectId + "}");
     }
 
     /**
      * Creates a task-updated event.
      *
-     * @param projectId the project the task belongs to
+     * @param subjectId the subject the task belongs to
      * @param taskId the task that changed
      * @param status the new task status
      * @return a new SSE event
      */
-    public static SseEvent taskUpdated(Long projectId, Long taskId, String status) {
+    public static SseEvent taskUpdated(Long subjectId, Long taskId, String status) {
         return new SseEvent("task-updated",
-                "{\"projectId\":" + projectId
+                "{\"subjectId\":" + subjectId
                         + ",\"taskId\":" + taskId
                         + ",\"status\":\"" + status + "\"}");
     }
@@ -48,12 +48,12 @@ public record SseEvent(
     /**
      * Creates a thread-entry event.
      *
-     * @param projectId the project the thread belongs to
+     * @param subjectId the subject the thread belongs to
      * @return a new SSE event
      */
-    public static SseEvent threadEntry(Long projectId) {
+    public static SseEvent threadEntry(Long subjectId) {
         return new SseEvent("thread-entry",
-                "{\"projectId\":" + projectId + "}");
+                "{\"subjectId\":" + subjectId + "}");
     }
 
     /**
@@ -130,12 +130,12 @@ public record SseEvent(
     /**
      * Fires when a workflow run changes state.
      *
-     * @param projectId the project the run belongs to
+     * @param subjectId the subject the run belongs to
      * @param runId the workflow run that changed (nullable)
      * @param status the run status (nullable)
      */
-    public static SseEvent workflowUpdated(long projectId, Long runId, String status) {
-        StringBuilder json = new StringBuilder("{\"projectId\":").append(projectId);
+    public static SseEvent workflowUpdated(long subjectId, Long runId, String status) {
+        StringBuilder json = new StringBuilder("{\"subjectId\":").append(subjectId);
         if (runId != null) {
             json.append(",\"runId\":").append(runId);
         }

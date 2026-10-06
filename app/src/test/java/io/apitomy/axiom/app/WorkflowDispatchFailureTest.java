@@ -2,7 +2,7 @@ package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
@@ -145,13 +145,13 @@ class WorkflowDispatchFailureTest {
             }
             """.formatted(awaitedType);
         return QuarkusTransaction.requiringNew().call(() -> {
-            ProjectEntity project = new ProjectEntity();
-            project.name = "Dispatch Fail Project";
-            project.type = "other";
-            project.ref = "test/dispatch-fail-" + UUID.randomUUID();
-            project.createdOn = Instant.now();
-            project.updatedOn = Instant.now();
-            project.persist();
+            SubjectEntity subject = new SubjectEntity();
+            subject.name = "Dispatch Fail Subject";
+            subject.type = "other";
+            subject.ref = "test/dispatch-fail-" + UUID.randomUUID();
+            subject.createdOn = Instant.now();
+            subject.updatedOn = Instant.now();
+            subject.persist();
 
             WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
             def.name = "Dispatch Fail WF " + UUID.randomUUID();
@@ -167,7 +167,7 @@ class WorkflowDispatchFailureTest {
             version.content = content;
             version.createdOn = Instant.now();
             version.persist();
-            return new long[] { project.id, def.id };
+            return new long[] { subject.id, def.id };
         });
     }
 

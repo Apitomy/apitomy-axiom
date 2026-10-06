@@ -17,8 +17,8 @@ import jakarta.persistence.Table;
 @Table(name = "retention_config")
 public class RetentionConfigEntity extends PanacheEntity {
 
-    @Column(name = "inactive_project_retention_days", nullable = false)
-    public int inactiveProjectRetentionDays;
+    @Column(name = "inactive_subject_retention_days", nullable = false)
+    public int inactiveSubjectRetentionDays;
 
     @Column(name = "trace_retention_days", nullable = false)
     public int traceRetentionDays;

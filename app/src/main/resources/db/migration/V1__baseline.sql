@@ -22,7 +22,7 @@
 
     create sequence mcp_server_SEQ start with 1 increment by 50;
 
-    create sequence project_SEQ start with 1 increment by 50;
+    create sequence subject_SEQ start with 1 increment by 50;
 
     create sequence retention_config_SEQ start with 1 increment by 50;
 
@@ -105,7 +105,7 @@
     create table activity_log (
         created_on timestamp(6) not null,
         id bigint not null,
-        project_id bigint,
+        subject_id bigint,
         task_id bigint,
         event_id uuid,
         trace_id uuid,
@@ -148,7 +148,7 @@
         id bigint not null,
         input_tokens bigint,
         output_tokens bigint,
-        project_id bigint,
+        subject_id bigint,
         task_id bigint,
         event_id uuid,
         trace_id uuid,
@@ -246,7 +246,7 @@
         primary key (id)
     );
 
-    create table project (
+    create table subject (
         created_on timestamp(6) not null,
         disk_usage_bytes bigint,
         id bigint not null,
@@ -254,22 +254,22 @@
         body TEXT,
         metadata TEXT,
         name varchar(255) not null,
-        project_ref varchar(255) not null unique,
+        subject_ref varchar(255) not null unique,
         ref_source varchar(255),
         repository varchar(255),
         type varchar(255) not null,
         primary key (id)
     );
 
-    create table project_label (
-        project_id bigint not null,
+    create table subject_label (
+        subject_id bigint not null,
         label varchar(255) not null
     );
 
     create table retention_config (
         activity_log_retention_days integer default 0 not null,
         ai_usage_retention_days integer default 0 not null,
-        inactive_project_retention_days integer default 90 not null,
+        inactive_subject_retention_days integer default 90 not null,
         event_retention_days integer default 90 not null,
         trace_retention_days integer default 30 not null,
         workflow_run_retention_days integer default 0 not null,
@@ -282,7 +282,7 @@
         created_on timestamp(6) not null,
         id bigint not null,
         ledger_id bigint not null,
-        project_id bigint,
+        subject_id bigint,
         task_id bigint,
         status varchar(16) not null,
         trace_id uuid,
@@ -296,7 +296,7 @@
         created_on timestamp(6) not null,
         id bigint not null,
         outcome_id bigint not null,
-        project_id bigint,
+        subject_id bigint,
         task_id bigint,
         trace_node_id bigint,
         workflow_run_id bigint,
@@ -368,7 +368,7 @@
         completed_on timestamp(6),
         created_on timestamp(6) not null,
         id bigint not null,
-        project_id bigint not null,
+        subject_id bigint not null,
         workflow_run_id bigint,
         event_id uuid,
         trace_id uuid,
@@ -388,7 +388,7 @@
     create table thread_entry (
         created_on timestamp(6) not null,
         id bigint not null,
-        project_id bigint not null,
+        subject_id bigint not null,
         author_id varchar(255),
         author_type varchar(255) not null,
         content TEXT not null,
@@ -432,7 +432,7 @@
 
     create table trace (
         completed_on timestamp(6),
-        project_id bigint,
+        subject_id bigint,
         started_on timestamp(6) not null,
         event_id uuid,
         trace_id uuid not null,
@@ -481,7 +481,7 @@
     create table workflow_event_subscription (
         created_on timestamp(6) not null,
         id bigint not null,
-        project_id bigint not null,
+        subject_id bigint not null,
         run_id bigint not null,
         event_type varchar(255) not null,
         node_id varchar(255) not null,
@@ -493,7 +493,7 @@
         completed_on timestamp(6),
         definition_id bigint not null,
         id bigint not null,
-        project_id bigint not null,
+        subject_id bigint not null,
         started_on timestamp(6) not null,
         trigger_ledger_id bigint,
         trace_id uuid,
@@ -553,10 +553,10 @@
        foreign key (event_subscription_id) 
        references event_subscription on delete cascade;
 
-    alter table if exists project_label 
+    alter table if exists subject_label 
        add constraint FK7ojjun8a14mrbws62ha0tbdou 
-       foreign key (project_id) 
-       references project on delete cascade;
+       foreign key (subject_id) 
+       references subject on delete cascade;
 
     alter table if exists session_template_allowed_tool 
        add constraint FK3rcvftv3im5ore04s9lwclws2 
@@ -577,7 +577,7 @@
 CREATE INDEX idx_action_type_label ON action_type_label (label, action_type_id);
 CREATE INDEX idx_activity_log_created_on ON activity_log (created_on);
 CREATE INDEX idx_activity_log_event ON activity_log (event_id);
-CREATE INDEX idx_activity_log_project ON activity_log (project_id);
+CREATE INDEX idx_activity_log_subject ON activity_log (subject_id);
 CREATE INDEX idx_activity_log_trace ON activity_log (trace_id);
 CREATE INDEX idx_ai_usage_created_on ON ai_usage (created_on);
 CREATE INDEX idx_ai_usage_event ON ai_usage (event_id);
@@ -588,7 +588,7 @@ CREATE INDEX idx_dashboard_label ON dashboard_label (label, dashboard_id);
 CREATE INDEX idx_epl_event ON event_processing_ledger (event_id);
 CREATE INDEX idx_epl_status ON event_processing_ledger (status);
 CREATE INDEX idx_epl_subscription ON event_processing_ledger (subscription_id);
-CREATE INDEX idx_project_label ON project_label (label, project_id);
+CREATE INDEX idx_subject_label ON subject_label (label, subject_id);
 CREATE INDEX idx_ro_ledger ON routing_outcome (ledger_id);
 CREATE INDEX idx_ro_trace ON routing_outcome (trace_id);
 CREATE INDEX idx_roi_outcome ON routing_outcome_item (outcome_id);
@@ -601,14 +601,14 @@ CREATE UNIQUE INDEX idx_stream_event_source_event_id ON stream_event (source_eve
 CREATE INDEX idx_stream_event_timestamp ON stream_event (timestamp);
 CREATE INDEX idx_stream_event_type ON stream_event (type);
 CREATE INDEX idx_task_event ON task (event_id);
-CREATE INDEX idx_task_project_status ON task (project_id, status);
+CREATE INDEX idx_task_subject_status ON task (subject_id, status);
 CREATE INDEX idx_task_status ON task (status);
 CREATE INDEX idx_task_trace ON task (trace_id);
 CREATE INDEX idx_task_workflow_run ON task (workflow_run_id);
 CREATE INDEX idx_tool_execution_trace ON tool_execution (trace_id);
 CREATE INDEX idx_tool_label ON tool_label (label, tool_id);
 CREATE INDEX idx_trace_event ON trace (event_id);
-CREATE INDEX idx_trace_project ON trace (project_id);
+CREATE INDEX idx_trace_subject ON trace (subject_id);
 CREATE INDEX idx_trace_started_on ON trace (started_on);
 CREATE INDEX idx_trace_status ON trace (status);
 CREATE INDEX idx_trace_node_entity ON trace_node (entity_type, entity_id);
@@ -618,7 +618,7 @@ CREATE INDEX idx_wf_def_version_def_id ON workflow_definition_version (definitio
 CREATE INDEX idx_wf_event_sub_event_type ON workflow_event_subscription (event_type);
 CREATE INDEX idx_wf_event_sub_run ON workflow_event_subscription (run_id);
 CREATE INDEX idx_wf_run_completed_on ON workflow_run (completed_on);
-CREATE INDEX idx_wf_run_project_started ON workflow_run (project_id, started_on desc);
+CREATE INDEX idx_wf_run_subject_started ON workflow_run (subject_id, started_on desc);
 CREATE INDEX idx_wf_run_status ON workflow_run (status);
 CREATE INDEX idx_wf_run_trace ON workflow_run (trace_id);
 CREATE INDEX idx_wf_run_trigger_event ON workflow_run (trigger_event_id);
@@ -644,14 +644,14 @@ alter table trace_node add foreign key (trace_id) references trace (trace_id) on
 alter table workflow_definition_version add foreign key (definition_id) references workflow_definition (id) on delete cascade;
 alter table workflow_event_subscription add foreign key (run_id) references workflow_run (id);
 alter table workflow_run add foreign key (definition_id) references workflow_definition (id);
-alter table workflow_run add foreign key (project_id) references project (id);
+alter table workflow_run add foreign key (subject_id) references subject (id);
 alter table workflow_run_resume add foreign key (run_id) references workflow_run (id) on delete cascade;
 alter table workflow_wait add foreign key (run_id) references workflow_run (id);
 alter table action_type_label add unique (action_type_id, label);
 alter table dashboard_label add unique (dashboard_id, label);
 alter table event_processing_ledger add unique (event_id, subscription_id);
 alter table event_subscription_label add unique (event_subscription_id, label);
-alter table project_label add unique (project_id, label);
+alter table subject_label add unique (subject_id, label);
 alter table session_template_allowed_tool add unique (session_template_id, tool_pattern);
 alter table session_template_mcp_server add unique (session_template_id, mcp_server_name);
 alter table tool_label add unique (tool_id, label);

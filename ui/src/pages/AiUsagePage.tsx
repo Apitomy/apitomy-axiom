@@ -317,7 +317,7 @@ export function AiUsagePage() {
                                         ) : "—"}
                                     </Td>
                                     <Td>
-                                        {r.projectId ? `Project #${r.projectId}` : "—"}
+                                        {r.subjectId ? `Project #${r.subjectId}` : "—"}
                                     </Td>
                                     <Td>
                                         {r.traceId ? (

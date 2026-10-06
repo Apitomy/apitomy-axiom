@@ -60,11 +60,11 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
 
     /** Inputs Axiom always injects when starting a workflow (may be marked required). */
     private static final Set<String> ALWAYS_PRESENT_INPUTS =
-            Set.of("projectId", "ref");
+            Set.of("subjectId", "ref");
 
     /** All inputs Axiom may inject (always-present plus conditionally-present). */
     private static final List<String> CANONICAL_INPUT_NAMES =
-            List.of("projectId", "projectName", "repository", "ref", "event");
+            List.of("subjectId", "subjectName", "repository", "ref", "event");
 
     private static final Set<String> CANONICAL_INPUTS = Set.copyOf(CANONICAL_INPUT_NAMES);
 
@@ -346,7 +346,7 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
                         Response.status(400).entity(Map.of("message",
                                 "Start node input '" + name + "' cannot be marked "
                                         + "required because Axiom does not always provide "
-                                        + "it. Only projectId and ref may be "
+                                        + "it. Only subjectId and ref may be "
                                         + "required.")).build());
             }
         }
@@ -397,12 +397,12 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
      */
     private String createEmptyWorkflowContent(String name) {
         List<Map<String, Object>> startInputs = List.of(
-                Map.of("name", "projectId", "type", "number",
+                Map.of("name", "subjectId", "type", "number",
                         "required", true,
-                        "description", "The Axiom project ID"),
+                        "description", "The Axiom subject ID"),
                 Map.of("name", "ref", "type", "string",
                         "required", true,
-                        "description", "Full URL identifying the project subject"),
+                        "description", "Full URL identifying the subject"),
                 Map.of("name", "event", "type", "object",
                         "required", false,
                         "description", "The triggering event (present when created by subscription routing)"));
@@ -441,8 +441,8 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
      */
     @Override
     public io.apitomy.axiom.api.beans.WorkflowRunSearchResults listWorkflowRuns(
-            Long projectId, String status, java.math.BigInteger page, java.math.BigInteger limit) {
-        return runBeanMapper.search(projectId, null, status, page, limit);
+            Long subjectId, String status, java.math.BigInteger page, java.math.BigInteger limit) {
+        return runBeanMapper.search(subjectId, null, status, page, limit);
     }
 
     /**

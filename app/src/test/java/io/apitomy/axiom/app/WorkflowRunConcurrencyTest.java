@@ -1,6 +1,6 @@
 package io.apitomy.axiom.app;
 
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Verifies the "one active run per (project, workflow definition)" rule.
+ * Verifies the "one active run per (subject, workflow definition)" rule.
  */
 @QuarkusTest
 class WorkflowRunConcurrencyTest {
@@ -42,18 +42,18 @@ class WorkflowRunConcurrencyTest {
     WorkflowExecutionService workflowExecutionService;
 
     /**
-     * Two different definitions may run concurrently on the same project.
+     * Two different definitions may run concurrently on the same subject.
      */
     @Test
-    void differentDefinitionsRunConcurrentlyOnSameProject() {
-        long projectId = createProject("concurrent-different");
+    void differentDefinitionsRunConcurrentlyOnSameSubject() {
+        long subjectId = createSubject("concurrent-different");
         long defA = createDefinition("Def A");
         long defB = createDefinition("Def B");
 
         WorkflowRunEntity runA = QuarkusTransaction.requiringNew().call(() ->
-                workflowExecutionService.triggerWorkflow(projectId, defA));
+                workflowExecutionService.triggerWorkflow(subjectId, defA));
         WorkflowRunEntity runB = QuarkusTransaction.requiringNew().call(() ->
-                workflowExecutionService.triggerWorkflow(projectId, defB));
+                workflowExecutionService.triggerWorkflow(subjectId, defB));
 
         assertEquals("waiting", runA.status);
         assertEquals("waiting", runB.status);
@@ -61,18 +61,18 @@ class WorkflowRunConcurrencyTest {
     }
 
     /**
-     * A second active run of the same definition on the same project is rejected.
+     * A second active run of the same definition on the same subject is rejected.
      */
     @Test
-    void sameDefinitionTwiceOnSameProjectConflicts() {
-        long projectId = createProject("concurrent-same");
+    void sameDefinitionTwiceOnSameSubjectConflicts() {
+        long subjectId = createSubject("concurrent-same");
         long def = createDefinition("Def Same");
 
-        QuarkusTransaction.requiringNew().call(() -> workflowExecutionService.triggerWorkflow(projectId, def));
+        QuarkusTransaction.requiringNew().call(() -> workflowExecutionService.triggerWorkflow(subjectId, def));
 
         WorkflowRunConflictException ex = assertThrows(WorkflowRunConflictException.class, () ->
                 QuarkusTransaction.requiringNew().call(() ->
-                        workflowExecutionService.triggerWorkflow(projectId, def)));
+                        workflowExecutionService.triggerWorkflow(subjectId, def)));
         assertEquals(409, ex.getResponse().getStatus());
     }
 
@@ -81,11 +81,11 @@ class WorkflowRunConcurrencyTest {
      */
     @Test
     void sameDefinitionMayRunAgainAfterPreviousRunEnds() {
-        long projectId = createProject("sequential-same");
+        long subjectId = createSubject("sequential-same");
         long def = createDefinition("Def Sequential");
 
         WorkflowRunEntity first = QuarkusTransaction.requiringNew().call(() ->
-                workflowExecutionService.triggerWorkflow(projectId, def));
+                workflowExecutionService.triggerWorkflow(subjectId, def));
         QuarkusTransaction.requiringNew().run(() -> {
             WorkflowRunEntity run = WorkflowRunEntity.findById(first.id);
             run.status = "completed";
@@ -93,21 +93,21 @@ class WorkflowRunConcurrencyTest {
         });
 
         WorkflowRunEntity second = QuarkusTransaction.requiringNew().call(() ->
-                workflowExecutionService.triggerWorkflow(projectId, def));
+                workflowExecutionService.triggerWorkflow(subjectId, def));
         assertEquals("waiting", second.status);
         assertTrue(second.id > first.id);
     }
 
-    private long createProject(String ref) {
+    private long createSubject(String ref) {
         return QuarkusTransaction.requiringNew().call(() -> {
-            ProjectEntity project = new ProjectEntity();
-            project.name = ref;
-            project.type = "other";
-            project.ref = "test/" + ref;
-            project.createdOn = Instant.now();
-            project.updatedOn = Instant.now();
-            project.persist();
-            return project.id;
+            SubjectEntity subject = new SubjectEntity();
+            subject.name = ref;
+            subject.type = "other";
+            subject.ref = "test/" + ref;
+            subject.createdOn = Instant.now();
+            subject.updatedOn = Instant.now();
+            subject.persist();
+            return subject.id;
         });
     }
 
