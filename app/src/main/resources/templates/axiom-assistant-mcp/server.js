@@ -269,7 +269,14 @@ const TOOLS = [
             if (!AXIOM_ASSISTANT_SESSION_ID) {
                 return "Validation unavailable: no assistant session id.";
             }
-            const item = typeof args.item === "string" ? JSON.parse(args.item) : args.item;
+            let item = args.item;
+            if (typeof item === "string") {
+                try {
+                    item = JSON.parse(item);
+                } catch (e) {
+                    return "INVALID — item is not valid JSON: " + e.message;
+                }
+            }
             const result = JSON.parse(await axiomApi("POST",
                 "/assistant/sessions/" + encodeURIComponent(AXIOM_ASSISTANT_SESSION_ID) + "/validate",
                 { type: args.type, item }));

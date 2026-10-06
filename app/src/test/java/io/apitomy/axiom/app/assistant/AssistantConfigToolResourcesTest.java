@@ -31,6 +31,7 @@ class AssistantConfigToolResourcesTest {
         String serverJs = resource("/templates/axiom-assistant-mcp/server.js");
         assertTrue(serverJs.contains("name: \"axiom_validate_item\""));
         assertTrue(serverJs.contains("AXIOM_ASSISTANT_SESSION_ID"));
+        assertTrue(serverJs.contains("INVALID \u2014 item is not valid JSON: "));
     }
 
     @Test
