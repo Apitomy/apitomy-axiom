@@ -40,29 +40,29 @@ import {
 import { BooleanStatusIcon } from "../components/BooleanStatusIcon";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import {
-    type Connection,
-    type NewConnection,
+    type EventSource,
+    type NewEventSource,
     type Secret,
-    fetchConnections,
-    createConnection,
-    deleteConnection,
+    fetchEventSources,
+    createEventSource,
+    deleteEventSource,
     fetchSecrets,
 } from "../config/api";
 
 const FILTER_TYPES: ChipFilterType[] = [
-    { value: "name", label: "Name", testId: "connection-filter-name" },
-    { value: "type", label: "Type", testId: "connection-filter-type" },
+    { value: "name", label: "Name", testId: "event-source-filter-name" },
+    { value: "type", label: "Type", testId: "event-source-filter-type" },
 ];
 
 const SLUG_PATTERN = /^[a-z0-9-]*$/;
 
-export function ConnectionsPage() {
+export function EventSourcesPage() {
     const navigate = useNavigate();
-    const [connections, setConnections] = useState<Connection[]>([]);
+    const [eventSources, setEventSources] = useState<EventSource[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [form, setForm] = useState<NewConnection>({
+    const [form, setForm] = useState<NewEventSource>({
         id: "", name: "", sourceType: "github", enabled: true, baseUrl: "",
     });
 
@@ -84,9 +84,9 @@ export function ConnectionsPage() {
 
     const load = useCallback(() => {
         setLoading(true);
-        fetchConnections(page, perPage, filterName || undefined, filterType || undefined)
+        fetchEventSources(page, perPage, filterName || undefined, filterType || undefined)
             .then((results) => {
-                setConnections(results.items);
+                setEventSources(results.items);
                 setTotalCount(results.totalCount);
             })
             .catch(console.error)
@@ -143,8 +143,8 @@ export function ConnectionsPage() {
     };
 
     const handleSave = () => {
-        const data: NewConnection = { ...form, configuration: buildConfiguration() };
-        createConnection(data)
+        const data: NewEventSource = { ...form, configuration: buildConfiguration() };
+        createEventSource(data)
             .then(() => { setIsModalOpen(false); load(); })
             .catch(console.error);
     };
@@ -155,7 +155,7 @@ export function ConnectionsPage() {
 
     const confirmDelete = () => {
         if (deleteTarget !== null) {
-            deleteConnection(deleteTarget).then(load).catch(console.error);
+            deleteEventSource(deleteTarget).then(load).catch(console.error);
             setDeleteTarget(null);
         }
     };
@@ -185,11 +185,11 @@ export function ConnectionsPage() {
             <Flex justifyContent={{ default: "justifyContentSpaceBetween" }}
                 alignItems={{ default: "alignItemsCenter" }}>
                 <FlexItem>
-                    <Title headingLevel="h1" size="lg">Connections</Title>
+                    <Title headingLevel="h1" size="lg">Event Sources</Title>
                 </FlexItem>
                 <FlexItem>
                     <Button variant="primary" icon={<PlusCircleIcon />} onClick={openCreate}>
-                        Add Connection
+                        Add Event Source
                     </Button>
                 </FlexItem>
             </Flex>
@@ -234,16 +234,16 @@ export function ConnectionsPage() {
             <div>
                 {loading ? (
                     <EmptyState><EmptyStateBody>Loading...</EmptyStateBody></EmptyState>
-                ) : connections.length === 0 ? (
+                ) : eventSources.length === 0 ? (
                     <EmptyState>
                         <EmptyStateBody>
                             {isFiltered
-                                ? "No connections match the current filters."
-                                : "No connections configured."}
+                                ? "No event sources match the current filters."
+                                : "No event sources configured."}
                         </EmptyStateBody>
                     </EmptyState>
                 ) : (
-                    <Table aria-label="Connections" variant="compact">
+                    <Table aria-label="Event Sources" variant="compact">
                         <Thead>
                             <Tr>
                                 <Th>ID</Th>
@@ -255,8 +255,8 @@ export function ConnectionsPage() {
                             </Tr>
                         </Thead>
                         <Tbody>
-                            {connections.map((c) => (
-                                <Tr key={c.id} isClickable onRowClick={() => navigate(`/events/connections/${c.id}`)}>
+                            {eventSources.map((c) => (
+                                <Tr key={c.id} isClickable onRowClick={() => navigate(`/events/sources/${c.id}`)}>
                                     <Td><strong>{c.id}</strong></Td>
                                     <Td>{c.name}</Td>
                                     <Td>
@@ -285,19 +285,19 @@ export function ConnectionsPage() {
                 )}
             </div>
 
-            <ConfirmDeleteModal isOpen={deleteTarget !== null} title="Delete Connection"
+            <ConfirmDeleteModal isOpen={deleteTarget !== null} title="Delete Event Source"
                 onConfirm={confirmDelete} onCancel={() => setDeleteTarget(null)}>
-                Delete this connection?
+                Delete this eventSource?
             </ConfirmDeleteModal>
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} variant="medium">
-                <ModalHeader title="Add Connection" />
+                <ModalHeader title="Add Event Source" />
                 <ModalBody>
                     <Form>
                         <FormGroup label="ID (Slug)" isRequired fieldId="id">
                             <TextInput id="id" isRequired value={form.id}
                                 onChange={(_e, v) => setForm({ ...form, id: v })}
-                                placeholder="my-connection" />
+                                placeholder="my-event-source" />
                             {form.id && !isSlugValid(form.id) ? (
                                 <HelperText>
                                     <HelperTextItem variant="error">
@@ -315,7 +315,7 @@ export function ConnectionsPage() {
                         <FormGroup label="Name" isRequired fieldId="name">
                             <TextInput id="name" isRequired value={form.name}
                                 onChange={(_e, v) => setForm({ ...form, name: v })}
-                                placeholder="e.g. My GitHub Connection" />
+                                placeholder="e.g. My GitHub Event Source" />
                         </FormGroup>
                         <FormGroup label="Source Type" isRequired fieldId="sourceType">
                             <FormSelect id="sourceType" value={form.sourceType}

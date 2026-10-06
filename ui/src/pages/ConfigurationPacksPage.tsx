@@ -37,7 +37,7 @@ import {
     type Toolset,
     type McpServer,
     type SessionTemplate,
-    type Connection,
+    type EventSource,
     type Subscription,
     type WorkflowDefinition,
     type PackExportRequest,
@@ -47,7 +47,7 @@ import {
     fetchToolsets,
     fetchMcpServers,
     fetchAssistantTemplates,
-    fetchConnections,
+    fetchEventSources,
     fetchSubscriptions,
     fetchWorkflowDefinitions,
     exportPack,
@@ -60,7 +60,7 @@ export function ConfigurationPacksPage() {
     const [toolsets, setToolsets] = useState<Toolset[]>([]);
     const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
     const [sessionTemplates, setSessionTemplates] = useState<SessionTemplate[]>([]);
-    const [connections, setConnections] = useState<Connection[]>([]);
+    const [eventSources, setEventSources] = useState<EventSource[]>([]);
     const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
     const [workflowDefs, setWorkflowDefs] = useState<WorkflowDefinition[]>([]);
     const [loading, setLoading] = useState(true);
@@ -74,7 +74,7 @@ export function ConfigurationPacksPage() {
     const [selectedToolsets, setSelectedToolsets] = useState<Set<number>>(new Set());
     const [selectedMcpServers, setSelectedMcpServers] = useState<Set<number>>(new Set());
     const [selectedSessionTemplates, setSelectedSessionTemplates] = useState<Set<string>>(new Set());
-    const [selectedConnections, setSelectedConnections] = useState<Set<string>>(new Set());
+    const [selectedEventSources, setSelectedEventSources] = useState<Set<string>>(new Set());
     const [selectedSubscriptions, setSelectedSubscriptions] = useState<Set<number>>(new Set());
     const [selectedWorkflowDefs, setSelectedWorkflowDefs] = useState<Set<number>>(new Set());
     const [exporting, setExporting] = useState(false);
@@ -97,7 +97,7 @@ export function ConfigurationPacksPage() {
             fetchToolsets(),
             fetchMcpServers(),
             fetchAssistantTemplates(),
-            fetchConnections(1, 100),
+            fetchEventSources(1, 100),
             fetchSubscriptions(1, 100),
             fetchWorkflowDefinitions(1, 1000),
         ])
@@ -107,7 +107,7 @@ export function ConfigurationPacksPage() {
                 setToolsets(ts);
                 setMcpServers(mcp);
                 setSessionTemplates(st.filter((s: SessionTemplate) => !s.builtIn));
-                setConnections(conn.items);
+                setEventSources(conn.items);
                 setSubscriptions(sub.items);
                 setWorkflowDefs(wd.items);
             })
@@ -120,7 +120,7 @@ export function ConfigurationPacksPage() {
     const totalSelected = selectedActionTypes.size + selectedTools.size
         + selectedToolsets.size + selectedMcpServers.size
         + selectedSessionTemplates.size
-        + selectedConnections.size + selectedSubscriptions.size
+        + selectedEventSources.size + selectedSubscriptions.size
         + selectedWorkflowDefs.size;
 
     const handleExport = async () => {
@@ -134,7 +134,7 @@ export function ConfigurationPacksPage() {
                 toolsetIds: [...selectedToolsets],
                 mcpServerIds: [...selectedMcpServers],
                 sessionTemplateIds: [...selectedSessionTemplates],
-                eventSourceIds: [...selectedConnections],
+                eventSourceIds: [...selectedEventSources],
                 subscriptionIds: [...selectedSubscriptions],
                 workflowDefinitionIds: [...selectedWorkflowDefs],
             };
@@ -168,7 +168,7 @@ export function ConfigurationPacksPage() {
                     if (json.toolsets?.length) preview["Toolsets"] = json.toolsets.length;
                     if (json.mcpServers?.length) preview["MCP Servers"] = json.mcpServers.length;
                     if (json.sessionTemplates?.length) preview["Session Templates"] = json.sessionTemplates.length;
-                    if (json.eventSources?.length) preview["Connections"] = json.eventSources.length;
+                    if (json.eventSources?.length) preview["Event Sources"] = json.eventSources.length;
                     if (json.subscriptions?.length) preview["Subscriptions"] = json.subscriptions.length;
                     if (json.workflowDefinitions?.length) preview["Workflow Definitions"] = json.workflowDefinitions.length;
                     setImportPreview(preview);
@@ -295,7 +295,7 @@ export function ConfigurationPacksPage() {
             <p className="axiom-text-subtle" style={{ marginTop: "8px", marginBottom: "16px" }}>
                 Configuration packs bundle related items — action types, tools, toolsets,
                 MCP servers, session templates,
-                connections, subscriptions, and workflow definitions — into a portable JSON
+                event sources, subscriptions, and workflow definitions — into a portable JSON
                 file. Create a pack to share your setup with others, or import one to quickly
                 add pre-configured functionality to your Axiom instance.
             </p>
@@ -413,10 +413,10 @@ export function ConfigurationPacksPage() {
                                             autoSelectReferencedItems([st.allowedTools]);
                                         }
                                     }} />
-                                <ConnectionCheckboxSection
-                                    connections={connections}
-                                    selected={selectedConnections}
-                                    onToggle={(id) => setSelectedConnections(toggleStringSet(selectedConnections, id))} />
+                                <EventSourceCheckboxSection
+                                    eventSources={eventSources}
+                                    selected={selectedEventSources}
+                                    onToggle={(id) => setSelectedEventSources(toggleStringSet(selectedEventSources, id))} />
                                 <CheckboxSection title="Subscriptions"
                                     items={subscriptions.map((s) => ({ id: s.id, name: s.name, description: s.description }))}
                                     selected={selectedSubscriptions}
@@ -508,7 +508,7 @@ export function ConfigurationPacksPage() {
                                         {importResult.mcpServers ? <li>{importResult.mcpServers} MCP server(s)</li> : null}
                                         {importResult.actionTypes ? <li>{importResult.actionTypes} action type(s)</li> : null}
                                         {importResult.sessionTemplates ? <li>{importResult.sessionTemplates} session template(s)</li> : null}
-                                        {importResult.eventSources ? <li>{importResult.eventSources} connection(s)</li> : null}
+                                        {importResult.eventSources ? <li>{importResult.eventSources} event source(s)</li> : null}
                                         {importResult.subscriptions ? <li>{importResult.subscriptions} subscription(s)</li> : null}
                                         {importResult.workflowDefinitions ? <li>{importResult.workflowDefinitions} workflow definition(s)</li> : null}
                                     </ul>
@@ -1020,19 +1020,19 @@ function SessionTemplateCheckboxSection({ templates, selected, onToggle }: {
     );
 }
 
-function ConnectionCheckboxSection({ connections, selected, onToggle }: {
-    connections: Connection[];
+function EventSourceCheckboxSection({ eventSources, selected, onToggle }: {
+    eventSources: EventSource[];
     selected: Set<string>;
     onToggle: (id: string) => void;
 }) {
-    if (connections.length === 0) return null;
+    if (eventSources.length === 0) return null;
 
-    const selectedCount = connections.filter((c) => selected.has(c.id)).length;
+    const selectedCount = eventSources.filter((c) => selected.has(c.id)).length;
 
     return (
         <div style={{ marginBottom: "16px" }}>
             <div style={{ fontWeight: 600, marginBottom: "8px", fontSize: "14px" }}>
-                Connections
+                Event Sources
                 {selectedCount > 0 && (
                     <Label isCompact color="blue" style={{ marginLeft: "8px" }}>
                         {selectedCount} selected
@@ -1046,9 +1046,9 @@ function ConnectionCheckboxSection({ connections, selected, onToggle }: {
                 backgroundColor: "var(--pf-t--global--background--color--secondary--default)",
                 borderRadius: "4px",
             }}>
-                {connections.map((c) => (
+                {eventSources.map((c) => (
                     <Checkbox key={c.id}
-                        id={`connection-${c.id}`}
+                        id={`event-source-${c.id}`}
                         label={c.name}
                         description={c.description}
                         isChecked={selected.has(c.id)}

@@ -13,7 +13,7 @@ import { ActivityLogPage } from "./pages/ActivityLogPage";
 import { EventDetailPage } from "./pages/EventDetailPage";
 import { EventStreamPage } from "./pages/EventStreamPage";
 import { TasksPage } from "./pages/TasksPage";
-import { ConnectionsPage } from "./pages/ConnectionsPage";
+import { EventSourcesPage } from "./pages/EventSourcesPage";
 import { SubjectDetailPage } from "./pages/SubjectDetailPage";
 import { ActionTypeDetailPage } from "./pages/ActionTypeDetailPage";
 import { ToolsPage } from "./pages/ToolsPage";
@@ -31,7 +31,7 @@ import { ConfigurationWarning } from "./components/ConfigurationWarning";
 import { ConfigurationPacksPage } from "./pages/ConfigurationPacksPage";
 import { DataRetentionPage } from "./pages/DataRetentionPage";
 import { EngineSettingsPage } from "./pages/EngineSettingsPage";
-import { ConnectionDetailPage } from "./pages/ConnectionDetailPage";
+import { EventSourceDetailPage } from "./pages/EventSourceDetailPage";
 import { SubscriptionsPage } from "./pages/SubscriptionsPage";
 import { SubscriptionDetailPage } from "./pages/SubscriptionDetailPage";
 import { AssistantPage } from "./pages/AssistantPage";
@@ -139,8 +139,8 @@ export function App() {
                         <Route path="/runs/:runId" element={<WorkflowRunDetailPage />} />
                         <Route path="/metrics/ai-usage" element={<AiUsagePage />} />
                         <Route path="/metrics/disk-usage" element={<DiskUsagePage />} />
-                        <Route path="/events/connections" element={<ConnectionsPage />} />
-                        <Route path="/events/connections/:connectionId" element={<ConnectionDetailPage />} />
+                        <Route path="/events/sources" element={<EventSourcesPage />} />
+                        <Route path="/events/sources/:eventSourceId" element={<EventSourceDetailPage />} />
                         <Route path="/events/subscriptions" element={<SubscriptionsPage />} />
                         <Route path="/events/subscriptions/:subscriptionId" element={<SubscriptionDetailPage />} />
                         <Route path="/secrets" element={<SecretsPage />} />

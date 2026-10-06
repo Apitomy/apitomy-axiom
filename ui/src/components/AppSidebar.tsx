@@ -68,7 +68,7 @@ export function AppSidebar() {
                             Dashboards
                         </NavItem>
                         <NavExpandable title="Events" isActive={isEventsActive} isExpanded={isEventsActive}>
-                            <NavItem isActive={location.pathname.startsWith("/events/connections")} onClick={() => navigate("/events/connections")}>
+                            <NavItem isActive={location.pathname.startsWith("/events/sources")} onClick={() => navigate("/events/sources")}>
                                 Event Sources
                             </NavItem>
                             <NavItem isActive={location.pathname.startsWith("/events/subscriptions")} onClick={() => navigate("/events/subscriptions")}>

@@ -40,16 +40,16 @@ import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle
 import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
 import { BooleanStatusIcon } from "../components/BooleanStatusIcon";
 import {
-    type Connection,
-    type NewConnection,
-    type ConnectionStatus,
-    type ConnectionPollLog,
+    type EventSource,
+    type NewEventSource,
+    type EventSourceStatus,
+    type EventSourcePollLog,
     type Secret,
     type StreamEvent,
-    fetchConnection,
-    updateConnection,
-    fetchConnectionStatus,
-    fetchConnectionPollLogs,
+    fetchEventSource,
+    updateEventSource,
+    fetchEventSourceStatus,
+    fetchEventSourcePollLogs,
     fetchSecrets,
     fetchStreamEvents,
 } from "../config/api";
@@ -59,10 +59,10 @@ const SOURCE_COLORS: Record<string, "blue" | "green" | "orange" | "grey"> = {
     jira: "green",
 };
 
-export function ConnectionDetailPage() {
-    const { connectionId } = useParams<{ connectionId: string }>();
-    const [connection, setConnection] = useState<Connection | null>(null);
-    const [form, setForm] = useState<Partial<Connection>>({});
+export function EventSourceDetailPage() {
+    const { eventSourceId } = useParams<{ eventSourceId: string }>();
+    const [eventSource, setEventSource] = useState<EventSource | null>(null);
+    const [form, setForm] = useState<Partial<EventSource>>({});
     const [reposText, setReposText] = useState("");
     const [projectsText, setProjectsText] = useState("");
     const [secrets, setSecrets] = useState<Secret[]>([]);
@@ -72,11 +72,11 @@ export function ConnectionDetailPage() {
     const [activeTab, setActiveTab] = useState(0);
 
     const loadData = useCallback(() => {
-        if (!connectionId) return;
+        if (!eventSourceId) return;
         setLoading(true);
-        Promise.all([fetchConnection(connectionId), fetchSecrets()])
+        Promise.all([fetchEventSource(eventSourceId), fetchSecrets()])
             .then(([conn, secs]) => {
-                setConnection(conn);
+                setEventSource(conn);
                 setForm({
                     id: conn.id,
                     name: conn.name,
@@ -107,17 +107,17 @@ export function ConnectionDetailPage() {
             })
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [connectionId]);
+    }, [eventSourceId]);
 
     useEffect(() => { loadData(); }, [loadData]);
 
-    const updateForm = (updates: Partial<Connection>) => {
+    const updateForm = (updates: Partial<EventSource>) => {
         setForm((prev) => ({ ...prev, ...updates }));
         setDirty(true);
     };
 
     const handleSave = () => {
-        if (!connectionId) return;
+        if (!eventSourceId) return;
         setSaving(true);
 
         // Build configuration from textarea lines
@@ -135,8 +135,8 @@ export function ConnectionDetailPage() {
                 .filter(Boolean);
         }
 
-        const data: NewConnection = {
-            id: form.id || connectionId,
+        const data: NewEventSource = {
+            id: form.id || eventSourceId,
             name: form.name || "",
             description: form.description,
             sourceType: form.sourceType || "",
@@ -146,8 +146,8 @@ export function ConnectionDetailPage() {
             pollInterval: form.pollInterval,
             configuration: config,
         };
-        updateConnection(connectionId, data)
-            .then((updated) => { setConnection(updated); setDirty(false); })
+        updateEventSource(eventSourceId, data)
+            .then((updated) => { setEventSource(updated); setDirty(false); })
             .catch(console.error)
             .finally(() => setSaving(false));
     };
@@ -160,10 +160,10 @@ export function ConnectionDetailPage() {
         );
     }
 
-    if (!connection) {
+    if (!eventSource) {
         return (
             <PageSection>
-                <EmptyState><EmptyStateBody>Connection not found.</EmptyStateBody></EmptyState>
+                <EmptyState><EmptyStateBody>Event Source not found.</EmptyStateBody></EmptyState>
             </PageSection>
         );
     }
@@ -171,15 +171,15 @@ export function ConnectionDetailPage() {
     return (
         <PageSection>
             <Breadcrumb style={{ marginBottom: "16px" }}>
-                <BreadcrumbItem><Link to="/events/connections">Connections</Link></BreadcrumbItem>
-                <BreadcrumbItem isActive>{connection?.name || connectionId}</BreadcrumbItem>
+                <BreadcrumbItem><Link to="/events/sources">Event Sources</Link></BreadcrumbItem>
+                <BreadcrumbItem isActive>{eventSource?.name || eventSourceId}</BreadcrumbItem>
             </Breadcrumb>
 
             <Flex justifyContent={{ default: "justifyContentSpaceBetween" }}
                 alignItems={{ default: "alignItemsCenter" }}
                 style={{ marginBottom: "16px" }}>
                 <FlexItem>
-                    <Title headingLevel="h1" size="lg">{connection.name}</Title>
+                    <Title headingLevel="h1" size="lg">{eventSource.name}</Title>
                 </FlexItem>
                 <FlexItem>
                     <Button variant="primary" icon={<SaveIcon />} onClick={handleSave}
@@ -207,13 +207,13 @@ export function ConnectionDetailPage() {
                 <Tab eventKey={1} title={<TabTitleText>Status</TabTitleText>}>
                     <TabContent id="status-tab" eventKey={1} activeKey={activeTab}
                         style={{ marginTop: "24px" }}>
-                        <StatusTab connectionId={connectionId!} isActive={activeTab === 1} />
+                        <StatusTab eventSourceId={eventSourceId!} isActive={activeTab === 1} />
                     </TabContent>
                 </Tab>
                 <Tab eventKey={2} title={<TabTitleText>Poll Logs</TabTitleText>}>
                     <TabContent id="poll-logs-tab" eventKey={2} activeKey={activeTab}
                         style={{ marginTop: "24px" }}>
-                        <PollLogsTab connectionId={connectionId!} isActive={activeTab === 2} />
+                        <PollLogsTab eventSourceId={eventSourceId!} isActive={activeTab === 2} />
                     </TabContent>
                 </Tab>
             </Tabs>
@@ -222,8 +222,8 @@ export function ConnectionDetailPage() {
 }
 
 function InfoTab({ form, updateForm, reposText, setReposText, projectsText, setProjectsText, secrets }: {
-    form: Partial<Connection>;
-    updateForm: (updates: Partial<Connection>) => void;
+    form: Partial<EventSource>;
+    updateForm: (updates: Partial<EventSource>) => void;
     reposText: string;
     setReposText: (v: string) => void;
     projectsText: string;
@@ -234,7 +234,7 @@ function InfoTab({ form, updateForm, reposText, setReposText, projectsText, setP
         <Form style={{ maxWidth: "600px" }}>
             <FormGroup label="ID" fieldId="id">
                 <TextInput id="id" value={form.id || ""} isDisabled />
-                <HelperText><HelperTextItem>Connection ID cannot be changed after creation.</HelperTextItem></HelperText>
+                <HelperText><HelperTextItem>Event Source ID cannot be changed after creation.</HelperTextItem></HelperText>
             </FormGroup>
             <FormGroup label="Name" isRequired fieldId="name">
                 <TextInput id="name" isRequired value={form.name || ""}
@@ -300,11 +300,11 @@ function InfoTab({ form, updateForm, reposText, setReposText, projectsText, setP
     );
 }
 
-function StatusTab({ connectionId, isActive }: {
-    connectionId: string;
+function StatusTab({ eventSourceId, isActive }: {
+    eventSourceId: string;
     isActive: boolean;
 }) {
-    const [status, setStatus] = useState<ConnectionStatus | null>(null);
+    const [status, setStatus] = useState<EventSourceStatus | null>(null);
     const [events, setEvents] = useState<StreamEvent[]>([]);
     const [loading, setLoading] = useState(false);
     const [eventsLoading, setEventsLoading] = useState(false);
@@ -312,19 +312,19 @@ function StatusTab({ connectionId, isActive }: {
 
     const loadStatus = useCallback(() => {
         setLoading(true);
-        fetchConnectionStatus(connectionId)
+        fetchEventSourceStatus(eventSourceId)
             .then(setStatus)
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [connectionId]);
+    }, [eventSourceId]);
 
     const loadEvents = useCallback(() => {
         setEventsLoading(true);
-        fetchStreamEvents(1, 10, undefined, connectionId)
+        fetchStreamEvents(1, 10, undefined, eventSourceId)
             .then((results) => setEvents(results.items))
             .catch(console.error)
             .finally(() => setEventsLoading(false));
-    }, [connectionId]);
+    }, [eventSourceId]);
 
     useEffect(() => {
         if (isActive && !loadedRef.current) {
@@ -346,7 +346,7 @@ function StatusTab({ connectionId, isActive }: {
                 alignItems={{ default: "alignItemsCenter" }}
                 style={{ marginBottom: "16px" }}>
                 <FlexItem>
-                    <Title headingLevel="h3" size="md">Connection Status</Title>
+                    <Title headingLevel="h3" size="md">Event Source Status</Title>
                 </FlexItem>
                 <FlexItem>
                     <Button variant="plain" aria-label="Refresh" onClick={() => {
@@ -441,28 +441,28 @@ function formatDuration(ms?: number): string {
     return `${(ms / 1000).toFixed(1)}s`;
 }
 
-function PollLogsTab({ connectionId, isActive }: {
-    connectionId: string;
+function PollLogsTab({ eventSourceId, isActive }: {
+    eventSourceId: string;
     isActive: boolean;
 }) {
-    const [logs, setLogs] = useState<ConnectionPollLog[]>([]);
+    const [logs, setLogs] = useState<EventSourcePollLog[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState(20);
     const [loading, setLoading] = useState(false);
-    const [detailModal, setDetailModal] = useState<ConnectionPollLog | null>(null);
+    const [detailModal, setDetailModal] = useState<EventSourcePollLog | null>(null);
     const loadedRef = useRef(false);
 
     const loadLogs = useCallback(() => {
         setLoading(true);
-        fetchConnectionPollLogs(connectionId, page, perPage)
+        fetchEventSourcePollLogs(eventSourceId, page, perPage)
             .then((results) => {
                 setLogs(results.items);
                 setTotalCount(results.totalCount);
             })
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [connectionId, page, perPage]);
+    }, [eventSourceId, page, perPage]);
 
     useEffect(() => {
         if (isActive && !loadedRef.current) {
@@ -498,7 +498,7 @@ function PollLogsTab({ connectionId, isActive }: {
                 </EmptyState>
             ) : logs.length === 0 ? (
                 <EmptyState>
-                    <EmptyStateBody>No poll logs yet. Logs will appear after the connection is polled.</EmptyStateBody>
+                    <EmptyStateBody>No poll logs yet. Logs will appear after the event source is polled.</EmptyStateBody>
                 </EmptyState>
             ) : (
                 <>

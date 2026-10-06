@@ -859,7 +859,7 @@ export async function updateRetentionConfig(config: RetentionConfig): Promise<Re
 // ── Event Source Filters (used by subscriptions) ─────────────────
 
 export interface EventSourceFilterRule {
-    type: "event-type" | "payload" | "connection" | "ref";
+    type: "event-type" | "payload" | "ref";
     pointer?: string;
     pattern: string;
 }
@@ -1969,9 +1969,9 @@ export async function fetchWorkflowDefinitionRuns(
     return response.json();
 }
 
-// ── Connections ───────────────────────────────────────────────────
+// ── Event Sources ───────────────────────────────────────────────────
 
-export interface Connection {
+export interface EventSource {
     id: string;
     name: string;
     description?: string;
@@ -1985,7 +1985,7 @@ export interface Connection {
     modifiedOn?: string;
 }
 
-export interface NewConnection {
+export interface NewEventSource {
     id: string;
     name: string;
     description?: string;
@@ -1997,7 +1997,7 @@ export interface NewConnection {
     configuration?: Record<string, unknown>;
 }
 
-export interface ConnectionStatus {
+export interface EventSourceStatus {
     eventSourceId: string;
     enabled: boolean;
     lastPolledAt?: string;
@@ -2006,59 +2006,59 @@ export interface ConnectionStatus {
     lastErrorAt?: string;
 }
 
-export async function fetchConnections(
+export async function fetchEventSources(
     page = 1, limit = 20, filterName?: string, filterType?: string
-): Promise<SearchResults<Connection>> {
+): Promise<SearchResults<EventSource>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
     params.set("limit", String(limit));
     if (filterName) params.set("filterName", filterName);
     if (filterType) params.set("filterType", filterType);
     const response = await fetch(`${API}/event-sources?${params}`);
-    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch connections"));
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch event sources"));
     return response.json();
 }
 
-export async function fetchConnection(connectionId: string): Promise<Connection> {
-    const response = await fetch(`${API}/event-sources/${encodeURIComponent(connectionId)}`);
-    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch connection"));
+export async function fetchEventSource(eventSourceId: string): Promise<EventSource> {
+    const response = await fetch(`${API}/event-sources/${encodeURIComponent(eventSourceId)}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch event source"));
     return response.json();
 }
 
-export async function createConnection(data: NewConnection): Promise<Connection> {
+export async function createEventSource(data: NewEventSource): Promise<EventSource> {
     const response = await fetch(`${API}/event-sources`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to create connection"));
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to create event source"));
     return response.json();
 }
 
-export async function updateConnection(connectionId: string, data: NewConnection): Promise<Connection> {
-    const response = await fetch(`${API}/event-sources/${encodeURIComponent(connectionId)}`, {
+export async function updateEventSource(eventSourceId: string, data: NewEventSource): Promise<EventSource> {
+    const response = await fetch(`${API}/event-sources/${encodeURIComponent(eventSourceId)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to update connection"));
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to update event source"));
     return response.json();
 }
 
-export async function deleteConnection(connectionId: string): Promise<void> {
-    const response = await fetch(`${API}/event-sources/${encodeURIComponent(connectionId)}`, {
+export async function deleteEventSource(eventSourceId: string): Promise<void> {
+    const response = await fetch(`${API}/event-sources/${encodeURIComponent(eventSourceId)}`, {
         method: "DELETE",
     });
-    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to delete connection"));
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to delete event source"));
 }
 
-export async function fetchConnectionStatus(connectionId: string): Promise<ConnectionStatus> {
-    const response = await fetch(`${API}/event-sources/${encodeURIComponent(connectionId)}/status`);
-    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch connection status"));
+export async function fetchEventSourceStatus(eventSourceId: string): Promise<EventSourceStatus> {
+    const response = await fetch(`${API}/event-sources/${encodeURIComponent(eventSourceId)}/status`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch event source status"));
     return response.json();
 }
 
-export interface ConnectionPollLog {
+export interface EventSourcePollLog {
     id: number;
     eventSourceId: string;
     status: string;
@@ -2069,14 +2069,14 @@ export interface ConnectionPollLog {
     createdOn?: string;
 }
 
-export async function fetchConnectionPollLogs(
-    connectionId: string, page = 1, limit = 20
-): Promise<SearchResults<ConnectionPollLog>> {
+export async function fetchEventSourcePollLogs(
+    eventSourceId: string, page = 1, limit = 20
+): Promise<SearchResults<EventSourcePollLog>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
     params.set("limit", String(limit));
     const response = await fetch(
-        `${API}/event-sources/${encodeURIComponent(connectionId)}/logs?${params}`);
+        `${API}/event-sources/${encodeURIComponent(eventSourceId)}/logs?${params}`);
     if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch poll logs"));
     return response.json();
 }
@@ -2100,13 +2100,13 @@ export interface StreamEvent {
 
 export async function fetchStreamEvents(
     page = 1, limit = 20,
-    filterType?: string, filterConnectionId?: string, filterRef?: string
+    filterType?: string, filterEventSourceId?: string, filterRef?: string
 ): Promise<SearchResults<StreamEvent>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
     params.set("limit", String(limit));
     if (filterType) params.set("filterType", filterType);
-    if (filterConnectionId) params.set("filterEventSourceId", filterConnectionId);
+    if (filterEventSourceId) params.set("filterEventSourceId", filterEventSourceId);
     if (filterRef) params.set("filterRef", filterRef);
     const response = await fetch(`${API}/stream/events?${params}`);
     if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch stream events"));

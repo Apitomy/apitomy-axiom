@@ -2,6 +2,13 @@ import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { AppSidebar } from "./AppSidebar";
 import { renderWithRouter } from "../test/renderWithRouter";
+import { Route, Routes, useLocation } from "react-router-dom";
+import userEvent from "@testing-library/user-event";
+
+function LocationProbe() {
+    const location = useLocation();
+    return <div data-testid="location">{location.pathname}</div>;
+}
 
 vi.mock("../config/api", () => ({
     fetchInboxCount: vi.fn().mockResolvedValue({ count: 0 }),
@@ -74,5 +81,16 @@ describe("AppSidebar", () => {
         await screen.findByText("Inbox");
         expect(screen.getByText("Subjects")).toBeInTheDocument();
         expect(screen.queryByText(/projects/i)).not.toBeInTheDocument();
+    });
+
+    it("navigates Event Sources to /events/sources", async () => {
+        renderWithRouter(
+            <Routes>
+                <Route path="*" element={<><AppSidebar /><LocationProbe /></>} />
+            </Routes>,
+            "/events/stream"
+        );
+        await userEvent.click(await screen.findByText("Event Sources"));
+        expect(screen.getByTestId("location")).toHaveTextContent("/events/sources");
     });
 });

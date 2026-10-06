@@ -34,7 +34,7 @@ const SOURCE_COLORS: Record<string, "blue" | "green" | "orange" | "grey"> = {
 
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "type", label: "Event Type", testId: "stream-filter-type" },
-    { value: "eventSourceId", label: "Connection", testId: "stream-filter-connection" },
+    { value: "eventSourceId", label: "Event Source", testId: "stream-filter-event-source" },
     { value: "ref", label: "Ref", testId: "stream-filter-ref" },
 ];
 
@@ -76,7 +76,7 @@ export function EventStreamPage() {
     const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
 
     const filterType = filters.find((f) => f.filterBy.value === "type")?.filterValue;
-    const filterConnectionId = filters.find((f) => f.filterBy.value === "eventSourceId")?.filterValue;
+    const filterEventSourceId = filters.find((f) => f.filterBy.value === "eventSourceId")?.filterValue;
     const filterRef = filters.find((f) => f.filterBy.value === "ref")?.filterValue;
     const isFiltered = filters.length > 0;
 
@@ -85,7 +85,7 @@ export function EventStreamPage() {
         fetchStreamEvents(
             page, perPage,
             filterType || undefined,
-            filterConnectionId || undefined,
+            filterEventSourceId || undefined,
             filterRef || undefined
         )
             .then((results) => {
@@ -94,7 +94,7 @@ export function EventStreamPage() {
             })
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [page, perPage, filterType, filterConnectionId, filterRef]);
+    }, [page, perPage, filterType, filterEventSourceId, filterRef]);
 
     useEffect(() => { loadData(); }, [loadData]);
 
@@ -196,7 +196,7 @@ export function EventStreamPage() {
                                 <Th style={{ width: "40px" }}></Th>
                                 <Th>Time</Th>
                                 <Th>Source</Th>
-                                <Th>Connection</Th>
+                                <Th>Event Source</Th>
                                 <Th>Event Type</Th>
                                 <Th>Ref</Th>
                                 <Th>Actor</Th>

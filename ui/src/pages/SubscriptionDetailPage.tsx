@@ -417,7 +417,7 @@ function registerElLanguage(monaco: typeof Monaco) {
         event: {
             type: "Normalized event type (e.g., \"issue.created\", \"pr.merged\")",
             source: "Source system: \"github\" or \"jira\"",
-            eventSourceId: "Connection slug (e.g., \"github-com\")",
+            eventSourceId: "Event Source slug (e.g., \"github-com\")",
             ref: "Full URL of the event subject",
             timestamp: "When the event occurred (ISO-8601)",
             actor: actorFields,
@@ -670,7 +670,7 @@ function FilterTab({ filterExpression, setFilterExpression, processEventsFrom, e
                             <Th style={{ width: "50px" }}>Match</Th>
                             <Th>Time</Th>
                             <Th>Source</Th>
-                            <Th>Connection</Th>
+                            <Th>Event Source</Th>
                             <Th>Event Type</Th>
                             <Th>Ref</Th>
                             <Th>Actor</Th>
@@ -755,7 +755,7 @@ function FilterHelpModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
                     <Tbody>
                         <Tr><Td><code>event.type</code></Td><Td>Normalized event type</Td><Td><code>"issue.created"</code>, <code>"pr.merged"</code>, <code>"push"</code></Td></Tr>
                         <Tr><Td><code>event.source</code></Td><Td>Source system</Td><Td><code>"github"</code>, <code>"jira"</code></Td></Tr>
-                        <Tr><Td><code>event.eventSourceId</code></Td><Td>Connection slug</Td><Td><code>"github-com"</code>, <code>"jira-prod"</code></Td></Tr>
+                        <Tr><Td><code>event.eventSourceId</code></Td><Td>Event Source slug</Td><Td><code>"github-com"</code>, <code>"jira-prod"</code></Td></Tr>
                         <Tr><Td><code>event.ref</code></Td><Td>Full URL of the event subject</Td><Td><code>"https://github.com/owner/repo/issues/123"</code></Td></Tr>
                         <Tr><Td><code>event.timestamp</code></Td><Td>When the event occurred</Td><Td>ISO-8601 string</Td></Tr>
                         <Tr><Td><code>event.actor.login</code></Td><Td>Actor username or account ID</Td><Td><code>"octocat"</code></Td></Tr>
@@ -807,9 +807,9 @@ function FilterHelpModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
                         {[
                             ["event.type == 'issue.created'", "Match a specific event type"],
                             ["event.type.startsWith('pr.')", "Match all pull request events"],
-                            ["event.eventSourceId == 'github-com' && event.type.startsWith('issue.')", "Issues from a specific connection"],
+                            ["event.eventSourceId == 'github-com' && event.type.startsWith('issue.')", "Issues from a specific event source"],
                             ["event.type == 'issue.created' || event.type == 'issue.closed'", "Match either of two event types"],
-                            ["event.eventSourceId != 'jira-staging'", "Exclude events from a specific connection"],
+                            ["event.eventSourceId != 'jira-staging'", "Exclude events from a specific event source"],
                             ["event.payload.issue.state == 'open'", "Match events where the issue is open"],
                             ["event.payload.pullRequest.baseBranch == 'main'", "PR events targeting the main branch"],
                             ["event.type == 'pr.review.submitted' && event.payload.review.state == 'approved'", "Only approved PR reviews"],
