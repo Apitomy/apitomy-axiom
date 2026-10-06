@@ -113,8 +113,6 @@ class LineageTest {
         Long task1 = createTask(traceId, eventId, null);
         Long task2 = createTask(traceId, eventId, null);
         Long outcomeId = createOutcome(eventId, "create-workflow", traceId);
-        createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_TASK, task1, null);
-        createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_TASK, task2, null);
         Long noMatchItem = createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_NO_MATCH, null, null);
         createUsage(null, eventId, traceId, 0.10);
         createUsage(task1, eventId, traceId, 0.20);
@@ -172,7 +170,7 @@ class LineageTest {
         assertEdge(graph, "workflow-run:" + runId, "task:" + task1, "created");
         assertEdge(graph, "workflow-run:" + runId, "task:" + task2, "created");
         assertNull(findNode(graph, "trace:" + runTrace), "Workflow traces collapse into their run");
-        assertEquals("/logs/workflow-runs/" + runId,
+        assertEquals("/runs/" + runId,
                 node(graph, "workflow-run:" + runId).getLinkPath());
 
         LineageGraph resumed = get("event", resumeEventId.toString(), "");
@@ -254,12 +252,12 @@ class LineageTest {
         Long task = createTask(runTrace, null, runId);
         UUID otherEvent = createEvent();
         Long outcomeId = createOutcome(otherEvent, "create-workflow", null);
-        Long deletedTask = createTask(null, otherEvent, null);
-        createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_TASK, deletedTask, null);
+        Long deletedRun = createRun(null, null);
+        createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_WORKFLOW_RUN, null, deletedRun);
 
         QuarkusTransaction.requiringNew().run(() -> {
             StreamEventEntity.deleteById(eventId);
-            TaskEntity.deleteById(deletedTask);
+            WorkflowRunEntity.deleteById(deletedRun);
         });
 
         LineageGraph run = get("workflow-run", runId.toString(), "");
@@ -270,9 +268,9 @@ class LineageTest {
         assertTrue(node(run, "task:" + task).getAvailable());
 
         LineageGraph other = get("event", otherEvent.toString(), "");
-        LineageNode gone = node(other, "task:" + deletedTask);
+        LineageNode gone = node(other, "workflow-run:" + deletedRun);
         assertFalse(gone.getAvailable());
-        assertEdge(other, "event:" + otherEvent, "task:" + deletedTask, "created");
+        assertEdge(other, "event:" + otherEvent, "workflow-run:" + deletedRun, "triggered");
 
         given().when().get("/api/v1/lineage/event/" + eventId).then().statusCode(404);
     }
@@ -312,8 +310,7 @@ class LineageTest {
         UUID traceId = createTrace("create-workflow", eventId);
         Long outcomeId = createOutcome(eventId, "create-workflow", traceId);
         for (int i = 0; i < 30; i++) {
-            Long task = createTask(traceId, eventId, null);
-            createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_TASK, task, null);
+            createTask(traceId, eventId, null);
         }
         Statistics stats = statistics();
         stats.clear();
@@ -373,15 +370,18 @@ class LineageTest {
     void edgesBetweenKnownNodesAtTheDepthLimitAreKept() {
         UUID eventId = createEvent();
         UUID routingTrace = createTrace("create-workflow", eventId);
-        // The task is reached from the event (an outcome without a trace) and from the trace.
-        Long task = createTask(routingTrace, null, null);
+        // The run is started by an outcome without a trace; the task, at the depth limit, is reached
+        // both from the run and from the routing trace.
         Long outcomeId = createOutcome(eventId, "create-workflow", null);
-        createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_TASK, task, null);
+        Long runId = createRun(null, null);
+        createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_WORKFLOW_RUN, null, runId);
+        Long task = createTask(routingTrace, null, runId);
 
-        LineageGraph graph = get("event", eventId.toString(), "?direction=downstream&depth=1");
+        LineageGraph graph = get("event", eventId.toString(), "?direction=downstream&depth=2");
         assertEdge(graph, "event:" + eventId, "trace:" + routingTrace, "triggered");
-        assertEdge(graph, "event:" + eventId, "task:" + task, "created");
+        assertEdge(graph, "event:" + eventId, "workflow-run:" + runId, "triggered");
         assertEdge(graph, "trace:" + routingTrace, "task:" + task, "created");
+        assertEdge(graph, "workflow-run:" + runId, "task:" + task, "created");
     }
 
     private Statistics statistics() {
@@ -407,7 +407,6 @@ class LineageTest {
         Long outcomeId = createOutcome(eventId, "create-workflow", traceId);
         for (int i = 0; i < taskCount; i++) {
             Long task = createTask(traceId, eventId, null);
-            createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_TASK, task, null);
             createUsage(task, eventId, traceId, 0.01);
         }
         Statistics stats = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();

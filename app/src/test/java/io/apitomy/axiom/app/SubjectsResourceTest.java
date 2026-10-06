@@ -202,6 +202,12 @@ class SubjectsResourceTest {
                 .statusCode(404);
     }
 
+    // ── Tasks ─────────────────────────────────────────────────────────
+
+    /**
+     * Tasks are created only by workflow action nodes, so POSTing a task directly to a subject must be
+     * rejected with 405 Method Not Allowed.
+     */
     @Test
     void creatingTaskDirectlyOnSubjectIsNotAllowed() {
         int subjectId = createSubject("Direct Task", "feature", "owner/repo#399");

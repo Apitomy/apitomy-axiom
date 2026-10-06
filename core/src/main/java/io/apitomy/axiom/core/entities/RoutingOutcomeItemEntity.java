@@ -16,8 +16,6 @@ import java.time.Instant;
 @Table(name = "routing_outcome_item")
 public class RoutingOutcomeItemEntity extends PanacheEntity {
 
-    /** A task was created. */
-    public static final String TYPE_TASK = "task";
     /** A workflow run was started (create-workflow). */
     public static final String TYPE_WORKFLOW_RUN = "workflow-run";
     /** A workflow run parked at a receive-event node was resumed (workflow-dispatch). */

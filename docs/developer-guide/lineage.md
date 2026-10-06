@@ -65,7 +65,7 @@ result, whichever direction was walked:
 |---------------------|------------------------------------|
 | `event`             | `/events/stream/{id}`              |
 | `trace`             | `/logs/traces/{id}`                |
-| `workflow-run`      | `/logs/workflow-runs/{id}`         |
+| `workflow-run`      | `/runs/{id}`                       |
 | `task`              | `/logs/tasks?taskId={id}`          |
 | `outcome`           | none                               |
 

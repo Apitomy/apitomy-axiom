@@ -596,9 +596,6 @@ public class LineageService {
         }
 
         Link itemLink(Ref from, RoutingOutcomeItemEntity item) {
-            if (RoutingOutcomeItemEntity.TYPE_TASK.equals(item.itemType) && item.taskId != null) {
-                return new Link(from, Ref.of(TASK, item.taskId), "created");
-            }
             return new Link(from, remember(item), "produced");
         }
 
@@ -749,7 +746,7 @@ public class LineageService {
                 case RunInfo r -> {
                     node.setLabel("Workflow run #" + r.id());
                     node.setStatus(r.status());
-                    node.setLinkPath("/logs/workflow-runs/" + r.id());
+                    node.setLinkPath("/runs/" + r.id());
                     node.setCreatedOn(date(r.startedOn()));
                 }
                 case TaskInfo t -> {

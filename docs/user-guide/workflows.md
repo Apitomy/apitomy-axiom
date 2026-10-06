@@ -93,7 +93,7 @@ A trigger that would violate the rule is handled as follows:
 ### Schedule Triggers
 
 A workflow definition can have zero or more schedule triggers, managed on the **Triggers** tab of the
-workflow definition page (REST: `/api/v1/workflow/definitions/{id}/triggers/schedules`). Each trigger has:
+workflow definition page (REST: `/api/v1/workflow/definitions/{workflowDefinitionId}/triggers/schedules`). Each trigger has:
 
 | Field | Purpose |
 |-------|---------|

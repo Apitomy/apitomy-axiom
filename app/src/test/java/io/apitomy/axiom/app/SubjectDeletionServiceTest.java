@@ -118,7 +118,7 @@ class SubjectDeletionServiceTest {
 
             RoutingOutcomeItemEntity taskItem = new RoutingOutcomeItemEntity();
             taskItem.outcomeId = outcome.id;
-            taskItem.itemType = RoutingOutcomeItemEntity.TYPE_TASK;
+            taskItem.itemType = RoutingOutcomeItemEntity.TYPE_NO_MATCH;
             taskItem.status = "succeeded";
             taskItem.subjectId = subject.id;
             taskItem.taskId = task.id;

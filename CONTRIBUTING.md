@@ -44,7 +44,7 @@ cd ui && npm run build
 
 - Follow the existing code style in the project
 - Code is formatted and linted with [Biome](https://biomejs.dev/)
-- Run `npm run lint` before committing to ensure code quality
+- Run `npm test` before committing to ensure the UI tests pass
 - Write clear, descriptive commit messages
 - Add tests for new features when applicable
 - Update documentation when adding or changing features

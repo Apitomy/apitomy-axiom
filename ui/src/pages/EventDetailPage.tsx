@@ -197,7 +197,6 @@ const ROUTING_LABELS: Record<string, string> = {
 };
 
 const ITEM_LABELS: Record<string, string> = {
-    task: "Task",
     "workflow-run": "Workflow Run",
     "workflow-resumed": "Resumed Workflow Run",
     "no-match": "No Match",
