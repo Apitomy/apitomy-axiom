@@ -33,12 +33,39 @@ cron-utils (transitive via quarkus-scheduler), React 19 + Vite + PatternFly 6.
 - Every workflow run **requires** a subject. At most one active (`running`/`waiting`) run per
   (subject, workflow definition); violations are **skipped and recorded**, not queued.
 - Workflow runs have **no outputs**.
+- `rg` is **not installed**. Every `rg -n [-i] 'PATTERN' --glob '!X' …` in this plan means
+  `git grep -n [-i] -E 'PATTERN' -- . ':!X' …` (git grep only searches tracked files, so `.worktrees/` and
+  `.claude/` are already excluded).
+- **No browser-based manual testing.** Verification is automated only: Maven tests, `npm run build`, and
+  `npm test` (Vitest, set up in Task 1b).
+- From Task 1b on, every task touching `ui/` must keep `cd ui && npm test` green.
+- **Axiom SDK** = the functions agents call via MCP: `core/src/main/resources/axiom-sdk-functions.json`
+  (definitions), `core/.../SdkFunctionRegistry.java`, `app/.../SdkCallService.java` (implementations),
+  `app/.../rest/SdkResource.java`, `app/src/main/resources/templates/axiom-mcp-server/sdk-server.js`,
+  the assistant templates (`templates/axiom-assistant-mcp/server.js`,
+  `templates/assistant-templates/axiom-config-assistant.json`), `core/.../services/ActionTypeValidator.java`
+  (validates SDK tool names in allowed tools), UI `ui/src/config/sdkTools.ts` and
+  `ui/src/components/assistant/toolNames.ts`, tests `SdkResourceTest`, `McpConfigGeneratorTest`,
+  `ActionTypeValidatorTest`. Every SDK change must update **all** of these consistently.
+
+## Axiom SDK Changes (summary)
+
+| Function | Change | Task |
+|----------|--------|------|
+| `axiom_add_report_label`, `axiom_remove_report_label`, `axiom_list_report_definitions`, `axiom_list_reports` | Remove | 4 |
+| `axiom_create_task` | Remove | 6 |
+| `axiom_close_project`, `axiom_reopen_project` | Remove | 7 |
+| `axiom_list_projects`, `axiom_get_project`, `axiom_create_project`, `axiom_update_project`, `axiom_update_project_body`, `axiom_add_project_label`, `axiom_remove_project_label`, `axiom_get_project_thread` | Rename `project` → `subject` (names, params `projectId` → `subjectId`, descriptions) | 8 |
+| `axiom_get_workflow_run` | **Add**: returns the caller's (or a given `runId`'s) run: id, title, status, definitionId, definitionVersion, subjectId, labels, inputs, currentNodeId | 10 |
+| `axiom_list_subject_runs` | **Add**: lists runs for a `subjectId` (id, title, status, definitionId, startedOn, completedOn) | 10 |
+| `axiom_fire_event`, `axiom_get_task_status`, `axiom_add_thread_entry`, `axiom_list_tools`, `axiom_list_action_types`, `axiom_list_agents`, `axiom_list_events`, `axiom_respond_to_task`, `axiom_get_activity_log` | Keep; update descriptions/params mentioning projects, reports or the Manager | 2, 4, 8 |
 
 ## Execution Order
 
 | # | Task | Area |
 |---|------|------|
 | 1 | Reset schema to single baseline | DB |
+| 1b | UI test harness (Vitest + Testing Library) | UI |
 | 2 | Remove AI Manager | backend, UI, API |
 | 3 | Remove `invoke-action` routing | backend, UI, API |
 | 4 | Remove reports | backend, UI, API |
@@ -136,6 +163,135 @@ git commit -m "refactor(db): reset schema to a single baseline migration"
 
 ---
 
+### Task 1b: UI test harness (Vitest + Testing Library)
+
+Basic, not comprehensive: a working harness plus a smoke test of the sidebar. Later tasks add a few focused
+tests.
+
+**Files:**
+- Modify: `ui/package.json` (devDependencies + `"test": "vitest run"` script)
+- Create: `ui/vitest.config.ts`, `ui/src/test/setup.ts`, `ui/src/test/renderWithRouter.tsx`
+- Create: `ui/src/components/AppSidebar.test.tsx`
+- Modify: `ui/tsconfig.json` — add `"types": ["vitest/globals", "@testing-library/jest-dom"]` to
+  `compilerOptions` (keep test files type-checked by `tsc -b`)
+- Modify: `ui-bundle/pom.xml` — after the npm `build` execution, add an npm `test` execution (same plugin/
+  pattern as the existing build execution) so `./build.sh -Pui` runs UI tests
+
+**Interfaces:**
+- Produces: `renderWithRouter(ui: ReactElement, path?: string)` helper (wraps in `MemoryRouter` with
+  `initialEntries={[path ?? "/"]}`), used by all later UI tests.
+- Produces: convention — tests live next to the component as `*.test.tsx`; API calls are mocked with
+  `vi.mock("../config/api", ...)`; SSE with `vi.mock("../config/sse", ...)`.
+
+- [ ] **Step 1: Install dev dependencies**
+
+Run (in `ui/`): `npm install --save-dev --save-exact vitest jsdom @testing-library/react @testing-library/jest-dom @testing-library/user-event`
+Expected: `package.json` devDependencies updated, `package-lock.json` updated.
+
+- [ ] **Step 2: Config files**
+
+`ui/vitest.config.ts`:
+
+```ts
+import { defineConfig } from "vitest/config";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({
+    plugins: [react()],
+    test: {
+        environment: "jsdom",
+        globals: true,
+        setupFiles: ["./src/test/setup.ts"],
+        css: false,
+    },
+});
+```
+
+`ui/src/test/setup.ts`:
+
+```ts
+import "@testing-library/jest-dom/vitest";
+import { cleanup } from "@testing-library/react";
+import { afterEach } from "vitest";
+
+afterEach(() => {
+    cleanup();
+});
+```
+
+`ui/src/test/renderWithRouter.tsx`:
+
+```tsx
+import type { ReactElement } from "react";
+import { render, type RenderResult } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+
+/**
+ * Renders a component inside a MemoryRouter for tests.
+ *
+ * @param ui the element to render
+ * @param path the initial route (defaults to "/")
+ * @returns the Testing Library render result
+ */
+export function renderWithRouter(ui: ReactElement, path: string = "/"): RenderResult {
+    return render(<MemoryRouter initialEntries={[path]}>{ui}</MemoryRouter>);
+}
+```
+
+Add `"test": "vitest run"` to `scripts` in `ui/package.json`.
+
+- [ ] **Step 3: Sidebar smoke test** — `ui/src/components/AppSidebar.test.tsx`:
+
+```tsx
+import { screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { AppSidebar } from "./AppSidebar";
+import { renderWithRouter } from "../test/renderWithRouter";
+
+vi.mock("../config/api", () => ({
+    fetchInboxCount: vi.fn().mockResolvedValue({ count: 0 }),
+}));
+vi.mock("../config/sse", () => ({
+    sseClient: { subscribe: vi.fn(() => () => {}) },
+}));
+
+describe("AppSidebar", () => {
+    it("renders the Inbox navigation item", async () => {
+        renderWithRouter(<AppSidebar />);
+        expect(await screen.findByText("Inbox")).toBeInTheDocument();
+    });
+});
+```
+
+If the sidebar renders expandable groups collapsed, assert only on top-level labels. If PatternFly needs
+`window.matchMedia` in jsdom, add a stub to `setup.ts`:
+
+```ts
+Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: (query: string) => ({
+        matches: false, media: query, onchange: null,
+        addListener: () => {}, removeListener: () => {},
+        addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false,
+    }),
+});
+```
+
+- [ ] **Step 4: Run**
+
+Run: `cd ui && npm test` — expected: 1 test passed.
+Run: `cd ui && npm run build` — expected: success.
+Run: `./build.sh -Pui` — expected: BUILD SUCCESS (UI tests run in the build).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add ui/package.json ui/package-lock.json ui/vitest.config.ts ui/tsconfig.json ui/src/test ui/src/components/AppSidebar.test.tsx ui-bundle/pom.xml
+git commit -m "test(ui): add Vitest and Testing Library harness"
+```
+
+---
+
 ### Task 2: Remove the AI Manager
 
 **Files:**
@@ -220,7 +376,21 @@ Expected: no matches.
 - [ ] **Step 5: UI cleanup**
 
 Delete the pages, remove routes/nav, remove `'manager'` from the routing type union in `api.ts` and from
-`SubscriptionDetailPage` options. Run `cd ui && npm run build` — expected success.
+`SubscriptionDetailPage` options. Remove `"/manager"` from `SETTINGS_PATHS` in `AppSidebar.tsx`. Add to
+`AppSidebar.test.tsx`:
+
+```tsx
+    it("has no Manager navigation item", async () => {
+        renderWithRouter(<AppSidebar />, "/engine");
+        await screen.findByText("Inbox");
+        expect(screen.queryByText(/manager/i)).not.toBeInTheDocument();
+    });
+```
+
+Run `cd ui && npm test && npm run build` — expected success.
+
+- [ ] **Step 5b: SDK** — update descriptions in `axiom-sdk-functions.json`, `sdk-server.js` and the assistant
+  templates that mention the Manager. No functions are removed in this task.
 
 - [ ] **Step 6: Run tests**
 
@@ -323,7 +493,16 @@ void reportsEndpointIsGone() {
 - [ ] **Step 4: Delete files, fix references** until
   `rg -n -i 'reportdefinition|ReportEntity|ReportScheduler|reportId|axiom\.reports' --glob '!.worktrees' --glob '!.claude' --glob '!*.md'`
   returns nothing. Keep any `TraceEntity`/`ActivityLogEntity` "source type" enum consistent (remove `report`).
-- [ ] **Step 5: UI cleanup; `cd ui && npm run build`.**
+- [ ] **Step 4b: SDK** — remove `axiom_add_report_label`, `axiom_remove_report_label`,
+  `axiom_list_report_definitions`, `axiom_list_reports` from every SDK file listed in Global Constraints
+  (definitions JSON, `SdkCallService` handlers, `sdk-server.js`, assistant templates, `sdkTools.ts`,
+  `toolNames.ts`, `ActionTypeValidator` allow-lists). In `SdkResourceTest` add
+  `removedReportFunctionsAreUnknown`: calling `axiom_list_reports` through the SDK endpoint returns the
+  same error status the endpoint uses for unknown functions (check `SdkResource` for the exact code). Update
+  `McpConfigGeneratorTest`/`ActionTypeValidatorTest` expectations.
+- [ ] **Step 5: UI cleanup; `cd ui && npm test && npm run build`.** Remove `"/report-definitions"` from
+  `COMPONENT_PATHS` and add an `AppSidebar.test.tsx` case asserting no "Reports" / "Report Definitions" item
+  (same pattern as Task 2).
 - [ ] **Step 6: `./build.sh` — BUILD SUCCESS.**
 - [ ] **Step 7: Commit** — `git add -A && git commit -m "refactor: remove reports"`.
 
@@ -352,9 +531,10 @@ void reportsEndpointIsGone() {
 - [ ] **Step 2: Run — expect FAIL.**
 - [ ] **Step 3: Edit openapi, regenerate.**
 - [ ] **Step 4: Delete files, fix references** until
-  `rg -n -i 'scheduledjob|scheduled-job|scheduled_job' --glob '!.worktrees' --glob '!.claude' --glob '!*.md'`
+  `git grep -n -i -E 'scheduledjob|scheduled-job|scheduled_job' -- . ':!*.md'`
   returns nothing.
-- [ ] **Step 5: UI cleanup; `cd ui && npm run build`.**
+- [ ] **Step 5: UI cleanup; `cd ui && npm test && npm run build`.** Remove `"/scheduled-jobs"` from
+  `COMPONENT_PATHS` and add an `AppSidebar.test.tsx` case asserting no "Scheduled Jobs" item.
 - [ ] **Step 6: `./build.sh` — BUILD SUCCESS.**
 - [ ] **Step 7: Commit** — `git add -A && git commit -m "refactor: remove scheduled jobs"`.
 
@@ -414,7 +594,11 @@ void creatingTaskDirectlyOnProjectIsNotAllowed() {
 - [ ] **Step 4: Remove fields/paths and fix references** until
   `rg -n -i 'userTriggerable|workflowEnabled|managerTriggerable|emitsEvent|user_triggerable|workflow_enabled|manager_triggerable|emits_event|axiom_create_task' --glob '!.worktrees' --glob '!.claude' --glob '!*.md'`
   returns nothing.
-- [ ] **Step 5: UI cleanup; `cd ui && npm run build`.**
+- [ ] **Step 4b: SDK** — `axiom_create_task` removal (above) must cover every SDK file in Global
+  Constraints, including `sdkTools.ts`, `toolNames.ts` and `ActionTypeValidator`. In `SdkResourceTest` add
+  `createTaskFunctionIsUnknown` (unknown-function error, as in Task 4). Update descriptions of
+  `axiom_list_action_types` to say action types run only from workflow action nodes.
+- [ ] **Step 5: UI cleanup; `cd ui && npm test && npm run build`.**
 - [ ] **Step 6: `./build.sh` — BUILD SUCCESS.**
 - [ ] **Step 7: Commit** — `git add -A && git commit -m "refactor: action types are invoked only from workflows"`.
 
@@ -735,7 +919,12 @@ deleting) but select projects where no run is active and `max(completedOn) < now
 same `@Scheduled` cadence and config lookup (`RetentionConfigEntity.inactiveProjectRetentionDays`). Whether
 cleanup deletes the workspace only or the whole project should match what `ClosedProjectCleanup` did.
 
-- [ ] **Step 9: UI** — as listed in Files; `cd ui && npm run build`.
+- [ ] **Step 9: UI** — as listed in Files; `cd ui && npm test && npm run build`.
+- [ ] **Step 9b: SDK** — remove `axiom_close_project` and `axiom_reopen_project` from every SDK file
+  (Global Constraints list), including `SdkCallService` (lines ~84, 94, 256 lifecycle use). Remove any
+  `status` param from `axiom_update_project`/`axiom_create_project` and any `status` field from
+  `axiom_get_project`/`axiom_list_projects` results; add `active` (boolean) to those results. Add
+  `SdkResourceTest.closeProjectFunctionIsUnknown`.
 - [ ] **Step 10: `./build.sh` — BUILD SUCCESS.**
 - [ ] **Step 11: Commit** — `git add -A && git commit -m "refactor: drop project lifecycle; one active run per project and definition"`.
 
@@ -767,9 +956,11 @@ Pure rename; no behavior change.
 | Workflow context key `projectId` | `subjectId` |
 | Thread entries' "project thread" wording | "subject thread" |
 | Templates/SDK function args `projectId` (`axiom-sdk-functions.json`, `sdk-server.js`, `axiom-assistant-mcp/server.js`, assistant templates) | `subjectId` |
+| SDK functions `axiom_list_projects`, `axiom_get_project`, `axiom_create_project`, `axiom_update_project`, `axiom_update_project_body`, `axiom_add_project_label`, `axiom_remove_project_label`, `axiom_get_project_thread` | `axiom_list_subjects`, `axiom_get_subject`, `axiom_create_subject`, `axiom_update_subject`, `axiom_update_subject_body`, `axiom_add_subject_label`, `axiom_remove_subject_label`, `axiom_get_subject_thread` (all SDK files incl. `sdkTools.ts`, `toolNames.ts`, `ActionTypeValidator`, seed data in `SeedDataInitializer` that lists allowed tools) |
 
 - [ ] **Step 1: Failing test** — rename `ProjectsResourceTest` → `SubjectsResourceTest`, change its paths to
-  `/api/subjects` and bean types to `Subject*`. It fails to compile / 404s.
+  `/api/subjects` and bean types to `Subject*`. It fails to compile / 404s. Also update `SdkResourceTest` to
+  call `axiom_list_subjects` / `axiom_get_subject` (fails: unknown function).
 - [ ] **Step 2: openapi rename; regenerate.**
 - [ ] **Step 3: Rename classes with `git mv`, then fields.** Use IDE/Serena symbol renames where possible;
   otherwise `rg -l` + careful edits. Fix the hardcoded workspace path in `ScriptExecutionService.java:272` to
@@ -799,9 +990,13 @@ too (data is reset, no compatibility needed).
 - [ ] **Step 1: `git mv` files, rename symbols, URLs and strings.**
 - [ ] **Step 2: Verify**
   `rg -n -i 'project' ui/src` — expected: no domain matches.
-- [ ] **Step 3: `cd ui && npm run build`** — success. Then `./build.sh -Pui` — BUILD SUCCESS.
-- [ ] **Step 4: Smoke test** — run the app (`mvn -pl app quarkus:dev` with UI dev server per README), open
-  Subjects list and a subject detail page in the browser; no console errors.
+- [ ] **Step 3: UI tests** — in `AppSidebar.test.tsx` add `it("shows Subjects and not Projects", ...)`
+  asserting `screen.getByText("Subjects")` exists and `queryByText(/projects/i)` is null. Create
+  `ui/src/pages/SubjectsPage.test.tsx`: mock `../config/api` so the subjects list call (whatever `SubjectsPage`
+  uses, e.g. `fetchSubjects`) resolves to one subject `{ id: 1, name: "Repo issue 42", active: true, ... }`
+  (fill required fields from the `Subject` type); render with `renderWithRouter(<SubjectsPage />, "/subjects")`;
+  assert `await screen.findByText("Repo issue 42")` and an "Active" label.
+- [ ] **Step 4: `cd ui && npm test && npm run build`** — success. Then `./build.sh -Pui` — BUILD SUCCESS.
 - [ ] **Step 5: Commit** — `git add -A && git commit -m "refactor(ui): rename Project to Subject"`.
 
 ---
@@ -907,6 +1102,30 @@ class WorkflowRunMetadataTest {
   `filtersRunsBySubjectAndLabel` (create two runs on different subjects/labels, assert filtering returns
   exactly one). Label filtering: since labels are a JSON text column, filter in the query with
   `labels like '%"key":"value"%'` (document this simplification in Javadoc).
+- [ ] **Step 5b: SDK — add run functions**
+
+Add two functions to every SDK file listed in Global Constraints:
+
+`axiom-sdk-functions.json` entries (match the existing entry format in that file exactly):
+- `axiom_get_workflow_run` — "Get a workflow run (title, status, subject, definition, labels, inputs,
+  current node). Defaults to the run of the calling task." Params: `runId` (integer, optional).
+- `axiom_list_subject_runs` — "List workflow runs for a subject, newest first." Params: `subjectId`
+  (integer, required), `status` (string, optional).
+
+`SdkCallService` handlers: resolve `runId` default from the calling task's `workflowRunId` (follow how other
+handlers access the calling task context); return JSON with `id`, `title`, `status`, `definitionId`,
+`definitionVersion`, `subjectId`, `labels` (object), `inputs` (object), `currentNodeId`, `startedOn`,
+`completedOn`. Unknown run → the same "not found" error shape other handlers use.
+
+Tests in `SdkResourceTest`:
+- `getWorkflowRunReturnsRunMetadata` — create a run with title/labels via `RunRequest`; call the function
+  with `runId`; assert title and labels.
+- `listSubjectRunsReturnsRunsNewestFirst` — two runs (different definitions, from `TestFixtures`) on one
+  subject; assert two entries, newer first.
+
+Update `sdk-server.js`, `sdkTools.ts`, `toolNames.ts`, `ActionTypeValidator` allow-list and
+`McpConfigGeneratorTest`/`ActionTypeValidatorTest` expectations.
+
 - [ ] **Step 6: `./build.sh` — BUILD SUCCESS.**
 - [ ] **Step 7: Commit** — `git add -A && git commit -m "feat(workflow): run title, labels and inputs; run filters"`.
 
@@ -1197,10 +1416,18 @@ class CronSchedulesTest {
 - [ ] **Step 2: Runs page + run detail; `npm run build`.**
 - [ ] **Step 3: Subject page timeline; `npm run build`.**
 - [ ] **Step 4: Triggers tab; `npm run build`.**
-- [ ] **Step 5: Browser verification** (Chrome DevTools MCP): start backend in dev mode and UI dev server;
-  create a wait-node workflow, publish it, add a schedule trigger with cron `* * * * *` and subject
-  "UI smoke"; within ~1 minute a run appears on the Runs page and on the "UI smoke" subject timeline; the
-  trigger row shows `lastOutcome` "started" then "skipped" on the next minute. No console errors.
+- [ ] **Step 5: Basic UI tests** (mock `../config/api` in each; use `renderWithRouter`):
+  - `ui/src/App.test.tsx` (or a routes test, whichever is simpler given how `App.tsx` is structured): rendering
+    route `/` shows the Runs page heading. If `App` pulls in too much (SSE, layout fetches), instead test that
+    the route table exported/used by `App.tsx` maps `/` to the Runs page component.
+  - Runs page test: mocked runs list with two runs (titles "Run A", "Run B"); assert both titles render; assert
+    the filter controls for status, definition, subject and label are present (by accessible label).
+  - Subject detail test: mocked subject + two runs; assert both run titles appear in the timeline.
+  - Triggers tab test: mocked trigger list with one trigger (cron `0 2 * * *`, subject "Nightly triage",
+    lastOutcome "skipped"); assert those values render; click "Add trigger" (use `@testing-library/user-event`)
+    and assert the modal shows fields labeled "Cron" and "Subject name".
+  - Sidebar test: first item is "Runs".
+  Run `cd ui && npm test` — all pass.
 - [ ] **Step 6: `./build.sh -Pui` — BUILD SUCCESS.**
 - [ ] **Step 7: Commit** — `git add -A && git commit -m "feat(ui): runs-first navigation, subject timeline, schedule triggers"`.
 
@@ -1219,6 +1446,10 @@ class CronSchedulesTest {
   `correlation.md`, `lineage.md`, `data-retention.md`, `database-and-migrations.md` (single baseline; edit V1
   until first release), `extending-axiom.md`; `docs/getting-started/configuring-axiom.md`; `README.md`
 - Wrap markdown at 110 columns (tables excepted).
+- Document the SDK changes wherever SDK functions are described in docs (`git grep -l -E 'axiom_[a-z_]+' docs`),
+  including the new `axiom_get_workflow_run` and `axiom_list_subject_runs`.
+- Document UI tests (`cd ui && npm test`) in the developer guide / `CONTRIBUTING.md` where the build is
+  described.
 
 - [ ] **Step 1: Edit docs.**
 - [ ] **Step 2: Verify** `rg -n -i 'project|report definition|scheduled job|ai manager|invoke-action|userTriggerable' docs README.md`
@@ -1229,8 +1460,9 @@ class CronSchedulesTest {
 
 ## Final Verification
 
-- [ ] `./build.sh -Pui` — BUILD SUCCESS, all tests pass.
-- [ ] `ls app/src/main/resources/db/migration` — exactly `V1__baseline.sql`.
-- [ ] Start with the `prod` profile against a fresh `~/.axiom/data` (move the old dir aside) — Flyway applies
-  V1 and Hibernate `validate` passes.
+- [ ] `./build.sh -Pui` — BUILD SUCCESS, all Java and UI tests pass.
+- [ ] `ls app/src/main/resources/db/migration` — exactly `V1__baseline.sql`; `MigrationSchemaValidationTest`
+  passes.
+- [ ] `git grep -n -E 'axiom_(create_task|close_project|reopen_project|list_reports|list_report_definitions|add_report_label|remove_report_label|[a-z_]*project[a-z_]*)'`
+  — no matches.
 - [ ] Spec checklist: every bullet in the spec's sections 1–6 maps to a task above.
