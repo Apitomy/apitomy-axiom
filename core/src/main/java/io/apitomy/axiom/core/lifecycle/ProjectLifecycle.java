@@ -15,7 +15,7 @@ import java.util.Set;
  *                     ▲                                │
  *                     │                                │
  *                     └────────────────────────────────┘
- *                       (re-opened by user or Manager)
+ *                       (re-opened by user or agent)  
  * </pre>
  */
 public final class ProjectLifecycle {

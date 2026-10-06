@@ -98,8 +98,8 @@ public final class ActionTypeValidator {
     private static void validateDescription(NewActionType def, List<ValidationMessage> messages) {
         if (def.getDescription() == null || def.getDescription().isBlank()) {
             messages.add(warning("description",
-                    "Action type has no description. A description helps the AI Manager "
-                            + "decide when to use this action type."));
+                    "Action type has no description. A description helps users and AI "
+                            + "agents decide when to use this action type."));
         }
     }
 

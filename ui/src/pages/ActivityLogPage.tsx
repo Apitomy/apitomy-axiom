@@ -33,12 +33,6 @@ const ENTRY_TYPE_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "
     "project-created": "blue",
     "project-closed": "grey",
     "project-reopened": "orange",
-    "event-ignored": "grey",
-    "manager-evaluated": "blue",
-    "manager-escalation": "orange",
-    "manager-no-decision": "grey",
-    "manager-skipped": "grey",
-    "manager-error": "red",
     "pipeline-error": "red",
     "task-awaiting-input": "orange",
     "report-generating": "blue",
@@ -87,13 +81,6 @@ export function ActivityLogPage() {
         setLogProjectId(projectId);
         setLogTaskId(taskId);
         setLogActivityId(null);
-        setIsLogModalOpen(true);
-    };
-
-    const handleViewActivityLog = (activityId: number) => {
-        setLogProjectId(null);
-        setLogTaskId(null);
-        setLogActivityId(activityId);
         setIsLogModalOpen(true);
     };
 
@@ -287,15 +274,6 @@ export function ActivityLogPage() {
                                                 {" — "}
                                                 <Button variant="link" isInline
                                                     onClick={() => handleViewTaskLog(entry.projectId!, entry.taskId!)}>
-                                                    View Log
-                                                </Button>
-                                            </>
-                                        )}
-                                        {(entry.entryType === "manager-evaluated" || entry.entryType === "manager-error") && (
-                                            <>
-                                                {" — "}
-                                                <Button variant="link" isInline
-                                                    onClick={() => handleViewActivityLog(entry.id)}>
                                                     View Log
                                                 </Button>
                                             </>

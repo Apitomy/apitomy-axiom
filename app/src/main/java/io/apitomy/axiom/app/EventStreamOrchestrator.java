@@ -20,9 +20,6 @@ import io.apitomy.axiom.core.lifecycle.ProjectStatus;
 import io.apitomy.axiom.core.logging.LogContext;
 import io.apitomy.axiom.core.services.WorkspaceService;
 import io.apitomy.axiom.core.tracing.TraceContext;
-import io.apitomy.axiom.manager.ManagerDecision;
-import io.apitomy.axiom.manager.ManagerEvaluationResult;
-import io.apitomy.axiom.manager.ManagerService;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
@@ -37,10 +34,8 @@ import org.jboss.logging.Logger;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -79,9 +74,6 @@ public class EventStreamOrchestrator {
     WorkflowEventDispatcher workflowEventDispatcher;
 
     @Inject
-    ManagerService managerService;
-
-    @Inject
     WorkflowExecutionService workflowExecutionService;
 
     @Inject
@@ -95,9 +87,6 @@ public class EventStreamOrchestrator {
 
     @Inject
     io.apitomy.axiom.core.tracing.TraceService traceService;
-
-    @Inject
-    ManagerTraceRecorder managerTraceRecorder;
 
     /**
      * Maximum routing attempts per ledger entry, the first try included. The entry is
@@ -598,17 +587,13 @@ public class EventStreamOrchestrator {
                            LogContext ruleLog) {
         try {
             RoutingOutcomeEntity outcome = switch (rule.type()) {
-                case RoutingRule.TYPE_MANAGER -> routeToManager(event, ruleLog);
                 case RoutingRule.TYPE_WORKFLOW_DISPATCH ->
                         routeToWorkflowDispatch(event, eventMap, ledgerId);
                 case RoutingRule.TYPE_CREATE_WORKFLOW ->
                         routeToCreateWorkflow(event, rule, ledgerId);
                 case RoutingRule.TYPE_INVOKE_ACTION -> routeToInvokeAction(event, rule, ruleLog);
-                default -> {
-                    LOG.warnf("Unknown routing type '%s' in subscription %d",
-                            rule.type(), sub.id);
-                    yield null;
-                }
+                default -> throw new IllegalStateException(
+                        "Unsupported routing type: " + rule.type());
             };
             if (outcome != null) {
                 outcome.ledgerId = ledgerId;
@@ -618,19 +603,15 @@ public class EventStreamOrchestrator {
                 QuarkusTransaction.requiringNew().run(() -> persistOutcome(outcome));
             }
         } catch (Exception e) {
-            // Record failed outcome (routing types may supply a pre-filled one, e.g.
-            // with the trace ID of the failed Manager evaluation)
+            // Record failed outcome
             QuarkusTransaction.requiringNew().run(() -> {
-                RoutingOutcomeEntity failedOutcome = e instanceof RoutingFailedException rfe
-                        ? rfe.outcome() : new RoutingOutcomeEntity();
+                RoutingOutcomeEntity failedOutcome = new RoutingOutcomeEntity();
                 failedOutcome.ledgerId = ledgerId;
                 failedOutcome.attemptNumber = attempt;
                 failedOutcome.routingType = rule.type();
                 failedOutcome.status = "failed";
-                if (failedOutcome.errorMessage == null) {
-                    failedOutcome.errorMessage = e.getMessage() != null
-                            ? truncate(e.getMessage(), 2000) : "Unknown error";
-                }
+                failedOutcome.errorMessage = e.getMessage() != null
+                        ? truncate(e.getMessage(), 2000) : "Unknown error";
                 failedOutcome.createdOn = Instant.now();
                 persistOutcome(failedOutcome);
             });
@@ -667,173 +648,6 @@ public class EventStreamOrchestrator {
         return item;
     }
 
-    /**
-     * Item type recorded for a Manager decision: a decision below the confidence threshold
-     * is escalated whatever it asked for.
-     */
-    private String decisionItemType(ManagerDecision decision) {
-        if (!managerService.meetsConfidenceThreshold(decision)) {
-            return RoutingOutcomeItemEntity.TYPE_ESCALATED;
-        }
-        return switch (decision.decision() != null ? decision.decision() : "") {
-            case "create_task", "script_action" -> RoutingOutcomeItemEntity.TYPE_TASK;
-            case "ignore" -> RoutingOutcomeItemEntity.TYPE_IGNORED;
-            case "escalate" -> RoutingOutcomeItemEntity.TYPE_ESCALATED;
-            default -> RoutingOutcomeItemEntity.TYPE_DECISION;
-        };
-    }
-
-    private RoutingOutcomeEntity routeToManager(StreamEventEntity event, LogContext ruleLog) {
-        // Trace structure: event-ingested (root) → manager-evaluation → manager-decision
-        // (one per decision) → task (for create_task / script_action decisions)
-        TraceContext traceCtx = managerTraceRecorder.startTrace("manager",
-                "Manager evaluation: " + event.type + " — " + event.ref,
-                "Event: " + event.type + " — " + event.ref, event);
-        if (traceCtx != null) {
-            ruleLog.traceId(traceCtx.traceId());
-        }
-        Long evalNodeId = managerTraceRecorder.addNode(traceCtx, "manager-evaluation",
-                "Manager evaluation: " + event.type);
-
-        RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
-        outcome.status = "completed";
-        if (traceCtx != null) {
-            outcome.traceId = traceCtx.traceId();
-        }
-
-        ManagerEvaluationResult evaluation;
-        try {
-            evaluation = managerService.evaluateStreamEvent(event,
-                    traceCtx != null ? traceCtx.traceId() : null);
-        } catch (RuntimeException e) {
-            throw failManagerRouting(outcome, traceCtx, evalNodeId, null,
-                    "Manager evaluation error: " + e.getMessage(), e);
-        }
-        if (evaluation == null || evaluation.failed()) {
-            String error = evaluation != null && evaluation.errorMessage() != null
-                    ? evaluation.errorMessage() : "Manager evaluation failed";
-            throw failManagerRouting(outcome, traceCtx, evalNodeId,
-                    evaluation != null ? evaluation.activityLogId() : null, error, null);
-        }
-        managerTraceRecorder.completeNode(evalNodeId, "completed", evaluation.activityLogId());
-
-        List<ManagerDecision> decisions = evaluation.decisions();
-        if (decisions.isEmpty()) {
-            LOG.debugf("Manager returned no decisions for stream event %s", event.id);
-            outcome.summary = "No decisions";
-            managerTraceRecorder.completeTrace(traceCtx, "completed");
-            return outcome;
-        }
-
-        // Decision nodes are children of the evaluation node; task nodes are children of
-        // the decision that created them.
-        if (traceCtx != null && evalNodeId != null) {
-            traceCtx.push(evalNodeId);
-        }
-        Set<Long> projectIds = new LinkedHashSet<>();
-        StringBuilder summaryBuilder = new StringBuilder();
-        for (ManagerDecision decision : decisions) {
-            String label = ManagerTraceRecorder.decisionLabel(decision);
-            if (summaryBuilder.length() > 0) summaryBuilder.append("; ");
-            summaryBuilder.append(label);
-
-            Long decisionNodeId = managerTraceRecorder.addNode(traceCtx, "manager-decision",
-                    managerTraceRecorder.decisionNodeSummary(decision));
-            RoutingOutcomeItemEntity item = newItem(decisionItemType(decision), "completed",
-                    label + " — " + decision.reasoning());
-            item.traceNodeId = decisionNodeId;
-            outcome.pendingItems.add(item);
-            if (traceCtx != null && decisionNodeId != null) {
-                traceCtx.push(decisionNodeId);
-            }
-            try {
-                ManagerDecisionResult result = processManagerDecision(event, decision, traceCtx);
-                managerTraceRecorder.completeNode(decisionNodeId, "completed",
-                        result != null ? result.activityLogId() : null);
-                if (result != null) {
-                    item.projectId = result.projectId();
-                    item.taskId = result.taskId();
-                    if (result.projectId() != null) {
-                        projectIds.add(result.projectId());
-                    }
-                    if (outcome.projectId == null && result.projectId() != null) {
-                        outcome.projectId = result.projectId();
-                    }
-                    if (outcome.taskId == null && result.taskId() != null) {
-                        outcome.taskId = result.taskId();
-                    }
-                }
-            } catch (Exception e) {
-                String error = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-                LOG.warnf(e, "Failed to process Manager decision '%s' for event %s",
-                        decision.decision(), event.id);
-                failDecisionNode(traceCtx, decisionNodeId, error);
-                item.status = "failed";
-                item.errorMessage = truncate(error, 2000);
-                summaryBuilder.append(" failed: ").append(error);
-            } finally {
-                if (traceCtx != null && decisionNodeId != null) {
-                    traceCtx.pop();
-                }
-            }
-        }
-        if (traceCtx != null && evalNodeId != null) {
-            traceCtx.pop();
-        }
-        outcome.summary = truncate(summaryBuilder.toString(), 2000);
-
-        if (traceCtx != null && projectIds.size() == 1) {
-            try {
-                traceService.setProjectId(traceCtx.traceId(), projectIds.iterator().next());
-            } catch (Exception e) {
-                LOG.warnf(e, "Failed to set project on trace %s", traceCtx.traceId());
-            }
-        }
-
-        // Tasks created by the Manager share this trace; TaskTraceFinalizer completes it
-        // when the last of them finishes. Only complete it here if no task is open.
-        completeTraceIfNoOpenTasks(traceCtx);
-        return outcome;
-    }
-
-    /**
-     * Records a failed Manager evaluation: fails the evaluation node and the trace, marks
-     * the outcome failed, and returns an exception that makes {@link #routeEvent} persist
-     * this outcome and fail the ledger entry (so it is retried).
-     */
-    private RoutingFailedException failManagerRouting(RoutingOutcomeEntity outcome,
-                                                      TraceContext traceCtx, Long evalNodeId,
-                                                      Long activityLogId, String error,
-                                                      Throwable cause) {
-        LOG.warnf("Manager evaluation failed: %s", error);
-        managerTraceRecorder.failNode(evalNodeId, error, activityLogId);
-        managerTraceRecorder.completeTrace(traceCtx, "failed");
-        outcome.status = "failed";
-        outcome.errorMessage = truncate(error, 2000);
-        outcome.summary = "Manager evaluation failed";
-        return new RoutingFailedException(error, outcome, cause);
-    }
-
-    /**
-     * Fails a decision node with the error, and fails any task node under it that was left
-     * open because the decision's transaction rolled back.
-     */
-    private void failDecisionNode(TraceContext traceCtx, Long decisionNodeId, String error) {
-        if (traceCtx == null || decisionNodeId == null) return;
-        try {
-            traceService.failNode(decisionNodeId, error);
-            List<Long> orphanTaskNodes = QuarkusTransaction.requiringNew().call(() ->
-                    io.apitomy.axiom.core.entities.TraceNodeEntity
-                            .<io.apitomy.axiom.core.entities.TraceNodeEntity>list(
-                                    "parentNodeId = ?1 and nodeType = 'task' and status = 'in-progress'",
-                                    decisionNodeId)
-                            .stream().map(n -> n.id).toList());
-            orphanTaskNodes.forEach(id -> traceService.completeNode(id, "failed"));
-        } catch (Exception e) {
-            LOG.warnf(e, "Failed to record decision failure on trace node %d", decisionNodeId);
-        }
-    }
-
     private static String truncate(String value, int maxLength) {
         if (value == null || value.length() <= maxLength) {
             return value;
@@ -842,166 +656,15 @@ public class EventStreamOrchestrator {
     }
 
     /**
-     * Completes the trace unless it still has in-progress task nodes (which will
-     * complete it when they finish) or has already been completed.
+     * Completes the trace with the given status, logging (not propagating) any failure.
      */
-    private void completeTraceIfNoOpenTasks(TraceContext traceCtx) {
+    private void completeTraceQuietly(TraceContext traceCtx, String status) {
         if (traceCtx == null) return;
         try {
-            boolean hasOpenTasks = QuarkusTransaction.requiringNew().call(() ->
-                    io.apitomy.axiom.core.entities.TraceNodeEntity.count(
-                            "traceId = ?1 and nodeType = 'task' and status = 'in-progress'",
-                            traceCtx.traceId()) > 0);
-            if (hasOpenTasks) {
-                return;
-            }
-            String status = QuarkusTransaction.requiringNew().call(() -> {
-                io.apitomy.axiom.core.entities.TraceEntity trace =
-                        io.apitomy.axiom.core.entities.TraceEntity.findById(traceCtx.traceId());
-                return trace != null ? trace.status : null;
-            });
-            if ("in-progress".equals(status)) {
-                managerTraceRecorder.completeTrace(traceCtx, "completed");
-            }
+            traceService.completeTrace(traceCtx.traceId(), status);
         } catch (Exception e) {
             LOG.warnf(e, "Failed to complete trace %s", traceCtx.traceId());
         }
-    }
-
-    /**
-     * Result of processing a single manager decision, capturing the IDs of any
-     * project/task involved and the activity row written, so they can be recorded
-     * in the routing outcome and on the decision's trace node.
-     */
-    record ManagerDecisionResult(Long projectId, Long taskId, Long activityLogId) {}
-
-    /**
-     * Thrown by a routing type to fail routing while supplying the outcome to persist.
-     */
-    static final class RoutingFailedException extends RuntimeException {
-        private static final long serialVersionUID = 1L;
-        private final transient RoutingOutcomeEntity outcome;
-
-        RoutingFailedException(String message, RoutingOutcomeEntity outcome, Throwable cause) {
-            super(message, cause);
-            this.outcome = outcome;
-        }
-
-        RoutingOutcomeEntity outcome() {
-            return outcome;
-        }
-    }
-
-    private ManagerDecisionResult processManagerDecision(StreamEventEntity event,
-                                                          ManagerDecision decision,
-                                                          TraceContext traceCtx) {
-        // Check confidence threshold — escalate if below
-        if (!managerService.meetsConfidenceThreshold(decision)) {
-            LOG.infof("Decision below confidence threshold (%.2f): %s — escalating",
-                    decision.confidence(), decision.decision());
-            return QuarkusTransaction.requiringNew().call(() ->
-                handleEscalation(event, decision, traceCtx,
-                    "Low confidence (" + String.format("%.0f%%", decision.confidence() * 100)
-                        + "): " + decision.reasoning()));
-        }
-
-        return switch (decision.decision()) {
-            case "create_task", "script_action" -> QuarkusTransaction.requiringNew().call(() ->
-                    handleCreateTask(event, decision, traceCtx));
-            case "ignore" -> QuarkusTransaction.requiringNew().call(() ->
-                    handleIgnore(event, decision, traceCtx));
-            case "escalate" -> QuarkusTransaction.requiringNew().call(() ->
-                    handleEscalation(event, decision, traceCtx, decision.reasoning()));
-            default -> throw new IllegalArgumentException(
-                    "Unknown Manager decision type: " + decision.decision());
-        };
-    }
-
-    private ManagerDecisionResult handleCreateTask(StreamEventEntity event,
-                                                     ManagerDecision decision,
-                                                     TraceContext traceCtx) {
-        ProjectEntity project = findOrCreateProjectForStreamEvent(event,
-                traceCtx != null ? traceCtx.traceId() : null);
-
-        TaskEntity task = new TaskEntity();
-        task.projectId = project.id;
-        task.actionType = decision.actionType();
-        task.createdBy = "manager";
-        task.status = "Pending";
-        task.input = decision.inputContext();
-        task.humanContext = decision.humanContext();
-        task.outputSchema = decision.outputSchema();
-        task.eventId = event.id;
-        task.createdOn = Instant.now();
-        if (traceCtx != null) {
-            task.traceId = traceCtx.traceId();
-        }
-        task.persist();
-
-        // Add a trace node for this task so the task execution is linked to the trace
-        if (traceCtx != null) {
-            try {
-                traceService.addNode(traceCtx, "task", "in-progress",
-                        "Task: " + task.actionType, "task", task.id);
-            } catch (Exception e) {
-                LOG.warnf(e, "Failed to add task trace node for task %d", task.id);
-            }
-        }
-
-        LOG.infof("Manager created task %d (%s) for project %d from stream event %s",
-                task.id, task.actionType, project.id, event.id);
-
-        logActivity(project.id, task.id, event.id, "task-created",
-                "Manager created task: " + task.actionType + " — " + decision.reasoning(),
-                task.traceId);
-        addThreadEntry(project.id, "manager", "decision",
-                "Created task: " + task.actionType + "\n\nReasoning: " + decision.reasoning());
-
-        sseEvents.fire(SseEvent.taskUpdated(project.id, task.id, "Pending"));
-        sseEvents.fire(SseEvent.projectUpdated(project.id));
-        sseEvents.fire(SseEvent.threadEntry(project.id));
-
-        // If the action type is script-based, execute the script immediately
-        // rather than waiting for the task queue to pick it up
-        ActionTypeEntity actionType = ActionTypeEntity.find("name", decision.actionType())
-                .firstResult();
-        if (actionType != null && "script".equals(actionType.executionMode)) {
-            scriptExecutionService.executeScript(task, project);
-        }
-
-        return new ManagerDecisionResult(project.id, task.id, null);
-    }
-
-    private ManagerDecisionResult handleIgnore(StreamEventEntity event, ManagerDecision decision,
-                                               TraceContext traceCtx) {
-        LOG.infof("Manager ignored stream event %s: %s", event.id, decision.reasoning());
-        Long logId = logActivity(null, null, event.id, "event-ignored",
-                "Event ignored: " + event.type + " — " + decision.reasoning(),
-                traceCtx != null ? traceCtx.traceId() : null);
-        return new ManagerDecisionResult(null, null, logId);
-    }
-
-    private ManagerDecisionResult handleEscalation(StreamEventEntity event,
-                                                   ManagerDecision decision,
-                                                   TraceContext traceCtx,
-                                                   String reason) {
-        LOG.infof("Manager escalated stream event %s: %s", event.id, reason);
-        Long logId = logActivity(null, null, event.id, "manager-escalation",
-                "Manager escalation: " + reason,
-                traceCtx != null ? traceCtx.traceId() : null);
-
-        // If we can find a project for this event, add to its thread
-        ProjectEntity project = QuarkusTransaction.requiringNew().call(() ->
-                ProjectEntity.find("ref", event.ref).<ProjectEntity>firstResult());
-        if (project != null) {
-            addThreadEntry(project.id, "manager", "question",
-                    "Escalation: " + reason
-                            + "\n\nThe Manager needs your input on how to handle this event.");
-            sseEvents.fire(SseEvent.threadEntry(project.id));
-        }
-
-        sseEvents.fire(SseEvent.notification("Manager escalation: " + reason, "warning"));
-        return new ManagerDecisionResult(project != null ? project.id : null, null, logId);
     }
 
     /**
@@ -1150,7 +813,7 @@ public class EventStreamOrchestrator {
                     finalTraceCtx);
         } catch (RuntimeException e) {
             // The task was never created, so nothing else will close this trace.
-            managerTraceRecorder.completeTrace(traceCtx, "failed");
+            completeTraceQuietly(traceCtx, "failed");
             throw e;
         }
 

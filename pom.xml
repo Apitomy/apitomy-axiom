@@ -23,7 +23,6 @@
     <modules>
         <module>common/api</module>
         <module>core</module>
-        <module>manager</module>
         <module>agents/spi</module>
         <module>agents/claude-code</module>
         <module>agents/opencode</module>
@@ -79,11 +78,6 @@
             <dependency>
                 <groupId>io.apitomy</groupId>
                 <artifactId>apitomy-axiom-core</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.apitomy</groupId>
-                <artifactId>apitomy-axiom-manager</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

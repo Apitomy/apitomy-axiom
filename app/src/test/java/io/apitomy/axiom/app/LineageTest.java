@@ -89,7 +89,7 @@ class LineageTest {
 
     /**
      * Deletes the rows created by the test, so that tests which pick up "all" events, outcomes or
-     * traces (for example {@code ManagerTracingTest}) do not see them.
+     * traces (for example {@code TraceCorrelationTest}) do not see them.
      */
     @AfterEach
     void cleanup() {
@@ -109,18 +109,18 @@ class LineageTest {
         return id;
     }
 
-    // ── Event → Manager → tasks ─────────────────────────────────────
+    // ── Event → routing trace → tasks ─────────────────────────────────────
 
     @Test
-    void eventToManagerToTwoTasksWithCost() {
+    void eventToRoutingTraceToTwoTasksWithCost() {
         UUID eventId = createEvent();
-        UUID traceId = createTrace("manager", eventId);
+        UUID traceId = createTrace("invoke-action", eventId);
         Long task1 = createTask(traceId, eventId, null);
         Long task2 = createTask(traceId, eventId, null);
-        Long outcomeId = createOutcome(eventId, "manager", traceId);
+        Long outcomeId = createOutcome(eventId, "invoke-action", traceId);
         createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_TASK, task1, null);
         createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_TASK, task2, null);
-        Long ignoredItem = createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_IGNORED, null, null);
+        Long noMatchItem = createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_NO_MATCH, null, null);
         createUsage(null, eventId, traceId, null, null, 0.10);
         createUsage(task1, eventId, traceId, null, null, 0.20);
         createUsage(task1, eventId, traceId, null, null, 0.05);
@@ -134,22 +134,22 @@ class LineageTest {
         assertEquals("root", root.getDirection());
         assertEquals("/events/stream/" + eventId, root.getLinkPath());
         LineageNode trace = node(graph, "trace:" + traceId);
-        assertEquals("manager", trace.getSubtype());
+        assertEquals("invoke-action", trace.getSubtype());
         assertEquals(0.10, trace.getCostUsd(), 0.0001);
         assertEquals("downstream", trace.getDirection());
         assertEquals(0.25, node(graph, "task:" + task1).getCostUsd(), 0.0001);
         assertEquals(0.30, node(graph, "task:" + task2).getCostUsd(), 0.0001);
         assertEquals("/logs/tasks?taskId=" + task1, node(graph, "task:" + task1).getLinkPath());
-        assertEquals("ignored", node(graph, "outcome:" + ignoredItem).getSubtype());
+        assertEquals("no-match", node(graph, "outcome:" + noMatchItem).getSubtype());
         assertEquals(0.65, graph.getTotalCostUsd(), 0.0001);
 
         assertEdge(graph, "event:" + eventId, "trace:" + traceId, "triggered");
         assertEdge(graph, "trace:" + traceId, "task:" + task1, "created");
         assertEdge(graph, "trace:" + traceId, "task:" + task2, "created");
-        assertEdge(graph, "trace:" + traceId, "outcome:" + ignoredItem, "produced");
+        assertEdge(graph, "trace:" + traceId, "outcome:" + noMatchItem, "produced");
         assertEquals(5, graph.getNodes().size());
 
-        // Origin of a task: task ← Manager trace ← event
+        // Origin of a task: task ← routing trace ← event
         LineageGraph up = get("task", task1.toString(), "?direction=upstream");
         assertEquals(3, up.getNodes().size());
         assertEdge(up, "trace:" + traceId, "task:" + task1, "created");
@@ -195,8 +195,8 @@ class LineageTest {
     @Test
     void jobRunAgentTaskUpstreamWalk() {
         UUID eventId = createEvent();
-        UUID managerTrace = createTrace("manager", eventId);
-        Long[] job = createJobRun(managerTrace);
+        UUID routingTrace = createTrace("invoke-action", eventId);
+        Long[] job = createJobRun(routingTrace);
         UUID runTrace = createTrace("scheduled-job-execution", null);
         setJobRunTrace(job[1], runTrace);
         Long rootNode = createTraceNode(runTrace, null, "scheduled-job-run", job[1].toString());
@@ -206,8 +206,8 @@ class LineageTest {
 
         LineageGraph up = get("task", joined.toString(), "?direction=upstream");
         assertEdge(up, "scheduled-job-run:" + job[1], "task:" + joined, "created");
-        assertEdge(up, "trace:" + managerTrace, "scheduled-job-run:" + job[1], "triggered-by-agent");
-        assertEdge(up, "event:" + eventId, "trace:" + managerTrace, "triggered");
+        assertEdge(up, "trace:" + routingTrace, "scheduled-job-run:" + job[1], "triggered-by-agent");
+        assertEdge(up, "event:" + eventId, "trace:" + routingTrace, "triggered");
         LineageNode run = node(up, "scheduled-job-run:" + job[1]);
         assertEquals(1.50, run.getCostUsd(), 0.0001);
         assertEquals("/logs/job-runs?runId=" + job[1], run.getLinkPath());
@@ -218,16 +218,16 @@ class LineageTest {
         assertEdge(down, "scheduled-job-run:" + job[1], "task:" + joined, "created");
         assertEquals(2, down.getNodes().size());
 
-        LineageGraph fromManager = get("trace", managerTrace.toString(), "?direction=downstream");
-        assertEdge(fromManager, "trace:" + managerTrace, "scheduled-job-run:" + job[1],
+        LineageGraph fromRouting = get("trace", routingTrace.toString(), "?direction=downstream");
+        assertEdge(fromRouting, "trace:" + routingTrace, "scheduled-job-run:" + job[1],
                 "triggered-by-agent");
-        assertEdge(fromManager, "scheduled-job-run:" + job[1], "task:" + joined, "created");
+        assertEdge(fromRouting, "scheduled-job-run:" + job[1], "task:" + joined, "created");
     }
 
     @Test
     void taskCreatedByAgentTaskLinksToParentTask() {
         UUID eventId = createEvent();
-        UUID traceId = createTrace("manager", eventId);
+        UUID traceId = createTrace("invoke-action", eventId);
         Long agentTask = createTask(traceId, eventId, null);
         Long agentNode = createTraceNode(traceId, null, "task", agentTask.toString());
         Long child = createTask(traceId, null, null);
@@ -273,7 +273,7 @@ class LineageTest {
     @Test
     void nodeCapTruncates() {
         UUID eventId = createEvent();
-        UUID traceId = createTrace("manager", eventId);
+        UUID traceId = createTrace("invoke-action", eventId);
         for (int i = 0; i < 5; i++) {
             createTask(traceId, eventId, null);
         }
@@ -294,7 +294,7 @@ class LineageTest {
     @Test
     void depthLimitTruncates() {
         UUID eventId = createEvent();
-        UUID traceId = createTrace("manager", eventId);
+        UUID traceId = createTrace("invoke-action", eventId);
         Long task = createTask(traceId, eventId, null);
 
         LineageGraph shallow = get("event", eventId.toString(), "?depth=1");
@@ -316,7 +316,7 @@ class LineageTest {
         UUID runTrace = createTrace("workflow", eventId);
         Long runId = createRun(eventId, runTrace);
         Long task = createTask(runTrace, null, runId);
-        UUID callerTrace = createTrace("manager", null);
+        UUID callerTrace = createTrace("invoke-action", null);
         Long[] job = createJobRun(callerTrace);
         UUID otherEvent = createEvent();
         Long outcomeId = createOutcome(otherEvent, "invoke-action", null);
@@ -380,8 +380,8 @@ class LineageTest {
     @Test
     void maxNodesBoundsTheRowsLoaded() {
         UUID eventId = createEvent();
-        UUID traceId = createTrace("manager", eventId);
-        Long outcomeId = createOutcome(eventId, "manager", traceId);
+        UUID traceId = createTrace("invoke-action", eventId);
+        Long outcomeId = createOutcome(eventId, "invoke-action", traceId);
         for (int i = 0; i < 30; i++) {
             Long task = createTask(traceId, eventId, null);
             createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_TASK, task, null);
@@ -426,7 +426,7 @@ class LineageTest {
     @Test
     void cappedGraphHasNoOrphanNodes() {
         UUID eventId = createEvent();
-        UUID traceId = createTrace("manager", eventId);
+        UUID traceId = createTrace("invoke-action", eventId);
         // The child task has the lower ID, so it is found before the agent task that created it.
         Long child = createTask(traceId, null, null);
         Long agentTask = createTask(traceId, eventId, null);
@@ -448,15 +448,15 @@ class LineageTest {
     @Test
     void edgesBetweenKnownNodesAtTheDepthLimitAreKept() {
         UUID eventId = createEvent();
-        UUID managerTrace = createTrace("manager", eventId);
-        Long[] job = createJobRun(managerTrace);
+        UUID routingTrace = createTrace("invoke-action", eventId);
+        Long[] job = createJobRun(routingTrace);
         UUID runTrace = createTrace("scheduled-job-execution", eventId);
         setJobRunTrace(job[1], runTrace);
 
         LineageGraph graph = get("event", eventId.toString(), "?direction=downstream&depth=1");
-        assertEdge(graph, "event:" + eventId, "trace:" + managerTrace, "triggered");
+        assertEdge(graph, "event:" + eventId, "trace:" + routingTrace, "triggered");
         assertEdge(graph, "event:" + eventId, "scheduled-job-run:" + job[1], "triggered");
-        assertEdge(graph, "trace:" + managerTrace, "scheduled-job-run:" + job[1], "triggered-by-agent");
+        assertEdge(graph, "trace:" + routingTrace, "scheduled-job-run:" + job[1], "triggered-by-agent");
     }
 
     private Statistics statistics() {
@@ -478,8 +478,8 @@ class LineageTest {
 
     private long countQueries(int taskCount) {
         UUID eventId = createEvent();
-        UUID traceId = createTrace("manager", eventId);
-        Long outcomeId = createOutcome(eventId, "manager", traceId);
+        UUID traceId = createTrace("invoke-action", eventId);
+        Long outcomeId = createOutcome(eventId, "invoke-action", traceId);
         for (int i = 0; i < taskCount; i++) {
             Long task = createTask(traceId, eventId, null);
             createItem(outcomeId, RoutingOutcomeItemEntity.TYPE_TASK, task, null);
@@ -581,7 +581,7 @@ class LineageTest {
             TaskEntity task = new TaskEntity();
             task.projectId = projectId;
             task.actionType = "lineage-action";
-            task.createdBy = "manager";
+            task.createdBy = "subscription";
             task.status = "Completed";
             task.traceId = traceId;
             task.eventId = eventId;

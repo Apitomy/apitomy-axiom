@@ -19,9 +19,6 @@ import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.tracing.TraceContext;
 import io.apitomy.axiom.core.tracing.TraceService;
-import io.apitomy.axiom.manager.ManagerDecision;
-import io.apitomy.axiom.manager.ManagerEvaluationResult;
-import io.apitomy.axiom.manager.ManagerService;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -68,9 +65,6 @@ class TraceCorrelationTest {
     @InjectMock
     AgentPool agentPool;
 
-    @InjectMock
-    ManagerService managerService;
-
     @Inject
     TaskExecutionService taskExecutionService;
 
@@ -82,9 +76,6 @@ class TraceCorrelationTest {
 
     @Inject
     WorkflowExecutionService workflowExecutionService;
-
-    @Inject
-    EventStreamOrchestrator orchestrator;
 
     @Inject
     TraceService traceService;
@@ -255,55 +246,6 @@ class TraceCorrelationTest {
                         .firstResult());
         assertNotNull(row);
         assertEquals(run.traceId, row.traceId);
-    }
-
-    // ── Event stream orchestrator ────────────────────────────────────
-
-    @Test
-    void managerIgnoreActivityCarriesRoutingTrace() {
-        Mockito.when(managerService.meetsConfidenceThreshold(ArgumentMatchers.any()))
-                .thenReturn(true);
-        Mockito.when(managerService.evaluateStreamEvent(ArgumentMatchers.any(),
-                        ArgumentMatchers.any()))
-                .thenReturn(ManagerEvaluationResult.success(List.of(new ManagerDecision(
-                        "ignore", null, null, null, 0.9, "not relevant", null, null)), null));
-
-        UUID eventId = UUID.randomUUID();
-        QuarkusTransaction.requiringNew().run(() -> {
-            StreamEventEntity event = new StreamEventEntity();
-            event.id = eventId;
-            event.sourceEventId = "corr-" + eventId;
-            event.source = "github";
-            event.connectionId = "conn-corr";
-            event.type = "issue.created";
-            event.ref = "https://github.com/test-org/test-repo/issues/" + eventId;
-            event.timestamp = Instant.now();
-            event.actor = "{\"login\":\"testuser\"}";
-            event.payload = "{\"issue\":{\"title\":\"Test\",\"state\":\"open\",\"number\":\"1\"}}";
-            event.createdOn = Instant.now();
-            event.persist();
-
-            EventSubscriptionEntity sub = new EventSubscriptionEntity();
-            sub.name = "corr-manager";
-            sub.enabled = true;
-            sub.routing = "[{\"type\":\"manager\"}]";
-            sub.createdOn = Instant.now();
-            sub.modifiedOn = Instant.now();
-            sub.persist();
-        });
-
-        orchestrator.processNewEvents();
-
-        RoutingOutcomeEntity outcome = QuarkusTransaction.requiringNew().call(() ->
-                RoutingOutcomeEntity.<RoutingOutcomeEntity>find("routingType", "manager")
-                        .firstResult());
-        assertNotNull(outcome);
-        assertNotNull(outcome.traceId);
-        ActivityLogEntity row = QuarkusTransaction.requiringNew().call(() ->
-                ActivityLogEntity.<ActivityLogEntity>find(
-                        "eventId = ?1 and entryType = 'event-ignored'", eventId).firstResult());
-        assertNotNull(row);
-        assertEquals(outcome.traceId, row.traceId);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────

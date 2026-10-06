@@ -653,7 +653,7 @@ public class LineageService {
             }
         }
 
-        /** Trace → routing outcome items recorded for the trace (Manager decisions). */
+        /** Trace → routing outcome items recorded for the trace. */
         void expandTraceOutcomes(List<UUID> traceIds, List<Link> links) {
             Map<Long, UUID> outcomeTraces = new HashMap<>();
             query(Object[].class, "select o.id, o.traceId from RoutingOutcomeEntity o where o.traceId in :ids",

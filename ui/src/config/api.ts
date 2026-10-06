@@ -857,29 +857,6 @@ export async function deleteSecret(id: number): Promise<void> {
     if (!response.ok) throw new Error(`Failed to delete secret: ${response.status}`);
 }
 
-// ── Manager Configuration ────────────────────────────────────────
-
-export interface ManagerConfig {
-    systemPrompt?: string;
-    promptTemplate?: string;
-}
-
-export async function fetchManagerConfig(): Promise<ManagerConfig> {
-    const response = await fetch(`${API}/manager/config`);
-    if (!response.ok) throw new Error(`Failed to fetch manager config: ${response.status}`);
-    return response.json();
-}
-
-export async function updateManagerConfig(config: ManagerConfig): Promise<ManagerConfig> {
-    const response = await fetch(`${API}/manager/config`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config),
-    });
-    if (!response.ok) throw new Error(`Failed to update manager config: ${response.status}`);
-    return response.json();
-}
-
 // ── Retention Configuration ─────────────────────────────────────
 
 export interface RetentionConfig {
@@ -2493,7 +2470,7 @@ export async function fetchEventProcessing(eventId: string): Promise<{
 // ── Subscriptions ─────────────────────────────────────────────────
 
 export interface RoutingRule {
-    type: "manager" | "workflow-dispatch" | "create-workflow" | "invoke-action";
+    type: "workflow-dispatch" | "create-workflow" | "invoke-action";
     workflowDefinitionId?: number;
     actionTypeId?: number;
 }

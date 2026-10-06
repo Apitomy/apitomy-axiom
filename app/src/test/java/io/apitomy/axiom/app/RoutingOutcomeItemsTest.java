@@ -8,11 +8,7 @@ import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
-import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
-import io.apitomy.axiom.manager.ManagerDecision;
-import io.apitomy.axiom.manager.ManagerEvaluationResult;
-import io.apitomy.axiom.manager.ManagerService;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -49,9 +45,6 @@ class RoutingOutcomeItemsTest {
     AgentPool agentPool;
 
     @InjectMock
-    ManagerService managerService;
-
-    @InjectMock
     WorkflowExecutionService workflowExecutionService;
 
     @Inject
@@ -67,8 +60,6 @@ class RoutingOutcomeItemsTest {
     void setUp() {
         Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(),
                 ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Optional.empty());
-        Mockito.when(managerService.meetsConfidenceThreshold(ArgumentMatchers.any()))
-                .thenReturn(true);
     }
 
     @AfterEach
@@ -88,61 +79,6 @@ class RoutingOutcomeItemsTest {
         });
         eventIds.clear();
         actionNames.clear();
-    }
-
-    @Test
-    void managerDecisionsProduceOneItemEach() {
-        stubEvaluation(ManagerEvaluationResult.success(List.of(
-                createTask("items-action-a"),
-                createTask("items-action-b"),
-                decision("ignore", "not relevant")), null));
-        UUID eventId = createEventAndSubscription("[{\"type\":\"manager\"}]");
-
-        orchestrator.processNewEvents();
-
-        RoutingOutcomeEntity outcome = singleOutcome("manager");
-        List<RoutingOutcomeItemEntity> items = items(outcome.id);
-        assertEquals(3, items.size());
-        List<TaskEntity> tasks = QuarkusTransaction.requiringNew().call(() ->
-                TaskEntity.<TaskEntity>list("eventId = ?1 order by id", eventId));
-        assertEquals(2, tasks.size());
-
-        for (int i = 0; i < 2; i++) {
-            RoutingOutcomeItemEntity item = items.get(i);
-            TaskEntity task = tasks.get(i);
-            assertEquals(RoutingOutcomeItemEntity.TYPE_TASK, item.itemType);
-            assertEquals("completed", item.status);
-            assertEquals(task.id, item.taskId);
-            assertEquals(task.projectId, item.projectId);
-            assertNotNull(item.traceNodeId);
-            TraceNodeEntity node = QuarkusTransaction.requiringNew().call(() ->
-                    TraceNodeEntity.<TraceNodeEntity>findById(item.traceNodeId));
-            assertEquals("manager-decision", node.nodeType);
-        }
-        RoutingOutcomeItemEntity ignored = items.get(2);
-        assertEquals(RoutingOutcomeItemEntity.TYPE_IGNORED, ignored.itemType);
-        assertEquals("completed", ignored.status);
-        assertNull(ignored.taskId);
-        assertTrue(ignored.summary.contains("not relevant"), ignored.summary);
-
-        // Backward compatibility: the outcome still holds the first project and task
-        assertEquals(tasks.get(0).id, outcome.taskId);
-        assertEquals(tasks.get(0).projectId, outcome.projectId);
-    }
-
-    @Test
-    void failedDecisionProducesFailedItemWithError() {
-        stubEvaluation(ManagerEvaluationResult.success(List.of(
-                decision("bogus_decision", "weird")), null));
-        createEventAndSubscription("[{\"type\":\"manager\"}]");
-
-        orchestrator.processNewEvents();
-
-        RoutingOutcomeItemEntity item = items(singleOutcome("manager").id).get(0);
-        assertEquals("failed", item.status);
-        assertEquals(RoutingOutcomeItemEntity.TYPE_DECISION, item.itemType);
-        assertTrue(item.errorMessage.contains("Unknown Manager decision type"), item.errorMessage);
-        assertNotNull(item.traceNodeId);
     }
 
     @Test
@@ -185,10 +121,9 @@ class RoutingOutcomeItemsTest {
 
     @Test
     void processingApiReturnsItems() {
-        stubEvaluation(ManagerEvaluationResult.success(List.of(
-                createTask("items-action-api"),
-                decision("escalate", "needs a human")), null));
-        UUID eventId = createEventAndSubscription("[{\"type\":\"manager\"}]");
+        Long actionTypeId = createActionType();
+        UUID eventId = createEventAndSubscription(
+                "[{\"type\":\"invoke-action\",\"actionTypeId\":" + actionTypeId + "}]");
 
         orchestrator.processNewEvents();
 
@@ -199,8 +134,8 @@ class RoutingOutcomeItemsTest {
                 .get("/api/v1/stream/events/" + eventId + "/processing")
             .then()
                 .statusCode(200)
-                .body("items[0].outcomes[0].items", hasSize(2))
-                .body("items[0].outcomes[0].items.type", hasItems("task", "escalated"))
+                .body("items[0].outcomes[0].items", hasSize(1))
+                .body("items[0].outcomes[0].items.type", hasItems("task"))
                 .body("items[0].outcomes[0].items[0].taskId", is(task.id.intValue()))
                 .body("items[0].outcomes[0].items[0].projectId", is(task.projectId.intValue()))
                 .body("items[0].outcomes[0].items[0].status", is("completed"));
@@ -240,7 +175,7 @@ class RoutingOutcomeItemsTest {
 
             RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
             outcome.ledgerId = ledger.id;
-            outcome.routingType = "manager";
+            outcome.routingType = "workflow-dispatch";
             outcome.status = "completed";
             outcome.createdOn = Instant.now();
             outcome.persist();
@@ -248,7 +183,7 @@ class RoutingOutcomeItemsTest {
 
             RoutingOutcomeItemEntity item = new RoutingOutcomeItemEntity();
             item.outcomeId = outcome.id;
-            item.itemType = RoutingOutcomeItemEntity.TYPE_IGNORED;
+            item.itemType = RoutingOutcomeItemEntity.TYPE_NO_MATCH;
             item.status = "completed";
             item.createdOn = Instant.now();
             item.persist();
@@ -272,23 +207,25 @@ class RoutingOutcomeItemsTest {
 
     @Test
     void itemsOfAnAttemptStayWithThatAttemptsOutcome() {
-        // Attempt 1: the Manager fails. Attempt 2 (retry): it succeeds with two decisions.
-        stubEvaluation(ManagerEvaluationResult.failure("temporarily broken", null));
-        createEventAndSubscription("[{\"type\":\"manager\"}]");
+        // Attempt 1: workflow creation fails. Attempt 2 (retry): it succeeds with one run.
+        WorkflowRunEntity run = new WorkflowRunEntity();
+        run.id = 987655L;
+        Mockito.when(workflowExecutionService.triggerWorkflow(ArgumentMatchers.anyLong(),
+                ArgumentMatchers.anyLong(), ArgumentMatchers.any(), ArgumentMatchers.any()))
+                .thenThrow(new IllegalStateException("temporarily broken"))
+                .thenReturn(run);
+        createEventAndSubscription("[{\"type\":\"create-workflow\",\"workflowDefinitionId\":42}]");
         orchestrator.processNewEvents();
-        stubEvaluation(ManagerEvaluationResult.success(List.of(
-                decision("ignore", "retry ignore"),
-                decision("escalate", "retry escalate")), null));
         makeDue();
         orchestrator.processNewEvents();
 
         // An entry runs at most once per tick (#422): the first tick records one failed
         // attempt and the second tick's retry succeeds.
-        List<RoutingOutcomeEntity> outcomes = outcomes("manager");
+        List<RoutingOutcomeEntity> outcomes = outcomes("create-workflow");
         assertEquals(2, outcomes.size());
         RoutingOutcomeEntity succeeded = outcomes.get(1);
         assertEquals("completed", succeeded.status);
-        assertEquals(2, items(succeeded.id).size(),
+        assertEquals(1, items(succeeded.id).size(),
                 "Only the successful attempt's results are on its outcome");
         for (RoutingOutcomeEntity failed : outcomes.subList(0, 1)) {
             assertEquals("failed", failed.status);
@@ -298,21 +235,24 @@ class RoutingOutcomeItemsTest {
 
     @Test
     void retriesNeitherDuplicateNorMoveItemsOfCompletedRules() {
-        // The manager rule completes (with items), the invoke-action rule keeps failing.
-        stubEvaluation(ManagerEvaluationResult.success(List.of(
-                decision("ignore", "first"),
-                decision("escalate", "second")), null));
+        // The create-workflow rule completes (with an item), the invoke-action rule keeps failing.
+        WorkflowRunEntity run = new WorkflowRunEntity();
+        run.id = 987656L;
+        Mockito.when(workflowExecutionService.triggerWorkflow(ArgumentMatchers.anyLong(),
+                ArgumentMatchers.anyLong(), ArgumentMatchers.any(), ArgumentMatchers.any()))
+                .thenReturn(run);
         UUID eventId = createEventAndSubscription(
-                "[{\"type\":\"manager\"},{\"type\":\"invoke-action\",\"actionTypeId\":-1}]");
+                "[{\"type\":\"create-workflow\",\"workflowDefinitionId\":42},"
+                        + "{\"type\":\"invoke-action\",\"actionTypeId\":-1}]");
 
         for (int i = 0; i < 5; i++) {
             orchestrator.processNewEvents();
             makeDue();
         }
 
-        assertEquals(1, outcomes("manager").size(), "Completed rule is not replayed");
-        RoutingOutcomeEntity manager = outcomes("manager").get(0);
-        assertEquals(2, items(manager.id).size());
+        assertEquals(1, outcomes("create-workflow").size(), "Completed rule is not replayed");
+        RoutingOutcomeEntity completed = outcomes("create-workflow").get(0);
+        assertEquals(1, items(completed.id).size());
         List<RoutingOutcomeEntity> failed = outcomes("invoke-action");
         assertEquals(3, failed.size(), "Items do not change the attempt count");
         failed.forEach(o -> {
@@ -332,20 +272,6 @@ class RoutingOutcomeItemsTest {
         QuarkusTransaction.requiringNew().run(() -> EventProcessingLedgerEntity.update(
                 "nextAttemptAt = ?1 where nextAttemptAt is not null",
                 Instant.now().minusSeconds(1)));
-    }
-
-    private void stubEvaluation(ManagerEvaluationResult result) {
-        Mockito.when(managerService.evaluateStreamEvent(ArgumentMatchers.any(), ArgumentMatchers.any()))
-                .thenReturn(result);
-    }
-
-    private static ManagerDecision decision(String type, String reasoning) {
-        return new ManagerDecision(type, null, null, null, 0.9, reasoning, null, null);
-    }
-
-    private ManagerDecision createTask(String actionType) {
-        return new ManagerDecision("create_task", actionType, null, "input", 0.9,
-                "needs " + actionType, null, null);
     }
 
     private Long createActionType() {

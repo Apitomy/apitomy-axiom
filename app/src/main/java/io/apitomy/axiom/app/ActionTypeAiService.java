@@ -45,12 +45,12 @@ public class ActionTypeAiService {
             or update the prompt template and allowed tools for action types that are \
             executed by AI agents.
 
-            An action type defines a kind of work that Axiom can perform. When the \
-            Manager AI decides to execute an action type, the prompt template is sent \
+            An action type defines a kind of work that Axiom can perform. When an \
+            action type is executed, the prompt template is sent \
             to an AI agent (Claude Code) that performs the work in a git repository.
 
             The prompt template supports these placeholders (substituted at runtime):
-            - {{managerInput}} — context and instructions from the Manager AI
+            - {{managerInput}} — context and instructions passed to the action
             - {{ref}} — the project reference (e.g. "owner/repo#42" or "CVE-2024-12345")
             - {{repository}} — the repository name (e.g. "owner/repo")
             - {{projectName}} — the project name

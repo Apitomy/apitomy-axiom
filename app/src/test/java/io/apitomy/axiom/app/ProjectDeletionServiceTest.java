@@ -98,7 +98,7 @@ class ProjectDeletionServiceTest {
 
             RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
             outcome.ledgerId = -1L;
-            outcome.routingType = "manager";
+            outcome.routingType = "workflow-dispatch";
             outcome.status = "succeeded";
             outcome.projectId = project.id;
             outcome.taskId = task.id;

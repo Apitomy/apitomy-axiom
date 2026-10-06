@@ -39,7 +39,7 @@ public class ToolAiService {
     @ConfigProperty(name = "axiom.helper-services.engine")
     Optional<String> helperEngine;
 
-    @ConfigProperty(name = "axiom.manager.model")
+    @ConfigProperty(name = "axiom.helper-services.model")
     Optional<String> model;
 
     @ConfigProperty(name = "axiom.ai-assistant.timeout-seconds", defaultValue = "300")

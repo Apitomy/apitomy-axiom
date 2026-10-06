@@ -19,7 +19,6 @@
 
     create sequence event_subscription_SEQ start with 1 increment by 50;
 
-    create sequence manager_config_SEQ start with 1 increment by 50;
 
     create sequence mcp_server_SEQ start with 1 increment by 50;
 
@@ -255,13 +254,6 @@
     create table event_subscription_label (
         event_subscription_id bigint not null,
         label varchar(255) not null
-    );
-
-    create table manager_config (
-        id bigint not null,
-        prompt_template TEXT,
-        system_prompt TEXT,
-        primary key (id)
     );
 
     create table mcp_server (

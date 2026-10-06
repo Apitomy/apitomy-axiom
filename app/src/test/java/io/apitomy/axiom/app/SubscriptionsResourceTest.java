@@ -105,6 +105,26 @@ class SubscriptionsResourceTest {
                 .statusCode(404);
     }
 
+    /**
+     * The AI Manager was removed; a subscription using the {@code manager} routing type must be rejected.
+     */
+    @Test
+    void managerRoutingTypeIsRejected() {
+        given()
+            .contentType(ContentType.JSON)
+            .body("""
+                {
+                    "name": "mgr-sub",
+                    "enabled": true,
+                    "routing": [{"type": "manager"}]
+                }
+                """)
+            .when()
+                .post(SUBSCRIPTIONS_PATH)
+            .then()
+                .statusCode(400);
+    }
+
     @Test
     void testGetSubscriptionNotFound() {
         given()

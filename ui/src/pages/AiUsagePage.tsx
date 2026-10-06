@@ -30,7 +30,6 @@ import { type AiUsage, fetchUsage } from "../config/api";
 
 const TYPE_COLORS: Record<string, "blue" | "green"> = {
     task: "green",
-    manager: "blue",
 };
 
 const MODEL_COLORS = ["blue", "teal", "green", "orange", "purple", "red", "yellow"] as const;

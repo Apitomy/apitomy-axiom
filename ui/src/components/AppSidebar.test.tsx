@@ -15,4 +15,10 @@ describe("AppSidebar", () => {
         renderWithRouter(<AppSidebar />);
         expect(await screen.findByText("Inbox")).toBeInTheDocument();
     });
+
+    it("has no Manager navigation item", async () => {
+        renderWithRouter(<AppSidebar />, "/engine");
+        await screen.findByText("Inbox");
+        expect(screen.queryByText(/manager/i)).not.toBeInTheDocument();
+    });
 });

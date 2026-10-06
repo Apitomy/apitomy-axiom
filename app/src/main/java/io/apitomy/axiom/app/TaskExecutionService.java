@@ -321,7 +321,7 @@ public class TaskExecutionService {
 
         // Extract managerInput and event from task input.
         // For invoke-action routing, task.input is a JSON object with "summary" and "event" fields.
-        // For Manager routing, task.input is the Manager's inputContext string.
+        // Otherwise task.input is a plain context string.
         String managerInput = task.input != null ? task.input : "";
         String eventPayload = "";
         if (task.input != null) {

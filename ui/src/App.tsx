@@ -8,12 +8,10 @@ import { DashboardViewPage } from "./pages/DashboardViewPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { AgentsPage } from "./pages/AgentsPage";
 import { AgentDetailPage } from "./pages/AgentDetailPage";
-import { ManagerConfigPage } from "./pages/ManagerConfigPage";
 import { ActionTypesPage } from "./pages/ActionTypesPage";
 import { ActivityLogPage } from "./pages/ActivityLogPage";
 import { EventDetailPage } from "./pages/EventDetailPage";
 import { EventStreamPage } from "./pages/EventStreamPage";
-import { ManagerDecisionsPage } from "./pages/ManagerDecisionsPage";
 import { TasksPage } from "./pages/TasksPage";
 import { ConnectionsPage } from "./pages/ConnectionsPage";
 import { ProjectDetailPage } from "./pages/ProjectDetailPage";
@@ -130,7 +128,6 @@ export function App() {
                         <Route path="/engine" element={<EngineSettingsPage />} />
                         <Route path="/agents" element={<AgentsPage />} />
                         <Route path="/agents/:agentId" element={<AgentDetailPage />} />
-                        <Route path="/manager" element={<ManagerConfigPage />} />
                         <Route path="/action-types" element={<ActionTypesPage />} />
                         <Route path="/action-types/:actionTypeId" element={<ActionTypeDetailPage />} />
                         <Route path="/tools" element={<ToolsPage />} />
@@ -142,7 +139,6 @@ export function App() {
                         <Route path="/logs/activity" element={<ActivityLogPage />} />
                         <Route path="/events/stream" element={<EventStreamPage />} />
                         <Route path="/events/stream/:eventId" element={<EventDetailPage />} />
-                        <Route path="/logs/manager" element={<ManagerDecisionsPage />} />
                         <Route path="/logs/tasks" element={<TasksPage />} />
                         <Route path="/logs/job-runs" element={<ScheduledJobRunsPage />} />
                         <Route path="/logs/traces" element={<TracesPage />} />

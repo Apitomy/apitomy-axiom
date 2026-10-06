@@ -18,7 +18,7 @@ interface ExecutionLogModalProps {
     projectId?: number | null;
     /** For task logs: the task ID */
     taskId?: number | null;
-    /** For activity log details (e.g. manager evaluations): the activity entry ID */
+    /** For activity log details : the activity entry ID */
     activityId?: number | null;
     /** For report logs: the report ID */
     reportId?: number | null;

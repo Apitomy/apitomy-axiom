@@ -6,11 +6,9 @@ import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import java.util.List;
 import io.apitomy.axiom.core.entities.AgentCapabilityEntity;
 import io.apitomy.axiom.core.entities.AgentEntity;
-import io.apitomy.axiom.core.entities.ManagerConfigEntity;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
 import io.apitomy.axiom.core.entities.SystemConfigEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
-import io.apitomy.axiom.manager.ManagerPromptBuilder;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -59,7 +57,6 @@ public class SeedDataInitializer {
         seedToolsets();
         ensureAxiomSdkToolset();
         seedAgents();
-        seedManagerConfig();
         seedSystemConfig();
         seedRetentionConfig();
     }
@@ -136,20 +133,6 @@ public class SeedDataInitializer {
         agent.persist();
         AgentCapabilityEntity.setCapabilities(agent.id, List.of("*"));
         LOG.infof("Seeded agent: %s (%s)", agent.name, agent.agentType);
-    }
-
-    private void seedManagerConfig() {
-        if (ManagerConfigEntity.count() > 0) {
-            LOG.info("Manager config already exists, skipping seed");
-            return;
-        }
-
-        ManagerConfigEntity config = new ManagerConfigEntity();
-        config.systemPrompt = ManagerPromptBuilder.DEFAULT_SYSTEM_PROMPT;
-        config.promptTemplate = ManagerPromptBuilder.DEFAULT_PROMPT_TEMPLATE;
-        config.persist();
-
-        LOG.info("Seeded default manager configuration");
     }
 
     private void seedRetentionConfig() {

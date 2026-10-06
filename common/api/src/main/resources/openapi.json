@@ -1109,56 +1109,6 @@
         }
       ]
     },
-    "/manager/config": {
-      "get": {
-        "tags": [
-          "Manager"
-        ],
-        "summary": "Get the Manager configuration",
-        "operationId": "getManagerConfig",
-        "responses": {
-          "200": {
-            "description": "The Manager configuration",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ManagerConfig"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "Manager"
-        ],
-        "summary": "Update the Manager configuration",
-        "operationId": "updateManagerConfig",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ManagerConfig"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Configuration updated",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ManagerConfig"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/reports/definitions": {
       "get": {
         "tags": [
@@ -1631,7 +1581,7 @@
           {
             "name": "filterInvocationType",
             "in": "query",
-            "description": "Filter by invocation type (task or manager)",
+            "description": "Filter by invocation type (e.g. task)",
             "schema": {
               "type": "string"
             }
@@ -2022,47 +1972,6 @@
           "schema": {
             "format": "int64",
             "type": "integer"
-          }
-        }
-      ]
-    },
-    "/manager/evaluate/{eventId}": {
-      "post": {
-        "tags": [
-          "Manager"
-        ],
-        "summary": "Evaluate an event with the AI Manager (debug)",
-        "description": "Invokes the AI Manager to evaluate a specific event and return its decisions. The decisions are not acted on (no tasks, routing outcome or ledger entry), but the evaluation is recorded as a manager-dry-run trace linked to the event; its ID is returned in the X-Axiom-Trace-Id header. This is a debug/testing endpoint — in production, events are evaluated automatically via the pipeline.",
-        "operationId": "evaluateEvent",
-        "responses": {
-          "200": {
-            "description": "Manager decisions",
-            "headers": {
-              "X-Axiom-Trace-Id": {
-                "description": "ID of the manager-dry-run trace recording this evaluation. Absent if the trace could not be created.",
-                "schema": {
-                  "type": "string",
-                  "format": "uuid"
-                }
-              }
-            },
-            "content": {
-              "application/json": {}
-            }
-          },
-          "404": {
-            "description": "Event not found"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "name": "eventId",
-          "in": "path",
-          "description": "Stream event ID (UUID) to evaluate",
-          "required": true,
-          "schema": {
-            "type": "string"
           }
         }
       ]
@@ -5949,7 +5858,7 @@
           "Lineage"
         ],
         "summary": "Get the lineage graph of an entity",
-        "description": "Returns the upstream (origin) and downstream (results) graph of work linked to an entity: stream events, Manager evaluations and other traces, workflow runs, tasks, scheduled job runs and reports. Each node carries a status, a UI link and its direct AI cost. Edges always point from the upstream node to the downstream node. The walk is bounded by `depth` (hops in each direction) and `maxNodes`; when either limit cuts the graph short, `truncated` is true. References to rows removed by data retention are returned as nodes with `available` false.",
+        "description": "Returns the upstream (origin) and downstream (results) graph of work linked to an entity: stream events, traces, workflow runs, tasks, scheduled job runs and reports. Each node carries a status, a UI link and its direct AI cost. Edges always point from the upstream node to the downstream node. The walk is bounded by `depth` (hops in each direction) and `maxNodes`; when either limit cuts the graph short, `truncated` is true. References to rows removed by data retention are returned as nodes with `available` false.",
         "operationId": "getLineage",
         "parameters": [
           {
@@ -6511,7 +6420,6 @@
           },
           "createdBy": {
             "enum": [
-              "manager",
               "user",
               "workflow",
               "subscription"
@@ -6868,17 +6776,6 @@
             "items": {
               "$ref": "#/components/schemas/ActionTypeField"
             }
-          }
-        }
-      },
-      "ManagerConfig": {
-        "type": "object",
-        "properties": {
-          "systemPrompt": {
-            "type": "string"
-          },
-          "promptTemplate": {
-            "type": "string"
           }
         }
       },
@@ -7539,7 +7436,6 @@
           },
           "authorType": {
             "enum": [
-              "manager",
               "agent",
               "user",
               "system"
@@ -7565,40 +7461,6 @@
           },
           "createdOn": {
             "format": "date-time",
-            "type": "string"
-          }
-        }
-      },
-      "ManagerDecision": {
-        "required": [
-          "decision",
-          "confidence",
-          "reasoning"
-        ],
-        "type": "object",
-        "properties": {
-          "decision": {
-            "enum": [
-              "create_task",
-              "ignore",
-              "script_action",
-              "escalate"
-            ],
-            "type": "string"
-          },
-          "actionType": {
-            "type": "string"
-          },
-          "agentHint": {
-            "type": "string"
-          },
-          "inputContext": {
-            "type": "string"
-          },
-          "confidence": {
-            "type": "number"
-          },
-          "reasoning": {
             "type": "string"
           }
         }
@@ -10563,7 +10425,7 @@
         "properties": {
           "type": {
             "type": "string",
-            "description": "Routing type that produced this outcome: manager, workflow-dispatch, create-workflow, invoke-action, or processing (a failure outside any routing rule, e.g. building the event context)"
+            "description": "Routing type that produced this outcome: workflow-dispatch, create-workflow, invoke-action, or processing (a failure outside any routing rule, e.g. building the event context)"
           },
           "status": {
             "type": "string",
@@ -10602,7 +10464,7 @@
           },
           "items": {
             "type": "array",
-            "description": "Every result of this outcome (one per Manager decision, task or workflow run). Empty for outcomes recorded before items existed; projectId and taskId then hold the only (first) result.",
+            "description": "Every result of this outcome (one per task or workflow run). Empty for outcomes recorded before items existed; projectId and taskId then hold the only (first) result.",
             "items": {
               "$ref": "#/components/schemas/EventProcessingOutcomeItem"
             }
@@ -10614,7 +10476,7 @@
         "properties": {
           "type": {
             "type": "string",
-            "description": "Kind of result: task, workflow-run, workflow-resumed (a waiting workflow run was resumed), no-match (a workflow-dispatch resumed no run), ignored, escalated, or decision (a Manager decision of an unknown type)"
+            "description": "Kind of result: task, workflow-run, workflow-resumed (a waiting workflow run was resumed), or no-match (a workflow-dispatch resumed no run)"
           },
           "status": {
             "type": "string",
@@ -10647,7 +10509,7 @@
           "traceNodeId": {
             "format": "int64",
             "type": "integer",
-            "description": "Trace node of the Manager decision that produced this result, or (workflow-resumed) the receive-event node the event completed"
+            "description": "Trace node that produced this result: for workflow-resumed, the receive-event node the event completed"
           },
           "traceId": {
             "format": "uuid",
@@ -10677,7 +10539,7 @@
         "properties": {
           "type": {
             "type": "string",
-            "enum": ["manager", "workflow-dispatch", "create-workflow", "invoke-action"],
+            "enum": ["workflow-dispatch", "create-workflow", "invoke-action"],
             "description": "Destination type for matched events"
           },
           "workflowDefinitionId": {
@@ -11084,10 +10946,6 @@
     {
       "name": "Activity",
       "description": "Global activity log"
-    },
-    {
-      "name": "Manager",
-      "description": "AI Manager event evaluation and debugging"
     },
     {
       "name": "Tools",

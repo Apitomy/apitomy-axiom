@@ -792,7 +792,6 @@ function ThreadTab({ entries }: { entries: ThreadEntry[] }) {
     }
 
     const AUTHOR_COLORS: Record<string, "blue" | "green" | "orange" | "grey"> = {
-        manager: "blue",
         agent: "green",
         user: "orange",
         system: "grey",

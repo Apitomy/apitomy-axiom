@@ -254,7 +254,7 @@ class TraceCleanupTest {
 
             RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
             outcome.ledgerId = -1L;
-            outcome.routingType = "manager";
+            outcome.routingType = "workflow-dispatch";
             outcome.status = "succeeded";
             outcome.traceId = traceId;
             outcome.createdOn = Instant.now();

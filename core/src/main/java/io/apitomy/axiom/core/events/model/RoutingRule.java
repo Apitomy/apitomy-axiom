@@ -15,8 +15,6 @@ public record RoutingRule(
         Long workflowDefinitionId,
         Long actionTypeId
 ) {
-    /** Route to the AI Manager for triage. */
-    public static final String TYPE_MANAGER = "manager";
     /** Dispatch to waiting workflow receive-event nodes. */
     public static final String TYPE_WORKFLOW_DISPATCH = "workflow-dispatch";
     /** Start a new workflow instance from a definition. */

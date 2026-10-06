@@ -35,7 +35,7 @@ public class ReportAiService {
     @Inject
     ObjectMapper objectMapper;
 
-    @ConfigProperty(name = "axiom.manager.model")
+    @ConfigProperty(name = "axiom.helper-services.model")
     Optional<String> model;
 
     private static final String SYSTEM_PROMPT = """

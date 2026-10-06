@@ -36,7 +36,7 @@ public class ScriptAiService {
     @ConfigProperty(name = "axiom.helper-services.engine")
     Optional<String> helperEngine;
 
-    @ConfigProperty(name = "axiom.manager.model")
+    @ConfigProperty(name = "axiom.helper-services.model")
     Optional<String> model;
 
     @ConfigProperty(name = "axiom.ai-assistant.timeout-seconds", defaultValue = "300")
@@ -44,11 +44,9 @@ public class ScriptAiService {
 
     private static final String SYSTEM_PROMPT = """
             You are a script editor for Apicurio Axiom. Your job is to create or update \
-            bash script templates for action types that are executed when triggered by the \
-            Axiom Manager.
+            bash script templates for script-mode action types.
 
-            Scripts are bash scripts that run when the Manager decides to execute a \
-            script action type. They support these placeholders which are substituted \
+            Scripts are bash scripts that run when a script action type is executed. They support these placeholders which are substituted \
             at runtime:
             - {{projectId}} — the Axiom project ID
             - {{eventId}} — the event ID that triggered this action
@@ -56,7 +54,7 @@ public class ScriptAiService {
             - {{ref}} — the project reference (e.g. "owner/repo#42" or "CVE-2024-12345")
             - {{repository}} — the repository name (e.g. "owner/repo")
             - {{projectName}} — the project name
-            - {{managerInput}} — context/instructions from the Manager
+            - {{managerInput}} — context/instructions passed to the action
             - {{apiBaseUrl}} — the Axiom REST API base URL (e.g. "http://localhost:9090/api/v1")
 
             Placeholder values are treated as literal data: each {{...}} is passed to the \

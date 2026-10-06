@@ -27,10 +27,6 @@
         </dependency>
         <dependency>
             <groupId>io.apitomy</groupId>
-            <artifactId>apitomy-axiom-manager</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.apitomy</groupId>
             <artifactId>apitomy-axiom-agents-spi</artifactId>
         </dependency>
         <dependency>

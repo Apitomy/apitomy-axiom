@@ -303,10 +303,10 @@ export function InboxPage() {
                             </Split>
                         </div>
 
-                        {/* Manager input (collapsible) */}
+                        {/* Task input (collapsible) */}
                         {selectedItem.input && (
                             <ExpandableSection
-                                toggleText="Manager Input"
+                                toggleText="Input"
                                 style={{ marginBottom: "16px" }}
                             >
                                 <Content>

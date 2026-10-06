@@ -14,7 +14,7 @@ import { sseClient, type AxiomSseEvent } from "../config/sse";
 
 const COMPONENT_PATHS = ["/action-types", "/agents", "/session-templates", "/mcp-servers", "/report-definitions", "/scheduled-jobs", "/secrets", "/tools", "/toolsets", "/components/workflows"];
 const EVENTS_PATHS = ["/events/stream", "/events/connections", "/events/subscriptions"];
-const SETTINGS_PATHS = ["/engine", "/manager", "/data-retention", "/configuration-packs"];
+const SETTINGS_PATHS = ["/engine", "/data-retention", "/configuration-packs"];
 
 export function AppSidebar() {
     const navigate = useNavigate();
@@ -83,9 +83,6 @@ export function AppSidebar() {
                             <NavItem isActive={location.pathname === "/logs/activity"} onClick={() => navigate("/logs/activity")}>
                                 All Activity
                             </NavItem>
-                            <NavItem isActive={location.pathname === "/logs/manager"} onClick={() => navigate("/logs/manager")}>
-                                Manager Decisions
-                            </NavItem>
                             <NavItem isActive={location.pathname === "/logs/tasks"} onClick={() => navigate("/logs/tasks")}>
                                 Tasks
                             </NavItem>
@@ -144,9 +141,6 @@ export function AppSidebar() {
                         <NavExpandable title="Settings" isActive={isSettingsActive} isExpanded={isSettingsActive}>
                             <NavItem isActive={location.pathname.startsWith("/engine")} onClick={() => navigate("/engine")}>
                                 AI Engine
-                            </NavItem>
-                            <NavItem isActive={location.pathname.startsWith("/manager")} onClick={() => navigate("/manager")}>
-                                Manager
                             </NavItem>
                             <NavItem isActive={location.pathname === "/data-retention"} onClick={() => navigate("/data-retention")}>
                                 Data Retention

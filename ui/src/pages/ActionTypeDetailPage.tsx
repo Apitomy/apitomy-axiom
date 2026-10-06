@@ -504,7 +504,7 @@ function InfoTab({ form, updateForm, onEditLabels }: {
                 />
                 <Checkbox
                     id="emitsEvent"
-                    label="Emits internal event on completion — allows the Manager to chain follow-up actions"
+                    label="Emits internal event on completion — allows workflows to react to the completion"
                     isChecked={form.emitsEvent}
                     onChange={(_e, v) => updateForm({ emitsEvent: v })}
                 />

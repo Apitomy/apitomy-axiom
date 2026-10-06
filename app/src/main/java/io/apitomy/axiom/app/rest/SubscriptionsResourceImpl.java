@@ -343,7 +343,9 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
                                     "invoke-action routing rule requires actionTypeId", 400);
                         }
                     }
-                    default -> { /* manager and workflow-dispatch need no extra config */ }
+                    case WORKFLOW_DISPATCH -> { /* needs no extra config */ }
+                    default -> throw new WebApplicationException(
+                            "Unsupported routing type: " + rule.getType(), 400);
                 }
             }
             try {

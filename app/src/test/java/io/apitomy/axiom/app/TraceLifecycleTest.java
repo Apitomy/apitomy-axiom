@@ -144,10 +144,10 @@ class TraceLifecycleTest {
 
     @Test
     void completedTaskClosesTraceOnlyAfterLastTaskNode() {
-        // Two tasks sharing one trace (as a Manager evaluation can produce)
+        // Two tasks sharing one trace (as an invoke-action routing can produce)
         Long projectId = createProject();
-        TraceContext ctx = traceService.createTrace("manager", "multi-task", null, null, null,
-                "manager-evaluation", "root", null, null);
+        TraceContext ctx = traceService.createTrace("invoke-action", "multi-task", null, null, null,
+                "invoke-action", "root", null, null);
         Long first = createTask(projectId, ctx);
         Long second = createTask(projectId, ctx);
 

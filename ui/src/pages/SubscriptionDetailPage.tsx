@@ -836,7 +836,6 @@ function FilterHelpModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
 // ── Routing Tab ────────────────────────────────────────────────────
 
 const ROUTING_TYPES: { value: RoutingRule["type"]; label: string }[] = [
-    { value: "manager", label: "Send to Manager" },
     { value: "workflow-dispatch", label: "Dispatch to Workflows" },
     { value: "create-workflow", label: "Create Workflow" },
     { value: "invoke-action", label: "Invoke Action" },
@@ -855,7 +854,7 @@ function RoutingTab({ routing, setRouting }: {
     }, []);
 
     const addRule = () => {
-        setRouting([...routing, { type: "manager" }]);
+        setRouting([...routing, { type: "workflow-dispatch" }]);
     };
 
     const removeRule = (index: number) => {
@@ -941,7 +940,7 @@ function RoutingTab({ routing, setRouting }: {
                                             testId={`routing-action-${index}`}
                                         />
                                     )}
-                                    {(rule.type === "manager" || rule.type === "workflow-dispatch") && (
+                                    {rule.type === "workflow-dispatch" && (
                                         <HelperText>
                                             <HelperTextItem variant="indeterminate">
                                                 No additional configuration needed.

@@ -20,7 +20,7 @@ import java.util.Set;
  *   <li>Tasks that joined an owner-managed trace ({@link #OWNER_MANAGED_TRACE_TYPES}) never complete
  *       it: the owning service does.</li>
  *   <li>Otherwise the trace is completed only once no other {@code task} node in the trace is still
- *       in progress (a Manager evaluation may create several tasks under one trace). The final status
+ *       in progress (a trace may hold several tasks). The final status
  *       is {@code failed} if any task node in the trace failed.</li>
  *   <li>A trace that is already in a final state is never completed a second time.</li>
  * </ul>

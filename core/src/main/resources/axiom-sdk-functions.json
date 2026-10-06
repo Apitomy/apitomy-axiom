@@ -1,7 +1,7 @@
 [
   {
     "name": "axiom_fire_event",
-    "description": "Fire a new event into Axiom for processing by the Manager.",
+    "description": "Fire a new event into Axiom for processing by event subscriptions and workflows.",
     "parameters": [
       { "name": "source", "type": "string", "description": "Event source type (e.g. 'github', 'jira', 'internal')", "required": true },
       { "name": "eventType", "type": "string", "description": "Event type (e.g. 'issue-created', 'custom')", "required": true },
