@@ -84,7 +84,7 @@ expression, each routing rule executes in order. There are exactly two routing t
 
 | Destination Type | Config Required | What Happens |
 |------------------|-----------------|--------------|
-| `create-workflow` | `workflowDefinitionId` | Finds or auto-creates a Subject from the event's `ref` URL, then starts a new workflow run of the specified definition on that subject, with `subjectId`, `ref`, and `event` in its context. If the subject already has an active (`running` or `waiting`) run of that definition, no run is started or queued: the outcome records a `skipped` `workflow-run` item. |
+| `create-workflow` | `workflowDefinitionId` (or `workflowDefinitionName`, resolved to the id on save) | Finds or auto-creates a Subject from the event's `ref` URL, then starts a new workflow run of the specified definition on that subject, with `subjectId`, `ref`, and `event` in its context. If the subject already has an active (`running` or `waiting`) run of that definition, no run is started or queued: the outcome records a `skipped` `workflow-run` item. |
 | `workflow-dispatch` | None | Broadcasts the event to **every** workflow run parked at a `receive-event` node whose event type and EL expression match (flow engine `matchesEvent`). When the event's `ref` correlates to a subject, delivery is limited to waiting runs on that subject (all of them, across definitions); otherwise all waiting runs with a matching event type are offered the event. |
 
 A subscription with no routing rules matches events silently (useful for previewing

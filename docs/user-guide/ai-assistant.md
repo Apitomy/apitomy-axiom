@@ -355,9 +355,21 @@ action type's allowed tools list automatically.
 
 ### Validation
 
-The assistant receives validation feedback in real time. When a generated item has
-errors, those errors are sent back to Claude as messages, allowing the assistant to
-fix issues automatically without you having to point them out.
+The assistant follows a **validate-before-write** loop. Before it writes a generated item, it checks the
+item with the `axiom_validate_item(type, item)` MCP tool (or the equivalent REST endpoint
+`POST /api/v1/assistant/sessions/{sessionId}/validate`), fixes any reported problems, and only then writes
+the item. The `type` is one of `tool`, `action-type`, `toolset`, `session-template`, `workflow`,
+`event-source`, or `subscription`.
+
+Validation uses exactly the same rules that Axiom applies when you create items through the UI or REST API,
+publish a workflow, or import a configuration pack, so an item that passes validation in the session will
+also pass on Apply. After an item is written, the assistant still receives validation feedback in real
+time: any errors are sent back to Claude as messages, allowing it to fix issues without you having to
+point them out.
+
+The assistant's system prompt includes a generated reference of every item type, its fields, and worked
+examples. These examples are checked by Axiom's test suite, so the patterns the assistant copies are known
+to validate and apply cleanly.
 
 ### Applying Generated Items
 
@@ -365,9 +377,24 @@ Generated items exist only within the session until you apply them. Nothing is s
 to your Axiom configuration until you explicitly click **Apply All** in the session
 header.
 
-Apply All validates all items, then applies them to your Axiom configuration in one
-atomic operation. Items with names matching existing configuration are **updated in
-place**; items with new names are **created**. A summary dialog shows what was applied
+Apply All first validates **every** item in the session. If any item has an error, nothing is written and
+the problems are reported. Otherwise the items are applied to your Axiom configuration in one atomic
+operation, in dependency order: tools, toolsets, action types, session templates, workflows, event
+sources, and finally subscriptions. If anything fails part-way, the whole operation is rolled back.
+
+During Apply:
+
+- Items with names matching existing configuration are **updated in place**; items with new names are
+  **created**.
+- Workflows are **published**, so they can be started immediately. A workflow whose definition is unchanged
+  from its latest published version is not re-published.
+- Subscription routing rules of type `create-workflow` may reference a workflow by name using
+  `workflowDefinitionName` instead of `workflowDefinitionId`. The name is resolved to the workflow's id, so
+  a subscription can target a workflow created in the same session.
+- Event sources and subscriptions created by the assistant are **disabled** (`enabled: false`) by default.
+  Review them and enable them on their detail pages when you are ready for events to flow.
+
+A summary dialog shows what was applied
 with a breakdown of created and updated counts (e.g., "2 tool(s) created, 1 tool(s)
 updated"). After applying, the session ends and you are returned to the sessions list.
 
