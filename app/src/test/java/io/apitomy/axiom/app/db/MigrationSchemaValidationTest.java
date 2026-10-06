@@ -22,7 +22,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
-import org.flywaydb.core.api.configuration.FluentConfiguration;
 import org.hibernate.SessionFactory;
 import org.hibernate.boot.Metadata;
 import org.hibernate.boot.MetadataSources;
@@ -64,7 +63,7 @@ class MigrationSchemaValidationTest {
     @BeforeAll
     static void migrateAndScan() throws Exception {
         url = "jdbc:h2:mem:migration-guard-" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1";
-        flyway(url, null).migrate();
+        flyway(url).migrate();
         entities = findEntityClasses();
         assertFalse(entities.isEmpty(), "No @Entity classes found in the core Jandex index");
     }
@@ -129,17 +128,13 @@ class MigrationSchemaValidationTest {
      * Creates a Flyway instance for all migrations in {@code db/migration}.
      *
      * @param jdbcUrl the JDBC URL
-     * @param target the target version, or {@code null} for latest
      * @return the Flyway instance
      */
-    private static Flyway flyway(String jdbcUrl, String target) {
-        FluentConfiguration config = Flyway.configure()
+    private static Flyway flyway(String jdbcUrl) {
+        return Flyway.configure()
                 .dataSource(jdbcUrl, "sa", "")
-                .locations("classpath:db/migration");
-        if (target != null) {
-            config.target(target);
-        }
-        return config.load();
+                .locations("classpath:db/migration")
+                .load();
     }
 
     /**

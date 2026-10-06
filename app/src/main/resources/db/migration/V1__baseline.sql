@@ -74,13 +74,13 @@
     create sequence workflow_wait_SEQ start with 1 increment by 50;
 
     create table action_type (
-        emits_event boolean not null,
-        manager_triggerable boolean not null,
+        emits_event boolean default false not null,
+        manager_triggerable boolean default true not null,
         max_budget_usd float(53),
         max_steps integer,
         timeout_seconds integer,
-        user_triggerable boolean not null,
-        workflow_enabled boolean not null,
+        user_triggerable boolean default false not null,
+        workflow_enabled boolean default false not null,
         id bigint not null,
         allowed_tools TEXT,
         description TEXT,
@@ -96,7 +96,7 @@
 
     create table action_type_input (
         ordinal integer not null check ((ordinal>=0)),
-        required boolean not null,
+        required boolean default false not null,
         action_type_id bigint not null,
         description TEXT,
         name varchar(255) not null,
@@ -106,12 +106,12 @@
 
     create table action_type_label (
         action_type_id bigint not null,
-        label varchar(255)
+        label varchar(255) not null
     );
 
     create table action_type_output (
         ordinal integer not null check ((ordinal>=0)),
-        required boolean not null,
+        required boolean default false not null,
         action_type_id bigint not null,
         description TEXT,
         name varchar(255) not null,
@@ -120,7 +120,7 @@
     );
 
     create table activity_log (
-        created_on timestamp(6) with time zone not null,
+        created_on timestamp(6) not null,
         id bigint not null,
         project_id bigint,
         report_definition_id bigint,
@@ -136,7 +136,7 @@
     );
 
     create table agent (
-        enabled boolean not null,
+        enabled boolean default true not null,
         id bigint not null,
         agent_type varchar(255) not null,
         configuration TEXT,
@@ -154,16 +154,16 @@
     create table agent_lease (
         agent_id bigint not null,
         id bigint not null,
-        leased_at timestamp(6) with time zone not null,
+        leased_at timestamp(6) not null,
         work_id bigint not null,
-        work_type varchar(255) not null,
+        work_type varchar(32) not null,
         primary key (id)
     );
 
     create table ai_usage (
         cost_usd float(53),
         agent_id bigint,
-        created_on timestamp(6) with time zone not null,
+        created_on timestamp(6) not null,
         duration_ms bigint,
         id bigint not null,
         input_tokens bigint,
@@ -183,7 +183,7 @@
 
     create table connection_poll_log (
         events_ingested integer,
-        created_on timestamp(6) with time zone not null,
+        created_on timestamp(6) not null,
         duration_ms bigint,
         id bigint not null,
         status varchar(16) not null,
@@ -194,10 +194,10 @@
     );
 
     create table dashboard (
-        is_default boolean,
-        created_on timestamp(6) with time zone not null,
+        is_default boolean default false,
+        created_on timestamp(6) not null,
         id bigint not null,
-        updated_on timestamp(6) with time zone not null,
+        updated_on timestamp(6) not null,
         description TEXT,
         name varchar(255) not null,
         tabs TEXT,
@@ -206,16 +206,16 @@
 
     create table dashboard_label (
         dashboard_id bigint not null,
-        label varchar(255)
+        label varchar(255) not null
     );
 
     create table event_processing_ledger (
-        attempt_count integer not null,
-        created_on timestamp(6) with time zone not null,
+        attempt_count integer default 0 not null,
+        created_on timestamp(6) not null,
         id bigint not null,
-        last_attempt_at timestamp(6) with time zone,
-        next_attempt_at timestamp(6) with time zone,
-        processed_on timestamp(6) with time zone,
+        last_attempt_at timestamp(6),
+        next_attempt_at timestamp(6),
+        processed_on timestamp(6),
         subscription_id bigint not null,
         event_id uuid not null,
         status varchar(32) not null,
@@ -224,11 +224,11 @@
     );
 
     create table event_source_connection (
-        enabled boolean not null,
+        enabled boolean default true not null,
         poll_interval integer,
-        created_on timestamp(6) with time zone not null,
-        last_polled_at timestamp(6) with time zone,
-        modified_on timestamp(6) with time zone not null,
+        created_on timestamp(6) not null,
+        last_polled_at timestamp(6),
+        modified_on timestamp(6) not null,
         source_type varchar(32) not null,
         id varchar(63) not null,
         base_url varchar(1024) not null,
@@ -240,11 +240,11 @@
     );
 
     create table event_subscription (
-        enabled boolean not null,
-        created_on timestamp(6) with time zone not null,
+        enabled boolean default true not null,
+        created_on timestamp(6) not null,
         id bigint not null,
-        modified_on timestamp(6) with time zone not null,
-        process_events_from timestamp(6) with time zone,
+        modified_on timestamp(6) not null,
+        process_events_from timestamp(6),
         description TEXT,
         filters TEXT,
         name varchar(255) not null,
@@ -254,7 +254,7 @@
 
     create table event_subscription_label (
         event_subscription_id bigint not null,
-        label varchar(255)
+        label varchar(255) not null
     );
 
     create table manager_config (
@@ -276,10 +276,10 @@
     );
 
     create table project (
-        created_on timestamp(6) with time zone not null,
+        created_on timestamp(6) not null,
         disk_usage_bytes bigint,
         id bigint not null,
-        updated_on timestamp(6) with time zone not null,
+        updated_on timestamp(6) not null,
         body TEXT,
         metadata TEXT,
         name varchar(255) not null,
@@ -293,24 +293,24 @@
 
     create table project_label (
         project_id bigint not null,
-        label varchar(255)
+        label varchar(255) not null
     );
 
     create table report (
         cost_usd float(53),
-        completed_on timestamp(6) with time zone,
+        completed_on timestamp(6),
         config_version_id bigint,
-        created_on timestamp(6) with time zone not null,
+        created_on timestamp(6) not null,
         definition_id bigint not null,
         duration_ms bigint,
         id bigint not null,
-        time_range_end timestamp(6) with time zone,
-        time_range_start timestamp(6) with time zone,
+        time_range_end timestamp(6),
+        time_range_start timestamp(6),
         trace_id uuid,
         triggered_by_trace_id uuid,
         content TEXT,
         execution_log TEXT,
-        report_trigger varchar(255),
+        report_trigger varchar(32),
         status varchar(255) not null,
         title varchar(255),
         triggered_by varchar(255),
@@ -318,15 +318,15 @@
     );
 
     create table report_definition (
-        enabled boolean not null,
+        enabled boolean default false not null,
         max_budget_usd float(53),
         max_steps integer,
         timeout_seconds integer,
-        created_on timestamp(6) with time zone not null,
+        created_on timestamp(6) not null,
         id bigint not null,
-        last_run_at timestamp(6) with time zone,
-        next_run_at timestamp(6) with time zone,
-        updated_on timestamp(6) with time zone not null,
+        last_run_at timestamp(6),
+        next_run_at timestamp(6),
+        updated_on timestamp(6) not null,
         allowed_tools TEXT,
         description TEXT,
         engine varchar(255),
@@ -335,7 +335,7 @@
         name varchar(255) not null,
         prompt_template TEXT not null,
         schedule varchar(255) not null,
-        schedule_day_of_week varchar(255),
+        schedule_day_of_week varchar(10),
         schedule_time varchar(255),
         slug varchar(255),
         time_window varchar(255),
@@ -345,11 +345,11 @@
 
     create table report_definition_initial_label (
         report_definition_id bigint not null,
-        label varchar(255)
+        label varchar(255) not null
     );
 
     create table report_definition_version (
-        created_on timestamp(6) with time zone not null,
+        created_on timestamp(6) not null,
         definition_id bigint not null,
         id bigint not null,
         config_hash varchar(64) not null,
@@ -360,25 +360,25 @@
 
     create table report_label (
         report_id bigint not null,
-        label varchar(255)
+        label varchar(255) not null
     );
 
     create table retention_config (
-        activity_log_retention_days integer not null,
-        ai_usage_retention_days integer not null,
-        closed_project_retention_days integer not null,
-        event_retention_days integer not null,
-        report_retention_days integer not null,
-        scheduled_job_run_retention_days integer not null,
-        trace_retention_days integer not null,
-        workflow_run_retention_days integer not null,
+        activity_log_retention_days integer default 0 not null,
+        ai_usage_retention_days integer default 0 not null,
+        closed_project_retention_days integer default 90 not null,
+        event_retention_days integer default 90 not null,
+        report_retention_days integer default 0 not null,
+        scheduled_job_run_retention_days integer default 0 not null,
+        trace_retention_days integer default 30 not null,
+        workflow_run_retention_days integer default 0 not null,
         id bigint not null,
         primary key (id)
     );
 
     create table routing_outcome (
         attempt_number integer,
-        created_on timestamp(6) with time zone not null,
+        created_on timestamp(6) not null,
         id bigint not null,
         ledger_id bigint not null,
         project_id bigint,
@@ -392,7 +392,7 @@
     );
 
     create table routing_outcome_item (
-        created_on timestamp(6) with time zone not null,
+        created_on timestamp(6) not null,
         id bigint not null,
         outcome_id bigint not null,
         project_id bigint,
@@ -407,26 +407,26 @@
     );
 
     create table scheduled_job (
-        enabled boolean not null,
+        enabled boolean default false not null,
         max_budget_usd float(53),
         max_steps integer,
         timeout_seconds integer,
-        created_on timestamp(6) with time zone not null,
+        created_on timestamp(6) not null,
         id bigint not null,
-        last_run_at timestamp(6) with time zone,
-        next_run_at timestamp(6) with time zone,
-        updated_on timestamp(6) with time zone not null,
+        last_run_at timestamp(6),
+        next_run_at timestamp(6),
+        updated_on timestamp(6) not null,
         allowed_tools TEXT,
         description TEXT,
         engine varchar(255),
         environment TEXT,
-        execution_mode varchar(255) not null,
+        execution_mode varchar(20) not null,
         model varchar(255),
         name varchar(255) not null unique,
         prompt_template TEXT,
-        schedule varchar(255) not null,
-        schedule_day_of_week varchar(255),
-        schedule_time varchar(255),
+        schedule varchar(50) not null,
+        schedule_day_of_week varchar(20),
+        schedule_time varchar(10),
         script_template TEXT,
         slug varchar(255),
         primary key (id)
@@ -434,31 +434,31 @@
 
     create table scheduled_job_label (
         scheduled_job_id bigint not null,
-        label varchar(255)
+        label varchar(255) not null
     );
 
     create table scheduled_job_run (
         cost_usd float(53),
-        completed_at timestamp(6) with time zone,
+        completed_at timestamp(6),
         config_version_id bigint,
-        created_on timestamp(6) with time zone not null,
+        created_on timestamp(6) not null,
         duration_ms bigint,
         id bigint not null,
         job_id bigint not null,
-        started_at timestamp(6) with time zone,
+        started_at timestamp(6),
         trace_id uuid,
         triggered_by_trace_id uuid,
         error TEXT,
         execution_log TEXT,
         output TEXT,
-        run_trigger varchar(255) not null,
-        status varchar(255) not null,
+        run_trigger varchar(20) default 'scheduled' not null,
+        status varchar(20) not null,
         triggered_by varchar(255),
         primary key (id)
     );
 
     create table scheduled_job_version (
-        created_on timestamp(6) with time zone not null,
+        created_on timestamp(6) not null,
         id bigint not null,
         job_id bigint not null,
         config_hash varchar(64) not null,
@@ -482,7 +482,7 @@
         engine varchar(255),
         environment TEXT,
         init_script TEXT,
-        init_script_type varchar(255),
+        init_script_type varchar(10),
         initial_message TEXT,
         model varchar(255),
         name varchar(255) not null,
@@ -494,17 +494,17 @@
 
     create table session_template_allowed_tool (
         session_template_id bigint not null,
-        tool_pattern varchar(255)
+        tool_pattern varchar(255) not null
     );
 
     create table session_template_mcp_server (
         session_template_id bigint not null,
-        mcp_server_name varchar(255)
+        mcp_server_name varchar(255) not null
     );
 
     create table stream_event (
-        created_on timestamp(6) with time zone not null,
-        timestamp timestamp(6) with time zone not null,
+        created_on timestamp(6) not null,
+        timestamp timestamp(6) not null,
         id uuid not null,
         source varchar(32) not null,
         connection_id varchar(63) not null,
@@ -525,8 +525,8 @@
 
     create table task (
         assigned_agent bigint,
-        completed_on timestamp(6) with time zone,
-        created_on timestamp(6) with time zone not null,
+        completed_on timestamp(6),
+        created_on timestamp(6) not null,
         id bigint not null,
         project_id bigint not null,
         workflow_run_id bigint,
@@ -546,7 +546,7 @@
     );
 
     create table thread_entry (
-        created_on timestamp(6) with time zone not null,
+        created_on timestamp(6) not null,
         id bigint not null,
         project_id bigint not null,
         author_id varchar(255),
@@ -566,11 +566,11 @@
     );
 
     create table tool_execution (
-        created_on timestamp(6) with time zone not null,
+        created_on timestamp(6) not null,
         duration_ms bigint,
         id bigint not null,
         trace_id uuid not null,
-        status varchar(255) not null,
+        status varchar(32) not null,
         tool_input TEXT,
         tool_name varchar(255) not null,
         tool_output TEXT,
@@ -579,7 +579,7 @@
 
     create table tool_label (
         tool_id bigint not null,
-        label varchar(255)
+        label varchar(255) not null
     );
 
     create table toolset (
@@ -591,38 +591,38 @@
     );
 
     create table trace (
-        completed_on timestamp(6) with time zone,
+        completed_on timestamp(6),
         project_id bigint,
         report_id bigint,
-        started_on timestamp(6) with time zone not null,
+        started_on timestamp(6) not null,
         event_id uuid,
         trace_id uuid not null,
         summary varchar(1024) not null,
-        status varchar(255) not null,
-        trace_type varchar(255) not null,
+        status varchar(32) not null,
+        trace_type varchar(64) not null,
         primary key (trace_id)
     );
 
     create table trace_node (
-        completed_on timestamp(6) with time zone,
+        completed_on timestamp(6),
         duration_ms bigint,
         id bigint not null,
         parent_node_id bigint,
-        started_on timestamp(6) with time zone not null,
+        started_on timestamp(6) not null,
         trace_id uuid not null,
         summary varchar(1024) not null,
-        entity_id varchar(255),
-        entity_type varchar(255),
-        node_type varchar(255) not null,
-        status varchar(255) not null,
+        entity_id varchar(64),
+        entity_type varchar(64),
+        node_type varchar(64) not null,
+        status varchar(32) not null,
         primary key (id)
     );
 
     create table workflow_definition (
         current_version integer,
-        created_on timestamp(6) with time zone not null,
+        created_on timestamp(6) not null,
         id bigint not null,
-        updated_on timestamp(6) with time zone not null,
+        updated_on timestamp(6) not null,
         content TEXT,
         description TEXT,
         name varchar(255) not null unique,
@@ -631,7 +631,7 @@
 
     create table workflow_definition_version (
         version integer not null,
-        created_on timestamp(6) with time zone not null,
+        created_on timestamp(6) not null,
         definition_id bigint not null,
         id bigint not null,
         content TEXT not null,
@@ -640,7 +640,7 @@
     );
 
     create table workflow_event_subscription (
-        created_on timestamp(6) with time zone not null,
+        created_on timestamp(6) not null,
         id bigint not null,
         project_id bigint not null,
         run_id bigint not null,
@@ -651,11 +651,11 @@
 
     create table workflow_run (
         definition_version integer not null,
-        completed_on timestamp(6) with time zone,
+        completed_on timestamp(6),
         definition_id bigint not null,
         id bigint not null,
         project_id bigint not null,
-        started_on timestamp(6) with time zone not null,
+        started_on timestamp(6) not null,
         trigger_ledger_id bigint,
         trace_id uuid,
         trigger_event_id uuid,
@@ -669,7 +669,7 @@
     create table workflow_run_resume (
         id bigint not null,
         ledger_id bigint,
-        resumed_on timestamp(6) with time zone not null,
+        resumed_on timestamp(6) not null,
         run_id bigint not null,
         trace_node_id bigint,
         event_id uuid not null,
@@ -678,9 +678,9 @@
     );
 
     create table workflow_wait (
-        created_on timestamp(6) with time zone not null,
+        created_on timestamp(6) not null,
         id bigint not null,
-        resume_at timestamp(6) with time zone not null,
+        resume_at timestamp(6) not null,
         run_id bigint not null,
         node_id varchar(255) not null,
         primary key (id)
@@ -692,62 +692,62 @@
     alter table if exists action_type_input 
        add constraint FKqmrreg4chic3yr3gln41cvh86 
        foreign key (action_type_id) 
-       references action_type;
+       references action_type on delete cascade;
 
     alter table if exists action_type_label 
        add constraint FK48nf227an9jy5uti43i82ll9e 
        foreign key (action_type_id) 
-       references action_type;
+       references action_type on delete cascade;
 
     alter table if exists action_type_output 
        add constraint FKnddoibhk1dliddnf4u0a1am1m 
        foreign key (action_type_id) 
-       references action_type;
+       references action_type on delete cascade;
 
     alter table if exists dashboard_label 
        add constraint FKnlao8on34p68quap260sajq2x 
        foreign key (dashboard_id) 
-       references dashboard;
+       references dashboard on delete cascade;
 
     alter table if exists event_subscription_label 
        add constraint FKr5w2dcekh4ir1adnjcrldr2r7 
        foreign key (event_subscription_id) 
-       references event_subscription;
+       references event_subscription on delete cascade;
 
     alter table if exists project_label 
        add constraint FK7ojjun8a14mrbws62ha0tbdou 
        foreign key (project_id) 
-       references project;
+       references project on delete cascade;
 
     alter table if exists report_definition_initial_label 
        add constraint FKrt7xooecttchflv6rpgs9a9u7 
        foreign key (report_definition_id) 
-       references report_definition;
+       references report_definition on delete cascade;
 
     alter table if exists report_label 
        add constraint FKh2wq33qdvra6t4anv9941s147 
        foreign key (report_id) 
-       references report;
+       references report on delete cascade;
 
     alter table if exists scheduled_job_label 
        add constraint FKg320v4be9jgfatfqcivv7t956 
        foreign key (scheduled_job_id) 
-       references scheduled_job;
+       references scheduled_job on delete cascade;
 
     alter table if exists session_template_allowed_tool 
        add constraint FK3rcvftv3im5ore04s9lwclws2 
        foreign key (session_template_id) 
-       references session_template;
+       references session_template on delete cascade;
 
     alter table if exists session_template_mcp_server 
        add constraint FKjke6h164shgwdwndfpwoqsho1 
        foreign key (session_template_id) 
-       references session_template;
+       references session_template on delete cascade;
 
     alter table if exists tool_label 
        add constraint FKbwyc8afriwo5cydrv7c1hojs4 
        foreign key (tool_id) 
-       references tool_definition;
+       references tool_definition on delete cascade;
 
 -- Indexes not declared in the entity model
 CREATE INDEX idx_action_type_label ON action_type_label (label, action_type_id);
@@ -819,3 +819,41 @@ CREATE INDEX idx_wf_run_resume_run ON workflow_run_resume (run_id);
 CREATE INDEX idx_wrr_trace_node ON workflow_run_resume (trace_node_id);
 CREATE INDEX idx_workflow_wait_resume_at ON workflow_wait (resume_at);
 CREATE INDEX idx_workflow_wait_run ON workflow_wait (run_id);
+
+-- Constraints not declared in the entity model
+alter table agent_capability add foreign key (agent_id) references agent (id) on delete cascade;
+alter table agent_lease add foreign key (agent_id) references agent (id);
+alter table connection_poll_log add foreign key (connection_id) references event_source_connection (id) on delete cascade;
+alter table event_processing_ledger add foreign key (event_id) references stream_event (id);
+alter table event_processing_ledger add foreign key (subscription_id) references event_subscription (id) on delete cascade;
+alter table report add foreign key (config_version_id) references report_definition_version (id) on delete set null;
+alter table report_definition_version add foreign key (definition_id) references report_definition (id) on delete cascade;
+alter table routing_outcome add foreign key (ledger_id) references event_processing_ledger (id) on delete cascade;
+alter table routing_outcome_item add foreign key (outcome_id) references routing_outcome (id) on delete cascade;
+alter table scheduled_job_run add foreign key (config_version_id) references scheduled_job_version (id) on delete set null;
+alter table scheduled_job_run add foreign key (job_id) references scheduled_job (id) on delete cascade;
+alter table scheduled_job_version add foreign key (job_id) references scheduled_job (id) on delete cascade;
+alter table stream_event add foreign key (connection_id) references event_source_connection (id);
+alter table task add foreign key (workflow_run_id) references workflow_run (id);
+alter table tool_execution add foreign key (trace_id) references trace (trace_id) on delete cascade;
+alter table trace_node add foreign key (parent_node_id) references trace_node (id) on delete set null;
+alter table trace_node add foreign key (trace_id) references trace (trace_id) on delete cascade;
+alter table workflow_definition_version add foreign key (definition_id) references workflow_definition (id) on delete cascade;
+alter table workflow_event_subscription add foreign key (run_id) references workflow_run (id);
+alter table workflow_run add foreign key (definition_id) references workflow_definition (id);
+alter table workflow_run add foreign key (project_id) references project (id);
+alter table workflow_run_resume add foreign key (run_id) references workflow_run (id) on delete cascade;
+alter table workflow_wait add foreign key (run_id) references workflow_run (id);
+alter table action_type_label add unique (action_type_id, label);
+alter table dashboard_label add unique (dashboard_id, label);
+alter table event_processing_ledger add unique (event_id, subscription_id);
+alter table event_subscription_label add unique (event_subscription_id, label);
+alter table project_label add unique (project_id, label);
+alter table report_definition add unique (slug);
+alter table report_definition_initial_label add unique (report_definition_id, label);
+alter table report_label add unique (report_id, label);
+alter table scheduled_job add unique (slug);
+alter table scheduled_job_label add unique (scheduled_job_id, label);
+alter table session_template_allowed_tool add unique (session_template_id, tool_pattern);
+alter table session_template_mcp_server add unique (session_template_id, mcp_server_name);
+alter table tool_label add unique (tool_id, label);
