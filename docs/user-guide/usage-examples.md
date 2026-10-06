@@ -27,7 +27,7 @@ these three tools, ensuring it can read issue details and apply labels but nothi
 | Item | Purpose |
 |------|---------|
 | Secret | GitHub API token for authentication |
-| Connection | Polls a GitHub repository for new activity |
+| Event Source | Polls a GitHub repository for new activity |
 | 3 Tools | Fetch labels, fetch issue details, apply labels |
 | Action Type | Defines the auto-labeling behavior and prompt |
 | Workflow | Runs the action type on the issue's subject |
@@ -47,9 +47,9 @@ Navigate to **Components > Secrets** and add a secret:
 This token is encrypted at rest and injected as an environment variable into AI agent
 subprocesses, where the `gh` CLI picks it up automatically.
 
-### Step 2: Add a Connection
+### Step 2: Add an Event Source
 
-Navigate to **Event Sources** and click **Add Connection**:
+Navigate to **Event Sources** and click **Add Event Source**:
 
 | Field | Value |
 |-------|-------|
@@ -250,7 +250,7 @@ capability this task will request. See
 ### How It Works End to End
 
 1. Someone opens a new issue on the monitored repository
-2. The Connection detects the new issue on its next poll and records it in the event
+2. The Event Source detects the new issue on its next poll and records it in the event
    stream
 3. The Subscription's filter matches the `issue.created` event, and its `create-workflow` rule finds or
    creates a subject for the issue's URL and starts an `Auto-Label New Issues` run on it

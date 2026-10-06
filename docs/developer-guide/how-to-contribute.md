@@ -83,7 +83,7 @@ Use conventional commits:
 Examples:
 
 ```
-feat: add Jira connection polling
+feat: add Jira event source polling
 fix: resolve timeout in Claude Code subprocess
 docs: add extending-axiom developer guide
 ```

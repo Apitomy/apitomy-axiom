@@ -16,7 +16,7 @@ validated against the Start node's declared inputs.
 | `subjectName` | string | never populated automatically (see below)         | no — must be optional |
 | `repository`  | string | never populated automatically (see below)         | no — must be optional |
 
-`event` is populated with the triggering event's envelope (`type`, `source`, `connectionId`, `ref`,
+`event` is populated with the triggering event's envelope (`type`, `source`, `eventSourceId`, `ref`,
 `timestamp`, `actor`, `payload`) only when the workflow instance was started by a subscription's
 `create-workflow` routing rule. Runs started manually (from the subject detail page's "Run Workflow"
 dialog) or by a schedule trigger do not populate `event`.

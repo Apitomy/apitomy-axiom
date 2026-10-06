@@ -7,7 +7,7 @@ versioned workflows that delegate work to AI agents, scripts, and humans.
 
 - **Workflows** — visually authored, versioned automations with action, human-task, wait, and
   receive-event nodes; workflow runs are the primary object in the UI
-- **Event Connections & Subscriptions** — polls GitHub and Jira for activity, then routes matched events
+- **Event Sources & Subscriptions** — polls GitHub and Jira for activity, then routes matched events
   to workflows: `create-workflow` starts a run, `workflow-dispatch` resumes waiting runs
 - **Schedule Triggers** — cron schedules that start workflow runs on a fixed subject
 - **Subjects** — the issue, pull request, or named subject a run is about, with a shared workspace and

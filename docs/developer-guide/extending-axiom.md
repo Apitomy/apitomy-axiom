@@ -1,6 +1,6 @@
 # Extending Axiom
 
-Axiom is designed to be extended at several key points: AI agents, event connections,
+Axiom is designed to be extended at several key points: AI agents, event sources,
 and notification channels. Extension points generally follow the same pattern —
 define an interface in an SPI module, implement it in a sibling module, and let CDI
 discover it at runtime.
@@ -102,14 +102,14 @@ before allowing session startup.
 
 ---
 
-## Adding a Connection Type
+## Adding an Event Source Type
 
-A Connection polls an external system for activity and produces normalized events for
-the event stream. Axiom ships with GitHub and Jira connection types.
+An Event Source polls an external system for activity and produces normalized events for
+the event stream. Axiom ships with GitHub and Jira event source types.
 
 ### Pattern
 
-Connection pollers are `@Scheduled` beans that use `EventStreamService` to persist
+Event source pollers are `@Scheduled` beans that use `EventStreamService` to persist
 normalized events. There is no formal SPI interface — the pattern is convention-based,
 built around a shared normalized event model (`NormalizedEvent` and its typed payload
 records) defined in `core`.
@@ -125,23 +125,23 @@ Location: `events/core/src/main/java/io/apitomy/axiom/events/core/EventStreamSer
 ### Implementation Pattern
 
 1. Create a scheduled poller with `@Scheduled` and `concurrentExecution = SKIP`
-2. Find enabled connections of your source type from `EventSourceConnectionEntity`
-3. Check if the connection's poll interval has elapsed since `lastPolledAt`
+2. Find enabled event sources of your source type from `EventSourceEntity`
+3. Check if the event source's poll interval has elapsed since `lastPolledAt`
 4. Fetch activity from the external API
 5. Normalize each item into a `NormalizedEvent` with a typed payload and call
    `eventStreamService.persistEvent()`
-6. Update `lastPolledAt` on the connection
-7. Record the poll result in `ConnectionPollLogEntity`
+6. Update `lastPolledAt` on the event source
+7. Record the poll result in `EventSourcePollLogEntity`
 
-New connections do not need any corresponding Subscription configuration to start
+New event sources do not need any corresponding Subscription configuration to start
 recording events — subscriptions are what route recorded events onward to workflows
 (`create-workflow` and `workflow-dispatch` routing rules).
 
 ### Reference Implementations
 
-- **GitHub**: `events/github/src/main/java/.../v2/GitHubConnectionPoller.java` —
+- **GitHub**: `events/github/src/main/java/.../v2/GitHubEventSourcePoller.java` —
   polls the GitHub Repository Events API, backfilling PR payloads as needed
-- **Jira**: `events/jira/src/main/java/.../v2/JiraConnectionPoller.java` — polls the
+- **Jira**: `events/jira/src/main/java/.../v2/JiraEventSourcePoller.java` — polls the
   Jira REST API using JQL search with changelog expansion
 
 See [Event System — Design Document](event-sourcing-design.md) for the full event

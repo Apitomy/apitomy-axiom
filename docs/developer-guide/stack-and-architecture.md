@@ -32,8 +32,8 @@ scheduled pollers and services cooperate to process events and execute work.
 ### Event Ingestion
 
 ```
-GitHubConnectionPoller / JiraConnectionPoller
-  │  @Scheduled — polls external APIs at each connection's configured interval
+GitHubEventSourcePoller / JiraEventSourcePoller
+  │  @Scheduled — polls external APIs at each event source's configured interval
   │
   ▼
 EventStreamService.persistEvent()
@@ -263,5 +263,5 @@ REST endpoint reference.
 
 All background processing uses Quarkus `@Scheduled` with
 `concurrentExecution = SKIP` to prevent overlapping executions, including the
-connection pollers, the event stream orchestrator, the task queue poller, the workflow
+event source pollers, the event stream orchestrator, the task queue poller, the workflow
 wait scheduler, and the workflow schedule trigger scheduler.

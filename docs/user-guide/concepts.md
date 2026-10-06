@@ -186,18 +186,18 @@ general work (`action:*` on several agents) runs in parallel.
 
 ## Events and Subscriptions
 
-Axiom polls GitHub and Jira through **Connections**, normalizes activity into a single **Event Stream**,
+Axiom polls GitHub and Jira through **Event Sources**, normalizes activity into a single **Event Stream**,
 and evaluates each event against your **Subscriptions** to decide which workflows to start or resume.
 
 ### The Event Pipeline
 
 ```
-Connection ──► Event Stream ──► Subscription filter ──► Routing rule(s) ──► create-workflow
+Event Source ──► Event Stream ──► Subscription filter ──► Routing rule(s) ──► create-workflow
  (GitHub/Jira)   (normalized,     (EL expression,          (ordered list)     or workflow-dispatch
    poller)        deduplicated)    per subscription)
 ```
 
-1. A **Connection** polls GitHub or Jira for new activity at a configurable interval
+1. An **Event Source** polls GitHub or Jira for new activity at a configurable interval
 2. New activity is normalized into typed **stream events** and persisted to the event stream, deduplicated
    by source event ID
 3. Every enabled **Subscription** is evaluated against each new event using a filter expression
@@ -206,13 +206,13 @@ Connection ──► Event Stream ──► Subscription filter ──► Routin
    survives restarts and failed routing is retried automatically. Events that match no subscription are
    recorded in the ledger only.
 
-### Connections
+### Event Sources
 
-A Connection is an authenticated link to an external system. Each connection is configured with:
+An Event Source is an authenticated link to an external system. Each event source is configured with:
 
 | Field | Purpose |
 |-------|---------|
-| **ID** | A URL-safe slug that identifies the connection (e.g. `github-com`) |
+| **ID** | A URL-safe slug that identifies the event source (e.g. `github-com`) |
 | **Name** | Display name |
 | **Source type** | `github` or `jira` |
 | **Base URL** | The human-readable URL of the system (e.g. `https://github.com`) |
@@ -221,12 +221,12 @@ A Connection is an authenticated link to an external system. Each connection is 
 | **Authentication secret** | Which secret to use for API access, or fall back to a default provider secret or environment variable |
 | **Enabled** | Whether polling is active |
 
-You can create multiple connections of the same type — for example, one for `github.com` and another for
+You can create multiple event sources of the same type — for example, one for `github.com` and another for
 a GitHub Enterprise instance.
 
 ### Event Stream
 
-Every event a connection detects is normalized into a single, browsable stream of typed events (issue,
+Every event an event source detects is normalized into a single, browsable stream of typed events (issue,
 pull request, and repository activity for GitHub; issue activity for Jira). Events are deduplicated so the
 same source activity is never recorded twice. You can browse the raw stream from **Event Stream**
 in the UI, independent of whether any subscription has matched it yet.
@@ -238,7 +238,7 @@ A Subscription is a filtered view over the event stream with configurable routin
 | Field | Purpose |
 |-------|---------|
 | **Name** | Display name |
-| **Filter expression** | An EL expression evaluated against each event (e.g. `event.type.startsWith('pr.') && event.connectionId == 'github-com'`). An empty expression matches every event. |
+| **Filter expression** | An EL expression evaluated against each event (e.g. `event.type.startsWith('pr.') && event.eventSourceId == 'github-com'`). An empty expression matches every event. |
 | **Process events from** | The cutoff timestamp; events that occurred before this are never evaluated against this subscription (defaults to the moment the subscription is created) |
 | **Routing rules** | An ordered list of destinations for matched events |
 | **Labels** | Free-form strings for organization |
@@ -336,7 +336,7 @@ Secret values are encrypted at rest and never returned by the API. They are auto
 all subprocesses by default. For fine-grained control, action types can specify a custom **Environment**
 that selectively references secrets using `${secret:SECRET_NAME}` syntax.
 
-Secrets are also used by Connections for API authentication when polling.
+Secrets are also used by Event Sources for API authentication when polling.
 
 ### AI Agent Pool
 
@@ -364,7 +364,7 @@ include any combination of:
 - Toolsets
 - MCP servers
 - Session templates
-- Connections
+- Event Sources
 - Subscriptions
 - Workflow definitions
 
@@ -426,7 +426,7 @@ For details on the dashboard UI, see [Navigating the UI](navigating-the-ui.md#da
 ## How It All Fits Together
 
 ```
-Connection ──► Event Stream ──► Subscription ──┬─ create-workflow ───┐
+Event Source ──► Event Stream ──► Subscription ──┬─ create-workflow ───┐
   └─ secret                                    └─ workflow-dispatch ─┼──► waiting runs (receive-event)
                                                                      ▼
 Schedule trigger (cron, fixed subject) ───────────────────────► Workflow Run ──► Subject

@@ -14,7 +14,7 @@ inside a workflow run, which is started or resumed along one of these paths:
 **Events:**
 
 ```
-Connection polls → Event recorded in stream → Subscription filter matches → Routing rule fires
+Event Source polls → Event recorded in stream → Subscription filter matches → Routing rule fires
   → create-workflow (start a run) or workflow-dispatch (resume waiting runs)
 ```
 
@@ -39,7 +39,7 @@ went wrong and examining the logs at that stage.
 
 | Symptom | Where to check first |
 |---------|---------------------|
-| No events appearing at all | **Event Sources** > connection detail page > Poll Log tab |
+| No events appearing at all | **Event Sources** > event source detail page > Poll Log tab |
 | Events appear but no subscription matches | **Subscriptions** — use Preview to test the filter expression |
 | A subscription matched but no run started | Subscription's routing rules — confirm a `create-workflow` rule is configured; check the routing outcome for a `skipped` run (the subject already had an active run of that definition) |
 | A waiting run never received an event | Confirm a `workflow-dispatch` rule matches the event and the `receive-event` node's event type and condition match |
@@ -92,22 +92,22 @@ full AI agent output showing what the agent did.
 
 ### Step 1: Verify Events Are Being Received
 
-Navigate to **Event Stream**. This page shows every event that Axiom has recorded from its connections.
+Navigate to **Event Stream**. This page shows every event that Axiom has recorded from its event sources.
 Each event shows:
 
-- **Source** — which connection produced it (e.g. `github`)
+- **Source** — which event source produced it (e.g. `github`)
 - **Type** — the normalized event type (e.g. `issue.created`, `pr.merged`)
 - **Ref** — the full URL identifying the subject of the event
 - **Timestamp** — when the activity occurred in the source system
 
 Click any event row to open the detail view, which shows the full typed payload. This is useful for
-verifying that the connection is producing the data you expect.
+verifying that the event source is producing the data you expect.
 
-**If no events appear**, check the connection configuration:
+**If no events appear**, check the event source configuration:
 
-1. Navigate to **Event Sources** and click on the connection
+1. Navigate to **Event Sources** and click on the event source
 2. Check the **Poll Log** tab — this shows the result of each poll cycle, including any errors
-3. Verify the connection is **Enabled**
+3. Verify the event source is **Enabled**
 4. Verify the **Authentication Secret** is set and the token is valid
 5. Check the **Poll Interval** — a long interval means events may be delayed
 
@@ -196,7 +196,7 @@ rendered as Markdown.
 
 ### Events Tab
 
-Shows all stream events (from connections) that were associated with this subject.
+Shows all stream events (from event sources) that were associated with this subject.
 
 ---
 
@@ -270,7 +270,7 @@ and re-renders the graph when the trace changes.
 
 When something isn't working, work through the pipeline in order:
 
-1. **Is the connection polling?** Check the connection detail page > Poll Log tab.
+1. **Is the event source polling?** Check the event source detail page > Poll Log tab.
 2. **Are events being recorded?** Check **Event Stream**.
 3. **Does a subscription match?** Check **Subscriptions** and use Preview.
 4. **Did the routing rule fire?** Check the ledger status and routing outcome for that (event,

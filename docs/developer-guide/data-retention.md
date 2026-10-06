@@ -53,7 +53,7 @@ routing outcome items. An event is **kept** while a workflow run with status `ru
 - has a `workflow_run_resume` row with that `event_id`.
 
 Such an event becomes eligible on the first cleanup after the run finishes, so the run → event link is never
-lost while the run can still use it. The job also deletes connection poll logs older than 3 days.
+lost while the run can still use it. The job also deletes event source poll logs older than 3 days.
 
 ### `InactiveSubjectCleanup` / `SubjectDeletionService`
 

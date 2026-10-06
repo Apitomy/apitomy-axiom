@@ -101,7 +101,7 @@ Click any subject to open its detail page, which has several tabs:
 - **Tasks** — all tasks created by runs on this subject, with status and execution details
 - **Thread** — a chronological log of everything that happened on the subject (events received, task
   results, notes)
-- **Events** — raw stream events from connections associated with this subject
+- **Events** — raw stream events from event sources associated with this subject
 - **Metrics** — AI cost, token usage, and disk usage for this subject
 - **Workflow** — start a run of a published workflow definition (**Run Workflow**), optionally with a
   title, labels, and inputs
@@ -121,14 +121,14 @@ workflow action nodes.
 
 ### Event Sources, Subscriptions, and Event Stream
 
-These pages cover the connection-based event pipeline described in
+These pages cover the event-source-based event pipeline described in
 [Events and Subscriptions](concepts.md#events-and-subscriptions):
 
 | Page | What it shows |
 |------|--------------|
-| **Event Sources** | Configured connections to GitHub/Jira, their poll status, and poll log history |
+| **Event Sources** | Configured event sources to GitHub/Jira, their poll status, and poll log history |
 | **Subscriptions** | Filtered, routed views over the event stream (`create-workflow` and `workflow-dispatch` rules) — create, edit, and preview filter expressions here |
-| **Event Stream** | Every normalized event Axiom has recorded from its connections, browsable and filterable. Click a row to view the full typed payload. |
+| **Event Stream** | Every normalized event Axiom has recorded from its event sources, browsable and filterable. Click a row to view the full typed payload. |
 
 ### Inbox
 

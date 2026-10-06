@@ -47,5 +47,5 @@ Open **http://localhost:9191** in your browser to access the Axiom dashboard.
 
 - [Configuring Axiom](configuring-axiom.md) — AI engine settings, database profiles, and
   application properties
-- [User Guide](../user-guide/concepts.md) — Core concepts, connections, action types,
+- [User Guide](../user-guide/concepts.md) — Core concepts, event sources, action types,
   and advanced usage

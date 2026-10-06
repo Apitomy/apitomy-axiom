@@ -151,7 +151,7 @@ Inactive subjects, traces and events must be kept for at least 1 day. For the hi
 "keep forever". They default to `0` so that upgrading Axiom never deletes
 data you did not ask it to delete.
 
-Cleanup runs hourly in the background. Connection poll logs are always retained for a
+Cleanup runs hourly in the background. Event source poll logs are always retained for a
 fixed 3 days and are not configurable.
 
 ## Database Profiles

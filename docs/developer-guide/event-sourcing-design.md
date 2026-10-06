@@ -5,32 +5,32 @@
 Axiom's event system provides a three-layer architecture for monitoring external systems
 and reacting to changes:
 
-1. **Connections** — authenticated links to external systems (GitHub, Jira) that poll
+1. **Event Sources** — authenticated links to external systems (GitHub, Jira) that poll
    for changes and produce a normalized event stream
 2. **Event Stream** — a single database table of typed, schema-validated events from
-   all connections, browsable via REST API and UI
+   all event sources, browsable via REST API and UI
 3. **Subscriptions** — filtered views over the event stream with EL expression matching
    and configurable routing rules that send matched events to workflows (workflow creation
    and workflow dispatch)
 
 ## Architecture
 
-### Connections (EventSourceConnection)
+### Event Sources (EventSourceEntity)
 
 A configured, authenticated link to an external system. Produces a raw, normalized event
 stream. No filtering — every detectable event gets recorded.
 
-- Each connection has a user-provided **slug ID** as its primary key (lowercase letters,
+- Each event source has a user-provided **slug ID** as its primary key (lowercase letters,
   numbers, dashes; max 63 characters, e.g., `github-com`, `github-ibm`, `jira-prod`)
-- Multiple connections of the same type are supported (e.g., github.com + GitHub Enterprise)
-- Each connection specifies what to watch (repositories for GitHub, projects for Jira)
-- A background poller runs per connection, iterating over watched resources
-- Poll results are audited in the `connection_poll_log` table with status, timing,
+- Multiple event sources of the same type are supported (e.g., github.com + GitHub Enterprise)
+- Each event source specifies what to watch (repositories for GitHub, projects for Jira)
+- A background poller runs per event source, iterating over watched resources
+- Poll results are audited in the `event_source_poll_log` table with status, timing,
   events ingested, and error details (3-day retention)
-- The connection's `baseUrl` stores the **human-readable URL** (e.g., `https://github.com`);
+- The event source's `baseUrl` stores the **human-readable URL** (e.g., `https://github.com`);
   the poller derives the API URL automatically
 
-**GitHub connection:**
+**GitHub event source:**
 - Uses the Repository Events API (`GET /repos/{owner}/{repo}/events`)
 - ETag-based conditional polling for efficiency (304 when nothing changed)
 - Per-repo polling under a shared authentication token
@@ -39,7 +39,7 @@ stream. No filtering — every detectable event gets recorded.
 - Configuration: `baseUrl` (e.g., `https://github.com`), `secretName`,
   `repositories` (list of `owner/repo`), `pollInterval`
 
-**Jira connection:**
+**Jira event source:**
 - Uses JQL search with changelog expansion (`expand=changelog`)
 - Single query covers all configured projects via `project in (A, B, C)` clause
 - Field-level change detection from changelog entries
@@ -47,14 +47,14 @@ stream. No filtering — every detectable event gets recorded.
 - Configuration: `baseUrl` (e.g., `https://myorg.atlassian.net`), `secretName`,
   `projects` (list of project keys), `pollInterval`
 
-**Authentication:** Three-tier fallback for both types: per-connection secret (by name
+**Authentication:** Three-tier fallback for both types: per-event-source secret (by name
 from the secrets store), default provider secret (`GH_TOKEN`/`GITHUB_TOKEN` for GitHub,
 `JIRA_API_TOKEN` for Jira), environment variable.
 
 ### Event Stream
 
 A single `stream_event` database table of normalized, schema-validated events produced
-by all connections.
+by all event sources.
 
 - Each event has a UUID primary key and a well-defined typed payload determined by its
   event type (26 types across issue, PR, and repository events)
@@ -67,14 +67,14 @@ by all connections.
 A filtered view over the event stream with configurable routing. Each subscription has:
 
 - **Filter Expression** — a Jakarta EL expression that evaluates to boolean against the
-  event map (e.g., `event.type.startsWith('pr.') && event.connectionId == 'github-com'`).
+  event map (e.g., `event.type.startsWith('pr.') && event.eventSourceId == 'github-com'`).
   Empty expression matches all events.
 - **Routing Rules** — a list of destinations for matched events (see Routing below)
 - **Labels** — free-form strings for categorization and downstream scoping
 - **Enabled/Disabled** — subscriptions must be explicitly enabled to process events
 
 **Filter expression evaluation** uses the flow engine's `ConditionEvaluator` (Jakarta EL).
-The event is exposed as an `event` variable with fields: `type`, `source`, `connectionId`,
+The event is exposed as an `event` variable with fields: `type`, `source`, `eventSourceId`,
 `ref`, `timestamp`, `actor.*`, and `payload.*` (with full typed payload field access).
 
 ### Routing Rules
@@ -207,23 +207,23 @@ items of an attempt stay on that attempt's outcome and never appear on a later a
 
 ## REST API
 
-### Connections
+### Event Sources
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/connections` | List all connections |
-| POST | `/connections` | Create a connection |
-| GET | `/connections/{connectionId}` | Get a connection (by slug) |
-| PUT | `/connections/{connectionId}` | Update a connection |
-| DELETE | `/connections/{connectionId}` | Delete a connection |
-| GET | `/connections/{connectionId}/status` | Poll health, last poll time, errors |
-| GET | `/connections/{connectionId}/logs` | Poll log history |
+| GET | `/event-sources` | List all event sources |
+| POST | `/event-sources` | Create an event source |
+| GET | `/event-sources/{eventSourceId}` | Get an event source (by slug) |
+| PUT | `/event-sources/{eventSourceId}` | Update an event source |
+| DELETE | `/event-sources/{eventSourceId}` | Delete an event source |
+| GET | `/event-sources/{eventSourceId}/status` | Poll health, last poll time, errors |
+| GET | `/event-sources/{eventSourceId}/logs` | Poll log history |
 
 ### Event Stream
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/stream/events` | Browse events (paginated, filterable by type, connectionId, ref) |
+| GET | `/stream/events` | Browse events (paginated, filterable by type, eventSourceId, ref) |
 | GET | `/stream/events/{eventId}` | Get a single event with full typed payload |
 
 ### Subscriptions
@@ -244,11 +244,11 @@ items of an attempt stay on that attempt's outcome and never appear on a later a
   then events. Events that a `running` or `waiting` workflow run was started by (`trigger_event_id`) or
   resumed by (`workflow_run_resume.event_id`) are kept until the run finishes. See
   [Data Retention](data-retention.md).
-- **Connection poll logs:** Cleaned up hourly with a 3-day fixed retention.
+- **Event source poll logs:** Cleaned up hourly with a 3-day fixed retention.
 
 ## Configuration Packs
 
-Connections and subscriptions are included in the configuration pack export/import
+Event Sources and subscriptions are included in the configuration pack export/import
 system, allowing portable sharing of event system configuration.
 
 ---
@@ -264,7 +264,7 @@ Every event in the stream shares this envelope structure.
 | `id` | `string` | System-generated unique event ID (UUID) |
 | `sourceEventId` | `string` | Original ID from the source system (for dedup). GitHub: Events API `id`. Jira: synthesized from issue key + changelog entry ID |
 | `source` | `string` | Source system identifier: `"github"` or `"jira"` |
-| `connectionId` | `string` | Slug of the connection that produced this event |
+| `eventSourceId` | `string` | Slug of the event source that produced this event |
 | `type` | `string` | Normalized event type (e.g., `issue.created`, `pr.merged`) |
 | `ref` | `string` | Full URL uniquely identifying the subject of the event |
 | `timestamp` | `ISO-8601` | When the event occurred in the source system |
@@ -431,7 +431,7 @@ GHE URLs get `/api/v3` appended.
 | Tag/release events | `{baseUrl}/{owner}/{repo}/releases/tag/{tagName}` |
 
 **Deduplication:** Each Events API event has a unique `id`. The poller tracks seen IDs
-per connection+repo in memory and deduplicates in the database via the `source_event_id`
+per event source + repo in memory and deduplicates in the database via the `source_event_id`
 unique index.
 
 **Polling:** ETag-based conditional polling (304 on no change). Default 60-second interval.

@@ -8,7 +8,7 @@ coding assistance.
 
 Out of the box, Axiom ships three built-in templates: a **Configuration Assistant** for
 creating and updating tools, action types, toolsets,
-connections, subscriptions, workflows, and session templates, a **General Assistant** for
+event sources, subscriptions, workflows, and session templates, a **General Assistant** for
 open-ended tasks, and a **Subject Assistant** for working within the context of a
 specific subject. You can also create your own templates to define custom workflows.
 
@@ -104,7 +104,7 @@ Each template specifies:
 Axiom ships three immutable built-in templates:
 
 - **Configuration Assistant** (`axiom-config-assistant`) — purpose-built for creating
-  and updating Axiom configuration items (tools, action types, toolsets, connections,
+  and updating Axiom configuration items (tools, action types, toolsets, event sources,
   subscriptions, workflows, and session templates) with a two-panel layout and Apply
   workflow.
 - **General Assistant** (`general-assistant`) — a minimal template for open-ended tasks
@@ -341,7 +341,7 @@ can work with these types of configuration items:
 | **Action Types** | Agent or script-mode action types with prompt templates, allowed tools, and inputs/outputs |
 | **Toolsets** | Named groups of tools that can be referenced in action types and session templates using `@ToolsetName` |
 | **Session Templates** | Custom AI Assistant session configurations with a persona, system prompt, MCP servers, and allowed tools |
-| **Connections** | Links to GitHub or Jira for the event stream pipeline |
+| **Event Sources** | Links to GitHub or Jira for the event stream pipeline |
 | **Subscriptions** | Filter expressions and routing rules over the event stream |
 | **Workflows** | Versioned, multi-step automation definitions |
 

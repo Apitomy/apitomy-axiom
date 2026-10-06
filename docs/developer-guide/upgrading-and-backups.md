@@ -25,7 +25,7 @@ backup (see below) first — there is no automatic downgrade path.
 
 A configuration pack (**Settings > Configuration Packs**) exports action types, tools,
 toolsets, MCP servers, session templates,
-connections, subscriptions, and workflow definitions as JSON. **It is not a full
+event sources, subscriptions, and workflow definitions as JSON. **It is not a full
 instance backup.** A configuration pack does not include:
 
 - Subjects, tasks, thread entries, or activity history
@@ -58,7 +58,7 @@ snapshot (H2 does not support online hot backups of the file store used here).
 
 ## Configuration Packs Are for Sharing, Not Disaster Recovery
 
-Use configuration packs to move a known-good set of tools, action types, connections,
+Use configuration packs to move a known-good set of tools, action types, event sources,
 subscriptions, and workflows between instances (e.g. staging to production), or to
 version-control your configuration outside the database. Don't rely on them as your
 only backup mechanism — they intentionally exclude runtime history and secret values.

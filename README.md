@@ -104,8 +104,8 @@ agents/claude-code/  Claude Code CLI agent
 agents/opencode/     OpenCode agent
 agents/copilot/      GitHub Copilot CLI agent
 events/core/         Event stream and pipeline support
-events/github/       GitHub connection poller
-events/jira/         Jira connection poller
+events/github/       GitHub event source poller
+events/jira/         Jira event source poller
 notifications/       Notification channels (Slack, Telegram)
 app/                 Quarkus application (assembles everything)
 ui/                  React frontend
