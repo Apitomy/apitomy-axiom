@@ -18,6 +18,8 @@ import { ActionTypeDetailModal } from "./ActionTypeDetailModal";
 import { ToolsetDetailModal } from "./ToolsetDetailModal";
 import { SessionTemplateDetailModal } from "./SessionTemplateDetailModal";
 import { EventSourceDetailModal } from "./EventSourceDetailModal";
+import { WorkflowDetailModal } from "./WorkflowDetailModal";
+import { SubscriptionDetailModal } from "./SubscriptionDetailModal";
 
 interface AssistantGeneratedItemsProps {
     sessionId: string;
@@ -25,12 +27,16 @@ interface AssistantGeneratedItemsProps {
     onItemCountChanged?: (count: number) => void;
 }
 
-const TYPE_LABELS: Record<string, { label: string; color: "blue" | "green" | "purple" | "teal" | "orange" | "grey" }> = {
+type LabelColor = "blue" | "green" | "purple" | "teal" | "orange" | "orangered" | "yellow" | "grey";
+
+const TYPE_LABELS: Record<string, { label: string; color: LabelColor }> = {
     "tools": { label: "Tool", color: "blue" },
     "action-types": { label: "Action Type", color: "green" },
     "toolsets": { label: "Toolset", color: "teal" },
     "session-templates": { label: "Template", color: "orange" },
     "event-sources": { label: "Event Source", color: "grey" },
+    "workflows": { label: "Workflow", color: "purple" },
+    "subscriptions": { label: "Subscription", color: "yellow" },
 };
 
 export function AssistantGeneratedItems({ sessionId, refreshTrigger, onItemCountChanged }: AssistantGeneratedItemsProps) {
@@ -95,8 +101,8 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger, onItemCount
                 <EmptyState variant="sm">
                     <EmptyStateBody>
                         No items generated yet. Ask the assistant to create tools,
-                        action types, toolsets, session templates, or event
-                        sources.
+                        action types, toolsets, session templates, workflows, event
+                        sources, or subscriptions.
                     </EmptyStateBody>
                 </EmptyState>
             )}
@@ -173,6 +179,24 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger, onItemCount
             )}
             {selectedItem?.type === "event-sources" && itemContent && (
                 <EventSourceDetailModal
+                    isOpen
+                    onClose={closeModal}
+                    name={selectedItem.name}
+                    content={itemContent}
+                    errors={selectedItem.validationErrors}
+                />
+            )}
+            {selectedItem?.type === "workflows" && itemContent && (
+                <WorkflowDetailModal
+                    isOpen
+                    onClose={closeModal}
+                    name={selectedItem.name}
+                    content={itemContent}
+                    errors={selectedItem.validationErrors}
+                />
+            )}
+            {selectedItem?.type === "subscriptions" && itemContent && (
+                <SubscriptionDetailModal
                     isOpen
                     onClose={closeModal}
                     name={selectedItem.name}
