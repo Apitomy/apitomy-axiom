@@ -155,9 +155,9 @@ lists every declared input that has a value (in declaration order, even if it is
 and then a `## Required output` contract derived from the declared outputs. Do not write output-format
 instructions in the prompt — Axiom appends the contract automatically.
 
-**Script environment.** Scripts and agents receive the plumbing environment variables `AXIOM_API_URL`
-(Axiom's API base URL), `AXIOM_TASK_ID` and `AXIOM_WORK_DIR`, plus secrets and the action type's
-environment. Subject data is not passed through the environment; declare an input instead, e.g.
+**Script environment.** Scripts receive the plumbing environment variables `AXIOM_API_URL` (Axiom's
+API base URL), `AXIOM_TASK_ID` and `AXIOM_WORK_DIR`, plus secrets and the action type's environment.
+Agents receive none of these; they run in the task workspace and get data only through declared inputs. Subject data is not passed through the environment; declare an input instead, e.g.
 `curl "$AXIOM_API_URL/subjects/{{inputs.subjectId}}"`.
 
 > **Input values are treated as literal data.** In script mode an `{{inputs.NAME}}` placeholder is not

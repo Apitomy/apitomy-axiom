@@ -143,8 +143,9 @@ public class AssistantReferenceGenerator {
                 .sorted(Map.Entry.comparingByKey())
                 .forEach(e -> sb.append("- `{{").append(e.getKey()).append("}}` — ")
                         .append(e.getValue()).append("\n"));
-        sb.append("\nScripts and agents get runtime environment variables `AXIOM_API_URL`, ")
-                .append("`AXIOM_TASK_ID`, `AXIOM_WORK_DIR`. The workflow context provides `subjectId`, ")
+        sb.append("\nScripts get runtime environment variables `AXIOM_API_URL`, ")
+                .append("`AXIOM_TASK_ID`, `AXIOM_WORK_DIR`; agents get data only through declared inputs. ")
+                .append("The workflow context provides `subjectId`, ")
                 .append("`subjectName`, `ref`, `repository` and `event` for mapping into inputs.\n\n")
                 .append("Input and output field types: `string`, `number`, `boolean`, `object`.\n\n")
                 .append("`allowedTools` entry formats: `mcp__axiom-tools__<tool>` (a tool), `@<toolset>` ")
