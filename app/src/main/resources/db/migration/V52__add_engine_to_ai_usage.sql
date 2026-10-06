@@ -1,1 +1,0 @@
-ALTER TABLE ai_usage ADD COLUMN engine VARCHAR(255);

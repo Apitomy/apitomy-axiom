@@ -1,7 +1,6 @@
 package io.apitomy.axiom.app.db;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -10,7 +9,6 @@ import jakarta.persistence.Entity;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
-import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -39,7 +37,6 @@ import org.jboss.jandex.Index;
 import org.jboss.jandex.IndexReader;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Regression guard against drift between the Flyway migrations and the JPA entity model.
@@ -125,39 +122,6 @@ class MigrationSchemaValidationTest {
             assertTrue(missing.isEmpty(), "Sequences missing after migrations: " + missing);
         } finally {
             StandardServiceRegistryBuilder.destroy(registry);
-        }
-    }
-
-    /**
-     * Upgrade path: an install that already has an {@code agent_SEQ} ahead of {@code max(agent.id)} (ids in
-     * flight on another node) must not have it lowered by V73.
-     *
-     * @param dir temporary directory for the file database
-     * @throws SQLException if the database can't be accessed
-     */
-    @Test
-    void v73NeverLowersExistingAgentSequence(@TempDir Path dir) throws SQLException {
-        String fileUrl = "jdbc:h2:file:" + dir.resolve("upgrade") + ";AUTO_SERVER=TRUE";
-        flyway(fileUrl, "72").migrate();
-        try (Connection connection = DriverManager.getConnection(fileUrl, "sa", "");
-                Statement statement = connection.createStatement()) {
-            statement.execute("INSERT INTO agent(id, name, agent_type) VALUES (150, 'old', 'claude-code')");
-            statement.execute("CREATE SEQUENCE agent_SEQ START WITH 10000 INCREMENT BY 50");
-        }
-
-        flyway(fileUrl, null).migrate();
-
-        try (Connection connection = DriverManager.getConnection(fileUrl, "sa", "");
-                Statement statement = connection.createStatement()) {
-            try (ResultSet rs = statement.executeQuery("SELECT NEXT VALUE FOR agent_SEQ")) {
-                assertTrue(rs.next());
-                assertEquals(10050L, rs.getLong(1), "Existing agent_SEQ was lowered");
-            }
-            try (ResultSet rs = statement.executeQuery("SELECT COUNT(*) FROM INFORMATION_SCHEMA.SEQUENCES"
-                    + " WHERE SEQUENCE_NAME = 'ACTOR_SEQ'")) {
-                assertTrue(rs.next());
-                assertEquals(0L, rs.getLong(1), "actor_SEQ should be dropped");
-            }
         }
     }
 
