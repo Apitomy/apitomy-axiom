@@ -4,7 +4,8 @@ import {
     DescriptionListDescription,
     DescriptionListGroup,
     DescriptionListTerm,
-    Label,
+    List,
+    ListItem,
     Modal,
     ModalBody,
     ModalHeader,
@@ -142,15 +143,17 @@ export function WorkflowDetailModal({ isOpen, onClose, name, content, errors }: 
                                     <DescriptionListTerm>Start inputs</DescriptionListTerm>
                                     <DescriptionListDescription>
                                         {startInputs.length === 0 ? "—" : (
-                                            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                                            <List aria-label="Start inputs" isPlain>
                                                 {startInputs.map((input) => (
-                                                    <Label key={input.name} isCompact
-                                                        color={input.required ? "blue" : "grey"}>
-                                                        {input.name}{input.type ? `: ${input.type}` : ""}
-                                                        {input.required ? " (required)" : ""}
-                                                    </Label>
+                                                    <ListItem key={input.name}>
+                                                        <code>{input.name}</code>
+                                                        {` (${input.type || "string"}`}
+                                                        {input.required ? ", required" : ", optional"}
+                                                        {")"}
+                                                        {input.description ? ` — ${input.description}` : ""}
+                                                    </ListItem>
                                                 ))}
-                                            </div>
+                                            </List>
                                         )}
                                     </DescriptionListDescription>
                                 </DescriptionListGroup>

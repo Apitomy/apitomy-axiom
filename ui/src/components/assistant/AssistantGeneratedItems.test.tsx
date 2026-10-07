@@ -37,6 +37,7 @@ const ITEMS = [
     { type: "event-sources", name: "github-com", valid: true },
     { type: "workflows", name: "triage", valid: true },
     { type: "workflows", name: "triage-string", valid: true },
+    { type: "workflows", name: "triage-inputs", valid: true },
     { type: "subscriptions", name: "new-issues", valid: true },
 ];
 
@@ -47,6 +48,24 @@ const CONTENT: Record<string, Record<string, unknown>> = {
     },
     "workflows/triage": { name: "triage", description: "Triage issues", content: WORKFLOW_CONTENT },
     "workflows/triage-string": { name: "triage-string", content: JSON.stringify(WORKFLOW_CONTENT) },
+    "workflows/triage-inputs": {
+        name: "triage-inputs",
+        content: {
+            ...WORKFLOW_CONTENT,
+            nodes: [
+                {
+                    id: "s", type: "start", name: "Start", position: { x: 0, y: 0 },
+                    config: {
+                        inputs: [
+                            { name: "ref", type: "string", required: true, description: "Issue URL" },
+                            { name: "priority", type: "string" },
+                        ],
+                    },
+                },
+                WORKFLOW_CONTENT.nodes[1],
+            ],
+        },
+    },
     "subscriptions/new-issues": {
         name: "new-issues", enabled: false,
         filterExpression: "event.type == 'issue.created'",
@@ -71,7 +90,7 @@ describe("AssistantGeneratedItems previews", () => {
     it("labels workflow and subscription items", async () => {
         render(<AssistantGeneratedItems sessionId="s1" refreshTrigger={0} />);
         await screen.findByText("triage");
-        expect(screen.getAllByText("Workflow")).toHaveLength(2);
+        expect(screen.getAllByText("Workflow")).toHaveLength(3);
         expect(screen.getByText("Subscription")).toBeInTheDocument();
     });
 
@@ -90,6 +109,20 @@ describe("AssistantGeneratedItems previews", () => {
     it("parses workflow content stored as a JSON string", async () => {
         const dialog = await openItem("triage-string");
         expect(within(dialog).getByTestId("workflow-viewer")).toHaveTextContent("2 nodes");
+    });
+
+    it("lists start inputs on the details tab", async () => {
+        const dialog = await openItem("triage-inputs");
+        await userEvent.click(within(dialog).getByRole("tab", { name: "Details" }));
+        const list = within(dialog).getByRole("list", { name: "Start inputs" });
+        const items = within(list).getAllByRole("listitem");
+        expect(items).toHaveLength(2);
+        expect(items[0]).toHaveTextContent("ref");
+        expect(items[0]).toHaveTextContent("string");
+        expect(items[0]).toHaveTextContent("required");
+        expect(items[0]).toHaveTextContent("Issue URL");
+        expect(items[1]).toHaveTextContent("priority");
+        expect(items[1]).not.toHaveTextContent("required");
     });
 
     it("opens the subscription preview with filter and routing", async () => {
