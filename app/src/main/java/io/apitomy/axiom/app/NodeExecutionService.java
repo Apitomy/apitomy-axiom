@@ -116,17 +116,22 @@ public class NodeExecutionService {
             try {
                 process = pb.start();
             } catch (IOException e) {
-                if (isProgramNotFound(e)) {
+                if (isNodeMissing(e, workDir.path())) {
                     return new ScriptExecutionService.RunResult(1, NODE_MISSING, null);
                 }
                 throw e;
             }
-            try (OutputStream stdin = process.getOutputStream()) {
-                stdin.write(inputsJson.getBytes(StandardCharsets.UTF_8));
-            } catch (IOException e) {
-                // The process exited before reading its inputs; its stderr explains why.
-                LOG.debugf("Could not write inputs to node action for task %d: %s", task.id, e.getMessage());
-            }
+            // Written asynchronously so capture()'s timeout bounds a process that never drains stdin.
+            byte[] inputBytes = inputsJson.getBytes(StandardCharsets.UTF_8);
+            long taskId = task.id;
+            CompletableFuture.runAsync(() -> {
+                try (OutputStream stdin = process.getOutputStream()) {
+                    stdin.write(inputBytes);
+                } catch (IOException e) {
+                    // The process exited before reading its inputs; its stderr explains why.
+                    LOG.debugf("Could not write inputs to node action for task %d: %s", taskId, e.getMessage());
+                }
+            });
 
             ScriptExecutionService.CapturedOutput captured =
                     ScriptExecutionService.capture(process, timeoutSeconds);
@@ -134,10 +139,10 @@ public class NodeExecutionService {
 
             String stdout = captured.stdout();
             if (!captured.finished()) {
-                stdout = stdout + "\n[Script timed out after " + timeoutSeconds + "s]";
+                stdout = stdout + "\n[Node action timed out after " + timeoutSeconds + "s]";
             }
             String output = ScriptExecutionService.extractScriptOutput(stdout);
-            String executionLog = ScriptExecutionService.buildExecutionLog(task, "Code", actionType.codeTemplate,
+            String executionLog = ScriptExecutionService.buildExecutionLog("Node Execution Log", task, "Code", actionType.codeTemplate,
                     null, stdout, captured.stderr(), captured.exitCode(), startTime, durationMs);
             return new ScriptExecutionService.RunResult(captured.exitCode(), output, executionLog);
         } finally {
@@ -182,9 +187,18 @@ public class NodeExecutionService {
         return runner;
     }
 
-    private static boolean isProgramNotFound(IOException e) {
+    /**
+     * Decides whether a start failure means node is missing; a missing working directory raises the same
+     * "No such file" error, so it only counts when the directory exists.
+     *
+     * @param e       the start failure
+     * @param workDir the process working directory
+     * @return true if node itself could not be found
+     */
+    static boolean isNodeMissing(IOException e, Path workDir) {
         String message = e.getMessage();
-        return message != null && (message.contains("error=2") || message.contains("No such file"));
+        return message != null && (message.contains("error=2") || message.contains("No such file"))
+                && Files.isDirectory(workDir);
     }
 
     private static void deleteRecursively(Path dir) {

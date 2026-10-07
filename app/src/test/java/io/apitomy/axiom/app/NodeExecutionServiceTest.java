@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -47,6 +48,10 @@ class NodeExecutionServiceTest {
     }
 
     private ScriptExecutionService.RunResult run(String code) {
+        return run(code, "{\"labels\":[\"x\",\"y\"]}");
+    }
+
+    private ScriptExecutionService.RunResult run(String code, String input) {
         String name = "node-exec-" + UUID.randomUUID();
         return QuarkusTransaction.requiringNew().call(() -> {
             ActionTypeEntity at = new ActionTypeEntity();
@@ -72,7 +77,7 @@ class NodeExecutionServiceTest {
             task.status = "Pending";
             task.createdOn = Instant.now();
             task.workflowRunId = -1L;
-            task.input = "{\"labels\":[\"x\",\"y\"]}";
+            task.input = input;
             task.persist();
 
             return nodeExecutionService.runNode(task, subject);
@@ -94,5 +99,26 @@ class NodeExecutionServiceTest {
                 run("export async function run(){ throw new Error(\"nope\"); }\n");
         assertEquals(1, result.exitCode());
         assertTrue(result.executionLog().contains("Action failed: nope"), result.executionLog());
+    }
+
+    @Test
+    void largeInputIsDelivered() throws Exception {
+        String big = "a".repeat(1024 * 1024);
+        ScriptExecutionService.RunResult result =
+                run("export async function run(inputs){ return { count: inputs.labels[0].length }; }\n",
+                        "{\"labels\":[\"" + big + "\"]}");
+        assertEquals(0, result.exitCode(), result.executionLog());
+        assertEquals(objectMapper.readTree("{\"count\":" + big.length() + "}"),
+                objectMapper.readTree(result.output()));
+        assertTrue(result.executionLog().contains("Node Execution Log"), result.executionLog());
+    }
+
+    @Test
+    void nodeMissingOnlyWhenWorkingDirectoryExists(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) {
+        java.io.IOException notFound = new java.io.IOException(
+                "Cannot run program \"node\": error=2, No such file or directory");
+        assertTrue(NodeExecutionService.isNodeMissing(notFound, dir));
+        assertFalse(NodeExecutionService.isNodeMissing(notFound, dir.resolve("gone")));
+        assertFalse(NodeExecutionService.isNodeMissing(new java.io.IOException("error=13, Permission denied"), dir));
     }
 }

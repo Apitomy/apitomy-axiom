@@ -59,9 +59,10 @@ class AssistantReferenceTest {
         String ref = generator.generate();
         assertTrue(ref.contains("run(inputs, ctx)"), ref);
         assertTrue(ref.contains("ctx.exec"), ref);
-        assertTrue(ref.contains("built-in"), ref);
+        assertTrue(ref.contains("Imports are limited to Node built-in modules"), ref);
         assertTrue(generator.examples().stream()
-                .anyMatch(e -> e.getKey().equals("action-types/fetch-repo-labels.json")));
+                .anyMatch(e -> e.getKey().equals("action-types/fetch-repo-labels.json")),
+                "examples must include action-types/fetch-repo-labels.json");
     }
 
     @Test

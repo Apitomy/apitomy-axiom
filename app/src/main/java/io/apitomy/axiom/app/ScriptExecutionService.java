@@ -338,9 +338,22 @@ public class ScriptExecutionService {
     static String buildExecutionLog(TaskEntity task, String sourceLabel, String source, String resolvedSource,
                                     String output, String stderr, int exitCode, Instant startTime,
                                     long durationMs) {
+        return buildExecutionLog("Script Execution Log", task, sourceLabel, source, resolvedSource, output,
+                stderr, exitCode, startTime, durationMs);
+    }
+
+    /**
+     * Builds an execution log with the given header title.
+     *
+     * @param title the header title, e.g. {@code Script Execution Log}
+     * @return the execution log
+     */
+    static String buildExecutionLog(String title, TaskEntity task, String sourceLabel, String source, String resolvedSource,
+                                    String output, String stderr, int exitCode, Instant startTime,
+                                    long durationMs) {
         StringBuilder log = new StringBuilder();
         log.append("═══════════════════════════════════════════════════════════════\n");
-        log.append("  Script Execution Log\n");
+        log.append("  ").append(title).append("\n");
         log.append("═══════════════════════════════════════════════════════════════\n");
         log.append("  Task:        #").append(task.id).append("\n");
         log.append("  Action Type: ").append(task.actionType).append("\n");
