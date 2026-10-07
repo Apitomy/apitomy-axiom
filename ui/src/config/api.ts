@@ -396,6 +396,7 @@ export interface ActionType {
     allowedTools?: string[];
     promptTemplate?: string;
     scriptTemplate?: string;
+    codeTemplate?: string;
     model?: string;
     engine?: string;
     maxSteps?: number;

@@ -512,6 +512,7 @@ public class ImportExportService {
             entity.allowedTools = csvOrNull(item, "allowedTools");
             entity.promptTemplate = textOrNull(item, "promptTemplate");
             entity.scriptTemplate = textOrNull(item, "scriptTemplate");
+            entity.codeTemplate = textOrNull(item, "codeTemplate");
             entity.model = textOrNull(item, "model");
             entity.engine = textOrNull(item, "engine");
             entity.maxSteps = item.has("maxSteps") ? item.path("maxSteps").asInt() : null;
@@ -624,6 +625,7 @@ public class ImportExportService {
             entity.allowedTools = csvOrNull(item, "allowedTools");
             entity.promptTemplate = textOrNull(item, "promptTemplate");
             entity.scriptTemplate = textOrNull(item, "scriptTemplate");
+            entity.codeTemplate = textOrNull(item, "codeTemplate");
             entity.model = textOrNull(item, "model");
             entity.engine = textOrNull(item, "engine");
             entity.maxSteps = item.has("maxSteps") ? item.path("maxSteps").asInt() : null;
@@ -768,6 +770,7 @@ public class ImportExportService {
         putIfNotNull(n, "allowedTools", e.allowedTools);
         putIfNotNull(n, "promptTemplate", e.promptTemplate);
         putIfNotNull(n, "scriptTemplate", e.scriptTemplate);
+        putIfNotNull(n, "codeTemplate", e.codeTemplate);
         putIfNotNull(n, "model", e.model);
         putIfNotNull(n, "engine", e.engine);
         if (e.maxSteps != null) n.put("maxSteps", e.maxSteps);

@@ -208,6 +208,7 @@ public class ActionResourceImpl implements ActionResource {
                 ? String.join(", ", data.getAllowedTools()) : null;
         entity.promptTemplate = data.getPromptTemplate();
         entity.scriptTemplate = data.getScriptTemplate();
+        entity.codeTemplate = data.getCodeTemplate();
         entity.model = data.getModel();
         entity.engine = data.getEngine();
         entity.maxSteps = data.getMaxSteps();
@@ -242,6 +243,7 @@ public class ActionResourceImpl implements ActionResource {
         }
         actionType.setPromptTemplate(entity.promptTemplate);
         actionType.setScriptTemplate(entity.scriptTemplate);
+        actionType.setCodeTemplate(entity.codeTemplate);
         actionType.setModel(entity.model);
         actionType.setEngine(entity.engine);
         actionType.setMaxSteps(entity.maxSteps);

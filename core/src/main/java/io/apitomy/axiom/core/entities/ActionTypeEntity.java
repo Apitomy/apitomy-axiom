@@ -43,6 +43,13 @@ public class ActionTypeEntity extends PanacheEntity {
     public String scriptTemplate;
 
     /**
+     * JavaScript ES module for node-mode action types. It must export
+     * {@code async function run(inputs, ctx)}; no placeholders are supported.
+     */
+    @Column(name = "code_template", columnDefinition = "TEXT")
+    public String codeTemplate;
+
+    /**
      * Optional AI model override (e.g. "claude-sonnet-4-6").
      * When null, the global default model is used.
      */

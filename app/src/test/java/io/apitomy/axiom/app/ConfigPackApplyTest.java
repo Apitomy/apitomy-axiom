@@ -3,6 +3,7 @@ package io.apitomy.axiom.app;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.apitomy.axiom.api.beans.PackExportRequest;
 import io.apitomy.axiom.app.validation.ConfigValidationException;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
@@ -13,6 +14,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -170,6 +172,32 @@ class ConfigPackApplyTest {
         importExportService.importOrUpdatePack(mapper.readTree(json.replace("\"name\": \"Do\"",
                 "\"name\": \"Do it\"")));
         assertEquals(2, currentVersion("wf-" + sfx));
+    }
+
+    /** A node-mode action type carries its codeTemplate through import and export. */
+    @Test
+    void nodeActionTypeImportsAndExports() throws Exception {
+        String sfx = UUID.randomUUID().toString().substring(0, 8);
+        String code = "export async function run(){ return {}; }";
+        ObjectNode pack = mapper.createObjectNode();
+        ObjectNode at = pack.putArray("actionTypes").addObject();
+        at.put("name", "node-" + sfx);
+        at.put("executionMode", "node");
+        at.put("codeTemplate", code);
+        importExportService.importOrUpdatePack(pack);
+        JsonNode exported = QuarkusTransaction.requiringNew().call(() -> {
+            ActionTypeEntity entity = ActionTypeEntity.find("name", "node-" + sfx).firstResult();
+            assertNotNull(entity);
+            assertEquals("node", entity.executionMode);
+            assertEquals(code, entity.codeTemplate);
+            PackExportRequest request = new PackExportRequest();
+            request.setName("export-" + sfx);
+            request.setActionTypeIds(List.of(entity.id));
+            return importExportService.exportPack(request);
+        });
+        JsonNode exportedType = exported.path("actionTypes").get(0);
+        assertEquals("node", exportedType.path("executionMode").asText());
+        assertEquals(code, exportedType.path("codeTemplate").asText());
     }
 
     private Integer currentVersion(String name) {

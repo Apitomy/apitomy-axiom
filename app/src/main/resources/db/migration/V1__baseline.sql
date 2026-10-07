@@ -68,6 +68,7 @@
         timeout_seconds integer,
         id bigint not null,
         allowed_tools TEXT,
+        code_template TEXT,
         description TEXT,
         engine varchar(255),
         environment TEXT,

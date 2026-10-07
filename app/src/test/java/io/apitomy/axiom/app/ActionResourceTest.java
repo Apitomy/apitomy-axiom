@@ -4,6 +4,9 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
+import java.util.UUID;
+
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 
@@ -44,6 +47,28 @@ class ActionResourceTest {
                 .body("$", not(hasKey("managerTriggerable")))
                 .body("$", not(hasKey("emitsEvent")))
                 .body("$", not(hasKey("workflowEnabled")));
+    }
+
+    @Test
+    void nodeActionTypeRoundTripsCodeTemplate() {
+        String name = "node-rt-" + UUID.randomUUID();
+        String code = "export async function run(){ return {}; }";
+        int id = given()
+            .contentType(ContentType.JSON)
+            .body(Map.of("name", name, "executionMode", "node", "codeTemplate", code))
+            .when()
+                .post(ACTION_TYPES_PATH)
+            .then()
+                .statusCode(200)
+                .extract().path("id");
+
+        given()
+            .when()
+                .get(ACTION_TYPES_PATH + "/" + id)
+            .then()
+                .statusCode(200)
+                .body("executionMode", equalTo("node"))
+                .body("codeTemplate", equalTo(code));
     }
 
     @Test

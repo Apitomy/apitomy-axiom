@@ -5706,7 +5706,8 @@
           "executionMode": {
             "enum": [
               "agent",
-              "script"
+              "script",
+              "node"
             ],
             "type": "string"
           },
@@ -5723,6 +5724,10 @@
           },
           "scriptTemplate": {
             "description": "Bash script template for script-mode action types. The only supported placeholder is {{inputs.<name>}}, where <name> is a declared input. $AXIOM_API_URL, $AXIOM_TASK_ID and $AXIOM_WORK_DIR are available as environment variables.",
+            "type": "string"
+          },
+          "codeTemplate": {
+            "description": "JavaScript ES module for node-mode action types. It must export async function run(inputs, ctx) and return an object with the declared outputs. Only Node.js built-in modules may be imported; no placeholders are supported.",
             "type": "string"
           },
           "model": {
@@ -5794,7 +5799,8 @@
           "executionMode": {
             "enum": [
               "agent",
-              "script"
+              "script",
+              "node"
             ],
             "type": "string"
           },
@@ -5811,6 +5817,10 @@
           },
           "scriptTemplate": {
             "description": "Bash script template for script-mode action types. The only supported placeholder is {{inputs.<name>}}, where <name> is a declared input. $AXIOM_API_URL, $AXIOM_TASK_ID and $AXIOM_WORK_DIR are available as environment variables.",
+            "type": "string"
+          },
+          "codeTemplate": {
+            "description": "JavaScript ES module for node-mode action types. It must export async function run(inputs, ctx) and return an object with the declared outputs. Only Node.js built-in modules may be imported; no placeholders are supported.",
             "type": "string"
           },
           "model": {
