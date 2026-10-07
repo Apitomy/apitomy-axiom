@@ -46,6 +46,13 @@ class AssistantReferenceTest {
     ValidationContextFactory contextFactory;
 
     @Test
+    void referenceExplainsHowScriptsReturnOutputs() {
+        String ref = generator.generate();
+        assertTrue(ref.contains("printing one JSON object to stdout"), ref);
+        assertTrue(ref.contains("Outputs written to files are ignored"), ref);
+    }
+
+    @Test
     void nodeConfigDocsCoverEveryNodeType() {
         assertEquals(EnumSet.allOf(NodeType.class),
                 EnumSet.copyOf(AssistantReferenceGenerator.NODE_CONFIG_DOCS.keySet()));

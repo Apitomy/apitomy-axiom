@@ -28,6 +28,12 @@ import java.util.stream.Collectors;
 @ApplicationScoped
 public class AssistantReferenceGenerator {
 
+    /** How a script-mode action type returns its declared outputs. */
+    static final String SCRIPT_OUTPUT_RULE = "A script returns its outputs by printing one JSON object to "
+            + "stdout as the last thing it prints (e.g. `jq -n --arg x \"$X\" '{x: $x}'`); it may span several "
+            + "lines. Earlier stdout lines are treated as logs; send diagnostics to stderr. Outputs written to "
+            + "files are ignored.";
+
     /**
      * Per node type documentation of config fields; keys must cover every {@link NodeType}.
      * Kept next to the generator so a new node type fails {@code AssistantReferenceTest}.
@@ -143,7 +149,8 @@ public class AssistantReferenceGenerator {
                 .sorted(Map.Entry.comparingByKey())
                 .forEach(e -> sb.append("- `{{").append(e.getKey()).append("}}` — ")
                         .append(e.getValue()).append("\n"));
-        sb.append("\nScripts get runtime environment variables `AXIOM_API_URL`, ")
+        sb.append("\nScript outputs: " + SCRIPT_OUTPUT_RULE + "\n")
+                .append("\nScripts get runtime environment variables `AXIOM_API_URL`, ")
                 .append("`AXIOM_TASK_ID`, `AXIOM_WORK_DIR`; agents get data only through declared inputs. ")
                 .append("The workflow context provides `subjectId`, ")
                 .append("`subjectName`, `ref`, `repository` and `event` for mapping into inputs.\n\n")

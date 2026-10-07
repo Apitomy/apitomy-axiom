@@ -69,6 +69,12 @@ public class ScriptAiService {
 
             Common CLI tools available: curl, jq, gh (GitHub CLI), git, standard Unix utilities.
 
+            Returning outputs: when the action type declares outputs, the script must print \
+            exactly one JSON object with those keys to stdout as the last thing it prints, \
+            e.g. jq -n --arg title "$TITLE" '{title: $title}'. Earlier stdout lines are \
+            treated as logs; send diagnostics to stderr (>&2). Never write outputs to a \
+            file; Axiom only reads stdout.
+
             Return the script as structured JSON output, plus a brief explanation of what \
             you created or changed.
             """;
