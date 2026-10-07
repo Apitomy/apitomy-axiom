@@ -55,7 +55,7 @@ class RoutingOutcomeItemsTest {
 
     @BeforeEach
     void setUp() {
-        Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(),
+        Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(),
                 ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Optional.empty());
     }
 

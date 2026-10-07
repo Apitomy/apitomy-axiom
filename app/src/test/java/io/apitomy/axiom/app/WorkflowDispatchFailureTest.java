@@ -56,7 +56,7 @@ class WorkflowDispatchFailureTest {
 
     @Test
     void throwingResumeIsRecordedAsFailedItem() {
-        Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(),
+        Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(),
                 ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Optional.empty());
         String awaitedType = "dispatch-fail-" + UUID.randomUUID();
         long[] ids = setup(awaitedType);
@@ -88,7 +88,7 @@ class WorkflowDispatchFailureTest {
 
     @Test
     void completedDispatchWithFailedResumeIsNotReDispatchedOnRetry() {
-        Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(),
+        Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(),
                 ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Optional.empty());
         String awaitedType = "dispatch-fail-" + UUID.randomUUID();
         long[] ids = setup(awaitedType);

@@ -181,16 +181,16 @@ public class TaskExecutionService {
 
         // Acquire an agent lease from the pool
         String capability = "action:" + task.actionType;
-        AgentLease lease = agentPool.tryLease(capability, task.assignedAgent, "task", task.id)
+        AgentLease lease = agentPool.tryLease(capability, agentType, task.assignedAgent, "task", task.id)
                 .orElse(null);
         if (lease == null) {
-            // No agent available — check if it's because they're all busy
-            boolean anyExist = AgentEntity.count("enabled", true) > 0;
-            if (anyExist) {
-                LOG.debugf("All agents busy, task %d stays pending", task.id);
+            // No agent available — wait if a suitable agent exists but is busy, otherwise fail clearly
+            if (agentPool.hasEnabledAgent(agentType)) {
+                LOG.debugf("All %sagents busy, task %d stays pending",
+                        agentType == null || agentType.isBlank() ? "" : agentType + " ", task.id);
                 return;
             }
-            failTask(task.id, "No agent available for task type: " + task.actionType);
+            failTask(task.id, noAgentMessage(agentType, task.actionType));
             return;
         }
 
@@ -239,7 +239,7 @@ public class TaskExecutionService {
         // (required for OpenCode, which registers servers dynamically
         // via HTTP rather than consuming the config file above).
         try {
-            agentRegistry.getMcpManager(agentType).configureMcpServers(task.id, env, allowedTools);
+            agentRegistry.getMcpManager(lease.agent().getType()).configureMcpServers(task.id, env, allowedTools);
         } catch (Exception e) {
             LOG.warnf(e, "Failed to configure agent MCP servers for task %d", task.id);
         }
@@ -322,6 +322,21 @@ public class TaskExecutionService {
         }
 
         return env;
+    }
+
+    /**
+     * The failure message when no enabled agent can run an action type.
+     *
+     * @param engine     the action type's engine, or null/blank for any
+     * @param actionType the action type name
+     * @return the message
+     */
+    static String noAgentMessage(String engine, String actionType) {
+        if (engine == null || engine.isBlank()) {
+            return "No agent available for task type: " + actionType;
+        }
+        return "No enabled agent of type '" + engine + "' is configured for action type '" + actionType
+                + "'. Add one under Components → Agents.";
     }
 
     /**

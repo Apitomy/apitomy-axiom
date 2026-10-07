@@ -121,7 +121,7 @@ class LogCorrelationTest {
             traceIdSeenByAgent.set((String) MDC.get(LogContext.TRACE_ID));
             return agentFuture;
         });
-        Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(),
+        Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(),
                 ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenReturn(Optional.of(new AgentLease(null, "fake-agent", agent)));
 
@@ -173,7 +173,7 @@ class LogCorrelationTest {
         TraceContext ctx = traceService.createTrace("create-workflow", "log correlation fail", null,
                 subjectId, "create-workflow", "root", null, null);
         Long taskId = createTask(subjectId, ctx.traceId());
-        Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(),
+        Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(),
                 ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Optional.empty());
 
         try (LogContext outer = LogContext.create().traceId("outer-trace")) {

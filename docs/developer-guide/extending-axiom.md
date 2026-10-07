@@ -88,8 +88,11 @@ type when the `Agent` implementation also implements `AgentMcpManager`.
 Registered agents don't self-select work — `AgentPool` leases an enabled, idle
 `AgentEntity` to a caller based on a requested capability string (e.g.
 `action:Auto-Label Issue`). `TaskExecutionService` requests `action:<action type>` for every task
-created by a workflow action node. See [AI Agents](../user-guide/concepts.md#ai-agents) for the
-capability-matching model.
+created by a workflow action node, together with the action type's engine: when the engine is set, only
+agents of that `agentType` are considered (an explicit agent assignment of another type is ignored); when it
+is blank, any type may run the task. If a suitable agent exists but is busy the task waits; if no enabled
+agent of the engine exists the task fails with a message naming the missing engine. See
+[AI Agents](../user-guide/concepts.md#ai-agents) for the capability-matching model.
 
 ### Interactive Assistant Session Drivers
 
