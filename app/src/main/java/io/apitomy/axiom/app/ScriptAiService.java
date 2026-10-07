@@ -75,6 +75,12 @@ public class ScriptAiService {
             treated as logs; send diagnostics to stderr (>&2). Never write outputs to a \
             file; Axiom only reads stdout.
 
+            Passing input values to commands: pipe them, e.g. \
+            printf '%s' {{inputs.labels}} | jq -r 'join(",")', or use an unquoted heredoc \
+            (<<EOF). Never put a placeholder inside a quoted heredoc (<<'EOF'): bash does \
+            not expand it there and the template is rejected. Put temporary files in \
+            $AXIOM_WORK_DIR or create them with mktemp, never at fixed /tmp paths.
+
             Return the script as structured JSON output, plus a brief explanation of what \
             you created or changed.
             """;

@@ -50,6 +50,8 @@ class AssistantReferenceTest {
         String ref = generator.generate();
         assertTrue(ref.contains("printing one JSON object to stdout"), ref);
         assertTrue(ref.contains("Outputs written to files are ignored"), ref);
+        assertTrue(ref.contains("printf '%s' {{inputs.labels}} | jq -r 'join(\",\")'"), ref);
+        assertTrue(ref.contains("quoted heredoc"), ref);
     }
 
     @Test

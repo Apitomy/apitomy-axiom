@@ -170,6 +170,12 @@ stdout as the last thing it prints, for example `jq -n --arg title "$TITLE" '{ti
 span several lines (as `jq` pretty-prints it). Earlier stdout lines are treated as logs, and stderr is kept
 separately in the execution log, so send diagnostics to stderr. Axiom does not read output files.
 
+**Inputs in scripts.** Each `{{inputs.NAME}}` becomes a reference to an environment variable that holds the
+value, quoted to suit where it appears, so values are never run as code. To hand a value to a command, pipe it
+(`printf '%s' {{inputs.labels}} | jq -r 'join(",")'`) or use an unquoted heredoc (`<<EOF`). A placeholder
+inside a quoted heredoc (`<<'EOF'`) would never be expanded, so such templates are rejected. Put temporary
+files in `$AXIOM_WORK_DIR` or create them with `mktemp`, not at fixed `/tmp` paths.
+
 **Script environment.** Scripts receive the plumbing environment variables `AXIOM_API_URL` (Axiom's
 API base URL), `AXIOM_TASK_ID` and `AXIOM_WORK_DIR`, plus secrets and the action type's environment.
 A script runs in its subject's workspace (`AXIOM_WORK_DIR`), or in a temporary directory when the task has

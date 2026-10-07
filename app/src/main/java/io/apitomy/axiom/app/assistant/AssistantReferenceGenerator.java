@@ -32,7 +32,10 @@ public class AssistantReferenceGenerator {
     static final String SCRIPT_OUTPUT_RULE = "A script returns its outputs by printing one JSON object to "
             + "stdout as the last thing it prints (e.g. `jq -n --arg x \"$X\" '{x: $x}'`); it may span several "
             + "lines. Earlier stdout lines are treated as logs; send diagnostics to stderr. Outputs written to "
-            + "files are ignored.";
+            + "files are ignored. To hand an input to a command, pipe it (`printf '%s' {{inputs.labels}} | jq -r "
+            + "'join(\",\")'`) or use an unquoted heredoc (`<<EOF`); placeholders inside a quoted heredoc "
+            + "(`<<'EOF'`) are never expanded and are rejected. Put temporary files in `$AXIOM_WORK_DIR` or create "
+            + "them with `mktemp`, never at fixed `/tmp` paths.";
 
     /**
      * Per node type documentation of config fields; keys must cover every {@link NodeType}.
