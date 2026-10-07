@@ -97,19 +97,17 @@ public class SeedDataInitializer {
             return;
         }
 
-        AgentEntity agent = new AgentEntity();
-        agent.name = "Blinky";
-        agent.description = "AI agent powered by Claude Code CLI";
-        agent.agentType = "claude-code";
-        agent.enabled = true;
-        agent.persist();
-        AgentCapabilityEntity.setCapabilities(agent.id, List.of("*"));
-        LOG.infof("Seeded agent: %s (%s)", agent.name, agent.agentType);
+        seedAgent("Blinky", "AI agent powered by Claude Code CLI", "claude-code");
+        seedAgent("Clyde", "AI agent powered by Claude Code CLI", "claude-code");
+        seedAgent("Pinky", "AI agent powered by OpenCode", "opencode");
+        seedAgent("Inky", "AI agent powered by OpenCode", "opencode");
+    }
 
-        agent = new AgentEntity();
-        agent.name = "Clyde";
-        agent.description = "AI agent powered by Claude Code CLI";
-        agent.agentType = "claude-code";
+    private void seedAgent(String name, String description, String agentType) {
+        AgentEntity agent = new AgentEntity();
+        agent.name = name;
+        agent.description = description;
+        agent.agentType = agentType;
         agent.enabled = true;
         agent.persist();
         AgentCapabilityEntity.setCapabilities(agent.id, List.of("*"));

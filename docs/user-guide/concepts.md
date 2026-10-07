@@ -260,6 +260,12 @@ capabilities are scoped — therefore determines how much work can run in parall
 `action:security-review` to a single agent guarantees that sensitive work runs one at a time while
 general work (`action:*` on several agents) runs in parallel.
 
+An action type's **Engine** restricts which agents may run it: an action type with engine `opencode` only
+runs on agents of type `opencode`. A busy matching agent makes the task wait; if no enabled agent of that type
+exists the task fails with a message naming the missing engine. Leave the engine blank to allow any agent
+type. A new installation is seeded with four agents with capability `*`: **Blinky** and **Clyde** (Claude
+Code) and **Pinky** and **Inky** (OpenCode).
+
 ---
 
 ## Events and Subscriptions
