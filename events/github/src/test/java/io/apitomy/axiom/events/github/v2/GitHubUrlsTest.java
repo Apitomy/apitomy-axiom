@@ -6,6 +6,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GitHubUrlsTest {
 
@@ -44,6 +45,30 @@ class GitHubUrlsTest {
         GitHubUrls urls = GitHubUrls.resolve(input);
         assertEquals(web, urls.webBaseUrl(), "web");
         assertEquals(api, urls.apiBaseUrl(), "api");
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @CsvSource({
+        "https://github.com/EricWittmann/cb-test-project/issues/152,        EricWittmann/cb-test-project",
+        "https://github.com/o/r/pull/7,                                     o/r",
+        "https://github.com/o/r/commit/abc123,                              o/r",
+        "https://github.com/o/r/tree/main,                                  o/r",
+        "https://github.com/o/r/releases/tag/v1.0,                          o/r",
+        "https://github.com/o/r,                                            o/r",
+        "https://github.com/o/r/,                                           o/r",
+        "https://github.ibm.com/Apicurio/apicurio-csd/issues/3,             Apicurio/apicurio-csd",
+        "https://example.com/github/team/repo/issues/9,                     team/repo",
+    })
+    void repositoryFromRef(String ref, String repository) {
+        assertEquals(repository, GitHubUrls.repositoryFromRef(ref).orElseThrow());
+    }
+
+    @Test
+    void repositoryFromRefIsEmptyWhenUnknown() {
+        assertTrue(GitHubUrls.repositoryFromRef(null).isEmpty());
+        assertTrue(GitHubUrls.repositoryFromRef("https://github.com").isEmpty());
+        assertTrue(GitHubUrls.repositoryFromRef("https://github.com/only-owner").isEmpty());
+        assertTrue(GitHubUrls.repositoryFromRef("not a url").isEmpty());
     }
 
     @Test

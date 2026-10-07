@@ -786,16 +786,40 @@ public class EventStreamOrchestrator {
                 findOrCreateSubjectForStreamEvent(event, traceId).id);
     }
 
+    /**
+     * The {@code owner/repo} an event belongs to, for GitHub events (derived from the event ref).
+     *
+     * @param event the stream event
+     * @return the repository, or null for non-GitHub events or when it cannot be determined
+     */
+    static String repositoryFor(StreamEventEntity event) {
+        if (!"github".equals(event.source)) {
+            return null;
+        }
+        return io.apitomy.axiom.events.github.v2.GitHubUrls.repositoryFromRef(event.ref).orElse(null);
+    }
+
     private SubjectEntity findOrCreateSubjectForStreamEvent(StreamEventEntity event,
                                                             UUID traceId) {
         // Try to find existing subject by ref
         SubjectEntity subject = SubjectEntity.find("ref", event.ref).firstResult();
-        if (subject != null) return subject;
+        if (subject != null) {
+            // Subjects created before the repository was recorded get it filled in now
+            if (subject.repository == null || subject.repository.isBlank()) {
+                String repository = repositoryFor(event);
+                if (repository != null) {
+                    subject.repository = repository;
+                    subject.updatedOn = Instant.now();
+                }
+            }
+            return subject;
+        }
 
         // Auto-create with metadata from the payload
         subject = new SubjectEntity();
         subject.ref = event.ref;
         subject.refSource = event.source;
+        subject.repository = repositoryFor(event);
         subject.type = determineSubjectType(event.type);
         subject.createdOn = Instant.now();
         subject.updatedOn = Instant.now();

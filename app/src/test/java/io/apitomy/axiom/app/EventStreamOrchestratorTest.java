@@ -423,6 +423,44 @@ class EventStreamOrchestratorTest {
     }
 
     @Test
+    void subjectFromGitHubEventGetsRepository() {
+        String ref = "https://github.com/test-org/repo-from-ref/issues/77701";
+        insertStreamEvent("ev-repo-1", "issue.created", "conn-1", ref);
+        insertSubscription("repo-test", null, true,
+                "[{\"type\":\"create-workflow\",\"workflowDefinitionId\":99999}]");
+
+        orchestrator.processNewEvents();
+
+        String repository = QuarkusTransaction.requiringNew().call(() ->
+            ((SubjectEntity) SubjectEntity.find("ref", ref).firstResult()).repository);
+        assertEquals("test-org/repo-from-ref", repository);
+    }
+
+    @Test
+    void existingGitHubSubjectWithoutRepositoryIsBackfilled() {
+        String ref = "https://github.com/test-org/backfill-repo/issues/77702";
+        QuarkusTransaction.requiringNew().run(() -> {
+            SubjectEntity s = new SubjectEntity();
+            s.name = "pre-existing";
+            s.type = "issue";
+            s.ref = ref;
+            s.refSource = "github";
+            s.createdOn = Instant.now();
+            s.updatedOn = Instant.now();
+            s.persist();
+        });
+        insertStreamEvent("ev-repo-2", "issue.updated", "conn-1", ref);
+        insertSubscription("backfill-test", null, true,
+                "[{\"type\":\"create-workflow\",\"workflowDefinitionId\":99999}]");
+
+        orchestrator.processNewEvents();
+
+        String repository = QuarkusTransaction.requiringNew().call(() ->
+            ((SubjectEntity) SubjectEntity.find("ref", ref).firstResult()).repository);
+        assertEquals("test-org/backfill-repo", repository);
+    }
+
+    @Test
     void disabledSubscriptionIsSkipped() {
         insertStreamEvent("ev-disabled-1", "issue.created", "conn-1", "https://github.com/org/repo/issues/1");
 
