@@ -513,6 +513,26 @@ class ActionTypeValidatorTest {
     }
 
     @Test
+    void nodeRefPlaceholderIsError() {
+        NewActionType at = makeNode("n", "d",
+                "export async function run() { return { a: '{{ref}}' }; }\n");
+
+        assertTrue(hasError(ActionTypeValidator.validate(at),
+                "Node actions receive inputs as run(inputs, ctx); placeholders are not supported."));
+    }
+
+    @Test
+    void nodeNonPlaceholderBracesAccepted() {
+        for (String body : List.of("const s = \"${{ secrets.TOKEN }}\";",
+                "const s = \"{{#each items}}\";", "const o = ({ a: { b: 1 } });")) {
+            NewActionType at = makeNode("n", "d",
+                    body + "\nexport async function run() { return {}; }\n");
+            assertFalse(hasError(ActionTypeValidator.validate(at),
+                    "Node actions receive inputs as run(inputs, ctx); placeholders are not supported."), body);
+        }
+    }
+
+    @Test
     void nodeNpmImportIsError() {
         NewActionType at = makeNode("n", "d",
                 "import _ from \"lodash\";\nexport async function run() { return {}; }\n");

@@ -176,6 +176,10 @@ public final class ActionTypeValidator {
         }
     }
 
+    /** Axiom-placeholder-shaped text in node code; excludes {@code ${{ ... }}} and mustache sections. */
+    private static final java.util.regex.Pattern AXIOM_PLACEHOLDER_IN_CODE =
+            java.util.regex.Pattern.compile("(?<!\\$)\\{\\{\\s*[A-Za-z_][\\w.]*\\s*\\}\\}");
+
     private static void validateCodeTemplate(NewActionType def, List<ValidationMessage> messages) {
         if (!"node".equals(executionMode(def))) {
             return;
@@ -185,7 +189,7 @@ public final class ActionTypeValidator {
             messages.add(error("codeTemplate", "Code is required for node-mode action types."));
             return;
         }
-        if (code.contains("{{")) {
+        if (AXIOM_PLACEHOLDER_IN_CODE.matcher(code).find()) {
             messages.add(error("codeTemplate",
                     "Node actions receive inputs as run(inputs, ctx); placeholders are not supported."));
         }

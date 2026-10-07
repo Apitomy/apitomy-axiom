@@ -4,9 +4,14 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -41,7 +46,17 @@ public final class NodeModuleChecks {
     private static final Pattern INPUT_READ_PATTERN =
             Pattern.compile("(?<![\\w$.])inputs\\.([A-Za-z_$][\\w$]*)");
 
-    private static final long CHECK_TIMEOUT_SECONDS = 10;
+    private static final long CHECK_TIMEOUT_SECONDS = 3;
+    private static final int CACHE_SIZE = 256;
+
+    /** LRU cache of {@code node --check} results keyed by SHA-256 of the code; guarded by itself. */
+    private static final Map<String, Optional<String>> CACHE =
+            new LinkedHashMap<>(16, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, Optional<String>> eldest) {
+                    return size() > CACHE_SIZE;
+                }
+            };
 
     private NodeModuleChecks() {
     }
@@ -103,16 +118,47 @@ public final class NodeModuleChecks {
      * @throws IllegalStateException with message {@code "node unavailable"} if node cannot be started
      */
     public static Optional<String> syntaxError(String code) {
-        Path file;
-        Path errFile;
-        try {
-            file = Files.createTempFile("axiom-node-check-", ".mjs");
-            errFile = Files.createTempFile("axiom-node-check-", ".err");
-            Files.writeString(file, code, StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new IllegalStateException("Could not write temp module", e);
+        String key = sha256(code);
+        synchronized (CACHE) {
+            Optional<String> cached = CACHE.get(key);
+            if (cached != null) {
+                return cached;
+            }
         }
+        Optional<String> result = runCheck(code);
+        synchronized (CACHE) {
+            CACHE.put(key, result);
+        }
+        return result;
+    }
+
+    /** Number of cached syntax check results (for tests). */
+    static int cacheSize() {
+        synchronized (CACHE) {
+            return CACHE.size();
+        }
+    }
+
+    private static String sha256(String code) {
         try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(code.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static Optional<String> runCheck(String code) {
+        Path file = null;
+        Path errFile = null;
+        try {
+            try {
+                file = Files.createTempFile("axiom-node-check-", ".mjs");
+                errFile = Files.createTempFile("axiom-node-check-", ".err");
+                Files.writeString(file, code, StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                throw new IllegalStateException("Could not write temp module", e);
+            }
             Process process;
             try {
                 process = new ProcessBuilder("node", "--check", file.toString())
@@ -139,12 +185,19 @@ public final class NodeModuleChecks {
                 throw new IllegalStateException("node --check interrupted", e);
             }
         } finally {
-            try {
-                Files.deleteIfExists(file);
-                Files.deleteIfExists(errFile);
-            } catch (IOException ignored) {
-                // best effort
-            }
+            deleteQuietly(file);
+            deleteQuietly(errFile);
+        }
+    }
+
+    private static void deleteQuietly(Path path) {
+        if (path == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException ignored) {
+            // best effort
         }
     }
 

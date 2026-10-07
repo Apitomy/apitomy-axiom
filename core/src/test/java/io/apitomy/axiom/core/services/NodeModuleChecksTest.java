@@ -99,4 +99,27 @@ class NodeModuleChecksTest {
         }
         Assumptions.assumeTrue(available, "node not available");
     }
+
+    @Test
+    void syntaxErrorCachesResultsByCode() {
+        Assumptions.assumeTrue(nodeAvailable(), "node is not installed");
+        String code = "export const x" + System.nanoTime() + " = (;\n";
+        int before = NodeModuleChecks.cacheSize();
+        Optional<String> first = NodeModuleChecks.syntaxError(code);
+        assertEquals(before + 1, NodeModuleChecks.cacheSize());
+        Optional<String> second = NodeModuleChecks.syntaxError(code);
+        assertEquals(before + 1, NodeModuleChecks.cacheSize());
+        assertTrue(first.isPresent());
+        assertEquals(first, second);
+    }
+
+    private static boolean nodeAvailable() {
+        try {
+            Process p = new ProcessBuilder("node", "--version").redirectErrorStream(true).start();
+            p.getInputStream().readAllBytes();
+            return p.waitFor() == 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
 }
