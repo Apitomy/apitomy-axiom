@@ -111,6 +111,8 @@ describe("AssistantGeneratedItems previews", () => {
         expect(items.map((i) => i.textContent)).toEqual(["my-org/my-repo", "my-org/other"]);
         expect(within(list.closest("dl") as HTMLElement).queryByText(/"repositories"/)).not.toBeInTheDocument();
         expect(within(dialog).getByText("extra")).toBeInTheDocument();
+        expect(within(dialog).getByText("Base URL")).toBeInTheDocument();
+        expect(within(dialog).getByText("https://api.github.com")).toBeInTheDocument();
     });
 
     it("shows Jira projects as a list", async () => {

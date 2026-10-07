@@ -36,6 +36,7 @@ export function EventSourceDetailModal({ isOpen, onClose, name, content, errors 
     const description = (content.description as string) || "";
     const sourceType = (content.sourceType as string) || "";
     const enabled = content.enabled as boolean ?? false;
+    const baseUrl = (content.baseUrl as string) || "";
     const pollInterval = content.pollInterval as number | undefined;
     const secretName = (content.secretName as string) || "";
     const configuration = content.configuration as Record<string, unknown> | undefined;
@@ -71,6 +72,10 @@ export function EventSourceDetailModal({ isOpen, onClose, name, content, errors 
                                             {sourceType || "—"}
                                         </Label>
                                     </DescriptionListDescription>
+                                </DescriptionListGroup>
+                                <DescriptionListGroup>
+                                    <DescriptionListTerm>Base URL</DescriptionListTerm>
+                                    <DescriptionListDescription>{baseUrl || "—"}</DescriptionListDescription>
                                 </DescriptionListGroup>
                                 <DescriptionListGroup>
                                     <DescriptionListTerm>Enabled</DescriptionListTerm>
