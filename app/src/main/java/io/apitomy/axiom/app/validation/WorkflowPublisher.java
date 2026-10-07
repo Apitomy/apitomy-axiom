@@ -61,14 +61,14 @@ public class WorkflowPublisher {
                     Response.status(400).entity(Map.of("message", violation.get())).build());
         }
 
-        List<WorkflowContentRules.InputMappingProblem> mappingProblems = WorkflowContentRules.inputMappingProblems(
-                workflow, ValidationContextFactory.actionTypeInputs(ActionTypeEntity.listAll()));
-        if (!mappingProblems.isEmpty()) {
-            List<String> messages = mappingProblems.stream()
-                    .map(WorkflowContentRules.InputMappingProblem::message)
-                    .toList();
+        List<String> mappingErrors = WorkflowContentRules.inputMappingProblems(
+                        workflow, ValidationContextFactory.actionTypeInputs(ActionTypeEntity.listAll())).stream()
+                .filter(WorkflowContentRules.InputMappingProblem::error)
+                .map(WorkflowContentRules.InputMappingProblem::message)
+                .toList();
+        if (!mappingErrors.isEmpty()) {
             throw new WebApplicationException(Response.status(400)
-                    .entity(Map.of("message", messages.get(0), "problems", messages)).build());
+                    .entity(Map.of("message", mappingErrors.get(0), "problems", mappingErrors)).build());
         }
 
         int newVersion = entity.currentVersion != null ? entity.currentVersion + 1 : 1;

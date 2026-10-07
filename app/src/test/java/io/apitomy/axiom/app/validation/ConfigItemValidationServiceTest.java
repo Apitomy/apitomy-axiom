@@ -212,6 +212,58 @@ class ConfigItemValidationServiceTest {
     }
 
     @Test
+    void blankRequiredInputMappingIsRejected() throws Exception {
+        List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW,
+                json(withNodeInputs("{\"ref\": \"  \"}")), withInputs());
+        assertTrue(problems.stream().anyMatch(p -> p.isError() && p.code().equals("EMPTY_INPUT_MAPPING")
+                && p.path().equals("content.nodes[1].config.inputs.ref")), problems.toString());
+    }
+
+    @Test
+    void invalidElInputMappingIsRejected() throws Exception {
+        List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW,
+                json(withNodeInputs("{\"ref\": \"context.ref ==\"}")), withInputs());
+        assertTrue(problems.stream().anyMatch(p -> p.isError() && p.code().equals("INVALID_INPUT_EXPRESSION")
+                && p.path().equals("content.nodes[1].config.inputs.ref")), problems.toString());
+    }
+
+    @Test
+    void unknownContextKeyInRequiredMappingIsRejected() throws Exception {
+        List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW,
+                json(withNodeInputs("{\"ref\": \"context.issueUrl\"}")), withInputs());
+        assertTrue(problems.stream().anyMatch(p -> p.isError() && p.code().equals("UNKNOWN_CONTEXT_KEY")
+                && p.path().equals("content.nodes[1].config.inputs.ref")
+                && p.message().contains("issueUrl")), problems.toString());
+    }
+
+    @Test
+    void unknownContextKeyInOptionalMappingWarns() throws Exception {
+        List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW,
+                json(withNodeInputs("{\"ref\": \"context.ref\", \"note\": \"context.nothing\"}")), withInputs());
+        assertFalse(ConfigItemValidationService.hasErrors(problems), problems.toString());
+        assertTrue(problems.stream().anyMatch(p -> !p.isError() && p.code().equals("UNKNOWN_CONTEXT_KEY")
+                && p.path().equals("content.nodes[1].config.inputs.note")), problems.toString());
+    }
+
+    @Test
+    void contextKeysFromStartInputsAreKnown() throws Exception {
+        String wf = withNodeInputs("{\"ref\": \"context.ref\", \"note\": \"context.priority\"}")
+                .replace("{\"id\": \"s\", \"type\": \"start\", \"name\": \"Start\", \"config\": {}",
+                        "{\"id\": \"s\", \"type\": \"start\", \"name\": \"Start\", "
+                                + "\"config\": {\"inputs\": [{\"name\": \"priority\", \"type\": \"string\"}]}");
+        List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW, json(wf), withInputs());
+        assertTrue(problems.stream().noneMatch(p -> p.code().equals("UNKNOWN_CONTEXT_KEY")), problems.toString());
+    }
+
+    @Test
+    void bareEventReferenceInMappingIsRejected() throws Exception {
+        List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW,
+                json(withNodeInputs("{\"ref\": \"event.ref\"}")), withInputs());
+        assertTrue(problems.stream().anyMatch(p -> p.isError() && p.code().equals("BARE_EVENT_REFERENCE")
+                && p.message().contains("context.event")), problems.toString());
+    }
+
+    @Test
     void subscriptionMayReferenceWorkflowByName() throws Exception {
         ValidationContext ctx = new ValidationContext(Set.of(), Set.of(), Set.of(), Set.of("triage"),
                 Set.of(), Set.of(), Set.of(), null);

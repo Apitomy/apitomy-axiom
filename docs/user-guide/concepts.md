@@ -142,6 +142,13 @@ These keys cannot be overridden by supplied run inputs. Mapping rules:
 - Mapping a name that is not a declared input is an error.
 - An **optional** input may be left unmapped; it is then absent, omitted from the Inputs section, and
   `{{inputs.NAME}}` renders as an empty string.
+- A required input may not be mapped to an empty expression, and every mapping must be valid EL.
+- Mappings read the run context, so use `context.event`, not a bare `event.` reference.
+- A `context.KEY` reference must name a key the workflow provides: a key from the table above, a Start node
+  input, or an output that a node writes to the context. An unknown key is an error for a required input and
+  a warning for an optional one.
+- Validation does not consider branch order, and an expression can still evaluate to nothing at run time (for
+  example a missing payload field). A task whose required input has no value fails when it starts.
 
 For example, an action type declaring a required `ref` input and an optional `repository` input, used by a
 node that maps `ref` from `context.ref` and `repository` from `context.repository`:

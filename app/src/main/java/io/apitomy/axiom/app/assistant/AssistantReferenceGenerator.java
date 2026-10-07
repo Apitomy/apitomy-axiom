@@ -147,6 +147,10 @@ public class AssistantReferenceGenerator {
                 .append("`AXIOM_TASK_ID`, `AXIOM_WORK_DIR`; agents get data only through declared inputs. ")
                 .append("The workflow context provides `subjectId`, ")
                 .append("`subjectName`, `ref`, `repository` and `event` for mapping into inputs.\n\n")
+                .append("Node input mappings (`config.inputs` on an `action` node): map every required input; "
+                        + "map no undeclared input; each value is EL over the run context (use `context.event`, "
+                        + "never a bare `event.`); a `context.<key>` reference must name a built-in key, a "
+                        + "Start input, or an output some node writes to the context.\n\n")
                 .append("Input and output field types: `string`, `number`, `boolean`, `object`.\n\n")
                 .append("`allowedTools` entry formats: `mcp__axiom-tools__<tool>` (a tool), `@<toolset>` ")
                 .append("(a toolset), or one of the Axiom SDK tools: ")
