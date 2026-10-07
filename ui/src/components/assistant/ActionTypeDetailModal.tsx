@@ -10,14 +10,13 @@ import {
     Tab,
     Tabs,
     TabTitleText,
-    EmptyState,
-    EmptyStateBody,
 } from "@patternfly/react-core";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { useState } from "react";
 import { useEffectiveTheme } from "../../hooks/useTheme";
 import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
 import { ValidationProblemsTab } from "./ValidationProblemsTab";
+import { FieldsTable } from "./FieldsTable";
 import "./ActionTypeDetailModal.css";
 
 interface ActionTypeDetailModalProps {
@@ -26,35 +25,6 @@ interface ActionTypeDetailModalProps {
     name: string;
     content: Record<string, unknown>;
     errors?: string[];
-}
-
-function FieldsTable({ fields }: { fields: { name: string; type: string; required?: boolean; description?: string }[] }) {
-    if (fields.length === 0) {
-        return (
-            <EmptyState variant="sm">
-                <EmptyStateBody>No fields declared.</EmptyStateBody>
-            </EmptyState>
-        );
-    }
-    return (
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {fields.map((f, i) => (
-                <div key={i} style={{
-                    display: "flex", alignItems: "center", gap: 8,
-                    padding: "8px 12px",
-                    backgroundColor: "var(--pf-t--global--background--color--secondary--default)",
-                    borderRadius: 4,
-                }}>
-                    <span style={{ fontWeight: 600, fontSize: 13, minWidth: 140 }}>{f.name}</span>
-                    <Label isCompact color="blue">{f.type}</Label>
-                    {f.required && <Label isCompact color="orange">required</Label>}
-                    {f.description && (
-                        <span className="axiom-text-subtle" style={{ fontSize: 13, flex: 1 }}>{f.description}</span>
-                    )}
-                </div>
-            ))}
-        </div>
-    );
 }
 
 export function ActionTypeDetailModal({ isOpen, onClose, name, content, errors }: ActionTypeDetailModalProps) {

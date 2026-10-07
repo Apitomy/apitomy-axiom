@@ -4,8 +4,6 @@ import {
     DescriptionListDescription,
     DescriptionListGroup,
     DescriptionListTerm,
-    List,
-    ListItem,
     Modal,
     ModalBody,
     ModalHeader,
@@ -20,6 +18,7 @@ import type { Workflow, WorkflowInstance } from "@apitomy/flow-ui";
 import { useMemo, useState } from "react";
 import { useEffectiveTheme } from "../../hooks/useTheme";
 import { ValidationProblemsTab } from "./ValidationProblemsTab";
+import { FieldsTable } from "./FieldsTable";
 import "./ActionTypeDetailModal.css";
 
 interface WorkflowDetailModalProps {
@@ -139,27 +138,21 @@ export function WorkflowDetailModal({ isOpen, onClose, name, content, errors }: 
                                         {workflow ? `${workflow.nodes.length} / ${workflow.edges.length}` : "—"}
                                     </DescriptionListDescription>
                                 </DescriptionListGroup>
-                                <DescriptionListGroup>
-                                    <DescriptionListTerm>Start inputs</DescriptionListTerm>
-                                    <DescriptionListDescription>
-                                        {startInputs.length === 0 ? "—" : (
-                                            <List aria-label="Start inputs" isPlain>
-                                                {startInputs.map((input) => (
-                                                    <ListItem key={input.name}>
-                                                        <code>{input.name}</code>
-                                                        {` (${input.type || "string"}`}
-                                                        {input.required ? ", required" : ", optional"}
-                                                        {")"}
-                                                        {input.description ? ` — ${input.description}` : ""}
-                                                    </ListItem>
-                                                ))}
-                                            </List>
-                                        )}
-                                    </DescriptionListDescription>
-                                </DescriptionListGroup>
                             </DescriptionList>
                         </div>
                     </Tab>
+                    {startInputs.length > 0 && (
+                        <Tab eventKey={4} title={<TabTitleText>Inputs ({startInputs.length})</TabTitleText>}>
+                            <div style={{ paddingTop: 16 }}>
+                                <FieldsTable fields={startInputs.map((input) => ({
+                                    name: input.name ?? "",
+                                    type: input.type,
+                                    required: input.required,
+                                    description: input.description,
+                                }))} />
+                            </div>
+                        </Tab>
+                    )}
                     <Tab eventKey={2} title={<TabTitleText>Source</TabTitleText>}>
                         <div style={{ paddingTop: 16, flex: "1 1 0", minHeight: 0 }}>
                             <CodeEditor

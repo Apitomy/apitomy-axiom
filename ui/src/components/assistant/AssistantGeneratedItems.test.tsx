@@ -133,18 +133,24 @@ describe("AssistantGeneratedItems previews", () => {
         expect(within(dialog).getByTestId("workflow-viewer")).toHaveTextContent("2 nodes");
     });
 
-    it("lists start inputs on the details tab", async () => {
+    it("shows start inputs on an Inputs tab", async () => {
         const dialog = await openItem("triage-inputs");
         await userEvent.click(within(dialog).getByRole("tab", { name: "Details" }));
-        const list = within(dialog).getByRole("list", { name: "Start inputs" });
-        const items = within(list).getAllByRole("listitem");
-        expect(items).toHaveLength(2);
-        expect(items[0]).toHaveTextContent("ref");
-        expect(items[0]).toHaveTextContent("string");
-        expect(items[0]).toHaveTextContent("required");
-        expect(items[0]).toHaveTextContent("Issue URL");
-        expect(items[1]).toHaveTextContent("priority");
-        expect(items[1]).not.toHaveTextContent("required");
+        expect(within(dialog).queryByText("Start inputs")).not.toBeInTheDocument();
+        await userEvent.click(within(dialog).getByRole("tab", { name: "Inputs (2)" }));
+        const rows = within(dialog).getAllByTestId("field-row");
+        expect(rows).toHaveLength(2);
+        expect(rows[0]).toHaveTextContent("ref");
+        expect(rows[0]).toHaveTextContent("string");
+        expect(rows[0]).toHaveTextContent("required");
+        expect(rows[0]).toHaveTextContent("Issue URL");
+        expect(rows[1]).toHaveTextContent("priority");
+        expect(rows[1]).not.toHaveTextContent("required");
+    });
+
+    it("has no Inputs tab when the workflow declares no start inputs", async () => {
+        const dialog = await openItem("triage");
+        expect(within(dialog).queryByRole("tab", { name: /^Inputs/ })).not.toBeInTheDocument();
     });
 
     it("opens the subscription preview with filter and routing", async () => {
