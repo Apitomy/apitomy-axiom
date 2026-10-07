@@ -3,6 +3,7 @@ import { Label } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { type ActionType, fetchActionTypes } from "../../../config/api";
 import { registerWidget, type WidgetProps } from "../widget-registry";
+import { executionModeColor } from "../../executionModeColor";
 import { WidgetError } from "../WidgetError";
 
 function ActionTypesWidget({ config, labels }: WidgetProps) {
@@ -42,7 +43,7 @@ function ActionTypesWidget({ config, labels }: WidgetProps) {
                     <Tr key={at.id}>
                         <Td>{at.name}</Td>
                         <Td>
-                            <Label isCompact color={at.executionMode === "agent" ? "blue" : "purple"}>
+                            <Label isCompact color={executionModeColor(at.executionMode)}>
                                 {at.executionMode}
                             </Label>
                         </Td>

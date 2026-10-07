@@ -16,6 +16,7 @@ import { useState } from "react";
 import { useEffectiveTheme } from "../../hooks/useTheme";
 import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
 import { ValidationProblemsTab } from "./ValidationProblemsTab";
+import { executionModeColor } from "../executionModeColor";
 import { FieldsTable } from "./FieldsTable";
 import "./ActionTypeDetailModal.css";
 
@@ -38,6 +39,7 @@ export function ActionTypeDetailModal({ isOpen, onClose, name, content, errors }
     const rawAllowedTools = content.allowedTools;
     const promptTemplate = (content.promptTemplate as string) || "";
     const scriptTemplate = (content.scriptTemplate as string) || "";
+    const codeTemplate = (content.codeTemplate as string) || "";
     const model = (content.model as string) || "";
     const engine = (content.engine as string) || "";
     const maxSteps = content.maxSteps as number | undefined;
@@ -51,9 +53,10 @@ export function ActionTypeDetailModal({ isOpen, onClose, name, content, errors }
             : [];
 
     const isAgentMode = executionMode === "agent";
-    const templateContent = isAgentMode ? promptTemplate : scriptTemplate;
-    const templateLabel = isAgentMode ? "Prompt Template" : "Script Template";
-    const templateLanguage = isAgentMode ? Language.markdown : Language.shell;
+    const isNodeMode = executionMode === "node";
+    const templateContent = isAgentMode ? promptTemplate : isNodeMode ? codeTemplate : scriptTemplate;
+    const templateLabel = isAgentMode ? "Prompt Template" : isNodeMode ? "Code" : "Script Template";
+    const templateLanguage = isAgentMode ? Language.markdown : isNodeMode ? Language.javascript : Language.shell;
 
     return (
         <Modal
@@ -81,7 +84,7 @@ export function ActionTypeDetailModal({ isOpen, onClose, name, content, errors }
                                 <DescriptionListGroup>
                                     <DescriptionListTerm style={{ whiteSpace: "nowrap" }}>Execution Mode</DescriptionListTerm>
                                     <DescriptionListDescription>
-                                        <Label isCompact color={isAgentMode ? "blue" : "orange"}>
+                                        <Label isCompact color={executionModeColor(executionMode)}>
                                             {executionMode}
                                         </Label>
                                     </DescriptionListDescription>

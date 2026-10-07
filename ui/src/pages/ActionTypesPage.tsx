@@ -40,6 +40,7 @@ import {
     createActionType,
     deleteActionType,
 } from "../config/api";
+import { executionModeColor } from "../components/executionModeColor";
 import { ColoredLabel } from "../components/ColoredLabel";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
@@ -49,6 +50,13 @@ import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 const DEFAULT_PROMPT_TEMPLATE = "Describe the task the agent should perform. Declared inputs are listed\nautomatically in an Inputs section and can be referenced inline.\n";
 const DEFAULT_SCRIPT_TEMPLATE =
     "#!/usr/bin/env bash\nset -euo pipefail\n\n# TODO: implement this action\necho \"Running task $AXIOM_TASK_ID\"\n";
+const DEFAULT_NODE_TEMPLATE =
+    "// inputs: the declared inputs. ctx: { workDir, apiUrl, taskId, log(...), exec(cmd, args, options) }\n"
+    + "// Only Node.js built-in modules may be imported (e.g. node:fs).\n"
+    + "export async function run(inputs, ctx) {\n"
+    + "    ctx.log(\"running\");\n"
+    + "    return {};\n"
+    + "}\n";
 
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "name", label: "Name", testId: "action-type-filter-name" },
@@ -140,6 +148,7 @@ export function ActionTypesPage() {
             executionMode: newMode,
             promptTemplate: newMode === "agent" ? DEFAULT_PROMPT_TEMPLATE : undefined,
             scriptTemplate: newMode === "script" ? DEFAULT_SCRIPT_TEMPLATE : undefined,
+            codeTemplate: newMode === "node" ? DEFAULT_NODE_TEMPLATE : undefined,
         };
         createActionType(data)
             .then((created) => {
@@ -244,7 +253,7 @@ export function ActionTypesPage() {
                                     <Td>{at.name}</Td>
                                     <Td>
                                         <Label isCompact
-                                            color={at.executionMode === "agent" ? "blue" : "orange"}
+                                            color={executionModeColor(at.executionMode)}
                                             style={{ cursor: "pointer" }}
                                             onClick={(e) => {
                                                 e.stopPropagation();
@@ -310,6 +319,7 @@ export function ActionTypesPage() {
                             >
                                 <FormSelectOption value="agent" label="Agent — AI agent" />
                                 <FormSelectOption value="script" label="Script — bash script" />
+                                <FormSelectOption value="node" label="Node.js — runs a JavaScript module" />
                             </FormSelect>
                         </FormGroup>
                     </Form>

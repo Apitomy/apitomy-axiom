@@ -37,6 +37,7 @@ import { EnvironmentTab } from "../components/EnvironmentTab";
 import { ActionTypeFieldsTab } from "../components/ActionTypeFieldsTab";
 import { LabelDisplay } from "../components/LabelDisplay";
 import { ToolListEditor } from "../components/ToolListEditor";
+import { NodeCodeTab } from "../components/NodeCodeTab";
 import { ScriptAiModal } from "../components/ScriptAiModal";
 import { ActionTypeAiModal } from "../components/ActionTypeAiModal";
 import { ValidationProblemsPanel } from "../components/ValidationProblemsPanel";
@@ -153,6 +154,9 @@ export function ActionTypeDetailPage() {
         }
         if (form.executionMode === "script") {
             visible.add(4);
+        }
+        if (form.executionMode === "node") {
+            visible.add(11);
         }
         visible.add(6);
         visible.add(7);
@@ -382,6 +386,16 @@ export function ActionTypeDetailPage() {
                         </TabContent>
                     </Tab>
                 )}
+                {form.executionMode === "node" && (
+                    <Tab eventKey={11} title={<TabTitleText>Code</TabTitleText>}>
+                        <TabContent id="code-tab" eventKey={11} activeKey={activeTab} style={{ marginTop: "24px" }}>
+                            <NodeCodeTab
+                                value={form.codeTemplate || ""}
+                                onChange={(v) => updateForm({ codeTemplate: v })}
+                            />
+                        </TabContent>
+                    </Tab>
+                )}
                 {validationMessages.length > 0 && (
                     <Tab eventKey={5} title={
                         <TabTitleText>
@@ -475,6 +489,7 @@ function InfoTab({ form, updateForm, onEditLabels }: {
                 >
                     <FormSelectOption value="agent" label="Agent — executed by an AI agent" />
                     <FormSelectOption value="script" label="Script — executes a bash script" />
+                    <FormSelectOption value="node" label="Node.js — runs a JavaScript module" />
                 </FormSelect>
             </FormGroup>
         </Form>

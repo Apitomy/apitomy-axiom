@@ -30,6 +30,7 @@ import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import DownloadIcon from "@patternfly/react-icons/dist/esm/icons/download-icon";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import TimesIcon from "@patternfly/react-icons/dist/esm/icons/times-icon";
+import { executionModeColor } from "../components/executionModeColor";
 import UploadIcon from "@patternfly/react-icons/dist/esm/icons/upload-icon";
 import {
     type ActionType,
@@ -343,7 +344,7 @@ export function ConfigurationPacksPage() {
                                             <Flex alignItems={{ default: "alignItemsCenter" }} style={{ gap: "8px" }}>
                                                 <FlexItem><span style={{ fontWeight: 600 }}>{item.name}</span></FlexItem>
                                                 <FlexItem>
-                                                    <Label isCompact color={at?.executionMode === "agent" ? "blue" : "orange"}>
+                                                    <Label isCompact color={executionModeColor(at?.executionMode)}>
                                                         {at?.executionMode || "—"}
                                                     </Label>
                                                 </FlexItem>
@@ -823,7 +824,7 @@ function ActionTypePickerModal({ isOpen, onClose, availableItems, modalSelected,
                                     </Td>
                                     <Td>{at.name}</Td>
                                     <Td>
-                                        <Label isCompact color={at.executionMode === "agent" ? "blue" : "orange"}>
+                                        <Label isCompact color={executionModeColor(at.executionMode)}>
                                             {at.executionMode}
                                         </Label>
                                     </Td>
