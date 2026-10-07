@@ -143,6 +143,7 @@ public class ScriptExecutionService {
         Instant startTime = Instant.now();
 
         Path scriptFile = Files.createTempFile("axiom-script-", ".sh");
+        WorkingDirectory workDir = workingDirectory(subject);
         try {
             Files.writeString(scriptFile, script);
             scriptFile.toFile().setExecutable(true);
@@ -150,8 +151,8 @@ public class ScriptExecutionService {
             LOG.infof("Executing script for task %d (%s), timeout %ds",
                     task.id, task.actionType, timeoutSeconds);
 
-            ProcessBuilder pb = new ProcessBuilder("/bin/bash", scriptFile.toString());
-            pb.environment().putAll(buildBaseEnvironment(task, subject));
+            ProcessBuilder pb = scriptProcess(scriptFile, workDir.path(),
+                    buildBaseEnvironment(task, workDir.path()));
 
             // Inject environment variables (custom or all secrets as fallback)
             if (environmentResolver.hasCustomEnvironment(actionType.environment)) {
@@ -192,6 +193,7 @@ public class ScriptExecutionService {
             return new RunResult(exitCode, output, executionLog);
         } finally {
             Files.deleteIfExists(scriptFile);
+            workDir.cleanUp();
         }
     }
 
@@ -341,21 +343,70 @@ public class ScriptExecutionService {
 
     /**
      * Builds the plumbing environment variables every script receives: the API base URL, the task ID
-     * and the subject's workspace directory. No subject data is exposed; scripts receive data only
+     * and the script's working directory. No subject data is exposed; scripts receive data only
      * through declared inputs.
      *
      * @param task    the task being executed
-     * @param subject the task's subject, may be {@code null}
+     * @param workDir the directory the script runs in
      * @return the plumbing environment variables
      */
-    Map<String, String> buildBaseEnvironment(TaskEntity task, SubjectEntity subject) {
+    Map<String, String> buildBaseEnvironment(TaskEntity task, Path workDir) {
         Map<String, String> env = new LinkedHashMap<>();
         env.put("AXIOM_API_URL", "http://localhost:" + httpPort + "/api/v1");
         env.put("AXIOM_TASK_ID", String.valueOf(task.id));
-        env.put("AXIOM_WORK_DIR", subject != null
-                ? workspaceService.getWorkspacePath(subject).toString()
-                : "");
+        env.put("AXIOM_WORK_DIR", workDir.toString());
         return env;
+    }
+
+    /**
+     * The directory a script runs in.
+     *
+     * @param path      the directory
+     * @param temporary true when it was created for this run and must be deleted afterwards
+     */
+    record WorkingDirectory(Path path, boolean temporary) {
+
+        /** Deletes the directory (recursively) if it was created for this run; a subject workspace is kept. */
+        void cleanUp() {
+            if (!temporary) {
+                return;
+            }
+            try (java.util.stream.Stream<Path> paths = Files.walk(path)) {
+                paths.sorted(java.util.Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+            } catch (IOException e) {
+                LOG.debugf("Failed to delete temporary script directory %s: %s", path, e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Chooses where a script runs: the subject's workspace (created if needed), or a new temporary directory
+     * when the task has no subject. Scripts never run in the server's own directory, so tools like {@code gh}
+     * or {@code git} cannot pick up the repository Axiom itself runs from.
+     *
+     * @param subject the task's subject, may be {@code null}
+     * @return the working directory
+     * @throws IOException if a temporary directory cannot be created
+     */
+    WorkingDirectory workingDirectory(SubjectEntity subject) throws IOException {
+        if (subject != null) {
+            return new WorkingDirectory(workspaceService.ensureWorkspace(subject), false);
+        }
+        return new WorkingDirectory(Files.createTempDirectory("axiom-script-dir-"), true);
+    }
+
+    /**
+     * Builds the process for a script file, running in {@code workDir} with the given extra environment.
+     *
+     * @param scriptFile the script to run
+     * @param workDir    the working directory
+     * @param env        environment variables to add
+     * @return the process builder
+     */
+    static ProcessBuilder scriptProcess(Path scriptFile, Path workDir, Map<String, String> env) {
+        ProcessBuilder pb = new ProcessBuilder("/bin/bash", scriptFile.toString()).directory(workDir.toFile());
+        pb.environment().putAll(env);
+        return pb;
     }
 
     /**

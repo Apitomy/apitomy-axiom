@@ -172,6 +172,10 @@ separately in the execution log, so send diagnostics to stderr. Axiom does not r
 
 **Script environment.** Scripts receive the plumbing environment variables `AXIOM_API_URL` (Axiom's
 API base URL), `AXIOM_TASK_ID` and `AXIOM_WORK_DIR`, plus secrets and the action type's environment.
+A script runs in its subject's workspace (`AXIOM_WORK_DIR`), or in a temporary directory when the task has
+no subject; it never runs in Axiom's own directory. A required input whose value is empty counts as missing,
+so the task fails before the script runs. For subjects created from GitHub events, `context.repository` is
+the event's `owner/repo`.
 Agents receive none of these; they run in the task workspace and get data only through declared inputs.
 Subject data is not passed through the environment; declare an input instead, e.g.
 `curl "$AXIOM_API_URL/subjects/{{inputs.subjectId}}"`.

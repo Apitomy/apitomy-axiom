@@ -82,8 +82,51 @@ class ScriptExecutionServiceTest {
     }
 
     @Test
+    void scriptRunsInItsWorkingDirectoryNotTheJvmDirectory() throws IOException, InterruptedException {
+        Path workDir = Files.createTempDirectory("axiom-test-workdir-");
+        Path scriptFile = Files.createTempFile("axiom-script-", ".sh");
+        try {
+            Files.writeString(scriptFile, "pwd; git rev-parse --show-toplevel 2>/dev/null || echo no-git\n");
+            Process process = ScriptExecutionService.scriptProcess(scriptFile, workDir, Map.of()).start();
+            String out = new String(process.getInputStream().readAllBytes()).trim();
+            process.waitFor(30, TimeUnit.SECONDS);
+            String[] lines = out.split("\n");
+            assertEquals(workDir.toRealPath().toString(), lines[0]);
+            assertEquals("no-git", lines[1], "a script must not see the repository Axiom runs from");
+        } finally {
+            Files.deleteIfExists(scriptFile);
+            Files.deleteIfExists(workDir);
+        }
+    }
+
+    @Test
+    void workingDirectoryIsTheSubjectWorkspaceOrATemporaryDirectory() throws IOException {
+        Path workspace = Files.createTempDirectory("axiom-test-ws-");
+        ScriptExecutionService svc = newService();
+        svc.workspaceService = new WorkspaceService() {
+            @Override
+            public Path ensureWorkspace(SubjectEntity subject) {
+                return workspace;
+            }
+        };
+        ScriptExecutionService.WorkingDirectory forSubject = svc.workingDirectory(subject());
+        assertEquals(workspace, forSubject.path());
+        assertFalse(forSubject.temporary());
+
+        ScriptExecutionService.WorkingDirectory noSubject = svc.workingDirectory(null);
+        assertTrue(noSubject.temporary());
+        assertTrue(Files.isDirectory(noSubject.path()));
+        noSubject.cleanUp();
+        assertFalse(Files.exists(noSubject.path()));
+        assertTrue(Files.isDirectory(workspace), "the subject workspace is never deleted");
+        forSubject.cleanUp();
+        assertTrue(Files.isDirectory(workspace));
+        Files.deleteIfExists(workspace);
+    }
+
+    @Test
     void baseEnvironmentHasPlumbingOnlyAndNoSubjectData() {
-        Map<String, String> env = newService().buildBaseEnvironment(workflowTask(null), subject());
+        Map<String, String> env = newService().buildBaseEnvironment(workflowTask(null), Path.of("/ws/subject-42"));
 
         assertEquals("http://localhost:9090/api/v1", env.get("AXIOM_API_URL"));
         assertEquals("7", env.get("AXIOM_TASK_ID"));

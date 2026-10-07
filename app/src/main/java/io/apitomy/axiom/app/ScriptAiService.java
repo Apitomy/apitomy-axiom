@@ -60,7 +60,7 @@ public class ScriptAiService {
             These environment variables are always available:
             - AXIOM_API_URL — the Axiom REST API base URL (e.g. "http://localhost:9090/api/v1")
             - AXIOM_TASK_ID — the task ID for this execution
-            - AXIOM_WORK_DIR — the working directory for this execution
+            - AXIOM_WORK_DIR — the directory the script runs in (the subject workspace)
 
             Common Axiom REST API endpoints the script can call (declare a subjectId input):
             - GET $AXIOM_API_URL/subjects/{{inputs.subjectId}} — get subject details
