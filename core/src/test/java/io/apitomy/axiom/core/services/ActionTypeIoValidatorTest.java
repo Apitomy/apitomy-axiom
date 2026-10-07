@@ -72,6 +72,27 @@ class ActionTypeIoValidatorTest {
     }
 
     @Test
+    void arrayIsAcceptedAsObject() {
+        List<ActionTypeField> declared = List.of(new ActionTypeField("labels", "object", true, null));
+        assertEquals(List.of(), ActionTypeIoValidator.validate(declared, Map.of("labels", List.of("bug", "ui"))));
+        assertEquals(List.of(), ActionTypeIoValidator.validate(declared, Map.of("labels", List.of())));
+    }
+
+    @Test
+    void jsonArrayStringCoercedToObject() {
+        List<ActionTypeField> declared = List.of(new ActionTypeField("labels", "object", true, null));
+        assertEquals(List.of(), ActionTypeIoValidator.validate(declared, Map.of("labels", "[\"bug\", \"ui\"]")));
+    }
+
+    @Test
+    void scalarJsonStringIsNotAnObject() {
+        List<ActionTypeField> declared = List.of(new ActionTypeField("cfg", "object", true, null));
+        assertFalse(ActionTypeIoValidator.validate(declared, Map.of("cfg", "42")).isEmpty());
+        assertFalse(ActionTypeIoValidator.validate(declared, Map.of("cfg", "\"text\"")).isEmpty());
+        assertFalse(ActionTypeIoValidator.validate(declared, Map.of("cfg", 42)).isEmpty());
+    }
+
+    @Test
     void optionalMissingFieldIsOk() {
         List<ActionTypeField> declared = List.of(new ActionTypeField("note", "string", false, null));
         assertEquals(List.of(), ActionTypeIoValidator.validate(declared, Map.of()));

@@ -140,7 +140,7 @@ export function ActionTypeFieldsTab({ kind, fields, onChange }: {
                                 <FormSelect value={f.type} aria-label={`Type for ${f.name}`}
                                     onChange={(_e, v) => handleUpdate(i, { type: v as ActionTypeField["type"] })}>
                                     {FIELD_TYPES.map((t) => (
-                                        <FormSelectOption key={t} value={t} label={t} />
+                                        <FormSelectOption key={t} value={t} label={t === "object" ? "object / array" : t} />
                                     ))}
                                 </FormSelect>
                             </FlexItem>

@@ -105,8 +105,12 @@ public final class ActionTypeIoValidator {
         return false;
     }
 
+    /**
+     * {@code object} means any JSON structure — an object or an array — matching the flow engine's
+     * semantics. A string is accepted when it parses as one.
+     */
     private static boolean matchesObject(Object value) {
-        if (value instanceof Map) {
+        if (value instanceof Map || value instanceof List) {
             return true;
         }
         if (value instanceof String s) {
@@ -115,7 +119,8 @@ public final class ActionTypeIoValidator {
                 return false;
             }
             try {
-                return OBJECT_MAPPER.readValue(trimmed, Map.class) != null;
+                com.fasterxml.jackson.databind.JsonNode node = OBJECT_MAPPER.readTree(trimmed);
+                return node != null && (node.isObject() || node.isArray());
             } catch (Exception e) {
                 return false;
             }

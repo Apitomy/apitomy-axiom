@@ -41,7 +41,7 @@ public class AssistantReferenceGenerator {
     static final Map<NodeType, String> NODE_CONFIG_DOCS = Map.of(
             NodeType.START, "Exactly one per workflow. `config.inputs`: optional array of "
                     + "`{name, type, required, description, defaultValue}` declaring the run's inputs "
-                    + "(`type` is string|number|boolean|object). Built-in inputs are `subjectId`, `ref`, "
+                    + "(`type` is string|number|boolean|object; object is any JSON object or array). Built-in inputs are `subjectId`, `ref`, "
                     + "`event`, `subjectName`, `repository`.",
             NodeType.END, "Terminates the run (or the current branch). `config` is `{}`.",
             NodeType.ACTION, "Runs an action type as a task. `config.actionType` (required): an action type name "
@@ -158,7 +158,8 @@ public class AssistantReferenceGenerator {
                         + "map no undeclared input; each value is EL over the run context (use `context.event`, "
                         + "never a bare `event.`); a `context.<key>` reference must name a built-in key, a "
                         + "Start input, or an output some node writes to the context.\n\n")
-                .append("Input and output field types: `string`, `number`, `boolean`, `object`.\n\n")
+                .append("Input and output field types: `string`, `number`, `boolean`, `object`. Use `object` for any JSON ")
+                .append("structure, including arrays (e.g. a list of label names); there is no separate array type.\n\n")
                 .append("`allowedTools` entry formats: `mcp__axiom-tools__<tool>` (a tool), `@<toolset>` ")
                 .append("(a toolset), or one of the Axiom SDK tools: ")
                 .append(codeList(SdkFunctionRegistry.allToolNames())).append(".\n\n");

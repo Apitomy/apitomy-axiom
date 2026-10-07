@@ -162,6 +162,9 @@ lists every declared input that has a value (in declaration order, even if it is
 and then a `## Required output` contract derived from the declared outputs. Do not write output-format
 instructions in the prompt — Axiom appends the contract automatically.
 
+**Field types.** Inputs and outputs are typed `string`, `number`, `boolean` or `object`. `object` means any
+JSON structure, an object or an array (for example a list of label names), matching the Apitomy Flow engine.
+
 **Script outputs.** A script returns its declared outputs by printing one JSON object with those keys to
 stdout as the last thing it prints, for example `jq -n --arg title "$TITLE" '{title: $title}'`. The object may
 span several lines (as `jq` pretty-prints it). Earlier stdout lines are treated as logs, and stderr is kept

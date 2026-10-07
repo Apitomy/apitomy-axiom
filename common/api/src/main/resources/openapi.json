@@ -8642,6 +8642,7 @@
             "type": "string"
           },
           "type": {
+            "description": "Value type. 'object' means any JSON structure: an object or an array (e.g. a list of label names).",
             "enum": [
               "string",
               "number",
