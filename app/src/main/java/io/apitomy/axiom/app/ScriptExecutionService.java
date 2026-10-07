@@ -85,6 +85,15 @@ public class ScriptExecutionService {
     int timeoutSeconds;
 
     /**
+     * The maximum run time of a script or node action ({@code axiom.script.timeout-seconds}).
+     *
+     * @return the timeout in seconds
+     */
+    int timeoutSeconds() {
+        return timeoutSeconds;
+    }
+
+    /**
      * Executes the script for a task asynchronously.
      *
      * @param task the task whose action type defines the script to run
@@ -155,18 +164,7 @@ public class ScriptExecutionService {
             ProcessBuilder pb = scriptProcess(scriptFile, workDir.path(),
                     buildBaseEnvironment(task, workDir.path()));
 
-            // Inject environment variables (custom or all secrets as fallback)
-            if (environmentResolver.hasCustomEnvironment(actionType.environment)) {
-                pb.environment().putAll(environmentResolver.resolve(actionType.environment));
-            } else {
-                for (SecretEntity secret : SecretEntity.<SecretEntity>listAll()) {
-                    try {
-                        pb.environment().put(secret.name, encryptionService.decrypt(secret.encryptedValue));
-                    } catch (Exception e) {
-                        LOG.warnf("Failed to decrypt secret '%s' for script — skipping", secret.name);
-                    }
-                }
-            }
+            applyActionEnvironment(pb, actionType);
 
             // Inject substituted placeholder values as environment variables. The
             // script references them via quoted shell expansions ("$AXIOM_*"), so
@@ -188,7 +186,7 @@ public class ScriptExecutionService {
             // The task output is the last JSON object the script printed to stdout; logs belong on stderr.
             String output = extractScriptOutput(stdout);
 
-            String executionLog = buildExecutionLog(task, actionType.scriptTemplate,
+            String executionLog = buildExecutionLog(task, "Script Template", actionType.scriptTemplate,
                     script, stdout, captured.stderr(), exitCode, startTime, durationMs);
 
             return new RunResult(exitCode, output, executionLog);
@@ -302,9 +300,44 @@ public class ScriptExecutionService {
         return true;
     }
 
-    private String buildExecutionLog(TaskEntity task, String template, String resolvedScript,
-                                      String output, String stderr, int exitCode, Instant startTime,
-                                      long durationMs) {
+    /**
+     * Injects the action type's environment into a process: its custom {@code environment} when configured,
+     * otherwise every secret (decrypted) as a fallback.
+     *
+     * @param pb         the process builder to add variables to
+     * @param actionType the action type being run
+     */
+    void applyActionEnvironment(ProcessBuilder pb, ActionTypeEntity actionType) {
+        if (environmentResolver.hasCustomEnvironment(actionType.environment)) {
+            pb.environment().putAll(environmentResolver.resolve(actionType.environment));
+        } else {
+            for (SecretEntity secret : SecretEntity.<SecretEntity>listAll()) {
+                try {
+                    pb.environment().put(secret.name, encryptionService.decrypt(secret.encryptedValue));
+                } catch (Exception e) {
+                    LOG.warnf("Failed to decrypt secret '%s' for script — skipping", secret.name);
+                }
+            }
+        }
+    }
+
+    /**
+     * Builds the human-readable execution log stored on a task.
+     *
+     * @param task          the task that ran
+     * @param sourceLabel   heading for the source section (e.g. "Script Template" or "Code")
+     * @param source        the source that was run
+     * @param resolvedSource the resolved script, or {@code null} to omit the "Resolved Script" section
+     * @param output        the process stdout
+     * @param stderr        the process stderr
+     * @param exitCode      the exit code
+     * @param startTime     when the run started
+     * @param durationMs    run time in milliseconds
+     * @return the execution log
+     */
+    static String buildExecutionLog(TaskEntity task, String sourceLabel, String source, String resolvedSource,
+                                    String output, String stderr, int exitCode, Instant startTime,
+                                    long durationMs) {
         StringBuilder log = new StringBuilder();
         log.append("═══════════════════════════════════════════════════════════════\n");
         log.append("  Script Execution Log\n");
@@ -318,11 +351,13 @@ public class ScriptExecutionService {
         log.append("  Status:      ").append(exitCode == 0 ? "SUCCESS" : "FAILED").append("\n");
         log.append("═══════════════════════════════════════════════════════════════\n\n");
 
-        log.append("── Script Template ────────────────────────────────────────────\n");
-        log.append(template.strip()).append("\n\n");
+        log.append(sectionHeader(sourceLabel)).append("\n");
+        log.append(source.strip()).append("\n\n");
 
-        log.append("── Resolved Script ────────────────────────────────────────────\n");
-        log.append(resolvedScript.strip()).append("\n\n");
+        if (resolvedSource != null) {
+            log.append("── Resolved Script ────────────────────────────────────────────\n");
+            log.append(resolvedSource.strip()).append("\n\n");
+        }
 
         log.append("── Output (stdout) ────────────────────────────────────────────\n");
         if (output != null && !output.isBlank()) {
@@ -340,6 +375,12 @@ public class ScriptExecutionService {
 
         log.append("\n═══════════════════════════════════════════════════════════════\n");
         return log.toString();
+    }
+
+    /** Renders a section heading such as {@code ── Code ───…}, padded with rules to the log width. */
+    private static String sectionHeader(String label) {
+        String head = "── " + label + " ";
+        return head + "─".repeat(Math.max(0, 63 - head.length()));
     }
 
     /**
@@ -610,5 +651,12 @@ public class ScriptExecutionService {
         entry.persist();
     }
 
-    private record RunResult(int exitCode, String output, String executionLog) {}
+    /**
+     * Result of running a script or node action.
+     *
+     * @param exitCode     the process exit code
+     * @param output       the task output
+     * @param executionLog the execution log, may be {@code null}
+     */
+    record RunResult(int exitCode, String output, String executionLog) {}
 }

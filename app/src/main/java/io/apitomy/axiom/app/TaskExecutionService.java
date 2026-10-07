@@ -68,6 +68,9 @@ public class TaskExecutionService {
     ScriptExecutionService scriptExecutionService;
 
     @Inject
+    NodeExecutionService nodeExecutionService;
+
+    @Inject
     EncryptionService encryptionService;
 
     @Inject
@@ -166,6 +169,10 @@ public class TaskExecutionService {
 
         if (actionTypeEntity != null && "script".equals(actionTypeEntity.executionMode)) {
             scriptExecutionService.executeScript(task);
+            return;
+        }
+        if (actionTypeEntity != null && "node".equals(actionTypeEntity.executionMode)) {
+            nodeExecutionService.executeNode(task);
             return;
         }
 
