@@ -91,6 +91,7 @@ public final class ActionTypeValidator {
         validateExecutionMode(def, messages);
         validatePromptTemplate(def, messages);
         validateScriptTemplate(def, messages);
+        validateCodeTemplate(def, messages);
         validateAllowedTools(def, known, messages);
         validateEnvironment(def, known, messages);
         validateFields(def.getInputs(), "inputs", messages);
@@ -173,6 +174,54 @@ public final class ActionTypeValidator {
                 }
             }
         }
+    }
+
+    private static void validateCodeTemplate(NewActionType def, List<ValidationMessage> messages) {
+        if (!"node".equals(executionMode(def))) {
+            return;
+        }
+        String code = def.getCodeTemplate();
+        if (code == null || code.isBlank()) {
+            messages.add(error("codeTemplate", "Code is required for node-mode action types."));
+            return;
+        }
+        if (code.contains("{{")) {
+            messages.add(error("codeTemplate",
+                    "Node actions receive inputs as run(inputs, ctx); placeholders are not supported."));
+        }
+        NodeModuleChecks.importSpecifiers(code).stream()
+                .filter(spec -> !NodeModuleChecks.isBuiltin(spec))
+                .distinct()
+                .forEach(spec -> messages.add(error("codeTemplate", "Import '" + spec
+                        + "' is not a Node.js built-in module; only built-ins (e.g. node:fs) are allowed.")));
+        if (!NodeModuleChecks.exportsRun(code)) {
+            messages.add(error("codeTemplate", "The module must export async function run(inputs, ctx)."));
+        }
+        try {
+            NodeModuleChecks.syntaxError(code).ifPresent(output ->
+                    messages.add(error("codeTemplate", "Syntax error: " + errorLine(output))));
+        } catch (IllegalStateException e) {
+            messages.add(warning("codeTemplate", "node unavailable".equals(e.getMessage())
+                    ? "Syntax not checked: Node.js not found."
+                    : "Syntax not checked: " + e.getMessage() + "."));
+        }
+        Set<String> declared = declaredInputNames(def);
+        NodeModuleChecks.inputReads(code).stream()
+                .filter(name -> !declared.contains(name))
+                .forEach(name -> messages.add(warning("codeTemplate",
+                        "Reads inputs." + name + ", which is not a declared input.")));
+    }
+
+    /**
+     * Picks the meaningful line from {@code node --check} output. Node prints the temp file path first, so
+     * prefer the first {@code ...Error:} line and fall back to the first non-blank line.
+     */
+    private static String errorLine(String output) {
+        List<String> lines = output.lines().map(String::strip).filter(l -> !l.isEmpty()).toList();
+        return lines.stream()
+                .filter(l -> l.matches("^[A-Za-z]*Error:.*"))
+                .findFirst()
+                .orElse(lines.isEmpty() ? "" : lines.get(0));
     }
 
     private static void validateAllowedTools(NewActionType def, KnownNames known,

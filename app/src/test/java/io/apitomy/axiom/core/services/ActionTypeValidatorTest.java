@@ -476,7 +476,119 @@ class ActionTypeValidatorTest {
         assertTrue(result.warnings().stream().allMatch(m -> m.severity() == Severity.WARNING));
     }
 
+    // ── Node mode ───────────────────────────────────────────────────
+
+    private static final String VALID_NODE = "import fs from 'node:fs';\n"
+            + "export async function run(inputs, ctx) {\n"
+            + "    return { size: fs.statSync(inputs.path).size };\n"
+            + "}\n";
+
+    @Test
+    void validNodeModuleAccepted() {
+        NewActionType at = makeNode("stat", "Stats a file", VALID_NODE);
+        at.setInputs(List.of(field("path", ActionTypeField.Type.STRING)));
+
+        ValidationResult result = ActionTypeValidator.validate(at);
+
+        assertFalse(result.hasErrors(), result.messages().toString());
+        assertFalse(result.warnings().stream().anyMatch(m -> m.field().equals("codeTemplate")
+                && !m.message().equals("Syntax not checked: Node.js not found.")));
+    }
+
+    @Test
+    void nodeMissingCodeIsError() {
+        NewActionType at = makeNode("n", "d", "  ");
+
+        assertTrue(hasError(ActionTypeValidator.validate(at), "Code is required for node-mode action types."));
+    }
+
+    @Test
+    void nodePlaceholderIsError() {
+        NewActionType at = makeNode("n", "d",
+                "export async function run(inputs) { return { a: '{{inputs.x}}' }; }\n");
+        at.setInputs(List.of(field("x", ActionTypeField.Type.STRING)));
+
+        assertTrue(hasError(ActionTypeValidator.validate(at),
+                "Node actions receive inputs as run(inputs, ctx); placeholders are not supported."));
+    }
+
+    @Test
+    void nodeNpmImportIsError() {
+        NewActionType at = makeNode("n", "d",
+                "import _ from \"lodash\";\nexport async function run() { return {}; }\n");
+
+        assertTrue(hasError(ActionTypeValidator.validate(at), "Import 'lodash' is not a Node.js built-in "
+                + "module; only built-ins (e.g. node:fs) are allowed."));
+    }
+
+    @Test
+    void nodeNpmRequireIsError() {
+        NewActionType at = makeNode("n", "d",
+                "const axios = require(\"axios\");\nexport async function run() { return {}; }\n");
+
+        assertTrue(hasError(ActionTypeValidator.validate(at), "Import 'axios' is not a Node.js built-in "
+                + "module; only built-ins (e.g. node:fs) are allowed."));
+    }
+
+    @Test
+    void nodeBuiltinImportsAccepted() {
+        NewActionType prefixed = makeNode("n", "d",
+                "import fs from \"node:fs\";\nexport async function run() { return {}; }\n");
+        NewActionType bare = makeNode("n", "d",
+                "import fs from \"fs\";\nexport async function run() { return {}; }\n");
+
+        assertFalse(ActionTypeValidator.validate(prefixed).hasErrors());
+        assertFalse(ActionTypeValidator.validate(bare).hasErrors());
+    }
+
+    @Test
+    void nodeMissingRunExportIsError() {
+        NewActionType at = makeNode("n", "d", "async function run() { return {}; }\n");
+
+        assertTrue(hasError(ActionTypeValidator.validate(at),
+                "The module must export async function run(inputs, ctx)."));
+    }
+
+    @Test
+    void nodeSyntaxErrorIsError() {
+        NewActionType at = makeNode("n", "d", "export async function run( {\n");
+
+        ValidationResult result = ActionTypeValidator.validate(at);
+
+        boolean nodeMissing = result.warnings().stream()
+                .anyMatch(m -> m.message().equals("Syntax not checked: Node.js not found."));
+        org.junit.jupiter.api.Assumptions.assumeFalse(nodeMissing, "node not available");
+        assertTrue(result.errors().stream().anyMatch(m -> m.field().equals("codeTemplate")
+                && m.message().startsWith("Syntax error: ")));
+    }
+
+    @Test
+    void nodeUndeclaredInputReadIsWarning() {
+        NewActionType at = makeNode("n", "d",
+                "export async function run(inputs) { return { v: inputs.missing }; }\n");
+
+        ValidationResult result = ActionTypeValidator.validate(at);
+
+        assertFalse(result.hasErrors());
+        assertTrue(result.warnings().stream().anyMatch(m -> m.field().equals("codeTemplate")
+                && m.message().equals("Reads inputs.missing, which is not a declared input.")));
+    }
+
+    private static boolean hasError(ValidationResult result, String message) {
+        return result.errors().stream()
+                .anyMatch(m -> m.field().equals("codeTemplate") && m.message().equals(message));
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────
+
+    private static NewActionType makeNode(String name, String description, String codeTemplate) {
+        NewActionType at = new NewActionType();
+        at.setName(name);
+        at.setDescription(description);
+        at.setExecutionMode(NewActionType.ExecutionMode.NODE);
+        at.setCodeTemplate(codeTemplate);
+        return at;
+    }
 
     private static NewActionType makeActor(String name, String description,
                                             String promptTemplate) {
