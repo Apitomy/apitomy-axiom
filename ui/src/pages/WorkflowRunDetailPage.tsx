@@ -25,12 +25,12 @@ const STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"
     failed: "red", cancelled: "grey",
 };
 
-/** Shows a single workflow run: overview, diagram, timeline, trace and lineage. */
+/** Shows a single workflow run: diagram (default tab), overview, timeline, trace and lineage. */
 export function WorkflowRunDetailPage() {
     const { runId } = useParams<{ runId: string }>();
     const numericRunId = Number(runId);
     const [run, setRun] = useState<WorkflowInstanceInfo | null>(null);
-    const [activeTab, setActiveTab] = useState(0);
+    const [activeTab, setActiveTab] = useState(1);
     const [refreshKey, setRefreshKey] = useState(0);
     const [isLogOpen, setIsLogOpen] = useState(false);
     const [logTaskId, setLogTaskId] = useState<number | null>(null);
@@ -151,8 +151,8 @@ export function WorkflowRunDetailPage() {
             </Flex>
 
             <Tabs activeKey={activeTab} onSelect={(_e, k) => setActiveTab(k as number)}>
-                <Tab eventKey={0} title={<TabTitleText>Overview</TabTitleText>} />
                 <Tab eventKey={1} title={<TabTitleText>Diagram</TabTitleText>} />
+                <Tab eventKey={0} title={<TabTitleText>Overview</TabTitleText>} />
                 <Tab eventKey={2} title={<TabTitleText>Timeline</TabTitleText>} />
                 <Tab eventKey={3} title={<TabTitleText>Execution Trace</TabTitleText>} />
                 <Tab eventKey={4} title={<TabTitleText>Lineage</TabTitleText>} />
