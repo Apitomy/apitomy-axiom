@@ -143,25 +143,24 @@ public class TaskExecutionService {
         // Check if this is a script action type
         ActionTypeEntity actionTypeEntity = ActionTypeEntity.find("name", task.actionType).firstResult();
 
-        // Fail fast when a required declared input has no value (e.g. it is not mapped on the node)
+        // Fail fast when a required declared input has no value (e.g. it is not mapped on the node),
+        // then on type mismatches. Inputs are parsed once for both checks.
         if (actionTypeEntity != null) {
+            Map<String, Object> resolvedInputs = parseResolvedInputs(task);
             List<String> missing = InputBindingResolver.missingRequiredInputs(
-                    actionTypeEntity.inputs, parseResolvedInputs(task));
+                    actionTypeEntity.inputs, resolvedInputs);
             if (!missing.isEmpty()) {
                 failTask(task.id, "Missing required input(s): " + String.join(", ", missing)
                         + ". Map them on the workflow node.");
                 return;
             }
-        }
-
-        // Validate resolved inputs for workflow tasks (fail fast on type mismatches)
-        if (actionTypeEntity != null && task.workflowRunId != null
-                && actionTypeEntity.inputs != null && !actionTypeEntity.inputs.isEmpty()) {
-            List<String> inputErrors = ActionTypeIoValidator.validate(
-                    actionTypeEntity.inputs, parseResolvedInputs(task));
-            if (!inputErrors.isEmpty()) {
-                failTask(task.id, "Input validation failed: " + String.join("; ", inputErrors));
-                return;
+            if (task.workflowRunId != null && actionTypeEntity.inputs != null
+                    && !actionTypeEntity.inputs.isEmpty()) {
+                List<String> inputErrors = ActionTypeIoValidator.validate(actionTypeEntity.inputs, resolvedInputs);
+                if (!inputErrors.isEmpty()) {
+                    failTask(task.id, "Input validation failed: " + String.join("; ", inputErrors));
+                    return;
+                }
             }
         }
 
