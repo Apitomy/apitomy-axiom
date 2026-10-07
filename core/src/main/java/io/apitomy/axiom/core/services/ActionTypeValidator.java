@@ -157,6 +157,7 @@ public final class ActionTypeValidator {
         checkUnsupportedPlaceholders(script, "scriptTemplate", messages);
 
         checkInputPlaceholders(script, "scriptTemplate", def, messages);
+        checkQuotedHeredocPlaceholders(script, messages);
 
         // Script binding only substitutes inputs whose names are valid shell
         // identifiers; any other declared input is silently skipped at runtime.
@@ -307,6 +308,23 @@ public final class ActionTypeValidator {
             String hint = REMOVED_PLACEHOLDER_HINTS.getOrDefault(name,
                     "Only {{inputs.<name>}} placeholders for declared inputs are supported.");
             messages.add(error(field, "Placeholder '{{" + name + "}}' is not supported. " + hint));
+        }
+    }
+
+    /**
+     * Rejects {@code {{inputs.X}}} inside the body of a quoted heredoc ({@code <<'EOF'}), where bash expands
+     * nothing, so the value would never reach the script.
+     */
+    private static void checkQuotedHeredocPlaceholders(String script, List<ValidationMessage> messages) {
+        ShellContext.Context[] contexts = ShellContext.analyze(script);
+        Matcher matcher = INPUT_PLACEHOLDER_PATTERN.matcher(script);
+        while (matcher.find()) {
+            if (contexts[matcher.start()] == ShellContext.Context.QUOTED_HEREDOC) {
+                String placeholder = matcher.group();
+                messages.add(error("scriptTemplate", placeholder + " is inside a quoted heredoc (<<'EOF'), "
+                        + "where bash expands nothing, so the value would never reach the script. Use an "
+                        + "unquoted heredoc (<<EOF) or pipe the value: printf '%s' " + placeholder + " | ..."));
+            }
         }
     }
 

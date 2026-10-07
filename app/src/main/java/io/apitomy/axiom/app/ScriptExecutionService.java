@@ -15,6 +15,7 @@ import io.apitomy.axiom.core.logging.LogContext;
 import io.apitomy.axiom.core.services.EncryptionService;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.InputBindingResolver;
+import io.apitomy.axiom.core.services.ShellContext;
 import io.apitomy.axiom.core.tracing.TraceService;
 import io.quarkus.arc.Arc;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -473,23 +474,18 @@ public class ScriptExecutionService {
     }
 
     /**
-     * Renders {@code template} in a single pass, tracking bash quoting context so
-     * each placeholder is replaced with a shell reference appropriate to where it
-     * appears (see {@link #substitutePlaceholders}). Environment variables are
-     * added to {@code env} only for placeholders that are actually present.
+     * Renders {@code template}, replacing each placeholder with a shell reference suited to the quoting
+     * context it appears in (see {@link ShellContext} and {@link #substitutePlaceholders}). Environment
+     * variables are added to {@code env} only for placeholders that are actually present.
      */
     private String render(String template, Map<String, String> bindings,
                           Map<String, String> values, Map<String, String> env) {
+        ShellContext.Context[] contexts = ShellContext.analyze(template);
         StringBuilder out = new StringBuilder(template.length() + 32);
         int i = 0;
         int n = template.length();
-        // Current quoting context: 0 = unquoted, '\'' = single, '"' = double.
-        char quote = 0;
         while (i < n) {
-            char c = template.charAt(i);
-
-            // Attempt to match a placeholder at this position (longest wins).
-            if (c == '{' && i + 1 < n && template.charAt(i + 1) == '{') {
+            if (template.charAt(i) == '{' && i + 1 < n && template.charAt(i + 1) == '{') {
                 String match = null;
                 for (String placeholder : bindings.keySet()) {
                     if (template.startsWith(placeholder, i)
@@ -500,64 +496,33 @@ public class ScriptExecutionService {
                 if (match != null) {
                     String envName = bindings.get(match);
                     env.put(envName, values.get(match));
-                    out.append(reference(envName, quote));
+                    out.append(reference(envName, contexts[i]));
                     i += match.length();
                     continue;
                 }
             }
-
-            // Not a placeholder — advance the quoting state machine. Injected
-            // references are always quote-balanced, so tracking only the
-            // original template characters keeps the context accurate.
-            if (quote == 0) {
-                if (c == '\'') {
-                    quote = '\'';
-                } else if (c == '"') {
-                    quote = '"';
-                } else if (c == '\\' && i + 1 < n) {
-                    // Backslash escapes the next character outside single quotes.
-                    out.append(c).append(template.charAt(i + 1));
-                    i += 2;
-                    continue;
-                }
-            } else if (quote == '"') {
-                if (c == '"') {
-                    quote = 0;
-                } else if (c == '\\' && i + 1 < n) {
-                    out.append(c).append(template.charAt(i + 1));
-                    i += 2;
-                    continue;
-                }
-            } else { // single quotes: no escapes, only a closing quote ends it
-                if (c == '\'') {
-                    quote = 0;
-                }
-            }
-
-            out.append(c);
+            out.append(template.charAt(i));
             i++;
         }
         return out.toString();
     }
 
     /**
-     * Builds the shell reference for {@code envName} appropriate to the current
-     * quoting context {@code quote} (0 = unquoted, {@code '} = single-quoted,
-     * {@code "} = double-quoted). See {@link #substitutePlaceholders} for the
-     * rationale behind each form.
+     * Builds the shell reference for {@code envName} appropriate to the quoting context it replaces a
+     * placeholder in. The value is always passed through the environment, so it is never parsed as code.
      */
-    private String reference(String envName, char quote) {
-        if (quote == '"') {
+    private String reference(String envName, ShellContext.Context context) {
+        return switch (context) {
             // Already inside double quotes: expansion is safe as-is.
-            return "${" + envName + "}";
-        }
-        if (quote == '\'') {
-            // Inside single quotes bash does not expand; break out, expand within
-            // double quotes, then reopen the single-quoted region.
-            return "'\"${" + envName + "}\"'";
-        }
-        // Unquoted: quote the expansion so whitespace does not word-split it.
-        return "\"${" + envName + "}\"";
+            case DOUBLE -> "${" + envName + "}";
+            // Inside single quotes bash does not expand; break out, expand within double quotes, then reopen.
+            case SINGLE -> "'\"${" + envName + "}\"'";
+            // Heredoc body: expansions are not word-split or executed, and quotes would be literal text.
+            // (In a quoted heredoc nothing expands at all; the validator rejects placeholders there.)
+            case HEREDOC, QUOTED_HEREDOC -> "${" + envName + "}";
+            // Unquoted: quote the expansion so whitespace does not word-split it.
+            case UNQUOTED -> "\"${" + envName + "}\"";
+        };
     }
 
     @Transactional

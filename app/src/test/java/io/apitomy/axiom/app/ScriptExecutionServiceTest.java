@@ -271,6 +271,42 @@ class ScriptExecutionServiceTest {
     }
 
     @Test
+    void jsonArrayInUnquotedHeredocArrivesIntact() throws IOException, InterruptedException {
+        Map<String, String> env = new LinkedHashMap<>();
+        String resolved = substitute("""
+                cat <<LABELS | jq -r 'join(",")'
+                {{inputs.title}}
+                LABELS
+                """, "[\"type/question\", \"Impacts Documentation\"]", env);
+        assertEquals("type/question,Impacts Documentation", runScript(resolved, env).trim());
+    }
+
+    @Test
+    void dashHeredocAlsoExpands() throws IOException, InterruptedException {
+        Map<String, String> env = new LinkedHashMap<>();
+        String resolved = substitute("cat <<-END\n\t{{inputs.title}}\n\tEND\n", "hello world", env);
+        assertEquals("hello world", runScript(resolved, env).trim());
+    }
+
+    @Test
+    void injectionPayloadInHeredocIsNotExecuted() throws IOException, InterruptedException {
+        Map<String, String> env = new LinkedHashMap<>();
+        Path marker = Files.createTempFile("axiom-inject-heredoc-", ".marker");
+        Files.deleteIfExists(marker);
+        String payload = "$(touch " + marker + ") `touch " + marker + "`";
+        String resolved = substitute("cat <<EOF\n{{inputs.title}}\nEOF\n", payload, env);
+        assertEquals(payload, runScript(resolved, env).trim());
+        assertFalse(Files.exists(marker), "heredoc expansion must not execute the value");
+    }
+
+    @Test
+    void placeholderAfterHeredocIsQuotedAgain() {
+        Map<String, String> env = new LinkedHashMap<>();
+        String resolved = substitute("cat <<EOF\n{{inputs.title}}\nEOF\necho {{inputs.title}}\n", "x", env);
+        assertEquals("cat <<EOF\n${AXIOM_INPUT_title}\nEOF\necho \"${AXIOM_INPUT_title}\"\n", resolved);
+    }
+
+    @Test
     void injectionPayloadIsNotExecutedByBash() throws IOException, InterruptedException {
         Map<String, String> env = new LinkedHashMap<>();
 

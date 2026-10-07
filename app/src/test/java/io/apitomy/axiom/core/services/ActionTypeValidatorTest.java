@@ -211,6 +211,25 @@ class ActionTypeValidatorTest {
     }
 
     @Test
+    void placeholderInQuotedHeredocIsError() {
+        NewActionType at = makeScript("test", "desc", "cat <<'EOF' > f.json\n{{inputs.labels}}\nEOF\n");
+        at.setInputs(List.of(field("labels", ActionTypeField.Type.OBJECT)));
+
+        ValidationResult result = ActionTypeValidator.validate(at);
+
+        assertTrue(result.errors().stream().anyMatch(m -> m.field().equals("scriptTemplate")
+                && m.message().contains("quoted heredoc") && m.message().contains("printf")), result.toString());
+    }
+
+    @Test
+    void placeholderInUnquotedHeredocIsAccepted() {
+        NewActionType at = makeScript("test", "desc", "cat <<EOF | jq .\n{{inputs.labels}}\nEOF\n");
+        at.setInputs(List.of(field("labels", ActionTypeField.Type.OBJECT)));
+
+        assertFalse(ActionTypeValidator.validate(at).hasErrors());
+    }
+
+    @Test
     void scriptWithUndeclaredInputPlaceholderIsError() {
         NewActionType at = makeScript("test", "desc", "echo {{inputs.foo}}");
 
