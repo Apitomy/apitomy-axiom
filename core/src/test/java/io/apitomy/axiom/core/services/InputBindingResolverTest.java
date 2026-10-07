@@ -130,4 +130,14 @@ class InputBindingResolverTest {
         assertEquals(List.of("a", "c"), InputBindingResolver.missingRequiredInputs(inputs, values));
         assertEquals(List.of(), InputBindingResolver.missingRequiredInputs(null, values));
     }
+
+    @Test
+    void blankStringCountsAsMissingForRequiredInputs() {
+        List<ActionTypeField> inputs = List.of(
+                new ActionTypeField("repository", "string", true, null),
+                new ActionTypeField("note", "string", false, null),
+                new ActionTypeField("count", "number", true, null));
+        Map<String, Object> values = Map.of("repository", "  ", "note", "", "count", 0);
+        assertEquals(List.of("repository"), InputBindingResolver.missingRequiredInputs(inputs, values));
+    }
 }

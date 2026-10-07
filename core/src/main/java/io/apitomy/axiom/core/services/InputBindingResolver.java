@@ -127,7 +127,7 @@ public final class InputBindingResolver {
     }
 
     /**
-     * Returns the names of required declared inputs that have no value.
+     * Returns the names of required declared inputs that have no value (absent, null or a blank string).
      *
      * @param inputs declared inputs (may be null)
      * @param values resolved input values by name
@@ -139,9 +139,14 @@ public final class InputBindingResolver {
         }
         return inputs.stream()
                 .filter(f -> f.required)
-                .filter(f -> values == null || values.get(f.name) == null)
+                .filter(f -> values == null || isAbsent(values.get(f.name)))
                 .map(f -> f.name)
                 .toList();
+    }
+
+    /** A value is absent when it is null or a blank string (e.g. an empty context key mapped onto the input). */
+    private static boolean isAbsent(Object value) {
+        return value == null || (value instanceof String text && text.isBlank());
     }
 
     private static String prettyJson(Object value, ObjectMapper mapper) {
