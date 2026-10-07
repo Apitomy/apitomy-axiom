@@ -1,0 +1,12 @@
+{
+  "name": "fetch-repo-labels",
+  "description": "Lists the label names defined in a GitHub repository.",
+  "executionMode": "node",
+  "inputs": [
+    {"name": "repository", "type": "string", "description": "owner/repo", "required": true}
+  ],
+  "outputs": [
+    {"name": "labels", "type": "object", "description": "Array of label names", "required": true}
+  ],
+  "codeTemplate": "export async function run(inputs, ctx) {\n    const { stdout } = await ctx.exec(\"gh\", [\"label\", \"list\", \"--repo\", inputs.repository, \"--json\", \"name\", \"--limit\", \"200\"]);\n    ctx.log(\"Fetched labels for\", inputs.repository);\n    return { labels: JSON.parse(stdout).map((l) => l.name) };\n}\n"
+}

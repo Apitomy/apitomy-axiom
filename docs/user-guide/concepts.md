@@ -105,9 +105,10 @@ directly. Every action type is available in the workflow editor palette. Each ac
 | Field | Purpose |
 |-------|---------|
 | **Name** | Identifies the action type (e.g. "Implement Feature", "Code Review") |
-| **Execution mode** | `agent` (AI agent or human-completed task) or `script` (bash script) |
+| **Execution mode** | `agent` (AI agent or human-completed task), `script` (bash script) or `node` (Node.js module) |
 | **Prompt template** | Instructions for the AI agent (agent mode) |
 | **Script template** | Bash script to execute (script mode) |
+| **Code template** | Node.js ES module to execute (node mode) |
 | **Inputs / outputs** | The typed contract between the action and its workflow node |
 | **Allowed tools** | Which tools the AI agent may use |
 | **Environment** | Custom environment variables for the subprocess |
@@ -117,6 +118,9 @@ directly. Every action type is available in the workflow editor palette. Each ac
 ### Execution Modes
 
 **Agent mode** — the action is executed by an AI agent. **Script mode** — a bash script runs directly.
+**Node mode** — a Node.js module runs directly (see [Node.js action types](#nodejs-action-types)).
+
+Prefer node mode for reshaping JSON or calling HTTP APIs; use script mode for short shell pipelines.
 
 ### Inputs, Placeholders and Mappings
 
@@ -193,6 +197,36 @@ Subject data is not passed through the environment; declare an input instead, e.
 > (`$(...)`, backticks, `;`, `&&`, newlines, etc.) is never executed as code. The expansion adapts to the
 > surrounding quotes, so a placeholder can go wherever you'd use a shell variable — unquoted, inside double
 > quotes (`"Fix: {{inputs.ref}}"`), or inside single quotes (`'{{inputs.ref}}'`).
+
+### Node.js action types
+
+A node-mode action type's **code template** is an ES module that exports an async `run(inputs, ctx)`
+function. Axiom runs it with the `node` executable on the server's `PATH`, under the same rules as script
+mode: it runs in the subject's workspace (or a temporary directory), honours the script timeout, keeps stderr
+separately in the execution log, and receives secrets and the action type's environment in `process.env`.
+
+```js
+export async function run(inputs, ctx) {
+    const { stdout } = await ctx.exec("gh", ["label", "list", "--repo", inputs.repository,
+        "--json", "name", "--limit", "200"]);
+    ctx.log("Fetched labels for", inputs.repository);
+    return { labels: JSON.parse(stdout).map((l) => l.name) };
+}
+```
+
+- **`inputs`** holds typed JSON values: numbers, booleans and objects arrive as such, not as strings.
+  Optional inputs without a value are omitted. There are no `{{...}}` placeholders in node code; read
+  `inputs.NAME` instead.
+- **Return value.** `run` must return a plain object; its fields are the action's outputs.
+- **`ctx`** provides `workDir`, `apiUrl` and `taskId`, `log(...args)` (writes to stderr), and
+  `exec(cmd, args, options)`, which runs a command without a shell and resolves to
+  `{stdout, stderr, exitCode}`. It rejects on a non-zero exit code unless `options.allowFailure` is true;
+  `options.input` is written to the command's stdin.
+- **Built-ins only.** Imports must be Node built-in modules (`node:fs`, `node:path`, ...); npm packages are
+  not available. Use the global `fetch` for HTTP calls.
+
+Validation requires a code template that exports `run`, has valid syntax, uses only built-in imports and
+contains no `{{`. It warns when the code reads an `inputs.NAME` that is not declared.
 
 ### Tasks
 

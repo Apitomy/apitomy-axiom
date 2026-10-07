@@ -55,6 +55,16 @@ class AssistantReferenceTest {
     }
 
     @Test
+    void referenceDocumentsNodeMode() {
+        String ref = generator.generate();
+        assertTrue(ref.contains("run(inputs, ctx)"), ref);
+        assertTrue(ref.contains("ctx.exec"), ref);
+        assertTrue(ref.contains("built-in"), ref);
+        assertTrue(generator.examples().stream()
+                .anyMatch(e -> e.getKey().equals("action-types/fetch-repo-labels.json")));
+    }
+
+    @Test
     void nodeConfigDocsCoverEveryNodeType() {
         assertEquals(EnumSet.allOf(NodeType.class),
                 EnumSet.copyOf(AssistantReferenceGenerator.NODE_CONFIG_DOCS.keySet()));
