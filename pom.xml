@@ -155,6 +155,10 @@
                     <version>${surefire-plugin.version}</version>
                     <configuration>
                         <excludedGroups>${surefire.excludedGroups}</excludedGroups>
+                        <systemPropertyVariables>
+                            <!-- Keep test runs away from the developer's real ~/.axiom (sessions, workspaces...) -->
+                            <axiom.home>${project.build.directory}/axiom-test-home</axiom.home>
+                        </systemPropertyVariables>
                     </configuration>
                 </plugin>
                 <plugin>

@@ -1,5 +1,6 @@
 package io.apitomy.axiom.app.assistant;
 
+import io.apitomy.axiom.core.config.AxiomHome;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -43,7 +44,7 @@ public class AssistantContextBuilder {
      * @throws IOException if directory creation fails
      */
     public Path createSessionDirectory(String sessionId, String mcpConfig) throws IOException {
-        Path axiomHome = Path.of(System.getProperty("user.home"), ".axiom");
+        Path axiomHome = AxiomHome.path();
         Path sessionsRoot = axiomHome.resolve("assistant").resolve("sessions");
         Path sessionDir = sessionsRoot.resolve(sessionId);
 

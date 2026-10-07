@@ -1,5 +1,6 @@
 package io.apitomy.axiom.app;
 
+import io.apitomy.axiom.core.config.AxiomHome;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.agents.claudecode.ClaudeCodeMcpManager;
@@ -228,8 +229,7 @@ public class McpConfigGenerator {
      * @param taskId the task ID used when generating the files
      */
     public void cleanupTempFiles(Long taskId) {
-        Path taskDir = Path.of(System.getProperty("user.home"), ".axiom", "tasks",
-                String.valueOf(taskId));
+        Path taskDir = AxiomHome.resolve("tasks", String.valueOf(taskId));
         if (!Files.isDirectory(taskDir)) return;
         try (var stream = Files.walk(taskDir)) {
             stream.sorted(java.util.Comparator.reverseOrder())
@@ -251,8 +251,7 @@ public class McpConfigGenerator {
      * creating it if it does not exist.
      */
     private Path getTaskDirectory(Long taskId) throws IOException {
-        Path taskDir = Path.of(System.getProperty("user.home"), ".axiom", "tasks",
-                String.valueOf(taskId));
+        Path taskDir = AxiomHome.resolve("tasks", String.valueOf(taskId));
         Files.createDirectories(taskDir);
         return taskDir;
     }
@@ -279,7 +278,7 @@ public class McpConfigGenerator {
                 return mcpServerDir;
             }
 
-            Path axiomHome = Path.of(System.getProperty("user.home"), ".axiom");
+            Path axiomHome = AxiomHome.path();
             Path serverDir = axiomHome.resolve(MCP_SERVER_DIR_NAME);
             Files.createDirectories(serverDir);
 

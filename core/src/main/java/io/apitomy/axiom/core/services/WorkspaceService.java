@@ -19,7 +19,7 @@ public class WorkspaceService {
 
     private static final Logger LOG = Logger.getLogger(WorkspaceService.class);
 
-    @ConfigProperty(name = "axiom.workspace.root", defaultValue = "${user.home}/.axiom/workspaces")
+    @ConfigProperty(name = "axiom.workspace.root", defaultValue = "${axiom.home:${user.home}/.axiom}/workspaces")
     String workspaceRoot;
 
     /**

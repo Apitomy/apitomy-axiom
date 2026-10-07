@@ -102,6 +102,34 @@ class AssistantValidateEndpointTest {
                 .statusCode(200);
     }
 
+    /**
+     * Applying a session with no items fails with a clear message and keeps the session.
+     */
+    @Test
+    void applyWithNothingToApplyFailsAndKeepsSession() {
+        given().when().post("/api/v1/assistant/sessions/{id}/apply", sessionId)
+                .then().statusCode(422)
+                .body("errors[0]", containsString("Nothing to apply"));
+        given().when().get("/api/v1/assistant/sessions/{id}", sessionId).then().statusCode(200);
+    }
+
+    /**
+     * Applying a session whose working directory was removed fails and keeps the session.
+     *
+     * @throws IOException if the directory cannot be removed
+     */
+    @Test
+    void applyWithMissingWorkingDirectoryFailsAndKeepsSession() throws IOException {
+        Path workDir = assistantSessionManager.getSession(sessionId).getWorkingDirectory();
+        try (var paths = Files.walk(workDir)) {
+            paths.sorted(java.util.Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+        }
+        given().when().post("/api/v1/assistant/sessions/{id}/apply", sessionId)
+                .then().statusCode(422)
+                .body("errors[0]", containsString("working directory"));
+        given().when().get("/api/v1/assistant/sessions/{id}", sessionId).then().statusCode(200);
+    }
+
     @Test
     void uppercaseWorkflowIsInvalid() {
         given()

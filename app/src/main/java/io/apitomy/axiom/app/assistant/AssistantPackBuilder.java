@@ -58,4 +58,14 @@ public final class AssistantPackBuilder {
         }
         return pack;
     }
+
+    /**
+     * Counts the items in a pack built by {@link #fromDirectory}.
+     *
+     * @param pack the pack
+     * @return the total number of items across all item arrays
+     */
+    public static int itemCount(ObjectNode pack) {
+        return ARRAYS.values().stream().mapToInt(name -> pack.path(name).size()).sum();
+    }
 }

@@ -1,5 +1,6 @@
 package io.apitomy.axiom.core.services;
 
+import io.apitomy.axiom.core.config.AxiomHome;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.jboss.logging.Logger;
@@ -35,7 +36,7 @@ public class EncryptionService {
 
     @PostConstruct
     void init() {
-        Path keyFile = Path.of(System.getProperty("user.home"), ".axiom", "secret.key");
+        Path keyFile = AxiomHome.resolve("secret.key");
         try {
             if (Files.exists(keyFile)) {
                 byte[] keyBytes = Files.readAllBytes(keyFile);

@@ -1,5 +1,6 @@
 package io.apitomy.axiom.app.assistant;
 
+import io.apitomy.axiom.core.config.AxiomHome;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -37,6 +38,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -528,8 +530,20 @@ public class AssistantSessionManager {
             throw new ValidationException("Items have validation errors", allErrors);
         }
 
+        // Refuse to "succeed" with nothing: the working directory may have been removed externally.
+        Path workDir = session.getWorkingDirectory();
+        if (workDir == null || !Files.isDirectory(workDir)) {
+            throw new ValidationException("Nothing to apply", List.of("Nothing to apply: the session's working "
+                    + "directory no longer exists (" + workDir + "). The session was kept; ask the assistant to "
+                    + "write the items again."));
+        }
+
         // Build configuration pack from the working directory and apply it (validated, transactional)
-        ObjectNode pack = AssistantPackBuilder.fromDirectory(session.getWorkingDirectory(), objectMapper);
+        ObjectNode pack = AssistantPackBuilder.fromDirectory(workDir, objectMapper);
+        if (AssistantPackBuilder.itemCount(pack) == 0) {
+            throw new ValidationException("Nothing to apply", List.of("Nothing to apply: the session has no items. "
+                    + "Ask the assistant to create or update configuration items first."));
+        }
         ObjectNode metadata = pack.putObject("metadata");
         metadata.put("name", "AI Assistant Session - " + session.getName());
         ImportExportService.UpsertResult result;
@@ -608,18 +622,50 @@ public class AssistantSessionManager {
      * @param event the startup event
      */
     void onStartup(@Observes StartupEvent event) {
-        Path sessionsRoot = Path.of(System.getProperty("user.home"),
-                ".axiom", "assistant", "sessions");
+        Path sessionsRoot = AxiomHome.resolve("assistant", "sessions");
         if (!Files.isDirectory(sessionsRoot)) {
             return;
         }
+        Instant now = Instant.now();
         try (Stream<Path> dirs = Files.list(sessionsRoot)) {
             dirs.filter(Files::isDirectory).forEach(dir -> {
+                if (!isStale(dir, now, STALE_SESSION_GRACE)) {
+                    LOG.warnf("Keeping session directory %s: it changed within the last %d minutes, so another "
+                            + "Axiom instance may be using it", dir.getFileName(), STALE_SESSION_GRACE.toMinutes());
+                    return;
+                }
                 contextBuilder.deleteSessionDirectory(dir);
-                LOG.infof("Cleaned up stale session directory: %s", dir.getFileName());
+                LOG.warnf("Removed stale session directory %s left behind by a previous run", dir.getFileName());
             });
         } catch (IOException e) {
             LOG.warnf(e, "Failed to clean up stale session directories");
+        }
+    }
+
+    /** Session directories with activity more recent than this are never removed at startup. */
+    static final Duration STALE_SESSION_GRACE = Duration.ofMinutes(10);
+
+    /**
+     * Whether a session directory has had no activity within {@code grace}: the newest modification time of
+     * the directory or anything under it is older than {@code now - grace}.
+     *
+     * @param dir   the session directory
+     * @param now   the current time
+     * @param grace how long after its last change a directory is protected
+     * @return true if it can be removed
+     */
+    static boolean isStale(Path dir, Instant now, Duration grace) {
+        Instant cutoff = now.minus(grace);
+        try (Stream<Path> paths = Files.walk(dir)) {
+            return paths.noneMatch(p -> {
+                try {
+                    return Files.getLastModifiedTime(p).toInstant().isAfter(cutoff);
+                } catch (IOException e) {
+                    return true;
+                }
+            });
+        } catch (IOException e) {
+            return false;
         }
     }
 
@@ -1025,7 +1071,7 @@ public class AssistantSessionManager {
                 return assistantMcpServerDir;
             }
 
-            Path axiomHome = Path.of(System.getProperty("user.home"), ".axiom");
+            Path axiomHome = AxiomHome.path();
             Path serverDir = axiomHome.resolve(ASSISTANT_MCP_DIR_NAME);
             Files.createDirectories(serverDir);
 

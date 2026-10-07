@@ -47,6 +47,7 @@ CLI). Set the default agent used for tasks
 
 | Property | Default | Description |
 |----------|---------|--------------|
+| `axiom.home` | `~/.axiom` | Home for assistant sessions, task files, MCP servers, workspaces and the encryption key |
 | `axiom.agent.default-type` | `claude-code` | Default agent type (`claude-code`, `opencode`, or `copilot`) |
 
 #### Claude Code Settings
