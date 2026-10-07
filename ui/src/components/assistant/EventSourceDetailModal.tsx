@@ -7,6 +7,8 @@ import {
     DescriptionListTerm,
     DescriptionListDescription,
     Label,
+    List,
+    ListItem,
     Tab,
     Tabs,
     TabTitleText,
@@ -86,14 +88,38 @@ export function EventSourceDetailModal({ isOpen, onClose, name, content, errors 
                                         <DescriptionListDescription>{secretName}</DescriptionListDescription>
                                     </DescriptionListGroup>
                                 )}
-                                {configuration && (
-                                    <DescriptionListGroup>
-                                        <DescriptionListTerm>Configuration</DescriptionListTerm>
-                                        <DescriptionListDescription>
-                                            <code>{JSON.stringify(configuration)}</code>
-                                        </DescriptionListDescription>
-                                    </DescriptionListGroup>
-                                )}
+                                {configuration && (() => {
+                                    const listKey = sourceType === "jira" ? "projects" : "repositories";
+                                    const listLabel = sourceType === "jira" ? "Projects" : "Repositories";
+                                    const entries = Array.isArray(configuration[listKey])
+                                        ? (configuration[listKey] as unknown[]).map(String) : [];
+                                    const others = Object.entries(configuration).filter(([k]) => k !== listKey);
+                                    return (
+                                        <>
+                                            <DescriptionListGroup>
+                                                <DescriptionListTerm>{listLabel}</DescriptionListTerm>
+                                                <DescriptionListDescription>
+                                                    {entries.length === 0 ? "—" : (
+                                                        <List aria-label={listLabel} isPlain>
+                                                            {entries.map((e) => (
+                                                                <ListItem key={e}><code>{e}</code></ListItem>
+                                                            ))}
+                                                        </List>
+                                                    )}
+                                                </DescriptionListDescription>
+                                            </DescriptionListGroup>
+                                            {others.map(([k, v]) => (
+                                                <DescriptionListGroup key={k}>
+                                                    <DescriptionListTerm>{k}</DescriptionListTerm>
+                                                    <DescriptionListDescription>
+                                                        {typeof v === "object" && v !== null
+                                                            ? <code>{JSON.stringify(v)}</code> : String(v)}
+                                                    </DescriptionListDescription>
+                                                </DescriptionListGroup>
+                                            ))}
+                                        </>
+                                    );
+                                })()}
                                 {labels.length > 0 && (
                                     <DescriptionListGroup>
                                         <DescriptionListTerm>Labels</DescriptionListTerm>

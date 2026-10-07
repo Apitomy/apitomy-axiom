@@ -35,6 +35,7 @@ const WORKFLOW_CONTENT = {
 
 const ITEMS = [
     { type: "event-sources", name: "github-com", valid: true },
+    { type: "event-sources", name: "jira-prod", valid: true },
     { type: "workflows", name: "triage", valid: true },
     { type: "workflows", name: "triage-string", valid: true },
     { type: "workflows", name: "triage-inputs", valid: true },
@@ -44,7 +45,11 @@ const ITEMS = [
 const CONTENT: Record<string, Record<string, unknown>> = {
     "event-sources/github-com": {
         id: "github-com", name: "GitHub", sourceType: "github", baseUrl: "https://api.github.com",
-        configuration: { repositories: ["my-org/my-repo"] },
+        configuration: { repositories: ["my-org/my-repo", "my-org/other"], extra: 5 },
+    },
+    "event-sources/jira-prod": {
+        id: "jira-prod", name: "Jira", sourceType: "jira", baseUrl: "https://x.atlassian.net",
+        configuration: { projects: ["PROJ"] },
     },
     "workflows/triage": { name: "triage", description: "Triage issues", content: WORKFLOW_CONTENT },
     "workflows/triage-string": { name: "triage-string", content: JSON.stringify(WORKFLOW_CONTENT) },
@@ -97,6 +102,21 @@ describe("AssistantGeneratedItems previews", () => {
     it("opens the event source preview", async () => {
         const dialog = await openItem("github-com");
         expect(within(dialog).getByText("Event Source: github-com")).toBeInTheDocument();
+    });
+
+    it("shows GitHub repositories as a list, plus unrecognized settings", async () => {
+        const dialog = await openItem("github-com");
+        const list = within(dialog).getByRole("list", { name: "Repositories" });
+        const items = within(list).getAllByRole("listitem");
+        expect(items.map((i) => i.textContent)).toEqual(["my-org/my-repo", "my-org/other"]);
+        expect(within(list.closest("dl") as HTMLElement).queryByText(/"repositories"/)).not.toBeInTheDocument();
+        expect(within(dialog).getByText("extra")).toBeInTheDocument();
+    });
+
+    it("shows Jira projects as a list", async () => {
+        const dialog = await openItem("jira-prod");
+        const list = within(dialog).getByRole("list", { name: "Projects" });
+        expect(within(list).getByText("PROJ")).toBeInTheDocument();
     });
 
     it("opens the workflow preview with a diagram", async () => {
