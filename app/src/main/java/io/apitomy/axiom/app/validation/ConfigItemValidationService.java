@@ -6,6 +6,7 @@ import io.apitomy.axiom.api.beans.NewActionType;
 import io.apitomy.axiom.api.beans.NewToolDefinition;
 import io.apitomy.axiom.core.SdkFunctionRegistry;
 import io.apitomy.axiom.core.events.model.EventType;
+import io.apitomy.axiom.events.github.v2.GitHubUrls;
 import io.apitomy.axiom.core.events.model.RoutingRule;
 import io.apitomy.axiom.core.filters.SubscriptionFilterEvaluator;
 import io.apitomy.axiom.core.services.ActionTypeValidator;
@@ -185,6 +186,16 @@ public class ConfigItemValidationService {
         } else if ("jira".equals(sourceType)) {
             validateStringList(configuration.path("projects"), "configuration.projects",
                     null, "a non-blank project key", problems);
+        }
+
+        String baseUrl = item.path("baseUrl").asText("");
+        if ("github".equals(sourceType) && !baseUrl.isBlank()) {
+            try {
+                GitHubUrls.resolve(baseUrl);
+            } catch (IllegalArgumentException e) {
+                problems.add(ConfigProblem.error("baseUrl", "INVALID_BASE_URL", e.getMessage()
+                        + ". Use the GitHub server's URL, e.g. https://github.com or https://github.example.com."));
+            }
         }
 
         String secretName = item.path("secretName").asText("");

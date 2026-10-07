@@ -50,6 +50,28 @@ class ConfigItemValidationServiceTest {
     }
 
     @Test
+    void githubEventSourceAcceptsApiAndRepositoryUrls() throws Exception {
+        for (String url : List.of("https://api.github.com", "https://github.com/Apicurio/apicurio-registry",
+                "https://github.ibm.com/", "github.ibm.com/api/v3")) {
+            List<ConfigProblem> problems = service.validate(ConfigItemType.EVENT_SOURCE, json("""
+                {"id": "gh", "name": "GH", "sourceType": "github", "baseUrl": "%s",
+                 "configuration": {"repositories": ["o/r"]}}
+                """.formatted(url)), ValidationContext.unchecked());
+            assertFalse(ConfigItemValidationService.hasErrors(problems), url + ": " + problems);
+        }
+    }
+
+    @Test
+    void githubEventSourceRejectsUnresolvableBaseUrl() throws Exception {
+        List<ConfigProblem> problems = service.validate(ConfigItemType.EVENT_SOURCE, json("""
+            {"id": "gh", "name": "GH", "sourceType": "github", "baseUrl": "ftp://github.com",
+             "configuration": {"repositories": ["o/r"]}}
+            """), ValidationContext.unchecked());
+        assertTrue(problems.stream().anyMatch(p -> p.isError() && p.code().equals("INVALID_BASE_URL")
+                && p.path().equals("baseUrl")), problems.toString());
+    }
+
+    @Test
     void validJiraEventSourcePasses() throws Exception {
         List<ConfigProblem> problems = service.validate(ConfigItemType.EVENT_SOURCE, json("""
             {"id": "jira-prod", "name": "Jira", "sourceType": "jira", "baseUrl": "https://x.atlassian.net",

@@ -167,8 +167,13 @@ public class AssistantReferenceGenerator {
                 .append("`event.actor`, `event.payload`.\n\n")
                 .append("Event source fields: `id` (matches `[a-z0-9-]+`), `name`, `description`, `sourceType`, ")
                 .append("`baseUrl`, `secretName`, `pollInterval` (seconds), `configuration`, `enabled`.\n\n")
-                .append("- `github`: `configuration.repositories` — array of `owner/repo` strings.\n")
-                .append("- `jira`: `configuration.projects` — array of project keys.\n\n");
+                .append("- `github`: `configuration.repositories` — array of `owner/repo` strings. `baseUrl` is ")
+                .append("the GitHub server: `https://github.com` for GitHub.com, or the Enterprise web URL such ")
+                .append("as `https://github.example.com`. Axiom derives the REST API URL from it, so the API URL ")
+                .append("(`https://api.github.com`, `https://github.example.com/api/v3`) or a repository page URL ")
+                .append("also work; repositories always come from `configuration.repositories`.\n")
+                .append("- `jira`: `configuration.projects` — array of project keys; `baseUrl` is the Jira site ")
+                .append("URL.\n\n");
     }
 
     private static void appendSubscriptions(StringBuilder sb) {

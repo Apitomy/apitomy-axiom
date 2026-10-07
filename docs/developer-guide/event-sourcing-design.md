@@ -27,8 +27,8 @@ stream. No filtering — every detectable event gets recorded.
 - A background poller runs per event source, iterating over watched resources
 - Poll results are audited in the `event_source_poll_log` table with status, timing,
   events ingested, and error details (3-day retention)
-- The event source's `baseUrl` stores the **human-readable URL** (e.g., `https://github.com`);
-  the poller derives the API URL automatically
+- The event source's `baseUrl` identifies the server (e.g., `https://github.com`); for GitHub the poller
+  resolves the web and API URLs from it (see "Base URL resolution" below)
 
 **GitHub event source:**
 - Uses the Repository Events API (`GET /repos/{owner}/{repo}/events`)
@@ -416,9 +416,20 @@ All Issue fields plus:
 `GET /repos/{owner}/{repo}/pulls/{number}` for all PR-related events. For
 `PullRequestEvent/closed`, the `merged` field distinguishes `pr.closed` from `pr.merged`.
 
-**Base URL derivation:** The stored `baseUrl` is human-readable (e.g., `https://github.com`).
-The poller derives the API URL: `https://github.com` becomes `https://api.github.com`;
-GHE URLs get `/api/v3` appended.
+**Base URL resolution:** `GitHubUrls.resolve` turns the stored `baseUrl` into a web URL (used to build
+`ref`s) and a REST API URL (used for polling). The stored value is kept as entered and resolved on each poll.
+Scheme and host are case-insensitive, a missing scheme means `https`, and trailing slashes, query and fragment
+are ignored. A repository path in the URL is ignored; repositories always come from `configuration`.
+
+| `baseUrl` | Web URL | API URL |
+|-----------|---------|---------|
+| `github.com`, `www.github.com` or `api.github.com` (any path) | `https://github.com` | `https://api.github.com` |
+| `<org>.ghe.com` or `api.<org>.ghe.com` | `https://<org>.ghe.com` | `https://api.<org>.ghe.com` |
+| Other host with `/api/v3` in the path | everything before `/api/v3` | up to and including `/api/v3` |
+| Any other host (GitHub Enterprise Server) | `<scheme>://<host>` | `<scheme>://<host>/api/v3` |
+
+A value that is not an http(s) URL with a host fails validation and is recorded as a configuration error
+when polled. In the `ref` formats below, `{baseUrl}` is the resolved web URL.
 
 **`ref` construction:**
 

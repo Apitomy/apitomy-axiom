@@ -108,10 +108,19 @@ GitHubEventSourcePoller {
             return;
         }
 
-        // The stored baseUrl is the human-readable URL (e.g. https://github.com).
-        // Derive the API base URL from it for API calls.
-        String apiBaseUrl = deriveApiBaseUrl(eventSource.baseUrl);
-        String htmlBaseUrl = eventSource.baseUrl;
+        // The stored baseUrl may be the web URL, a repository page, the API URL, etc.
+        // Resolve it to the web URL (for event refs) and the REST API URL (for polling).
+        GitHubUrls urls;
+        try {
+            urls = GitHubUrls.resolve(eventSource.baseUrl);
+        } catch (IllegalArgumentException e) {
+            LOG.warnf("Invalid base URL for event source %s: %s", eventSource.id, e.getMessage());
+            recordPollLog(eventSource.id, "error", "Configuration error",
+                    e.getMessage(), 0, System.currentTimeMillis() - startMs);
+            return;
+        }
+        String apiBaseUrl = urls.apiBaseUrl();
+        String htmlBaseUrl = urls.webBaseUrl();
 
         int totalIngested = 0;
         StringBuilder errors = new StringBuilder();
@@ -231,24 +240,6 @@ GitHubEventSourcePoller {
         }
         LOG.warnf("Failed to backfill PR #%d for %s/%s: %s", number, owner, repo, result.errorMessage());
         return null;
-    }
-
-    /**
-     * Derives the API base URL from the human-readable URL.
-     * "https://github.com" -> "https://api.github.com"
-     * "https://github.example.com" -> "https://github.example.com/api/v3"
-     */
-    String deriveApiBaseUrl(String htmlBaseUrl) {
-        if (htmlBaseUrl == null) return "https://api.github.com";
-        String url = htmlBaseUrl.replaceAll("/+$", "");
-        if (url.equals("https://github.com") || url.equals("http://github.com")) {
-            return "https://api.github.com";
-        }
-        // GHE: append /api/v3 if not already present
-        if (url.endsWith("/api/v3")) {
-            return url;
-        }
-        return url + "/api/v3";
     }
 
     private String resolveToken(EventSourceEntity eventSource) {
