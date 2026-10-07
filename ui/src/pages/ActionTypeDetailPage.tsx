@@ -115,6 +115,7 @@ export function ActionTypeDetailPage() {
                     allowedTools: at.allowedTools,
                     promptTemplate: at.promptTemplate,
                     scriptTemplate: at.scriptTemplate,
+                    codeTemplate: at.codeTemplate,
                     model: at.model,
                     engine: at.engine,
                     maxSteps: at.maxSteps,
