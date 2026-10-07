@@ -150,8 +150,7 @@ public class ScriptExecutionService {
             LOG.infof("Executing script for task %d (%s), timeout %ds",
                     task.id, task.actionType, timeoutSeconds);
 
-            ProcessBuilder pb = new ProcessBuilder("/bin/bash", scriptFile.toString())
-                    .redirectErrorStream(true);
+            ProcessBuilder pb = new ProcessBuilder("/bin/bash", scriptFile.toString());
             pb.environment().putAll(buildBaseEnvironment(task, subject));
 
             // Inject environment variables (custom or all secrets as fallback)
@@ -175,22 +174,20 @@ public class ScriptExecutionService {
             pb.environment().putAll(placeholderEnv);
 
             Process process = pb.start();
-            String output = new String(process.getInputStream().readAllBytes());
-            boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+            CapturedOutput captured = capture(process, timeoutSeconds);
             Instant endTime = Instant.now();
             long durationMs = java.time.Duration.between(startTime, endTime).toMillis();
 
-            int exitCode;
-            if (!finished) {
-                process.destroyForcibly();
-                exitCode = 1;
-                output = output + "\n[Script timed out after " + timeoutSeconds + "s]";
-            } else {
-                exitCode = process.exitValue();
+            int exitCode = captured.exitCode();
+            String stdout = captured.stdout();
+            if (!captured.finished()) {
+                stdout = stdout + "\n[Script timed out after " + timeoutSeconds + "s]";
             }
+            // The task output is the last JSON object the script printed to stdout; logs belong on stderr.
+            String output = extractScriptOutput(stdout);
 
             String executionLog = buildExecutionLog(task, actionType.scriptTemplate,
-                    script, output, exitCode, startTime, durationMs);
+                    script, stdout, captured.stderr(), exitCode, startTime, durationMs);
 
             return new RunResult(exitCode, output, executionLog);
         } finally {
@@ -198,8 +195,112 @@ public class ScriptExecutionService {
         }
     }
 
+    /** Parser that rejects trailing content, so a candidate must run to the end of stdout. */
+    private static final ObjectMapper STRICT_JSON = new ObjectMapper()
+            .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
+
+    /**
+     * Separately captured result of a script process.
+     *
+     * @param stdout   everything the script wrote to stdout
+     * @param stderr   everything the script wrote to stderr
+     * @param exitCode the exit code ({@code 1} when the script timed out)
+     * @param finished false when the script was killed after the timeout
+     */
+    record CapturedOutput(String stdout, String stderr, int exitCode, boolean finished) {
+    }
+
+    /**
+     * Reads stdout and stderr concurrently (so neither pipe can fill up and block the script), waits up to the
+     * timeout, and kills the script and its child processes if it is still running.
+     *
+     * @param process        the started process
+     * @param timeoutSeconds maximum run time
+     * @return the captured output
+     * @throws InterruptedException if interrupted while waiting
+     */
+    static CapturedOutput capture(Process process, long timeoutSeconds) throws InterruptedException {
+        java.util.concurrent.CompletableFuture<String> stdout = readAsync(process.getInputStream());
+        java.util.concurrent.CompletableFuture<String> stderr = readAsync(process.getErrorStream());
+        boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+        if (!finished) {
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+            process.waitFor(5, TimeUnit.SECONDS);
+        }
+        int exitCode = finished ? process.exitValue() : 1;
+        return new CapturedOutput(join(stdout), join(stderr), exitCode, finished);
+    }
+
+    private static java.util.concurrent.CompletableFuture<String> readAsync(java.io.InputStream in) {
+        return java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try {
+                return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                return "";
+            }
+        });
+    }
+
+    private static String join(java.util.concurrent.CompletableFuture<String> future) {
+        try {
+            return future.get(5, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            future.cancel(true);
+            return "";
+        }
+    }
+
+    /**
+     * Extracts a script's outputs from its stdout: the last JSON object printed, which may span several lines
+     * (e.g. pretty-printed by {@code jq}) and must be the final thing on stdout. Earlier lines are treated as
+     * logs. When stdout does not end with a JSON object it is returned unchanged.
+     *
+     * @param stdout the script's stdout
+     * @return the JSON object text, or {@code stdout} when none is found
+     */
+    static String extractScriptOutput(String stdout) {
+        if (stdout == null) {
+            return "";
+        }
+        String trimmed = stdout.strip();
+        if (!trimmed.endsWith("}")) {
+            return stdout;
+        }
+        for (int start = trimmed.lastIndexOf('{'); start >= 0; start = trimmed.lastIndexOf('{', start - 1)) {
+            if (!startsLine(trimmed, start)) {
+                continue;
+            }
+            String candidate = trimmed.substring(start);
+            try {
+                if (STRICT_JSON.readTree(candidate).isObject()) {
+                    return candidate;
+                }
+            } catch (IOException e) {
+                // not a complete object from here; try an earlier line
+            }
+            if (start == 0) {
+                break;
+            }
+        }
+        return stdout;
+    }
+
+    private static boolean startsLine(String text, int index) {
+        for (int i = index - 1; i >= 0; i--) {
+            char c = text.charAt(i);
+            if (c == '\n') {
+                return true;
+            }
+            if (c != ' ' && c != '\t' && c != '\r') {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private String buildExecutionLog(TaskEntity task, String template, String resolvedScript,
-                                      String output, int exitCode, Instant startTime,
+                                      String output, String stderr, int exitCode, Instant startTime,
                                       long durationMs) {
         StringBuilder log = new StringBuilder();
         log.append("═══════════════════════════════════════════════════════════════\n");
@@ -220,11 +321,18 @@ public class ScriptExecutionService {
         log.append("── Resolved Script ────────────────────────────────────────────\n");
         log.append(resolvedScript.strip()).append("\n\n");
 
-        log.append("── Output ─────────────────────────────────────────────────────\n");
+        log.append("── Output (stdout) ────────────────────────────────────────────\n");
         if (output != null && !output.isBlank()) {
             log.append(output.strip()).append("\n");
         } else {
             log.append("(no output)\n");
+        }
+
+        log.append("\n── Errors (stderr) ────────────────────────────────────────────\n");
+        if (stderr != null && !stderr.isBlank()) {
+            log.append(stderr.strip()).append("\n");
+        } else {
+            log.append("(none)\n");
         }
 
         log.append("\n═══════════════════════════════════════════════════════════════\n");
