@@ -99,15 +99,17 @@ public class ValidationContextFactory {
      */
     public ValidationContext forDirectory(Path workDir) {
         ValidationContext db = databaseOnly();
+        List<DirectoryFile> actionTypes = directoryFiles(workDir, ConfigItemType.ACTION_TYPE);
         return new ValidationContext(
-                union(db.toolNames(), directoryNames(workDir, ConfigItemType.TOOL, "name")),
-                union(db.toolsetNames(), directoryNames(workDir, ConfigItemType.TOOLSET, "name")),
-                union(db.actionTypeNames(), directoryNames(workDir, ConfigItemType.ACTION_TYPE, "name")),
-                union(db.workflowDefinitionNames(), directoryNames(workDir, ConfigItemType.WORKFLOW, "name")),
+                union(db.toolNames(), names(directoryFiles(workDir, ConfigItemType.TOOL), "name")),
+                union(db.toolsetNames(), names(directoryFiles(workDir, ConfigItemType.TOOLSET), "name")),
+                union(db.actionTypeNames(), names(actionTypes, "name")),
+                union(db.workflowDefinitionNames(), names(directoryFiles(workDir, ConfigItemType.WORKFLOW), "name")),
                 db.workflowDefinitionIds(),
-                union(db.eventSourceIds(), directoryNames(workDir, ConfigItemType.EVENT_SOURCE, "id")),
+                union(db.eventSourceIds(), names(directoryFiles(workDir, ConfigItemType.EVENT_SOURCE), "id")),
                 db.secretNames(),
-                overlay(db.actionTypeInputs(), pendingInputs(directoryItems(workDir, ConfigItemType.ACTION_TYPE))));
+                overlay(db.actionTypeInputs(), pendingInputs(actionTypes.stream()
+                        .map(DirectoryFile::content).filter(c -> c != null).toList())));
     }
 
     /**
@@ -157,27 +159,55 @@ public class ValidationContextFactory {
         return result;
     }
 
-    private List<JsonNode> directoryItems(Path workDir, ConfigItemType type) {
-        List<JsonNode> items = new ArrayList<>();
+    /**
+     * One JSON file in an assistant session directory.
+     *
+     * @param basename the file name without {@code .json}
+     * @param content  the parsed JSON, or null when the file cannot be read or parsed
+     */
+    private record DirectoryFile(String basename, JsonNode content) {
+    }
+
+    private List<DirectoryFile> directoryFiles(Path workDir, ConfigItemType type) {
+        List<DirectoryFile> files = new ArrayList<>();
         if (workDir == null) {
-            return items;
+            return files;
         }
         Path dir = workDir.resolve(type.directory());
         if (!Files.isDirectory(dir)) {
-            return items;
+            return files;
         }
-        try (Stream<Path> files = Files.list(dir)) {
-            files.filter(f -> f.getFileName().toString().endsWith(".json")).forEach(f -> {
+        try (Stream<Path> paths = Files.list(dir)) {
+            paths.filter(f -> f.getFileName().toString().endsWith(".json")).sorted().forEach(f -> {
+                String basename = f.getFileName().toString().replaceFirst("\\.json$", "");
+                JsonNode content = null;
                 try {
-                    items.add(objectMapper.readTree(f.toFile()));
+                    content = objectMapper.readTree(f.toFile());
                 } catch (IOException e) {
                     LOG.debugf("Skipping unreadable %s: %s", f, e.getMessage());
                 }
+                files.add(new DirectoryFile(basename, content));
             });
         } catch (IOException e) {
             LOG.warnf("Failed to list %s: %s", dir, e.getMessage());
         }
-        return items;
+        return files;
+    }
+
+    /**
+     * Names of directory files: the JSON field value when present and non-blank, otherwise the basename.
+     *
+     * @param files     the files
+     * @param nameField the JSON field holding the name
+     * @return the names
+     */
+    private static Set<String> names(List<DirectoryFile> files, String nameField) {
+        Set<String> names = new HashSet<>();
+        for (DirectoryFile file : files) {
+            String name = file.content() != null ? file.content().path(nameField).asText("") : "";
+            names.add(name.isBlank() ? file.basename() : name);
+        }
+        return names;
     }
 
     private static <E> Set<String> collect(List<E> entities, Function<E, String> name) {
@@ -202,33 +232,5 @@ public class ValidationContextFactory {
             }
         }
         return names;
-    }
-
-    private Set<String> directoryNames(Path workDir, ConfigItemType type, String nameField) {
-        Set<String> names = new HashSet<>();
-        if (workDir == null) {
-            return names;
-        }
-        Path dir = workDir.resolve(type.directory());
-        if (!Files.isDirectory(dir)) {
-            return names;
-        }
-        try (Stream<Path> files = Files.list(dir)) {
-            files.filter(f -> f.getFileName().toString().endsWith(".json"))
-                    .forEach(f -> names.add(nameOf(f, nameField)));
-        } catch (IOException e) {
-            LOG.warnf("Failed to list %s: %s", dir, e.getMessage());
-        }
-        return names;
-    }
-
-    private String nameOf(Path file, String nameField) {
-        String basename = file.getFileName().toString().replaceFirst("\\.json$", "");
-        try {
-            String name = objectMapper.readTree(file.toFile()).path(nameField).asText("");
-            return name.isBlank() ? basename : name;
-        } catch (IOException e) {
-            return basename;
-        }
     }
 }
