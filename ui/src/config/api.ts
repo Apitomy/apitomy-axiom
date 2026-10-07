@@ -220,6 +220,8 @@ export interface AssistantApplyResult {
     eventSourcesUpdated?: number;
     subscriptionsCreated?: number;
     subscriptionsUpdated?: number;
+    workflowDefinitionsCreated?: number;
+    workflowDefinitionsUpdated?: number;
 }
 
 export async function exportPack(request: PackExportRequest): Promise<Blob> {

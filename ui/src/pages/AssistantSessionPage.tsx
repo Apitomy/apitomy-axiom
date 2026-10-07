@@ -1,3 +1,4 @@
+import { applySummaryLines } from "./assistantApplySummary";
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -542,16 +543,7 @@ export function AssistantSessionPage() {
                             <div>
                                 <p>The following items were applied:</p>
                                 <ul className="axiom-session-page__apply-result-list">
-                                    {(applyResult.toolsCreated ?? 0) > 0 && <li>{applyResult.toolsCreated} tool(s) created</li>}
-                                    {(applyResult.toolsUpdated ?? 0) > 0 && <li>{applyResult.toolsUpdated} tool(s) updated</li>}
-                                    {(applyResult.actionTypesCreated ?? 0) > 0 && <li>{applyResult.actionTypesCreated} action type(s) created</li>}
-                                    {(applyResult.actionTypesUpdated ?? 0) > 0 && <li>{applyResult.actionTypesUpdated} action type(s) updated</li>}
-                                    {(applyResult.toolsetsCreated ?? 0) > 0 && <li>{applyResult.toolsetsCreated} toolset(s) created</li>}
-                                    {(applyResult.toolsetsUpdated ?? 0) > 0 && <li>{applyResult.toolsetsUpdated} toolset(s) updated</li>}
-                                    {(applyResult.sessionTemplatesCreated ?? 0) > 0 && <li>{applyResult.sessionTemplatesCreated} session template(s) created</li>}
-                                    {(applyResult.sessionTemplatesUpdated ?? 0) > 0 && <li>{applyResult.sessionTemplatesUpdated} session template(s) updated</li>}
-                                    {(applyResult.eventSourcesCreated ?? 0) > 0 && <li>{applyResult.eventSourcesCreated} event source(s) created</li>}
-                                    {(applyResult.eventSourcesUpdated ?? 0) > 0 && <li>{applyResult.eventSourcesUpdated} event source(s) updated</li>}
+                                    {applySummaryLines(applyResult).map((line) => <li key={line}>{line}</li>)}
                                 </ul>
                             </div>
                         )}
