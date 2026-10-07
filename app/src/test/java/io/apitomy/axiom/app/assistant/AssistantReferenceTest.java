@@ -1,5 +1,6 @@
 package io.apitomy.axiom.app.assistant;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.app.ImportExportService;
@@ -63,6 +64,27 @@ class AssistantReferenceTest {
         assertTrue(generator.examples().stream()
                 .anyMatch(e -> e.getKey().equals("action-types/fetch-repo-labels.json")),
                 "examples must include action-types/fetch-repo-labels.json");
+    }
+
+    @Test
+    void configAssistantPrefersNodeOverBash() throws Exception {
+        String template = new String(getClass().getResourceAsStream(
+                "/templates/assistant-templates/axiom-config-assistant.json").readAllBytes(),
+                StandardCharsets.UTF_8);
+        JsonNode json = mapper.readTree(template);
+        String prompt = json.path("systemPrompt").asText();
+        assertTrue(prompt.contains("`node` by default"), "prompt must make node the default non-AI mode");
+        assertTrue(prompt.contains("`node` mode"), "prompt concepts must mention node mode");
+        assertTrue(json.path("welcomeMessage").asText().contains("Node.js"), "welcome message must mention Node.js");
+
+        String ref = generator.generate();
+        for (String expected : List.of("Choosing an execution mode", "Node.js pitfalls", "`require` is not defined",
+                "no shell", "`ctx.log`", "process.env", "node --check", "error.result")) {
+            assertTrue(ref.contains(expected), "reference must mention: " + expected);
+        }
+        assertTrue(generator.examples().stream()
+                .anyMatch(e -> e.getKey().equals("action-types/add-issue-comment.json")),
+                "examples must include action-types/add-issue-comment.json");
     }
 
     @Test

@@ -2,6 +2,7 @@ tools/post-issue-comment.json
 toolsets/triage-tools.json
 action-types/request-more-info.json
 action-types/triage-issue.json
+action-types/add-issue-comment.json
 action-types/fetch-repo-labels.json
 workflows/issue-triage.json
 event-sources/github-com.json

@@ -1,0 +1,34 @@
+{
+  "name": "add-issue-comment",
+  "description": "Adds a comment to a GitHub issue using the GitHub REST API.",
+  "executionMode": "node",
+  "inputs": [
+    {
+      "name": "repository",
+      "type": "string",
+      "description": "owner/repo",
+      "required": true
+    },
+    {
+      "name": "issueNumber",
+      "type": "number",
+      "description": "Issue number",
+      "required": true
+    },
+    {
+      "name": "body",
+      "type": "string",
+      "description": "Comment text (Markdown)",
+      "required": true
+    }
+  ],
+  "outputs": [
+    {
+      "name": "commentUrl",
+      "type": "string",
+      "description": "URL of the new comment",
+      "required": true
+    }
+  ],
+  "codeTemplate": "export async function run(inputs, ctx) {\n    const token = process.env.GH_TOKEN;\n    if (!token) {\n        throw new Error(\"GH_TOKEN secret is not configured\");\n    }\n    const url = `https://api.github.com/repos/${inputs.repository}/issues/${inputs.issueNumber}/comments`;\n    ctx.log(\"Commenting on\", inputs.repository, \"#\" + inputs.issueNumber);\n    const response = await fetch(url, {\n        method: \"POST\",\n        headers: {\n            Authorization: `Bearer ${token}`,\n            Accept: \"application/vnd.github+json\",\n            \"Content-Type\": \"application/json\",\n        },\n        body: JSON.stringify({ body: inputs.body }),\n    });\n    if (!response.ok) {\n        throw new Error(`GitHub returned ${response.status}: ${await response.text()}`);\n    }\n    const comment = await response.json();\n    return { commentUrl: comment.html_url };\n}\n"
+}
