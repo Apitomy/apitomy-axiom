@@ -1054,6 +1054,7 @@ export interface SessionTemplate {
     name: string;
     description: string;
     builtIn: boolean;
+    capabilities?: string[];
     systemPrompt: string;
     welcomeMessage?: string;
     initialMessage?: string;
@@ -1085,6 +1086,7 @@ export interface NewSessionTemplate {
 }
 
 export interface AssistantSessionInfo {
+    capabilities?: string[];
     id: string;
     name: string;
     templateId: string;

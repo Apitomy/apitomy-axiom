@@ -40,6 +40,7 @@ import {
     type AssistantApplyResult,
 } from "../config/api";
 import { engineColor, engineDisplayName } from "../components/engineNames";
+import { hasCapability } from "../config/capabilities";
 import "./AssistantSessionPage.css";
 
 export function AssistantSessionPage() {
@@ -258,7 +259,7 @@ export function AssistantSessionPage() {
         );
     }
 
-    const isConfigAssistant = session.templateId === "axiom-config-assistant";
+    const isConfigAssistant = hasCapability(session, "config-items");
 
     return (
         <PageSection padding={{ default: "noPadding" }} isFilled hasBodyWrapper={false}
