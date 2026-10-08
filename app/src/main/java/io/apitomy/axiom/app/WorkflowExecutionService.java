@@ -23,6 +23,7 @@ import io.apitomy.flow.engine.WorkflowEngine;
 import io.apitomy.flow.engine.WorkflowValidationException;
 import io.apitomy.flow.model.ActionInfo;
 import io.apitomy.flow.model.ActiveBranch;
+import io.apitomy.flow.model.EventLookback;
 import io.apitomy.flow.model.HumanTaskInfo;
 import io.apitomy.flow.model.InstanceStatus;
 import io.apitomy.flow.model.NodeType;
@@ -72,6 +73,9 @@ public class WorkflowExecutionService {
 
     @Inject
     Event<SseEvent> sseEvents;
+
+    @Inject
+    Event<EventLookbackRequested> lookbackRequests;
 
     @Inject
     TraceService traceService;
@@ -531,7 +535,15 @@ public class WorkflowExecutionService {
             WorkflowInstance instance, String nodeId, NodeResult result) {
         WorkflowInstance advanced = workflowEngine.completeNode(
                 workflow, instance, nodeId, result);
+        applyAdvancedInstance(entity, workflow, advanced);
+    }
 
+    /**
+     * Persists an advanced instance, spawns follow-on tasks/waits/subscriptions for a WAITING
+     * instance and handles terminal (COMPLETED/FAILED) transitions.
+     */
+    private void applyAdvancedInstance(WorkflowRunEntity entity, Workflow workflow,
+            WorkflowInstance advanced) {
         persistInstanceState(entity, advanced);
 
         if (advanced.status() == InstanceStatus.WAITING) {
@@ -815,8 +827,13 @@ public class WorkflowExecutionService {
             String nodeId, HumanTaskInfo humanTaskInfo) {
         TaskEntity task = new TaskEntity();
         task.subjectId = entity.subjectId;
-        String nodeName = humanTaskInfo.nodeName();
-        task.actionType = nodeName != null && !nodeName.isBlank() ? nodeName : "Human Task";
+        // The node's EL title (Flow falls back to the node name when it is absent or fails).
+        String title = humanTaskInfo.title();
+        if (title == null || title.isBlank()) {
+            title = humanTaskInfo.nodeName();
+        }
+        title = title != null && !title.isBlank() ? title.strip() : "Human Task";
+        task.actionType = title.length() > 255 ? title.substring(0, 252) + "..." : title;
         task.createdBy = "workflow";
         task.status = "Pending";
         task.workflowRunId = entity.id;
@@ -902,8 +919,18 @@ public class WorkflowExecutionService {
         sub.nodeId = receiveEventInfo.nodeId();
         sub.eventType = receiveEventInfo.eventType();
         sub.subjectId = entity.subjectId;
-        sub.createdOn = Instant.now();
+        Instant now = Instant.now();
+        sub.createdOn = now;
+        sub.correlationKey = receiveEventInfo.subscriptionKey();
+        if (receiveEventInfo.timeout() != null) {
+            sub.timeoutAt = now.plus(receiveEventInfo.timeout());
+        }
+        sub.lookbackFrom = lookbackFrom(receiveEventInfo.lookback(), entity.startedOn, now);
         sub.persist();
+        if (sub.lookbackFrom != null) {
+            // Offered stored events after this transaction commits (see WorkflowEventDispatcher).
+            lookbackRequests.fire(new EventLookbackRequested(sub.id));
+        }
 
         TraceContext traceCtx = traceContextFor(entity);
         if (traceCtx != null) {
@@ -921,6 +948,65 @@ public class WorkflowExecutionService {
 
         LOG.infof("Parked workflow instance %d at receive-event node %s (awaiting: %s)",
                 entity.id, sub.nodeId, sub.eventType);
+    }
+
+    /**
+     * The start of a receive-event node's look-back window: the run's start for {@code run-start}
+     * (the default), {@code now - duration} but never before the run's start for a duration, and
+     * null (no look-back) for {@code none}.
+     *
+     * @param lookback  the node's parsed lookback; null means {@code run-start}
+     * @param runStart  when the run started; null if unknown
+     * @param now       the current time
+     * @return the window start, or null when no stored events should be offered
+     */
+    static Instant lookbackFrom(EventLookback lookback, Instant runStart, Instant now) {
+        if (runStart == null) {
+            return null;
+        }
+        if (lookback == null || lookback.mode() == EventLookback.Mode.RUN_START) {
+            return runStart;
+        }
+        if (lookback.mode() == EventLookback.Mode.NONE || lookback.duration() == null) {
+            return null;
+        }
+        Instant windowStart = now.minus(lookback.duration());
+        return windowStart.isAfter(runStart) ? windowStart : runStart;
+    }
+
+    /**
+     * Called when a parked receive-event branch's timeout has elapsed without a matching event:
+     * the branch follows its timeout edge. The caller ({@link WorkflowWaitScheduler}) deletes the
+     * {@link WorkflowEventSubscriptionEntity} row in the same transaction. Does nothing when the
+     * branch is no longer parked (Flow returns the instance unchanged).
+     *
+     * @param runId          the id of the run to advance
+     * @param nodeId         the timed-out receive-event node's id
+     * @param subscriptionId the consumed subscription's id (identifies the parked trace node)
+     */
+    @Transactional
+    public void onReceiveEventTimeout(long runId, String nodeId, Long subscriptionId) {
+        try (LogContext logCtx = LogContext.create().workflowRunId(runId)) {
+            WorkflowRunEntity entity = WorkflowRunEntity.findById(runId);
+            if (entity == null || entity.completedOn != null) {
+                return;
+            }
+            logCtx.traceId(entity.traceId).subjectId(entity.subjectId);
+            Workflow workflow = loadWorkflowContent(entity.definitionId, entity.definitionVersion);
+            WorkflowInstance instance = deserializeInstance(entity.instanceState);
+            WorkflowInstance advanced = workflowEngine.onReceiveEventTimeout(workflow, instance, nodeId);
+            if (advanced == instance) {
+                return;
+            }
+            completeParkedTraceNode(entity, "workflow-event-subscription", subscriptionId);
+            LOG.infof("Receive-event node %s of workflow run %d timed out", nodeId, runId);
+            try (LogContext ignored = LogContext.create()
+                    .traceId(entity.traceId)
+                    .subjectId(entity.subjectId)
+                    .workflowRunId(entity.id)) {
+                applyAdvancedInstance(entity, workflow, advanced);
+            }
+        }
     }
 
     private void persistInstanceState(WorkflowRunEntity entity,

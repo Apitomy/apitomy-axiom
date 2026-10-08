@@ -10,9 +10,9 @@ vi.mock("../../config/api", () => ({
     fetchAssistantItemContent: vi.fn(),
 }));
 
-const viewerProps: { workflow?: { nodes: unknown[]; edges: unknown[] } }[] = [];
+const viewerProps: { workflow?: { nodes: unknown[]; edges: unknown[] }; readOnly?: boolean }[] = [];
 vi.mock("@apitomy/flow-ui", () => ({
-    WorkflowViewer: (props: { workflow: { nodes: unknown[]; edges: unknown[] } }) => {
+    WorkflowEditor: (props: { workflow: { nodes: unknown[]; edges: unknown[] }; readOnly?: boolean }) => {
         viewerProps.push(props);
         return <div data-testid="workflow-viewer">{props.workflow.nodes.length} nodes</div>;
     },
@@ -126,6 +126,7 @@ describe("AssistantGeneratedItems previews", () => {
         expect(within(dialog).getByText("Workflow: triage")).toBeInTheDocument();
         expect(within(dialog).getByTestId("workflow-viewer")).toHaveTextContent("2 nodes");
         expect(viewerProps.at(-1)?.workflow?.edges).toHaveLength(1);
+        expect(viewerProps.at(-1)?.readOnly).toBe(true);
     });
 
     it("parses workflow content stored as a JSON string", async () => {

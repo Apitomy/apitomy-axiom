@@ -134,6 +134,21 @@ condition. When the event carries a recognizable `ref`, delivery is scoped to wa
 correlated subject (all of them, across definitions); uncorrelated events are offered to every parked
 `receive-event` node of a matching type.
 
+A `receive-event` node can also declare:
+
+- **`correlationKey`** — `{subscriptionKey, eventKey}` EL expressions. The subscription key is evaluated
+  against the run context when the node is reached and stored with the parked branch; only events whose
+  evaluated event key is equal can match. `match` conditions still apply.
+- **`lookback`** — which already-stored events can satisfy the node when it is reached: `run-start`
+  (default; events since the run started), `none` (only events that arrive later), or an ISO-8601
+  duration such as `PT10M` (never earlier than the run's start). Only events that were routed by a
+  `workflow-dispatch` rule are eligible, and an event never resumes the same run twice.
+- **`timeout`** — an ISO-8601 duration. If no matching event arrives in time, the run follows the node's
+  timeout edge (`isTimeout: true`). Timeouts are checked every `axiom.workflow.wait-poll-interval`.
+
+A `human-task` node's optional **`title`** EL expression (e.g. `'Review ' += context.ref`) becomes the
+task's subject in the Inbox; it falls back to the node name.
+
 ## Following a Run
 
 **Runs** is Axiom's landing page (`/runs`). It lists every workflow run across all subjects with its

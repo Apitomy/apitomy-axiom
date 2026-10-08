@@ -483,6 +483,9 @@
 
     create table workflow_event_subscription (
         created_on timestamp(6) not null,
+        timeout_at timestamp(6),
+        lookback_from timestamp(6),
+        correlation_key varchar(1024),
         id bigint not null,
         subject_id bigint not null,
         run_id bigint not null,
@@ -638,6 +641,8 @@ CREATE INDEX idx_trace_node_trace ON trace_node (trace_id);
 CREATE INDEX idx_wf_def_version_def_id ON workflow_definition_version (definition_id);
 CREATE INDEX idx_wf_event_sub_event_type ON workflow_event_subscription (event_type);
 CREATE INDEX idx_wf_event_sub_run ON workflow_event_subscription (run_id);
+CREATE INDEX idx_wf_event_sub_correlation ON workflow_event_subscription (event_type, correlation_key);
+CREATE INDEX idx_wf_event_sub_timeout ON workflow_event_subscription (timeout_at);
 CREATE INDEX idx_wf_run_completed_on ON workflow_run (completed_on);
 CREATE INDEX idx_wf_run_subject_started ON workflow_run (subject_id, started_on desc);
 CREATE INDEX idx_wf_run_status ON workflow_run (status);

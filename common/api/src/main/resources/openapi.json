@@ -8368,6 +8368,15 @@
           },
           "branchId": {
             "type": "string"
+          },
+          "input": {
+              "description": "Inputs the node received on this visit (action and human-task nodes resolved input expressions; the start node's declared workflow inputs)",
+              "type": "object",
+              "additionalProperties": {}
+          },
+          "title": {
+              "description": "The computed title of a human-task node on this visit",
+              "type": "string"
           }
         }
       },

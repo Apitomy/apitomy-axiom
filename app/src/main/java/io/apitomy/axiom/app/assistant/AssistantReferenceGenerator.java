@@ -53,14 +53,24 @@ public class AssistantReferenceGenerator {
                     + "are merged into the run context under their names, so a later condition can read "
                     + "`context.<outputName>`. `config.outputs`: optional array of "
                     + "`{name, type, required, contextKey}` to rename or require outputs.",
-            NodeType.HUMAN_TASK, "Creates a task for a person and waits for completion. `config.description`, "
+            NodeType.HUMAN_TASK, "Creates a task for a person and waits for completion. `config.title`: optional "
+                    + "EL expression used as the task's inbox subject (join text with `+=`, e.g. "
+                    + "`'Review ' += context.ref`; falls back to the node name). `config.description`, "
                     + "`config.inputs` (map of name → EL expression shown to the person), `config.outputs` "
                     + "(array of `{name, type, required, contextKey, label, description, widget, defaultValue, options}`; "
                     + "answers are merged into the context under `contextKey`, or the output's name if unset).",
             NodeType.RECEIVE_EVENT, "Parks the run until a matching event is delivered. `config.eventType` "
                     + "(required, an event type from the list below), `config.match`: optional array of EL "
                     + "conditions over `event` and `context`, `config.outputs`: optional array of "
-                    + "`{contextKey, expression}` copying event values into the context.",
+                    + "`{contextKey, expression}` copying event values into the context. "
+                    + "`config.correlationKey`: optional `{subscriptionKey, eventKey}` EL expressions "
+                    + "(over `context` and `event` respectively); when set, only events whose key equals the "
+                    + "run's key match. `config.lookback`: `run-start` (default: events since the run "
+                    + "started can match, even ones that arrived before the node was reached), `none` (only "
+                    + "events after the node is reached) or an ISO-8601 duration such as `PT10M`. "
+                    + "`config.timeout`: optional ISO-8601 duration; requires exactly one outgoing edge with "
+                    + "`isTimeout: true` (no condition), taken when no matching event arrives in time, plus "
+                    + "a normal outgoing edge for the event path.",
             NodeType.WAIT, "Pauses for a fixed time. `config.duration` (required): ISO-8601 duration, e.g. "
                     + "`PT1H` or `P1D`.");
 

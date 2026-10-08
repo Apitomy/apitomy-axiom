@@ -154,6 +154,8 @@ export function WorkflowTab({
                 enteredOn: h.enteredOn,
                 completedOn: h.completedOn || "",
                 output: h.output || {},
+                ...(h.input ? { input: h.input } : {}),
+                ...(h.title ? { title: h.title } : {}),
             })),
             failureReason: instance.failureReason,
             createdOn: instance.startedOn,

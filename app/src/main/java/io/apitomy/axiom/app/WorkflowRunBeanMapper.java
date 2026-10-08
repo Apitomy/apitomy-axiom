@@ -194,6 +194,13 @@ public class WorkflowRunBeanMapper {
                     entry.output(),
                     io.apitomy.axiom.api.beans.Output.class));
         }
+        if (entry.input() != null && !entry.input().isEmpty()) {
+            bean.setInput(objectMapper.convertValue(entry.input(),
+                    io.apitomy.axiom.api.beans.Input.class));
+        }
+        if (entry.title() != null) {
+            bean.setTitle(entry.title());
+        }
         TaskEntity task = entry.nodeId() != null
                 ? tasksByNode.get(entry.nodeId()) : null;
         if (task != null) {

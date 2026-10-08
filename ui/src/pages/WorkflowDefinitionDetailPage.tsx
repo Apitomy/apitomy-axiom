@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
@@ -38,7 +38,8 @@ import {
     WorkflowEditor,
     WorkflowDiffViewer,
 } from "@apitomy/flow-ui";
-import type { Workflow, ValidationProblem, EditorSpi, ActionTypeDescriptor } from "@apitomy/flow-ui";
+import type { Workflow, ValidationProblem } from "@apitomy/flow-ui";
+import { useWorkflowEditorSpi } from "../hooks/useWorkflowEditorSpi";
 import {
     type WorkflowDefinition,
     type WorkflowDefinitionVersion,
@@ -51,11 +52,9 @@ import {
     listWorkflowDefinitionVersions,
     getWorkflowDefinitionVersion,
     fetchWorkflowDefinitionRuns,
-    fetchActionTypes,
     type WorkflowRunSummary,
 } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
-import { fetchSdkFunctions } from "../config/sdkTools";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { WorkflowTriggersTab } from "../components/WorkflowTriggersTab";
 import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
@@ -118,36 +117,7 @@ export function WorkflowDefinitionDetailPage() {
     const [diffBaseWorkflow, setDiffBaseWorkflow] = useState<Workflow | null>(null);
     const [diffCompareWorkflow, setDiffCompareWorkflow] = useState<Workflow | null>(null);
 
-    // EditorSpi for action types — memoized to avoid re-renders
-    const spi: EditorSpi = useMemo(() => ({
-        actionTypes: async () => {
-            const [results, sdkFunctions] = await Promise.all([
-                fetchActionTypes(1, 1000),
-                fetchSdkFunctions(),
-            ]);
-            const configured = results.items.map((at): ActionTypeDescriptor => ({
-                value: at.name,
-                label: at.name,
-                description: at.description,
-                inputs: at.inputs,
-                outputs: at.outputs,
-            }));
-            const sdkActions = sdkFunctions
-                .filter(fn => fn.sdkCallSupported)
-                .map((fn): ActionTypeDescriptor => ({
-                    value: `sdk:${fn.name}`,
-                    label: `SDK: ${fn.name.replace(/^axiom_/, "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}`,
-                    description: fn.description,
-                    inputs: fn.parameters?.map(p => ({
-                        name: p.name,
-                        type: (p.type || "string") as "string" | "number" | "boolean" | "object",
-                        required: p.required,
-                        description: p.description,
-                    })),
-                }));
-            return [...configured, ...sdkActions];
-        },
-    }), []);
+    const spi = useWorkflowEditorSpi();
 
     const loadDefinition = useCallback(() => {
         if (!id) return;

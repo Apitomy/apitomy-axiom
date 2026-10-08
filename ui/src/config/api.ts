@@ -1807,6 +1807,10 @@ export interface HistoryEntryInfo {
     edgeId?: string;
     edgeCondition?: string;
     branchId?: string;
+    /** Inputs the node received on this visit. */
+    input?: Record<string, unknown>;
+    /** The computed title of a human-task node on this visit. */
+    title?: string;
 }
 
 export interface TriggerWorkflowRequest {

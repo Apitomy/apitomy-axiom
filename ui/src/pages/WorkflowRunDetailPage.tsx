@@ -81,6 +81,8 @@ export function WorkflowRunDetailPage() {
                 edgeId: h.edgeId ?? "", edgeCondition: h.edgeCondition ?? "",
                 enteredOn: h.enteredOn, completedOn: h.completedOn ?? "",
                 output: h.output ?? {},
+                ...(h.input ? { input: h.input } : {}),
+                ...(h.title ? { title: h.title } : {}),
             })),
             failureReason: run.failureReason,
             createdOn: run.startedOn,
