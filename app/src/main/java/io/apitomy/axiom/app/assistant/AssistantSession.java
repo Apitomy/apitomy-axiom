@@ -11,6 +11,8 @@ import org.jboss.logging.Logger;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -434,6 +436,38 @@ public class AssistantSession {
     /** Returns the interactive engine type used by this session. */
     public String getEngineType() {
         return engineType;
+    }
+
+    private volatile Set<SessionCapability> capabilities = Collections.emptySet();
+
+    /**
+     * Returns the capabilities of the template this session was created from.
+     *
+     * @return an unmodifiable set, empty if none
+     */
+    public Set<SessionCapability> getCapabilities() {
+        return capabilities;
+    }
+
+    /**
+     * Sets the capabilities of this session. Called once by the session manager before the session starts.
+     *
+     * @param capabilities the template's capabilities
+     */
+    public void setCapabilities(Set<SessionCapability> capabilities) {
+        this.capabilities = capabilities.isEmpty()
+                ? Collections.emptySet()
+                : Collections.unmodifiableSet(EnumSet.copyOf(capabilities));
+    }
+
+    /**
+     * Returns whether this session has a capability.
+     *
+     * @param capability the capability
+     * @return true if the session's template declares it
+     */
+    public boolean hasCapability(SessionCapability capability) {
+        return capabilities.contains(capability);
     }
 
     /**

@@ -30,6 +30,7 @@ import io.apitomy.axiom.app.ImportExportService;
 import io.apitomy.axiom.app.assistant.AssistantSessionManager;
 import io.apitomy.axiom.app.assistant.AssistantSessionManager.SessionLimitReachedException;
 import io.apitomy.axiom.app.assistant.AssistantSessionManager.ValidationException;
+import io.apitomy.axiom.app.assistant.SessionCapability;
 import io.apitomy.axiom.app.assistant.SessionTemplateService;
 import io.apitomy.axiom.app.assistant.runtime.SessionCompatibilityException;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -636,7 +637,7 @@ public class AssistantResourceImpl implements AssistantResource {
     }
 
     private void requireConfigAssistant(AssistantSession session) {
-        if (!"axiom-config-assistant".equals(session.getTemplateId())) {
+        if (!session.hasCapability(SessionCapability.CONFIG_ITEMS)) {
             throw new WebApplicationException(
                     "Items are only available for Configuration Assistant sessions", 400);
         }
@@ -666,6 +667,7 @@ public class AssistantResourceImpl implements AssistantResource {
         info.setSubjectId(session.getSubjectId());
         info.setSubjectName(session.getSubjectName());
         info.setAllowAll(session.isAllowAll());
+        info.setCapabilities(session.getCapabilities().stream().map(SessionCapability::jsonName).sorted().toList());
         return info;
     }
 
@@ -685,6 +687,7 @@ public class AssistantResourceImpl implements AssistantResource {
         bean.setName(template.name());
         bean.setDescription(template.description());
         bean.setBuiltIn(template.builtIn());
+        bean.setCapabilities(template.capabilities().stream().map(SessionCapability::jsonName).sorted().toList());
         bean.setSystemPrompt(template.systemPrompt());
         bean.setWelcomeMessage(template.welcomeMessage());
         bean.setInitialMessage(template.initialMessage());

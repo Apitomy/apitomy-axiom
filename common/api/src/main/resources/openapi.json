@@ -6853,6 +6853,14 @@
           "allowAll": {
             "description": "Whether Allow All mode is active for this session",
             "type": "boolean"
+          },
+          "capabilities": {
+            "description": "Behaviours enabled by the session's template, for example config-items, validation-feedback or composition. Read-only; user-defined templates have none.",
+            "readOnly": true,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -7662,6 +7670,14 @@
           "builtIn": {
             "description": "Whether this is an immutable built-in template",
             "type": "boolean"
+          },
+          "capabilities": {
+            "description": "Behaviours enabled by the session's template, for example config-items, validation-feedback or composition. Read-only; user-defined templates have none.",
+            "readOnly": true,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "systemPrompt": {
             "description": "Markdown content written to CLAUDE.md",

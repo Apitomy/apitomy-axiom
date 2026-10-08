@@ -206,10 +206,10 @@ public class AssistantSessionManager {
                 if (Files.isDirectory(subjectWorkspace)) {
                     workDir = subjectWorkspace;
                 } else {
-                    workDir = contextBuilder.createWorkingDirectory(sessionDir, templateId);
+                    workDir = contextBuilder.createWorkingDirectory(sessionDir, template.capabilities());
                 }
             } else {
-                workDir = contextBuilder.createWorkingDirectory(sessionDir, templateId);
+                workDir = contextBuilder.createWorkingDirectory(sessionDir, template.capabilities());
             }
 
             // Run init script if configured
@@ -266,6 +266,7 @@ public class AssistantSessionManager {
 
             AssistantSession session = new AssistantSession(sessionId, sessionName, templateId, sessionDir,
                     workDir, command, resolvedEnv, agent.getType(), subjectId, subjectName, driver);
+            session.setCapabilities(template.capabilities());
             sessionRef.set(session);
             session.start();
 
@@ -290,7 +291,7 @@ public class AssistantSessionManager {
             });
 
             // Config Assistant validation listener
-            if ("axiom-config-assistant".equals(templateId)) {
+            if (session.hasCapability(SessionCapability.VALIDATION_FEEDBACK)) {
                 session.addListener(createValidationListener(session));
             }
 
