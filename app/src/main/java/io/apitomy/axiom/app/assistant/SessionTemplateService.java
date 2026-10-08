@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -57,6 +58,7 @@ public class SessionTemplateService {
      * @param mcpServers MCP server names to include
      * @param allowedTools tool patterns and @ToolsetName references for --allowedTools
      * @param builtIn true if loaded from classpath resources
+     * @param capabilities behaviours this template enables (empty for user-defined templates)
      */
     public record SessionTemplate(
             String templateId,
@@ -73,7 +75,8 @@ public class SessionTemplateService {
             String environment,
             List<String> mcpServers,
             List<String> allowedTools,
-            boolean builtIn) {
+            boolean builtIn,
+            Set<SessionCapability> capabilities) {
     }
 
     /**
@@ -247,7 +250,8 @@ public class SessionTemplateService {
                 entity.environment,
                 List.copyOf(entity.mcpServers),
                 List.copyOf(entity.allowedTools),
-                false);
+                false,
+                Set.of());
     }
 
     private SessionTemplate parseTemplateJson(JsonNode node, boolean builtIn) {
@@ -268,7 +272,8 @@ public class SessionTemplateService {
                 environment,
                 jsonArrayToList(node.path("mcpServers")),
                 jsonArrayToList(node.path("allowedTools")),
-                builtIn);
+                builtIn,
+                SessionCapability.parse(node.path("capabilities")));
     }
 
     private List<String> jsonArrayToList(JsonNode arrayNode) {

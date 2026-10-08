@@ -726,7 +726,8 @@ public class AssistantResourceImpl implements AssistantResource {
                 environmentToJson(data.getEnvironment()),
                 data.getMcpServers() != null ? data.getMcpServers() : List.of(),
                 data.getAllowedTools() != null ? data.getAllowedTools() : List.of(),
-                false);
+                false,
+                java.util.Set.of());
     }
 
     private String environmentToJson(Environment env) {
