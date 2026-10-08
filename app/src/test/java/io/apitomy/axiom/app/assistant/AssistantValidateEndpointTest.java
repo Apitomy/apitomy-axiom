@@ -95,6 +95,7 @@ class AssistantValidateEndpointTest {
 
         given()
                 .contentType(ContentType.JSON)
+                .header("X-Axiom-Session-Token", token(mcpSessionId))
                 .body(request("workflow", WORKFLOW))
                 .when()
                 .post("/api/v1/assistant/sessions/{id}/validate", mcpSessionId)
@@ -134,6 +135,7 @@ class AssistantValidateEndpointTest {
     void uppercaseWorkflowIsInvalid() {
         given()
                 .contentType(ContentType.JSON)
+                .header("X-Axiom-Session-Token", token(sessionId))
                 .body(request("workflow", WORKFLOW.replace("\"type\": \"start\"", "\"type\": \"START\"")))
                 .when()
                 .post("/api/v1/assistant/sessions/{id}/validate", sessionId)
@@ -155,6 +157,7 @@ class AssistantValidateEndpointTest {
 
         given()
                 .contentType(ContentType.JSON)
+                .header("X-Axiom-Session-Token", token(sessionId))
                 .body(request("workflow", WORKFLOW))
                 .when()
                 .post("/api/v1/assistant/sessions/{id}/validate", sessionId)
@@ -232,5 +235,9 @@ class AssistantValidateEndpointTest {
         public String getErrorMessage() {
             return null;
         }
+    }
+
+    private String token(String id) {
+        return assistantSessionManager.getSession(id).getMcpToken();
     }
 }

@@ -67,6 +67,11 @@ import java.util.function.Consumer;
 @RunOnVirtualThread
 public class AssistantResourceImpl implements AssistantResource {
 
+    static final String SESSION_TOKEN_HEADER = "X-Axiom-Session-Token";
+
+    @Context
+    HttpHeaders httpHeaders;
+
     private static final Logger LOG = Logger.getLogger(AssistantResourceImpl.class);
 
     @Inject
@@ -428,6 +433,10 @@ public class AssistantResourceImpl implements AssistantResource {
      */
     @Override
     public AssistantValidateResult validateAssistantItem(String sessionId, AssistantValidateRequest data) {
+        AssistantSession session = requireSession(sessionId);
+        if (!session.verifyMcpToken(httpHeaders.getHeaderString(SESSION_TOKEN_HEADER))) {
+            throw new WebApplicationException("Missing or invalid " + SESSION_TOKEN_HEADER, 401);
+        }
         if (data.getType() == null || data.getItem() == null) {
             throw new WebApplicationException("'type' and 'item' are required", 400);
         }

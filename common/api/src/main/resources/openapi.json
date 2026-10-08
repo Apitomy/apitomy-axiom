@@ -2714,7 +2714,7 @@
           "Assistant"
         ],
         "summary": "Validate a draft configuration item in the context of an assistant session",
-        "description": "Validates an item using the same rules as apply. Items already written to the session working directory count as existing.",
+        "description": "Validates an item using the same rules as apply. Items already written to the session working directory count as existing. Called by the session's MCP server; requires the X-Axiom-Session-Token header with the session's token.",
         "operationId": "validateAssistantItem",
         "requestBody": {
           "required": true,
@@ -2736,6 +2736,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Missing or invalid session token"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"

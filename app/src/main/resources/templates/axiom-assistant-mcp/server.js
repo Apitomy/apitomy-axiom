@@ -16,6 +16,7 @@ function log(level, message, data) {
 const AXIOM_API_URL = process.env.AXIOM_API_URL || "http://localhost:9090/api/v1";
 const AXIOM_SUBJECT_ID = process.env.AXIOM_SUBJECT_ID;
 const AXIOM_ASSISTANT_SESSION_ID = process.env.AXIOM_ASSISTANT_SESSION_ID;
+const AXIOM_SESSION_TOKEN = process.env.AXIOM_SESSION_TOKEN || "";
 
 async function axiomApi(method, path, body) {
     const url = `${AXIOM_API_URL}${path}`;
@@ -23,6 +24,9 @@ async function axiomApi(method, path, body) {
         method,
         headers: { "Accept": "application/json" },
     };
+    if (AXIOM_SESSION_TOKEN) {
+        opts.headers["X-Axiom-Session-Token"] = AXIOM_SESSION_TOKEN;
+    }
     if (body !== undefined) {
         opts.headers["Content-Type"] = "application/json";
         opts.body = JSON.stringify(body);

@@ -174,6 +174,7 @@ public class AssistantSessionManager {
             // Create session directory first — MCP server resolution may need
             // to write files there (e.g. tools.json for @axiom-tools).
             String sessionId = UUID.randomUUID().toString();
+            String mcpToken = AssistantSession.newToken();
             Path sessionDir = contextBuilder.createSessionDirectory(sessionId, null);
 
             try {
@@ -184,7 +185,7 @@ public class AssistantSessionManager {
             // Resolve MCP servers from template, augmented with any servers
             // implied by the allowed tools list.
             Map<String, AssistantContextBuilder.McpServerConfig> mcpConfigs =
-                    resolveMcpServers(sessionId, template, subject, sessionDir, resolvedEnv,
+                    resolveMcpServers(sessionId, mcpToken, template, subject, sessionDir, resolvedEnv,
                             resolvedAllowedTools);
 
             // Build and write MCP config JSON to session directory
@@ -267,6 +268,7 @@ public class AssistantSessionManager {
             AssistantSession session = new AssistantSession(sessionId, sessionName, templateId, sessionDir,
                     workDir, command, resolvedEnv, agent.getType(), subjectId, subjectName, driver);
             session.setCapabilities(template.capabilities());
+            session.setMcpToken(mcpToken);
             sessionRef.set(session);
             session.start();
 
@@ -864,7 +866,7 @@ public class AssistantSessionManager {
     }
 
     private Map<String, AssistantContextBuilder.McpServerConfig> resolveMcpServers(
-            String sessionId, SessionTemplateService.SessionTemplate template,
+            String sessionId, String mcpToken, SessionTemplateService.SessionTemplate template,
             SubjectEntity subject, Path sessionDir,
             Map<String, String> sessionEnv,
             List<String> allowedTools) throws IOException {
@@ -890,6 +892,7 @@ public class AssistantSessionManager {
                     env.put("AXIOM_SUBJECT_ID", String.valueOf(subject.id));
                 }
                 env.put("AXIOM_ASSISTANT_SESSION_ID", sessionId);
+                env.put("AXIOM_SESSION_TOKEN", mcpToken);
                 configs.put("axiom", AssistantContextBuilder.McpServerConfig.stdio(
                         "node", List.of(serverJsPath), env));
 

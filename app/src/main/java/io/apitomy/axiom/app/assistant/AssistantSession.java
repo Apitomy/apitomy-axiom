@@ -9,8 +9,12 @@ import io.apitomy.axiom.app.assistant.runtime.InteractiveSessionDriver;
 import org.jboss.logging.Logger;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
@@ -37,6 +41,51 @@ public class AssistantSession {
     private static final Logger LOG = Logger.getLogger(AssistantSession.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String RAW_EVENTS_FILE = "raw-events.jsonl";
+
+    private static final SecureRandom RANDOM = new SecureRandom();
+
+    private volatile String mcpToken = newToken();
+
+    /**
+     * Generates a new random session token (32 bytes, URL-safe Base64 without padding).
+     *
+     * @return the token
+     */
+    static String newToken() {
+        byte[] bytes = new byte[32];
+        RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    /**
+     * Sets this session's MCP token. Called once by the session manager, which generates the token before the
+     * session is constructed so it can be written into the MCP configuration.
+     *
+     * @param token the token
+     */
+    void setMcpToken(String token) {
+        this.mcpToken = token;
+    }
+
+    /**
+     * Returns the secret token this session's MCP servers present to Axiom REST.
+     *
+     * @return the token
+     */
+    public String getMcpToken() {
+        return mcpToken;
+    }
+
+    /**
+     * Checks a presented token against this session's token in constant time.
+     *
+     * @param presented the value of the {@code X-Axiom-Session-Token} header, possibly null
+     * @return true if it matches
+     */
+    public boolean verifyMcpToken(String presented) {
+        return presented != null && MessageDigest.isEqual(
+                mcpToken.getBytes(StandardCharsets.UTF_8), presented.getBytes(StandardCharsets.UTF_8));
+    }
 
     /** Possible session states. */
     public enum Status { STARTING, RUNNING, STOPPED, ERROR }
