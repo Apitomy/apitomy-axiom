@@ -152,6 +152,49 @@ class WorkflowReceiveEventFeaturesTest {
                 WorkflowRunResumeEntity.count("runId = ?1 and eventId = ?2", run.id, eventId)));
     }
 
+    /**
+     * The race: the event's ledger entry is committed and routing is still in flight (no outcome
+     * yet, so live dispatch may already have looked for waiting runs before this branch parked).
+     * Look-back must still deliver it.
+     */
+    @Test
+    void eventStillBeingRoutedIsDeliveredByLookback() {
+        String type = "lookback.inflight";
+        UUID eventId = storeEvent(type, true, "pending", false);
+        long[] ids = setup("Lookback Inflight Subject", receiveWorkflow(type, "{\"eventType\": \"$TYPE\"}", false));
+
+        WorkflowRunEntity run = trigger(ids, Map.of());
+
+        assertRunStatus(run.id, "completed");
+        QuarkusTransaction.requiringNew().run(() -> assertEquals(1,
+                WorkflowRunResumeEntity.count("runId = ?1 and eventId = ?2", run.id, eventId)));
+    }
+
+    /** An event whose subscription filter did not match (ledger {@code skipped}) is not replayed. */
+    @Test
+    void filteredOutEventsAreNotReplayed() {
+        String type = "lookback.skipped";
+        storeEvent(type, true, "skipped", false);
+        long[] ids = setup("Lookback Skipped Subject", receiveWorkflow(type, "{\"eventType\": \"$TYPE\"}", false));
+
+        WorkflowRunEntity run = trigger(ids, Map.of());
+
+        assertRunStatus(run.id, "waiting");
+    }
+
+    /** Live delivery after the look-back found nothing still resumes the run exactly once. */
+    @Test
+    void liveEventAfterEmptyLookbackResumesOnce() {
+        String type = "lookback.live";
+        long[] ids = setup("Lookback Live Subject", receiveWorkflow(type, "{\"eventType\": \"$TYPE\"}", false));
+        WorkflowRunEntity run = trigger(ids, Map.of());
+        assertRunStatus(run.id, "waiting");
+
+        assertEquals(1, dispatcher.dispatchStreamEvent(type, eventMap(type, Map.of()), null).size());
+        assertEquals(0, dispatcher.dispatchStreamEvent(type, eventMap(type, Map.of()), null).size());
+        assertRunStatus(run.id, "completed");
+    }
+
     @Test
     void lookbackNoneIgnoresStoredEvents() {
         String type = "lookback.none";
@@ -236,6 +279,17 @@ class WorkflowReceiveEventFeaturesTest {
      * optionally routed by a workflow-dispatch rule.
      */
     private UUID storeEvent(String type, boolean routedByWorkflowDispatch) {
+        return storeEvent(type, routedByWorkflowDispatch, "completed", true);
+    }
+
+    /**
+     * Stores a stream event and the ledger entry of an event subscription for it.
+     *
+     * @param ledgerStatus  the ledger entry's status ({@code pending} while routing is in flight)
+     * @param withOutcome   whether the routing outcome has been recorded yet
+     */
+    private UUID storeEvent(String type, boolean routedByWorkflowDispatch, String ledgerStatus,
+                            boolean withOutcome) {
         return QuarkusTransaction.requiringNew().call(() -> {
             UUID id = UUID.randomUUID();
             StreamEventEntity event = new StreamEventEntity();
@@ -253,7 +307,9 @@ class WorkflowReceiveEventFeaturesTest {
 
             EventSubscriptionEntity sub = new EventSubscriptionEntity();
             sub.name = "lookback-sub-" + id;
-            sub.routing = "[]";
+            String rule = routedByWorkflowDispatch
+                    ? RoutingRule.TYPE_WORKFLOW_DISPATCH : RoutingRule.TYPE_CREATE_WORKFLOW;
+            sub.routing = "[{\"type\":\"" + rule + "\"}]";
             sub.createdOn = Instant.now();
             sub.modifiedOn = Instant.now();
             sub.persist();
@@ -261,10 +317,13 @@ class WorkflowReceiveEventFeaturesTest {
             EventProcessingLedgerEntity ledger = new EventProcessingLedgerEntity();
             ledger.eventId = id;
             ledger.subscriptionId = sub.id;
-            ledger.status = "completed";
+            ledger.status = ledgerStatus;
             ledger.createdOn = Instant.now();
             ledger.persist();
 
+            if (!withOutcome) {
+                return id;
+            }
             RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
             outcome.ledgerId = ledger.id;
             outcome.routingType = routedByWorkflowDispatch

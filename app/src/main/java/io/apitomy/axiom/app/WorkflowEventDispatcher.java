@@ -19,6 +19,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.event.TransactionPhase;
 import jakarta.inject.Inject;
+import jakarta.persistence.LockModeType;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import org.jboss.logging.Logger;
 
@@ -146,8 +147,10 @@ public class WorkflowEventDispatcher {
      */
     private ResumedRun offerToSubscription(long subscriptionId, Map<String, Object> eventMap,
                                            EventOrigin origin, MatchedSubscription[] matched) {
+        // Locked: live delivery and look-back may offer events to the same subscription at once;
+        // the second waits, then finds the row consumed.
         WorkflowEventSubscriptionEntity sub =
-                WorkflowEventSubscriptionEntity.findById(subscriptionId);
+                WorkflowEventSubscriptionEntity.findById(subscriptionId, LockModeType.PESSIMISTIC_WRITE);
         if (sub == null) {
             return null;
         }
@@ -210,9 +213,16 @@ public class WorkflowEventDispatcher {
     /**
      * Offers stored events that arrived before a branch parked to its subscription, oldest first,
      * until one resumes the run. Eligible events have the subscription's event type, a timestamp at
-     * or after its {@code lookbackFrom}, were routed by a {@code workflow-dispatch} rule (so event
-     * subscription filters applied, as for live delivery), and have not already resumed this run.
-     * Clears {@code lookbackFrom} afterwards so the look-back runs once.
+     * or after its {@code lookbackFrom}, matched the filter of an event subscription with a
+     * {@code workflow-dispatch} rule (so filters apply, as for live delivery), and have not already
+     * resumed this run. Clears {@code lookbackFrom} afterwards so the look-back runs once.
+     *
+     * <p>Eligibility uses the event's ledger entry, not its routing outcome: the orchestrator
+     * commits a {@code pending} entry <em>before</em> routing looks for waiting runs. So for an
+     * event routed while the branch parks, either this query sees its entry, or the entry (and
+     * therefore live dispatch planning) came after the branch parked and live delivery finds the
+     * subscription. No event falls between the two. If both deliver at once, the subscription
+     * row lock in {@link #offerToSubscription} lets only one of them consume it.
      *
      * @param subscriptionId the subscription
      * @return the resumed run, or null if no stored event matched
@@ -225,17 +235,19 @@ public class WorkflowEventDispatcher {
                 return List.<Object[]>of();
             }
             return StreamEventEntity.getEntityManager().createQuery(
-                    "select e.id, min(l.id) from StreamEventEntity e, EventProcessingLedgerEntity l"
-                            + " where l.eventId = e.id and e.type = :type and e.timestamp >= :from"
-                            + " and exists (select o.id from RoutingOutcomeEntity o"
-                            + "   where o.ledgerId = l.id and o.routingType = :routing)"
+                    "select e.id, min(l.id) from StreamEventEntity e, EventProcessingLedgerEntity l,"
+                            + " EventSubscriptionEntity s"
+                            + " where l.eventId = e.id and s.id = l.subscriptionId"
+                            + " and e.type = :type and e.timestamp >= :from"
+                            // skipped = the subscription's filter did not match
+                            + " and l.status <> 'skipped' and s.routing like :routing"
                             + " and not exists (select r.id from WorkflowRunResumeEntity r"
                             + "   where r.runId = :runId and r.eventId = e.id)"
                             + " group by e.id, e.timestamp, e.createdOn"
                             + " order by e.timestamp, e.createdOn", Object[].class)
                     .setParameter("type", sub.eventType)
                     .setParameter("from", sub.lookbackFrom)
-                    .setParameter("routing", RoutingRule.TYPE_WORKFLOW_DISPATCH)
+                    .setParameter("routing", "%\"" + RoutingRule.TYPE_WORKFLOW_DISPATCH + "\"%")
                     .setParameter("runId", sub.runId)
                     .getResultList();
         });
