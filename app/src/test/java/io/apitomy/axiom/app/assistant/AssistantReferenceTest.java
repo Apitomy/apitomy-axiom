@@ -87,6 +87,28 @@ class AssistantReferenceTest {
                 "examples must include action-types/add-issue-comment.json");
     }
 
+    /**
+     * The Flow 2.6/2.7 node options are documented, shown in the example workflow and explained in the prompt.
+     */
+    @Test
+    void referenceCoversFlowReceiveEventAndHumanTaskOptions() throws Exception {
+        String ref = generator.generate();
+        for (String expected : List.of("`config.correlationKey`", "`config.lookback`", "`config.timeout`",
+                "`isTimeout`", "`config.title`", "`+=`")) {
+            assertTrue(ref.contains(expected), "reference must mention: " + expected);
+        }
+        String example = generator.examples().stream()
+                .filter(e -> e.getKey().equals("workflows/issue-triage.json"))
+                .map(e -> e.getValue()).findFirst().orElseThrow();
+        for (String expected : List.of("\"correlationKey\"", "\"lookback\"", "\"timeout\"", "\"isTimeout\": true",
+                "\"title\"")) {
+            assertTrue(example.contains(expected), "example workflow must show: " + expected);
+        }
+        String prompt = mapper.readTree(getClass().getResourceAsStream(
+                "/templates/assistant-templates/axiom-config-assistant.json")).path("systemPrompt").asText();
+        assertTrue(prompt.contains("Receive-event nodes must correlate"), prompt);
+    }
+
     @Test
     void nodeConfigDocsCoverEveryNodeType() {
         assertEquals(EnumSet.allOf(NodeType.class),

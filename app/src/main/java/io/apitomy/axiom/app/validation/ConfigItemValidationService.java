@@ -38,7 +38,7 @@ public class ConfigItemValidationService {
     private static final String AXIOM_TOOL_PREFIX = "mcp__axiom-tools__";
     private static final Pattern EVENT_SOURCE_ID = Pattern.compile("[a-z0-9-]+");
     private static final String WORKFLOW_FORMAT_HINT = "Node types are lowercase (start, end, action, "
-            + "human-task, receive-event, wait); edges use id/source/target/condition/priority/isDefault.";
+            + "human-task, receive-event, wait); edges use id/source/target/condition/priority/isDefault (and isTimeout for a receive-event timeout edge).";
     private static final Pattern GITHUB_REPOSITORY = Pattern.compile("[^/\\s]+/[^/\\s]+");
     private static final Pattern FILTER_EVENT_TYPE = Pattern.compile(
             "event\\.type\\s*==\\s*['\"]([^'\"]+)['\"]");
