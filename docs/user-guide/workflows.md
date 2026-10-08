@@ -141,8 +141,8 @@ A `receive-event` node can also declare:
   evaluated event key is equal can match. `match` conditions still apply.
 - **`lookback`** — which already-stored events can satisfy the node when it is reached: `run-start`
   (default; events since the run started), `none` (only events that arrive later), or an ISO-8601
-  duration such as `PT10M` (never earlier than the run's start). Only events that were routed by a
-  `workflow-dispatch` rule are eligible, and an event never resumes the same run twice.
+  duration such as `PT10M` (never earlier than the run's start). Only events that matched the filter of a
+  subscription with a `workflow-dispatch` rule are eligible, and an event never resumes the same run twice.
 - **`timeout`** — an ISO-8601 duration. If no matching event arrives in time, the run follows the node's
   timeout edge (`isTimeout: true`). Timeouts are checked every `axiom.workflow.wait-poll-interval`.
 
