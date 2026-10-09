@@ -94,4 +94,15 @@ class SessionTokenTest {
                 .header("X-Axiom-Session-Token", manager.getSession(sessionId).getMcpToken()).body(BODY)
                 .post("/api/v1/assistant/sessions/{id}/validate", sessionId).then().statusCode(200);
     }
+
+    @Test
+    void sessionEventsAreJournaled() throws IOException {
+        AssistantSession session = manager.getSession(sessionId);
+        com.fasterxml.jackson.databind.node.ObjectNode data = new ObjectMapper().createObjectNode();
+        data.put("text", "journal me");
+        session.addEvent(new AssistantEventParser.SseEvent("assistant_text", data));
+        java.util.List<AssistantEventParser.SseEvent> loaded = HistoryJournal.load(
+                session.getSessionDirectory().resolve(HistoryJournal.FILE_NAME), new ObjectMapper());
+        assertEquals("journal me", loaded.get(loaded.size() - 1).data().path("text").asText());
+    }
 }

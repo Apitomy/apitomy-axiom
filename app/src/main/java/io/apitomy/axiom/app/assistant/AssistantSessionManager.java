@@ -270,6 +270,8 @@ public class AssistantSessionManager {
             session.setCapabilities(template.capabilities());
             session.setMcpToken(mcpToken);
             sessionRef.set(session);
+            // Persist every event (including the welcome message and startup events) to history.jsonl
+            session.addListener(new HistoryJournal(sessionDir.resolve(HistoryJournal.FILE_NAME), objectMapper));
             session.start();
 
             // Add welcome message to event history so it replays on reconnect
