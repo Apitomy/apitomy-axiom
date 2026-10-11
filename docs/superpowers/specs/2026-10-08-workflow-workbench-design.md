@@ -29,23 +29,32 @@ and their edits interleave throughout the session.
 
 ## Dependencies on Apitomy Flow
 
-The workbench needs the Flow release described in the Flow spec above:
+The workbench uses **Apitomy Flow 3.0.0** (`io.apitomy:apitomy-flow-engine` and `@apitomy/flow-ui`, both
+published). Flow's user guide `docs/user-guide/ai-assisted-editing.md` is the reference. What Axiom uses:
 
-- `contentRevision`: `"sha256:" + hex(SHA-256(JCS(stripLayout(workflow))))`, in TS and Java.
-- An imperative `WorkflowEditor` handle: `propose`, `apply`, `replace`, `withdraw`, `clearHighlights`,
-  `getSnapshot`.
-- `onChange(workflow, { contentRevision, origin })` and `onSelectionChange({ nodeIds, edgeIds })`.
-- `ChangeSet` / `ChangeOp`, including `unset`, and the error codes `target-missing`, `duplicate-id`,
-  `edge-endpoint-missing`, `malformed`, `read-only`, `stale`.
-- A proposal review bar, a lingering highlight after apply (`highlightApplied`), and
-  `onProposalResolved`.
-- Java `ChangeSets.apply` and `ContentRevision` in `apitomy-flow-engine`.
-- `placeNewNodes` for positionless nodes on `apply` and `replace`.
+- **Content revisions**: `computeContentRevision(workflow)` (TS) and `ContentRevision.of(JsonNode)` (Java),
+  `"sha256:" + hex(SHA-256(JCS(stripLayout(workflow))))`.
+- **Change sets**: `ChangeSet` / `ChangeOp` (with `unset`) and the error codes `target-missing`,
+  `duplicate-id`, `edge-endpoint-missing`, `malformed`, `read-only`, `stale`. Java:
+  `ChangeSets.apply(JsonNode, JsonNode)` / `applyChecked(...)` returning `ChangeSetResult.Applied(ObjectNode)`
+  or `Rejected(ChangeSetError)`. Java does not position added nodes.
+- **Editor handle** (React 19 `ref`): `propose`, `apply`, `withdraw`, `replace(workflow, origin?)`,
+  `clearHighlights`, `getSnapshot()`. No method throws.
+- **Editor props**: `onChange(workflow, { contentRevision, origin })`, `onProposalResolved(id, outcome)`,
+  `onSelectionChange({ nodeIds, edgeIds })`, `highlightApplied` (default true) and
+  `appliedChangeLayout: 'place' | 'tidy'` (default `'place'`).
+- **SPI**: `actionTypes` (a new array or provider reloads the catalog without a remount; unknown action types
+  show as unresolved), `openActionType({ value, resolved })` (Open / Create… in the Properties panel),
+  `contextActions(FlowContext)` (host menu items on canvas, node, edge, selection and Problems rows), and
+  `validate`.
 
-**Axiom rule:** the server computes `contentRevision` over exactly the Flow `Workflow` document it sends to
-the editor, with no Axiom-specific fields.
-
-Until the release is published, Axiom develops against a local snapshot build of Flow.
+**Axiom rules:**
+- The server computes `contentRevision` over exactly the Flow `Workflow` JSON it sends to the editor, with no
+  Axiom-specific fields. It hashes and sends the stored JSON as-is (`ContentRevision.of(JsonNode)`), never a
+  re-serialized Java object, so that `null` values and key sets match what the browser hashes.
+- Change sets the agent writes use `author: "agent:axiom-workbench"`.
+- Nodes added by the agent have no `position` on the server until the editor places them and `onChange`
+  saves the placed document.
 
 ## §1 Architecture
 
@@ -181,10 +190,15 @@ revision from the start of the turn.
 
 - **Workflow tab**: the Flow `WorkflowEditor` with a ref handle.
   - `onChange` saves a revision, debounced by 500 ms and flushed before each AI turn.
-  - `onSelectionChange` records the selection as context for the AI. Double-clicking an action node opens
-    its action type's tab.
+  - `onSelectionChange` records the selection as context for the AI.
+  - `spi.openActionType` opens the action type's tab (**Open**), or creates a blank draft with that name and
+    opens it (**Create…**) when the value is unresolved.
   - `spi.validate` calls draft validation on the server.
-  - `spi.actionTypes` merges database action types with draft ones.
+  - `spi.actionTypes` is an array of database action types merged with draft ones. It is replaced whenever a
+    draft action type is created, renamed or has its inputs or outputs changed, so the palette and the
+    unresolved markers update without a remount.
+  - `appliedChangeLayout` is a workbench preference (**Place new nodes** or **Tidy after AI changes**),
+    stored in `localStorage`, default `'place'`.
 - **Action type tab**: the new `ActionTypeEditor` component, extracted from `ActionTypeDetailPage`. It takes
   `value` and `onChange`. `ActionTypeDetailPage` is refactored to use it.
 - **Tool tab**: the new `ToolEditor` component, extracted from the tool detail page in the same way.
@@ -319,7 +333,15 @@ All Java tests use JUnit 5 and the isolated `axiom.home`.
    - entities, REST, revisions, draft validation and publish;
    - `/expressions/evaluate` and the stream-event tools;
    - the `axiom-workbench` MCP server, template and reference.
-3. **Flow upgrade**: consume the new Flow release, using a local snapshot until it is published.
+   - Carried over from the Phase 1 review: one shared session-token guard for every MCP-called endpoint;
+     MCP-only routes, so MCP calls never share a route with UI calls; startup cleanup must keep
+     `COMPOSITION` session directories (and their `history.jsonl`); restoring a session passes its token and
+     capabilities at construction and normalizes missing event `data`; move journal writes out of the event
+     lock.
+3. **Flow 3.0.0 upgrade (UI)**: upgrade `@apitomy/flow-ui` and adapt the existing editor, viewer and diff
+   usages; wire `openActionType` on `WorkflowDefinitionDetailPage`. The Java `apitomy-flow-engine` upgrade
+   to 3.0.0 is done at the start of Phase 2, because the change-set endpoint needs `ChangeSets` and
+   `ContentRevision`. This phase can run before or alongside Phase 2.
 4. **Workbench UI**:
    - the page, tree and tabs;
    - the extracted `ActionTypeEditor` and `ToolEditor`;
@@ -331,7 +353,6 @@ All Java tests use JUnit 5 and the isolated `axiom.home`.
 
 - Whole-workflow dry run using flow-ui's simulator.
 - Inline one-shot AI helpers in the editors, including a helper for node `codeTemplate`.
-- Flow context hooks and a live action type catalog (Flow feature set items 4 and 5).
 - Event sources, subscriptions and toolsets in the workbench.
 - The copilot engine. It needs interactive session support.
 - Simultaneous (non-turn-based) editing by the user and the AI.
