@@ -137,6 +137,19 @@ class CompositionTurnsResourceTest {
     }
 
     @Test
+    void ensureSessionReturnsFreshAssistantSessionId() {
+        org.mockito.Mockito.doAnswer(inv -> {
+            QuarkusTransaction.requiringNew().run(() -> {
+                CompositionEntity entity = CompositionEntity.findById(compositionId);
+                entity.assistantSessionId = "sess-fresh";
+            });
+            return null;
+        }).when(sessions).ensure(compositionId);
+        given().post(BASE + "/{id}/session", compositionId).then().statusCode(200)
+                .body("assistantSessionId", equalTo("sess-fresh"));
+    }
+
+    @Test
     void ensureSessionStartsTheAgent() {
         given().post(BASE + "/{id}/session", compositionId).then().statusCode(200).body("id", equalTo((int) compositionId));
         org.mockito.Mockito.verify(sessions).ensure(compositionId);

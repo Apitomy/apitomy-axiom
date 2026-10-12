@@ -1,6 +1,7 @@
 package io.apitomy.axiom.app.rest;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.CompositionsResource;
@@ -252,7 +253,8 @@ public class CompositionsResourceImpl implements CompositionsResource {
     public Composition ensureCompositionSession(long compositionId) {
         service.get(compositionId);
         workbenchSessions.ensure(compositionId);
-        return toBean(service.get(compositionId));
+        // ensure() commits in its own transaction; the entity loaded above is stale in this context.
+        return QuarkusTransaction.requiringNew().call(() -> toBean(service.get(compositionId)));
     }
 
     /** {@inheritDoc} */
