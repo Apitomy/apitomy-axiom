@@ -29,7 +29,7 @@ and their edits interleave throughout the session.
 
 ## Dependencies on Apitomy Flow
 
-The workbench uses **Apitomy Flow 3.0.0** (`io.apitomy:apitomy-flow-engine` and `@apitomy/flow-ui`, both
+The workbench uses **Apitomy Flow 3.0.1** (`io.apitomy:apitomy-flow-engine` and `@apitomy/flow-ui`, both
 published). Flow's user guide `docs/user-guide/ai-assisted-editing.md` is the reference. What Axiom uses:
 
 - **Content revisions**: `computeContentRevision(workflow)` (TS) and `ContentRevision.of(JsonNode)` (Java),
@@ -352,9 +352,9 @@ All Java tests use JUnit 5 and the isolated `axiom.home`.
      `COMPOSITION` session directories (and their `history.jsonl`); restoring a session passes its token and
      capabilities at construction and normalizes missing event `data`; move journal writes out of the event
      lock.
-3. **Flow 3.0.0 upgrade (UI)**: upgrade `@apitomy/flow-ui` and adapt the existing editor, viewer and diff
+3. **Flow 3.0.1 upgrade (UI)**: upgrade `@apitomy/flow-ui` to 3.0.1 and adapt the existing editor, viewer and diff
    usages; wire `openActionType` on `WorkflowDefinitionDetailPage`. The Java `apitomy-flow-engine` upgrade
-   to 3.0.0 is done at the start of Phase 2, because the change-set endpoint needs `ChangeSets` and
+   to 3.0.1 is done at the start of Phase 2, because the change-set endpoint needs `ChangeSets` and
    `ContentRevision`. This phase can run before or alongside Phase 2.
 4. **Workbench UI**:
    - the page, tree and tabs;
