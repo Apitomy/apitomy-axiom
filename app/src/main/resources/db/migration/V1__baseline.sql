@@ -13,6 +13,10 @@
 
     create sequence event_source_poll_log_SEQ start with 1 increment by 50;
 
+    create sequence composition_SEQ start with 1 increment by 50;
+    create sequence composition_item_SEQ start with 1 increment by 50;
+    create sequence composition_revision_SEQ start with 1 increment by 50;
+
     create sequence dashboard_SEQ start with 1 increment by 50;
 
     create sequence event_processing_ledger_SEQ start with 1 increment by 50;
@@ -171,6 +175,53 @@
         event_source_id varchar(63) not null,
         detail TEXT,
         message TEXT not null,
+        primary key (id)
+    );
+
+    create table composition (
+        created_on timestamp(6) not null,
+        id bigint not null,
+        updated_on timestamp(6) not null,
+        apply_mode varchar(255) not null,
+        assistant_session_id varchar(255),
+        current_turn_id varchar(255),
+        engine varchar(255),
+        goal TEXT,
+        model varchar(255),
+        name varchar(255) not null,
+        pending_change_set TEXT,
+        pending_turn_id varchar(255),
+        turn_state varchar(255) not null,
+        primary key (id)
+    );
+
+    create table composition_item (
+        base_item_id bigint,
+        composition_id bigint not null,
+        created_on timestamp(6) not null,
+        id bigint not null,
+        published_on timestamp(6),
+        updated_on timestamp(6) not null,
+        base_content_revision varchar(255),
+        content TEXT not null,
+        content_revision varchar(255) not null,
+        item_type varchar(255) not null,
+        last_author varchar(255) not null,
+        last_turn_id varchar(255),
+        name varchar(255) not null,
+        published_revision varchar(255),
+        primary key (id),
+        unique (composition_id, item_type, name)
+    );
+
+    create table composition_revision (
+        created_on timestamp(6) not null,
+        id bigint not null,
+        item_id bigint not null,
+        author varchar(255) not null,
+        content TEXT not null,
+        content_revision varchar(255) not null,
+        turn_id varchar(255),
         primary key (id)
     );
 
@@ -669,6 +720,8 @@ alter table tool_execution add foreign key (trace_id) references trace (trace_id
 alter table trace_node add foreign key (parent_node_id) references trace_node (id) on delete set null;
 alter table trace_node add foreign key (trace_id) references trace (trace_id) on delete cascade;
 alter table workflow_definition_version add foreign key (definition_id) references workflow_definition (id) on delete cascade;
+alter table composition_item add foreign key (composition_id) references composition (id) on delete cascade;
+alter table composition_revision add foreign key (item_id) references composition_item (id) on delete cascade;
 alter table workflow_event_subscription add foreign key (run_id) references workflow_run (id);
 alter table workflow_run add foreign key (definition_id) references workflow_definition (id);
 alter table workflow_run add foreign key (subject_id) references subject (id);
