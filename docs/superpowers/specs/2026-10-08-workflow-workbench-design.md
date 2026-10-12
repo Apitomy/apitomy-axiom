@@ -69,7 +69,8 @@ published). Flow's user guide `docs/user-guide/ai-assisted-editing.md` is the re
   - `createdAt`, `updatedAt`.
 - **`CompositionItemEntity`**:
   - `id`, `compositionId`, `type` (`workflow` | `action-type` | `tool`), `name`;
-  - `baseItemId` and `baseUpdatedAt`, set when the draft edits an existing item;
+  - `baseItemId` and `baseContentRevision` (the hash of the published item's JSON when it was loaded or last
+    published), set when the draft edits an existing item;
   - `content` (JSON) and `contentRevision`;
   - `lastAuthor`, `lastTurnId`, `publishedAt`, `publishedRevision`.
 - **`CompositionRevisionEntity`**:
@@ -168,8 +169,9 @@ change set.
 - Checks before publishing:
   - Every selected draft is valid. Warnings are allowed.
   - A selected workflow's new action-type dependencies are also selected or already exist.
-  - The draft's `baseUpdatedAt` still matches the published item. If it does not, the server returns a
-    conflict that the user confirms with `force`.
+  - The published item's current JSON still hashes to the draft's `baseContentRevision`. If it does not, the
+    item was changed outside the workbench, and the server returns a conflict that the user confirms with
+    `force`.
 - On success, the server sets `publishedAt` and `publishedRevision` on the items. The session continues.
 
 ## §2 UI
@@ -343,7 +345,13 @@ All Java tests use JUnit 5 and the isolated `axiom.home`.
 
 1. **Foundation**: template capabilities, persisted history, MCP token. The Configuration Assistant is
    unchanged.
-2. **Composition backend**:
+2. **Composition backend**, in two plans:
+   - **2a**: the `apitomy-flow-engine` 3.0.1 upgrade, entities and revisions, the UI-facing REST API, draft
+     validation and publish.
+   - **2b**: the turn loop, change-set endpoint and pending change sets, MCP-only routes with the token
+     guard, session restore, `/expressions/evaluate`, the stream-event tools, and the `axiom-workbench` MCP
+     server, template and reference.
+   Scope:
    - entities, REST, revisions, draft validation and publish;
    - `/expressions/evaluate` and the stream-event tools;
    - the `axiom-workbench` MCP server, template and reference.
