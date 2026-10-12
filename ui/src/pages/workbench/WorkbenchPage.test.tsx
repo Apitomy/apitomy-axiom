@@ -10,7 +10,7 @@ vi.mock("./useWorkbench", () => ({
     useWorkbench: (): WorkbenchState => ({
         composition: { id: 1, name: "My comp", turnState: "idle", applyMode: "live", createdAt: "", updatedAt: "" },
         items: [{ id: 10, type: "workflow", name: "main-flow", contentRevision: "r", lastAuthor: "user", changed: false } as never],
-        contents: {}, problems: {}, pending: null, lastCompletedTurnId: undefined, sessionError: null,
+        contents: {}, revisions: {}, problems: {}, pending: null, lastCompletedTurnId: undefined, sessionError: null,
         loadContent: async () => ({}), refreshItems: async () => {}, refreshComposition: async () => {},
         setContent: () => {}, markPendingHandled: () => {}, retrySession: async () => {},
     }),

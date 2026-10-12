@@ -26,6 +26,8 @@ export interface WorkbenchState {
     items: CompositionItem[];
     /** Item content by item id, loaded on demand (the workflow is loaded eagerly). */
     contents: Record<number, Record<string, unknown>>;
+    /** Content revision of each entry in `contents` (set together with it by loads, SSE reloads and setContent). */
+    revisions: Record<number, string>;
     /** Problems by item id from POST /validate (refreshed on load, after saves and after turns; debounced 800 ms). */
     problems: Record<number, ConfigProblem[]>;
     /** Pending change set to apply, with where it came from. Cleared by markPendingHandled. */
@@ -70,6 +72,7 @@ export function useWorkbench(compositionId: number): WorkbenchState {
     const [lastCompletedTurnId, setLastCompletedTurnId] = useState<string | undefined>(undefined);
     const [sessionError, setSessionError] = useState<string | null>(null);
 
+    const [revisions, setRevisions] = useState<Record<number, string>>({});
     const revisionsRef = useRef<Record<number, string>>({});
     const handledRef = useRef<Set<string>>(new Set());
     const pendingRef = useRef<PendingChangeSet | null>(null);
@@ -110,6 +113,7 @@ export function useWorkbench(compositionId: number): WorkbenchState {
         revisionsRef.current[itemId] = item.contentRevision;
         if (aliveRef.current) {
             setContents((prev) => ({ ...prev, [itemId]: content }));
+            setRevisions((prev) => ({ ...prev, [itemId]: item.contentRevision }));
         }
         return content;
     }, [compositionId]);
@@ -234,6 +238,7 @@ export function useWorkbench(compositionId: number): WorkbenchState {
     const setContent = useCallback((itemId: number, content: Record<string, unknown>, revision: string) => {
         revisionsRef.current[itemId] = revision;
         setContents((prev) => ({ ...prev, [itemId]: content }));
+        setRevisions((prev) => ({ ...prev, [itemId]: revision }));
         scheduleValidate();
     }, [scheduleValidate]);
 
@@ -245,7 +250,7 @@ export function useWorkbench(compositionId: number): WorkbenchState {
     }, [updatePending]);
 
     return {
-        composition, items, contents, problems, pending, lastCompletedTurnId, sessionError,
+        composition, items, contents, revisions, problems, pending, lastCompletedTurnId, sessionError,
         loadContent, refreshItems, refreshComposition, setContent, markPendingHandled, retrySession: () => startSession(),
     };
 }

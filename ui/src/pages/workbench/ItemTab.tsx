@@ -20,6 +20,8 @@ export interface ItemTabProps {
     compositionId: number;
     item: CompositionItem;
     content: Record<string, unknown>;
+    /** Revision of `content`; adopted as the save base when external content is adopted. */
+    contentRevision?: string;
     composition: Composition;
     problems: ConfigProblem[] | undefined;
     onSaved: (item: CompositionItem, content: Record<string, unknown>) => void;
@@ -54,8 +56,11 @@ export function ItemTab(props: ItemTabProps) {
     useEffect(() => {
         if (!timer.current && !inFlight.current && !pendingContent.current) {
             setValue(content);
+            if (props.contentRevision) {
+                baseRevision.current = props.contentRevision;
+            }
         }
-    }, [content]);
+    }, [content, props.contentRevision]);
 
     const runSave = useCallback(async (): Promise<void> => {
         const next: Record<string, unknown> | null = pendingContent.current;

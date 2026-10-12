@@ -270,6 +270,7 @@ export function WorkbenchPage() {
                                 title={<TabTitleText>{item?.name ?? `Item ${tid}`}</TabTitleText>}>
                                 {composition && item && wb.contents[tid] ? (
                                     <ItemTab key={tid} compositionId={id} item={item} content={wb.contents[tid]}
+                                        contentRevision={wb.revisions[tid]}
                                         composition={composition} problems={wb.problems[tid]}
                                         onSaved={(saved, content) => {
                                             wb.setContent(saved.id, content, saved.contentRevision);
