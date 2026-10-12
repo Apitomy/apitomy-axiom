@@ -5849,6 +5849,52 @@
         }
       ]
     },
+    "/compositions/{compositionId}/session": {
+      "post": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Ensure the agent session",
+        "description": "Starts or restores the composition's agent session.",
+        "operationId": "ensureCompositionSession",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Composition"
+                }
+              }
+            },
+            "description": "The composition"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionConflictError"
+                }
+              }
+            },
+            "description": "The agent could not be started"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
     "/compositions/{compositionId}/interrupt": {
       "post": {
         "tags": [

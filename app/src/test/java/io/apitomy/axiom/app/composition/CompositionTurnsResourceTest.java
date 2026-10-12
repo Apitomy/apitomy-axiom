@@ -135,4 +135,10 @@ class CompositionTurnsResourceTest {
                 .body("turnState", equalTo("idle")).body("pendingTurnId", org.hamcrest.Matchers.nullValue());
         org.mockito.Mockito.verify(sessions).notice(compositionId, CompositionTurns.STALE_PENDING_NOTICE);
     }
+
+    @Test
+    void ensureSessionStartsTheAgent() {
+        given().post(BASE + "/{id}/session", compositionId).then().statusCode(200).body("id", equalTo((int) compositionId));
+        org.mockito.Mockito.verify(sessions).ensure(compositionId);
+    }
 }

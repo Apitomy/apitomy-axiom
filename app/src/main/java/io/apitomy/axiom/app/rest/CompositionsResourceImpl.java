@@ -249,6 +249,14 @@ public class CompositionsResourceImpl implements CompositionsResource {
 
     /** {@inheritDoc} */
     @Override
+    public Composition ensureCompositionSession(long compositionId) {
+        service.get(compositionId);
+        workbenchSessions.ensure(compositionId);
+        return toBean(service.get(compositionId));
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public void interruptComposition(long compositionId) {
         service.get(compositionId);
         turns.interrupt(compositionId);

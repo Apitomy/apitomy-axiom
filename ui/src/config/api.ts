@@ -26,7 +26,7 @@ const API = `${getApiBaseUrl()}/api/v1`;
  * @param fallback the default message prefix to use when no body message exists
  * @returns a message suitable for display to the user
  */
-async function extractErrorMessage(response: Response, fallback: string): Promise<string> {
+export async function extractErrorMessage(response: Response, fallback: string): Promise<string> {
     try {
         const body = await response.clone().json();
         if (body && typeof body.message === "string" && body.message.trim()) {
