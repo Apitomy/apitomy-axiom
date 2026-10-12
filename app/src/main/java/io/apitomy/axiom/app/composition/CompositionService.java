@@ -14,6 +14,7 @@ import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.events.SseEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.persistence.LockModeType;
 import jakarta.transaction.Status;
@@ -49,6 +50,9 @@ public class CompositionService {
 
     @Inject
     TransactionSynchronizationRegistry transactions;
+
+    @Inject
+    Instance<WorkbenchSessions> workbenchSessions;
 
     /**
      * Creates a composition, optionally seeded with an existing workflow, the action types its action nodes use
@@ -156,6 +160,7 @@ public class CompositionService {
     @Transactional
     public void delete(long id) {
         CompositionEntity composition = get(id);
+        workbenchSessions.get().discard(id);
         for (CompositionItemEntity item : items(id)) {
             CompositionRevisionEntity.delete("itemId", item.id);
             item.delete();

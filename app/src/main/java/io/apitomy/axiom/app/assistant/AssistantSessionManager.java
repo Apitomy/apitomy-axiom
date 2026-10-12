@@ -306,8 +306,8 @@ public class AssistantSessionManager {
             session.addListener(journal);
             session.start();
 
-            // Add welcome message to event history so it replays on reconnect
-            if (welcomeMessage != null && !welcomeMessage.isBlank()) {
+            // Add welcome message to event history so it replays on reconnect (a resumed session already has it)
+            if (seed.isEmpty() && welcomeMessage != null && !welcomeMessage.isBlank()) {
                 ObjectNode welcomeData = objectMapper.createObjectNode();
                 welcomeData.put("text", welcomeMessage);
                 session.addEvent(new AssistantEventParser.SseEvent("assistant_text", welcomeData));
@@ -404,7 +404,7 @@ public class AssistantSessionManager {
      * @param sessionId the session identifier
      * @return the journal, or null if the session has none
      */
-    HistoryJournal journal(String sessionId) {
+    public HistoryJournal journal(String sessionId) {
         return journals.get(sessionId);
     }
 
@@ -771,7 +771,7 @@ public class AssistantSessionManager {
      * @param sessionId the session identifier
      * @return {@code ${axiom.home}/assistant/sessions/<sessionId>}
      */
-    static Path sessionDirectory(String sessionId) {
+    public static Path sessionDirectory(String sessionId) {
         return AxiomHome.resolve("assistant", "sessions", sessionId);
     }
 
