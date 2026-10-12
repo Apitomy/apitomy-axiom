@@ -106,4 +106,20 @@ class SessionTokenTest {
                 session.getSessionDirectory().resolve(HistoryJournal.FILE_NAME), new ObjectMapper());
         assertEquals("journal me", loaded.get(loaded.size() - 1).data().path("text").asText());
     }
+
+    @Test
+    void failedStartClosesAndForgetsJournal() throws IOException {
+        int before = manager.journalCount();
+        when(interactiveSessionDriverFactory.createDriver(any()))
+                .thenAnswer(i -> {
+                    InteractiveSessionDriver driver = mock(InteractiveSessionDriver.class);
+                    org.mockito.Mockito.doThrow(new IOException("boom")).when(driver).start();
+                    return driver;
+                });
+        int status = given().contentType(ContentType.JSON)
+                .body("{\"templateId\":\"axiom-config-assistant\",\"name\":\"fail-test\"}")
+                .post("/api/v1/assistant/sessions").then().extract().statusCode();
+        assertNotEquals(200, status);
+        assertEquals(before, manager.journalCount());
+    }
 }

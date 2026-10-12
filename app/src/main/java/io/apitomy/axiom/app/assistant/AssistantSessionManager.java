@@ -317,10 +317,12 @@ public class AssistantSessionManager {
 
             return session;
             } catch (SessionCompatibilityException e) {
+                closeJournal(sessionId);
                 contextBuilder.deleteSessionDirectory(sessionDir);
                 throw e;
             } catch (Exception e) {
-                // Clean up the session directory if setup fails after creation
+                // Clean up the journal and session directory if setup fails after creation
+                closeJournal(sessionId);
                 contextBuilder.deleteSessionDirectory(sessionDir);
                 throw e;
             }
@@ -377,6 +379,22 @@ public class AssistantSessionManager {
         return journals.get(sessionId);
     }
 
+    private void closeJournal(String sessionId) {
+        HistoryJournal journal = journals.remove(sessionId);
+        if (journal != null) {
+            journal.close();
+        }
+    }
+
+    /**
+     * Returns the number of open history journals, for tests.
+     *
+     * @return the number of journals currently tracked
+     */
+    int journalCount() {
+        return journals.size();
+    }
+
     /**
      * Destroys a session: kills the subprocess and deletes the session directory.
      * If the working directory is inside the session directory (auto-created),
@@ -396,10 +414,7 @@ public class AssistantSessionManager {
                 LOG.debugf("Could not record usage for session %s: %s",
                         sessionId, e.getMessage());
             }
-            HistoryJournal journal = journals.remove(sessionId);
-            if (journal != null) {
-                journal.close();
-            }
+            closeJournal(sessionId);
             contextBuilder.deleteSessionDirectory(session.getSessionDirectory());
             LOG.infof("Destroyed assistant session %s (cost=$%.4f, turns=%d)",
                     sessionId, session.getTotalCostUsd(), session.getTurnCount());
