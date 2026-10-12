@@ -9,6 +9,7 @@ import { loadPrefs, savePrefs, type WorkbenchPrefs } from "./workbenchPrefs";
 import { useWorkbench } from "./useWorkbench";
 import { PaneSplitter } from "./PaneSplitter";
 import { WorkflowTab, type WorkflowTabHandle } from "./WorkflowTab";
+import { ItemTab } from "./ItemTab";
 import { mergeCatalog } from "./workbenchLogic";
 import { findActionTypeIdByName, loadEditorActionTypes } from "../../hooks/useWorkflowEditorSpi";
 import "./WorkbenchPage.css";
@@ -267,7 +268,16 @@ export function WorkbenchPage() {
                         return (
                             <Tab key={tid} eventKey={String(tid)}
                                 title={<TabTitleText>{item?.name ?? `Item ${tid}`}</TabTitleText>}>
-                                <div className="axiom-workbench__placeholder">{item?.name}</div>
+                                {composition && item && wb.contents[tid] ? (
+                                    <ItemTab key={tid} compositionId={id} item={item} content={wb.contents[tid]}
+                                        composition={composition} problems={wb.problems[tid]}
+                                        onSaved={(saved, content) => {
+                                            wb.setContent(saved.id, content, saved.contentRevision);
+                                            void wb.refreshItems().catch(console.error);
+                                        }} />
+                                ) : (
+                                    <div className="axiom-workbench__placeholder">{item?.name}</div>
+                                )}
                             </Tab>
                         );
                     })]}
