@@ -16,6 +16,7 @@ import io.apitomy.axiom.api.beans.WorkflowDefinitionVersion;
 import io.apitomy.axiom.app.CronSchedules;
 import io.apitomy.axiom.app.WorkflowExecutionService;
 import io.apitomy.axiom.app.WorkflowRunBeanMapper;
+import io.apitomy.axiom.app.WorkflowTemplates;
 import io.apitomy.axiom.app.validation.WorkflowPublisher;
 import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
@@ -45,7 +46,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 
 /**
  * Implementation of the Workflow Definitions REST API.
@@ -442,42 +442,7 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
      * Creates an empty workflow JSON with start and end nodes.
      */
     private String createEmptyWorkflowContent(String name) {
-        List<Map<String, Object>> startInputs = List.of(
-                Map.of("name", "subjectId", "type", "number",
-                        "required", true,
-                        "description", "The Axiom subject ID"),
-                Map.of("name", "ref", "type", "string",
-                        "required", true,
-                        "description", "Full URL identifying the subject"),
-                Map.of("name", "event", "type", "object",
-                        "required", false,
-                        "description", "The triggering event (present when created by subscription routing)"));
-        Map<String, Object> startNode = Map.of(
-                "id", "start-1",
-                "type", "start",
-                "name", "Start",
-                "config", Map.of("inputs", startInputs));
-        Map<String, Object> endNode = Map.of(
-                "id", "end-1",
-                "type", "end",
-                "name", "End",
-                "config", Map.of());
-        Map<String, Object> edge = Map.of(
-                "id", "edge-1",
-                "source", "start-1",
-                "target", "end-1",
-                "priority", 0,
-                "isDefault", true);
-        Map<String, Object> workflow = Map.of(
-                "id", UUID.randomUUID().toString(),
-                "name", name,
-                "nodes", List.of(startNode, endNode),
-                "edges", List.of(edge));
-        try {
-            return objectMapper.writeValueAsString(workflow);
-        } catch (JsonProcessingException e) {
-            return "{}";
-        }
+        return WorkflowTemplates.emptyWorkflow(name, objectMapper).toString();
     }
 
     // ── Workflow Runs ─────────────────────────────────────────────────

@@ -722,7 +722,13 @@ public class ImportExportService {
 
     // ── Serialization helpers ────────────────────────────────────────
 
-    private ObjectNode serializeTool(ToolDefinitionEntity e) {
+    /**
+     * Serializes a tool to its configuration-pack item JSON.
+     *
+     * @param e the entity
+     * @return the item JSON
+     */
+    public ObjectNode serializeTool(ToolDefinitionEntity e) {
         ObjectNode n = objectMapper.createObjectNode();
         n.put("name", e.name);
         putIfNotNull(n, "description", e.description);
@@ -754,7 +760,13 @@ public class ImportExportService {
         return n;
     }
 
-    private ObjectNode serializeActionType(ActionTypeEntity e) {
+    /**
+     * Serializes an action type to its configuration-pack item JSON.
+     *
+     * @param e the entity
+     * @return the item JSON
+     */
+    public ObjectNode serializeActionType(ActionTypeEntity e) {
         ObjectNode n = objectMapper.createObjectNode();
         n.put("name", e.name);
         putIfNotNull(n, "description", e.description);
