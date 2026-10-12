@@ -58,4 +58,13 @@ describe("useWorkbench", () => {
         await waitFor(() => expect(result.current.sessionError).toContain("agent down"));
         expect(result.current.items).toHaveLength(1);
     });
+
+    it("validates without waiting for the session to start", async () => {
+        vi.spyOn(c, "ensureCompositionSession").mockReturnValue(new Promise(() => {}));
+        vi.spyOn(c, "validateComposition").mockResolvedValue({ items: [{ itemId: 10, type: "workflow", name: "wf",
+            valid: false, problems: [{ severity: "error", message: "bad" }] }] } as never);
+        const { result } = renderHook(() => useWorkbench(1));
+        await waitFor(() => expect(result.current.problems[10]).toHaveLength(1));
+        expect(result.current.composition?.assistantSessionId).toBeUndefined();
+    });
 });

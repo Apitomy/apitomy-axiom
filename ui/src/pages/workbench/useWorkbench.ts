@@ -179,11 +179,8 @@ export function useWorkbench(compositionId: number): WorkbenchState {
             if (cancelled) {
                 return;
             }
-            await startSession(isCancelled);
-            if (cancelled) {
-                return;
-            }
-            await validate(isCancelled);
+            // Validation does not depend on the agent: run it alongside the (possibly slow) session start.
+            await Promise.all([startSession(isCancelled), validate(isCancelled)]);
         })();
         return () => {
             cancelled = true;
