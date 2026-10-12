@@ -18,9 +18,16 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -190,6 +197,48 @@ class CompositionServiceTest {
         assertEquals(CompositionItems.revisionOf(first), stale.currentRevision());
         assertEquals("user edit",
                 service.contentOf(service.item(composition.id, tool.id)).path("description").asText());
+    }
+
+    @Test
+    void concurrentSavesWithSameBaseRevisionAllowExactlyOneWinner() throws Exception {
+        CompositionEntity composition = service.create("c", null, null, null, null);
+        CompositionItemEntity tool = service.addBlank(composition.id, ConfigItemType.TOOL, "cst-tool");
+        String base = tool.contentRevision;
+        ObjectNode userContent = (ObjectNode) service.contentOf(tool);
+        userContent.put("description", "user edit");
+        ObjectNode aiContent = (ObjectNode) service.contentOf(tool);
+        aiContent.put("description", "ai edit");
+
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<CompositionItemEntity> userSave = executor.submit(() -> {
+                start.await();
+                return service.save(composition.id, tool.id, userContent, base, CompositionService.AUTHOR_USER, null);
+            });
+            Future<CompositionItemEntity> aiSave = executor.submit(() -> {
+                start.await();
+                return service.save(composition.id, tool.id, aiContent, base, CompositionService.AUTHOR_AI, "t1");
+            });
+            start.countDown();
+
+            int successes = 0;
+            int stale = 0;
+            for (Future<CompositionItemEntity> future : List.of(userSave, aiSave)) {
+                try {
+                    future.get(30, TimeUnit.SECONDS);
+                    successes++;
+                } catch (ExecutionException e) {
+                    assertInstanceOf(StaleRevisionException.class, e.getCause(), "unexpected failure: " + e.getCause());
+                    stale++;
+                }
+            }
+            assertEquals(1, successes);
+            assertEquals(1, stale);
+            assertEquals(2, service.revisions(composition.id, tool.id).size());
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     @Test

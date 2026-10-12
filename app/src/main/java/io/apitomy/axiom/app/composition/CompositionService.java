@@ -15,6 +15,7 @@ import io.apitomy.axiom.core.events.SseEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
+import jakarta.persistence.LockModeType;
 import jakarta.transaction.Status;
 import jakarta.transaction.Synchronization;
 import jakarta.transaction.TransactionSynchronizationRegistry;
@@ -255,9 +256,11 @@ public class CompositionService {
     @Transactional
     public CompositionItemEntity save(long compositionId, long itemId, JsonNode content, String baseRevision,
                                       String author, String turnId) {
-        item(compositionId, itemId);
-        CompositionItemEntity item = CompositionItemEntity.findById(itemId,
-                jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        get(compositionId);
+        CompositionItemEntity item = CompositionItemEntity.findById(itemId, LockModeType.PESSIMISTIC_WRITE);
+        if (item == null || item.compositionId != compositionId) {
+            throw new CompositionNotFoundException("Composition item not found: " + itemId);
+        }
         if (baseRevision != null && !baseRevision.equals(item.contentRevision)) {
             throw new StaleRevisionException(item.contentRevision);
         }
