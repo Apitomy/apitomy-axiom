@@ -79,7 +79,7 @@ export function PublishDialog({ compositionId, items, contents, problems, onPubl
         <Modal isOpen variant="medium" onClose={onClose} aria-labelledby="publish-title">
             <ModalHeader title="Publish" labelId="publish-title" />
             <ModalBody>
-                {changed.length === 0 && <p>No unpublished changes.</p>}
+                {changed.length === 0 && !result && <p>No unpublished changes.</p>}
                 {changed.map((item) => {
                     const deps: string[] = requiredBy(item.id);
                     const locked: boolean = deps.length > 0;

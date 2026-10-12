@@ -27,6 +27,17 @@ describe("PublishDialog", () => {
         expect(publish).toHaveBeenLastCalledWith(9, [1, 2], true);
     });
 
+    it("hides the empty state after a successful publish", async () => {
+        vi.spyOn(c, "publishComposition").mockResolvedValue({ created: 2, updated: 0, items: [] });
+        const { rerender } = render(<PublishDialog compositionId={9} items={items} contents={contents}
+            problems={{ 1: [], 2: [] }} onPublished={() => {}} onClose={() => {}} />);
+        fireEvent.click(screen.getByRole("button", { name: /^publish$/i }));
+        await screen.findByText(/Created 2, updated 0/);
+        rerender(<PublishDialog compositionId={9} items={items.map((i) => ({ ...i, changed: false }))}
+            contents={contents} problems={{ 1: [], 2: [] }} onPublished={() => {}} onClose={() => {}} />);
+        expect(screen.queryByText(/No unpublished changes/)).toBeNull();
+    });
+
     it("lists blocking problems on 422", async () => {
         vi.spyOn(c, "publishComposition").mockRejectedValue(new c.ApiError("Cannot publish", 422,
             { message: "Cannot publish", problems: { "workflow/wf": [{ severity: "error", code: "x", message: "broken node" }] } }));
