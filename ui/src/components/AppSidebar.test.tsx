@@ -76,14 +76,30 @@ describe("AppSidebar", () => {
         expect(screen.getByText("Action Types")).toBeVisible();
     });
 
-    it("lists Components items in alphabetical order", async () => {
+    it("lists Workbench first, then the remaining Components items in alphabetical order", async () => {
         renderWithRouter(<AppSidebar />, "/components/workflows");
         const toggle = await screen.findByRole("button", { name: "Components" });
         const group = toggle.closest("li") as HTMLElement;
         const labels = Array.from(group.querySelectorAll("ul li")).map((li) => li.textContent?.trim() ?? "");
-        const sorted = [...labels].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
-        expect(labels).toHaveLength(8);
-        expect(labels).toEqual(sorted);
+        expect(labels).toHaveLength(9);
+        expect(labels[0]).toBe("Workbench");
+        const rest = labels.slice(1);
+        const sorted = [...rest].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
+        expect(rest).toEqual(sorted);
+    });
+
+    it("expands Components on /workbench and navigates Workbench to /workbench", async () => {
+        renderWithRouter(
+            <Routes>
+                <Route path="*" element={<><AppSidebar /><LocationProbe /></>} />
+            </Routes>,
+            "/workbench"
+        );
+        const toggle = await screen.findByRole("button", { name: "Components" });
+        expect(toggle).toHaveAttribute("aria-expanded", "true");
+        await userEvent.click(screen.getByText("Agents"));
+        await userEvent.click(screen.getByText("Workbench"));
+        expect(screen.getByTestId("location")).toHaveTextContent("/workbench");
     });
 
     it("shows Subjects and not Projects", async () => {

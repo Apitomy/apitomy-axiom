@@ -55,6 +55,7 @@ import {
     type WorkflowRunSummary,
 } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
+import { createComposition } from "../config/compositions";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { WorkflowTriggersTab } from "../components/WorkflowTriggersTab";
 import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
@@ -355,6 +356,12 @@ export function WorkflowDefinitionDetailPage() {
     }
 
     const hasErrors = validationErrors.length > 0;
+
+    const handleOpenInWorkbench = () => {
+        createComposition({ name: definition.name, seedWorkflowId: id })
+            .then((composition) => navigate(`/workbench/${composition.id}`))
+            .catch(console.error);
+    };
     const canPublish = !dirty && !publishing && !hasErrors;
 
     return (
@@ -396,6 +403,19 @@ export function WorkflowDefinitionDetailPage() {
                     </FlexItem>
                     <FlexItem>
                         <Flex spaceItems={{ default: "spaceItemsSm" }}>
+                            <FlexItem>
+                                {dirty ? (
+                                    <Tooltip content="Save first">
+                                        <Button variant="secondary" isAriaDisabled>
+                                            Open in workbench
+                                        </Button>
+                                    </Tooltip>
+                                ) : (
+                                    <Button variant="secondary" onClick={handleOpenInWorkbench}>
+                                        Open in workbench
+                                    </Button>
+                                )}
+                            </FlexItem>
                             <FlexItem>
                                 <Button
                                     variant="secondary"

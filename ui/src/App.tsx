@@ -45,6 +45,8 @@ import { WorkflowDefinitionsPage } from "./pages/WorkflowDefinitionsPage";
 import { WorkflowDefinitionDetailPage } from "./pages/WorkflowDefinitionDetailPage";
 import { WorkflowRunsPage } from "./pages/WorkflowRunsPage";
 import { WorkflowRunDetailPage } from "./pages/WorkflowRunDetailPage";
+import { WorkbenchListPage } from "./pages/WorkbenchListPage";
+import { WorkbenchPage } from "./pages/workbench/WorkbenchPage";
 import { type StartupCheck, fetchSystemHealth, fetchSystemConfig } from "./config/api";
 import { sseClient } from "./config/sse";
 
@@ -94,15 +96,18 @@ export function App() {
 
     const hasCheckErrors = startupChecks != null &&
         startupChecks.some((c) => c.status === "error");
-    const isBreakout = new URLSearchParams(location.search).get("breakout") === "true";
+    const searchParams = new URLSearchParams(location.search);
+    const isBreakout = searchParams.get("breakout") === "true" || searchParams.get("chrome") === "none";
+    const isWorkbenchFocus = location.pathname.startsWith("/workbench/") && searchParams.get("focus") === "1";
+    const hideChrome = isBreakout || isWorkbenchFocus;
 
     return (
         <EffectiveThemeContext.Provider value={effectiveTheme}>
             <Page
-                masthead={isBreakout ? undefined : <AppMasthead engineLabel={engineLabel} assistantAvailable={assistantAvailable} appVersion={appVersion} {...themeProps} />}
-                sidebar={hasCheckErrors || isAssistantPage || isBreakout ? undefined : <AppSidebar />}
+                masthead={hideChrome ? undefined : <AppMasthead engineLabel={engineLabel} assistantAvailable={assistantAvailable} appVersion={appVersion} {...themeProps} />}
+                sidebar={hasCheckErrors || isAssistantPage || hideChrome ? undefined : <AppSidebar />}
                 isContentFilled
-                style={isBreakout ? {
+                style={hideChrome ? {
                     paddingTop: 8,
                     "--pf-v6-c-page__sidebar--Width": "0px",
                     "--pf-v6-c-page__sidebar--xl--Width": "0px",
@@ -150,6 +155,8 @@ export function App() {
                         <Route path="/session-templates/:templateId" element={<SessionTemplateDetailPage />} />
                         <Route path="/components/workflows" element={<WorkflowDefinitionsPage />} />
                         <Route path="/components/workflows/:workflowDefinitionId" element={<WorkflowDefinitionDetailPage />} />
+                        <Route path="/workbench" element={<WorkbenchListPage />} />
+                        <Route path="/workbench/:compositionId" element={<WorkbenchPage />} />
                         <Route path="/assistant" element={<AssistantPage />} />
                         <Route path="/assistant/:sessionId" element={<AssistantSessionPage />} />
                     </Routes>
