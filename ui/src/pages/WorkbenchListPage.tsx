@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
     Alert,
@@ -42,6 +42,8 @@ export function WorkbenchListPage() {
     const [name, setName] = useState("");
     const [goal, setGoal] = useState("");
     const [creating, setCreating] = useState(false);
+    /** Synchronous in-flight guard: state alone can't stop a second click before re-render. */
+    const creatingRef = useRef<boolean>(false);
     const [error, setError] = useState<string | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<Composition | null>(null);
 
@@ -61,9 +63,10 @@ export function WorkbenchListPage() {
 
     const handleCreate = async () => {
         const trimmed = name.trim();
-        if (!trimmed) {
+        if (!trimmed || creatingRef.current) {
             return;
         }
+        creatingRef.current = true;
         setCreating(true);
         setError(null);
         try {
@@ -74,6 +77,7 @@ export function WorkbenchListPage() {
         } catch (e) {
             setError(e instanceof Error ? e.message : String(e));
         } finally {
+            creatingRef.current = false;
             setCreating(false);
         }
     };

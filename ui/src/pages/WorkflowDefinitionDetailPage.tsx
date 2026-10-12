@@ -92,6 +92,8 @@ export function WorkflowDefinitionDetailPage() {
     const [definition, setDefinition] = useState<WorkflowDefinition | null>(null);
     const [editorContent, setEditorContent] = useState<Workflow | null>(null);
     const [dirty, setDirty] = useState(false);
+    const [openingWorkbench, setOpeningWorkbench] = useState<boolean>(false);
+    const openingWorkbenchRef = useRef<boolean>(false);
     const savedContentRef = useRef<string>("");
     const [saving, setSaving] = useState(false);
     const [publishing, setPublishing] = useState(false);
@@ -358,9 +360,18 @@ export function WorkflowDefinitionDetailPage() {
     const hasErrors = validationErrors.length > 0;
 
     const handleOpenInWorkbench = () => {
+        if (openingWorkbenchRef.current) {
+            return;
+        }
+        openingWorkbenchRef.current = true;
+        setOpeningWorkbench(true);
         createComposition({ name: definition.name, seedWorkflowId: id })
             .then((composition) => navigate(`/workbench/${composition.id}`))
-            .catch(console.error);
+            .catch(console.error)
+            .finally(() => {
+                openingWorkbenchRef.current = false;
+                setOpeningWorkbench(false);
+            });
     };
     const canPublish = !dirty && !publishing && !hasErrors;
 
@@ -411,7 +422,8 @@ export function WorkflowDefinitionDetailPage() {
                                         </Button>
                                     </Tooltip>
                                 ) : (
-                                    <Button variant="secondary" onClick={handleOpenInWorkbench}>
+                                    <Button variant="secondary" onClick={handleOpenInWorkbench}
+                                        isDisabled={openingWorkbench} isLoading={openingWorkbench}>
                                         Open in workbench
                                     </Button>
                                 )}

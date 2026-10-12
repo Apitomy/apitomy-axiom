@@ -25,4 +25,25 @@ describe("WorkbenchListPage", () => {
         expect(create).toHaveBeenCalledWith(expect.objectContaining({ name: "New" }));
         expect(addItem).toHaveBeenCalledWith(2, { type: "workflow", name: "New" });
     });
+
+    it("creates only once when Create is clicked twice", async () => {
+        vi.spyOn(compositions, "listCompositions").mockResolvedValue([]);
+        let release: (v: never) => void = () => {};
+        const create = vi.spyOn(compositions, "createComposition")
+            .mockReturnValue(new Promise((r) => { release = r; }));
+        vi.spyOn(compositions, "addItem").mockResolvedValue({} as never);
+        render(<MemoryRouter initialEntries={["/workbench"]}><Routes>
+            <Route path="/workbench" element={<WorkbenchListPage />} />
+            <Route path="/workbench/:compositionId" element={<div>opened</div>} />
+        </Routes></MemoryRouter>);
+        fireEvent.click(await screen.findByRole("button", { name: /new composition/i }));
+        fireEvent.change(screen.getByLabelText(/name/i), { target: { value: "New" } });
+        const button = screen.getByRole("button", { name: /^create$/i });
+        fireEvent.click(button);
+        fireEvent.click(button);
+        expect(create).toHaveBeenCalledTimes(1);
+        release({ id: 3, name: "New", turnState: "idle", applyMode: "live", createdAt: "", updatedAt: "" } as never);
+        await waitFor(() => expect(screen.getByText("opened")).toBeTruthy());
+        expect(create).toHaveBeenCalledTimes(1);
+    });
 });
