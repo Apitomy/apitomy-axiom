@@ -275,6 +275,33 @@ public class CompositionService {
     }
 
     /**
+     * Adds a new draft with the given content, recording a single creation revision.
+     *
+     * @param compositionId the composition id
+     * @param type workflow, action type or tool
+     * @param name the item name
+     * @param content the item content (a JSON object)
+     * @param author {@link #AUTHOR_USER} or {@link #AUTHOR_AI}
+     * @param turnId the AI turn id, or null
+     * @return the item
+     * @throws CompositionConflictException for a second workflow or a duplicate name
+     */
+    @Transactional
+    public CompositionItemEntity addWithContent(long compositionId, ConfigItemType type, String name,
+                                                JsonNode content, String author, String turnId) {
+        requireSupported(type);
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("'name' is required");
+        }
+        if (content == null || !content.isObject()) {
+            throw new IllegalArgumentException("'content' must be a JSON object");
+        }
+        String trimmed = name.trim();
+        checkCanAdd(compositionId, type, trimmed);
+        return insert(compositionId, type, trimmed, content, null, null, author, turnId);
+    }
+
+    /**
      * Adds a draft copy of a published item.
      *
      * @param compositionId the composition id

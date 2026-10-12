@@ -60,8 +60,14 @@ public class TurnPreamble {
                 }
                 edits.add("- " + item.itemType + " '" + item.name + "': edited by the user");
                 if (item == workflow) {
+                    CompositionRevisionEntity firstUser = userRevisions.stream()
+                            .min(java.util.Comparator.comparing((CompositionRevisionEntity r) -> r.createdOn)
+                                    .thenComparing(r -> r.id))
+                            .orElseThrow();
                     CompositionRevisionEntity base = CompositionRevisionEntity.<CompositionRevisionEntity>find(
-                            "itemId = ?1 and createdOn <= ?2 order by createdOn desc, id desc", item.id, since)
+                            "itemId = ?1 and (createdOn < ?2 or (createdOn = ?2 and id < ?3))"
+                                    + " order by createdOn desc, id desc",
+                            item.id, firstUser.createdOn, firstUser.id)
                             .firstResult();
                     if (base != null) {
                         String diff = WorkflowDiffs.summarize(parse(base.content), service.contentOf(item));

@@ -82,6 +82,23 @@ class AssistantSessionDriverDelegationTest {
     }
 
     @Test
+    void sendMessageRecordsDisplayTextButSendsAgentText() throws Exception {
+        RecordingDriver driver = new RecordingDriver();
+        AssistantSession session = new AssistantSession(
+                "test", "general-assistant", Path.of("/tmp/s"), Path.of("/tmp/w"),
+                List.of(), Map.of(), "opencode", null, null, driver);
+        session.start();
+
+        session.sendMessage("hello", "[context]\n\nhello");
+
+        assertEquals("[context]\n\nhello", driver.lastMessage);
+        List<SseEvent> userMessages = session.getEventHistory().stream()
+                .filter(e -> "user_message".equals(e.type())).toList();
+        assertEquals(1, userMessages.size());
+        assertEquals("hello", userMessages.get(0).data().path("content").asText());
+    }
+
+    @Test
     void failedDeliveryRecordsMessageNotDeliveredAfterUserMessage() throws Exception {
         RecordingDriver driver = new RecordingDriver();
         driver.sendFailure = new IOException("connection refused");

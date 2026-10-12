@@ -159,14 +159,15 @@ public class WorkbenchSessions {
      * Sends a user message to the composition's agent, starting it if needed.
      *
      * @param compositionId the composition id
-     * @param text the message
+     * @param displayText the text recorded in the conversation
+     * @param agentText the text sent to the agent
      * @throws IOException if the message could not be sent
      * @throws AgentUnavailableException if the agent could not be started
      * @throws IllegalStateException if called inside a transaction (see the class docs)
      */
-    public void send(long compositionId, String text) throws IOException {
+    public void send(long compositionId, String displayText, String agentText) throws IOException {
         requireNoTransaction("send");
-        ensure(compositionId).sendMessage(text);
+        ensure(compositionId).sendMessage(displayText, agentText);
     }
 
     /**

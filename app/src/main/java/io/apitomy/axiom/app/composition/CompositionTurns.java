@@ -49,6 +49,10 @@ public class CompositionTurns {
     /** The author of change sets produced by the workbench agent. */
     public static final String AUTHOR = "agent:axiom-workbench";
 
+    /** What the conversation shows for the server-originated stale retry prompt. */
+    public static final String STALE_RETRY_DISPLAY =
+            "(Axiom) The workflow changed while the AI was working; asking it to try again.";
+
     /** The prompt sent when a turn's change set could not be applied because the workflow changed. */
     public static final String STALE_RETRY_PROMPT = "Your workflow changes from the last turn could not be applied "
             + "because the user changed the workflow while you were working. Call get_composition to see the current "
@@ -207,7 +211,9 @@ public class CompositionTurns {
         String recap = sessions.takeRecap(compositionId);
         try {
             turn.firstEventIndex = sessions.nextEventIndex(compositionId);
-            sessions.send(compositionId, (recap == null ? "" : recap + "\n\n") + context + "\n\n" + message);
+            String displayText = staleRetry ? STALE_RETRY_DISPLAY : message;
+            sessions.send(compositionId, displayText,
+                    (recap == null ? "" : recap + "\n\n") + context + "\n\n" + message);
         } catch (IOException | RuntimeException e) {
             synchronized (this) {
                 if (turns.get(compositionId) == turn) {
@@ -282,10 +288,11 @@ public class CompositionTurns {
         AgentWrite write = QuarkusTransaction.requiringNew().call(() -> {
             CompositionItemEntity existing = itemType == ConfigItemType.WORKFLOW ? null
                     : find(compositionId, itemType, name);
-            long itemId = existing != null ? existing.id : service.addBlank(compositionId, itemType, name,
-                    CompositionService.AUTHOR_AI, turn.turnId).id;
-            CompositionItemEntity saved = service.save(compositionId, itemId, content, null,
-                    CompositionService.AUTHOR_AI, turn.turnId);
+            CompositionItemEntity saved = existing != null
+                    ? service.save(compositionId, existing.id, content, null, CompositionService.AUTHOR_AI,
+                            turn.turnId)
+                    : service.addWithContent(compositionId, itemType, name, content, CompositionService.AUTHOR_AI,
+                            turn.turnId);
             List<ConfigProblem> problems = validator.validateContent(compositionId, itemType, saved.name, content);
             return new AgentWrite(saved, problems);
         });

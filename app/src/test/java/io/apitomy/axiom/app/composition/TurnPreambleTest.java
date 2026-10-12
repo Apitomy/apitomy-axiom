@@ -63,6 +63,35 @@ class TurnPreambleTest {
     }
 
     @Test
+    void aiChangesSavedAfterTurnStartAreNotReportedAsUserEdits() throws Exception {
+        CompositionEntity composition = service.create("c", null, null, null, null);
+        CompositionItemEntity workflow = service.addBlank(composition.id, ConfigItemType.WORKFLOW, "tp-wf2");
+        Thread.sleep(5);
+        QuarkusTransaction.requiringNew().run(() -> {
+            CompositionEntity c = CompositionEntity.findById(composition.id);
+            c.lastTurnStartedOn = Instant.now();
+        });
+        Thread.sleep(5);
+        ObjectNode aiContent = (ObjectNode) service.contentOf(workflow);
+        ObjectNode added = ((com.fasterxml.jackson.databind.node.ArrayNode) aiContent.path("nodes"))
+                .addObject();
+        added.setAll((ObjectNode) aiContent.path("nodes").get(0).deepCopy());
+        added.put("id", "ai-node-1");
+        added.put("name", "AI node");
+        CompositionItemEntity aiSaved = service.save(composition.id, workflow.id, aiContent,
+                workflow.contentRevision, CompositionService.AUTHOR_AI, "turn-1");
+        Thread.sleep(5);
+        ObjectNode userContent = (ObjectNode) service.contentOf(aiSaved);
+        ((ObjectNode) userContent.path("nodes").get(0)).put("name", "Begin");
+        service.save(composition.id, workflow.id, userContent, aiSaved.contentRevision,
+                CompositionService.AUTHOR_USER, null);
+
+        String text = preamble.build(composition.id, List.of(), List.of());
+        assertTrue(text.contains("changed nodes: start-1"), text);
+        assertTrue(!text.contains("added nodes"), text);
+    }
+
+    @Test
     void firstTurnHasNoEditSummary() {
         CompositionEntity composition = service.create("c", null, null, null, null);
         String text = preamble.build(composition.id, List.of(), List.of());

@@ -93,7 +93,7 @@ class CompositionTurnsTest {
         CompositionEntity composition = withWorkflow();
         String turnId = turns.start(composition.id, "Add a triage step", List.of("start-1"), List.of());
         ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
-        verify(sessions).send(eq(composition.id), text.capture());
+        verify(sessions).send(eq(composition.id), eq("Add a triage step"), text.capture());
         assertTrue(text.getValue().contains("[Workbench context]"), text.getValue());
         assertTrue(text.getValue().endsWith("Add a triage step"), text.getValue());
         CompositionEntity saved = reload(composition.id);
@@ -137,9 +137,11 @@ class CompositionTurnsTest {
         CompositionEntity composition = withWorkflow();
         String turnId = turns.start(composition.id, "make a tool", List.of(), List.of());
         ObjectNode tool = CompositionItems.blank(ConfigItemType.TOOL, "ct-tool", mapper);
+        tool.put("description", "v1");
         CompositionTurns.AgentWrite write = turns.upsert(composition.id, "tool", tool);
         assertEquals("ai", write.item().lastAuthor);
         assertEquals(turnId, write.item().lastTurnId);
+        assertEquals(1, service.revisions(composition.id, write.item().id).size());
         tool.put("description", "v2");
         assertEquals(turnId, turns.upsert(composition.id, "tool", tool).item().lastTurnId);
         assertEquals(1, service.items(composition.id).stream().filter(i -> "tool".equals(i.itemType)).count());
@@ -177,7 +179,7 @@ class CompositionTurnsTest {
 
         turns.resolve(composition.id, turnId, "stale");
         assertNull(reload(composition.id).pendingChangeSet);
-        verify(sessions).send(eq(composition.id), org.mockito.ArgumentMatchers.endsWith(CompositionTurns.STALE_RETRY_PROMPT));
+        verify(sessions).send(eq(composition.id), anyString(), org.mockito.ArgumentMatchers.endsWith(CompositionTurns.STALE_RETRY_PROMPT));
         String retryTurn = reload(composition.id).currentTurnId;
         String retryBase = ContentRevision.of(turns.currentWorkflow(composition.id));
         turns.applyChangeSet(composition.id, renameStart(retryBase, "Again"));
@@ -185,7 +187,7 @@ class CompositionTurnsTest {
 
         turns.resolve(composition.id, retryTurn, "stale");
         verify(sessions).notice(composition.id, CompositionTurns.SECOND_STALE_NOTICE);
-        verify(sessions, times(2)).send(anyLong(), anyString());
+        verify(sessions, times(2)).send(anyLong(), anyString(), anyString());
     }
 
     @Test
@@ -205,7 +207,7 @@ class CompositionTurnsTest {
         turns.onSessionEvent(new WorkbenchSessionEvent(composition.id, WorkbenchSessionEvent.Kind.TURN_COMPLETE, null));
         turns.resolve(composition.id, retryTurn, "stale");
         verify(sessions).notice(composition.id, CompositionTurns.SECOND_STALE_NOTICE);
-        verify(sessions, times(2)).send(anyLong(), anyString());
+        verify(sessions, times(2)).send(anyLong(), anyString(), anyString());
     }
 
     @Test
@@ -225,7 +227,7 @@ class CompositionTurnsTest {
         turns.onSessionEvent(new WorkbenchSessionEvent(composition.id, WorkbenchSessionEvent.Kind.TURN_COMPLETE, null));
         turns.resolve(composition.id, next, "stale");
         verify(sessions, never()).notice(eq(composition.id), anyString());
-        verify(sessions, times(2)).send(eq(composition.id), org.mockito.ArgumentMatchers.endsWith(CompositionTurns.STALE_RETRY_PROMPT));
+        verify(sessions, times(2)).send(eq(composition.id), anyString(), org.mockito.ArgumentMatchers.endsWith(CompositionTurns.STALE_RETRY_PROMPT));
     }
 
     @Test
@@ -240,7 +242,7 @@ class CompositionTurnsTest {
         turns.resolve(composition.id, turnId, "applied");
         assertNull(reload(composition.id).pendingChangeSet);
         verify(sessions, never()).notice(eq(composition.id), anyString());
-        verify(sessions, atLeastOnce()).send(anyLong(), anyString());
+        verify(sessions, atLeastOnce()).send(anyLong(), anyString(), anyString());
     }
 
     @Test
@@ -252,7 +254,7 @@ class CompositionTurnsTest {
             sending.countDown();
             assertTrue(release.await(10, TimeUnit.SECONDS));
             return null;
-        }).when(sessions).send(eq(composition.id), anyString());
+        }).when(sessions).send(eq(composition.id), anyString(), anyString());
         ExecutorService pool = Executors.newFixedThreadPool(2);
         try {
             Future<String> started = pool.submit(() -> turns.start(composition.id, "hi", List.of(), List.of()));
@@ -316,7 +318,7 @@ class CompositionTurnsTest {
     @Test
     void sendFailureEndsTheTurnAndReportsTheAgentUnavailable() throws Exception {
         CompositionEntity composition = withWorkflow();
-        doThrow(new IOException("pipe closed")).when(sessions).send(eq(composition.id), anyString());
+        doThrow(new IOException("pipe closed")).when(sessions).send(eq(composition.id), anyString(), anyString());
         assertThrows(AgentUnavailableException.class, () -> turns.start(composition.id, "hi", List.of(), List.of()));
         assertEquals(CompositionEntity.TURN_IDLE, reload(composition.id).turnState);
         assertNull(turns.currentTurnId(composition.id));
@@ -338,7 +340,7 @@ class CompositionTurnsTest {
         assertNull(reload(composition.id).pendingChangeSet);
         assertEquals(CompositionEntity.TURN_IDLE, reload(composition.id).turnState);
         verify(sessions).notice(composition.id, CompositionTurns.STALE_PENDING_NOTICE);
-        verify(sessions, times(1)).send(anyLong(), anyString());
+        verify(sessions, times(1)).send(anyLong(), anyString(), anyString());
     }
 
     @Test
@@ -349,14 +351,14 @@ class CompositionTurnsTest {
         turns.resolve(composition.id, turnId, "stale");
         verify(sessions).notice(composition.id, CompositionTurns.STALE_DURING_TURN_NOTICE);
         assertEquals(running, turns.currentTurnId(composition.id));
-        verify(sessions, times(2)).send(anyLong(), anyString());
+        verify(sessions, times(2)).send(anyLong(), anyString(), anyString());
     }
 
     @Test
     void failedRetryPostsANoticeInsteadOfThrowing() throws Exception {
         CompositionEntity composition = withWorkflow();
         String turnId = completeTurnWithPendingChangeSet(composition);
-        doThrow(new IOException("pipe closed")).when(sessions).send(eq(composition.id),
+        doThrow(new IOException("pipe closed")).when(sessions).send(eq(composition.id), anyString(),
                 org.mockito.ArgumentMatchers.endsWith(CompositionTurns.STALE_RETRY_PROMPT));
         turns.resolve(composition.id, turnId, "stale");
         assertNull(reload(composition.id).pendingChangeSet);

@@ -244,12 +244,26 @@ public class AssistantSession {
      * @throws IOException if the message cannot be written
      */
     public void sendMessage(String message) throws IOException {
+        sendMessage(message, message);
+    }
+
+    /**
+     * Sends a message to the agent while recording a different text in the conversation. The
+     * {@code user_message} event carries {@code displayText}; the driver receives {@code agentText} (for
+     * example the display text prefixed with context the user should not see). Failure handling is the same
+     * as {@link #sendMessage(String)}.
+     *
+     * @param displayText the text shown in the conversation
+     * @param agentText the text sent to the agent
+     * @throws IOException if the message cannot be written
+     */
+    public void sendMessage(String displayText, String agentText) throws IOException {
         ObjectNode userData = MAPPER.createObjectNode();
-        userData.put("content", message);
+        userData.put("content", displayText);
         addEvent(new SseEvent("user_message", userData));
 
         try {
-            driver.sendUserMessage(message);
+            driver.sendUserMessage(agentText);
         } catch (IOException | RuntimeException e) {
             recordUndeliveredMessage(e);
             throw e;
