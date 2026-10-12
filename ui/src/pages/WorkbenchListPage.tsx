@@ -146,7 +146,7 @@ export function WorkbenchListPage() {
                     {error && <Alert variant="danger" isInline title={error} style={{ marginBottom: "16px" }} />}
                     <Form onSubmit={(e) => { e.preventDefault(); void handleCreate(); }}>
                         <FormGroup label="Name" isRequired fieldId="composition-name">
-                            <TextInput id="composition-name" isRequired value={name} onChange={(_e, v) => setName(v)} />
+                            <TextInput id="composition-name" isRequired autoFocus value={name} onChange={(_e, v) => setName(v)} />
                         </FormGroup>
                         <FormGroup label="Goal" fieldId="composition-goal">
                             <TextArea id="composition-goal" value={goal} onChange={(_e, v) => setGoal(v)} />

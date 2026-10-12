@@ -26,6 +26,25 @@ describe("WorkbenchListPage", () => {
         expect(addItem).toHaveBeenCalledWith(2, { type: "workflow", name: "New" });
     });
 
+    it("focuses the name field and submits on Enter", async () => {
+        vi.spyOn(compositions, "listCompositions").mockResolvedValue([]);
+        const create = vi.spyOn(compositions, "createComposition").mockResolvedValue({ id: 4, name: "New",
+            turnState: "idle", applyMode: "live", createdAt: "", updatedAt: "" });
+        vi.spyOn(compositions, "addItem").mockResolvedValue({} as never);
+        render(<MemoryRouter initialEntries={["/workbench"]}><Routes>
+            <Route path="/workbench" element={<WorkbenchListPage />} />
+            <Route path="/workbench/:compositionId" element={<div>opened</div>} />
+        </Routes></MemoryRouter>);
+        fireEvent.click(await screen.findByRole("button", { name: /new composition/i }));
+        const input: HTMLElement = screen.getByLabelText(/name/i);
+        await waitFor(() => expect(document.activeElement).toBe(input));
+        fireEvent.change(input, { target: { value: "New" } });
+        fireEvent.submit(input.closest("form") as HTMLFormElement);
+        fireEvent.submit(input.closest("form") as HTMLFormElement);
+        await waitFor(() => expect(screen.getByText("opened")).toBeTruthy());
+        expect(create).toHaveBeenCalledTimes(1);
+    });
+
     it("creates only once when Create is clicked twice", async () => {
         vi.spyOn(compositions, "listCompositions").mockResolvedValue([]);
         let release: (v: never) => void = () => {};
