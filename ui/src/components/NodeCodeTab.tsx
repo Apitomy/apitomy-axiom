@@ -4,12 +4,14 @@ import { useEffectiveTheme } from "../hooks/useTheme";
 interface NodeCodeTabProps {
     value: string;
     onChange: (value: string) => void;
+    /** Makes the code editor read-only. */
+    readOnly?: boolean;
 }
 
 /**
  * Editor tab for the JavaScript module of a "node" execution mode action type.
  */
-export function NodeCodeTab({ value, onChange }: NodeCodeTabProps) {
+export function NodeCodeTab({ value, onChange, readOnly = false }: NodeCodeTabProps) {
     const effectiveTheme = useEffectiveTheme();
     return (
         <div>
@@ -21,6 +23,7 @@ export function NodeCodeTab({ value, onChange }: NodeCodeTabProps) {
             </p>
             <CodeEditor
                 code={value}
+                isReadOnly={readOnly}
                 onChange={(v) => onChange(v)}
                 language={Language.javascript}
                 isDarkTheme={effectiveTheme === "dark"}

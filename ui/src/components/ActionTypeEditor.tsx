@@ -261,6 +261,7 @@ export function ActionTypeEditor({ value, onChange, readOnly = false, problems, 
                         <TabContent id="prompt-tab" eventKey={3} activeKey={activeTab} style={{ marginTop: "24px" }}>
                             <fieldset disabled={readOnly} style={READ_ONLY_FIELDSET_STYLE}>
                                 <PromptTemplateTab
+                                    readOnly={readOnly}
                                     value={form.promptTemplate || ""}
                                     onChange={(v) => updateForm({ promptTemplate: v })}
                                     inputs={form.inputs || []}
@@ -290,6 +291,7 @@ export function ActionTypeEditor({ value, onChange, readOnly = false, problems, 
                         <TabContent id="script-tab" eventKey={4} activeKey={activeTab} style={{ marginTop: "24px" }}>
                             <fieldset disabled={readOnly} style={READ_ONLY_FIELDSET_STYLE}>
                                 <ScriptTab
+                                    readOnly={readOnly}
                                     value={form.scriptTemplate || ""}
                                     onChange={(v) => updateForm({ scriptTemplate: v })}
                                     inputs={form.inputs || []}
@@ -303,6 +305,7 @@ export function ActionTypeEditor({ value, onChange, readOnly = false, problems, 
                         <TabContent id="code-tab" eventKey={11} activeKey={activeTab} style={{ marginTop: "24px" }}>
                             <fieldset disabled={readOnly} style={READ_ONLY_FIELDSET_STYLE}>
                                 <NodeCodeTab
+                                    readOnly={readOnly}
                                     value={form.codeTemplate || ""}
                                     onChange={(v) => updateForm({ codeTemplate: v })}
                                 />
@@ -392,7 +395,7 @@ function InfoTab({ form, readOnly, updateForm, onEditLabels }: {
                 />
             </FormGroup>
             <FormGroup label="Labels" fieldId="labels">
-                <LabelDisplay labels={form.labels || []} onEdit={onEditLabels} />
+                <LabelDisplay labels={form.labels || []} onEdit={readOnly ? undefined : onEditLabels} />
             </FormGroup>
             <FormGroup label="Execution Mode" isRequired fieldId="executionMode">
                 <FormSelect
@@ -410,8 +413,9 @@ function InfoTab({ form, readOnly, updateForm, onEditLabels }: {
     );
 }
 
-function PromptTemplateTab({ value, onChange, inputs }: {
+function PromptTemplateTab({ value, onChange, inputs, readOnly = false }: {
     value: string;
+    readOnly?: boolean;
     onChange: (v: string) => void;
     inputs: ActionTypeField[];
 }) {
@@ -477,6 +481,7 @@ function PromptTemplateTab({ value, onChange, inputs }: {
             </Flex>
             <CodeEditor
                 code={value}
+                isReadOnly={readOnly}
                 onCodeChange={(v) => onChange(v)}
                 language={Language.markdown}
                 height="500px"
@@ -525,8 +530,9 @@ function PromptTemplateTab({ value, onChange, inputs }: {
     );
 }
 
-function ScriptTab({ value, onChange, inputs }: {
+function ScriptTab({ value, onChange, inputs, readOnly = false }: {
     value: string;
+    readOnly?: boolean;
     onChange: (v: string) => void;
     inputs: ActionTypeField[];
 }) {
@@ -589,6 +595,7 @@ function ScriptTab({ value, onChange, inputs }: {
             </Flex>
             <CodeEditor
                 code={value}
+                isReadOnly={readOnly}
                 onCodeChange={(v) => onChange(v)}
                 language={Language.shell}
                 height="500px"
