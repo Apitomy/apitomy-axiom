@@ -5452,6 +5452,253 @@
           }
         }
       ]
+    },
+    "/compositions/{compositionId}/items/{itemId}/revisions": {
+      "get": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "List an item's revisions, newest first",
+        "operationId": "listCompositionItemRevisions",
+        "responses": {
+          "200": {
+            "description": "Revisions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CompositionRevision"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "itemId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/compositions/{compositionId}/items/{itemId}/revisions/{revisionId}/restore": {
+      "post": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Restore a revision as a new user revision",
+        "operationId": "restoreCompositionItemRevision",
+        "responses": {
+          "200": {
+            "description": "The item, with content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionItem"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "The restored name collides with another item"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "itemId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "revisionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/compositions/{compositionId}/items/{itemId}/validate": {
+      "post": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Validate unsaved content for an item against the drafts and the database",
+        "operationId": "validateCompositionItem",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompositionItemValidateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Validation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantValidateResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "itemId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/compositions/{compositionId}/validate": {
+      "post": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Validate every draft in a composition",
+        "operationId": "validateComposition",
+        "responses": {
+          "200": {
+            "description": "Problems per item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionValidationResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/compositions/{compositionId}/publish": {
+      "post": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Publish selected drafts in one transaction",
+        "description": "422 body: {message, problems: {\"<type>/<name>\": [ConfigProblem]}}. 409 when a published item changed outside the workbench and force is false.",
+        "operationId": "publishComposition",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompositionPublishRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Publish result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionPublishResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No items selected"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "Changed outside the workbench"
+          },
+          "422": {
+            "description": "Errors or missing dependencies"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
     }
   },
   "components": {
@@ -9996,6 +10243,143 @@
           "baseRevision": {
             "description": "The contentRevision this edit was based on",
             "type": "string"
+          }
+        }
+      },
+      "CompositionRevision": {
+        "required": [
+          "id",
+          "contentRevision",
+          "author",
+          "createdAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "contentRevision": {
+            "type": "string"
+          },
+          "author": {
+            "enum": [
+              "user",
+              "ai"
+            ],
+            "type": "string"
+          },
+          "turnId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "content": {
+            "$ref": "#/components/schemas/CompositionContent"
+          }
+        }
+      },
+      "CompositionItemValidateRequest": {
+        "required": [
+          "content"
+        ],
+        "type": "object",
+        "properties": {
+          "content": {
+            "$ref": "#/components/schemas/CompositionContent"
+          }
+        }
+      },
+      "CompositionItemProblems": {
+        "required": [
+          "itemId",
+          "type",
+          "name",
+          "valid",
+          "problems"
+        ],
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "type": {
+            "enum": [
+              "workflow",
+              "action-type",
+              "tool"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "valid": {
+            "type": "boolean"
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConfigProblem"
+            }
+          }
+        }
+      },
+      "CompositionValidationResult": {
+        "required": [
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompositionItemProblems"
+            }
+          }
+        }
+      },
+      "CompositionPublishRequest": {
+        "required": [
+          "itemIds"
+        ],
+        "type": "object",
+        "properties": {
+          "itemIds": {
+            "type": "array",
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          "force": {
+            "description": "Publish even if a published item changed outside the workbench",
+            "type": "boolean"
+          }
+        }
+      },
+      "CompositionPublishResult": {
+        "required": [
+          "created",
+          "updated",
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "created": {
+            "type": "integer"
+          },
+          "updated": {
+            "type": "integer"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompositionItem"
+            }
           }
         }
       }

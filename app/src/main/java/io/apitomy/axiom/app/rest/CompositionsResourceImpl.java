@@ -3,17 +3,28 @@ package io.apitomy.axiom.app.rest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.CompositionsResource;
+import io.apitomy.axiom.api.beans.AssistantValidateResult;
 import io.apitomy.axiom.api.beans.Composition;
 import io.apitomy.axiom.api.beans.CompositionContent;
 import io.apitomy.axiom.api.beans.CompositionItem;
+import io.apitomy.axiom.api.beans.CompositionItemProblems;
 import io.apitomy.axiom.api.beans.CompositionItemUpdate;
+import io.apitomy.axiom.api.beans.CompositionItemValidateRequest;
+import io.apitomy.axiom.api.beans.CompositionPublishRequest;
+import io.apitomy.axiom.api.beans.CompositionPublishResult;
+import io.apitomy.axiom.api.beans.CompositionRevision;
 import io.apitomy.axiom.api.beans.CompositionUpdate;
+import io.apitomy.axiom.api.beans.CompositionValidationResult;
+import io.apitomy.axiom.api.beans.ConfigProblem;
 import io.apitomy.axiom.api.beans.NewComposition;
 import io.apitomy.axiom.api.beans.NewCompositionItem;
 import io.apitomy.axiom.app.composition.CompositionConflictException;
 import io.apitomy.axiom.app.composition.CompositionItems;
 import io.apitomy.axiom.app.composition.CompositionNotFoundException;
+import io.apitomy.axiom.app.composition.CompositionPublisher;
 import io.apitomy.axiom.app.composition.CompositionService;
+import io.apitomy.axiom.app.composition.CompositionValidator;
+import io.apitomy.axiom.app.composition.PublishBlockedException;
 import io.apitomy.axiom.app.composition.StaleRevisionException;
 import io.apitomy.axiom.app.validation.ConfigItemType;
 import io.apitomy.axiom.core.entities.CompositionEntity;
@@ -42,6 +53,12 @@ public class CompositionsResourceImpl implements CompositionsResource {
 
     @Inject
     ObjectMapper mapper;
+
+    @Inject
+    CompositionValidator validator;
+
+    @Inject
+    CompositionPublisher publisher;
 
     /** {@inheritDoc} */
     @Override
@@ -113,6 +130,89 @@ public class CompositionsResourceImpl implements CompositionsResource {
     @Override
     public void deleteCompositionItem(long compositionId, long itemId) {
         service.removeItem(compositionId, itemId);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public List<CompositionRevision> listCompositionItemRevisions(long compositionId, long itemId) {
+        return service.revisions(compositionId, itemId).stream().map(r -> {
+            CompositionRevision bean = new CompositionRevision();
+            bean.setId(r.id);
+            bean.setContentRevision(r.contentRevision);
+            bean.setAuthor(CompositionRevision.Author.fromValue(r.author));
+            bean.setTurnId(r.turnId);
+            bean.setCreatedAt(Date.from(r.createdOn));
+            return bean;
+        }).toList();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public CompositionItem restoreCompositionItemRevision(long compositionId, long itemId, long revisionId) {
+        return toBean(service.restore(compositionId, itemId, revisionId), true);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public AssistantValidateResult validateCompositionItem(long compositionId, long itemId,
+            CompositionItemValidateRequest data) {
+        CompositionItemEntity item = service.item(compositionId, itemId);
+        if (data.getContent() == null) {
+            throw new IllegalArgumentException("content is required");
+        }
+        JsonNode content = mapper.valueToTree(data.getContent().getAdditionalProperties());
+        List<io.apitomy.axiom.app.validation.ConfigProblem> problems = validator.validateContent(compositionId,
+                ConfigItemType.fromName(item.itemType), item.name, content);
+        AssistantValidateResult result = new AssistantValidateResult();
+        result.setValid(isValid(problems));
+        result.setProblems(toProblemBeans(problems));
+        return result;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public CompositionValidationResult validateComposition(long compositionId) {
+        List<CompositionItemProblems> items = validator.validateAll(compositionId).entrySet().stream()
+                .map(entry -> {
+                    CompositionItemEntity item = service.item(compositionId, entry.getKey());
+                    CompositionItemProblems bean = new CompositionItemProblems();
+                    bean.setItemId(item.id);
+                    bean.setType(CompositionItemProblems.Type.fromValue(item.itemType));
+                    bean.setName(item.name);
+                    bean.setValid(isValid(entry.getValue()));
+                    bean.setProblems(toProblemBeans(entry.getValue()));
+                    return bean;
+                }).toList();
+        CompositionValidationResult result = new CompositionValidationResult();
+        result.setItems(items);
+        return result;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public CompositionPublishResult publishComposition(long compositionId, CompositionPublishRequest data) {
+        CompositionPublisher.Outcome outcome = publisher.publish(compositionId, data.getItemIds(),
+                Boolean.TRUE.equals(data.getForce()));
+        CompositionPublishResult result = new CompositionPublishResult();
+        result.setCreated(outcome.created());
+        result.setUpdated(outcome.updated());
+        result.setItems(outcome.items().stream().map(i -> toBean(i, false)).toList());
+        return result;
+    }
+
+    private static boolean isValid(List<io.apitomy.axiom.app.validation.ConfigProblem> problems) {
+        return problems.stream().noneMatch(io.apitomy.axiom.app.validation.ConfigProblem::isError);
+    }
+
+    private static List<ConfigProblem> toProblemBeans(List<io.apitomy.axiom.app.validation.ConfigProblem> problems) {
+        return problems.stream().map(p -> {
+            ConfigProblem bean = new ConfigProblem();
+            bean.setSeverity(ConfigProblem.Severity.fromValue(p.severity()));
+            bean.setPath(p.path());
+            bean.setCode(p.code());
+            bean.setMessage(p.message());
+            return bean;
+        }).toList();
     }
 
     private Composition toBean(CompositionEntity entity) {
@@ -195,5 +295,19 @@ public class CompositionsResourceImpl implements CompositionsResource {
     @ServerExceptionMapper
     public Response mapBadRequest(IllegalArgumentException e) {
         return error(400, e.getMessage());
+    }
+
+    /**
+     * @param e the exception
+     * @return 422 with problems keyed by "&lt;type&gt;/&lt;name&gt;"
+     */
+    @ServerExceptionMapper
+    public Response mapPublishBlocked(PublishBlockedException e) {
+        Map<String, Object> problems = new LinkedHashMap<>();
+        e.problems().forEach((key, list) -> problems.put(key, toProblemBeans(list)));
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("message", e.getMessage());
+        body.put("problems", problems);
+        return Response.status(422).type(MediaType.APPLICATION_JSON).entity(body).build();
     }
 }
