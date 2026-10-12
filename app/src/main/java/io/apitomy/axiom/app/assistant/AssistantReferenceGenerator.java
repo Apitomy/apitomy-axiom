@@ -148,7 +148,7 @@ public class AssistantReferenceGenerator {
             {
               "id": "cs-1",
               "baseRevision": "<workflowRevision>",
-              "author": "agent:workbench",
+              "author": "agent:axiom-workbench",
               "summary": "Wait one hour before ending",
               "ops": [
                 { "op": "removeEdge", "id": "edge-1" },
