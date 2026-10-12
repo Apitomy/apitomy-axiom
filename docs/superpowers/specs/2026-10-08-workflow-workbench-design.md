@@ -64,6 +64,7 @@ published). Flow's user guide `docs/user-guide/ai-assisted-editing.md` is the re
   - `id`, `name`, `goal` (the user's first request, kept for recaps), `engine`, `model`;
   - `assistantSessionId`;
   - `turnState` (`idle` | `ai-working`) and `currentTurnId`;
+  - `pendingChangeSet` (JSON, nullable) and `pendingTurnId`;
   - `applyMode` (`live` | `review`), defaulting to `live`;
   - `createdAt`, `updatedAt`.
 - **`CompositionItemEntity`**:
@@ -153,6 +154,13 @@ revision from the start of the turn.
      second stale result ends the turn with a chat notice.
 5. The server sets `turnState = idle` and releases the locks.
 
+Only the editor commits workflow change sets: the server never writes a combined change set into the draft
+itself, because Java does not position added nodes. If no editor is open when a turn ends (for example, the
+browser was closed), the combined change set is stored on the composition as the **pending change set** and
+sent to the editor the next time the workbench opens. The editor applies or proposes it as usual; a `stale`
+result discards it and posts a chat notice offering to ask the agent again. A newer turn replaces any pending
+change set.
+
 ### Publish
 
 - `POST /compositions/{id}/publish {items[]}` builds a configuration pack from the selected drafts and runs
@@ -197,6 +205,10 @@ revision from the start of the turn.
   - `spi.actionTypes` is an array of database action types merged with draft ones. It is replaced whenever a
     draft action type is created, renamed or has its inputs or outputs changed, so the palette and the
     unresolved markers update without a remount.
+  - `spi.contextActions` adds **Ask AI about this…** on node, edge, selection and canvas menus, and
+    **Ask AI to fix this** on Problems rows. Each pre-fills the chat input with a description of the target
+    (ids, names, the problem text) and records the menu's `contentRevision` with the message. The items are
+    disabled while the AI is working and hidden when `context.readOnly`.
   - `appliedChangeLayout` is a workbench preference (**Place new nodes** or **Tidy after AI changes**),
     stored in `localStorage`, default `'place'`.
 - **Action type tab**: the new `ActionTypeEditor` component, extracted from `ActionTypeDetailPage`. It takes
@@ -216,8 +228,10 @@ revision from the start of the turn.
   workflow changes". Each card links to its tab.
 - A turn header with **Undo AI turn**:
   - It restores the previous revision of every action type and tool the turn changed.
-  - For the workflow, it calls the editor's undo only if the turn's change set is the latest undo step.
-    Otherwise it leaves the workflow alone and says so in chat.
+  - For the workflow, it calls `handle.replace(<workflow revision saved before the turn>, 'host')`. This is
+    a new undoable step, so Ctrl+Z restores the AI's version. It is offered only when the workflow's latest
+    saved revision is the one the turn produced (no user or host `onChange` since). Otherwise it leaves the
+    workflow alone and says so in chat. Flow has no host-callable undo, and none is needed.
 - A mode toggle, **Apply live** (the default) or **Review changes**.
 
 ### Maximizing space
