@@ -38,4 +38,12 @@ class AssistantMcpServerAugmentationTest {
 
         assertEquals(List.of("@axiom-assistant", "github"), serverNames);
     }
+
+    @Test
+    void workbenchToolsImplyWorkbenchServerAndAreNotExternal() {
+        List<String> servers = new ArrayList<>();
+        AssistantSessionManager.augmentServersFromAllowedTools(servers,
+                List.of("mcp__workbench__get_composition", "mcp__workbench__propose_workflow_changes"));
+        assertEquals(List.of("@axiom-workbench"), servers);
+    }
 }

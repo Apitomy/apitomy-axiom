@@ -268,6 +268,18 @@ public class AssistantSession {
     }
 
     /**
+     * Restores earlier events into the history without notifying listeners. Must be called before any
+     * listener is attached and before {@link #start()}.
+     *
+     * @param events the events, oldest first
+     */
+    void seedHistory(List<SseEvent> events) {
+        synchronized (eventLock) {
+            eventHistory.addAll(events);
+        }
+    }
+
+    /**
      * Adds a synthetic event to the event history and dispatches it to listeners.
      * Used for events not produced by the Claude Code subprocess (e.g., user
      * messages, welcome messages).

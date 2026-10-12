@@ -61,6 +61,8 @@ public class AssistantSessionManager {
     private static final Logger LOG = Logger.getLogger(AssistantSessionManager.class);
 
     private static final String ASSISTANT_MCP_DIR_NAME = "assistant-mcp-server";
+    private static final String WORKBENCH_MCP_DIR_NAME = "workbench-mcp-server";
+    private static final String COMPOSITION_MARKER = "composition";
     private static final String[] MCP_TEMPLATE_FILES = { "package.json", "server.js" };
 
     @ConfigProperty(name = "axiom.assistant.max-sessions", defaultValue = "3")
@@ -112,7 +114,7 @@ public class AssistantSessionManager {
     private final Map<String, HistoryJournal> journals = new ConcurrentHashMap<>();
     private final AtomicInteger sessionCount = new AtomicInteger();
 
-    private volatile Path assistantMcpServerDir;
+    private final Map<String, Path> installedMcpServers = new ConcurrentHashMap<>();
 
     /**
      * Creates and starts a new assistant session.
@@ -127,6 +129,26 @@ public class AssistantSessionManager {
      */
     public AssistantSession createSession(String name, String templateId,
                                           Long subjectId) throws IOException {
+        return createSession(name, templateId, subjectId, null, List.of());
+    }
+
+    /**
+     * Creates and starts a new assistant session, optionally bound to a workbench composition and seeded with
+     * earlier history.
+     *
+     * @param name the user-visible session name
+     * @param templateId the template to create the session from
+     * @param subjectId optional subject ID to scope the session to
+     * @param compositionId optional composition ID, passed to the workbench MCP server
+     * @param seedHistory events restored into the history (and journal) before the session starts
+     * @return the started session
+     * @throws IOException if the session cannot be created
+     * @throws IllegalStateException if the AI engine does not support interactive sessions or the
+     *         session limit has been reached
+     */
+    public AssistantSession createSession(String name, String templateId, Long subjectId,
+                                          Long compositionId, List<SseEvent> seedHistory) throws IOException {
+        List<SseEvent> seed = seedHistory != null ? seedHistory : List.of();
         SessionTemplateService.SessionTemplate template = templateService.getTemplate(templateId);
         if (template == null) {
             throw new IllegalArgumentException("Template not found: " + templateId);
@@ -179,6 +201,10 @@ public class AssistantSessionManager {
             Path sessionDir = contextBuilder.createSessionDirectory(sessionId, null);
 
             try {
+            if (compositionId != null) {
+                Files.writeString(sessionDir.resolve(COMPOSITION_MARKER), String.valueOf(compositionId));
+            }
+
             // Resolve allowed tools first — MCP server resolution needs them
             // to auto-include servers implied by tool names.
             List<String> resolvedAllowedTools = resolveAllowedTools(template);
@@ -186,8 +212,8 @@ public class AssistantSessionManager {
             // Resolve MCP servers from template, augmented with any servers
             // implied by the allowed tools list.
             Map<String, AssistantContextBuilder.McpServerConfig> mcpConfigs =
-                    resolveMcpServers(sessionId, mcpToken, template, subject, sessionDir, resolvedEnv,
-                            resolvedAllowedTools);
+                    resolveMcpServers(sessionId, mcpToken, template, subject, compositionId, sessionDir,
+                            resolvedEnv, resolvedAllowedTools);
 
             // Build and write MCP config JSON to session directory
             String mcpConfig = contextBuilder.buildMcpConfig(mcpConfigs);
@@ -270,10 +296,13 @@ public class AssistantSessionManager {
                     workDir, command, resolvedEnv, agent.getType(), subjectId, subjectName, driver);
             session.setCapabilities(template.capabilities());
             session.setMcpToken(mcpToken);
+            session.seedHistory(seed);
             sessionRef.set(session);
-            // Persist every event (including the welcome message and startup events) to history.jsonl
+            // Persist every event (including the welcome message and startup events) to history.jsonl.
+            // Seeded events are written directly so the new directory holds the complete history.
             HistoryJournal journal = new HistoryJournal(sessionDir.resolve(HistoryJournal.FILE_NAME), objectMapper);
             journals.put(sessionId, journal);
+            seed.forEach(journal::accept);
             session.addListener(journal);
             session.start();
 
@@ -404,6 +433,18 @@ public class AssistantSessionManager {
      */
     @jakarta.transaction.Transactional
     public void destroySession(String sessionId) {
+        destroySession(sessionId, false);
+    }
+
+    /**
+     * Destroys a session: kills the subprocess, closes its journal and records usage. The session directory
+     * is deleted unless {@code keepDirectory} is true.
+     *
+     * @param sessionId the session to destroy
+     * @param keepDirectory whether to keep the session directory on disk
+     */
+    @jakarta.transaction.Transactional
+    public void destroySession(String sessionId, boolean keepDirectory) {
         AssistantSession session = sessions.remove(sessionId);
         if (session != null) {
             sessionCount.decrementAndGet();
@@ -415,7 +456,9 @@ public class AssistantSessionManager {
                         sessionId, e.getMessage());
             }
             closeJournal(sessionId);
-            contextBuilder.deleteSessionDirectory(session.getSessionDirectory());
+            if (!keepDirectory) {
+                contextBuilder.deleteSessionDirectory(session.getSessionDirectory());
+            }
             LOG.infof("Destroyed assistant session %s (cost=$%.4f, turns=%d)",
                     sessionId, session.getTotalCostUsd(), session.getTurnCount());
         }
@@ -666,6 +709,10 @@ public class AssistantSessionManager {
         Instant now = Instant.now();
         try (Stream<Path> dirs = Files.list(sessionsRoot)) {
             dirs.filter(Files::isDirectory).forEach(dir -> {
+                if (Files.exists(dir.resolve(COMPOSITION_MARKER))) {
+                    LOG.infof("Keeping composition session directory %s", dir.getFileName());
+                    return;
+                }
                 if (!isStale(dir, now, STALE_SESSION_GRACE)) {
                     LOG.warnf("Keeping session directory %s: it changed within the last %d minutes, so another "
                             + "Axiom instance may be using it", dir.getFileName(), STALE_SESSION_GRACE.toMinutes());
@@ -713,9 +760,19 @@ public class AssistantSessionManager {
      */
     void onShutdown(@Observes ShutdownEvent event) {
         LOG.info("Shutting down — destroying all assistant sessions");
-        for (String sessionId : new ArrayList<>(sessions.keySet())) {
-            destroySession(sessionId);
+        for (AssistantSession session : new ArrayList<>(sessions.values())) {
+            destroySession(session.getId(), session.hasCapability(SessionCapability.COMPOSITION));
         }
+    }
+
+    /**
+     * Returns the directory of an assistant session.
+     *
+     * @param sessionId the session identifier
+     * @return {@code ${axiom.home}/assistant/sessions/<sessionId>}
+     */
+    static Path sessionDirectory(String sessionId) {
+        return AxiomHome.resolve("assistant", "sessions", sessionId);
     }
 
     /**
@@ -901,7 +958,7 @@ public class AssistantSessionManager {
 
     private Map<String, AssistantContextBuilder.McpServerConfig> resolveMcpServers(
             String sessionId, String mcpToken, SessionTemplateService.SessionTemplate template,
-            SubjectEntity subject, Path sessionDir,
+            SubjectEntity subject, Long compositionId, Path sessionDir,
             Map<String, String> sessionEnv,
             List<String> allowedTools) throws IOException {
         Map<String, AssistantContextBuilder.McpServerConfig> configs = new LinkedHashMap<>();
@@ -917,7 +974,8 @@ public class AssistantSessionManager {
         for (String serverName : serverNames) {
             if ("@axiom-assistant".equals(serverName)) {
                 // Built-in MCP server for subject-scoped assistant tools
-                Path mcpServerDir = ensureAssistantMcpServerInstalled();
+                Path mcpServerDir = ensureMcpServerInstalled(ASSISTANT_MCP_DIR_NAME,
+                        "templates/axiom-assistant-mcp/");
                 String serverJsPath = mcpServerDir.resolve("server.js")
                         .toAbsolutePath().toString();
                 Map<String, String> env = new LinkedHashMap<>();
@@ -929,6 +987,18 @@ public class AssistantSessionManager {
                 env.put("AXIOM_SESSION_TOKEN", mcpToken);
                 configs.put("axiom", AssistantContextBuilder.McpServerConfig.stdio(
                         "node", List.of(serverJsPath), env));
+
+            } else if ("@axiom-workbench".equals(serverName)) {
+                // Built-in MCP server for workbench composition tools
+                Path serverDir = ensureMcpServerInstalled(WORKBENCH_MCP_DIR_NAME, "templates/axiom-workbench-mcp/");
+                Map<String, String> env = new LinkedHashMap<>();
+                env.put("AXIOM_API_URL", apiUrl);
+                if (compositionId != null) {
+                    env.put("AXIOM_COMPOSITION_ID", String.valueOf(compositionId));
+                }
+                env.put("AXIOM_SESSION_TOKEN", mcpToken);
+                configs.put("workbench", AssistantContextBuilder.McpServerConfig.stdio("node",
+                        List.of(serverDir.resolve("server.js").toAbsolutePath().toString()), env));
 
             } else if ("@axiom-tools".equals(serverName)) {
                 // Built-in MCP server for user-defined script tools.
@@ -1030,6 +1100,9 @@ public class AssistantSessionManager {
         // which is registered under the name "axiom".
         boolean needsAxiomAssistant = !serverNames.contains("@axiom-assistant")
                 && allowedTools.stream().anyMatch(t -> t.startsWith("mcp__axiom__"));
+        // "mcp__workbench__*" tools come from the built-in @axiom-workbench server.
+        boolean needsAxiomWorkbench = !serverNames.contains("@axiom-workbench")
+                && allowedTools.stream().anyMatch(t -> t.startsWith("mcp__workbench__"));
 
         if (needsAxiomTools) {
             LOG.infof("Auto-including @axiom-tools server (implied by allowed tools)");
@@ -1043,12 +1116,17 @@ public class AssistantSessionManager {
             LOG.infof("Auto-including @axiom-assistant server (implied by allowed tools)");
             serverNames.add("@axiom-assistant");
         }
+        if (needsAxiomWorkbench) {
+            LOG.infof("Auto-including @axiom-workbench server (implied by allowed tools)");
+            serverNames.add("@axiom-workbench");
+        }
 
         // Auto-include external MCP servers referenced in allowed tools
         for (String tool : allowedTools) {
             if (tool.startsWith("mcp__") && !tool.startsWith("mcp__axiom-tools__")
                     && !tool.startsWith("mcp__axiom-sdk__")
-                    && !tool.startsWith("mcp__axiom__")) {
+                    && !tool.startsWith("mcp__axiom__")
+                    && !tool.startsWith("mcp__workbench__")) {
                 int secondSep = tool.indexOf("__", 5);
                 if (secondSep > 5) {
                     String externalName = tool.substring(5, secondSep);
@@ -1094,39 +1172,40 @@ public class AssistantSessionManager {
     }
 
     /**
-     * Ensures the assistant MCP server Node.js subject is installed at
-     * {@code ~/.axiom/assistant-mcp-server/}.
+     * Ensures a built-in Node.js MCP server is installed at {@code ${axiom.home}/<dirName>/}: copies its
+     * {@code package.json} and {@code server.js} from the classpath and runs {@code npm install} once.
+     *
+     * @param dirName the install directory name under the Axiom home
+     * @param resourceDir the classpath directory holding the server files (with trailing slash)
+     * @return the install directory
      */
-    private Path ensureAssistantMcpServerInstalled() throws IOException {
-        if (assistantMcpServerDir != null
-                && Files.exists(assistantMcpServerDir.resolve("node_modules"))) {
-            return assistantMcpServerDir;
+    private Path ensureMcpServerInstalled(String dirName, String resourceDir) throws IOException {
+        Path installed = installedMcpServers.get(dirName);
+        if (installed != null && Files.exists(installed.resolve("node_modules"))) {
+            return installed;
         }
 
         synchronized (this) {
-            if (assistantMcpServerDir != null
-                    && Files.exists(assistantMcpServerDir.resolve("node_modules"))) {
-                return assistantMcpServerDir;
+            installed = installedMcpServers.get(dirName);
+            if (installed != null && Files.exists(installed.resolve("node_modules"))) {
+                return installed;
             }
 
-            Path axiomHome = AxiomHome.path();
-            Path serverDir = axiomHome.resolve(ASSISTANT_MCP_DIR_NAME);
+            Path serverDir = AxiomHome.path().resolve(dirName);
             Files.createDirectories(serverDir);
 
             for (String fileName : MCP_TEMPLATE_FILES) {
-                String resourcePath = "templates/axiom-assistant-mcp/" + fileName;
-                try (InputStream is = getClass().getClassLoader()
-                        .getResourceAsStream(resourcePath)) {
+                String resourcePath = resourceDir + fileName;
+                try (InputStream is = getClass().getClassLoader().getResourceAsStream(resourcePath)) {
                     if (is == null) {
                         throw new IOException("Template resource not found: " + resourcePath);
                     }
-                    Files.copy(is, serverDir.resolve(fileName),
-                            StandardCopyOption.REPLACE_EXISTING);
+                    Files.copy(is, serverDir.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
                 }
             }
-            LOG.infof("Copied assistant MCP server template to %s", serverDir);
+            LOG.infof("Copied MCP server template %s to %s", resourceDir, serverDir);
 
-            LOG.info("Running npm install for assistant MCP server...");
+            LOG.infof("Running npm install for MCP server %s...", dirName);
             ProcessBuilder pb = new ProcessBuilder("npm", "install", "--production")
                     .directory(serverDir.toFile())
                     .redirectErrorStream(true);
@@ -1141,13 +1220,12 @@ public class AssistantSessionManager {
             }
 
             if (exitCode != 0) {
-                throw new IOException(
-                        "npm install failed (exit code " + exitCode + "): " + output);
+                throw new IOException("npm install failed (exit code " + exitCode + "): " + output);
             }
-            LOG.infof("npm install completed for assistant MCP server in %s", serverDir);
+            LOG.infof("npm install completed for MCP server in %s", serverDir);
 
-            assistantMcpServerDir = serverDir;
-            return assistantMcpServerDir;
+            installedMcpServers.put(dirName, serverDir);
+            return serverDir;
         }
     }
 

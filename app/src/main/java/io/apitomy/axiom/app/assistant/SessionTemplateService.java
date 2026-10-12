@@ -33,6 +33,7 @@ public class SessionTemplateService {
             "axiom-config-assistant.json",
             "general-assistant.json",
             "subject-assistant.json",
+            "axiom-workbench.json",
     };
 
     @Inject

@@ -1,0 +1,11 @@
+{
+    "name": "axiom-workbench-mcp",
+    "version": "1.0.0",
+    "description": "Axiom Workbench MCP server providing composition tools for workbench assistant sessions",
+    "private": true,
+    "type": "commonjs",
+    "main": "server.js",
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.32.0"
+    }
+}

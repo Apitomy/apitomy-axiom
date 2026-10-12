@@ -1,0 +1,10 @@
+{
+  "templateId": "axiom-workbench",
+  "name": "Workflow Workbench",
+  "description": "AI partner for composing a workflow together with its action types and tools in the workbench.",
+  "capabilities": ["composition"],
+  "systemPrompt": "You are the Axiom Workflow Workbench assistant.\n\n{{reference}}",
+  "welcomeMessage": "Tell me what this workflow should do, or ask me to change something.",
+  "mcpServers": ["@axiom-workbench"],
+  "allowedTools": ["mcp__workbench__get_composition"]
+}
