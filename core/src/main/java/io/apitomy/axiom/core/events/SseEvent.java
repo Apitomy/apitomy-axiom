@@ -147,6 +147,27 @@ public record SseEvent(
     }
 
     /**
+     * A composition draft item changed (saved by the user or the AI, or restored).
+     *
+     * @param compositionId the composition id
+     * @param itemId the item id
+     * @param contentRevision the item's new content revision
+     * @param author {@code user} or {@code ai}
+     * @param turnId the AI turn id, or null
+     * @return the event
+     */
+    public static SseEvent compositionItemChanged(long compositionId, long itemId, String contentRevision,
+                                                  String author, String turnId) {
+        return new SseEvent("composition-item-changed",
+                "{\"compositionId\":" + compositionId
+                        + ",\"itemId\":" + itemId
+                        + ",\"contentRevision\":\"" + escapeJson(contentRevision) + "\""
+                        + ",\"author\":\"" + escapeJson(author) + "\""
+                        + ",\"turnId\":" + (turnId == null ? "null" : "\"" + escapeJson(turnId) + "\"")
+                        + "}");
+    }
+
+    /**
      * Creates a stream-event-received event, indicating a new event
      * has been added to the event stream.
      *
