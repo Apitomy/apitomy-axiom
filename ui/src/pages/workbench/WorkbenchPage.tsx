@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { Alert, AlertActionLink, Button, Tab, Tabs, TabTitleText, ToggleGroup, ToggleGroupItem } from "@patternfly/react-core";
-import { type CompositionItem, updateComposition } from "../../config/compositions";
+import { addItem, type CompositionItem, fetchItem, updateComposition } from "../../config/compositions";
+import { type AddRequest, CompositionTree } from "./CompositionTree";
+import { PublishDialog } from "./PublishDialog";
 import { loadPrefs, savePrefs, type WorkbenchPrefs } from "./workbenchPrefs";
 import { useWorkbench } from "./useWorkbench";
 import { PaneSplitter } from "./PaneSplitter";
@@ -22,6 +24,7 @@ export function WorkbenchPage() {
     const [brokenOut, setBrokenOut] = useState<boolean>(false);
     const [openTabs, setOpenTabs] = useState<number[]>([]);
     const [activeTab, setActiveTab] = useState<string>("workflow");
+    const [publishOpen, setPublishOpen] = useState<boolean>(false);
 
     const composition = wb.composition;
 
@@ -85,6 +88,54 @@ export function WorkbenchPage() {
         }
     };
 
+    const openItem = (itemId: number) => {
+        const item: CompositionItem | undefined = wb.items.find((i) => i.id === itemId);
+        if (!item || item.type === "workflow") {
+            setActiveTab("workflow");
+            return;
+        }
+        setOpenTabs((prev) => (prev.includes(itemId) ? prev : [...prev, itemId]));
+        setActiveTab(String(itemId));
+        if (!wb.contents[itemId]) {
+            void wb.loadContent(itemId).catch(console.error);
+        }
+    };
+
+    const addToComposition = (request: AddRequest) => {
+        addItem(id, request)
+            .then(async (item: CompositionItem) => {
+                await wb.refreshItems();
+                setOpenTabs((prev) => (prev.includes(item.id) ? prev : [...prev, item.id]));
+                setActiveTab(String(item.id));
+                void wb.loadContent(item.id).catch(console.error);
+            })
+            .catch(console.error);
+    };
+
+    /** Applies a restored workflow revision to the editor state (Task 10 routes this through the editor handle). */
+    const onWorkflowRestored = (item: CompositionItem, content: Record<string, unknown>) => {
+        wb.setContent(item.id, content, item.contentRevision);
+    };
+
+    const onRestored = (item: CompositionItem) => {
+        void wb.refreshItems().catch(console.error);
+        const apply = (full: CompositionItem) => {
+            if (!full.content) {
+                return;
+            }
+            if (full.type === "workflow") {
+                onWorkflowRestored(full, full.content);
+            } else {
+                wb.setContent(full.id, full.content, full.contentRevision);
+            }
+        };
+        if (item.content) {
+            apply(item);
+        } else {
+            fetchItem(id, item.id).then(apply).catch(console.error);
+        }
+    };
+
     const leftWidth: number = prefs.leftCollapsed ? RAIL : prefs.panes.left;
     const rightWidth: number = prefs.rightCollapsed ? RAIL : prefs.panes.right;
     const setLeft = (w: number) => setPrefs((p) => ({ ...p, panes: { ...p.panes, left: w } }));
@@ -117,7 +168,7 @@ export function WorkbenchPage() {
                     {searchParams.get("focus") === "1" ? "Exit focus" : "Focus"}
                 </Button>
                 <Button variant="secondary" onClick={breakOut}>Break out</Button>
-                <Button variant="primary">Publish…</Button>
+                <Button variant="primary" onClick={() => setPublishOpen(true)}>Publish…</Button>
             </div>
             {brokenOut && (
                 <Alert className="axiom-workbench__notice" isInline variant="info" title="Opened in another window"
@@ -135,24 +186,11 @@ export function WorkbenchPage() {
                     onClick={() => updatePrefs({ leftCollapsed: !prefs.leftCollapsed })}>
                     {prefs.leftCollapsed ? "»" : "«"}
                 </Button>
-                {!prefs.leftCollapsed && (
-                    <ul className="axiom-workbench__items">
-                        {wb.items.map((item) => (
-                            <li key={item.id}>
-                                <Button variant="link" isInline onClick={() => {
-                                    if (item.type === "workflow") {
-                                        setActiveTab("workflow");
-                                        return;
-                                    }
-                                    setOpenTabs((prev) => (prev.includes(item.id) ? prev : [...prev, item.id]));
-                                    setActiveTab(String(item.id));
-                                    if (!wb.contents[item.id]) {
-                                        void wb.loadContent(item.id).catch(console.error);
-                                    }
-                                }}>{item.name}</Button>
-                            </li>
-                        ))}
-                    </ul>
+                {!prefs.leftCollapsed && composition && (
+                    <CompositionTree composition={composition} items={wb.items} problems={wb.problems}
+                        lastCompletedTurnId={wb.lastCompletedTurnId}
+                        selectedItemId={activeTab === "workflow" ? workflow?.id : Number(activeTab)}
+                        onOpen={openItem} onAdd={addToComposition} onRestored={onRestored} />
                 )}
             </aside>
             {prefs.leftCollapsed ? <div /> : (
@@ -197,6 +235,11 @@ export function WorkbenchPage() {
                     ? aiWorking && <span className="axiom-workbench__pulse" aria-label="AI is working" />
                     : <div className="axiom-workbench__placeholder">Chat</div>}
             </aside>
+            {publishOpen && (
+                <PublishDialog compositionId={id} items={wb.items} contents={wb.contents} problems={wb.problems}
+                    onPublished={() => void wb.refreshItems().catch(console.error)}
+                    onClose={() => setPublishOpen(false)} />
+            )}
         </div>
     );
 }
