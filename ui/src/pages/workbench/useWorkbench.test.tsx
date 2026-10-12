@@ -67,4 +67,28 @@ describe("useWorkbench", () => {
         await waitFor(() => expect(result.current.problems[10]).toHaveLength(1));
         expect(result.current.composition?.assistantSessionId).toBeUndefined();
     });
+
+    it("loads every action type's content so drafts reach the catalog", async () => {
+        vi.spyOn(c, "listItems").mockResolvedValue([
+            { id: 10, type: "workflow", name: "wf", contentRevision: "r", lastAuthor: "user", changed: true },
+            { id: 11, type: "action-type", name: "at", contentRevision: "a1", lastAuthor: "ai", changed: true },
+        ]);
+        vi.spyOn(c, "fetchItem").mockImplementation(async (_cid, itemId) => (itemId === 11
+            ? { id: 11, type: "action-type", name: "at", contentRevision: "a1", lastAuthor: "ai", changed: true,
+                content: { name: "at" } }
+            : { id: 10, type: "workflow", name: "wf", contentRevision: "r", lastAuthor: "user", changed: true,
+                content: { id: "w", name: "wf", nodes: [], edges: [] } }) as never);
+        const { result } = renderHook(() => useWorkbench(1));
+        await waitFor(() => expect(result.current.contents[11]).toEqual({ name: "at" }));
+
+        vi.spyOn(c, "listItems").mockResolvedValue([
+            { id: 10, type: "workflow", name: "wf", contentRevision: "r", lastAuthor: "user", changed: true },
+            { id: 11, type: "action-type", name: "at", contentRevision: "a1", lastAuthor: "ai", changed: true },
+            { id: 12, type: "action-type", name: "new", contentRevision: "n1", lastAuthor: "ai", changed: true },
+        ]);
+        vi.spyOn(c, "fetchItem").mockResolvedValue({ id: 12, type: "action-type", name: "new", contentRevision: "n1",
+            lastAuthor: "ai", changed: true, content: { name: "new" } } as never);
+        await act(async () => sse.itemChanged?.({ compositionId: 1, itemId: 12, contentRevision: "n1" } as never));
+        await waitFor(() => expect(result.current.contents[12]).toEqual({ name: "new" }));
+    });
 });

@@ -232,6 +232,24 @@ export function useWorkbench(compositionId: number): WorkbenchState {
         };
     }, [compositionId, refreshItems, loadContent, scheduleValidate, refreshComposition, updatePending, adoptPending]);
 
+    // Action type drafts feed the canvas catalog, so keep every action type's content loaded and current.
+    const loadingRef = useRef<Map<number, string>>(new Map());
+    useEffect(() => {
+        items.filter((i) => i.type === "action-type").forEach((i) => {
+            if (revisionsRef.current[i.id] === i.contentRevision || loadingRef.current.get(i.id) === i.contentRevision) {
+                return;
+            }
+            loadingRef.current.set(i.id, i.contentRevision);
+            void loadContent(i.id)
+                .catch(console.error)
+                .finally(() => {
+                    if (loadingRef.current.get(i.id) === i.contentRevision) {
+                        loadingRef.current.delete(i.id);
+                    }
+                });
+        });
+    }, [items, loadContent]);
+
     const setContent = useCallback((itemId: number, content: Record<string, unknown>, revision: string) => {
         revisionsRef.current[itemId] = revision;
         setContents((prev) => ({ ...prev, [itemId]: content }));
