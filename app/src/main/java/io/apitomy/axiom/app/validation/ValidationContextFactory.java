@@ -92,6 +92,38 @@ public class ValidationContextFactory {
     }
 
     /**
+     * A context in which the given draft items count as existing, in addition to the database. Used by the
+     * workbench, whose drafts live in the database rather than in a pack or a directory.
+     *
+     * @param items draft items in configuration-pack form, by type
+     * @return the context
+     */
+    public ValidationContext forItems(Map<ConfigItemType, List<JsonNode>> items) {
+        ValidationContext db = databaseOnly();
+        List<JsonNode> actionTypes = items.getOrDefault(ConfigItemType.ACTION_TYPE, List.of());
+        return new ValidationContext(
+                union(db.toolNames(), itemNames(items, ConfigItemType.TOOL)),
+                db.toolsetNames(),
+                union(db.actionTypeNames(), itemNames(items, ConfigItemType.ACTION_TYPE)),
+                union(db.workflowDefinitionNames(), itemNames(items, ConfigItemType.WORKFLOW)),
+                db.workflowDefinitionIds(),
+                db.eventSourceIds(),
+                db.secretNames(),
+                overlay(db.actionTypeInputs(), pendingInputs(actionTypes)));
+    }
+
+    private static Set<String> itemNames(Map<ConfigItemType, List<JsonNode>> items, ConfigItemType type) {
+        Set<String> names = new HashSet<>();
+        for (JsonNode item : items.getOrDefault(type, List.of())) {
+            String name = item.path("name").asText("");
+            if (!name.isBlank()) {
+                names.add(name);
+            }
+        }
+        return names;
+    }
+
+    /**
      * Database names unioned with the names of items written to an assistant session directory.
      *
      * @param workDir the session working directory
