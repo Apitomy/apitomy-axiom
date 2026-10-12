@@ -37,11 +37,17 @@ interface AssistantChatPanelProps {
     onAllowAllChanged?: (enabled: boolean) => void;
     onModelDetected?: (model: string) => void;
     onCostUpdate?: (costUsd: number, inputTokens: number, outputTokens: number) => void;
+    /** When given, replaces the generic send endpoint; thrown error messages are shown to the user. */
+    onSend?: (message: string) => Promise<void>;
+    /** When given, replaces the generic interrupt endpoint. */
+    onInterrupt?: () => Promise<void>;
+    /** When set, the input is disabled and this reason is shown as its placeholder. */
+    disabledReason?: string;
 }
 
 let messageIdCounter = 0;
 
-export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, onAutoApprovalCountChange, onAllowAllChanged, onModelDetected, onCostUpdate }: AssistantChatPanelProps) {
+export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, onAutoApprovalCountChange, onAllowAllChanged, onModelDetected, onCostUpdate, onSend, onInterrupt, disabledReason }: AssistantChatPanelProps) {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [todos, setTodos] = useState<AssistantTodo[]>([]);
     const [isProcessing, setIsProcessingState] = useState(false);
@@ -647,7 +653,11 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
     const handleStop = useCallback(async () => {
         setIsStopping(true);
         try {
-            await interruptAssistantSession(sessionId);
+            if (onInterrupt) {
+                await onInterrupt();
+            } else {
+                await interruptAssistantSession(sessionId);
+            }
         } catch (e) {
             setIsStopping(false);
             addMessage({
@@ -655,7 +665,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                 content: `Could not stop the current reply: ${e instanceof Error ? e.message : String(e)}`,
             });
         }
-    }, [sessionId, addMessage]);
+    }, [sessionId, addMessage, onInterrupt]);
 
     // The interrupted turn ends with a turn_complete / session event, which clears processing.
     useEffect(() => {
@@ -682,14 +692,21 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
             setIsProcessing(true);
         }
         try {
-            await sendAssistantMessage(sessionId, message);
+            if (onSend) {
+                await onSend(message);
+            } else {
+                await sendAssistantMessage(sessionId, message);
+            }
         } catch (err) {
             console.error("Failed to send message:", err);
-            addMessage({ type: "system", content: "Failed to send message. Please try again." });
+            const content = onSend && err instanceof Error && err.message
+                ? err.message
+                : "Failed to send message. Please try again.";
+            addMessage({ type: "system", content });
             pendingLocalUserMessageRef.current = null;
             setIsProcessing(false);
         }
-    }, [sessionId, addMessage]);
+    }, [sessionId, addMessage, onSend]);
 
     const handlePermissionRespond = useCallback(async (
         permissionId: string, allow: boolean, toolInput?: Record<string, unknown>, always?: boolean
@@ -877,7 +894,8 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                 />
                 <AssistantMessageInput
                     onSend={handleSend}
-                    disabled={isProcessing}
+                    disabled={isProcessing || !!disabledReason}
+                    placeholder={disabledReason}
                     isProcessing={isProcessing}
                     isStopping={isStopping}
                     onStop={handleStop}

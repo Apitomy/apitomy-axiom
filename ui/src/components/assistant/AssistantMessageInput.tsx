@@ -7,6 +7,8 @@ import "./AssistantMessageInput.css";
 interface AssistantMessageInputProps {
     onSend: (message: string) => void;
     disabled?: boolean;
+    /** Overrides the default placeholder text when set. */
+    placeholder?: string;
     /** When true, a Stop button is shown next to the Send button. */
     isProcessing?: boolean;
     /** True while a stop request is in flight; disables the Stop button. */
@@ -17,7 +19,7 @@ interface AssistantMessageInputProps {
 }
 
 export function AssistantMessageInput({
-    onSend, disabled, slashCommands = [], isProcessing = false, isStopping = false, onStop,
+    onSend, disabled, placeholder, slashCommands = [], isProcessing = false, isStopping = false, onStop,
 }: AssistantMessageInputProps) {
     const [value, setValue] = useState("");
     const [selectedIndex, setSelectedIndex] = useState(0);
@@ -144,7 +146,7 @@ export function AssistantMessageInput({
                         value={value}
                         onChange={(_e, val) => { if (val !== value) setValue(val); }}
                         onKeyDown={handleKeyDown}
-                        placeholder="Type a message... (/ for commands)"
+                        placeholder={placeholder ?? "Type a message... (/ for commands)"}
                         aria-label="Message input"
                         autoResize
                         rows={1}
