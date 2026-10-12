@@ -4,35 +4,51 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.CompositionsResource;
+import io.apitomy.axiom.api.beans.AgentChangeSetResult;
+import io.apitomy.axiom.api.beans.AgentComposition;
+import io.apitomy.axiom.api.beans.AgentItemResult;
+import io.apitomy.axiom.api.beans.AgentItemSummary;
+import io.apitomy.axiom.api.beans.AgentItemUpsert;
 import io.apitomy.axiom.api.beans.AssistantValidateResult;
 import io.apitomy.axiom.api.beans.Composition;
+import io.apitomy.axiom.api.beans.ChangeSetError;
+import io.apitomy.axiom.api.beans.CompositionChangeSetResolution;
 import io.apitomy.axiom.api.beans.CompositionContent;
 import io.apitomy.axiom.api.beans.CompositionItem;
 import io.apitomy.axiom.api.beans.CompositionItemProblems;
 import io.apitomy.axiom.api.beans.CompositionItemUpdate;
 import io.apitomy.axiom.api.beans.CompositionItemValidateRequest;
+import io.apitomy.axiom.api.beans.CompositionMessage;
 import io.apitomy.axiom.api.beans.CompositionPublishRequest;
 import io.apitomy.axiom.api.beans.CompositionPublishResult;
 import io.apitomy.axiom.api.beans.CompositionRevision;
+import io.apitomy.axiom.api.beans.CompositionUndoResult;
 import io.apitomy.axiom.api.beans.CompositionUpdate;
 import io.apitomy.axiom.api.beans.CompositionValidationResult;
 import io.apitomy.axiom.api.beans.ConfigProblem;
 import io.apitomy.axiom.api.beans.NewComposition;
 import io.apitomy.axiom.api.beans.NewCompositionItem;
+import io.apitomy.axiom.app.assistant.SessionTokenGuard;
 import io.apitomy.axiom.app.composition.CompositionConflictException;
 import io.apitomy.axiom.app.composition.CompositionItems;
 import io.apitomy.axiom.app.composition.CompositionNotFoundException;
 import io.apitomy.axiom.app.composition.CompositionPublisher;
 import io.apitomy.axiom.app.composition.CompositionService;
+import io.apitomy.axiom.app.composition.CompositionTurns;
 import io.apitomy.axiom.app.composition.CompositionValidator;
 import io.apitomy.axiom.app.composition.PublishBlockedException;
 import io.apitomy.axiom.app.composition.StaleRevisionException;
+import io.apitomy.axiom.app.composition.TurnUndo;
+import io.apitomy.axiom.app.composition.WorkbenchSessions;
 import io.apitomy.axiom.app.validation.ConfigItemType;
 import io.apitomy.axiom.core.entities.CompositionEntity;
 import io.apitomy.axiom.core.entities.CompositionItemEntity;
+import io.apitomy.flow.changeset.ContentRevision;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
@@ -43,7 +59,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * REST implementation of workbench compositions: drafts, revisions, validation and publish.
+ * REST implementation of workbench compositions: drafts, revisions, validation, publish, AI turns and the
+ * token-guarded agent routes.
  */
 @ApplicationScoped
 @RunOnVirtualThread
@@ -60,6 +77,21 @@ public class CompositionsResourceImpl implements CompositionsResource {
 
     @Inject
     CompositionPublisher publisher;
+
+    @Inject
+    CompositionTurns turns;
+
+    @Inject
+    TurnUndo turnUndo;
+
+    @Inject
+    WorkbenchSessions workbenchSessions;
+
+    @Inject
+    SessionTokenGuard tokenGuard;
+
+    @Context
+    HttpHeaders httpHeaders;
 
     /** {@inheritDoc} */
     @Override
@@ -202,6 +234,154 @@ public class CompositionsResourceImpl implements CompositionsResource {
         return result;
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public Composition sendCompositionMessage(long compositionId, CompositionMessage data) {
+        if (data.getMessage() == null || data.getMessage().isBlank()) {
+            throw new IllegalArgumentException("message is required");
+        }
+        List<String> nodeIds = data.getNodeIds() == null ? List.of() : data.getNodeIds();
+        List<String> edgeIds = data.getEdgeIds() == null ? List.of() : data.getEdgeIds();
+        turns.start(compositionId, data.getMessage(), nodeIds, edgeIds);
+        return toBean(service.get(compositionId));
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void interruptComposition(long compositionId) {
+        service.get(compositionId);
+        turns.interrupt(compositionId);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void resolveCompositionChangeSet(long compositionId, CompositionChangeSetResolution data) {
+        if (data.getTurnId() == null || data.getOutcome() == null) {
+            throw new IllegalArgumentException("turnId and outcome are required");
+        }
+        turns.resolve(compositionId, data.getTurnId(), data.getOutcome().value());
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public CompositionUndoResult undoCompositionTurn(long compositionId, String turnId) {
+        TurnUndo.Result undone = turnUndo.undo(compositionId, turnId);
+        CompositionUndoResult result = new CompositionUndoResult();
+        result.setRestored(undone.restored());
+        result.setRemoved(undone.removed());
+        result.setSkipped(undone.skipped());
+        result.setWorkflowBefore(toContentBean(undone.workflowBefore()));
+        result.setWorkflowRestorable(undone.workflowRestorable());
+        return result;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public AgentComposition getAgentComposition(long compositionId) {
+        requireToken(compositionId);
+        CompositionEntity composition = service.get(compositionId);
+        JsonNode workflow = turns.currentWorkflow(compositionId);
+        Map<Long, List<io.apitomy.axiom.app.validation.ConfigProblem>> problems = validator.validateAll(compositionId);
+        AgentComposition result = new AgentComposition();
+        result.setCompositionId(compositionId);
+        result.setTurnId(turns.currentTurnId(compositionId));
+        result.setGoal(composition.goal);
+        List<AgentItemSummary> items = service.items(compositionId).stream().map(item -> {
+            if (ConfigItemType.WORKFLOW.jsonName().equals(item.itemType)) {
+                result.setWorkflowName(item.name);
+            }
+            List<io.apitomy.axiom.app.validation.ConfigProblem> itemProblems =
+                    problems.getOrDefault(item.id, List.of());
+            AgentItemSummary summary = new AgentItemSummary();
+            summary.setType(item.itemType);
+            summary.setName(item.name);
+            summary.setContentRevision(item.contentRevision);
+            summary.setValid(isValid(itemProblems));
+            summary.setProblems(toProblemBeans(itemProblems));
+            return summary;
+        }).toList();
+        result.setItems(items);
+        if (workflow != null) {
+            result.setWorkflow(toContentBean(workflow));
+            result.setWorkflowRevision(ContentRevision.of(workflow));
+        }
+        return result;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public CompositionContent getAgentItem(long compositionId, String itemType, String itemName) {
+        requireToken(compositionId);
+        CompositionItemEntity item = service.items(compositionId).stream()
+                .filter(i -> i.itemType.equals(itemType) && i.name.equals(itemName))
+                .findFirst()
+                .orElseThrow(() -> new CompositionNotFoundException(
+                        "No " + itemType + " named " + itemName + " in composition " + compositionId));
+        return toContentBean(service.contentOf(item));
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public AgentItemResult upsertAgentItem(long compositionId, AgentItemUpsert data) {
+        requireToken(compositionId);
+        if (data.getType() == null || data.getContent() == null) {
+            throw new IllegalArgumentException("type and content are required");
+        }
+        CompositionTurns.AgentWrite write = turns.upsert(compositionId, data.getType().value(),
+                toJson(data.getContent()));
+        AgentItemResult result = new AgentItemResult();
+        result.setType(write.item().itemType);
+        result.setName(write.item().name);
+        result.setContentRevision(write.item().contentRevision);
+        result.setValid(isValid(write.problems()));
+        result.setProblems(toProblemBeans(write.problems()));
+        return result;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void removeAgentItem(long compositionId, String itemType, String itemName) {
+        requireToken(compositionId);
+        turns.remove(compositionId, itemType, itemName);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public AgentChangeSetResult proposeAgentWorkflowChanges(long compositionId, CompositionContent data) {
+        requireToken(compositionId);
+        CompositionTurns.ChangeSetOutcome outcome = turns.applyChangeSet(compositionId, toJson(data));
+        AgentChangeSetResult result = new AgentChangeSetResult();
+        result.setApplied(outcome.applied());
+        result.setContentRevision(outcome.contentRevision());
+        result.setProblems(toProblemBeans(outcome.problems()));
+        if (outcome.error() != null) {
+            ChangeSetError error = new ChangeSetError();
+            error.setCode(outcome.error().code());
+            error.setOpIndex(outcome.error().opIndex());
+            error.setReason(outcome.error().reason());
+            result.setError(error);
+        }
+        return result;
+    }
+
+    private void requireToken(long compositionId) {
+        tokenGuard.require(workbenchSessions.live(compositionId), httpHeaders.getHeaderString(SessionTokenGuard.HEADER));
+    }
+
+    private JsonNode toJson(CompositionContent content) {
+        return mapper.valueToTree(content.getAdditionalProperties());
+    }
+
+    @SuppressWarnings("unchecked")
+    private CompositionContent toContentBean(JsonNode json) {
+        if (json == null) {
+            return null;
+        }
+        CompositionContent content = new CompositionContent();
+        mapper.convertValue(json, Map.class).forEach((k, v) -> content.setAdditionalProperty((String) k, v));
+        return content;
+    }
+
     private static boolean isValid(List<io.apitomy.axiom.app.validation.ConfigProblem> problems) {
         return problems.stream().noneMatch(io.apitomy.axiom.app.validation.ConfigProblem::isError);
     }
@@ -324,5 +504,14 @@ public class CompositionsResourceImpl implements CompositionsResource {
         body.put("message", e.getMessage());
         body.put("problems", problems);
         return Response.status(422).type(MediaType.APPLICATION_JSON).entity(body).build();
+    }
+
+    /**
+     * @param e the exception
+     * @return 503, for example when the workbench agent could not be started
+     */
+    @ServerExceptionMapper
+    public Response mapUnavailable(IllegalStateException e) {
+        return error(503, e.getMessage());
     }
 }

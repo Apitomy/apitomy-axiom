@@ -262,8 +262,20 @@ composition discards its unpublished drafts, after a confirmation.
 - `GET/PUT/DELETE /compositions/{id}/items/{itemId}`. `PUT` takes `{content, baseRevision}` and returns 409
   if `baseRevision` is not current.
 - `GET /compositions/{id}/items/{itemId}/revisions` and `POST .../revisions/{revId}/restore`.
-- `POST /compositions/{id}/workflow/changesets`, for MCP. The body is a `ChangeSet`. It returns
-  `{contentRevision, problems[]}` or a `ChangeSetError`.
+- UI turn routes:
+  - `POST /compositions/{id}/messages`, with `{message, nodeIds?, edgeIds?}`. Starts a turn; 409 if one is
+    running.
+  - `POST /compositions/{id}/interrupt`.
+  - `POST /compositions/{id}/changeset-resolution`, with `{turnId, outcome}`. `outcome` is one of `applied`,
+    `accepted`, `rejected` or `stale`.
+- Agent routes, for MCP. Each requires the `X-Axiom-Session-Token` header of the composition's live
+  workbench session and returns 401 otherwise:
+  - `GET /compositions/{id}/agent/composition`: the turn, goal, current workflow and its revision, and a
+    summary of every item with its problems.
+  - `GET /compositions/{id}/agent/items/{itemType}/{itemName}` and `DELETE` on the same path.
+  - `PUT /compositions/{id}/agent/items`, with `{type, content}`.
+  - `POST /compositions/{id}/agent/workflow/changesets`. The body is a `ChangeSet`. It returns
+    `{applied, contentRevision?, problems[], error?}`, where `error` is a `ChangeSetError`.
 - `POST /compositions/{id}/validate`.
 - `POST /compositions/{id}/test/action-type` and `POST /compositions/{id}/test/tool`.
 - `POST /compositions/{id}/turns/{turnId}/undo`.
@@ -272,9 +284,11 @@ composition discards its unpublished drafts, after a confirmation.
 - `POST /expressions/evaluate`, with body `{expression, scope, eventId?, context?}`. `scope` is one of:
   - `edge-condition`;
   - `action-input`;
+  - `human-task-title`;
+  - `correlation-subscription-key`;
+  - `correlation-event-key`;
   - `receive-event-match`;
-  - `correlation-key`;
-  - `human-task-title`.
+  - `receive-event-output`.
 
   Each scope builds the same EL variables the engine provides at that point.
 - New SSE event types:

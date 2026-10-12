@@ -5734,10 +5734,698 @@
           }
         }
       ]
+    },
+    "/compositions/{compositionId}/messages": {
+      "post": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Send a message to the composition's agent",
+        "description": "Starts an AI turn with the given message and selection.",
+        "operationId": "sendCompositionMessage",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompositionMessage"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The composition with the running turn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Composition"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "A turn is already running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionConflictError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/compositions/{compositionId}/interrupt": {
+      "post": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Interrupt the running turn",
+        "description": "Interrupts the agent's running turn, if any.",
+        "operationId": "interruptComposition",
+        "responses": {
+          "204": {
+            "description": "Interrupted"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/compositions/{compositionId}/changeset-resolution": {
+      "post": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Resolve the pending change set",
+        "description": "Records how the UI resolved the turn's pending workflow change set.",
+        "operationId": "resolveCompositionChangeSet",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompositionChangeSetResolution"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Resolved"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "Not the pending turn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionConflictError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/compositions/{compositionId}/turns/{turnId}/undo": {
+      "post": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Undo an AI turn",
+        "description": "Restores the items an AI turn changed and removes the items it created.",
+        "operationId": "undoCompositionTurn",
+        "responses": {
+          "200": {
+            "description": "Undo result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionUndoResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "The turn cannot be undone",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionConflictError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "turnId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "/compositions/{compositionId}/agent/composition": {
+      "get": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Agent: get the composition",
+        "description": "Returns the turn context, the current workflow and a summary of every item. Requires the `X-Axiom-Session-Token` header of the composition's live workbench session (401 otherwise).",
+        "operationId": "getAgentComposition",
+        "responses": {
+          "200": {
+            "description": "The composition as seen by the agent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentComposition"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session token"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/compositions/{compositionId}/agent/items": {
+      "put": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Agent: create or update an item",
+        "description": "Creates or updates a non-workflow draft item, or the workflow, by name. Requires the `X-Axiom-Session-Token` header of the composition's live workbench session (401 otherwise).",
+        "operationId": "upsertAgentItem",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentItemUpsert"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The written item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentItemResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid item"
+          },
+          "401": {
+            "description": "Missing or invalid session token"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "No running turn, or a conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionConflictError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/compositions/{compositionId}/agent/items/{itemType}/{itemName}": {
+      "get": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Agent: get an item's content",
+        "description": "Returns the draft content of the named item. Requires the `X-Axiom-Session-Token` header of the composition's live workbench session (401 otherwise).",
+        "operationId": "getAgentItem",
+        "responses": {
+          "200": {
+            "description": "Item content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionContent"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session token"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Agent: remove an item",
+        "description": "Removes the named draft item. Requires the `X-Axiom-Session-Token` header of the composition's live workbench session (401 otherwise).",
+        "operationId": "removeAgentItem",
+        "responses": {
+          "204": {
+            "description": "Removed"
+          },
+          "401": {
+            "description": "Missing or invalid session token"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "No running turn, or a conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionConflictError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "itemType",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "itemName",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "/compositions/{compositionId}/agent/workflow/changesets": {
+      "post": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Agent: propose a workflow change set",
+        "description": "Applies (or stages) a Flow change set against the composition's workflow. Requires the `X-Axiom-Session-Token` header of the composition's live workbench session (401 otherwise).",
+        "operationId": "proposeAgentWorkflowChanges",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompositionContent"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Change set result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentChangeSetResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The composition has no workflow"
+          },
+          "401": {
+            "description": "Missing or invalid session token"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "No running turn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionConflictError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
     }
   },
   "components": {
     "schemas": {
+      "CompositionMessage": {
+        "title": "CompositionMessage",
+        "description": "A user message to the composition's agent.",
+        "required": [
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "nodeIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "edgeIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CompositionChangeSetResolution": {
+        "title": "CompositionChangeSetResolution",
+        "description": "How the UI resolved a pending change set.",
+        "required": [
+          "turnId",
+          "outcome"
+        ],
+        "type": "object",
+        "properties": {
+          "turnId": {
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "applied",
+              "accepted",
+              "rejected",
+              "stale"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "CompositionUndoResult": {
+        "title": "CompositionUndoResult",
+        "description": "Result of undoing an AI turn.",
+        "required": [
+          "restored",
+          "removed",
+          "skipped",
+          "workflowRestorable"
+        ],
+        "type": "object",
+        "properties": {
+          "restored": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "removed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "workflowBefore": {
+            "$ref": "#/components/schemas/CompositionContent"
+          },
+          "workflowRestorable": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AgentItemSummary": {
+        "title": "AgentItemSummary",
+        "description": "An item as summarized for the agent.",
+        "required": [
+          "type",
+          "name",
+          "contentRevision",
+          "valid",
+          "problems"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "contentRevision": {
+            "type": "string"
+          },
+          "valid": {
+            "type": "boolean"
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConfigProblem"
+            }
+          }
+        }
+      },
+      "AgentComposition": {
+        "title": "AgentComposition",
+        "description": "The composition as seen by the agent.",
+        "required": [
+          "compositionId",
+          "items"
+        ],
+        "type": "object",
+        "properties": {
+          "compositionId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "turnId": {
+            "type": "string"
+          },
+          "goal": {
+            "type": "string"
+          },
+          "workflowName": {
+            "type": "string"
+          },
+          "workflowRevision": {
+            "type": "string"
+          },
+          "workflow": {
+            "$ref": "#/components/schemas/CompositionContent"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentItemSummary"
+            }
+          }
+        }
+      },
+      "AgentItemUpsert": {
+        "title": "AgentItemUpsert",
+        "description": "An item written by the agent.",
+        "required": [
+          "type",
+          "content"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "enum": [
+              "workflow",
+              "action-type",
+              "tool"
+            ],
+            "type": "string"
+          },
+          "content": {
+            "$ref": "#/components/schemas/CompositionContent"
+          }
+        }
+      },
+      "AgentItemResult": {
+        "title": "AgentItemResult",
+        "description": "Result of an agent item write.",
+        "required": [
+          "type",
+          "name",
+          "contentRevision",
+          "valid",
+          "problems"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "contentRevision": {
+            "type": "string"
+          },
+          "valid": {
+            "type": "boolean"
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConfigProblem"
+            }
+          }
+        }
+      },
+      "ChangeSetError": {
+        "title": "ChangeSetError",
+        "description": "Why a change set was not applied.",
+        "required": [
+          "code",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "opIndex": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "AgentChangeSetResult": {
+        "title": "AgentChangeSetResult",
+        "description": "Result of an agent change set.",
+        "required": [
+          "applied",
+          "problems"
+        ],
+        "type": "object",
+        "properties": {
+          "applied": {
+            "type": "boolean"
+          },
+          "contentRevision": {
+            "type": "string"
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConfigProblem"
+            }
+          },
+          "error": {
+            "$ref": "#/components/schemas/ChangeSetError"
+          }
+        }
+      },
       "LineageGraph": {
         "required": [
           "root",
