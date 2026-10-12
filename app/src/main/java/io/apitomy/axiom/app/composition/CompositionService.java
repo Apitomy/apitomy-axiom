@@ -233,13 +233,31 @@ public class CompositionService {
      */
     @Transactional
     public CompositionItemEntity addBlank(long compositionId, ConfigItemType type, String name) {
+        return addBlank(compositionId, type, name, AUTHOR_USER, null);
+    }
+
+    /**
+     * Adds a new, empty draft, recording its creation revision with the given author and turn.
+     *
+     * @param compositionId the composition id
+     * @param type workflow, action type or tool
+     * @param name the item name
+     * @param author {@link #AUTHOR_USER} or {@link #AUTHOR_AI}
+     * @param turnId the AI turn id, or null
+     * @return the item
+     * @throws CompositionConflictException for a second workflow or a duplicate name
+     */
+    @Transactional
+    public CompositionItemEntity addBlank(long compositionId, ConfigItemType type, String name, String author,
+                                         String turnId) {
         requireSupported(type);
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("'name' is required");
         }
         String trimmed = name.trim();
         checkCanAdd(compositionId, type, trimmed);
-        return insert(compositionId, type, trimmed, CompositionItems.blank(type, trimmed, mapper), null, null);
+        return insert(compositionId, type, trimmed, CompositionItems.blank(type, trimmed, mapper), null, null,
+                author, turnId);
     }
 
     /**
@@ -260,7 +278,8 @@ public class CompositionService {
         }
         checkCanAdd(compositionId, type, name);
         JsonNode content = publishedContent(type, existingId);
-        return insert(compositionId, type, name, content, existingId, CompositionItems.revisionOf(content));
+        return insert(compositionId, type, name, content, existingId, CompositionItems.revisionOf(content),
+                AUTHOR_USER, null);
     }
 
     /**
@@ -392,7 +411,7 @@ public class CompositionService {
     }
 
     private CompositionItemEntity insert(long compositionId, ConfigItemType type, String name, JsonNode content,
-                                         Long baseItemId, String baseRevision) {
+                                         Long baseItemId, String baseRevision, String author, String turnId) {
         CompositionItemEntity item = new CompositionItemEntity();
         item.compositionId = compositionId;
         item.itemType = type.jsonName();
@@ -401,12 +420,13 @@ public class CompositionService {
         item.baseContentRevision = baseRevision;
         item.content = content.toString();
         item.contentRevision = CompositionItems.revisionOf(content);
-        item.lastAuthor = AUTHOR_USER;
+        item.lastAuthor = author;
+        item.lastTurnId = turnId;
         item.createdOn = Instant.now();
         item.updatedOn = item.createdOn;
         item.persist();
-        addRevision(item, AUTHOR_USER, null);
-        fireAfterCommit(SseEvent.compositionItemChanged(compositionId, item.id, item.contentRevision, AUTHOR_USER, null));
+        addRevision(item, author, turnId);
+        fireAfterCommit(SseEvent.compositionItemChanged(compositionId, item.id, item.contentRevision, author, turnId));
         return item;
     }
 

@@ -178,6 +178,46 @@ class CompositionTurnsTest {
     }
 
     @Test
+    void earlyResolutionOfARetryTurnKeepsItsRetryFlag() throws Exception {
+        CompositionEntity composition = withWorkflow();
+        String base = ContentRevision.of(turns.currentWorkflow(composition.id));
+        String turnId = turns.start(composition.id, "rename", List.of(), List.of());
+        turns.applyChangeSet(composition.id, renameStart(base, "Begin"));
+        turns.onSessionEvent(new WorkbenchSessionEvent(composition.id, WorkbenchSessionEvent.Kind.TURN_COMPLETE, null));
+        turns.resolve(composition.id, turnId, "stale");
+        String retryTurn = reload(composition.id).currentTurnId;
+
+        // A resolution that does not match the pending change set must not clear the retry flag.
+        turns.resolve(composition.id, retryTurn, "applied");
+        String retryBase = ContentRevision.of(turns.currentWorkflow(composition.id));
+        turns.applyChangeSet(composition.id, renameStart(retryBase, "Again"));
+        turns.onSessionEvent(new WorkbenchSessionEvent(composition.id, WorkbenchSessionEvent.Kind.TURN_COMPLETE, null));
+        turns.resolve(composition.id, retryTurn, "stale");
+        verify(sessions).notice(composition.id, CompositionTurns.SECOND_STALE_NOTICE);
+        verify(sessions, times(2)).send(anyLong(), anyString());
+    }
+
+    @Test
+    void retryTurnWithoutOpsLeavesNoResidue() throws Exception {
+        CompositionEntity composition = withWorkflow();
+        String base = ContentRevision.of(turns.currentWorkflow(composition.id));
+        String turnId = turns.start(composition.id, "rename", List.of(), List.of());
+        turns.applyChangeSet(composition.id, renameStart(base, "Begin"));
+        turns.onSessionEvent(new WorkbenchSessionEvent(composition.id, WorkbenchSessionEvent.Kind.TURN_COMPLETE, null));
+        turns.resolve(composition.id, turnId, "stale");
+        turns.onSessionEvent(new WorkbenchSessionEvent(composition.id, WorkbenchSessionEvent.Kind.TURN_COMPLETE, null));
+        assertNull(reload(composition.id).pendingChangeSet);
+
+        String next = turns.start(composition.id, "rename again", List.of(), List.of());
+        String nextBase = ContentRevision.of(turns.currentWorkflow(composition.id));
+        turns.applyChangeSet(composition.id, renameStart(nextBase, "Again"));
+        turns.onSessionEvent(new WorkbenchSessionEvent(composition.id, WorkbenchSessionEvent.Kind.TURN_COMPLETE, null));
+        turns.resolve(composition.id, next, "stale");
+        verify(sessions, never()).notice(eq(composition.id), anyString());
+        verify(sessions, times(2)).send(eq(composition.id), org.mockito.ArgumentMatchers.endsWith(CompositionTurns.STALE_RETRY_PROMPT));
+    }
+
+    @Test
     void acceptedResolutionClearsPendingAndIgnoresOtherTurns() throws Exception {
         CompositionEntity composition = withWorkflow();
         String base = ContentRevision.of(turns.currentWorkflow(composition.id));

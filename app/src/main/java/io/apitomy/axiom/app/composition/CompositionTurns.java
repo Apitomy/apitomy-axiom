@@ -8,7 +8,6 @@ import io.apitomy.axiom.app.validation.ConfigItemType;
 import io.apitomy.axiom.app.validation.ConfigProblem;
 import io.apitomy.axiom.core.entities.CompositionEntity;
 import io.apitomy.axiom.core.entities.CompositionItemEntity;
-import io.apitomy.axiom.core.entities.CompositionRevisionEntity;
 import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.flow.changeset.ChangeSetError;
 import io.apitomy.flow.changeset.ChangeSetResult;
@@ -132,6 +131,7 @@ public class CompositionTurns {
             throw new IllegalArgumentException("'message' is required");
         }
         String turnId = UUID.randomUUID().toString();
+        Turn turn = new Turn(turnId, mapper.createArrayNode());
         String context = QuarkusTransaction.requiringNew().call(() -> {
             CompositionEntity composition = CompositionEntity.findById(compositionId, LockModeType.PESSIMISTIC_WRITE);
             if (composition == null) {
@@ -147,14 +147,13 @@ public class CompositionTurns {
             composition.currentTurnId = turnId;
             composition.lastTurnStartedOn = now;
             composition.updatedOn = now;
-            Turn turn = new Turn(turnId, mapper.createArrayNode());
             CompositionItemEntity workflow = workflowItem(compositionId);
             if (workflow != null) {
                 setBase(turn, workflow);
             }
-            turns.put(compositionId, turn);
             return text;
         });
+        turns.put(compositionId, turn);
         sseEvents.fire(SseEvent.compositionTurn(compositionId, turnId, CompositionEntity.TURN_AI_WORKING));
         String recap = sessions.takeRecap(compositionId);
         try {
@@ -226,17 +225,10 @@ public class CompositionTurns {
         AgentWrite write = QuarkusTransaction.requiringNew().call(() -> {
             CompositionItemEntity existing = itemType == ConfigItemType.WORKFLOW ? null
                     : find(compositionId, itemType, name);
-            long itemId = existing != null ? existing.id : service.addBlank(compositionId, itemType, name).id;
+            long itemId = existing != null ? existing.id : service.addBlank(compositionId, itemType, name,
+                    CompositionService.AUTHOR_AI, turn.turnId).id;
             CompositionItemEntity saved = service.save(compositionId, itemId, content, null,
                     CompositionService.AUTHOR_AI, turn.turnId);
-            if (existing == null) {
-                // addBlank recorded the item as a user creation; the agent created it in this turn. When the
-                // content equals the blank, save records no new revision, so tag the item and its first revision.
-                saved.lastAuthor = CompositionService.AUTHOR_AI;
-                saved.lastTurnId = turn.turnId;
-                CompositionRevisionEntity.update("author = ?1, turnId = ?2 where itemId = ?3 and author = ?4",
-                        CompositionService.AUTHOR_AI, turn.turnId, saved.id, CompositionService.AUTHOR_USER);
-            }
             List<ConfigProblem> problems = validator.validateContent(compositionId, itemType, saved.name, content);
             return new AgentWrite(saved, problems);
         });
@@ -277,7 +269,7 @@ public class CompositionTurns {
     public synchronized JsonNode currentWorkflow(long compositionId) {
         Turn turn = turns.get(compositionId);
         if (turn != null && turn.working != null) {
-            return turn.working;
+            return turn.working.deepCopy();
         }
         return QuarkusTransaction.requiringNew().call(() -> {
             CompositionItemEntity workflow = workflowItem(compositionId);
@@ -313,8 +305,11 @@ public class CompositionTurns {
             composition.updatedOn = Instant.now();
             return true;
         });
+        if (!cleared) {
+            return;
+        }
         boolean wasRetry = staleRetryTurnIds.remove(turnId);
-        if (!cleared || !"stale".equals(outcome)) {
+        if (!"stale".equals(outcome)) {
             return;
         }
         if (wasRetry || turns.containsKey(compositionId)) {
@@ -383,6 +378,9 @@ public class CompositionTurns {
             composition.updatedOn = Instant.now();
             return true;
         });
+        if (turn != null && pending == null) {
+            staleRetryTurnIds.remove(turn.turnId);
+        }
         if (turn == null || !exists) {
             return;
         }
@@ -391,7 +389,6 @@ public class CompositionTurns {
         }
         sseEvents.fire(SseEvent.compositionTurn(compositionId, turn.turnId, CompositionEntity.TURN_IDLE));
         if (kind == WorkbenchSessionEvent.Kind.FAILED) {
-            staleRetryTurnIds.remove(turn.turnId);
             sessions.notice(compositionId, FAILED_NOTICE_PREFIX + detail + FAILED_NOTICE_SUFFIX);
         }
     }
