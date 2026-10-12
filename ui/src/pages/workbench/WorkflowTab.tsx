@@ -212,7 +212,10 @@ export function WorkflowTab(props: WorkflowTabProps) {
             timer.current = null;
             void startSave();
         }
-        proposals.current.forEach((entry, id) => {
+        // Snapshot and clear first: a synchronous onProposalResolved from withdraw() then finds nothing.
+        const staged = Array.from(proposals.current.entries());
+        proposals.current.clear();
+        staged.forEach(([id, entry]) => {
             try {
                 lastEditorHandle.current?.withdraw(id);
             } catch (e) {
@@ -220,7 +223,6 @@ export function WorkflowTab(props: WorkflowTabProps) {
             }
             void resolve(entry.turnId, "rejected", entry.fromPending);
         });
-        proposals.current.clear();
     }, [startSave, resolve]);
 
     const onChange = useCallback((workflow: Workflow, meta: { origin: string }) => {
@@ -241,6 +243,8 @@ export function WorkflowTab(props: WorkflowTabProps) {
             }
         } else {
             untaggedAgentChange.current = false;
+            // A user/host change: any expected agent change did not arrive, so do not tag a later one.
+            expectedAgentTurn.current = undefined;
         }
         if (timer.current) {
             clearTimeout(timer.current);
@@ -391,9 +395,11 @@ export function WorkflowTab(props: WorkflowTabProps) {
                 <Alert isInline variant="danger" title={applyError}
                     actionLinks={<AlertActionLink onClick={() => setApplyError(null)}>Dismiss</AlertActionLink>} />
             )}
-            <WorkflowEditor ref={setEditorHandle} workflow={props.initialContent} theme={theme} highlightApplied
-                appliedChangeLayout={props.applyLayout} spi={spi} onChange={onChange}
-                onProposalResolved={onProposalResolved} onSelectionChange={onSelectionChange} />
+            <div className="axiom-workbench__workflow-editor">
+                <WorkflowEditor ref={setEditorHandle} workflow={props.initialContent} theme={theme} highlightApplied
+                    appliedChangeLayout={props.applyLayout} spi={spi} onChange={onChange}
+                    onProposalResolved={onProposalResolved} onSelectionChange={onSelectionChange} />
+            </div>
         </div>
     );
 }

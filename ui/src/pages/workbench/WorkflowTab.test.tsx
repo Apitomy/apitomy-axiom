@@ -118,4 +118,34 @@ describe("WorkflowTab", () => {
         expect(handle.withdraw).toHaveBeenCalledWith("cs7");
         await waitFor(() => expect(resolve).toHaveBeenCalledWith(1, { turnId: "t7", outcome: "rejected", fromPending: false }));
     });
+
+    it("resolves a staged proposal once when withdraw reports it synchronously on unmount", async () => {
+        handle.propose.mockReturnValue({ status: "staged" });
+        handle.withdraw.mockImplementation((id: string) => editorProps.onProposalResolved(id, "withdrawn"));
+        const resolve = vi.spyOn(c, "resolveChangeSet").mockResolvedValue(undefined);
+        const { unmount } = render(<WorkflowTab {...base} composition={{ ...base.composition, applyMode: "review" }}
+            pending={{ turnId: "t8", changeSet: { id: "cs8" } as never, fromPending: false }} />);
+        await waitFor(() => expect(handle.propose).toHaveBeenCalled());
+        unmount();
+        await waitFor(() => expect(resolve).toHaveBeenCalledTimes(1));
+        expect(resolve).toHaveBeenCalledWith(1, { turnId: "t8", outcome: "rejected", fromPending: false });
+    });
+
+    it("drops the expected agent turn when a user change arrives first", async () => {
+        handle.propose.mockReturnValue({ status: "staged" });
+        vi.spyOn(c, "resolveChangeSet").mockResolvedValue(undefined);
+        const save = vi.spyOn(c, "saveItem").mockResolvedValue({ ...base.item, contentRevision: "r1" });
+        render(<WorkflowTab {...base} composition={{ ...base.composition, applyMode: "review" }}
+            pending={{ turnId: "t9", changeSet: { id: "cs9" } as never, fromPending: false }} />);
+        await waitFor(() => expect(handle.propose).toHaveBeenCalled());
+        act(() => editorProps.onProposalResolved("cs9", "accepted"));
+        const user = { id: "w", name: "wf", nodes: [{ id: "u" }], edges: [] };
+        act(() => editorProps.onChange(user, { contentRevision: "x1", origin: "user" }));
+        await waitFor(() => expect(save).toHaveBeenCalledTimes(1), { timeout: 2000 });
+        expect(save.mock.calls[0][2]).toEqual({ content: user, baseRevision: "r0" });
+        const agent = { id: "w", name: "wf", nodes: [], edges: [] };
+        act(() => editorProps.onChange(agent, { contentRevision: "x2", origin: "agent:axiom-workbench" }));
+        await waitFor(() => expect(save).toHaveBeenCalledTimes(2), { timeout: 2000 });
+        expect(save.mock.calls[1][2]).toEqual({ content: agent, baseRevision: "r1" });
+    });
 });
