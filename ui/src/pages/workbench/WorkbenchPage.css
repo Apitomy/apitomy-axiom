@@ -1,0 +1,81 @@
+.axiom-workbench {
+    display: grid;
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
+}
+
+.axiom-workbench__toolbar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: var(--pf-t--global--spacer--md, 16px);
+    padding: var(--pf-t--global--spacer--sm, 8px) var(--pf-t--global--spacer--md, 16px);
+    border-bottom: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+}
+
+.axiom-workbench__spacer {
+    flex: 1;
+}
+
+.axiom-workbench__notice {
+    grid-column: 1 / -1;
+}
+
+.axiom-workbench__left,
+.axiom-workbench__right,
+.axiom-workbench__centre {
+    grid-row: 4;
+    min-height: 0;
+    overflow: auto;
+}
+
+.axiom-workbench__centre {
+    display: flex;
+    flex-direction: column;
+}
+
+.axiom-workbench__tabs {
+    flex-shrink: 0;
+}
+
+.axiom-workbench__placeholder {
+    padding: var(--pf-t--global--spacer--md, 16px);
+}
+
+.axiom-workbench__problems {
+    margin-top: auto;
+    padding: var(--pf-t--global--spacer--xs, 4px) var(--pf-t--global--spacer--md, 16px);
+    border-top: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+}
+
+.axiom-workbench__items {
+    list-style: none;
+    padding: 0 var(--pf-t--global--spacer--sm, 8px);
+}
+
+.axiom-workbench__splitter {
+    grid-row: 4;
+    cursor: col-resize;
+}
+
+.axiom-workbench__splitter:hover,
+.axiom-workbench__splitter:active {
+    background-color: var(--pf-t--global--color--brand--default, #0066cc);
+    opacity: 0.4;
+}
+
+.axiom-workbench__pulse {
+    display: block;
+    width: 10px;
+    height: 10px;
+    margin: 8px auto;
+    border-radius: 50%;
+    background-color: var(--pf-t--global--color--brand--default, #0066cc);
+    animation: axiom-workbench-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes axiom-workbench-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
