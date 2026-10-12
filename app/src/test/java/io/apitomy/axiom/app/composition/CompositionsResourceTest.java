@@ -101,4 +101,18 @@ class CompositionsResourceTest {
         given().delete(BASE + "/{id}/items/{itemId}", id, itemId).then().statusCode(204);
         given().get(BASE + "/{id}/items", id).then().statusCode(200).body("$", hasSize(0));
     }
+
+    @Test
+    void saveWithTurnIdIsRecordedAsAi() {
+        long id = createComposition();
+        JsonPath tool = addItem(id, "tool", "rest-ai-tool");
+        Map<String, Object> content = tool.getMap("content");
+        content.put("description", "applied from AI change set");
+        given().contentType(ContentType.JSON)
+                .body(Map.of("content", content, "baseRevision", tool.getString("contentRevision"), "turnId", "turn-9"))
+                .put(BASE + "/{id}/items/{itemId}", id, tool.getLong("id")).then().statusCode(200)
+                .body("lastAuthor", equalTo("ai")).body("lastTurnId", equalTo("turn-9"));
+        given().get(BASE + "/{id}", id).then().statusCode(200)
+                .body("pendingChangeSet", nullValue()).body("currentTurnId", nullValue());
+    }
 }

@@ -168,6 +168,38 @@ public record SseEvent(
     }
 
     /**
+     * Creates a composition-turn event, emitted when an AI turn changes state.
+     *
+     * @param compositionId the composition id
+     * @param turnId        the turn id
+     * @param state         the new turn state
+     * @return the SSE event
+     */
+    public static SseEvent compositionTurn(long compositionId, String turnId, String state) {
+        return new SseEvent("composition-turn",
+                "{\"compositionId\":" + compositionId
+                        + ",\"turnId\":" + (turnId == null ? "null" : "\"" + escapeJson(turnId) + "\"")
+                        + ",\"state\":\"" + escapeJson(state) + "\""
+                        + "}");
+    }
+
+    /**
+     * Creates a composition-changeset event, carrying an AI turn's change set for review.
+     *
+     * @param compositionId the composition id
+     * @param turnId        the turn id
+     * @param changeSetJson the change set, as raw JSON (embedded unescaped)
+     * @return the SSE event
+     */
+    public static SseEvent compositionChangeSet(long compositionId, String turnId, String changeSetJson) {
+        return new SseEvent("composition-changeset",
+                "{\"compositionId\":" + compositionId
+                        + ",\"turnId\":" + (turnId == null ? "null" : "\"" + escapeJson(turnId) + "\"")
+                        + ",\"changeSet\":" + (changeSetJson == null ? "null" : changeSetJson)
+                        + "}");
+    }
+
+    /**
      * Creates a stream-event-received event, indicating a new event
      * has been added to the event stream.
      *

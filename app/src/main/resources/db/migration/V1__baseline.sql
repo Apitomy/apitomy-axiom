@@ -181,6 +181,7 @@
     create table composition (
         created_on timestamp(6) not null,
         id bigint not null,
+        last_turn_started_on timestamp(6),
         updated_on timestamp(6) not null,
         apply_mode varchar(255) not null,
         assistant_session_id varchar(255),

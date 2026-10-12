@@ -1,5 +1,6 @@
 package io.apitomy.axiom.app.rest;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.CompositionsResource;
@@ -122,8 +123,9 @@ public class CompositionsResourceImpl implements CompositionsResource {
     public CompositionItem updateCompositionItem(long compositionId, long itemId, CompositionItemUpdate data) {
         JsonNode content = data.getContent() == null ? null
                 : mapper.valueToTree(data.getContent().getAdditionalProperties());
-        return toBean(service.save(compositionId, itemId, content, data.getBaseRevision(),
-                CompositionService.AUTHOR_USER, null), true);
+        String turnId = data.getTurnId();
+        String author = turnId == null ? CompositionService.AUTHOR_USER : CompositionService.AUTHOR_AI;
+        return toBean(service.save(compositionId, itemId, content, data.getBaseRevision(), author, turnId), true);
     }
 
     /** {@inheritDoc} */
@@ -215,6 +217,7 @@ public class CompositionsResourceImpl implements CompositionsResource {
         }).toList();
     }
 
+    @SuppressWarnings("unchecked")
     private Composition toBean(CompositionEntity entity) {
         Composition bean = new Composition();
         bean.setId(entity.id);
@@ -227,6 +230,18 @@ public class CompositionsResourceImpl implements CompositionsResource {
         bean.setApplyMode(Composition.ApplyMode.fromValue(entity.applyMode));
         bean.setCreatedAt(Date.from(entity.createdOn));
         bean.setUpdatedAt(Date.from(entity.updatedOn));
+        bean.setCurrentTurnId(entity.currentTurnId);
+        bean.setPendingTurnId(entity.pendingTurnId);
+        if (entity.pendingChangeSet != null) {
+            try {
+                CompositionContent changeSet = new CompositionContent();
+                mapper.convertValue(mapper.readTree(entity.pendingChangeSet), Map.class)
+                        .forEach((k, v) -> changeSet.setAdditionalProperty((String) k, v));
+                bean.setPendingChangeSet(changeSet);
+            } catch (JsonProcessingException e) {
+                throw new IllegalStateException("Invalid pending change set JSON", e);
+            }
+        }
         return bean;
     }
 

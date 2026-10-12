@@ -10137,6 +10137,18 @@
           "updatedAt": {
             "format": "date-time",
             "type": "string"
+          },
+          "currentTurnId": {
+            "description": "The id of the AI turn in progress, if any",
+            "type": "string"
+          },
+          "pendingTurnId": {
+            "description": "The id of the AI turn whose change set awaits review, if any",
+            "type": "string"
+          },
+          "pendingChangeSet": {
+            "$ref": "#/components/schemas/CompositionContent",
+            "description": "The combined change set JSON awaiting review"
           }
         }
       },
@@ -10277,6 +10289,10 @@
           },
           "baseRevision": {
             "description": "The contentRevision this edit was based on",
+            "type": "string"
+          },
+          "turnId": {
+            "description": "Set when saving the editor's application of an AI change set; the revision is recorded with author ai",
             "type": "string"
           }
         }

@@ -52,6 +52,10 @@ public class CompositionEntity extends PanacheEntity {
     @Column(name = "pending_turn_id")
     public String pendingTurnId;
 
+    /** When the most recent AI turn started; user edits after it are summarized for the next turn. */
+    @Column(name = "last_turn_started_on")
+    public Instant lastTurnStartedOn;
+
     @Column(name = "created_on", nullable = false)
     public Instant createdOn;
 
