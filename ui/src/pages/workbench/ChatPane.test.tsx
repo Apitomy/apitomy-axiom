@@ -33,6 +33,15 @@ describe("ChatPane", () => {
         expect(await screen.findByText(/tool\/t/)).toBeTruthy();
     });
 
+    it("mentions the restored workflow in the undo summary", async () => {
+        const before = { id: "w", name: "wf", nodes: [], edges: [] };
+        vi.spyOn(c, "undoTurn").mockResolvedValue({ restored: [], removed: [], skipped: [],
+            workflowBefore: before, workflowRestorable: true } as never);
+        render(<ChatPane {...props} />);
+        fireEvent.click(screen.getByRole("button", { name: /undo ai turn/i }));
+        expect(await screen.findByText(/Restored: workflow/)).toBeTruthy();
+    });
+
     it("disables the chat while the AI works and shows session errors", () => {
         const { rerender } = render(<ChatPane {...props} composition={{ ...composition, turnState: "ai-working" }} />);
         expect(chatProps.disabledReason).toBe("The AI is working…");

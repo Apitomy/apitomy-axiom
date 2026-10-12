@@ -23,9 +23,10 @@ export interface ChatPaneProps {
     beforeUndo?: () => Promise<void>;
 }
 
-function summarise(result: UndoResult): string {
+function summarise(result: UndoResult, workflowRestored: boolean): string {
     const part = (label: string, list: string[]) => `${label}: ${list.length > 0 ? list.join(", ") : "none"}`;
-    return [part("Restored", result.restored), part("Removed", result.removed), part("Skipped", result.skipped)]
+    const restored: string[] = workflowRestored ? ["workflow", ...result.restored] : result.restored;
+    return [part("Restored", restored), part("Removed", result.removed), part("Skipped", result.skipped)]
         .join(" · ");
 }
 
@@ -74,7 +75,7 @@ export function ChatPane(props: ChatPaneProps) {
             if (plan.replaceWorkflow) {
                 props.onReplaceWorkflow(plan.replaceWorkflow);
             }
-            setNotice({ variant: "info", title: plan.message, body: summarise(result) });
+            setNotice({ variant: "info", title: plan.message, body: summarise(result, plan.replaceWorkflow !== null) });
             setUndoneTurnId(turnId);
             props.onUndone();
         } catch (e) {
