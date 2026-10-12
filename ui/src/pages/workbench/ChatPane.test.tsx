@@ -62,4 +62,11 @@ describe("ChatPane", () => {
         rerender(<ChatPane {...props} lastCompletedTurnId="t2" />);
         expect(screen.getByRole("button", { name: /undo ai turn/i })).toBeTruthy();
     });
+
+    it("rejects /clear without sending a composition turn", async () => {
+        const send = vi.spyOn(c, "sendCompositionMessage").mockResolvedValue(composition);
+        render(<ChatPane {...props} />);
+        await expect(chatProps.onSend("  /clear ")).rejects.toThrow("Clearing the conversation isn't supported in the workbench.");
+        expect(send).not.toHaveBeenCalled();
+    });
 });

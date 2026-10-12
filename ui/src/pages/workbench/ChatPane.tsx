@@ -50,6 +50,9 @@ export function ChatPane(props: ChatPaneProps) {
     }
 
     const onSend = async (message: string): Promise<void> => {
+        if (message.trim() === "/clear") {
+            throw new Error("Clearing the conversation isn't supported in the workbench.");
+        }
         const sel = await props.beforeSend();
         try {
             await sendCompositionMessage(composition.id, { message, ...sel });
