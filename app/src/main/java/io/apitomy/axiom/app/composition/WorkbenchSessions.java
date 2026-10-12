@@ -8,6 +8,7 @@ import io.apitomy.axiom.app.assistant.AssistantSessionManager;
 import io.apitomy.axiom.app.assistant.HistoryJournal;
 import io.apitomy.axiom.core.entities.CompositionEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
@@ -20,6 +21,11 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Binds each workbench composition to one agent session, restores its conversation after a restart and
@@ -29,6 +35,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * new transactions. They must be called outside any transaction: inside one they could miss the caller's
  * uncommitted rows, block on its row locks, or have the caller's stale entity overwrite the new binding.
  * {@code ensure} and {@code send} enforce this.
+ * <p>
+ * {@link WorkbenchSessionEvent}s are fired on a single dedicated thread, never on the session's reader thread:
+ * the reader thread dispatches session events while holding the session's event lock, and the observers take
+ * their own locks, so firing inline could deadlock with a thread that holds an observer lock and sends a message.
+ * One thread preserves the event order of each composition.
  */
 @ApplicationScoped
 public class WorkbenchSessions {
@@ -55,6 +66,12 @@ public class WorkbenchSessions {
 
     private final ConcurrentHashMap<Long, String> recaps = new ConcurrentHashMap<>();
 
+    private final ExecutorService eventExecutor = Executors.newSingleThreadExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "workbench-session-events");
+        thread.setDaemon(true);
+        return thread;
+    });
+
     /**
      * @param compositionId the composition id
      * @return the composition's running session, or null
@@ -74,8 +91,9 @@ public class WorkbenchSessions {
      *
      * @param compositionId the composition id
      * @return the session
-     * @throws IllegalStateException if the agent could not be started, or if called inside a transaction (the
-     *         binding is read and written in new transactions, see the class docs)
+     * @throws AgentUnavailableException if the agent could not be started
+     * @throws IllegalStateException if called inside a transaction (the binding is read and written in new
+     *         transactions, see the class docs)
      */
     public synchronized AssistantSession ensure(long compositionId) {
         requireNoTransaction("ensure");
@@ -95,7 +113,7 @@ public class WorkbenchSessions {
                 seed = HistoryJournal.load(previousDir.resolve(HistoryJournal.FILE_NAME), mapper);
             }
             AssistantSession session = manager.createSession(composition.name, TEMPLATE_ID, null, compositionId, seed);
-            session.addListener(event -> onEvent(compositionId, event));
+            session.addListener(event -> onEvent(compositionId, session, event));
             String sessionId = session.getId();
             QuarkusTransaction.requiringNew().run(() -> {
                 CompositionEntity entity = CompositionEntity.findById(compositionId);
@@ -109,8 +127,8 @@ public class WorkbenchSessions {
                 recaps.put(compositionId, recap(composition.goal, seed));
             }
             return session;
-        } catch (IOException e) {
-            throw new IllegalStateException("Could not start the workbench agent: " + e.getMessage(), e);
+        } catch (IOException | RuntimeException e) {
+            throw new AgentUnavailableException("Could not start the workbench agent: " + e.getMessage(), e);
         }
     }
 
@@ -125,11 +143,25 @@ public class WorkbenchSessions {
     }
 
     /**
+     * Starts the composition's agent if needed and returns the index the next session event will get. Every
+     * event of an exchange started by a following {@link #send} has at least this index.
+     *
+     * @param compositionId the composition id
+     * @return the session's current event count
+     * @throws AgentUnavailableException if the agent could not be started
+     * @throws IllegalStateException if called inside a transaction (see the class docs)
+     */
+    public int nextEventIndex(long compositionId) {
+        return ensure(compositionId).getEventCount();
+    }
+
+    /**
      * Sends a user message to the composition's agent, starting it if needed.
      *
      * @param compositionId the composition id
      * @param text the message
      * @throws IOException if the message could not be sent
+     * @throws AgentUnavailableException if the agent could not be started
      * @throws IllegalStateException if called inside a transaction (see the class docs)
      */
     public void send(long compositionId, String text) throws IOException {
@@ -169,14 +201,46 @@ public class WorkbenchSessions {
      * @param compositionId the composition id
      */
     public void discard(long compositionId) {
-        recaps.remove(compositionId);
         CompositionEntity composition = CompositionEntity.findById(compositionId);
-        if (composition == null || composition.assistantSessionId == null) {
+        discard(compositionId, composition == null ? null : composition.assistantSessionId);
+    }
+
+    /**
+     * Destroys a session that was bound to a composition and deletes its directory. Does not touch the database,
+     * so it can run after the composition was deleted.
+     *
+     * @param compositionId the composition id
+     * @param sessionId the bound session id, or null
+     */
+    public void discard(long compositionId, String sessionId) {
+        recaps.remove(compositionId);
+        if (sessionId == null) {
             return;
         }
-        String sessionId = composition.assistantSessionId;
         manager.destroySession(sessionId, false);
         contextBuilder.deleteSessionDirectory(AssistantSessionManager.sessionDirectory(sessionId));
+    }
+
+    /**
+     * Waits until every session event handed off so far has been delivered. For tests.
+     */
+    void awaitEventsForTests() {
+        try {
+            eventExecutor.submit(() -> { }).get(10, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        } catch (ExecutionException | TimeoutException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /**
+     * Stops the event thread.
+     */
+    @PreDestroy
+    void shutdown() {
+        eventExecutor.shutdownNow();
     }
 
     private static void requireNoTransaction(String method) {
@@ -185,28 +249,41 @@ public class WorkbenchSessions {
         }
     }
 
-    private void onEvent(long compositionId, SseEvent event) {
+    /**
+     * Runs on the thread that added the event, inside the session's event lock: translates the event, captures
+     * its index and hands it to the event thread.
+     */
+    private void onEvent(long compositionId, AssistantSession session, SseEvent event) {
+        WorkbenchSessionEvent translated = translate(compositionId, session.getEventCount() - 1, event);
+        if (translated == null) {
+            return;
+        }
         try {
-            switch (event.type()) {
-                case "turn_complete" -> events.fire(
-                        new WorkbenchSessionEvent(compositionId, WorkbenchSessionEvent.Kind.TURN_COMPLETE, null));
-                case "session_ended" -> events.fire(new WorkbenchSessionEvent(compositionId,
-                        WorkbenchSessionEvent.Kind.FAILED,
-                        event.data().path("message").asText("The agent session ended")));
-                case "session_error" -> {
-                    if (!"ProviderRetry".equals(event.data().path("name").asText())) {
-                        events.fire(new WorkbenchSessionEvent(compositionId, WorkbenchSessionEvent.Kind.FAILED,
-                                event.data().path("message").asText(null)));
-                    }
+            eventExecutor.execute(() -> {
+                try {
+                    events.fire(translated);
+                } catch (RuntimeException e) {
+                    LOG.warnf(e, "Could not deliver workbench session event %s for composition %d", event.type(),
+                            compositionId);
                 }
-                default -> {
-                    // not relevant to the turn loop
-                }
-            }
+            });
         } catch (RuntimeException e) {
-            LOG.warnf(e, "Could not deliver workbench session event %s for composition %d", event.type(),
+            LOG.warnf(e, "Could not queue workbench session event %s for composition %d", event.type(),
                     compositionId);
         }
+    }
+
+    private static WorkbenchSessionEvent translate(long compositionId, int eventIndex, SseEvent event) {
+        return switch (event.type()) {
+            case "turn_complete" -> new WorkbenchSessionEvent(compositionId, WorkbenchSessionEvent.Kind.TURN_COMPLETE,
+                    null, eventIndex);
+            case "session_ended" -> new WorkbenchSessionEvent(compositionId, WorkbenchSessionEvent.Kind.FAILED,
+                    event.data().path("message").asText("The agent session ended"), eventIndex);
+            case "session_error" -> "ProviderRetry".equals(event.data().path("name").asText()) ? null
+                    : new WorkbenchSessionEvent(compositionId, WorkbenchSessionEvent.Kind.FAILED,
+                            event.data().path("message").asText(null), eventIndex);
+            default -> null;
+        };
     }
 
     private static String recap(String goal, List<SseEvent> history) {

@@ -115,4 +115,16 @@ class CompositionsResourceTest {
         given().get(BASE + "/{id}", id).then().statusCode(200)
                 .body("pendingChangeSet", nullValue()).body("currentTurnId", nullValue());
     }
+
+    @Test
+    void saveWithBlankTurnIdIsRecordedAsUser() {
+        long id = createComposition();
+        JsonPath tool = addItem(id, "tool", "rest-blank-turn-tool");
+        Map<String, Object> content = tool.getMap("content");
+        content.put("description", "edited");
+        given().contentType(ContentType.JSON)
+                .body(Map.of("content", content, "baseRevision", tool.getString("contentRevision"), "turnId", " "))
+                .put(BASE + "/{id}/items/{itemId}", id, tool.getLong("id")).then().statusCode(200)
+                .body("lastAuthor", equalTo("user")).body("lastTurnId", nullValue());
+    }
 }

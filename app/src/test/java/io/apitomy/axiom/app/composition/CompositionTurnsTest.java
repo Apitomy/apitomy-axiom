@@ -16,7 +16,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.io.IOException;
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -28,6 +35,9 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -52,6 +62,7 @@ class CompositionTurnsTest {
 
     @AfterEach
     void cleanUp() {
+        turns.setInterruptTimeoutForTests(null);
         QuarkusTransaction.requiringNew().call(() -> CompositionEntity.<CompositionEntity>listAll())
                 .forEach(c -> turns.onSessionEvent(new WorkbenchSessionEvent(c.id, WorkbenchSessionEvent.Kind.FAILED, "cleanup")));
         QuarkusTransaction.requiringNew().run(() -> {
@@ -230,5 +241,127 @@ class CompositionTurnsTest {
         assertNull(reload(composition.id).pendingChangeSet);
         verify(sessions, never()).notice(eq(composition.id), anyString());
         verify(sessions, atLeastOnce()).send(anyLong(), anyString());
+    }
+
+    @Test
+    void sendRunsOutsideTheMonitorSoSessionEventsAreNotBlocked() throws Exception {
+        CompositionEntity composition = withWorkflow();
+        CountDownLatch sending = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            sending.countDown();
+            assertTrue(release.await(10, TimeUnit.SECONDS));
+            return null;
+        }).when(sessions).send(eq(composition.id), anyString());
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            Future<String> started = pool.submit(() -> turns.start(composition.id, "hi", List.of(), List.of()));
+            assertTrue(sending.await(10, TimeUnit.SECONDS));
+            // While send blocks (as when it waits on the session's event lock), a session event must get through.
+            Future<?> delivered = pool.submit(() -> turns.onSessionEvent(new WorkbenchSessionEvent(composition.id,
+                    WorkbenchSessionEvent.Kind.TURN_COMPLETE, null, -1)));
+            delivered.get(5, TimeUnit.SECONDS);
+            release.countDown();
+            String turnId = started.get(10, TimeUnit.SECONDS);
+            // The event predates the turn's message, so the turn is still running.
+            assertEquals(turnId, turns.currentTurnId(composition.id));
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void completionFromAnEarlierExchangeIsIgnored() throws Exception {
+        CompositionEntity composition = withWorkflow();
+        when(sessions.nextEventIndex(composition.id)).thenReturn(10);
+        String turnId = turns.start(composition.id, "hi", List.of(), List.of());
+        turns.onSessionEvent(new WorkbenchSessionEvent(composition.id, WorkbenchSessionEvent.Kind.TURN_COMPLETE,
+                null, 9));
+        assertEquals(turnId, reload(composition.id).currentTurnId);
+        turns.onSessionEvent(new WorkbenchSessionEvent(composition.id, WorkbenchSessionEvent.Kind.TURN_COMPLETE,
+                null, 11));
+        assertEquals(CompositionEntity.TURN_IDLE, reload(composition.id).turnState);
+    }
+
+    @Test
+    void interruptedTurnThatNeverEndsIsFailedByTheWatchdog() throws Exception {
+        CompositionEntity composition = withWorkflow();
+        turns.setInterruptTimeoutForTests(Duration.ofMillis(200));
+        turns.start(composition.id, "hi", List.of(), List.of());
+        turns.interrupt(composition.id);
+        verify(sessions).interrupt(composition.id);
+        long deadline = System.currentTimeMillis() + 10_000;
+        while (turns.currentTurnId(composition.id) != null && System.currentTimeMillis() < deadline) {
+            Thread.sleep(50);
+        }
+        assertNull(turns.currentTurnId(composition.id));
+        assertEquals(CompositionEntity.TURN_IDLE, reload(composition.id).turnState);
+        verify(sessions).notice(eq(composition.id),
+                org.mockito.ArgumentMatchers.startsWith(CompositionTurns.FAILED_NOTICE_PREFIX + "interrupted"));
+    }
+
+    @Test
+    void watchdogLeavesALaterTurnAlone() throws Exception {
+        CompositionEntity composition = withWorkflow();
+        turns.setInterruptTimeoutForTests(Duration.ofMillis(300));
+        turns.start(composition.id, "hi", List.of(), List.of());
+        turns.interrupt(composition.id);
+        turns.onSessionEvent(new WorkbenchSessionEvent(composition.id, WorkbenchSessionEvent.Kind.FAILED, "stopped"));
+        String next = turns.start(composition.id, "again", List.of(), List.of());
+        Thread.sleep(800);
+        assertEquals(next, turns.currentTurnId(composition.id));
+    }
+
+    @Test
+    void sendFailureEndsTheTurnAndReportsTheAgentUnavailable() throws Exception {
+        CompositionEntity composition = withWorkflow();
+        doThrow(new IOException("pipe closed")).when(sessions).send(eq(composition.id), anyString());
+        assertThrows(AgentUnavailableException.class, () -> turns.start(composition.id, "hi", List.of(), List.of()));
+        assertEquals(CompositionEntity.TURN_IDLE, reload(composition.id).turnState);
+        assertNull(turns.currentTurnId(composition.id));
+    }
+
+    private String completeTurnWithPendingChangeSet(CompositionEntity composition) throws Exception {
+        String base = ContentRevision.of(turns.currentWorkflow(composition.id));
+        String turnId = turns.start(composition.id, "rename", List.of(), List.of());
+        turns.applyChangeSet(composition.id, renameStart(base, "Begin"));
+        turns.onSessionEvent(new WorkbenchSessionEvent(composition.id, WorkbenchSessionEvent.Kind.TURN_COMPLETE, null));
+        return turnId;
+    }
+
+    @Test
+    void staleChangeSetFromPendingIsDiscardedWithoutRetry() throws Exception {
+        CompositionEntity composition = withWorkflow();
+        String turnId = completeTurnWithPendingChangeSet(composition);
+        turns.resolve(composition.id, turnId, "stale", true);
+        assertNull(reload(composition.id).pendingChangeSet);
+        assertEquals(CompositionEntity.TURN_IDLE, reload(composition.id).turnState);
+        verify(sessions).notice(composition.id, CompositionTurns.STALE_PENDING_NOTICE);
+        verify(sessions, times(1)).send(anyLong(), anyString());
+    }
+
+    @Test
+    void staleChangeSetDuringARunningTurnPostsANotice() throws Exception {
+        CompositionEntity composition = withWorkflow();
+        String turnId = completeTurnWithPendingChangeSet(composition);
+        String running = turns.start(composition.id, "next", List.of(), List.of());
+        turns.resolve(composition.id, turnId, "stale");
+        verify(sessions).notice(composition.id, CompositionTurns.STALE_DURING_TURN_NOTICE);
+        assertEquals(running, turns.currentTurnId(composition.id));
+        verify(sessions, times(2)).send(anyLong(), anyString());
+    }
+
+    @Test
+    void failedRetryPostsANoticeInsteadOfThrowing() throws Exception {
+        CompositionEntity composition = withWorkflow();
+        String turnId = completeTurnWithPendingChangeSet(composition);
+        doThrow(new IOException("pipe closed")).when(sessions).send(eq(composition.id),
+                org.mockito.ArgumentMatchers.endsWith(CompositionTurns.STALE_RETRY_PROMPT));
+        turns.resolve(composition.id, turnId, "stale");
+        assertNull(reload(composition.id).pendingChangeSet);
+        assertEquals(CompositionEntity.TURN_IDLE, reload(composition.id).turnState);
+        verify(sessions).notice(eq(composition.id),
+                org.mockito.ArgumentMatchers.startsWith(CompositionTurns.RETRY_FAILED_NOTICE_PREFIX));
     }
 }

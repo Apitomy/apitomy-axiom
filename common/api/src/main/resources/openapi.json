@@ -2431,6 +2431,9 @@
         "responses": {
           "204": {
             "description": "Message sent"
+          },
+          "409": {
+            "description": "The session is a workbench session; send messages through /compositions/{id}/messages"
           }
         }
       },
@@ -5809,8 +5812,21 @@
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
+          "400": {
+            "description": "The message is blank"
+          },
           "409": {
             "description": "A turn is already running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionConflictError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The workbench agent could not be started or the message could not be sent",
             "content": {
               "application/json": {
                 "schema": {
@@ -6260,6 +6276,10 @@
               "stale"
             ],
             "type": "string"
+          },
+          "fromPending": {
+            "description": "true when the change set was delivered from the stored pending change set on opening the workbench rather than at the end of a live turn",
+            "type": "boolean"
           }
         }
       },

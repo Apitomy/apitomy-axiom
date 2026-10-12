@@ -65,6 +65,16 @@ class CompositionTurnsResourceTest {
     }
 
     @Test
+    void unavailableAgentIs503() throws Exception {
+        org.mockito.Mockito.doThrow(new AgentUnavailableException("no agent", null)).when(sessions)
+                .nextEventIndex(compositionId);
+        given().contentType(ContentType.JSON).body(Map.of("message", "hi"))
+                .post(BASE + "/{id}/messages", compositionId).then().statusCode(503)
+                .body("message", equalTo("no agent"));
+        given().get(BASE + "/{id}", compositionId).then().body("turnState", equalTo("idle"));
+    }
+
+    @Test
     void agentRoutesRequireToken() {
         given().get(BASE + "/{id}/agent/composition", compositionId).then().statusCode(401);
         given().header("X-Axiom-Session-Token", "bad").get(BASE + "/{id}/agent/composition", compositionId)
@@ -108,5 +118,21 @@ class CompositionTurnsResourceTest {
                 .post(BASE + "/{id}/changeset-resolution", compositionId).then().statusCode(204);
         given().post(BASE + "/{id}/turns/{turnId}/undo", compositionId, turnId).then().statusCode(200)
                 .body("removed", equalTo(List.of("tool/ctr-tool")));
+    }
+
+    @Test
+    void staleResolutionFromPendingDoesNotRetry() throws Exception {
+        String revision = given().header("X-Axiom-Session-Token", "good")
+                .get(BASE + "/{id}/agent/composition", compositionId).then().extract().path("workflowRevision");
+        String turnId = turns.start(compositionId, "rename", List.of(), List.of());
+        turns.applyChangeSet(compositionId, new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(Map.of(
+                "id", "cs1", "baseRevision", revision, "author", "agent:axiom-workbench", "summary", "rename",
+                "ops", List.of(Map.of("op", "updateNode", "id", "start-1", "patch", Map.of("name", "Begin"))))));
+        turns.onSessionEvent(new WorkbenchSessionEvent(compositionId, WorkbenchSessionEvent.Kind.TURN_COMPLETE, null));
+        given().contentType(ContentType.JSON).body(Map.of("turnId", turnId, "outcome", "stale", "fromPending", true))
+                .post(BASE + "/{id}/changeset-resolution", compositionId).then().statusCode(204);
+        given().get(BASE + "/{id}", compositionId).then().statusCode(200)
+                .body("turnState", equalTo("idle")).body("pendingTurnId", org.hamcrest.Matchers.nullValue());
+        org.mockito.Mockito.verify(sessions).notice(compositionId, CompositionTurns.STALE_PENDING_NOTICE);
     }
 }

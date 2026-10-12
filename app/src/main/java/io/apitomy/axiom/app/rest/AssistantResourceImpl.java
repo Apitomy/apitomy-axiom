@@ -348,6 +348,10 @@ public class AssistantResourceImpl implements AssistantResource {
         if (data.getMessage() == null || data.getMessage().isBlank()) {
             throw new WebApplicationException("Missing 'message' field", 400);
         }
+        if (session.hasCapability(SessionCapability.COMPOSITION)) {
+            throw new WebApplicationException(Response.status(409).type(MediaType.APPLICATION_JSON)
+                    .entity(Map.of("message", "Use /compositions/{id}/messages for workbench sessions")).build());
+        }
         try {
             session.sendMessage(data.getMessage());
         } catch (IOException e) {

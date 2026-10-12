@@ -29,6 +29,7 @@ import io.apitomy.axiom.api.beans.ConfigProblem;
 import io.apitomy.axiom.api.beans.NewComposition;
 import io.apitomy.axiom.api.beans.NewCompositionItem;
 import io.apitomy.axiom.app.assistant.SessionTokenGuard;
+import io.apitomy.axiom.app.composition.AgentUnavailableException;
 import io.apitomy.axiom.app.composition.CompositionConflictException;
 import io.apitomy.axiom.app.composition.CompositionItems;
 import io.apitomy.axiom.app.composition.CompositionNotFoundException;
@@ -155,7 +156,7 @@ public class CompositionsResourceImpl implements CompositionsResource {
     public CompositionItem updateCompositionItem(long compositionId, long itemId, CompositionItemUpdate data) {
         JsonNode content = data.getContent() == null ? null
                 : mapper.valueToTree(data.getContent().getAdditionalProperties());
-        String turnId = data.getTurnId();
+        String turnId = data.getTurnId() == null || data.getTurnId().isBlank() ? null : data.getTurnId();
         String author = turnId == null ? CompositionService.AUTHOR_USER : CompositionService.AUTHOR_AI;
         return toBean(service.save(compositionId, itemId, content, data.getBaseRevision(), author, turnId), true);
     }
@@ -259,7 +260,8 @@ public class CompositionsResourceImpl implements CompositionsResource {
         if (data.getTurnId() == null || data.getOutcome() == null) {
             throw new IllegalArgumentException("turnId and outcome are required");
         }
-        turns.resolve(compositionId, data.getTurnId(), data.getOutcome().value());
+        turns.resolve(compositionId, data.getTurnId(), data.getOutcome().value(),
+                Boolean.TRUE.equals(data.getFromPending()));
     }
 
     /** {@inheritDoc} */
@@ -508,10 +510,10 @@ public class CompositionsResourceImpl implements CompositionsResource {
 
     /**
      * @param e the exception
-     * @return 503, for example when the workbench agent could not be started
+     * @return 503 when the workbench agent could not be started or reached
      */
     @ServerExceptionMapper
-    public Response mapUnavailable(IllegalStateException e) {
+    public Response mapUnavailable(AgentUnavailableException e) {
         return error(503, e.getMessage());
     }
 }

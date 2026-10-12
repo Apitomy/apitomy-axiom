@@ -15,25 +15,33 @@ import io.apitomy.flow.changeset.ChangeSets;
 import io.apitomy.flow.changeset.ContentRevision;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.runtime.StartupEvent;
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.persistence.LockModeType;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Runs AI turns on a composition. A turn accumulates workflow change sets in memory against a working copy of
  * the workflow; when the turn completes they are combined into one pending change set that the editor applies.
  * Action types and tools written by the agent are saved directly, tagged with the turn id. The agent is never
- * called while a transaction is open.
+ * called while a transaction is open, nor while this bean's monitor is held: session events reach
+ * {@link #onSessionEvent} from another thread, and sending while holding the monitor could deadlock with it.
  */
 @ApplicationScoped
 public class CompositionTurns {
@@ -49,6 +57,18 @@ public class CompositionTurns {
     /** The notice posted when a stale retry is itself stale. */
     public static final String SECOND_STALE_NOTICE = "The workflow changed again before my changes could be "
             + "applied, so I stopped. Ask me to try again when you are ready.";
+
+    /** The notice posted when a stale change set from an earlier visit to the workbench is discarded. */
+    public static final String STALE_PENDING_NOTICE = "My earlier workflow changes no longer fit the current "
+            + "workflow, so I discarded them. Ask me to try again if you still want them.";
+
+    /** The notice posted when a change set is stale while another turn is already running. */
+    public static final String STALE_DURING_TURN_NOTICE = "My earlier workflow changes no longer fit the current "
+            + "workflow; I'll take your latest edits into account in this turn.";
+
+    /** The start of the notice posted when a stale retry turn could not be started. */
+    public static final String RETRY_FAILED_NOTICE_PREFIX = "My earlier workflow changes no longer fit the current "
+            + "workflow, and I could not retry them: ";
 
     /** The start of the notice posted when a turn fails. */
     public static final String FAILED_NOTICE_PREFIX = "The AI turn ended with an error: ";
@@ -77,8 +97,12 @@ public class CompositionTurns {
     public record AgentWrite(CompositionItemEntity item, List<ConfigProblem> problems) {
     }
 
+    private static final Logger LOG = Logger.getLogger(CompositionTurns.class);
+
     private static final class Turn {
         final String turnId;
+        /** Completion events with a lower session event index belong to an earlier exchange. */
+        volatile int firstEventIndex = Integer.MAX_VALUE;
         Long workflowItemId;
         String workflowName;
         String baseRevision;
@@ -94,6 +118,17 @@ public class CompositionTurns {
 
     private final Map<Long, Turn> turns = new ConcurrentHashMap<>();
     private final Set<String> staleRetryTurnIds = ConcurrentHashMap.newKeySet();
+
+    private final ScheduledExecutorService watchdog = Executors.newSingleThreadScheduledExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "workbench-interrupt-watchdog");
+        thread.setDaemon(true);
+        return thread;
+    });
+
+    @ConfigProperty(name = "axiom.workbench.interrupt-timeout-seconds", defaultValue = "30")
+    long interruptTimeoutSeconds;
+
+    private volatile Duration interruptTimeoutOverride;
 
     @Inject
     WorkbenchSessions sessions;
@@ -124,45 +159,67 @@ public class CompositionTurns {
      * @return the new turn id
      * @throws CompositionConflictException if a turn is already running
      * @throws IllegalArgumentException if the message is blank
-     * @throws IllegalStateException if the message could not be sent
+     * @throws AgentUnavailableException if the agent could not be started or the message could not be sent
      */
-    public synchronized String start(long compositionId, String message, List<String> nodeIds, List<String> edgeIds) {
+    public String start(long compositionId, String message, List<String> nodeIds, List<String> edgeIds) {
+        return start(compositionId, message, nodeIds, edgeIds, false);
+    }
+
+    private String start(long compositionId, String message, List<String> nodeIds, List<String> edgeIds,
+                         boolean staleRetry) {
         if (message == null || message.isBlank()) {
             throw new IllegalArgumentException("'message' is required");
         }
-        String turnId = UUID.randomUUID().toString();
-        Turn turn = new Turn(turnId, mapper.createArrayNode());
-        String context = QuarkusTransaction.requiringNew().call(() -> {
-            CompositionEntity composition = CompositionEntity.findById(compositionId, LockModeType.PESSIMISTIC_WRITE);
-            if (composition == null) {
-                throw new CompositionNotFoundException("Composition not found: " + compositionId);
+        Turn turn;
+        String context;
+        synchronized (this) {
+            turn = new Turn(UUID.randomUUID().toString(), mapper.createArrayNode());
+            context = QuarkusTransaction.requiringNew().call(() -> {
+                CompositionEntity composition = CompositionEntity.findById(compositionId,
+                        LockModeType.PESSIMISTIC_WRITE);
+                if (composition == null) {
+                    throw new CompositionNotFoundException("Composition not found: " + compositionId);
+                }
+                if (turns.containsKey(compositionId)
+                        || CompositionEntity.TURN_AI_WORKING.equals(composition.turnState)) {
+                    throw new CompositionConflictException("An AI turn is already running");
+                }
+                String text = preamble.build(compositionId,
+                        nodeIds == null ? List.of() : nodeIds, edgeIds == null ? List.of() : edgeIds);
+                Instant now = Instant.now();
+                composition.turnState = CompositionEntity.TURN_AI_WORKING;
+                composition.currentTurnId = turn.turnId;
+                composition.lastTurnStartedOn = now;
+                composition.updatedOn = now;
+                CompositionItemEntity workflow = workflowItem(compositionId);
+                if (workflow != null) {
+                    setBase(turn, workflow);
+                }
+                return text;
+            });
+            turns.put(compositionId, turn);
+            if (staleRetry) {
+                staleRetryTurnIds.add(turn.turnId);
             }
-            if (turns.containsKey(compositionId) || CompositionEntity.TURN_AI_WORKING.equals(composition.turnState)) {
-                throw new CompositionConflictException("An AI turn is already running");
-            }
-            String text = preamble.build(compositionId,
-                    nodeIds == null ? List.of() : nodeIds, edgeIds == null ? List.of() : edgeIds);
-            Instant now = Instant.now();
-            composition.turnState = CompositionEntity.TURN_AI_WORKING;
-            composition.currentTurnId = turnId;
-            composition.lastTurnStartedOn = now;
-            composition.updatedOn = now;
-            CompositionItemEntity workflow = workflowItem(compositionId);
-            if (workflow != null) {
-                setBase(turn, workflow);
-            }
-            return text;
-        });
-        turns.put(compositionId, turn);
-        sseEvents.fire(SseEvent.compositionTurn(compositionId, turnId, CompositionEntity.TURN_AI_WORKING));
+        }
+        sseEvents.fire(SseEvent.compositionTurn(compositionId, turn.turnId, CompositionEntity.TURN_AI_WORKING));
+        // Outside the monitor: starting the agent can take long and sending dispatches session events.
         String recap = sessions.takeRecap(compositionId);
         try {
+            turn.firstEventIndex = sessions.nextEventIndex(compositionId);
             sessions.send(compositionId, (recap == null ? "" : recap + "\n\n") + context + "\n\n" + message);
         } catch (IOException | RuntimeException e) {
-            finish(compositionId, WorkbenchSessionEvent.Kind.FAILED, String.valueOf(e.getMessage()));
-            throw new IllegalStateException("Could not send the message to the workbench agent", e);
+            synchronized (this) {
+                if (turns.get(compositionId) == turn) {
+                    finish(compositionId, WorkbenchSessionEvent.Kind.FAILED, String.valueOf(e.getMessage()));
+                }
+            }
+            if (e instanceof AgentUnavailableException unavailable) {
+                throw unavailable;
+            }
+            throw new AgentUnavailableException("Could not send the message to the workbench agent", e);
         }
-        return turnId;
+        return turn.turnId;
     }
 
     /**
@@ -287,56 +344,129 @@ public class CompositionTurns {
     }
 
     /**
-     * Records how the editor resolved a pending change set. Locks the composition row and clears the pending
-     * change set; a {@code stale} outcome starts one retry turn, or posts {@link #SECOND_STALE_NOTICE}.
+     * Records how the editor resolved a change set delivered at the end of a live turn.
      *
      * @param compositionId the composition id
      * @param turnId the turn whose change set was resolved
      * @param outcome {@code applied}, {@code accepted}, {@code rejected} or {@code stale}
+     * @see #resolve(long, String, String, boolean)
      */
-    public synchronized void resolve(long compositionId, String turnId, String outcome) {
-        boolean cleared = QuarkusTransaction.requiringNew().call(() -> {
-            CompositionEntity composition = CompositionEntity.findById(compositionId, LockModeType.PESSIMISTIC_WRITE);
-            if (composition == null || turnId == null || !turnId.equals(composition.pendingTurnId)) {
-                return false;
-            }
-            composition.pendingChangeSet = null;
-            composition.pendingTurnId = null;
-            composition.updatedOn = Instant.now();
-            return true;
-        });
-        if (!cleared) {
-            return;
-        }
-        boolean wasRetry = staleRetryTurnIds.remove(turnId);
-        if (!"stale".equals(outcome)) {
-            return;
-        }
-        if (wasRetry || turns.containsKey(compositionId)) {
-            sessions.notice(compositionId, SECOND_STALE_NOTICE);
-            return;
-        }
-        String retry = start(compositionId, STALE_RETRY_PROMPT, List.of(), List.of());
-        staleRetryTurnIds.add(retry);
+    public void resolve(long compositionId, String turnId, String outcome) {
+        resolve(compositionId, turnId, outcome, false);
     }
 
     /**
-     * Interrupts the running turn. The turn ends when the session reports it.
+     * Records how the editor resolved a pending change set. Locks the composition row and clears the pending
+     * change set. A {@code stale} outcome posts {@link #STALE_PENDING_NOTICE} when the change set came from the
+     * stored pending change set, {@link #SECOND_STALE_NOTICE} when it came from a stale retry,
+     * {@link #STALE_DURING_TURN_NOTICE} while a turn is running, and otherwise starts one retry turn.
+     *
+     * @param compositionId the composition id
+     * @param turnId the turn whose change set was resolved
+     * @param outcome {@code applied}, {@code accepted}, {@code rejected} or {@code stale}
+     * @param fromPending whether the change set was delivered from the stored pending change set
+     */
+    public void resolve(long compositionId, String turnId, String outcome, boolean fromPending) {
+        String notice;
+        synchronized (this) {
+            boolean cleared = QuarkusTransaction.requiringNew().call(() -> {
+                CompositionEntity composition = CompositionEntity.findById(compositionId,
+                        LockModeType.PESSIMISTIC_WRITE);
+                if (composition == null || turnId == null || !turnId.equals(composition.pendingTurnId)) {
+                    return false;
+                }
+                composition.pendingChangeSet = null;
+                composition.pendingTurnId = null;
+                composition.updatedOn = Instant.now();
+                return true;
+            });
+            if (!cleared) {
+                return;
+            }
+            boolean wasRetry = staleRetryTurnIds.remove(turnId);
+            if (!"stale".equals(outcome)) {
+                return;
+            }
+            if (fromPending) {
+                notice = STALE_PENDING_NOTICE;
+            } else if (wasRetry) {
+                notice = SECOND_STALE_NOTICE;
+            } else if (turns.containsKey(compositionId)) {
+                notice = STALE_DURING_TURN_NOTICE;
+            } else {
+                notice = null;
+            }
+        }
+        if (notice != null) {
+            sessions.notice(compositionId, notice);
+            return;
+        }
+        try {
+            start(compositionId, STALE_RETRY_PROMPT, List.of(), List.of(), true);
+        } catch (RuntimeException e) {
+            LOG.warnf(e, "Could not start the stale retry turn for composition %d", compositionId);
+            sessions.notice(compositionId, RETRY_FAILED_NOTICE_PREFIX + e.getMessage());
+        }
+    }
+
+    /**
+     * Interrupts the running turn. The turn ends when the session reports it; if it has not after
+     * {@code axiom.workbench.interrupt-timeout-seconds}, it is finished as failed.
      *
      * @param compositionId the composition id
      */
     public void interrupt(long compositionId) {
+        String turnId = currentTurnId(compositionId);
         sessions.interrupt(compositionId);
+        if (turnId == null) {
+            return;
+        }
+        Duration timeout = interruptTimeoutOverride != null ? interruptTimeoutOverride
+                : Duration.ofSeconds(interruptTimeoutSeconds);
+        watchdog.schedule(() -> expireInterrupted(compositionId, turnId), timeout.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    private synchronized void expireInterrupted(long compositionId, String turnId) {
+        try {
+            Turn turn = turns.get(compositionId);
+            if (turn != null && turn.turnId.equals(turnId)) {
+                finish(compositionId, WorkbenchSessionEvent.Kind.FAILED, "interrupted");
+            }
+        } catch (RuntimeException e) {
+            LOG.warnf(e, "Could not finish interrupted turn %s of composition %d", turnId, compositionId);
+        }
+    }
+
+    /**
+     * Overrides the interrupt timeout. For tests.
+     *
+     * @param timeout the timeout, or null for the configured one
+     */
+    void setInterruptTimeoutForTests(Duration timeout) {
+        interruptTimeoutOverride = timeout;
+    }
+
+    /**
+     * Stops the interrupt watchdog.
+     */
+    @PreDestroy
+    void shutdown() {
+        watchdog.shutdownNow();
     }
 
     /**
      * Finishes the composition's turn when its session reports completion or failure. Locks the composition
      * row, sets it idle, stores the combined change set on completion, then fires {@code compositionChangeSet}
-     * (if any) and {@code compositionTurn(idle)}.
+     * (if any) and {@code compositionTurn(idle)}. Events older than the running turn's message are ignored:
+     * they end an earlier exchange.
      *
      * @param event the session event
      */
     public synchronized void onSessionEvent(@Observes WorkbenchSessionEvent event) {
+        Turn turn = turns.get(event.compositionId());
+        if (turn != null && event.eventIndex() < turn.firstEventIndex) {
+            return;
+        }
         finish(event.compositionId(), event.kind(), event.detail());
     }
 

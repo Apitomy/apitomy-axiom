@@ -44,8 +44,13 @@ class WorkbenchSessionsTest {
     @Singleton
     static class Recorder {
         final List<WorkbenchSessionEvent> events = new CopyOnWriteArrayList<>();
+        volatile Runnable onDelivery;
 
         void on(@Observes WorkbenchSessionEvent event) {
+            Runnable hook = onDelivery;
+            if (hook != null) {
+                hook.run();
+            }
             events.add(event);
         }
     }
@@ -115,9 +120,61 @@ class WorkbenchSessionsTest {
                 mapper.createObjectNode().put("name", "ProviderRetry").put("message", "retrying")));
         session.addEvent(new io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent("session_error",
                 mapper.createObjectNode().put("name", "Boom").put("message", "broken")));
+        sessions.awaitEventsForTests();
         assertEquals(List.of(WorkbenchSessionEvent.Kind.TURN_COMPLETE, WorkbenchSessionEvent.Kind.FAILED),
                 recorder.events.stream().map(WorkbenchSessionEvent::kind).toList());
         assertEquals("broken", recorder.events.get(1).detail());
+        assertEquals(session.getEventCount() - 3, recorder.events.get(0).eventIndex());
+        assertEquals(session.getEventCount() - 1, recorder.events.get(1).eventIndex());
+    }
+
+    @Test
+    void sessionEventsAreNotDeliveredOnTheAddingThread() {
+        mockDriver();
+        CompositionEntity composition = compositions.create("c", null, null, null, null);
+        AssistantSession session = sessions.ensure(composition.id);
+        Thread adder = Thread.currentThread();
+        List<Thread> deliveredOn = new CopyOnWriteArrayList<>();
+        recorder.onDelivery = () -> deliveredOn.add(Thread.currentThread());
+        try {
+            session.addEvent(new io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent("turn_complete",
+                    mapper.createObjectNode()));
+            sessions.awaitEventsForTests();
+        } finally {
+            recorder.onDelivery = null;
+        }
+        assertEquals(1, deliveredOn.size());
+        assertNotEquals(adder, deliveredOn.get(0));
+    }
+
+    @Test
+    void deleteDiscardsTheSessionAfterCommit() {
+        mockDriver();
+        CompositionEntity composition = compositions.create("c", null, null, null, null);
+        AssistantSession session = sessions.ensure(composition.id);
+        org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                () -> QuarkusTransaction.requiringNew().run(() -> {
+                    compositions.delete(composition.id);
+                    throw new RuntimeException("roll back");
+                }));
+        assertNotNull(manager.getSession(session.getId()), "a rolled-back delete keeps the session");
+
+        compositions.delete(composition.id);
+        assertNull(manager.getSession(session.getId()));
+        assertFalse(Files.exists(AssistantSessionManager.sessionDirectory(session.getId())));
+    }
+
+    @Test
+    void workbenchSessionsRejectAssistantMessages() {
+        mockDriver();
+        CompositionEntity composition = compositions.create("c", null, null, null, null);
+        AssistantSession session = sessions.ensure(composition.id);
+        io.restassured.RestAssured.given().contentType(io.restassured.http.ContentType.JSON)
+                .body(java.util.Map.of("message", "hi"))
+                .post("/api/v1/assistant/sessions/{id}/messages", session.getId())
+                .then().statusCode(409)
+                .body("message", org.hamcrest.Matchers.equalTo(
+                        "Use /compositions/{id}/messages for workbench sessions"));
     }
 
     @Test
