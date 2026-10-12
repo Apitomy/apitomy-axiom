@@ -81,10 +81,10 @@ export function useWorkbench(compositionId: number): WorkbenchState {
         setPending(p);
     }, []);
 
-    const validate = useCallback(async () => {
+    const validate = useCallback(async (isCancelled: () => boolean = () => false) => {
         try {
             const result = await validateComposition(compositionId);
-            if (!aliveRef.current) {
+            if (!aliveRef.current || isCancelled()) {
                 return;
             }
             const next: Record<number, ConfigProblem[]> = {};
@@ -100,8 +100,11 @@ export function useWorkbench(compositionId: number): WorkbenchState {
         timerRef.current = setTimeout(() => { void validate(); }, VALIDATE_DEBOUNCE_MS);
     }, [validate]);
 
-    const loadContent = useCallback(async (itemId: number) => {
+    const loadContent = useCallback(async (itemId: number, isCancelled: () => boolean = () => false) => {
         const item = await fetchItem(compositionId, itemId);
+        if (isCancelled()) {
+            return {};
+        }
         const content: Record<string, unknown> = (item as CompositionItem & { content?: Record<string, unknown> })
             .content ?? {};
         revisionsRef.current[itemId] = item.contentRevision;
@@ -132,15 +135,18 @@ export function useWorkbench(compositionId: number): WorkbenchState {
         }
     }, [compositionId]);
 
-    const startSession = useCallback(async () => {
+    const startSession = useCallback(async (isCancelled: () => boolean = () => false) => {
         try {
             const comp = await ensureCompositionSession(compositionId);
+            if (isCancelled()) {
+                return;
+            }
             if (aliveRef.current) {
                 setSessionError(null);
                 setComposition((prev) => (prev ? { ...prev, ...comp } : prev));
             }
         } catch (e) {
-            if (aliveRef.current) {
+            if (aliveRef.current && !isCancelled()) {
                 setSessionError(errorMessage(e));
             }
         }
@@ -148,10 +154,12 @@ export function useWorkbench(compositionId: number): WorkbenchState {
 
     useEffect(() => {
         aliveRef.current = true;
+        let cancelled: boolean = false;
+        const isCancelled = (): boolean => cancelled;
         (async () => {
             try {
                 const [comp, list] = await Promise.all([fetchComposition(compositionId), listItems(compositionId)]);
-                if (!aliveRef.current) {
+                if (cancelled) {
                     return;
                 }
                 setComposition(comp);
@@ -159,15 +167,22 @@ export function useWorkbench(compositionId: number): WorkbenchState {
                 adoptPending(comp);
                 const workflow = list.find((i) => i.type === "workflow");
                 if (workflow) {
-                    await loadContent(workflow.id);
+                    await loadContent(workflow.id, isCancelled);
                 }
             } catch (e) {
                 console.error(e);
             }
-            await startSession();
-            await validate();
+            if (cancelled) {
+                return;
+            }
+            await startSession(isCancelled);
+            if (cancelled) {
+                return;
+            }
+            await validate(isCancelled);
         })();
         return () => {
+            cancelled = true;
             aliveRef.current = false;
             clearTimeout(timerRef.current);
         };
@@ -191,7 +206,8 @@ export function useWorkbench(compositionId: number): WorkbenchState {
                 }
             },
             changeSet: (ev) => {
-                if (ev.turnId) {
+                if (ev.turnId && !handledRef.current.has(ev.turnId)
+                        && pendingRef.current?.turnId !== ev.turnId) {
                     updatePending({ turnId: ev.turnId, changeSet: ev.changeSet, fromPending: false });
                 }
             },
@@ -230,6 +246,6 @@ export function useWorkbench(compositionId: number): WorkbenchState {
 
     return {
         composition, items, contents, problems, pending, lastCompletedTurnId, sessionError,
-        loadContent, refreshItems, refreshComposition, setContent, markPendingHandled, retrySession: startSession,
+        loadContent, refreshItems, refreshComposition, setContent, markPendingHandled, retrySession: () => startSession(),
     };
 }

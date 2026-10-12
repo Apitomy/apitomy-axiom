@@ -37,6 +37,21 @@ describe("useWorkbench", () => {
         expect(result.current.lastCompletedTurnId).toBe("t1");
     });
 
+    it("ignores an SSE change set for a turn already handled", async () => {
+        const { result } = renderHook(() => useWorkbench(1));
+        await waitFor(() => expect(result.current.pending?.turnId).toBe("t0"));
+        act(() => result.current.markPendingHandled());
+        act(() => sse.changeSet?.({ compositionId: 1, turnId: "t0", changeSet: { id: "t0" } as never }));
+        expect(result.current.pending).toBeNull();
+    });
+
+    it("keeps fromPending when SSE repeats the adopted pending turn", async () => {
+        const { result } = renderHook(() => useWorkbench(1));
+        await waitFor(() => expect(result.current.pending?.turnId).toBe("t0"));
+        act(() => sse.changeSet?.({ compositionId: 1, turnId: "t0", changeSet: { id: "t0" } as never }));
+        expect(result.current.pending).toEqual(expect.objectContaining({ turnId: "t0", fromPending: true }));
+    });
+
     it("reports a session start failure without blocking", async () => {
         vi.spyOn(c, "ensureCompositionSession").mockRejectedValue(new c.ApiError("agent down", 503, {}));
         const { result } = renderHook(() => useWorkbench(1));

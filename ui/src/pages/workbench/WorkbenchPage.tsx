@@ -24,6 +24,12 @@ export function WorkbenchPage() {
     const [activeTab, setActiveTab] = useState<string>("workflow");
 
     const composition = wb.composition;
+
+    useEffect(() => {
+        if (applyMode !== null && composition?.applyMode === applyMode) {
+            setApplyMode(null);
+        }
+    }, [applyMode, composition?.applyMode]);
     const mode: "live" | "review" = applyMode ?? composition?.applyMode ?? "live";
     const workflow: CompositionItem | undefined = wb.items.find((i) => i.type === "workflow");
     const aiWorking: boolean = composition?.turnState === "ai-working";
