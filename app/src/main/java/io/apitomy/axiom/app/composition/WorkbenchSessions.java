@@ -24,6 +24,11 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Binds each workbench composition to one agent session, restores its conversation after a restart and
  * translates session events into {@link WorkbenchSessionEvent}s.
+ * <p>
+ * {@link #ensure}, {@link #send} and {@link #live} read and write the composition's session binding in their own
+ * new transactions. They must be called outside any transaction: inside one they could miss the caller's
+ * uncommitted rows, block on its row locks, or have the caller's stale entity overwrite the new binding.
+ * {@code ensure} and {@code send} enforce this.
  */
 @ApplicationScoped
 public class WorkbenchSessions {
@@ -53,6 +58,8 @@ public class WorkbenchSessions {
     /**
      * @param compositionId the composition id
      * @return the composition's running session, or null
+     * <p>
+     * Must be called outside a transaction (it reads the binding in a new one, see the class docs).
      */
     public AssistantSession live(long compositionId) {
         String sessionId = QuarkusTransaction.requiringNew().call(() -> {
@@ -67,9 +74,11 @@ public class WorkbenchSessions {
      *
      * @param compositionId the composition id
      * @return the session
-     * @throws IllegalStateException if the agent could not be started
+     * @throws IllegalStateException if the agent could not be started, or if called inside a transaction (the
+     *         binding is read and written in new transactions, see the class docs)
      */
     public synchronized AssistantSession ensure(long compositionId) {
+        requireNoTransaction("ensure");
         // Read in a fresh transaction so a caller's persistence context cannot hand us a stale binding.
         CompositionEntity composition = QuarkusTransaction.requiringNew().call(() -> compositions.get(compositionId));
         String previousId = composition.assistantSessionId;
@@ -121,8 +130,10 @@ public class WorkbenchSessions {
      * @param compositionId the composition id
      * @param text the message
      * @throws IOException if the message could not be sent
+     * @throws IllegalStateException if called inside a transaction (see the class docs)
      */
     public void send(long compositionId, String text) throws IOException {
+        requireNoTransaction("send");
         ensure(compositionId).sendMessage(text);
     }
 
@@ -166,6 +177,12 @@ public class WorkbenchSessions {
         String sessionId = composition.assistantSessionId;
         manager.destroySession(sessionId, false);
         contextBuilder.deleteSessionDirectory(AssistantSessionManager.sessionDirectory(sessionId));
+    }
+
+    private static void requireNoTransaction(String method) {
+        if (QuarkusTransaction.isActive()) {
+            throw new IllegalStateException("WorkbenchSessions." + method + " must be called outside a transaction");
+        }
     }
 
     private void onEvent(long compositionId, SseEvent event) {

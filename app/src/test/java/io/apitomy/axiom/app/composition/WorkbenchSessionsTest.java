@@ -159,4 +159,12 @@ class WorkbenchSessionsTest {
         sessions.notice(composition.id, "The workflow changed while I worked.");
         assertTrue(session.getEventHistory().stream().anyMatch(e -> e.data().path("notice").asBoolean()));
     }
+
+    @Test
+    void ensureRejectsActiveTransaction() {
+        mockDriver();
+        CompositionEntity composition = compositions.create("c", null, null, null, null);
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> QuarkusTransaction.requiringNew().run(() -> sessions.ensure(composition.id)));
+    }
 }
