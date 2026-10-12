@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type Ref, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Alert, AlertActionLink } from "@patternfly/react-core";
 import type { NewActionType, NewToolDefinition } from "../../config/api";
 import { ActionTypeEditor, type ValidationMessage } from "../../components/ActionTypeEditor";
@@ -25,6 +25,14 @@ export interface ItemTabProps {
     composition: Composition;
     problems: ConfigProblem[] | undefined;
     onSaved: (item: CompositionItem, content: Record<string, unknown>) => void;
+    /** Receives the tab's imperative handle. */
+    ref?: Ref<ItemTabHandle>;
+}
+
+/** Imperative handle of {@link ItemTab}. */
+export interface ItemTabHandle {
+    /** Saves any scheduled change now and resolves when all saves have settled. */
+    flush(): Promise<void>;
 }
 
 type SaveError = { kind: "conflict" } | { kind: "error"; message: string };
@@ -97,6 +105,18 @@ export function ItemTab(props: ItemTabProps) {
         });
         return next;
     }, [runSave]);
+
+    const flush = useCallback(async (): Promise<void> => {
+        if (timer.current) {
+            clearTimeout(timer.current);
+            timer.current = null;
+            await startSave();
+        } else if (inFlight.current) {
+            await inFlight.current;
+        }
+    }, [startSave]);
+
+    useImperativeHandle(props.ref, () => ({ flush }), [flush]);
 
     // Unmount: save any scheduled change.
     useEffect(() => () => {

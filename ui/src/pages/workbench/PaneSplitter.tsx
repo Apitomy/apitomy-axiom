@@ -12,6 +12,8 @@ export interface PaneSplitterProps {
     onResizeEnd: (width: number) => void;
     /** Accessible label. */
     label: string;
+    /** Extra class names (e.g. the grid-placement modifier). */
+    className?: string;
 }
 
 const MIN: number = 160;
@@ -20,7 +22,7 @@ const MAX: number = 800;
 /**
  * Draggable vertical splitter between two workbench panes.
  */
-export function PaneSplitter({ width, direction, onResize, onResizeEnd, label }: PaneSplitterProps) {
+export function PaneSplitter({ width, direction, onResize, onResizeEnd, label, className }: PaneSplitterProps) {
     const draggingRef = useRef<boolean>(false);
     const startXRef = useRef<number>(0);
     const startWidthRef = useRef<number>(width);
@@ -66,7 +68,7 @@ export function PaneSplitter({ width, direction, onResize, onResizeEnd, label }:
     }, [width]);
 
     return (
-        <div className="axiom-workbench__splitter" role="separator" aria-orientation="vertical"
+        <div className={className ? `axiom-workbench__splitter ${className}` : "axiom-workbench__splitter"} role="separator" aria-orientation="vertical"
             aria-label={label} onMouseDown={handleMouseDown} />
     );
 }

@@ -6,20 +6,31 @@ import * as prefs from "./workbenchPrefs";
 import type { WorkbenchState } from "./useWorkbench";
 
 vi.mock("@apitomy/flow-ui", () => ({}));
+const setContent = vi.fn();
 vi.mock("./useWorkbench", () => ({
     useWorkbench: (): WorkbenchState => ({
         composition: { id: 1, name: "My comp", turnState: "idle", applyMode: "live", createdAt: "", updatedAt: "" },
         items: [{ id: 10, type: "workflow", name: "main-flow", contentRevision: "r", lastAuthor: "user", changed: false } as never],
         contents: { 10: {} }, revisions: {}, problems: {}, pending: null, lastCompletedTurnId: undefined, sessionError: null,
         loadContent: async () => ({}), refreshItems: async () => {}, refreshComposition: async () => {},
-        setContent: () => {}, markPendingHandled: () => {}, retrySession: async () => {},
+        setContent, markPendingHandled: () => {}, retrySession: async () => {},
     }),
 }));
 
 let workflowTabProps: Record<string, any> = {};
-vi.mock("./WorkflowTab", () => ({
-    WorkflowTab: (props: Record<string, any>) => { workflowTabProps = props; return <div data-testid="wf" />; },
-}));
+const workflowFlush = vi.fn();
+vi.mock("./WorkflowTab", async () => {
+    const { useImperativeHandle } = await import("react");
+    return {
+        WorkflowTab: (props: Record<string, any>) => {
+            workflowTabProps = props;
+            useImperativeHandle(props.ref, () => ({ flush: workflowFlush, replace: () => {},
+                selection: () => ({ nodeIds: [], edgeIds: [] }) }));
+            return <div data-testid="wf" />;
+        },
+    };
+});
+vi.mock("./PublishDialog", () => ({ PublishDialog: () => <div data-testid="publish-dialog" /> }));
 
 import { act } from "@testing-library/react";
 import { WorkbenchPage } from "./WorkbenchPage";
@@ -41,6 +52,8 @@ function renderPage() {
 
 beforeEach(() => {
     vi.restoreAllMocks();
+    setContent.mockReset();
+    workflowFlush.mockReset();
     localStorage.clear();
 });
 
@@ -79,5 +92,47 @@ describe("WorkbenchPage", () => {
         act(() => workflowTabProps.onAskAi("explain node a"));
         expect(screen.getByRole("button", { name: "Collapse chat pane" })).toBeTruthy();
         expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ rightCollapsed: false }));
+    });
+
+    it("places panes with grid-column classes even when collapsed", () => {
+        const { container } = renderPage();
+        expect(container.querySelector(".axiom-workbench__splitter--left")).toBeTruthy();
+        fireEvent.click(screen.getByRole("button", { name: "Collapse left pane" }));
+        fireEvent.click(screen.getByRole("button", { name: "Collapse chat pane" }));
+        const grid = container.querySelector(".axiom-workbench")!;
+        const classes = Array.from(grid.children).map((el) => el.className);
+        expect(classes).toEqual(expect.arrayContaining([
+            expect.stringContaining("axiom-workbench__left"),
+            expect.stringMatching(/axiom-workbench__splitter .*axiom-workbench__splitter--left/),
+            expect.stringContaining("axiom-workbench__centre"),
+            expect.stringMatching(/axiom-workbench__splitter .*axiom-workbench__splitter--right/),
+            expect.stringContaining("axiom-workbench__right"),
+        ]));
+        expect(container.querySelectorAll("[role=separator]")).toHaveLength(0);
+        expect(grid.parentElement?.className).toContain("axiom-workbench-page");
+    });
+
+    it("renders the active tab content as a direct child of the centre column", () => {
+        const { container } = renderPage();
+        const content = container.querySelector(".axiom-workbench__centre > .pf-v6-c-tab-content:not([hidden])");
+        expect(content?.querySelector("[data-testid=wf]")).toBeTruthy();
+    });
+
+    it("flushes the workflow editor before opening the Publish dialog", async () => {
+        let release: () => void = () => {};
+        workflowFlush.mockReturnValue(new Promise<void>((r) => { release = r; }));
+        renderPage();
+        fireEvent.click(screen.getByRole("button", { name: /Publish/ }));
+        expect(workflowFlush).toHaveBeenCalled();
+        expect(screen.queryByTestId("publish-dialog")).toBeNull();
+        await act(async () => release());
+        expect(await screen.findByTestId("publish-dialog")).toBeTruthy();
+    });
+
+    it("records its own workflow saves as current content", () => {
+        renderPage();
+        const content = { id: "w", name: "wf", nodes: [], edges: [] };
+        act(() => workflowTabProps.onSaved({ id: 10, contentRevision: "r2" }, content, undefined));
+        expect(setContent).toHaveBeenCalledWith(10, content, "r2");
     });
 });

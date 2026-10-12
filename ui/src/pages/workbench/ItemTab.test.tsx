@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import * as c from "../../config/compositions";
-import { ItemTab } from "./ItemTab";
+import { ItemTab, type ItemTabHandle } from "./ItemTab";
 
 vi.mock("../../components/ToolEditor", () => ({
     ToolEditor: ({ value, onChange, readOnly }: { value: { description?: string }; onChange: (v: unknown) => void; readOnly?: boolean }) => (
@@ -64,5 +64,16 @@ describe("ItemTab", () => {
         fireEvent.change(screen.getByLabelText("description"), { target: { value: "y" } });
         await waitFor(() => expect(save).toHaveBeenLastCalledWith(1, 5,
             { content: { name: "t", description: "y" }, baseRevision: "r5" }), { timeout: 2000 });
+    });
+
+    it("flush() saves a scheduled edit immediately", async () => {
+        const save = vi.spyOn(c, "saveItem").mockResolvedValue({ ...item, contentRevision: "r1" });
+        const ref: { current: ItemTabHandle | null } = { current: null };
+        render(<ItemTab ref={ref} compositionId={1} item={item} content={{ name: "t", description: "" }}
+            composition={composition} problems={[]} onSaved={() => {}} />);
+        fireEvent.change(screen.getByLabelText("description"), { target: { value: "now" } });
+        expect(save).not.toHaveBeenCalled();
+        await ref.current!.flush();
+        expect(save).toHaveBeenCalledWith(1, 5, { content: { name: "t", description: "now" }, baseRevision: "r0" });
     });
 });

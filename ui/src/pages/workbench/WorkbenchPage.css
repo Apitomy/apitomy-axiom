@@ -1,7 +1,14 @@
+/* PageSection (isFilled, no body wrapper): a flex column filling the page's main area. */
+.axiom-workbench-page {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
 .axiom-workbench {
     display: grid;
     grid-template-rows: auto auto auto minmax(0, 1fr);
-    height: 100%;
+    flex: 1 1 0;
     min-height: 0;
 }
 
@@ -27,16 +34,51 @@
 .axiom-workbench__centre {
     grid-row: 4;
     min-height: 0;
+    min-width: 0;
     overflow: auto;
 }
+
+/* Explicit columns: placement never depends on DOM order or on which panes are collapsed. */
+.axiom-workbench__left { grid-column: 1; }
+.axiom-workbench__splitter--left { grid-column: 2; }
+.axiom-workbench__centre { grid-column: 3; }
+.axiom-workbench__splitter--right { grid-column: 4; }
+.axiom-workbench__right { grid-column: 5; }
 
 .axiom-workbench__centre {
     display: flex;
     flex-direction: column;
+    overflow: hidden;
 }
 
 .axiom-workbench__tabs {
-    flex-shrink: 0;
+    flex: 0 0 auto;
+}
+
+/* The active tab's content fills the centre column between the tab bar and the problems strip. */
+.axiom-workbench__centre > .pf-v6-c-tab-content:not([hidden]) {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+}
+
+/* Workflow tab: alerts at natural height, the Flow editor takes the rest (no scroll). */
+.axiom-workbench__workflow-tab {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.axiom-workbench__workflow-tab > .pf-v6-c-alert {
+    flex: 0 0 auto;
+}
+
+.axiom-workbench__workflow-editor {
+    flex: 1 1 0;
+    min-height: 0;
 }
 
 .axiom-workbench__placeholder {
@@ -44,6 +86,7 @@
 }
 
 .axiom-workbench__problems {
+    flex: 0 0 auto;
     margin-top: auto;
     padding: var(--pf-t--global--spacer--xs, 4px) var(--pf-t--global--spacer--md, 16px);
     border-top: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);

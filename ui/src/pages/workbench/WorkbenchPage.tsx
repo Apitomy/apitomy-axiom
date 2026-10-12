@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ActionTypeDescriptor, Workflow } from "@apitomy/flow-ui";
 import { useParams, useSearchParams } from "react-router-dom";
-import { Alert, AlertActionLink, Button, Tab, Tabs, TabTitleText, ToggleGroup, ToggleGroupItem } from "@patternfly/react-core";
+import { Alert, AlertActionLink, Button, PageSection, Tab, Tabs, TabTitleText, ToggleGroup, ToggleGroupItem } from "@patternfly/react-core";
 import { addItem, type CompositionItem, fetchItem, updateComposition } from "../../config/compositions";
 import { type AddRequest, CompositionTree } from "./CompositionTree";
 import { PublishDialog } from "./PublishDialog";
@@ -9,7 +9,7 @@ import { loadPrefs, savePrefs, type WorkbenchPrefs } from "./workbenchPrefs";
 import { useWorkbench } from "./useWorkbench";
 import { PaneSplitter } from "./PaneSplitter";
 import { WorkflowTab, type WorkflowTabHandle } from "./WorkflowTab";
-import { ItemTab } from "./ItemTab";
+import { ItemTab, type ItemTabHandle } from "./ItemTab";
 import { mergeCatalog } from "./workbenchLogic";
 import { ChatPane } from "./ChatPane";
 import { ProblemsStrip } from "./ProblemsStrip";
@@ -35,6 +35,9 @@ export function WorkbenchPage() {
 
     const composition = wb.composition;
     const workflowTabRef = useRef<WorkflowTabHandle | null>(null);
+    /** Handles of the mounted item tabs, by item id (flushed before publishing). */
+    const itemTabRefs = useRef<Map<number, ItemTabHandle>>(new Map());
+    const [preparingPublish, setPreparingPublish] = useState<boolean>(false);
     /** Turn id of the last workflow save made for an AI turn (input to undoPlan). */
     const lastWorkflowSaveTurnId = useRef<string | undefined>(undefined);
     const [prefill, setPrefill] = useState<{ text: string; nonce: number } | undefined>(undefined);
@@ -147,8 +150,9 @@ export function WorkbenchPage() {
         add().catch(console.error);
     };
 
-    const onWorkflowSaved = (_item: CompositionItem, _content: Workflow, savedTurnId: string | undefined) => {
+    const onWorkflowSaved = (saved: CompositionItem, content: Workflow, savedTurnId: string | undefined) => {
         lastWorkflowSaveTurnId.current = savedTurnId;
+        wb.setContent(saved.id, content as unknown as Record<string, unknown>, saved.contentRevision);
     };
 
     const addToComposition = (request: AddRequest) => {
@@ -206,12 +210,39 @@ export function WorkbenchPage() {
         return tab.selection();
     };
 
+    /** Flushes every open editor's unsaved changes, then opens the Publish dialog. */
+    const openPublish = async (): Promise<void> => {
+        setPreparingPublish(true);
+        try {
+            await Promise.all([
+                workflowTabRef.current?.flush() ?? Promise.resolve(),
+                ...Array.from(itemTabRefs.current.values()).map((h) => h.flush()),
+            ]);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setPreparingPublish(false);
+        }
+        setPublishOpen(true);
+    };
+
+    /** Returns a ref callback that tracks the handle of the item tab for `itemId`. */
+    const itemTabRef = (itemId: number) => (h: ItemTabHandle | null) => {
+        if (h) {
+            itemTabRefs.current.set(itemId, h);
+        } else {
+            itemTabRefs.current.delete(itemId);
+        }
+    };
+
     const leftWidth: number = prefs.leftCollapsed ? RAIL : prefs.panes.left;
     const rightWidth: number = prefs.rightCollapsed ? RAIL : prefs.panes.right;
     const setLeft = (w: number) => setPrefs((p) => ({ ...p, panes: { ...p.panes, left: w } }));
     const setRight = (w: number) => setPrefs((p) => ({ ...p, panes: { ...p.panes, right: w } }));
 
     return (
+        <PageSection isFilled padding={{ default: "noPadding" }} hasBodyWrapper={false}
+            className="axiom-workbench-page">
         <div className="axiom-workbench"
             style={{ gridTemplateColumns: `${leftWidth}px 6px minmax(0, 1fr) 6px ${rightWidth}px` }}>
             <div className="axiom-workbench__toolbar">
@@ -238,7 +269,8 @@ export function WorkbenchPage() {
                     {searchParams.get("focus") === "1" ? "Exit focus" : "Focus"}
                 </Button>
                 <Button variant="secondary" onClick={breakOut}>Break out</Button>
-                <Button variant="primary" onClick={() => setPublishOpen(true)}>Publish…</Button>
+                <Button variant="primary" isDisabled={preparingPublish} isLoading={preparingPublish}
+                    onClick={() => void openPublish()}>Publish…</Button>
             </div>
             {brokenOut && (
                 <Alert className="axiom-workbench__notice" isInline variant="info" title="Opened in another window"
@@ -263,8 +295,8 @@ export function WorkbenchPage() {
                         onOpen={openItem} onAdd={addToComposition} onRestored={onRestored} />
                 )}
             </aside>
-            {prefs.leftCollapsed ? <div /> : (
-                <PaneSplitter label="Resize left pane" width={prefs.panes.left} direction={1} onResize={setLeft}
+            {prefs.leftCollapsed ? <div className="axiom-workbench__splitter axiom-workbench__splitter--left" /> : (
+                <PaneSplitter className="axiom-workbench__splitter--left" label="Resize left pane" width={prefs.panes.left} direction={1} onResize={setLeft}
                     onResizeEnd={(w) => savePrefs({ panes: { left: w, right: prefs.panes.right } })} />
             )}
 
@@ -292,7 +324,7 @@ export function WorkbenchPage() {
                             <Tab key={tid} eventKey={String(tid)}
                                 title={<TabTitleText>{item?.name ?? `Item ${tid}`}</TabTitleText>}>
                                 {composition && item && wb.contents[tid] ? (
-                                    <ItemTab key={tid} compositionId={id} item={item} content={wb.contents[tid]}
+                                    <ItemTab key={tid} ref={itemTabRef(tid)} compositionId={id} item={item} content={wb.contents[tid]}
                                         contentRevision={wb.revisions[tid]}
                                         composition={composition} problems={wb.problems[tid]}
                                         onSaved={(saved, content) => {
@@ -309,8 +341,8 @@ export function WorkbenchPage() {
                 <ProblemsStrip problems={wb.problems[activeItemId ?? -1] ?? []} />
             </main>
 
-            {prefs.rightCollapsed ? <div /> : (
-                <PaneSplitter label="Resize right pane" width={prefs.panes.right} direction={-1} onResize={setRight}
+            {prefs.rightCollapsed ? <div className="axiom-workbench__splitter axiom-workbench__splitter--right" /> : (
+                <PaneSplitter className="axiom-workbench__splitter--right" label="Resize right pane" width={prefs.panes.right} direction={-1} onResize={setRight}
                     onResizeEnd={(w) => savePrefs({ panes: { left: prefs.panes.left, right: w } })} />
             )}
             <aside className="axiom-workbench__right">
@@ -337,5 +369,6 @@ export function WorkbenchPage() {
                     onClose={() => setPublishOpen(false)} />
             )}
         </div>
+        </PageSection>
     );
 }
