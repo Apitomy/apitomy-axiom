@@ -38,8 +38,8 @@ import {
     WorkflowEditor,
     WorkflowDiffViewer,
 } from "@apitomy/flow-ui";
-import type { Workflow, ValidationProblem } from "@apitomy/flow-ui";
-import { useWorkflowEditorSpi } from "../hooks/useWorkflowEditorSpi";
+import type { ChangeMeta, Workflow, ValidationProblem } from "@apitomy/flow-ui";
+import { findActionTypeIdByName, useWorkflowEditorSpi } from "../hooks/useWorkflowEditorSpi";
 import {
     type WorkflowDefinition,
     type WorkflowDefinitionVersion,
@@ -117,7 +117,20 @@ export function WorkflowDefinitionDetailPage() {
     const [diffBaseWorkflow, setDiffBaseWorkflow] = useState<Workflow | null>(null);
     const [diffCompareWorkflow, setDiffCompareWorkflow] = useState<Workflow | null>(null);
 
-    const spi = useWorkflowEditorSpi();
+    const openActionType = useCallback(({ value, resolved }: { value: string; resolved: boolean }) => {
+        if (dirty && !window.confirm("Leave without saving workflow changes?")) {
+            return;
+        }
+        if (!resolved) {
+            navigate("/action-types");
+            return;
+        }
+        findActionTypeIdByName(value)
+            .then(id => navigate(id !== undefined ? `/action-types/${id}` : "/action-types"))
+            .catch(() => navigate("/action-types"));
+    }, [dirty, navigate]);
+
+    const spi = useWorkflowEditorSpi({ openActionType });
 
     const loadDefinition = useCallback(() => {
         if (!id) return;
@@ -195,7 +208,7 @@ export function WorkflowDefinitionDetailPage() {
         return () => { clearTimeout(timeout); unsubscribe(); };
     }, [activeTab, loadRuns]);
 
-    const handleEditorChange = useCallback((updated: Workflow) => {
+    const handleEditorChange = useCallback((updated: Workflow, _meta?: ChangeMeta) => {
         setEditorContent(updated);
         const isDirty = JSON.stringify(updated) !== savedContentRef.current;
         setDirty(isDirty);

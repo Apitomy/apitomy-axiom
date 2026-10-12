@@ -38,10 +38,32 @@ export async function loadEditorActionTypes(): Promise<ActionTypeDescriptor[]> {
 }
 
 /**
+ * Looks up the id of a configured action type by its name.
+ *
+ * @param name the action type name
+ * @returns the id, or undefined when no action type has that name
+ */
+export async function findActionTypeIdByName(name: string): Promise<number | undefined> {
+    const results = await fetchActionTypes(1, 1000);
+    return results.items.find(at => at.name === name)?.id;
+}
+
+/** Options for {@link useWorkflowEditorSpi}. */
+export interface WorkflowEditorSpiOptions {
+    /** Called when the editor asks to open an action type. */
+    openActionType?: (request: { value: string; resolved: boolean }) => void;
+}
+
+/**
  * A memoized {@link EditorSpi} for Axiom's workflow editors.
  *
+ * @param options optional callbacks exposed through the SPI
  * @returns the SPI
  */
-export function useWorkflowEditorSpi(): EditorSpi {
-    return useMemo(() => ({ actionTypes: loadEditorActionTypes }), []);
+export function useWorkflowEditorSpi(options?: WorkflowEditorSpiOptions): EditorSpi {
+    const openActionType = options?.openActionType;
+    return useMemo(() => ({
+        actionTypes: loadEditorActionTypes,
+        ...(openActionType ? { openActionType } : {}),
+    }), [openActionType]);
 }
