@@ -16,6 +16,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -143,5 +146,80 @@ class CompositionPublisherTest {
         assertEquals(1, forced.updated());
         assertEquals("edited in workbench", QuarkusTransaction.requiringNew().call(
                 () -> ActionTypeEntity.<ActionTypeEntity>find("name", "cpt-at").firstResult().description));
+    }
+
+    @Test
+    void newDraftMatchingExistingNameNeedsForce() {
+        CompositionEntity first = service.create("c1", null, null, null, null);
+        CompositionItemEntity original = validActionType(first.id, "cpt-dup");
+        publisher.publish(first.id, List.of(original.id), false);
+
+        CompositionEntity second = service.create("c2", null, null, null, null);
+        CompositionItemEntity duplicate = validActionType(second.id, "cpt-dup");
+        CompositionConflictException conflict = assertThrows(CompositionConflictException.class,
+                () -> publisher.publish(second.id, List.of(duplicate.id), false));
+        assertTrue(conflict.getMessage().contains("action-type/cpt-dup already exists outside this composition"),
+                conflict.getMessage());
+        CompositionPublisher.Outcome forced = publisher.publish(second.id, List.of(duplicate.id), true);
+        assertEquals(1, forced.updated());
+    }
+
+    @Test
+    void renamedLoadedItemNeedsForce() {
+        CompositionEntity composition = service.create("c", null, null, null, null);
+        CompositionItemEntity actionType = validActionType(composition.id, "cpt-old");
+        publisher.publish(composition.id, List.of(actionType.id), false);
+
+        CompositionItemEntity current = QuarkusTransaction.requiringNew().call(
+                () -> CompositionItemEntity.<CompositionItemEntity>findById(actionType.id));
+        ObjectNode content = (ObjectNode) service.contentOf(current);
+        content.put("name", "cpt-new");
+        service.save(composition.id, actionType.id, content, current.contentRevision, CompositionService.AUTHOR_USER, null);
+
+        CompositionConflictException conflict = assertThrows(CompositionConflictException.class,
+                () -> publisher.publish(composition.id, List.of(actionType.id), false));
+        assertTrue(conflict.getMessage().contains("action-type/cpt-new was renamed from 'cpt-old'; "
+                + "publishing creates a new item and keeps 'cpt-old'"), conflict.getMessage());
+        CompositionPublisher.Outcome forced = publisher.publish(composition.id, List.of(actionType.id), true);
+        assertEquals(1, forced.created());
+        assertEquals(2L, QuarkusTransaction.requiringNew().call(
+                () -> ActionTypeEntity.count("name in ?1", List.of("cpt-old", "cpt-new"))));
+    }
+
+    @Test
+    void publishDoesNotOverwriteConcurrentSave() throws Exception {
+        CompositionEntity composition = service.create("c", null, null, null, null);
+        CompositionItemEntity actionType = validActionType(composition.id, "cpt-race");
+        ObjectNode content = (ObjectNode) service.contentOf(actionType);
+        content.put("description", "saved concurrently");
+
+        CountDownLatch saved = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        CompletableFuture<Void> saver = CompletableFuture.runAsync(() -> QuarkusTransaction.requiringNew().run(() -> {
+            service.save(composition.id, actionType.id, content, actionType.contentRevision,
+                    CompositionService.AUTHOR_USER, null);
+            saved.countDown();
+            try {
+                release.await(10, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }));
+        assertTrue(saved.await(10, TimeUnit.SECONDS));
+        CompletableFuture<CompositionPublisher.Outcome> publishing = CompletableFuture.supplyAsync(
+                () -> publisher.publish(composition.id, List.of(actionType.id), false));
+        Thread.sleep(500);
+        release.countDown();
+        saver.get(20, TimeUnit.SECONDS);
+        publishing.get(20, TimeUnit.SECONDS);
+
+        QuarkusTransaction.requiringNew().run(() -> {
+            CompositionItemEntity stored = CompositionItemEntity.findById(actionType.id);
+            CompositionRevisionEntity newest = CompositionRevisionEntity
+                    .<CompositionRevisionEntity>find("itemId = ?1 order by createdOn desc, id desc", actionType.id)
+                    .firstResult();
+            assertEquals(newest.contentRevision, stored.contentRevision);
+            assertEquals(stored.contentRevision, stored.publishedRevision);
+        });
     }
 }

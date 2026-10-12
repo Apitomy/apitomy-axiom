@@ -193,6 +193,24 @@ public class CompositionService {
     public CompositionItemEntity item(long compositionId, long itemId) {
         get(compositionId);
         CompositionItemEntity item = CompositionItemEntity.findById(itemId);
+        return checkMember(compositionId, itemId, item);
+    }
+
+    /**
+     * Loads an item with a pessimistic write lock, so concurrent saves wait for the caller's transaction.
+     *
+     * @param compositionId the composition id
+     * @param itemId the item id
+     * @return the locked item
+     * @throws CompositionNotFoundException if the composition or item does not exist
+     */
+    public CompositionItemEntity lockedItem(long compositionId, long itemId) {
+        get(compositionId);
+        CompositionItemEntity item = CompositionItemEntity.findById(itemId, LockModeType.PESSIMISTIC_WRITE);
+        return checkMember(compositionId, itemId, item);
+    }
+
+    private static CompositionItemEntity checkMember(long compositionId, long itemId, CompositionItemEntity item) {
         if (item == null || item.compositionId != compositionId) {
             throw new CompositionNotFoundException("Composition item not found: " + itemId);
         }
@@ -424,7 +442,12 @@ public class CompositionService {
         }
     }
 
-    private static String publishedName(ConfigItemType type, long id) {
+    /**
+     * @param type the item type
+     * @param id the published item's database id
+     * @return the published item's current name, or null if it no longer exists
+     */
+    public static String publishedName(ConfigItemType type, long id) {
         return switch (type) {
             case WORKFLOW -> {
                 WorkflowDefinitionEntity e = WorkflowDefinitionEntity.findById(id);

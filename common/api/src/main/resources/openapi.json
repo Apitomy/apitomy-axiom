@@ -5339,7 +5339,14 @@
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "description": "A second workflow or a duplicate name"
+            "description": "A second workflow or a duplicate name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionConflictError"
+                }
+              }
+            }
           }
         }
       },
@@ -5413,7 +5420,14 @@
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "description": "Stale baseRevision or duplicate name"
+            "description": "Stale baseRevision (body has message and currentRevision) or duplicate name (body has only message)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaleRevisionError"
+                }
+              }
+            }
           }
         }
       },
@@ -5522,7 +5536,14 @@
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "description": "The restored name collides with another item"
+            "description": "The restored name collides with another item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionConflictError"
+                }
+              }
+            }
           }
         }
       },
@@ -5681,10 +5702,24 @@
             "$ref": "#/components/responses/NotFound"
           },
           "409": {
-            "description": "Changed outside the workbench"
+            "description": "Changed outside the workbench, an existing item with the same name, or a renamed loaded item; retry with force",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionConflictError"
+                }
+              }
+            }
           },
           "422": {
-            "description": "Errors or missing dependencies"
+            "description": "Errors or missing dependencies",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishBlockedError"
+                }
+              }
+            }
           }
         }
       },
@@ -10379,6 +10414,61 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CompositionItem"
+            }
+          }
+        }
+      },
+      "StaleRevisionError": {
+        "title": "StaleRevisionError",
+        "description": "409 body when the caller's baseRevision is not the item's current revision.",
+        "required": [
+          "message",
+          "currentRevision"
+        ],
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "currentRevision": {
+            "description": "The item's current content revision.",
+            "type": "string"
+          }
+        }
+      },
+      "CompositionConflictError": {
+        "title": "CompositionConflictError",
+        "description": "409 body for composition conflicts (duplicate names, a second workflow, publish conflicts).",
+        "required": [
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "PublishBlockedError": {
+        "title": "PublishBlockedError",
+        "description": "422 body when publishing is blocked by validation errors or missing dependencies.",
+        "required": [
+          "message",
+          "problems"
+        ],
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "problems": {
+            "description": "Problems keyed by \"<type>/<name>\".",
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/ConfigProblem"
+              }
             }
           }
         }

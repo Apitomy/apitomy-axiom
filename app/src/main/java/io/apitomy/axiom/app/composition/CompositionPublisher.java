@@ -14,6 +14,7 @@ import io.apitomy.axiom.core.entities.CompositionEntity;
 import io.apitomy.axiom.core.entities.CompositionItemEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
+import io.quarkus.hibernate.orm.panache.PanacheEntity;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -73,8 +74,9 @@ public class CompositionPublisher {
         if (itemIds == null || itemIds.isEmpty()) {
             throw new IllegalArgumentException("Select at least one item to publish");
         }
-        List<CompositionItemEntity> selected = itemIds.stream().distinct()
-                .map(id -> service.item(compositionId, id)).toList();
+        // Lock in id order so concurrent saves cannot be overwritten by this transaction's stale snapshot.
+        List<CompositionItemEntity> selected = itemIds.stream().distinct().sorted()
+                .map(id -> service.lockedItem(compositionId, id)).toList();
 
         Map<String, List<ConfigProblem>> blocked = new LinkedHashMap<>();
         checkDependencies(compositionId, selected, blocked);
@@ -91,14 +93,31 @@ public class CompositionPublisher {
         }
 
         if (!force) {
-            List<String> conflicts = selected.stream()
+            List<String> conflicts = new ArrayList<>();
+            List<String> changed = selected.stream()
                     .filter(item -> item.baseItemId != null)
                     .filter(item -> !Objects.equals(item.baseContentRevision,
                             service.currentBaseRevision(ConfigItemType.fromName(item.itemType), item.baseItemId)))
                     .map(CompositionPublisher::key).toList();
+            if (!changed.isEmpty()) {
+                conflicts.add("Changed outside the workbench since loaded: " + String.join(", ", changed));
+            }
+            for (CompositionItemEntity item : selected) {
+                ConfigItemType type = ConfigItemType.fromName(item.itemType);
+                if (item.baseItemId == null) {
+                    if (publishedIdOrNull(type, item.name) != null) {
+                        conflicts.add(key(item) + " already exists outside this composition");
+                    }
+                } else {
+                    String oldName = CompositionService.publishedName(type, item.baseItemId);
+                    if (oldName != null && !oldName.equals(item.name)) {
+                        conflicts.add(key(item) + " was renamed from '" + oldName
+                                + "'; publishing creates a new item and keeps '" + oldName + "'");
+                    }
+                }
+            }
             if (!conflicts.isEmpty()) {
-                throw new CompositionConflictException(
-                        "Changed outside the workbench since loaded: " + String.join(", ", conflicts));
+                throw new CompositionConflictException(String.join("; ", conflicts));
             }
         }
 
@@ -164,12 +183,20 @@ public class CompositionPublisher {
     }
 
     private static Long publishedId(ConfigItemType type, String name) {
+        return Objects.requireNonNull(publishedIdOrNull(type, name), "Published item not found: " + name);
+    }
+
+    private static Long publishedIdOrNull(ConfigItemType type, String name) {
         return switch (type) {
-            case WORKFLOW -> WorkflowDefinitionEntity.<WorkflowDefinitionEntity>find("name", name).firstResult().id;
-            case ACTION_TYPE -> ActionTypeEntity.<ActionTypeEntity>find("name", name).firstResult().id;
-            case TOOL -> ToolDefinitionEntity.<ToolDefinitionEntity>find("name", name).firstResult().id;
+            case WORKFLOW -> idOf(WorkflowDefinitionEntity.<WorkflowDefinitionEntity>find("name", name).firstResult());
+            case ACTION_TYPE -> idOf(ActionTypeEntity.<ActionTypeEntity>find("name", name).firstResult());
+            case TOOL -> idOf(ToolDefinitionEntity.<ToolDefinitionEntity>find("name", name).firstResult());
             default -> throw new IllegalArgumentException("Unsupported type " + type);
         };
+    }
+
+    private static Long idOf(PanacheEntity entity) {
+        return entity == null ? null : entity.id;
     }
 
     private static String key(CompositionItemEntity item) {
