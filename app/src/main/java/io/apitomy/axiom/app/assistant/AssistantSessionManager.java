@@ -109,6 +109,7 @@ public class AssistantSessionManager {
     InteractiveSessionDriverFactory interactiveSessionDriverFactory;
 
     private final Map<String, AssistantSession> sessions = new ConcurrentHashMap<>();
+    private final Map<String, HistoryJournal> journals = new ConcurrentHashMap<>();
     private final AtomicInteger sessionCount = new AtomicInteger();
 
     private volatile Path assistantMcpServerDir;
@@ -271,7 +272,9 @@ public class AssistantSessionManager {
             session.setMcpToken(mcpToken);
             sessionRef.set(session);
             // Persist every event (including the welcome message and startup events) to history.jsonl
-            session.addListener(new HistoryJournal(sessionDir.resolve(HistoryJournal.FILE_NAME), objectMapper));
+            HistoryJournal journal = new HistoryJournal(sessionDir.resolve(HistoryJournal.FILE_NAME), objectMapper);
+            journals.put(sessionId, journal);
+            session.addListener(journal);
             session.start();
 
             // Add welcome message to event history so it replays on reconnect
@@ -365,6 +368,16 @@ public class AssistantSessionManager {
     }
 
     /**
+     * Returns the history journal of a live session, for tests that need to flush it.
+     *
+     * @param sessionId the session identifier
+     * @return the journal, or null if the session has none
+     */
+    HistoryJournal journal(String sessionId) {
+        return journals.get(sessionId);
+    }
+
+    /**
      * Destroys a session: kills the subprocess and deletes the session directory.
      * If the working directory is inside the session directory (auto-created),
      * it is deleted as well. User-specified working directories are left untouched.
@@ -382,6 +395,10 @@ public class AssistantSessionManager {
             } catch (Exception e) {
                 LOG.debugf("Could not record usage for session %s: %s",
                         sessionId, e.getMessage());
+            }
+            HistoryJournal journal = journals.remove(sessionId);
+            if (journal != null) {
+                journal.close();
             }
             contextBuilder.deleteSessionDirectory(session.getSessionDirectory());
             LOG.infof("Destroyed assistant session %s (cost=$%.4f, turns=%d)",

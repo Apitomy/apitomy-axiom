@@ -35,6 +35,7 @@ class HistoryJournalTest {
         HistoryJournal journal = new HistoryJournal(file, MAPPER);
         journal.accept(event("user_message", "hi"));
         journal.accept(event("assistant_text", "hello\nthere"));
+        journal.flush();
 
         List<SseEvent> loaded = HistoryJournal.load(file, MAPPER);
         assertEquals(2, loaded.size());
@@ -49,6 +50,7 @@ class HistoryJournalTest {
         journal.accept(event("user_message", "old"));
         journal.accept(event("conversation_reset", ""));
         journal.accept(event("user_message", "new"));
+        journal.flush();
 
         List<SseEvent> loaded = HistoryJournal.load(file, MAPPER);
         assertEquals(List.of("conversation_reset", "user_message"),
@@ -59,7 +61,9 @@ class HistoryJournalTest {
     void skipsMalformedLinesAndMissingFile(@TempDir Path dir) throws IOException {
         Path file = dir.resolve(HistoryJournal.FILE_NAME);
         assertTrue(HistoryJournal.load(file, MAPPER).isEmpty());
-        new HistoryJournal(file, MAPPER).accept(event("user_message", "ok"));
+        HistoryJournal journal = new HistoryJournal(file, MAPPER);
+        journal.accept(event("user_message", "ok"));
+        journal.close();
         Files.writeString(file, "{not json\n", StandardOpenOption.APPEND);
         assertEquals(1, HistoryJournal.load(file, MAPPER).size());
     }
@@ -68,5 +72,31 @@ class HistoryJournalTest {
     void writeFailureDoesNotThrow(@TempDir Path dir) {
         HistoryJournal journal = new HistoryJournal(dir.resolve("missing-dir/history.jsonl"), MAPPER);
         assertDoesNotThrow(() -> journal.accept(event("user_message", "x")));
+        assertDoesNotThrow(journal::flush);
+        assertDoesNotThrow(journal::close);
+    }
+
+    @Test
+    void asyncWritesArePreservedInOrderAfterFlush(@TempDir Path dir) throws IOException {
+        Path file = dir.resolve(HistoryJournal.FILE_NAME);
+        HistoryJournal journal = new HistoryJournal(file, MAPPER);
+        for (int i = 0; i < 200; i++) {
+            journal.accept(event("assistant_text", "m" + i));
+        }
+        journal.flush();
+        List<SseEvent> loaded = HistoryJournal.load(file, MAPPER);
+        assertEquals(200, loaded.size());
+        assertEquals("m199", loaded.get(199).data().path("text").asText());
+        journal.close();
+        journal.close();
+    }
+
+    @Test
+    void missingDataLoadsAsEmptyObject(@TempDir Path dir) throws IOException {
+        Path file = dir.resolve(HistoryJournal.FILE_NAME);
+        Files.writeString(file, "{\"type\":\"turn_complete\"}\n{\"type\":\"x\",\"data\":null}\n");
+        List<SseEvent> loaded = HistoryJournal.load(file, MAPPER);
+        assertTrue(loaded.get(0).data().isObject());
+        assertTrue(loaded.get(1).data().isObject());
     }
 }

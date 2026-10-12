@@ -101,6 +101,7 @@ class SessionTokenTest {
         com.fasterxml.jackson.databind.node.ObjectNode data = new ObjectMapper().createObjectNode();
         data.put("text", "journal me");
         session.addEvent(new AssistantEventParser.SseEvent("assistant_text", data));
+        manager.journal(sessionId).flush();
         java.util.List<AssistantEventParser.SseEvent> loaded = HistoryJournal.load(
                 session.getSessionDirectory().resolve(HistoryJournal.FILE_NAME), new ObjectMapper());
         assertEquals("journal me", loaded.get(loaded.size() - 1).data().path("text").asText());

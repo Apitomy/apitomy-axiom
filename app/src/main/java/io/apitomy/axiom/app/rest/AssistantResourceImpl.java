@@ -24,6 +24,7 @@ import io.apitomy.axiom.api.beans.SendAssistantMessageRequest;
 import io.apitomy.axiom.api.beans.SessionTemplate;
 import io.apitomy.axiom.api.beans.SetAllowAllRequest;
 import io.apitomy.axiom.api.beans.SetSubagentAllowAllRequest;
+import io.apitomy.axiom.app.assistant.SessionTokenGuard;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
 import io.apitomy.axiom.app.assistant.AssistantSession;
 import io.apitomy.axiom.app.ImportExportService;
@@ -67,7 +68,8 @@ import java.util.function.Consumer;
 @RunOnVirtualThread
 public class AssistantResourceImpl implements AssistantResource {
 
-    static final String SESSION_TOKEN_HEADER = "X-Axiom-Session-Token";
+    @Inject
+    SessionTokenGuard tokenGuard;
 
     @Context
     HttpHeaders httpHeaders;
@@ -434,9 +436,7 @@ public class AssistantResourceImpl implements AssistantResource {
     @Override
     public AssistantValidateResult validateAssistantItem(String sessionId, AssistantValidateRequest data) {
         AssistantSession session = requireSession(sessionId);
-        if (!session.verifyMcpToken(httpHeaders.getHeaderString(SESSION_TOKEN_HEADER))) {
-            throw new WebApplicationException("Missing or invalid " + SESSION_TOKEN_HEADER, 401);
-        }
+        tokenGuard.require(session, httpHeaders.getHeaderString(SessionTokenGuard.HEADER));
         if (data.getType() == null || data.getItem() == null) {
             throw new WebApplicationException("'type' and 'item' are required", 400);
         }
