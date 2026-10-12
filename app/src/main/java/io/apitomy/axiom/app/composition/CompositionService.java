@@ -160,7 +160,21 @@ public class CompositionService {
     @Transactional
     public void delete(long id) {
         CompositionEntity composition = get(id);
-        workbenchSessions.get().discard(id);
+        String sessionId = composition.assistantSessionId;
+        // Only discard the session once the deletion is committed: a rolled-back delete keeps its conversation.
+        transactions.registerInterposedSynchronization(new Synchronization() {
+            @Override
+            public void beforeCompletion() {
+                // nothing to do
+            }
+
+            @Override
+            public void afterCompletion(int status) {
+                if (status == Status.STATUS_COMMITTED) {
+                    workbenchSessions.get().discard(id, sessionId);
+                }
+            }
+        });
         for (CompositionItemEntity item : items(id)) {
             CompositionRevisionEntity.delete("itemId", item.id);
             item.delete();

@@ -8,6 +8,7 @@ import io.apitomy.axiom.core.entities.CompositionItemEntity;
 import io.apitomy.axiom.core.entities.CompositionRevisionEntity;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.persistence.LockModeType;
 import jakarta.transaction.Transactional;
 
 import java.util.ArrayList;
@@ -52,7 +53,10 @@ public class TurnUndo {
      */
     @Transactional
     public Result undo(long compositionId, String turnId) {
-        CompositionEntity composition = service.get(compositionId);
+        CompositionEntity composition = CompositionEntity.findById(compositionId, LockModeType.PESSIMISTIC_WRITE);
+        if (composition == null) {
+            throw new CompositionNotFoundException("Composition not found: " + compositionId);
+        }
         if (CompositionEntity.TURN_AI_WORKING.equals(composition.turnState)) {
             throw new CompositionConflictException("Wait for the AI turn to finish before undoing");
         }
