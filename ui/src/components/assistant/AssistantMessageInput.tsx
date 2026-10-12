@@ -9,6 +9,8 @@ interface AssistantMessageInputProps {
     disabled?: boolean;
     /** Overrides the default placeholder text when set. */
     placeholder?: string;
+    /** When the nonce changes, replaces the input text and focuses the input. */
+    prefill?: { text: string; nonce: number };
     /** When true, a Stop button is shown next to the Send button. */
     isProcessing?: boolean;
     /** True while a stop request is in flight; disables the Stop button. */
@@ -19,11 +21,23 @@ interface AssistantMessageInputProps {
 }
 
 export function AssistantMessageInput({
-    onSend, disabled, placeholder, slashCommands = [], isProcessing = false, isStopping = false, onStop,
+    onSend, disabled, placeholder, prefill, slashCommands = [], isProcessing = false, isStopping = false, onStop,
 }: AssistantMessageInputProps) {
     const [value, setValue] = useState("");
+    const prefillNonce: number | undefined = prefill?.nonce;
+    const prefillText: string | undefined = prefill?.text;
     const [selectedIndex, setSelectedIndex] = useState(0);
     const textAreaRef = useRef<HTMLTextAreaElement>(null);
+
+    useEffect(() => {
+        if (prefillNonce === undefined) {
+            return;
+        }
+        setValue(prefillText ?? "");
+        textAreaRef.current?.focus();
+        // Only a new nonce applies the prefill; text alone must not overwrite user edits.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [prefillNonce]);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     const filteredCommands = useMemo(() => {

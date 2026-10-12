@@ -43,11 +43,13 @@ interface AssistantChatPanelProps {
     onInterrupt?: () => Promise<void>;
     /** When set, the input is disabled and this reason is shown as its placeholder. */
     disabledReason?: string;
+    /** When the nonce changes, puts the text into the input and focuses it. */
+    prefill?: { text: string; nonce: number };
 }
 
 let messageIdCounter = 0;
 
-export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, onAutoApprovalCountChange, onAllowAllChanged, onModelDetected, onCostUpdate, onSend, onInterrupt, disabledReason }: AssistantChatPanelProps) {
+export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, onAutoApprovalCountChange, onAllowAllChanged, onModelDetected, onCostUpdate, onSend, onInterrupt, disabledReason, prefill }: AssistantChatPanelProps) {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [todos, setTodos] = useState<AssistantTodo[]>([]);
     const [isProcessing, setIsProcessingState] = useState(false);
@@ -896,6 +898,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                     onSend={handleSend}
                     disabled={isProcessing || !!disabledReason}
                     placeholder={disabledReason}
+                    prefill={prefill}
                     isProcessing={isProcessing}
                     isStopping={isStopping}
                     onStop={handleStop}

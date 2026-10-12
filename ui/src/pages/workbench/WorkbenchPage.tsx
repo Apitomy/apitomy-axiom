@@ -11,6 +11,8 @@ import { PaneSplitter } from "./PaneSplitter";
 import { WorkflowTab, type WorkflowTabHandle } from "./WorkflowTab";
 import { ItemTab } from "./ItemTab";
 import { mergeCatalog } from "./workbenchLogic";
+import { ChatPane } from "./ChatPane";
+import { ProblemsStrip } from "./ProblemsStrip";
 import { findActionTypeIdByName, loadEditorActionTypes } from "../../hooks/useWorkflowEditorSpi";
 import "./WorkbenchPage.css";
 
@@ -35,6 +37,7 @@ export function WorkbenchPage() {
     const workflowTabRef = useRef<WorkflowTabHandle | null>(null);
     /** Turn id of the last workflow save made for an AI turn (input to undoPlan). */
     const lastWorkflowSaveTurnId = useRef<string | undefined>(undefined);
+    const [prefill, setPrefill] = useState<{ text: string; nonce: number } | undefined>(undefined);
     const [databaseCatalog, setDatabaseCatalog] = useState<ActionTypeDescriptor[]>([]);
 
     useEffect(() => {
@@ -183,6 +186,18 @@ export function WorkbenchPage() {
         }
     };
 
+    const activeItemId: number | undefined = activeTab === "workflow" ? workflow?.id : Number(activeTab);
+
+    /** Flushes pending workflow saves and returns the current canvas selection. */
+    const beforeSend = async (): Promise<{ nodeIds: string[]; edgeIds: string[] }> => {
+        const tab: WorkflowTabHandle | null = workflowTabRef.current;
+        if (!tab) {
+            return { nodeIds: [], edgeIds: [] };
+        }
+        await tab.flush();
+        return tab.selection();
+    };
+
     const leftWidth: number = prefs.leftCollapsed ? RAIL : prefs.panes.left;
     const rightWidth: number = prefs.rightCollapsed ? RAIL : prefs.panes.right;
     const setLeft = (w: number) => setPrefs((p) => ({ ...p, panes: { ...p.panes, left: w } }));
@@ -221,7 +236,7 @@ export function WorkbenchPage() {
                 <Alert className="axiom-workbench__notice" isInline variant="info" title="Opened in another window"
                     actionLinks={<AlertActionLink onClick={() => setBrokenOut(false)}>Bring back here</AlertActionLink>} />
             )}
-            {wb.sessionError && (
+            {wb.sessionError && prefs.rightCollapsed && (
                 <Alert className="axiom-workbench__notice" isInline variant="warning"
                     title={`Assistant unavailable: ${wb.sessionError}`}
                     actionLinks={<AlertActionLink onClick={() => void wb.retrySession()}>Retry</AlertActionLink>} />
@@ -258,7 +273,7 @@ export function WorkbenchPage() {
                                 applyLayout={prefs.applyLayout} pending={wb.pending}
                                 onPendingHandled={wb.markPendingHandled} onSaved={onWorkflowSaved}
                                 onOpenActionType={onOpenActionType}
-                                onAskAi={(prefill) => console.info("Ask AI:", prefill)} />
+                                onAskAi={(text) => setPrefill({ text, nonce: Date.now() })} />
                         ) : (
                             <div className="axiom-workbench__placeholder">{workflow?.name}</div>
                         )}
@@ -283,9 +298,7 @@ export function WorkbenchPage() {
                         );
                     })]}
                 </Tabs>
-                <div className="axiom-workbench__problems">
-                    {Object.values(wb.problems).reduce((n, p) => n + p.length, 0)} problems
-                </div>
+                <ProblemsStrip problems={wb.problems[activeItemId ?? -1] ?? []} />
             </main>
 
             {prefs.rightCollapsed ? <div /> : (
@@ -300,7 +313,14 @@ export function WorkbenchPage() {
                 </Button>
                 {prefs.rightCollapsed
                     ? aiWorking && <span className="axiom-workbench__pulse" aria-label="AI is working" />
-                    : <div className="axiom-workbench__placeholder">Chat</div>}
+                    : composition && (
+                        <ChatPane composition={composition} sessionError={wb.sessionError}
+                            lastCompletedTurnId={wb.lastCompletedTurnId} prefill={prefill}
+                            beforeSend={beforeSend} onRetrySession={() => void wb.retrySession()}
+                            onReplaceWorkflow={(w) => workflowTabRef.current?.replace(w)}
+                            lastWorkflowSaveTurnId={lastWorkflowSaveTurnId.current}
+                            onUndone={() => void wb.refreshItems().catch(console.error)} />
+                    )}
             </aside>
             {publishOpen && (
                 <PublishDialog compositionId={id} items={wb.items} contents={wb.contents} problems={wb.problems}

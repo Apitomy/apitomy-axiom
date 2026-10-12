@@ -29,4 +29,17 @@ describe("AssistantChatPanel overrides", () => {
         const input = await screen.findByPlaceholderText("The AI is working…");
         expect((input as HTMLTextAreaElement).disabled).toBe(true);
     });
+
+    it("puts a prefill into the input when its nonce changes", async () => {
+        vi.spyOn(api, "fetchAssistantSessionHistory").mockResolvedValue([]);
+        const { rerender } = render(<AssistantChatPanel sessionId="s1" prefill={{ text: "fix node a", nonce: 1 }} />);
+        const input = await screen.findByRole("textbox") as HTMLTextAreaElement;
+        await waitFor(() => expect(input.value).toBe("fix node a"));
+        expect(document.activeElement).toBe(input);
+        fireEvent.change(input, { target: { value: "edited" } });
+        rerender(<AssistantChatPanel sessionId="s1" prefill={{ text: "fix node a", nonce: 1 }} />);
+        expect(input.value).toBe("edited");
+        rerender(<AssistantChatPanel sessionId="s1" prefill={{ text: "again", nonce: 2 }} />);
+        await waitFor(() => expect(input.value).toBe("again"));
+    });
 });
