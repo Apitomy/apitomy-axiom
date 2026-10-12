@@ -5137,6 +5137,321 @@
           }
         }
       }
+    },
+    "/compositions": {
+      "get": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "List workbench compositions",
+        "operationId": "listCompositions",
+        "responses": {
+          "200": {
+            "description": "Compositions, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Composition"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Create a composition, optionally seeded from an existing workflow",
+        "operationId": "createComposition",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewComposition"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The composition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Composition"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          }
+        }
+      }
+    },
+    "/compositions/{compositionId}": {
+      "get": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Get a composition",
+        "operationId": "getComposition",
+        "responses": {
+          "200": {
+            "description": "The composition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Composition"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Rename a composition or change its apply mode",
+        "operationId": "updateComposition",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompositionUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The composition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Composition"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Delete a composition and its unpublished drafts",
+        "operationId": "deleteComposition",
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/compositions/{compositionId}/items": {
+      "get": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "List a composition's draft items (without content)",
+        "operationId": "listCompositionItems",
+        "responses": {
+          "200": {
+            "description": "Items: the workflow, then action types, then tools",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CompositionItem"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Add a blank draft, or a draft copy of an existing item",
+        "operationId": "addCompositionItem",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewCompositionItem"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The item, with content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionItem"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "A second workflow or a duplicate name"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/compositions/{compositionId}/items/{itemId}": {
+      "get": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Get a draft item with its content",
+        "operationId": "getCompositionItem",
+        "responses": {
+          "200": {
+            "description": "The item, with content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionItem"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Save a draft item's content (a user edit)",
+        "description": "Fails with 409 if baseRevision is not the item's current contentRevision. The 409 body has message and currentRevision.",
+        "operationId": "updateCompositionItem",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompositionItemUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The saved item, with content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionItem"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid content"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "Stale baseRevision or duplicate name"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Remove a draft from the composition (published items are kept)",
+        "operationId": "deleteCompositionItem",
+        "responses": {
+          "204": {
+            "description": "Removed"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "itemId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
     }
   },
   "components": {
@@ -8389,13 +8704,13 @@
             "type": "string"
           },
           "input": {
-              "description": "Inputs the node received on this visit (action and human-task nodes resolved input expressions; the start node's declared workflow inputs)",
-              "type": "object",
-              "additionalProperties": {}
+            "description": "Inputs the node received on this visit (action and human-task nodes resolved input expressions; the start node's declared workflow inputs)",
+            "type": "object",
+            "additionalProperties": {}
           },
           "title": {
-              "description": "The computed title of a human-task node on this visit",
-              "type": "string"
+            "description": "The computed title of a human-task node on this visit",
+            "type": "string"
           }
         }
       },
@@ -9480,6 +9795,206 @@
           },
           "explanation": {
             "description": "AI's explanation of what was generated or changed",
+            "type": "string"
+          }
+        }
+      },
+      "CompositionContent": {
+        "description": "A draft item's JSON: the Flow Workflow document for workflows, otherwise the configuration item JSON.",
+        "type": "object",
+        "additionalProperties": true
+      },
+      "Composition": {
+        "required": [
+          "id",
+          "name",
+          "turnState",
+          "applyMode",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "goal": {
+            "type": "string"
+          },
+          "engine": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "assistantSessionId": {
+            "type": "string"
+          },
+          "turnState": {
+            "enum": [
+              "idle",
+              "ai-working"
+            ],
+            "type": "string"
+          },
+          "applyMode": {
+            "enum": [
+              "live",
+              "review"
+            ],
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        }
+      },
+      "NewComposition": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "goal": {
+            "type": "string"
+          },
+          "engine": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "seedWorkflowId": {
+            "description": "Existing workflow definition to load, with its action types and tools",
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      },
+      "CompositionUpdate": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "applyMode": {
+            "enum": [
+              "live",
+              "review"
+            ],
+            "type": "string"
+          }
+        }
+      },
+      "CompositionItem": {
+        "required": [
+          "id",
+          "type",
+          "name",
+          "contentRevision",
+          "lastAuthor",
+          "changed"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "type": {
+            "enum": [
+              "workflow",
+              "action-type",
+              "tool"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "contentRevision": {
+            "type": "string"
+          },
+          "baseItemId": {
+            "description": "Database id of the published item this draft edits",
+            "format": "int64",
+            "type": "integer"
+          },
+          "lastAuthor": {
+            "enum": [
+              "user",
+              "ai"
+            ],
+            "type": "string"
+          },
+          "lastTurnId": {
+            "type": "string"
+          },
+          "publishedRevision": {
+            "type": "string"
+          },
+          "publishedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "changed": {
+            "description": "True when publishing would change something",
+            "type": "boolean"
+          },
+          "content": {
+            "$ref": "#/components/schemas/CompositionContent"
+          }
+        }
+      },
+      "NewCompositionItem": {
+        "required": [
+          "type"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "enum": [
+              "workflow",
+              "action-type",
+              "tool"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "description": "Name of a new blank item (ignored when existingItemId is set)",
+            "type": "string"
+          },
+          "existingItemId": {
+            "description": "Database id of an existing item to copy as a draft",
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      },
+      "CompositionItemUpdate": {
+        "required": [
+          "content",
+          "baseRevision"
+        ],
+        "type": "object",
+        "properties": {
+          "content": {
+            "$ref": "#/components/schemas/CompositionContent"
+          },
+          "baseRevision": {
+            "description": "The contentRevision this edit was based on",
             "type": "string"
           }
         }
