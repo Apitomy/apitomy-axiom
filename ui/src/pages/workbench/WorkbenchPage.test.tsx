@@ -10,12 +10,18 @@ vi.mock("./useWorkbench", () => ({
     useWorkbench: (): WorkbenchState => ({
         composition: { id: 1, name: "My comp", turnState: "idle", applyMode: "live", createdAt: "", updatedAt: "" },
         items: [{ id: 10, type: "workflow", name: "main-flow", contentRevision: "r", lastAuthor: "user", changed: false } as never],
-        contents: {}, revisions: {}, problems: {}, pending: null, lastCompletedTurnId: undefined, sessionError: null,
+        contents: { 10: {} }, revisions: {}, problems: {}, pending: null, lastCompletedTurnId: undefined, sessionError: null,
         loadContent: async () => ({}), refreshItems: async () => {}, refreshComposition: async () => {},
         setContent: () => {}, markPendingHandled: () => {}, retrySession: async () => {},
     }),
 }));
 
+let workflowTabProps: Record<string, any> = {};
+vi.mock("./WorkflowTab", () => ({
+    WorkflowTab: (props: Record<string, any>) => { workflowTabProps = props; return <div data-testid="wf" />; },
+}));
+
+import { act } from "@testing-library/react";
 import { WorkbenchPage } from "./WorkbenchPage";
 
 function Probe() {
@@ -63,5 +69,15 @@ describe("WorkbenchPage", () => {
         renderPage();
         fireEvent.click(screen.getByRole("button", { name: "Collapse left pane" }));
         expect(spy).toHaveBeenCalledWith(expect.objectContaining({ leftCollapsed: true }));
+    });
+
+    it("expands a collapsed chat pane on Ask AI", () => {
+        const spy = vi.spyOn(prefs, "savePrefs");
+        renderPage();
+        fireEvent.click(screen.getByRole("button", { name: "Collapse chat pane" }));
+        expect(screen.getByRole("button", { name: "Expand chat pane" })).toBeTruthy();
+        act(() => workflowTabProps.onAskAi("explain node a"));
+        expect(screen.getByRole("button", { name: "Collapse chat pane" })).toBeTruthy();
+        expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ rightCollapsed: false }));
     });
 });

@@ -40,4 +40,26 @@ describe("ChatPane", () => {
         expect(screen.getByText(/agent down/)).toBeTruthy();
         expect(screen.getByRole("button", { name: /retry/i })).toBeTruthy();
     });
+
+    it("flushes before undoing", async () => {
+        const order: string[] = [];
+        const beforeUndo = vi.fn(async () => { await Promise.resolve(); order.push("flush"); });
+        vi.spyOn(c, "undoTurn").mockImplementation(async () => {
+            order.push("undo");
+            return { restored: [], removed: [], skipped: [], workflowRestorable: false };
+        });
+        render(<ChatPane {...props} beforeUndo={beforeUndo} />);
+        fireEvent.click(screen.getByRole("button", { name: /undo ai turn/i }));
+        await waitFor(() => expect(order).toEqual(["flush", "undo"]));
+    });
+
+    it("hides the undo bar after the turn is undone until a new turn completes", async () => {
+        vi.spyOn(c, "undoTurn").mockResolvedValue({ restored: [], removed: [], skipped: [],
+            workflowRestorable: false });
+        const { rerender } = render(<ChatPane {...props} />);
+        fireEvent.click(screen.getByRole("button", { name: /undo ai turn/i }));
+        await waitFor(() => expect(screen.queryByRole("button", { name: /undo ai turn/i })).toBeNull());
+        rerender(<ChatPane {...props} lastCompletedTurnId="t2" />);
+        expect(screen.getByRole("button", { name: /undo ai turn/i })).toBeTruthy();
+    });
 });

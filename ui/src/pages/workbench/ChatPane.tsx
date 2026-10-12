@@ -19,6 +19,8 @@ export interface ChatPaneProps {
     onReplaceWorkflow: (workflow: Workflow) => void;
     lastWorkflowSaveTurnId: string | undefined;
     onUndone: () => void;
+    /** Flushes unsaved editor changes before undoing. */
+    beforeUndo?: () => Promise<void>;
 }
 
 function summarise(result: UndoResult): string {
@@ -34,6 +36,7 @@ export function ChatPane(props: ChatPaneProps) {
     const { composition, sessionError, lastCompletedTurnId } = props;
     const [notice, setNotice] = useState<{ variant: "info" | "danger"; title: string; body?: string } | null>(null);
     const [undoing, setUndoing] = useState<boolean>(false);
+    const [undoneTurnId, setUndoneTurnId] = useState<string | undefined>(undefined);
 
     if (sessionError) {
         return (
@@ -62,12 +65,14 @@ export function ChatPane(props: ChatPaneProps) {
         setUndoing(true);
         setNotice(null);
         try {
+            await props.beforeUndo?.();
             const result: UndoResult = await undoTurn(composition.id, turnId);
             const plan = undoPlan(result, props.lastWorkflowSaveTurnId, turnId);
             if (plan.replaceWorkflow) {
                 props.onReplaceWorkflow(plan.replaceWorkflow);
             }
             setNotice({ variant: "info", title: plan.message, body: summarise(result) });
+            setUndoneTurnId(turnId);
             props.onUndone();
         } catch (e) {
             const title: string = e instanceof ApiError && e.status === 409
@@ -81,7 +86,7 @@ export function ChatPane(props: ChatPaneProps) {
 
     return (
         <div className="axiom-workbench__chat">
-            {lastCompletedTurnId && composition.turnState === "idle" && (
+            {lastCompletedTurnId && lastCompletedTurnId !== undoneTurnId && composition.turnState === "idle" && (
                 <div className="axiom-workbench__undo-bar">
                     <span>Last AI turn ·</span>
                     <Button variant="link" isInline isDisabled={undoing}

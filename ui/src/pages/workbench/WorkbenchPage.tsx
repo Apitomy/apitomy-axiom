@@ -188,6 +188,14 @@ export function WorkbenchPage() {
 
     const activeItemId: number | undefined = activeTab === "workflow" ? workflow?.id : Number(activeTab);
 
+    /** Prefills the chat and reveals a collapsed chat pane. */
+    const askAi = (text: string) => {
+        setPrefill({ text, nonce: Date.now() });
+        if (prefs.rightCollapsed) {
+            updatePrefs({ rightCollapsed: false });
+        }
+    };
+
     /** Flushes pending workflow saves and returns the current canvas selection. */
     const beforeSend = async (): Promise<{ nodeIds: string[]; edgeIds: string[] }> => {
         const tab: WorkflowTabHandle | null = workflowTabRef.current;
@@ -273,7 +281,7 @@ export function WorkbenchPage() {
                                 applyLayout={prefs.applyLayout} pending={wb.pending}
                                 onPendingHandled={wb.markPendingHandled} onSaved={onWorkflowSaved}
                                 onOpenActionType={onOpenActionType}
-                                onAskAi={(text) => setPrefill({ text, nonce: Date.now() })} />
+                                onAskAi={askAi} />
                         ) : (
                             <div className="axiom-workbench__placeholder">{workflow?.name}</div>
                         )}
@@ -319,6 +327,7 @@ export function WorkbenchPage() {
                             beforeSend={beforeSend} onRetrySession={() => void wb.retrySession()}
                             onReplaceWorkflow={(w) => workflowTabRef.current?.replace(w)}
                             lastWorkflowSaveTurnId={lastWorkflowSaveTurnId.current}
+                            beforeUndo={() => workflowTabRef.current?.flush() ?? Promise.resolve()}
                             onUndone={() => void wb.refreshItems().catch(console.error)} />
                     )}
             </aside>
