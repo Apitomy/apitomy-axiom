@@ -4993,6 +4993,48 @@
         }
       ]
     },
+    "/expressions/evaluate": {
+      "post": {
+        "tags": [
+          "Expressions"
+        ],
+        "summary": "Evaluate an EL expression in a workflow scope",
+        "description": "Evaluates an EL expression the way the workflow engine would in the given scope. Scopes that use `event` need `eventId` (a stored stream event). Context scopes given an `eventId` also see `context.event` unless the context already has `event`. Evaluation errors are returned with `ok` false.",
+        "operationId": "evaluateExpression",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExpressionEvaluateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Evaluation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpressionEvaluateResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Blank expression or unknown scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/lineage/{entityType}/{id}": {
       "get": {
         "tags": [
@@ -10769,6 +10811,75 @@
           }
         }
       },
+      "ExpressionEvaluateRequest": {
+        "title": "ExpressionEvaluateRequest",
+        "description": "An EL expression to evaluate in a workflow scope.",
+        "required": [
+          "expression",
+          "scope"
+        ],
+        "type": "object",
+        "properties": {
+          "expression": {
+            "description": "The EL expression",
+            "type": "string"
+          },
+          "scope": {
+            "description": "Where the expression is used, which decides its variables and result kind",
+            "type": "string",
+            "enum": [
+              "edge-condition",
+              "action-input",
+              "human-task-title",
+              "correlation-subscription-key",
+              "correlation-event-key",
+              "receive-event-match",
+              "receive-event-output"
+            ]
+          },
+          "eventId": {
+            "description": "ID of a stored stream event to use as `event`",
+            "type": "string"
+          },
+          "context": {
+            "$ref": "#/components/schemas/CompositionContent"
+          }
+        }
+      },
+      "ExpressionEvaluateResult": {
+        "title": "ExpressionEvaluateResult",
+        "description": "The result of evaluating an EL expression.",
+        "required": [
+          "ok"
+        ],
+        "type": "object",
+        "properties": {
+          "ok": {
+            "description": "Whether evaluation succeeded",
+            "type": "boolean"
+          },
+          "valueJson": {
+            "description": "The value as a JSON string",
+            "type": "string"
+          },
+          "valueType": {
+            "description": "The JSON type of the value",
+            "type": "string",
+            "enum": [
+              "null",
+              "boolean",
+              "number",
+              "string",
+              "object",
+              "array"
+            ]
+          },
+          "error": {
+            "description": "The error message when `ok` is false",
+            "type": "string"
+          }
+        }
+      },
       "CompositionContent": {
         "description": "A draft item's JSON: the Flow Workflow document for workflows, otherwise the configuration item JSON.",
         "type": "object",
@@ -11254,6 +11365,10 @@
     }
   },
   "tags": [
+    {
+      "name": "Expressions",
+      "description": "EL expression evaluation for workflow authoring"
+    },
     {
       "name": "System",
       "description": "System health and configuration"
