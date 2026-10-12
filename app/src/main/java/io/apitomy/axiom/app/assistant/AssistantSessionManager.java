@@ -785,6 +785,9 @@ public class AssistantSessionManager {
         if (prompt.contains("{{reference}}")) {
             prompt = prompt.replace("{{reference}}", referenceGenerator.generate());
         }
+        if (prompt.contains("{{changesetReference}}")) {
+            prompt = prompt.replace("{{changesetReference}}", referenceGenerator.generateChangeSetReference());
+        }
 
         if (subject == null) {
             return prompt;

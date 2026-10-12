@@ -89,6 +89,81 @@ public class AssistantReferenceGenerator {
     }
 
     /**
+     * Returns the change-set reference used by the workbench assistant: shape, ops, patch semantics, error
+     * codes and one complete example.
+     *
+     * @return Markdown change-set reference
+     */
+    public String generateChangeSetReference() {
+        return CHANGE_SET_REFERENCE;
+    }
+
+    private static final String CHANGE_SET_REFERENCE = """
+            # Workflow Change Sets
+
+            `propose_workflow_changes` takes a change set:
+
+            ```
+            { "id": string, "baseRevision": string, "author": "agent:<name>", "summary": string, "ops": [ ... ] }
+            ```
+
+            | Op | Fields | Effect |
+            | --- | --- | --- |
+            | `addNode` | `node` | Adds a node. A node without `position` is placed near its connected neighbours. |
+            | `updateNode` | `id`, `patch: { name?, config? }`, `unset?` | Updates the name and shallow-merges config. |
+            | `renameNode` | `id`, `newId` | Renames a node and rewrites `source`/`target` of attached edges. |
+            | `removeNode` | `id` | Removes a node and every edge attached to it. |
+            | `addEdge` | `edge` | Adds an edge; both endpoints must exist. |
+            | `updateEdge` | `id`, `patch`, `unset?` | Shallow-merges edge fields (any field except `id`). |
+            | `removeEdge` | `id` | Removes an edge. |
+            | `metadata` | `patch: { name?, description?, version? }` | Updates workflow metadata. |
+
+            Ops apply in order and later ops see the effects of earlier ones. Application is atomic: any error
+            leaves the workflow unchanged.
+
+            ## Patch semantics
+
+            - `updateNode.patch.config` is merged shallowly into the existing config. Nested values such as the
+              `inputs` and `outputs` mappings are replaced whole; to drop one entry, resend the whole mapping.
+            - `unset` lists top-level config keys (for `updateNode`) or edge fields (for `updateEdge`) to remove,
+              for example `timeout` or `condition`. It is applied after `patch`; a key in both is `malformed`.
+            - `null` in a patch is stored as a value. It does not remove the key; use `unset` for that.
+
+            ## Errors
+
+            | Code | Meaning |
+            | --- | --- |
+            | `target-missing` | The op references a node or edge that does not exist. |
+            | `duplicate-id` | An added or renamed element's id already exists. |
+            | `edge-endpoint-missing` | An edge's `source` or `target` does not exist. |
+            | `malformed` | The op is structurally invalid, for example a key in both `patch` and `unset`. |
+            | `stale` | `baseRevision` does not match the current workflow revision. Call `get_composition` and rebuild the change set. |
+
+            ## Example
+
+            Insert a one-hour wait between Start and End of a blank workflow (set `baseRevision` to the current
+            `workflowRevision`):
+
+            ```json
+            {
+              "id": "cs-1",
+              "baseRevision": "<workflowRevision>",
+              "author": "agent:workbench",
+              "summary": "Wait one hour before ending",
+              "ops": [
+                { "op": "removeEdge", "id": "edge-1" },
+                { "op": "addNode", "node": { "id": "wait-1", "type": "wait", "name": "Wait an hour",
+                  "config": { "duration": "PT1H" } } },
+                { "op": "addEdge", "edge": { "id": "edge-2", "source": "start-1", "target": "wait-1",
+                  "priority": 0, "isDefault": true } },
+                { "op": "addEdge", "edge": { "id": "edge-3", "source": "wait-1", "target": "end-1",
+                  "priority": 0, "isDefault": true } }
+              ]
+            }
+            ```
+            """;
+
+    /**
      * Lists bundled example files as (relative path, JSON text) pairs, in ConfigItemType order.
      *
      * @return example files
