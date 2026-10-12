@@ -113,14 +113,22 @@ export function WorkflowTab(props: WorkflowTabProps) {
         onAskAi } = props;
     const theme = useEffectiveTheme();
     const editorRef = useRef<WorkflowEditorHandle | null>(null);
+    /** Last non-null editor handle; the ref is detached before unmount cleanup runs. */
+    const lastEditorHandle = useRef<WorkflowEditorHandle | null>(null);
+    const [editorReady, setEditorReady] = useState<boolean>(false);
     const lastSavedRevision = useRef<string>(item.contentRevision);
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const pendingContent = useRef<Workflow | null>(null);
     const inFlight = useRef<Promise<void> | null>(null);
     const turnIdForNextSave = useRef<string | undefined>(undefined);
-    const applyingTurn = useRef<string | undefined>(undefined);
-    const suppressNextSave = useRef<boolean>(false);
+    /** Turn whose apply/accept produced an agent-origin change not yet seen by onChange; consumed once. */
+    const expectedAgentTurn = useRef<string | undefined>(undefined);
+    /** True when the last change was agent-origin but untagged and still unsaved (accept arriving late). */
+    const untaggedAgentChange = useRef<boolean>(false);
+    /** Suppresses the host-origin onChange produced by Reload; any other change clears it. */
+    const suppressReloadChange = useRef<boolean>(false);
     const handledTurns = useRef<Set<string>>(new Set());
+    const inProgressTurns = useRef<Set<string>>(new Set());
     const proposals = useRef<Map<string, { turnId: string; fromPending: boolean }>>(new Map());
     const selectionRef = useRef<{ nodeIds: string[]; edgeIds: string[] }>({ nodeIds: [], edgeIds: [] });
     const [saveError, setSaveError] = useState<SaveError | null>(null);
@@ -130,12 +138,21 @@ export function WorkflowTab(props: WorkflowTabProps) {
     const latest = useRef({ compositionId, item, onSaved, onPendingHandled, onOpenActionType, onAskAi, composition });
     latest.current = { compositionId, item, onSaved, onPendingHandled, onOpenActionType, onAskAi, composition };
 
+    const setEditorHandle = useCallback((h: WorkflowEditorHandle | null) => {
+        editorRef.current = h;
+        if (h) {
+            lastEditorHandle.current = h;
+        }
+        setEditorReady(h !== null);
+    }, []);
+
     const runSave = useCallback(async (): Promise<void> => {
         const content: Workflow | null = pendingContent.current;
         if (!content) {
             return;
         }
         pendingContent.current = null;
+        untaggedAgentChange.current = false;
         const turnId: string | undefined = turnIdForNextSave.current;
         turnIdForNextSave.current = undefined;
         const { compositionId: cid, item: it } = latest.current;
@@ -179,20 +196,51 @@ export function WorkflowTab(props: WorkflowTabProps) {
         }
     }, [startSave]);
 
+    const resolve = useCallback(async (turnId: string, outcome: ChangeSetOutcome, fromPending: boolean) => {
+        try {
+            await resolveChangeSet(latest.current.compositionId, { turnId, outcome, fromPending });
+        } catch (e) {
+            console.error(e);
+        }
+        latest.current.onPendingHandled();
+    }, []);
+
+    // Unmount: save any scheduled change and reject staged proposals (fire-and-forget).
     useEffect(() => () => {
         if (timer.current) {
             clearTimeout(timer.current);
+            timer.current = null;
+            void startSave();
         }
-    }, []);
+        proposals.current.forEach((entry, id) => {
+            try {
+                lastEditorHandle.current?.withdraw(id);
+            } catch (e) {
+                console.error(e);
+            }
+            void resolve(entry.turnId, "rejected", entry.fromPending);
+        });
+        proposals.current.clear();
+    }, [startSave, resolve]);
 
     const onChange = useCallback((workflow: Workflow, meta: { origin: string }) => {
-        if (suppressNextSave.current) {
-            suppressNextSave.current = false;
-            return;
+        if (suppressReloadChange.current) {
+            suppressReloadChange.current = false;
+            if (meta.origin === "host") {
+                return;
+            }
         }
         pendingContent.current = workflow;
         if (meta.origin.startsWith("agent:")) {
-            turnIdForNextSave.current = applyingTurn.current;
+            if (expectedAgentTurn.current) {
+                turnIdForNextSave.current = expectedAgentTurn.current;
+                expectedAgentTurn.current = undefined;
+                untaggedAgentChange.current = false;
+            } else {
+                untaggedAgentChange.current = true;
+            }
+        } else {
+            untaggedAgentChange.current = false;
         }
         if (timer.current) {
             clearTimeout(timer.current);
@@ -212,8 +260,10 @@ export function WorkflowTab(props: WorkflowTabProps) {
                 timer.current = null;
             }
             pendingContent.current = null;
+            turnIdForNextSave.current = undefined;
+            expectedAgentTurn.current = undefined;
             lastSavedRevision.current = fresh.contentRevision;
-            suppressNextSave.current = true;
+            suppressReloadChange.current = true;
             editorRef.current?.replace(fresh.content as unknown as Workflow, "host");
             setSaveError(null);
         } catch (e) {
@@ -221,73 +271,80 @@ export function WorkflowTab(props: WorkflowTabProps) {
         }
     }, []);
 
-    const resolve = useCallback(async (turnId: string, outcome: ChangeSetOutcome, fromPending: boolean) => {
-        try {
-            await resolveChangeSet(latest.current.compositionId, { turnId, outcome, fromPending });
-        } catch (e) {
-            console.error(e);
-        }
-        latest.current.onPendingHandled();
-    }, []);
-
     useEffect(() => {
-        if (!pending || handledTurns.current.has(pending.turnId)) {
+        if (!pending || !editorReady || handledTurns.current.has(pending.turnId)
+            || inProgressTurns.current.has(pending.turnId)) {
             return;
         }
-        handledTurns.current.add(pending.turnId);
         const { turnId, changeSet, fromPending } = pending;
-        void (async () => {
-            await flush();
-            const handle: WorkflowEditorHandle | null = editorRef.current;
-            if (!handle) {
-                return;
-            }
-            setApplyError(null);
-            applyingTurn.current = turnId;
-            if (latest.current.composition.applyMode === "review") {
-                proposals.current.set(changeSet.id, { turnId, fromPending });
-                const result: ProposeResult = handle.propose(changeSet);
-                if (result.status === "staged") {
-                    return;
-                }
-                proposals.current.delete(changeSet.id);
-                await rejected(turnId, fromPending, result.error.code, result.error.reason);
-            } else {
-                const result: ApplyResult = handle.apply(changeSet);
-                if (result.status === "applied") {
-                    await resolve(turnId, "applied", fromPending);
-                } else {
-                    await rejected(turnId, fromPending, result.error.code, result.error.reason);
-                }
-            }
-        })();
-
-        async function rejected(id: string, fp: boolean, code: string, reason: string) {
+        inProgressTurns.current.add(turnId);
+        const rejected = async (code: string, reason: string) => {
             if (code === "stale") {
-                await resolve(id, "stale", fp);
+                await resolve(turnId, "stale", fromPending);
             } else {
                 setApplyError(`The AI's workflow changes could not be applied: ${reason}`);
-                await resolve(id, "rejected", fp);
+                await resolve(turnId, "rejected", fromPending);
             }
-        }
-    }, [pending, flush, resolve]);
+        };
+        void (async () => {
+            await flush();
+            inProgressTurns.current.delete(turnId);
+            const handle: WorkflowEditorHandle | null = editorRef.current;
+            if (!handle) {
+                // Not handled: retried when the editor (re)mounts.
+                return;
+            }
+            handledTurns.current.add(turnId);
+            setApplyError(null);
+            try {
+                if (latest.current.composition.applyMode === "review") {
+                    proposals.current.set(changeSet.id, { turnId, fromPending });
+                    const result: ProposeResult = handle.propose(changeSet);
+                    if (result.status === "staged") {
+                        return;
+                    }
+                    proposals.current.delete(changeSet.id);
+                    await rejected(result.error.code, result.error.reason);
+                } else {
+                    expectedAgentTurn.current = turnId;
+                    const result: ApplyResult = handle.apply(changeSet);
+                    if (result.status === "applied") {
+                        await resolve(turnId, "applied", fromPending);
+                    } else {
+                        expectedAgentTurn.current = undefined;
+                        await rejected(result.error.code, result.error.reason);
+                    }
+                }
+            } catch (e) {
+                proposals.current.delete(changeSet.id);
+                expectedAgentTurn.current = undefined;
+                await rejected("error", e instanceof Error ? e.message : String(e));
+            }
+        })();
+    }, [pending, editorReady, flush, resolve]);
 
     const onProposalResolved = useCallback((id: string, outcome: ProposalOutcome) => {
-        if (!proposals.current.has(id)) {
+        const entry = proposals.current.get(id);
+        if (!entry) {
             return;
         }
-        const entry = proposals.current.get(id);
         proposals.current.delete(id);
-        if (entry) {
-            void resolve(entry.turnId, proposalOutcome(outcome), entry.fromPending);
+        if (outcome === "accepted") {
+            if (untaggedAgentChange.current && pendingContent.current) {
+                // The accept's onChange arrived first and is still unsaved: tag it now.
+                turnIdForNextSave.current = entry.turnId;
+                untaggedAgentChange.current = false;
+            } else {
+                expectedAgentTurn.current = entry.turnId;
+            }
         }
+        void resolve(entry.turnId, proposalOutcome(outcome), entry.fromPending);
     }, [resolve]);
 
     const onSelectionChange = useCallback((s: { nodeIds: string[]; edgeIds: string[] }) => {
         selectionRef.current = { nodeIds: [...s.nodeIds], edgeIds: [...s.edgeIds] };
     }, []);
 
-    const aiWorking: boolean = composition.turnState === "ai-working";
     const spi: EditorSpi = useMemo(() => ({
         actionTypes: catalog,
         openActionType: (r: { value: string; resolved: boolean }) => latest.current.onOpenActionType(r.value, r.resolved),
@@ -303,15 +360,21 @@ export function WorkflowTab(props: WorkflowTabProps) {
             return [{
                 id: "axiom-ask-ai",
                 label: context.target.kind === "problem" ? "Ask AI to fix this" : "Ask AI about this…",
-                disabled: aiWorking,
+                disabled: latest.current.composition.turnState === "ai-working",
                 onSelect: (ctx: FlowContext) => latest.current.onAskAi(askAiPrefill(ctx)),
             }];
         },
-    }), [catalog, aiWorking]);
+    }), [catalog]);
 
     useImperativeHandle(props.ref, () => ({
         flush,
-        replace: (workflow: Workflow) => editorRef.current?.replace(workflow, "host"),
+        replace: (workflow: Workflow) => {
+            turnIdForNextSave.current = undefined;
+            expectedAgentTurn.current = undefined;
+            untaggedAgentChange.current = false;
+            suppressReloadChange.current = false;
+            editorRef.current?.replace(workflow, "host");
+        },
         selection: () => selectionRef.current,
     }), [flush]);
 
@@ -328,7 +391,7 @@ export function WorkflowTab(props: WorkflowTabProps) {
                 <Alert isInline variant="danger" title={applyError}
                     actionLinks={<AlertActionLink onClick={() => setApplyError(null)}>Dismiss</AlertActionLink>} />
             )}
-            <WorkflowEditor ref={editorRef} workflow={props.initialContent} theme={theme} highlightApplied
+            <WorkflowEditor ref={setEditorHandle} workflow={props.initialContent} theme={theme} highlightApplied
                 appliedChangeLayout={props.applyLayout} spi={spi} onChange={onChange}
                 onProposalResolved={onProposalResolved} onSelectionChange={onSelectionChange} />
         </div>

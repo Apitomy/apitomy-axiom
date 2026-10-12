@@ -81,4 +81,41 @@ describe("WorkflowTab", () => {
         actions[0].onSelect({ target: { kind: "node", nodeId: "a" }, workflow: { nodes: [{ id: "a", name: "A", type: "action" }], edges: [] } });
         expect(base.onAskAi).toHaveBeenCalledWith("About node `a` (A, action): ");
     });
+
+    it("tags only the apply-triggered change with the turn id", async () => {
+        handle.apply.mockReturnValue({ status: "applied" });
+        vi.spyOn(c, "resolveChangeSet").mockResolvedValue(undefined);
+        const save = vi.spyOn(c, "saveItem").mockResolvedValue({ ...base.item, contentRevision: "r1" });
+        render(<WorkflowTab {...base} pending={{ turnId: "t5", changeSet: { id: "t5" } as never, fromPending: false }} />);
+        await waitFor(() => expect(handle.apply).toHaveBeenCalled());
+        const first = { id: "w", name: "wf", nodes: [{ id: "a" }], edges: [] };
+        act(() => editorProps.onChange(first, { contentRevision: "x1", origin: "agent:axiom-workbench" }));
+        await waitFor(() => expect(save).toHaveBeenCalledTimes(1), { timeout: 2000 });
+        expect(save.mock.calls[0][2].turnId).toBe("t5");
+        const second = { id: "w", name: "wf", nodes: [], edges: [] };
+        act(() => editorProps.onChange(second, { contentRevision: "x2", origin: "agent:axiom-workbench" }));
+        await waitFor(() => expect(save).toHaveBeenCalledTimes(2), { timeout: 2000 });
+        expect(save.mock.calls[1][2]).toEqual({ content: second, baseRevision: "r1" });
+    });
+
+    it("resolves as rejected when apply throws", async () => {
+        handle.apply.mockImplementation(() => { throw new Error("boom"); });
+        const resolve = vi.spyOn(c, "resolveChangeSet").mockResolvedValue(undefined);
+        const { findByText } = render(<WorkflowTab {...base}
+            pending={{ turnId: "t6", changeSet: { id: "t6" } as never, fromPending: true }} />);
+        await waitFor(() => expect(resolve).toHaveBeenCalledWith(1, { turnId: "t6", outcome: "rejected", fromPending: true }));
+        expect(base.onPendingHandled).toHaveBeenCalled();
+        expect(await findByText(/could not be applied: boom/)).toBeTruthy();
+    });
+
+    it("withdraws and rejects a staged proposal on unmount", async () => {
+        handle.propose.mockReturnValue({ status: "staged" });
+        const resolve = vi.spyOn(c, "resolveChangeSet").mockResolvedValue(undefined);
+        const { unmount } = render(<WorkflowTab {...base} composition={{ ...base.composition, applyMode: "review" }}
+            pending={{ turnId: "t7", changeSet: { id: "cs7" } as never, fromPending: false }} />);
+        await waitFor(() => expect(handle.propose).toHaveBeenCalled());
+        unmount();
+        expect(handle.withdraw).toHaveBeenCalledWith("cs7");
+        await waitFor(() => expect(resolve).toHaveBeenCalledWith(1, { turnId: "t7", outcome: "rejected", fromPending: false }));
+    });
 });
