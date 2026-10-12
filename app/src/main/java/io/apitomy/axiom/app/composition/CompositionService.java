@@ -255,7 +255,9 @@ public class CompositionService {
     @Transactional
     public CompositionItemEntity save(long compositionId, long itemId, JsonNode content, String baseRevision,
                                       String author, String turnId) {
-        CompositionItemEntity item = item(compositionId, itemId);
+        item(compositionId, itemId);
+        CompositionItemEntity item = CompositionItemEntity.findById(itemId,
+                jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
         if (baseRevision != null && !baseRevision.equals(item.contentRevision)) {
             throw new StaleRevisionException(item.contentRevision);
         }

@@ -175,6 +175,24 @@ class CompositionServiceTest {
     }
 
     @Test
+    void secondSaveWithSameBaseRevisionIsStale() {
+        CompositionEntity composition = service.create("c", null, null, null, null);
+        CompositionItemEntity tool = service.addBlank(composition.id, ConfigItemType.TOOL, "cst-tool");
+        String base = tool.contentRevision;
+        ObjectNode first = (ObjectNode) service.contentOf(tool);
+        first.put("description", "user edit");
+        ObjectNode second = (ObjectNode) service.contentOf(tool);
+        second.put("description", "ai edit");
+
+        service.save(composition.id, tool.id, first, base, CompositionService.AUTHOR_USER, null);
+        StaleRevisionException stale = assertThrows(StaleRevisionException.class,
+                () -> service.save(composition.id, tool.id, second, base, CompositionService.AUTHOR_AI, "t1"));
+        assertEquals(CompositionItems.revisionOf(first), stale.currentRevision());
+        assertEquals("user edit",
+                service.contentOf(service.item(composition.id, tool.id)).path("description").asText());
+    }
+
+    @Test
     void unknownCompositionThrowsNotFound() {
         assertThrows(CompositionNotFoundException.class, () -> service.get(999_999L));
         assertThrows(CompositionNotFoundException.class, () -> service.items(999_999L));
