@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ActionTypeDescriptor, Workflow } from "@apitomy/flow-ui";
 import { useParams, useSearchParams } from "react-router-dom";
 import { Alert, AlertActionLink, Button, Tab, Tabs, TabTitleText, ToggleGroup, ToggleGroupItem } from "@patternfly/react-core";
 import { addItem, type CompositionItem, fetchItem, updateComposition } from "../../config/compositions";
@@ -7,6 +8,9 @@ import { PublishDialog } from "./PublishDialog";
 import { loadPrefs, savePrefs, type WorkbenchPrefs } from "./workbenchPrefs";
 import { useWorkbench } from "./useWorkbench";
 import { PaneSplitter } from "./PaneSplitter";
+import { WorkflowTab, type WorkflowTabHandle } from "./WorkflowTab";
+import { mergeCatalog } from "./workbenchLogic";
+import { findActionTypeIdByName, loadEditorActionTypes } from "../../hooks/useWorkflowEditorSpi";
 import "./WorkbenchPage.css";
 
 const RAIL: number = 32;
@@ -27,6 +31,21 @@ export function WorkbenchPage() {
     const [publishOpen, setPublishOpen] = useState<boolean>(false);
 
     const composition = wb.composition;
+    const workflowTabRef = useRef<WorkflowTabHandle | null>(null);
+    /** Turn id of the last workflow save made for an AI turn (input to undoPlan). */
+    const lastWorkflowSaveTurnId = useRef<string | undefined>(undefined);
+    const [databaseCatalog, setDatabaseCatalog] = useState<ActionTypeDescriptor[]>([]);
+
+    useEffect(() => {
+        loadEditorActionTypes().then(setDatabaseCatalog).catch(console.error);
+    }, []);
+
+    const draftActionTypes: { name: string; content: Record<string, unknown> }[] = wb.items
+        .filter((i) => i.type === "action-type" && wb.contents[i.id])
+        .map((i) => ({ name: i.name, content: wb.contents[i.id] }));
+    const draftKey: string = JSON.stringify(draftActionTypes);
+    const catalog: ActionTypeDescriptor[] = useMemo(() => mergeCatalog(databaseCatalog, draftActionTypes),
+        [databaseCatalog, draftKey]);
 
     useEffect(() => {
         if (applyMode !== null && composition?.applyMode === applyMode) {
@@ -101,6 +120,33 @@ export function WorkbenchPage() {
         }
     };
 
+    const openAddedItem = async (item: CompositionItem) => {
+        await wb.refreshItems();
+        setOpenTabs((prev) => (prev.includes(item.id) ? prev : [...prev, item.id]));
+        setActiveTab(String(item.id));
+        void wb.loadContent(item.id).catch(console.error);
+    };
+
+    const onOpenActionType = (value: string, resolved: boolean) => {
+        const draft: CompositionItem | undefined = wb.items.find((i) => i.type === "action-type" && i.name === value);
+        if (draft) {
+            openItem(draft.id);
+            return;
+        }
+        const add = async () => {
+            const existingItemId: number | undefined = resolved ? await findActionTypeIdByName(value) : undefined;
+            const created: CompositionItem = await addItem(id, existingItemId !== undefined
+                ? { type: "action-type", existingItemId }
+                : { type: "action-type", name: value });
+            await openAddedItem(created);
+        };
+        add().catch(console.error);
+    };
+
+    const onWorkflowSaved = (_item: CompositionItem, _content: Workflow, savedTurnId: string | undefined) => {
+        lastWorkflowSaveTurnId.current = savedTurnId;
+    };
+
     const addToComposition = (request: AddRequest) => {
         addItem(id, request)
             .then(async (item: CompositionItem) => {
@@ -112,9 +158,9 @@ export function WorkbenchPage() {
             .catch(console.error);
     };
 
-    /** Applies a restored workflow revision to the editor state (Task 10 routes this through the editor handle). */
-    const onWorkflowRestored = (item: CompositionItem, content: Record<string, unknown>) => {
-        wb.setContent(item.id, content, item.contentRevision);
+    /** Applies a restored workflow revision through the editor, which then saves it as the user. */
+    const onWorkflowRestored = (_item: CompositionItem, content: Record<string, unknown>) => {
+        workflowTabRef.current?.replace(content as unknown as Workflow);
     };
 
     const onRestored = (item: CompositionItem) => {
@@ -204,7 +250,17 @@ export function WorkbenchPage() {
                     {[
                     <Tab key="workflow" eventKey="workflow" title={<TabTitleText>{workflow?.name ?? "Workflow"}</TabTitleText>}
                         isCloseDisabled>
-                        <div className="axiom-workbench__placeholder">{workflow?.name}</div>
+                        {composition && workflow && wb.contents[workflow.id] ? (
+                            <WorkflowTab key={workflow.id} ref={workflowTabRef} compositionId={id} item={workflow}
+                                initialContent={wb.contents[workflow.id] as unknown as Workflow}
+                                composition={{ ...composition, applyMode: mode }} catalog={catalog}
+                                applyLayout={prefs.applyLayout} pending={wb.pending}
+                                onPendingHandled={wb.markPendingHandled} onSaved={onWorkflowSaved}
+                                onOpenActionType={onOpenActionType}
+                                onAskAi={(prefill) => console.info("Ask AI:", prefill)} />
+                        ) : (
+                            <div className="axiom-workbench__placeholder">{workflow?.name}</div>
+                        )}
                     </Tab>,
                     ...openTabs.map((tid) => {
                         const item = wb.items.find((i) => i.id === tid);
