@@ -69,6 +69,8 @@ export interface ToolEditorProps {
     onAskAiAboutProblem?: (message: ToolValidationMessage) => void;
     /** Disables the "Ask AI to fix this" actions. */
     askAiDisabled?: boolean;
+    /** Lets the Script Template tab's editor fill the available height (used by the workbench). */
+    fillHeight?: boolean;
 }
 
 /** Style that makes a fieldset a transparent wrapper (used to disable tab bodies when read-only). */
@@ -79,7 +81,7 @@ const READ_ONLY_FIELDSET_STYLE = { border: 0, padding: 0, margin: 0, minWidth: 0
  * assistant and label editing. The value is the single source of truth; every edit emits the
  * complete new value.
  */
-export function ToolEditor({ value, onChange, readOnly = false, problems, onValidation, toolId, onAskAiAboutProblem, askAiDisabled }: ToolEditorProps) {
+export function ToolEditor({ value, onChange, readOnly = false, problems, onValidation, toolId, onAskAiAboutProblem, askAiDisabled, fillHeight = false }: ToolEditorProps) {
     const form = value;
     const params = value.parameters || [];
     const labels = value.labels || [];
@@ -156,8 +158,10 @@ export function ToolEditor({ value, onChange, readOnly = false, problems, onVali
                     </TabContent>
                 </Tab>
                 <Tab eventKey={2} title={<TabTitleText>Script Template</TabTitleText>}>
-                    <TabContent id="script-tab" eventKey={2} activeKey={activeTab} style={{ marginTop: "24px" }}>
+                    <TabContent id="script-tab" eventKey={2} activeKey={activeTab} style={{ marginTop: "24px" }}
+                        className="axiom-tool-editor__script-tab">
                         <ScriptTemplateTab
+                            fillHeight={fillHeight}
                             value={form.scriptTemplate || ""}
                             readOnly={readOnly}
                             onChange={(v) => updateForm({ scriptTemplate: v })}
@@ -303,14 +307,15 @@ function ParametersTab({ params, addParam, updateParam, removeParam, readOnly }:
     );
 }
 
-function ScriptTemplateTab({ value, onChange, readOnly }: {
+function ScriptTemplateTab({ value, onChange, readOnly, fillHeight = false }: {
     value: string;
+    fillHeight?: boolean;
     readOnly: boolean;
     onChange: (v: string) => void;
 }) {
     const effectiveTheme = useEffectiveTheme();
     return (
-        <div>
+        <div className={fillHeight ? "axiom-node-code--fill" : undefined}>
             <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
                 Bash script to execute when the tool is called. Supports multi-line scripts
                 with variables, pipes, and control flow.
@@ -323,7 +328,7 @@ function ScriptTemplateTab({ value, onChange, readOnly }: {
                 isReadOnly={readOnly}
                 onCodeChange={(v) => onChange(v)}
                 language={Language.shell}
-                height="400px"
+                height={fillHeight ? "100%" : "400px"}
                 isDarkTheme={effectiveTheme === "dark"}
                 isLineNumbersVisible
             />

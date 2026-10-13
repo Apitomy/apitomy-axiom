@@ -244,6 +244,7 @@
 
 .axiom-workbench__item-tab .axiom-action-type-editor__code-tab:not([hidden]),
 .axiom-workbench__item-tab .axiom-action-type-editor__code-tab > fieldset,
+.axiom-workbench__item-tab .axiom-tool-editor__script-tab:not([hidden]),
 .axiom-workbench__item-tab .axiom-node-code--fill {
     flex: 1 1 0;
     min-height: 0;

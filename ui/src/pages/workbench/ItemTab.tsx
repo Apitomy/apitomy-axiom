@@ -181,7 +181,7 @@ export function ItemTab(props: ItemTabProps) {
             )}
             {item.type === "tool" ? (
                 <ToolEditor value={value as unknown as NewToolDefinition} readOnly={locked} problems={messages}
-                    toolId={item.baseItemId} onAskAiAboutProblem={askAiAboutProblem} askAiDisabled={aiWorking}
+                    toolId={item.baseItemId} onAskAiAboutProblem={askAiAboutProblem} askAiDisabled={aiWorking} fillHeight
                     onChange={(v: NewToolDefinition) => onChange(v as unknown as Record<string, unknown>)} />
             ) : (
                 <ActionTypeEditor value={value as unknown as NewActionType} readOnly={locked} problems={messages}
