@@ -17,7 +17,7 @@ const problems = {
 
 function renderTree(onOpen = vi.fn()) {
     render(<CompositionTree composition={composition} items={items} problems={problems} lastCompletedTurnId="t1"
-        selectedItemId={undefined} onOpen={onOpen} onAdd={() => {}} />);
+        selectedItemId={undefined} onOpen={onOpen} />);
     return onOpen;
 }
 

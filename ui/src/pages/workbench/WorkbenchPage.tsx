@@ -3,12 +3,12 @@ import type { ActionTypeDescriptor, Workflow } from "@apitomy/flow-ui";
 import { useParams, useSearchParams } from "react-router-dom";
 import {
     Alert, AlertActionLink, Button, Modal, ModalBody, ModalHeader, PageSection, Tab, Tabs, TabTitleText, ToggleGroup,
-    ToggleGroupItem, Tooltip,
+    ToggleGroupItem, Tooltip, Dropdown, DropdownItem, DropdownList, MenuToggle,
 } from "@patternfly/react-core";
-import { HistoryIcon } from "@patternfly/react-icons";
+import { HistoryIcon, PlusCircleIcon } from "@patternfly/react-icons";
 import { RevisionList } from "./RevisionList";
 import { addItem, type CompositionItem, fetchItem, updateComposition } from "../../config/compositions";
-import { type AddRequest, CompositionTree } from "./CompositionTree";
+import { type AddableType, AddItemDialog, type AddRequest, CompositionTree } from "./CompositionTree";
 import { PublishDialog } from "./PublishDialog";
 import { loadPrefs, savePrefs, type WorkbenchPrefs } from "./workbenchPrefs";
 import { useWorkbench } from "./useWorkbench";
@@ -36,6 +36,8 @@ export function WorkbenchPage() {
     const [openTabs, setOpenTabs] = useState<number[]>([]);
     const [activeTab, setActiveTab] = useState<string>("workflow");
     const [historyOpen, setHistoryOpen] = useState<boolean>(false);
+    const [createMenuOpen, setCreateMenuOpen] = useState<boolean>(false);
+    const [creating, setCreating] = useState<AddableType | null>(null);
     const [publishOpen, setPublishOpen] = useState<boolean>(false);
 
     const composition = wb.composition;
@@ -300,9 +302,29 @@ export function WorkbenchPage() {
                 <div className="axiom-workbench__pane-toolbar">
                     {!prefs.leftCollapsed && <span className="axiom-workbench__pane-title">Components</span>}
                     {!prefs.leftCollapsed && (
+                        <Dropdown isOpen={createMenuOpen} onOpenChange={setCreateMenuOpen}
+                            popperProps={{ position: "end" }}
+                            onSelect={(_e, value) => {
+                                setCreateMenuOpen(false);
+                                setCreating(value as AddableType);
+                            }}
+                            toggle={(ref) => (
+                                <Tooltip content="Create">
+                                    <MenuToggle ref={ref} variant="plain" size="sm" aria-label="Create"
+                                        className="axiom-workbench__pane-toolbar-end" icon={<PlusCircleIcon />}
+                                        isExpanded={createMenuOpen} onClick={() => setCreateMenuOpen((o) => !o)} />
+                                </Tooltip>
+                            )}>
+                            <DropdownList>
+                                <DropdownItem value="action-type">Action Type</DropdownItem>
+                                <DropdownItem value="tool">Tool</DropdownItem>
+                            </DropdownList>
+                        </Dropdown>
+                    )}
+                    {!prefs.leftCollapsed && (
                         <Tooltip content="Revision history">
                             <Button variant="plain" size="sm" icon={<HistoryIcon />} aria-label="Revision history"
-                                className="axiom-workbench__pane-toolbar-end" isDisabled={!activeItem}
+                                isDisabled={!activeItem}
                                 onClick={() => setHistoryOpen(true)} />
                         </Tooltip>
                     )}
@@ -317,7 +339,7 @@ export function WorkbenchPage() {
                     <CompositionTree composition={composition} items={wb.items} problems={wb.problems}
                         lastCompletedTurnId={wb.lastCompletedTurnId}
                         selectedItemId={activeTab === "workflow" ? workflow?.id : Number(activeTab)}
-                        onOpen={openItem} onAdd={addToComposition} />
+                        onOpen={openItem} />
                 )}
             </aside>
             {prefs.leftCollapsed ? <div className="axiom-workbench__splitter axiom-workbench__splitter--left" /> : (
@@ -384,6 +406,13 @@ export function WorkbenchPage() {
                             onUndone={() => void wb.refreshItems().catch(console.error)} />
                     )}
             </aside>
+            {creating && (
+                <AddItemDialog type={creating} onClose={() => setCreating(null)}
+                    onSubmit={(request: AddRequest) => {
+                        setCreating(null);
+                        addToComposition(request);
+                    }} />
+            )}
             {historyOpen && activeItem && (
                 <Modal isOpen variant="medium" onClose={() => setHistoryOpen(false)} aria-labelledby="revision-history-title">
                     <ModalHeader title={`Revision history: ${activeItem.name}`} labelId="revision-history-title" />

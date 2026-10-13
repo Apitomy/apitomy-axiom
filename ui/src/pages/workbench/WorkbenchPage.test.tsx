@@ -146,4 +146,11 @@ describe("WorkbenchPage", () => {
         expect(await screen.findByText(/Revision history: main-flow/)).toBeTruthy();
         expect(await screen.findAllByRole("button", { name: /restore/i })).toHaveLength(2);
     });
+
+    it("opens the add dialog from the Create menu in the Components toolbar", async () => {
+        renderPage();
+        fireEvent.click(screen.getByRole("button", { name: "Create" }));
+        fireEvent.click(await screen.findByRole("menuitem", { name: "Tool" }));
+        expect(await screen.findByText("Add tool")).toBeTruthy();
+    });
 });

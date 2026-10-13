@@ -4,7 +4,7 @@ import {
     Radio, SimpleList, SimpleListGroup, SimpleListItem, TextInput, Tooltip,
 } from "@patternfly/react-core";
 import {
-    CheckCircleIcon, ExclamationCircleIcon, ExclamationTriangleIcon, LockIcon, PlusCircleIcon,
+    CheckCircleIcon, ExclamationCircleIcon, ExclamationTriangleIcon, LockIcon,
 } from "@patternfly/react-icons";
 import type { Composition, CompositionItem, CompositionItemType, ConfigProblem } from "../../config/compositions";
 import { fetchActionTypes, fetchTools } from "../../config/api";
@@ -28,14 +28,12 @@ export interface CompositionTreeProps {
     lastCompletedTurnId: string | undefined;
     selectedItemId: number | undefined;
     onOpen(itemId: number): void;
-    /** Called with the dialog result; the add dialog is opened by the tree itself. */
-    onAdd(request: AddRequest): void;
 }
 
-const GROUPS: { type: CompositionItemType; title: string; addLabel?: string }[] = [
+const GROUPS: { type: CompositionItemType; title: string }[] = [
     { type: "workflow", title: "Workflow" },
-    { type: "action-type", title: "Action types", addLabel: "Add action type" },
-    { type: "tool", title: "Tools", addLabel: "Add tool" },
+    { type: "action-type", title: "Action types" },
+    { type: "tool", title: "Tools" },
 ];
 
 function countLabel(n: number, word: string): string {
@@ -85,9 +83,8 @@ function StatusIcon({ problems }: { problems: ConfigProblem[] | undefined }) {
  * selected item's revisions.
  */
 export function CompositionTree(props: CompositionTreeProps) {
-    const { composition, items, problems, lastCompletedTurnId, onOpen, onAdd } = props;
+    const { composition, items, problems, lastCompletedTurnId, onOpen } = props;
     const [selected, setSelected] = useState<number | undefined>(props.selectedItemId);
-    const [adding, setAdding] = useState<AddableType | null>(null);
 
     useEffect(() => {
         if (props.selectedItemId !== undefined) {
@@ -131,37 +128,24 @@ export function CompositionTree(props: CompositionTreeProps) {
                                 </span>
                             </SimpleListItem>
                         ))}
-                        {g.addLabel && (
-                            // Rendered in the list (the group title is aria-hidden) and positioned in the title row.
-                            <li className="axiom-workbench__group-action">
-                                <Tooltip content={g.addLabel}>
-                                    <Button variant="plain" size="sm" icon={<PlusCircleIcon />}
-                                        aria-label={`Add ${g.title.toLowerCase()}`}
-                                        onClick={() => setAdding(g.type as AddableType)} />
-                                </Tooltip>
-                            </li>
-                        )}
                     </SimpleListGroup>
                 ))}
             </SimpleList>
-            {adding && (
-                <AddItemDialog type={adding} onClose={() => setAdding(null)}
-                    onSubmit={(r: AddRequest) => {
-                        setAdding(null);
-                        onAdd(r);
-                    }} />
-            )}
         </div>
     );
 }
 
-interface AddItemDialogProps {
+/** Props for {@link AddItemDialog}. */
+export interface AddItemDialogProps {
     type: AddableType;
     onSubmit(request: AddRequest): void;
     onClose(): void;
 }
 
-function AddItemDialog({ type, onSubmit, onClose }: AddItemDialogProps) {
+/**
+ * Dialog to add a new or existing action type or tool to the composition.
+ */
+export function AddItemDialog({ type, onSubmit, onClose }: AddItemDialogProps) {
     const [mode, setMode] = useState<"new" | "existing">("new");
     const [name, setName] = useState<string>("");
     const [options, setOptions] = useState<{ id: number; name: string }[]>([]);

@@ -120,17 +120,7 @@
     align-items: center;
 }
 
-.axiom-workbench__tree .pf-v6-c-simple-list__section {
-    position: relative;
-}
 
-/* The group's add button sits at the right end of the group title row. */
-.axiom-workbench__group-action {
-    list-style: none;
-    position: absolute;
-    top: 0;
-    right: var(--pf-t--global--spacer--xs, 4px);
-}
 
 .axiom-workbench__splitter {
     grid-row: 4;
