@@ -57,7 +57,7 @@
     overflow: hidden;
 }
 
-.axiom-workbench__tabs {
+.axiom-workbench__tabs.pf-v6-c-tabs {
     flex: 0 0 auto;
 }
 
@@ -195,4 +195,16 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* Compact centre tabs: default PatternFly tabs with tighter vertical padding. */
+.axiom-workbench__tabs.pf-v6-c-tabs {
+    --pf-v6-c-tabs__item--PaddingBlockStart: var(--pf-t--global--spacer--xs, 4px);
+    --pf-v6-c-tabs__item--PaddingBlockEnd: var(--pf-t--global--spacer--xs, 4px);
+    --pf-v6-c-tabs__link--PaddingBlockStart: 2px;
+    --pf-v6-c-tabs__link--PaddingBlockEnd: 2px;
+}
+
+.axiom-workbench__tabs.pf-v6-c-tabs .pf-v6-c-tabs__item-action .pf-v6-c-button {
+    padding-block: var(--pf-t--global--spacer--xs, 4px);
 }
