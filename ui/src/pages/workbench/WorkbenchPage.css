@@ -61,7 +61,7 @@
     flex: 0 0 auto;
 }
 
-/* The active tab's content fills the centre column between the tab bar and the problems strip. */
+/* The active tab's content fills the centre column below the tab bar. */
 .axiom-workbench__centre > .pf-v6-c-tab-content:not([hidden]) {
     flex: 1 1 0;
     min-height: 0;
@@ -91,12 +91,6 @@
     padding: var(--pf-t--global--spacer--md, 16px);
 }
 
-.axiom-workbench__problems {
-    flex: 0 0 auto;
-    margin-top: auto;
-    padding: var(--pf-t--global--spacer--xs, 4px) var(--pf-t--global--spacer--md, 16px);
-    border-top: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
-}
 
 .axiom-workbench__item {
     display: flex;

@@ -17,7 +17,6 @@ import { WorkflowTab, type WorkflowTabHandle } from "./WorkflowTab";
 import { ItemTab, type ItemTabHandle } from "./ItemTab";
 import { mergeCatalog } from "./workbenchLogic";
 import { ChatPane } from "./ChatPane";
-import { ProblemsStrip } from "./ProblemsStrip";
 import { findActionTypeIdByName, loadEditorActionTypes } from "../../hooks/useWorkflowEditorSpi";
 import "./WorkbenchPage.css";
 
@@ -364,7 +363,6 @@ export function WorkbenchPage() {
                         );
                     })]}
                 </Tabs>
-                <ProblemsStrip problems={wb.problems[activeItemId ?? -1] ?? []} />
             </main>
 
             {prefs.rightCollapsed ? <div className="axiom-workbench__splitter axiom-workbench__splitter--right" /> : (
