@@ -13,7 +13,7 @@ vi.mock("./useWorkbench", () => ({
         items: [{ id: 10, type: "workflow", name: "main-flow", contentRevision: "r", lastAuthor: "user", changed: false } as never],
         contents: { 10: {} }, revisions: {}, problems: {}, pending: null, lastCompletedTurnId: undefined, sessionError: null,
         loadContent: async () => ({}), refreshItems: async () => {}, refreshComposition: async () => {},
-        setContent, markPendingHandled: () => {}, retrySession: async () => {},
+        setContent, removeItem: async () => {}, markPendingHandled: () => {}, retrySession: async () => {},
     }),
 }));
 

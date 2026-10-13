@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import {
-    Button, Form, FormGroup, FormSelect, FormSelectOption, Label, Modal, ModalBody, ModalFooter, ModalHeader,
-    SimpleList, SimpleListGroup, SimpleListItem, TextInput, ToggleGroup, ToggleGroupItem, Tooltip,
+    Alert, Button, Dropdown, DropdownItem, DropdownList, Form, FormGroup, FormSelect, FormSelectOption, Label, Modal, ModalBody, ModalFooter, ModalHeader,
+    MenuToggle, SimpleList, SimpleListGroup, TextInput, ToggleGroup, ToggleGroupItem, Tooltip,
 } from "@patternfly/react-core";
 import {
-    CheckCircleIcon, ExclamationCircleIcon, ExclamationTriangleIcon, LockIcon,
+    CheckCircleIcon, EllipsisVIcon, ExclamationCircleIcon, ExclamationTriangleIcon, LockIcon,
 } from "@patternfly/react-icons";
 import type {
     Composition, CompositionItem, CompositionItemType, ConfigProblem, ExecutionMode,
@@ -39,6 +39,8 @@ export interface CompositionTreeProps {
     lastCompletedTurnId: string | undefined;
     selectedItemId: number | undefined;
     onOpen(itemId: number): void;
+    /** Called when the user chooses Remove on an action type or tool row. */
+    onRemove?(itemId: number): void;
 }
 
 const GROUPS: { type: CompositionItemType; title: string }[] = [
@@ -110,8 +112,10 @@ export function CompositionTree(props: CompositionTreeProps) {
                 {GROUPS.map((g) => (
                     <SimpleListGroup key={g.type} id={`composition-group-${g.type}`} title={g.title}>
                         {items.filter((i) => i.type === g.type).map((item) => (
-                            <SimpleListItem key={item.id} itemId={item.id} isActive={item.id === selected}
-                                componentProps={{ "data-name": item.name }}
+                            <ItemRow key={item.id} item={item} isActive={item.id === selected}
+                                isRemovable={item.type !== "workflow" && !!props.onRemove
+                                    && composition.turnState !== "ai-working"}
+                                onRemove={() => props.onRemove?.(item.id)}
                                 onClick={() => {
                                     setSelected(item.id);
                                     onOpen(item.id);
@@ -137,12 +141,83 @@ export function CompositionTree(props: CompositionTreeProps) {
                                         )}
                                     </span>
                                 </span>
-                            </SimpleListItem>
+                            </ItemRow>
                         ))}
                     </SimpleListGroup>
                 ))}
             </SimpleList>
         </div>
+    );
+}
+
+function ItemRow({ item, isActive, isRemovable, onClick, onRemove, children }: {
+    item: CompositionItem;
+    isActive: boolean;
+    isRemovable: boolean;
+    onClick(): void;
+    onRemove(): void;
+    children: ReactNode;
+}) {
+    const [menuOpen, setMenuOpen] = useState<boolean>(false);
+    return (
+        <li className="pf-v6-c-simple-list__item axiom-workbench__row">
+            <button type="button" data-name={item.name} onClick={onClick}
+                className={`pf-v6-c-simple-list__item-link${isActive ? " pf-m-current" : ""}`}>
+                {children}
+            </button>
+            {item.type === "workflow" ? <span className="axiom-workbench__row-menu" aria-hidden="true" /> : (
+                <Dropdown isOpen={menuOpen} onOpenChange={setMenuOpen} popperProps={{ position: "right" }}
+                    onSelect={() => setMenuOpen(false)}
+                    toggle={(ref) => (
+                        <MenuToggle ref={ref} variant="plain" size="sm" aria-label={`Actions for ${item.name}`}
+                            className="axiom-workbench__row-menu" icon={<EllipsisVIcon />}
+                            isExpanded={menuOpen} onClick={() => setMenuOpen((o) => !o)} />
+                    )}>
+                    <DropdownList>
+                        <DropdownItem value="remove" isDisabled={!isRemovable} onClick={onRemove}>Remove</DropdownItem>
+                    </DropdownList>
+                </Dropdown>
+            )}
+        </li>
+    );
+}
+
+/** Props for {@link RemoveItemDialog}. */
+export interface RemoveItemDialogProps {
+    item: CompositionItem;
+    /** Where the item is still used (see itemUsages); empty when unused. */
+    usages: string[];
+    onConfirm(): void;
+    onClose(): void;
+}
+
+/**
+ * Confirms removing an action type or tool draft from the composition, warning when it is still in use.
+ */
+export function RemoveItemDialog({ item, usages, onConfirm, onClose }: RemoveItemDialogProps) {
+    const label: string = item.type === "tool" ? "tool" : "action type";
+    return (
+        <Modal isOpen variant="small" onClose={onClose} aria-labelledby="remove-item-title">
+            <ModalHeader title={`Remove ${label}`} labelId="remove-item-title" titleIconVariant="warning" />
+            <ModalBody>
+                <p>
+                    Remove <strong>{item.name}</strong> from this composition? Its draft and revision history are
+                    discarded. A published {label} with this name is not deleted.
+                </p>
+                {usages.length > 0 && (
+                    <Alert isInline variant="warning" title={`This ${label} is still in use`}
+                        style={{ marginTop: "16px" }}>
+                        <ul>{usages.map((u) => <li key={u}>{u}</li>)}</ul>
+                        These references will be reported as problems unless a published {label} with the same
+                        name exists.
+                    </Alert>
+                )}
+            </ModalBody>
+            <ModalFooter>
+                <Button variant="danger" onClick={onConfirm}>Remove</Button>
+                <Button variant="link" onClick={onClose}>Cancel</Button>
+            </ModalFooter>
+        </Modal>
     );
 }
 

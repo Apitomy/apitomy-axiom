@@ -256,3 +256,23 @@
     flex: 1 1 0;
     min-height: 200px;
 }
+
+/* Component rows: the select button fills the row; the actions menu sits at the end. */
+.axiom-workbench__row {
+    display: flex;
+    align-items: center;
+}
+
+.axiom-workbench__row > .pf-v6-c-simple-list__item-link {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.axiom-workbench__row-menu {
+    flex: 0 0 auto;
+}
+
+/* Keeps the workflow row's markers aligned with the rows that have an actions menu. */
+span.axiom-workbench__row-menu {
+    width: 29px;
+}

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { AddItemDialog, CompositionTree, statusTooltip } from "./CompositionTree";
+import { AddItemDialog, CompositionTree, RemoveItemDialog, statusTooltip } from "./CompositionTree";
 import * as c from "../../config/compositions";
 import * as api from "../../config/api";
 
@@ -16,9 +16,9 @@ const problems = {
     3: [{ severity: "error", code: "e", message: "e" }],
 } as Record<number, c.ConfigProblem[]>;
 
-function renderTree(onOpen = vi.fn()) {
+function renderTree(onOpen = vi.fn(), onRemove = vi.fn()) {
     render(<CompositionTree composition={composition} items={items} problems={problems} lastCompletedTurnId="t1"
-        selectedItemId={undefined} onOpen={onOpen} />);
+        selectedItemId={undefined} onOpen={onOpen} onRemove={onRemove} />);
     return onOpen;
 }
 
@@ -87,5 +87,24 @@ describe("CompositionTree", () => {
         fireEvent.change(screen.getByLabelText("Name"), { target: { value: "t" } });
         fireEvent.click(screen.getByRole("button", { name: "Add" }));
         expect(onSubmit).toHaveBeenCalledWith({ type: "tool", name: "t" });
+    });
+
+    it("offers Remove on action type and tool rows only", async () => {
+        const onRemove = vi.fn();
+        renderTree(vi.fn(), onRemove);
+        expect(screen.queryByLabelText("Actions for wf")).toBeNull();
+        fireEvent.click(screen.getByLabelText("Actions for tl"));
+        fireEvent.click(await screen.findByRole("menuitem", { name: "Remove" }));
+        expect(onRemove).toHaveBeenCalledWith(3);
+    });
+
+    it("warns when the removed item is still in use", () => {
+        const onConfirm = vi.fn();
+        render(<RemoveItemDialog item={items[1]} usages={["Workflow wf (1 node)"]} onConfirm={onConfirm}
+            onClose={vi.fn()} />);
+        expect(screen.getByText("This action type is still in use")).toBeTruthy();
+        expect(screen.getByText("Workflow wf (1 node)")).toBeTruthy();
+        fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+        expect(onConfirm).toHaveBeenCalled();
     });
 });

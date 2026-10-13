@@ -6,6 +6,7 @@ import {
     type ConfigProblem,
     ensureCompositionSession,
     fetchComposition,
+    deleteItem,
     fetchItem,
     listItems,
     subscribeComposition,
@@ -39,6 +40,8 @@ export interface WorkbenchState {
     refreshItems(): Promise<void>;
     refreshComposition(): Promise<void>;
     setContent(itemId: number, content: Record<string, unknown>, revision: string): void;
+    /** Removes an item from the composition, drops its loaded content and revalidates. */
+    removeItem(itemId: number): Promise<void>;
     markPendingHandled(): void;
     retrySession(): Promise<void>;
 }
@@ -257,6 +260,25 @@ export function useWorkbench(compositionId: number): WorkbenchState {
         scheduleValidate();
     }, [scheduleValidate]);
 
+    const removeItem = useCallback(async (itemId: number) => {
+        await deleteItem(compositionId, itemId);
+        delete revisionsRef.current[itemId];
+        if (aliveRef.current) {
+            setContents((prev) => {
+                const next = { ...prev };
+                delete next[itemId];
+                return next;
+            });
+            setRevisions((prev) => {
+                const next = { ...prev };
+                delete next[itemId];
+                return next;
+            });
+        }
+        await refreshItems();
+        scheduleValidate();
+    }, [compositionId, refreshItems, scheduleValidate]);
+
     const markPendingHandled = useCallback(() => {
         if (pendingRef.current) {
             handledRef.current.add(pendingRef.current.turnId);
@@ -266,6 +288,6 @@ export function useWorkbench(compositionId: number): WorkbenchState {
 
     return {
         composition, items, contents, revisions, problems, pending, lastCompletedTurnId, sessionError,
-        loadContent, refreshItems, refreshComposition, setContent, markPendingHandled, retrySession: () => startSession(),
+        loadContent, refreshItems, refreshComposition, setContent, removeItem, markPendingHandled, retrySession: () => startSession(),
     };
 }

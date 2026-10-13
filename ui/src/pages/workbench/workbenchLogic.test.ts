@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+    itemUsages,
     defaultPublishChoice, isLockedForUser, itemStatus, mergeCatalog, publishSelection, referencedActionTypes,
     referencedTools, undoPlan,
 } from "./workbenchLogic";
@@ -59,5 +60,22 @@ describe("workbenchLogic", () => {
             [{ name: "b", content: { name: "b", inputs: [{ name: "x", type: "string" }] } }, { name: "c", content: { name: "c" } }]);
         expect(merged.map((d) => d.value)).toEqual(["a", "b", "c"]);
         expect(merged[1].inputs).toEqual([{ name: "x", type: "string" }]);
+    });
+
+    it("lists where an action type or tool is still used", () => {
+        const items = [
+            { id: 1, type: "workflow", name: "wf" },
+            { id: 2, type: "action-type", name: "at" },
+            { id: 3, type: "tool", name: "tl" },
+            { id: 4, type: "tool", name: "unused" },
+        ] as CompositionItem[];
+        const contents = {
+            1: { nodes: [{ id: "a", type: "action", config: { actionType: "at" } },
+                { id: "b", type: "action", config: { actionType: "at" } }], edges: [] },
+            2: { name: "at", allowedTools: ["mcp__axiom-tools__tl"] },
+        };
+        expect(itemUsages(items[1], items, contents)).toEqual(["Workflow wf (2 nodes)"]);
+        expect(itemUsages(items[2], items, contents)).toEqual(["Action type at"]);
+        expect(itemUsages(items[3], items, contents)).toEqual([]);
     });
 });

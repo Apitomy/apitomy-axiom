@@ -10,14 +10,16 @@ import {
 } from "@patternfly/react-icons";
 import { RevisionList } from "./RevisionList";
 import { addItem, type CompositionItem, fetchItem, updateComposition } from "../../config/compositions";
-import { type AddableType, AddItemDialog, type AddRequest, CompositionTree } from "./CompositionTree";
+import {
+    type AddableType, AddItemDialog, type AddRequest, CompositionTree, RemoveItemDialog,
+} from "./CompositionTree";
 import { PublishDialog } from "./PublishDialog";
 import { loadPrefs, savePrefs, type WorkbenchPrefs } from "./workbenchPrefs";
 import { useWorkbench } from "./useWorkbench";
 import { PaneSplitter } from "./PaneSplitter";
 import { WorkflowTab, type WorkflowTabHandle } from "./WorkflowTab";
 import { ItemTab, type ItemTabHandle } from "./ItemTab";
-import { mergeCatalog } from "./workbenchLogic";
+import { itemUsages, mergeCatalog } from "./workbenchLogic";
 import { ChatPane } from "./ChatPane";
 import { findActionTypeIdByName, loadEditorActionTypes } from "../../hooks/useWorkflowEditorSpi";
 import "./WorkbenchPage.css";
@@ -39,6 +41,7 @@ export function WorkbenchPage() {
     const [activeTab, setActiveTab] = useState<string>("workflow");
     const [historyOpen, setHistoryOpen] = useState<boolean>(false);
     const [createMenuOpen, setCreateMenuOpen] = useState<boolean>(false);
+    const [removingId, setRemovingId] = useState<number | null>(null);
     const [creating, setCreating] = useState<AddableType | null>(null);
     const [publishOpen, setPublishOpen] = useState<boolean>(false);
 
@@ -123,6 +126,12 @@ export function WorkbenchPage() {
         }
     };
 
+    const removeItem = (itemId: number) => {
+        setRemovingId(null);
+        closeTab(itemId);
+        wb.removeItem(itemId).catch(console.error);
+    };
+
     const openItem = (itemId: number) => {
         const item: CompositionItem | undefined = wb.items.find((i) => i.id === itemId);
         if (!item || item.type === "workflow") {
@@ -201,6 +210,8 @@ export function WorkbenchPage() {
 
     const activeItemId: number | undefined = activeTab === "workflow" ? workflow?.id : Number(activeTab);
     const activeItem: CompositionItem | undefined = wb.items.find((i) => i.id === activeItemId);
+    const removingItem: CompositionItem | undefined = removingId === null ? undefined
+        : wb.items.find((i) => i.id === removingId);
 
     /** Prefills the chat and reveals a collapsed chat pane. */
     const askAi = (text: string) => {
@@ -348,7 +359,7 @@ export function WorkbenchPage() {
                     <CompositionTree composition={composition} items={wb.items} problems={wb.problems}
                         lastCompletedTurnId={wb.lastCompletedTurnId}
                         selectedItemId={activeTab === "workflow" ? workflow?.id : Number(activeTab)}
-                        onOpen={openItem} />
+                        onOpen={openItem} onRemove={setRemovingId} />
                 )}
             </aside>
             {prefs.leftCollapsed ? <div className="axiom-workbench__splitter axiom-workbench__splitter--left" /> : (
@@ -421,6 +432,10 @@ export function WorkbenchPage() {
                         setCreating(null);
                         addToComposition(request);
                     }} />
+            )}
+            {removingItem && (
+                <RemoveItemDialog item={removingItem} usages={itemUsages(removingItem, wb.items, wb.contents)}
+                    onClose={() => setRemovingId(null)} onConfirm={() => removeItem(removingItem.id)} />
             )}
             {historyOpen && activeItem && (
                 <Modal isOpen variant="medium" onClose={() => setHistoryOpen(false)} aria-labelledby="revision-history-title">

@@ -199,3 +199,37 @@ export function mergeCatalog(database: ActionTypeDescriptor[],
     });
     return merged;
 }
+
+/**
+ * Describes where a composition item is still used by the other drafts: the workflow's action nodes for an
+ * action type, and the action types' allowed tools for a tool.
+ * @param item the item about to be removed
+ * @param items the composition items
+ * @param contents item contents keyed by item id
+ * @returns one human-readable entry per user, empty when the item is unused (or is the workflow)
+ */
+export function itemUsages(item: CompositionItem, items: CompositionItem[],
+                           contents: Record<number, Record<string, unknown>>): string[] {
+    const result: string[] = [];
+    if (item.type === "action-type") {
+        items.filter((i: CompositionItem) => i.type === "workflow").forEach((wf: CompositionItem) => {
+            const workflow = contents[wf.id] as unknown as Workflow | undefined;
+            if (!workflow) {
+                return;
+            }
+            const count: number = (workflow.nodes ?? []).filter((n) => n.type === "action"
+                && (n as { config?: Record<string, unknown> }).config?.actionType === item.name).length;
+            if (count > 0) {
+                result.push(`Workflow ${wf.name} (${count} node${count === 1 ? "" : "s"})`);
+            }
+        });
+    } else if (item.type === "tool") {
+        items.filter((i: CompositionItem) => i.type === "action-type").forEach((at: CompositionItem) => {
+            const content: Record<string, unknown> | undefined = contents[at.id];
+            if (content && referencedTools(content).includes(item.name)) {
+                result.push(`Action type ${at.name}`);
+            }
+        });
+    }
+    return result;
+}
