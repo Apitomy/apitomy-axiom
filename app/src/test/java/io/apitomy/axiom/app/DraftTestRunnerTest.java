@@ -135,6 +135,32 @@ class DraftTestRunnerTest {
     }
 
     @Test
+    void stdoutWithoutTrailingJsonFails() throws Exception {
+        DraftTestRunner.Result r = action("""
+                {"name":"s","executionMode":"script","inputs":[],
+                 "outputs":[{"name":"count","type":"number","required":true}],
+                 "scriptTemplate":"echo hello"}""", Map.of());
+        assertEquals("failed", r.status());
+        assertTrue(r.problems().contains(DraftTestRunner.NO_JSON_OUTPUT), r.problems().toString());
+    }
+
+    @Test
+    void slowToolTimesOut() throws Exception {
+        JsonNode tool = json("{\"name\":\"t\",\"scriptTemplate\":\"sleep 5\"}");
+        runner.setToolTimeoutSeconds(1);
+        try {
+            long start = System.currentTimeMillis();
+            DraftTestRunner.Result r = QuarkusTransaction.requiringNew().call(() ->
+                    runner.runTool(tool, Map.of(), null));
+            assertEquals("failed", r.status());
+            assertEquals(List.of("Timed out."), r.problems());
+            assertTrue(System.currentTimeMillis() - start < 3000);
+        } finally {
+            runner.setToolTimeoutSeconds(DraftTestRunner.TOOL_TIMEOUT_SECONDS);
+        }
+    }
+
+    @Test
     void longOutputIsTruncated() {
         String text = "x".repeat(DraftTestRunner.MAX_OUTPUT_CHARS + 10);
         assertTrue(DraftTestRunner.truncate(text).endsWith("\n[truncated]"));

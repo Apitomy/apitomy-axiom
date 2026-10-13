@@ -44,6 +44,7 @@ import io.apitomy.axiom.app.composition.CompositionNotFoundException;
 import io.apitomy.axiom.app.composition.CompositionPublisher;
 import io.apitomy.axiom.app.composition.CompositionService;
 import io.apitomy.axiom.app.composition.CompositionTestRuns;
+import io.apitomy.axiom.app.composition.TooManyTestRunsException;
 import io.apitomy.axiom.app.composition.CompositionTurns;
 import io.apitomy.axiom.app.composition.CompositionValidator;
 import io.apitomy.axiom.app.composition.PublishBlockedException;
@@ -577,6 +578,15 @@ public class CompositionsResourceImpl implements CompositionsResource {
         body.put("message", e.getMessage());
         body.put("problems", problems);
         return Response.status(422).type(MediaType.APPLICATION_JSON).entity(body).build();
+    }
+
+    /**
+     * @param e the exception
+     * @return 429 when too many test runs are in progress
+     */
+    @ServerExceptionMapper
+    public Response mapTooManyTestRuns(TooManyTestRunsException e) {
+        return error(429, e.getMessage());
     }
 
     /**

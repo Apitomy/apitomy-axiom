@@ -1,12 +1,15 @@
 package io.apitomy.axiom.app.composition;
 
+import io.apitomy.axiom.app.assistant.AssistantSession;
 import io.apitomy.axiom.core.entities.CompositionEntity;
 import io.apitomy.axiom.core.entities.CompositionItemEntity;
 import io.apitomy.axiom.core.entities.CompositionRevisionEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
+import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -15,6 +18,9 @@ import java.util.Map;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * REST tests for test runs of composition drafts.
@@ -23,6 +29,16 @@ import static org.hamcrest.Matchers.hasSize;
 class CompositionTestRunsResourceTest {
 
     static final String BASE = "/api/v1/compositions";
+
+    @InjectMock
+    WorkbenchSessions sessions;
+
+    @BeforeEach
+    void setUp() {
+        AssistantSession session = mock(AssistantSession.class);
+        when(session.verifyMcpToken("good")).thenReturn(true);
+        when(sessions.live(anyLong())).thenReturn(session);
+    }
 
     @AfterEach
     void cleanUp() {
@@ -33,7 +49,7 @@ class CompositionTestRunsResourceTest {
         });
     }
 
-    private long scriptActionType(long compositionId) {
+    static long scriptActionType(long compositionId) {
         long itemId = given().contentType(ContentType.JSON)
                 .body(Map.of("type", "action-type", "name", "greet", "executionMode", "script"))
                 .post(BASE + "/{id}/items", compositionId).then().statusCode(200)
@@ -88,5 +104,32 @@ class CompositionTestRunsResourceTest {
         }
         given().get(BASE + "/{id}/test-runs", id).then().statusCode(200)
                 .body("$", hasSize(CompositionTestRuns.MAX_RUNS));
+    }
+
+    @Test
+    void agentRouteRunsTheNamedDraftAsTheAi() {
+        long id = CompositionsResourceTest.createComposition();
+        scriptActionType(id);
+        given().header("X-Axiom-Session-Token", "good").contentType(ContentType.JSON)
+                .body(Map.of("type", "action-type", "name", "greet", "inputs", Map.of("who", "ann")))
+                .post(BASE + "/{id}/agent/test", id).then().statusCode(200)
+                .body("status", equalTo("passed"))
+                .body("author", equalTo("ai"));
+    }
+
+    @Test
+    void agentRouteUnknownDraftIs404() {
+        long id = CompositionsResourceTest.createComposition();
+        given().header("X-Axiom-Session-Token", "good").contentType(ContentType.JSON)
+                .body(Map.of("type", "action-type", "name", "nope"))
+                .post(BASE + "/{id}/agent/test", id).then().statusCode(404);
+    }
+
+    @Test
+    void unknownSubjectIs400() {
+        long id = CompositionsResourceTest.createComposition();
+        long itemId = scriptActionType(id);
+        given().contentType(ContentType.JSON).body(Map.of("inputs", Map.of("who", "bob"), "subjectId", 999999))
+                .post(BASE + "/{id}/items/{itemId}/test", id, itemId).then().statusCode(400);
     }
 }

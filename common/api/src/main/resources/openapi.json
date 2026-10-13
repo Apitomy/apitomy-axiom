@@ -6214,6 +6214,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "description": "Too many test runs are in progress for this composition"
           }
         }
       },
@@ -6311,6 +6314,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "description": "Too many test runs are in progress for this composition"
           }
         }
       },

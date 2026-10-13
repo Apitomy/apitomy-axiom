@@ -36,6 +36,11 @@ public class DraftTestRunner {
     /** Tool timeout, matching the MCP tools server. */
     static final long TOOL_TIMEOUT_SECONDS = 30;
 
+    /** Problem reported when an action type exits 0 without printing a trailing JSON object. */
+    public static final String NO_JSON_OUTPUT = "Output: stdout did not end with a JSON object.";
+
+    private volatile long toolTimeoutSeconds = TOOL_TIMEOUT_SECONDS;
+
     private static final TypeReference<Map<String, Object>> MAP = new TypeReference<>() {
     };
 
@@ -113,6 +118,9 @@ public class DraftTestRunner {
         if (!run.finished()) {
             problems.add("Timed out.");
         }
+        if (run.exitCode() == 0 && outputs == null) {
+            problems.add(NO_JSON_OUTPUT);
+        }
         if (run.exitCode() == 0) {
             problems.addAll(prefixed("Output: ",
                     ActionTypeIoValidator.validate(actionType.outputs, outputs != null ? outputs : Map.of())));
@@ -162,7 +170,7 @@ public class DraftTestRunner {
             scriptExecutionService.applyActionEnvironment(pb, new ActionTypeEntity());
             Instant start = Instant.now();
             ScriptExecutionService.CapturedOutput captured =
-                    ScriptExecutionService.capture(pb.start(), TOOL_TIMEOUT_SECONDS);
+                    ScriptExecutionService.capture(pb.start(), toolTimeoutSeconds);
             long durationMs = Duration.between(start, Instant.now()).toMillis();
             List<String> runProblems = captured.finished() ? List.of() : List.of("Timed out.");
             String status = captured.exitCode() == 0 && runProblems.isEmpty() ? "passed" : "failed";
@@ -181,6 +189,15 @@ public class DraftTestRunner {
                 new ScriptExecutionService.WorkingDirectory(fileDir, true).cleanUp();
             }
         }
+    }
+
+    /**
+     * Overrides the tool timeout. For tests.
+     *
+     * @param seconds the timeout in seconds
+     */
+    void setToolTimeoutSeconds(long seconds) {
+        toolTimeoutSeconds = seconds;
     }
 
     /**
