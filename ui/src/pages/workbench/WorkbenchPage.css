@@ -277,9 +277,17 @@ span.axiom-workbench__row-menu {
     width: 29px;
 }
 
-/* Drafts with unpublished changes are shown in italics and the subtle text colour; published items stay
-   regular. */
-.axiom-workbench__item-name--unpublished {
-    color: var(--pf-t--global--text--color--subtle);
-    font-style: italic;
+/* Drafts with unpublished changes are shown in a lighter grey; published items keep the regular text colour.
+   Gray 50 is lighter than the theme's "subtle" text (gray 60), which is too close to regular text to notice.
+   The list link's own colour is "subtle", so published names set the regular colour explicitly. */
+.axiom-workbench__item-name {
+    color: var(--pf-t--global--text--color--regular);
+}
+
+.axiom-workbench__item-name.axiom-workbench__item-name--unpublished {
+    color: var(--pf-t--color--gray--50);
+}
+
+:root:where(.pf-v6-theme-dark) .axiom-workbench__item-name.axiom-workbench__item-name--unpublished {
+    color: var(--pf-t--color--gray--40);
 }
