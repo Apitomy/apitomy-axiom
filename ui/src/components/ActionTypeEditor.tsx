@@ -34,7 +34,6 @@ import { ActionTypeFieldsTab } from "./ActionTypeFieldsTab";
 import { LabelDisplay } from "./LabelDisplay";
 import { ToolListEditor } from "./ToolListEditor";
 import { NodeCodeTab } from "./NodeCodeTab";
-import { ScriptAiModal } from "./ScriptAiModal";
 import { ActionTypeAiModal } from "./ActionTypeAiModal";
 import { ValidationProblemsPanel } from "./ValidationProblemsPanel";
 import {
@@ -182,7 +181,7 @@ export function ActionTypeEditor({ value, onChange, readOnly = false, problems, 
 
     return (
         <>
-            {!readOnly && (form.executionMode === "agent" || form.executionMode === "script") && (
+            {!readOnly && form.executionMode === "agent" && (
                 <Flex justifyContent={{ default: "justifyContentFlexEnd" }} style={{ marginBottom: "8px" }}>
                     <FlexItem>
                         <Button variant="secondary" icon={<MagicIcon />}
@@ -339,18 +338,6 @@ export function ActionTypeEditor({ value, onChange, readOnly = false, problems, 
                 )}
             </Tabs>
 
-            {!readOnly && form.executionMode === "script" && (
-                <ScriptAiModal
-                    isOpen={aiModalOpen}
-                    script={form.scriptTemplate || ""}
-                    actionTypeName={form.name}
-                    actionTypeDescription={form.description}
-                    onApply={(script) => {
-                        updateForm({ scriptTemplate: script });
-                    }}
-                    onClose={() => setAiModalOpen(false)}
-                />
-            )}
             {!readOnly && form.executionMode === "agent" && (
                 <ActionTypeAiModal
                     isOpen={aiModalOpen}

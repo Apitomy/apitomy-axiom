@@ -6,13 +6,10 @@ import io.apitomy.axiom.api.beans.ActionTypeSearchResults;
 import io.apitomy.axiom.api.beans.NewActionType;
 import io.apitomy.axiom.api.beans.AiEditPromptRequest;
 import io.apitomy.axiom.api.beans.AiEditPromptResponse;
-import io.apitomy.axiom.api.beans.ScriptAiEditRequest;
-import io.apitomy.axiom.api.beans.ScriptAiEditResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.beans.Environment;
 import io.apitomy.axiom.app.ActionTypeAiService;
-import io.apitomy.axiom.app.ScriptAiService;
 import io.apitomy.axiom.app.validation.ConfigItemType;
 import io.apitomy.axiom.app.validation.ConfigItemValidationService;
 import io.apitomy.axiom.app.validation.ConfigProblem;
@@ -44,9 +41,6 @@ public class ActionResourceImpl implements ActionResource {
 
     @Inject
     ObjectMapper objectMapper;
-
-    @Inject
-    ScriptAiService scriptAiService;
 
     @Inject
     ActionTypeAiService actionTypeAiService;
@@ -252,14 +246,6 @@ public class ActionResourceImpl implements ActionResource {
         actionType.setEnvironment(jsonToEnvironment(entity.environment));
         actionType.setLabels(entity.labels);
         return actionType;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public ScriptAiEditResponse aiEditScript(ScriptAiEditRequest data) {
-        return scriptAiService.editScript(data);
     }
 
     /**

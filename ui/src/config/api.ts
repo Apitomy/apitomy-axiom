@@ -465,28 +465,6 @@ export async function updateActionType(id: number, at: NewActionType): Promise<A
     return response.json();
 }
 
-export interface ScriptAiEditRequest {
-    message: string;
-    currentScript?: string;
-    actionTypeName?: string;
-    actionTypeDescription?: string;
-}
-
-export interface ScriptAiEditResponse {
-    script?: string;
-    explanation?: string;
-}
-
-export async function aiEditScript(request: ScriptAiEditRequest): Promise<ScriptAiEditResponse> {
-    const response = await fetch(`${API}/action-types/ai-edit-script`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(request),
-    });
-    if (!response.ok) throw new Error(`Failed to AI edit script: ${response.status}`);
-    return response.json();
-}
-
 export async function aiEditActionPrompt(request: AiEditPromptRequest): Promise<AiEditPromptResponse> {
     const response = await fetch(`${API}/action-types/ai-edit-prompt`, {
         method: "POST",
