@@ -139,7 +139,11 @@ public class WorkbenchSessions {
      * @return the recap text, or null
      */
     public String takeRecap(long compositionId) {
-        return recaps.remove(compositionId);
+        String recap = recaps.remove(compositionId);
+        if (recap != null) {
+            LOG.infof("Sending recap for composition %d (%d chars)", compositionId, recap.length());
+        }
+        return recap;
     }
 
     /**

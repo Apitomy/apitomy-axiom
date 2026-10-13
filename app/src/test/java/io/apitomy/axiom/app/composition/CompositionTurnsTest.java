@@ -141,7 +141,10 @@ class CompositionTurnsTest {
         CompositionTurns.AgentWrite write = turns.upsert(composition.id, "tool", tool);
         assertEquals("ai", write.item().lastAuthor);
         assertEquals(turnId, write.item().lastTurnId);
-        assertEquals(1, service.revisions(composition.id, write.item().id).size());
+        List<CompositionRevisionEntity> created = service.revisions(composition.id, write.item().id);
+        assertEquals(1, created.size());
+        assertEquals("ai", created.get(0).author);
+        assertEquals(turnId, created.get(0).turnId);
         tool.put("description", "v2");
         assertEquals(turnId, turns.upsert(composition.id, "tool", tool).item().lastTurnId);
         assertEquals(1, service.items(composition.id).stream().filter(i -> "tool".equals(i.itemType)).count());

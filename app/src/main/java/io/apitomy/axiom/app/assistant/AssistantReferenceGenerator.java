@@ -109,7 +109,7 @@ public class AssistantReferenceGenerator {
 
             | Op | Fields | Effect |
             | --- | --- | --- |
-            | `addNode` | `node` | Adds a node. A node without `position` is placed near its connected neighbours. |
+            | `addNode` | `node` | Adds a node. Omit `position`; the editor lays out the workflow. |
             | `updateNode` | `id`, `patch: { name?, config? }`, `unset?` | Updates the name and shallow-merges config. |
             | `renameNode` | `id`, `newId` | Renames a node and rewrites `source`/`target` of attached edges. |
             | `removeNode` | `id` | Removes a node and every edge attached to it. |
