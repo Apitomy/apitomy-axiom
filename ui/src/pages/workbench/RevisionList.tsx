@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Button } from "@patternfly/react-core";
+import { Alert, Button, Label, Tooltip } from "@patternfly/react-core";
+import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import {
     type CompositionItem, type CompositionRevision, listRevisions, restoreRevision,
 } from "../../config/compositions";
@@ -40,18 +41,44 @@ export function RevisionList({ compositionId, item, onRestored }: RevisionListPr
 
     return (
         <div className="axiom-workbench__revisions">
-            {error && <div role="alert">{error}</div>}
-            <ul>
-                {revisions.map((r: CompositionRevision) => (
-                    <li key={r.id}>
-                        <span>{r.author === "ai" ? "AI" : "You"}</span>
-                        {r.turnId && <span title={r.turnId}> · turn {r.turnId.substring(0, 8)}</span>}
-                        <span> · {new Date(r.createdAt).toLocaleString()}</span>{" "}
-                        <Button variant="link" isInline aria-label={`Restore revision ${r.id}`}
-                            onClick={() => restore(r.id)}>Restore</Button>
-                    </li>
-                ))}
-            </ul>
+            {error && <Alert isInline variant="danger" title={error} />}
+            <Table aria-label={`Revisions of ${item.name}`} variant="compact">
+                <Thead>
+                    <Tr>
+                        <Th>Author</Th>
+                        <Th>Turn</Th>
+                        <Th>Time</Th>
+                        <Th screenReaderText="Actions" />
+                    </Tr>
+                </Thead>
+                <Tbody>
+                    {revisions.map((r: CompositionRevision) => {
+                        const current: boolean = r.contentRevision === item.contentRevision;
+                        return (
+                            <Tr key={r.id}>
+                                <Td dataLabel="Author">
+                                    <Label isCompact color={r.author === "ai" ? "purple" : "blue"}>
+                                        {r.author === "ai" ? "AI" : "You"}
+                                    </Label>
+                                    {current && <> <Label isCompact color="green">Current</Label></>}
+                                </Td>
+                                <Td dataLabel="Turn">
+                                    {r.turnId ? (
+                                        <Tooltip content={r.turnId}>
+                                            <code>{r.turnId.substring(0, 8)}</code>
+                                        </Tooltip>
+                                    ) : "—"}
+                                </Td>
+                                <Td dataLabel="Time">{new Date(r.createdAt).toLocaleString()}</Td>
+                                <Td isActionCell>
+                                    <Button variant="link" isInline aria-label={`Restore revision ${r.id}`}
+                                        isDisabled={current} onClick={() => restore(r.id)}>Restore</Button>
+                                </Td>
+                            </Tr>
+                        );
+                    })}
+                </Tbody>
+            </Table>
         </div>
     );
 }
