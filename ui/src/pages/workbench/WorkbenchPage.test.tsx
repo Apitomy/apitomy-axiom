@@ -153,4 +153,14 @@ describe("WorkbenchPage", () => {
         fireEvent.click(await screen.findByRole("menuitem", { name: "Tool" }));
         expect(await screen.findByText("Add tool")).toBeTruthy();
     });
+
+    it("maximizes the canvas and restores both side panels on a second click", () => {
+        renderPage();
+        fireEvent.click(screen.getByRole("button", { name: "Maximize canvas" }));
+        expect(screen.getByRole("button", { name: "Expand left pane" })).toBeTruthy();
+        expect(screen.getByRole("button", { name: "Expand chat pane" })).toBeTruthy();
+        fireEvent.click(screen.getByRole("button", { name: "Restore side panels" }));
+        expect(screen.getByRole("button", { name: "Collapse left pane" })).toBeTruthy();
+        expect(screen.getByRole("button", { name: "Collapse chat pane" })).toBeTruthy();
+    });
 });

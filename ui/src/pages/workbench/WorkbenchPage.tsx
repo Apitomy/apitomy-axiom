@@ -6,7 +6,7 @@ import {
     ToggleGroupItem, Tooltip, Dropdown, DropdownItem, DropdownList, MenuToggle,
 } from "@patternfly/react-core";
 import {
-    CompressArrowsAltIcon, ExpandArrowsAltIcon, ExpandIcon, ExternalLinkAltIcon, HistoryIcon, PlusCircleIcon,
+    CompressArrowsAltIcon, CompressIcon, ExpandArrowsAltIcon, ExpandIcon, ExternalLinkAltIcon, HistoryIcon, PlusCircleIcon,
 } from "@patternfly/react-icons";
 import { RevisionList } from "./RevisionList";
 import { addItem, type CompositionItem, fetchItem, updateComposition } from "../../config/compositions";
@@ -251,6 +251,7 @@ export function WorkbenchPage() {
     const setRight = (w: number) => setPrefs((p) => ({ ...p, panes: { ...p.panes, right: w } }));
 
     const focused: boolean = searchParams.get("focus") === "1";
+    const maximized: boolean = prefs.leftCollapsed && prefs.rightCollapsed;
     const chatCollapseButton = (
         <Button variant="plain" size="sm"
             aria-label={prefs.rightCollapsed ? "Expand chat pane" : "Collapse chat pane"}
@@ -281,9 +282,10 @@ export function WorkbenchPage() {
                         onChange={() => updatePrefs({ applyLayout: "tidy" })} />
                 </ToggleGroup>
                 <span className="axiom-workbench__spacer" />
-                <Tooltip content="Maximize canvas">
-                    <Button variant="plain" aria-label="Maximize canvas" icon={<ExpandIcon />}
-                        onClick={() => updatePrefs({ leftCollapsed: true, rightCollapsed: true })} />
+                <Tooltip content={maximized ? "Restore side panels" : "Maximize canvas"}>
+                    <Button variant="plain" aria-label={maximized ? "Restore side panels" : "Maximize canvas"}
+                        icon={maximized ? <CompressIcon /> : <ExpandIcon />}
+                        onClick={() => updatePrefs({ leftCollapsed: !maximized, rightCollapsed: !maximized })} />
                 </Tooltip>
                 <Tooltip content={`${focused ? "Exit focus" : "Focus"} (Ctrl+Shift+F)`}>
                     <Button variant="plain" aria-label={focused ? "Exit focus" : "Focus"} onClick={toggleFocus}
