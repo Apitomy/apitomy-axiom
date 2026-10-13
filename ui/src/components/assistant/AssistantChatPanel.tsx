@@ -121,7 +121,11 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
 
             case "user_message":
                 if (data.content) {
+                    const isNotice: boolean = (data.content as string).startsWith("(Axiom) ");
                     setMessages((prev) => {
+                        if (isNotice) {
+                            return [...prev, { id: String(++messageIdCounter), type: "system", content: data.content as string }];
+                        }
                         const last = prev[prev.length - 1];
                         if (last && last.type === "user" && last.content === data.content) {
                             return prev;

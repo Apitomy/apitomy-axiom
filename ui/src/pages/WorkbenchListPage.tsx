@@ -140,13 +140,13 @@ export function WorkbenchListPage() {
             </ConfirmDeleteModal>
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} variant="medium"
-                aria-labelledby="new-composition-title">
+                aria-labelledby="new-composition-title" elementToFocus="#composition-name">
                 <ModalHeader title="New composition" labelId="new-composition-title" />
                 <ModalBody>
                     {error && <Alert variant="danger" isInline title={error} style={{ marginBottom: "16px" }} />}
                     <Form onSubmit={(e) => { e.preventDefault(); void handleCreate(); }}>
                         <FormGroup label="Name" isRequired fieldId="composition-name">
-                            <TextInput id="composition-name" isRequired autoFocus value={name} onChange={(_e, v) => setName(v)} />
+                            <TextInput id="composition-name" isRequired value={name} onChange={(_e, v) => setName(v)} />
                         </FormGroup>
                         <FormGroup label="Goal" fieldId="composition-goal">
                             <TextArea id="composition-goal" value={goal} onChange={(_e, v) => setGoal(v)} />

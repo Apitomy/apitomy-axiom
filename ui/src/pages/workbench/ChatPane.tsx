@@ -75,7 +75,7 @@ export function ChatPane(props: ChatPaneProps) {
             if (plan.replaceWorkflow) {
                 props.onReplaceWorkflow(plan.replaceWorkflow);
             }
-            setNotice({ variant: "info", title: plan.message, body: summarise(result, plan.replaceWorkflow !== null) });
+            setNotice({ variant: "info", title: plan.message, body: summarise(result, Boolean(plan.replaceWorkflow)) });
             setUndoneTurnId(turnId);
             props.onUndone();
         } catch (e) {

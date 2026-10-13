@@ -42,4 +42,17 @@ describe("AssistantChatPanel overrides", () => {
         rerender(<AssistantChatPanel sessionId="s1" prefill={{ text: "again", nonce: 2 }} />);
         await waitFor(() => expect(input.value).toBe("again"));
     });
+
+    it("renders (Axiom) user_message notices as system messages", async () => {
+        vi.spyOn(api, "fetchAssistantSessionHistory").mockResolvedValue([
+            { eventIndex: 1, eventType: "user_message", eventData: { content: "(Axiom) Retrying with fresh state" } },
+            { eventIndex: 2, eventType: "user_message", eventData: { content: "hi there" } },
+        ] as never);
+        const { container } = render(<AssistantChatPanel sessionId="s1" />);
+        const notice: HTMLElement = await screen.findByText("(Axiom) Retrying with fresh state");
+        expect(notice.closest(".axiom-message-list__system")).toBeTruthy();
+        const user: HTMLElement = await screen.findByText("hi there");
+        expect(user.closest(".axiom-message-list__system")).toBeNull();
+        expect(container).toBeTruthy();
+    });
 });

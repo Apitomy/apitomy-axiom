@@ -4,6 +4,19 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { WorkbenchListPage } from "./WorkbenchListPage";
 import * as compositions from "../config/compositions";
 
+const modalProps: Record<string, unknown>[] = [];
+vi.mock("@patternfly/react-core", async (orig) => {
+    const actual: Record<string, unknown> = await orig();
+    const React = await import("react");
+    const RealModal = actual.Modal as React.ComponentType<Record<string, unknown>>;
+    // jsdom has no layout, so focus-trap rejects the selector target; record the prop and strip it.
+    return { ...actual, Modal: (p: Record<string, unknown>) => {
+        modalProps.push(p);
+        const { elementToFocus: _ignored, ...rest } = p;
+        return React.createElement(RealModal, rest);
+    } };
+});
+
 describe("WorkbenchListPage", () => {
     it("lists compositions and creates one with a blank workflow", async () => {
         vi.spyOn(compositions, "listCompositions").mockResolvedValue([
@@ -37,7 +50,8 @@ describe("WorkbenchListPage", () => {
         </Routes></MemoryRouter>);
         fireEvent.click(await screen.findByRole("button", { name: /new composition/i }));
         const input: HTMLElement = screen.getByLabelText(/name/i);
-        await waitFor(() => expect(document.activeElement).toBe(input));
+        expect(input.id).toBe("composition-name");
+        expect(modalProps.some((p) => p.isOpen && p.elementToFocus === "#composition-name")).toBe(true);
         fireEvent.change(input, { target: { value: "New" } });
         fireEvent.submit(input.closest("form") as HTMLFormElement);
         fireEvent.submit(input.closest("form") as HTMLFormElement);
