@@ -306,6 +306,63 @@ export function undoTurn(id: number, turnId: string): Promise<UndoResult> {
     return request("POST", `${c(id)}/turns/${encodeURIComponent(turnId)}/undo`);
 }
 
+/** Status of a composition test run. */
+export type TestRunStatus = "running" | "passed" | "failed" | "error";
+
+/** One test run of a draft action type or tool. */
+export interface CompositionTestRun {
+    id: string;
+    itemId: number;
+    itemType: "action-type" | "tool";
+    itemName: string;
+    author: "user" | "ai";
+    turnId?: string;
+    subjectId?: number;
+    status: TestRunStatus;
+    startedAt: string;
+    durationMs?: number;
+    inputs?: Record<string, unknown>;
+    outputs?: Record<string, unknown>;
+    stdout?: string;
+    stderr?: string;
+    exitCode?: number;
+    problems?: string[];
+    message?: string;
+    resolvedScript?: string;
+}
+
+/** SSE payload of a "composition-test-run" event. */
+export interface CompositionTestRunEvent {
+    compositionId: number;
+    run: CompositionTestRun;
+}
+
+/** Test-runs a draft action type or tool and returns the finished run. */
+export function testItem(id: number, itemId: number,
+    data: { inputs: Record<string, unknown>; subjectId?: number }): Promise<CompositionTestRun> {
+    return request("POST", `${it(id, itemId)}/test`, data);
+}
+
+/** Lists a composition's recent test runs, newest first. */
+export function listTestRuns(id: number): Promise<CompositionTestRun[]> {
+    return request("GET", `${c(id)}/test-runs`);
+}
+
+const MAX_TEST_RUNS: number = 50;
+
+/**
+ * Adds or updates a run in a newest-first list.
+ * @param runs the current runs
+ * @param run the new or updated run
+ * @returns the new list
+ */
+export function mergeTestRun(runs: CompositionTestRun[], run: CompositionTestRun): CompositionTestRun[] {
+    if (runs.some((r) => r.id === run.id)) {
+        return runs.map((r) => (r.id === run.id ? run : r));
+    }
+    return [run, ...runs].slice(0, MAX_TEST_RUNS);
+}
+
 // ── SSE ───────────────────────────────────────────────────────────
 
 /** Handlers for composition SSE events. */
@@ -313,6 +370,7 @@ export interface CompositionEventHandlers {
     itemChanged?: (event: CompositionItemChangedEvent) => void;
     turn?: (event: CompositionTurnEvent) => void;
     changeSet?: (event: CompositionChangeSetEvent) => void;
+    testRun?: (event: CompositionTestRunEvent) => void;
 }
 
 /**
@@ -336,6 +394,9 @@ export function subscribeComposition(compositionId: number, handlers: Compositio
                 break;
             case "composition-changeset":
                 handlers.changeSet?.(event.data as unknown as CompositionChangeSetEvent);
+                break;
+            case "composition-test-run":
+                handlers.testRun?.(event.data as unknown as CompositionTestRunEvent);
                 break;
         }
     });

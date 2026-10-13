@@ -3,12 +3,16 @@ import {
     type ChangeSet,
     type Composition,
     type CompositionItem,
+    type CompositionTestRun,
     type ConfigProblem,
     ensureCompositionSession,
     fetchComposition,
     deleteItem,
     fetchItem,
     listItems,
+    listTestRuns,
+    mergeTestRun,
+    testItem,
     subscribeComposition,
     validateComposition,
 } from "../../config/compositions";
@@ -44,6 +48,10 @@ export interface WorkbenchState {
     removeItem(itemId: number): Promise<void>;
     markPendingHandled(): void;
     retrySession(): Promise<void>;
+    /** Recent test runs of this composition, newest first (loaded on mount, updated by SSE and runTest). */
+    testRuns: CompositionTestRun[];
+    /** Test-runs a draft action type or tool, records the finished run and returns it. */
+    runTest(itemId: number, inputs: Record<string, unknown>, subjectId?: number): Promise<CompositionTestRun>;
 }
 
 const VALIDATE_DEBOUNCE_MS: number = 800;
@@ -81,6 +89,7 @@ export function useWorkbench(compositionId: number): WorkbenchState {
     const pendingRef = useRef<PendingChangeSet | null>(null);
     const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const aliveRef = useRef<boolean>(true);
+    const [testRuns, setTestRuns] = useState<CompositionTestRun[]>([]);
 
     const updatePending = useCallback((p: PendingChangeSet | null) => {
         pendingRef.current = p;
@@ -182,6 +191,9 @@ export function useWorkbench(compositionId: number): WorkbenchState {
             if (cancelled) {
                 return;
             }
+            void listTestRuns(compositionId)
+                .then((runs) => { if (aliveRef.current && !isCancelled()) setTestRuns(runs); })
+                .catch(console.error);
             // Validation does not depend on the agent: run it alongside the (possibly slow) session start.
             await Promise.all([startSession(isCancelled), validate(isCancelled)]);
         })();
@@ -194,6 +206,7 @@ export function useWorkbench(compositionId: number): WorkbenchState {
 
     useEffect(() => {
         const unsubscribe = subscribeComposition(compositionId, {
+            testRun: (ev) => setTestRuns((prev) => mergeTestRun(prev, ev.run)),
             itemChanged: (ev) => {
                 void refreshItems().catch(console.error);
                 const loaded = revisionsRef.current[ev.itemId];
@@ -286,7 +299,17 @@ export function useWorkbench(compositionId: number): WorkbenchState {
         updatePending(null);
     }, [updatePending]);
 
+    const runTest = useCallback(async (itemId: number, inputs: Record<string, unknown>, subjectId?: number) => {
+        const run: CompositionTestRun = await testItem(compositionId, itemId,
+            subjectId === undefined ? { inputs } : { inputs, subjectId });
+        if (aliveRef.current) {
+            setTestRuns((prev) => mergeTestRun(prev, run));
+        }
+        return run;
+    }, [compositionId]);
+
     return {
+        testRuns, runTest,
         composition, items, contents, revisions, problems, pending, lastCompletedTurnId, sessionError,
         loadContent, refreshItems, refreshComposition, setContent, removeItem, markPendingHandled, retrySession: () => startSession(),
     };

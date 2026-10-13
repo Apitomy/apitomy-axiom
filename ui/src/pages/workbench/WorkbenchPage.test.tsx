@@ -16,6 +16,7 @@ vi.mock("./useWorkbench", () => ({
         contents: { 10: {} }, revisions: {}, problems: {}, pending: null, lastCompletedTurnId: undefined, sessionError: null,
         loadContent: async () => ({}), refreshItems: async () => {}, refreshComposition: async () => {},
         setContent, removeItem: async () => {}, markPendingHandled: () => {}, retrySession: async () => {},
+        testRuns: [], runTest: async () => ({}) as never,
     }),
 }));
 

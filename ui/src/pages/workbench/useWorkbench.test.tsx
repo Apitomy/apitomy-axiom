@@ -14,6 +14,7 @@ beforeEach(() => {
         changed: true, content: { id: "w", name: "wf", nodes: [], edges: [] } } as never);
     vi.spyOn(c, "ensureCompositionSession").mockResolvedValue({ id: 1, assistantSessionId: "s1" } as never);
     vi.spyOn(c, "validateComposition").mockResolvedValue({ items: [{ itemId: 10, type: "workflow", name: "wf", valid: true, problems: [] }] });
+    vi.spyOn(c, "listTestRuns").mockResolvedValue([]);
     vi.spyOn(c, "subscribeComposition").mockImplementation((_id, handlers) => { sse = handlers; return () => {}; });
 });
 
@@ -90,5 +91,38 @@ describe("useWorkbench", () => {
             lastAuthor: "ai", changed: true, content: { name: "new" } } as never);
         await act(async () => sse.itemChanged?.({ compositionId: 1, itemId: 12, contentRevision: "n1" } as never));
         await waitFor(() => expect(result.current.contents[12]).toEqual({ name: "new" }));
+    });
+});
+
+const run = (id: string, status: c.TestRunStatus): c.CompositionTestRun => ({
+    id, itemId: 11, itemType: "action-type", itemName: "greet", author: "ai", status, startedAt: "",
+});
+
+describe("test runs", () => {
+    it("loads runs and merges SSE updates by id, newest first", async () => {
+        vi.spyOn(c, "listTestRuns").mockResolvedValue([run("a", "passed")]);
+        const { result } = renderHook(() => useWorkbench(1));
+        await waitFor(() => expect(result.current.testRuns).toHaveLength(1));
+        act(() => sse.testRun?.({ compositionId: 1, run: run("b", "running") }));
+        expect(result.current.testRuns.map((r) => r.id)).toEqual(["b", "a"]);
+        act(() => sse.testRun?.({ compositionId: 1, run: run("b", "failed") }));
+        expect(result.current.testRuns.map((r) => `${r.id}:${r.status}`)).toEqual(["b:failed", "a:passed"]);
+    });
+
+    it("runs a test and keeps its result", async () => {
+        const test = vi.spyOn(c, "testItem").mockResolvedValue(run("c", "passed"));
+        const { result } = renderHook(() => useWorkbench(1));
+        await waitFor(() => expect(result.current.items).toHaveLength(1));
+        await act(async () => { await result.current.runTest(11, { who: "bob" }, 5); });
+        expect(test).toHaveBeenCalledWith(1, 11, { inputs: { who: "bob" }, subjectId: 5 });
+        expect(result.current.testRuns[0].id).toBe("c");
+    });
+});
+
+describe("mergeTestRun", () => {
+    it("caps the list at 50", () => {
+        const many = Array.from({ length: 50 }, (_v, i) => run(String(i), "passed"));
+        expect(c.mergeTestRun(many, run("new", "running"))).toHaveLength(50);
+        expect(c.mergeTestRun(many, run("new", "running"))[0].id).toBe("new");
     });
 });
