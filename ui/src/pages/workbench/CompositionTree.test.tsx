@@ -26,7 +26,7 @@ describe("CompositionTree", () => {
 
     it("orders groups and rows workflow, action types, tools", () => {
         renderTree();
-        const headings = screen.getAllByRole("heading").map((h) => h.textContent);
+        const headings = [...document.querySelectorAll(".pf-v6-c-simple-list__title")].map((h) => h.textContent);
         expect(headings).toEqual(["Workflow", "Action types", "Tools"]);
         const rows = screen.getAllByRole("button", { name: /^(wf|at|tl)\b/ }).map((b) => b.getAttribute("data-name"));
         expect(rows).toEqual(["wf", "at", "tl"]);

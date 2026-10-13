@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import {
     Button, Form, FormGroup, FormSelect, FormSelectOption, Label, Modal, ModalBody, ModalFooter, ModalHeader,
-    Radio, TextInput, Tooltip,
+    Radio, SimpleList, SimpleListGroup, SimpleListItem, TextInput, Tooltip,
 } from "@patternfly/react-core";
-import { CheckCircleIcon, ExclamationCircleIcon, ExclamationTriangleIcon, LockIcon } from "@patternfly/react-icons";
+import {
+    CheckCircleIcon, ExclamationCircleIcon, ExclamationTriangleIcon, LockIcon, PlusCircleIcon,
+} from "@patternfly/react-icons";
 import type { Composition, CompositionItem, CompositionItemType, ConfigProblem } from "../../config/compositions";
 import { fetchActionTypes, fetchTools } from "../../config/api";
 import { isAiTouchedInTurn, isLockedForUser, itemStatus, type ItemStatus } from "./workbenchLogic";
@@ -32,10 +34,10 @@ export interface CompositionTreeProps {
     onRestored(item: CompositionItem): void;
 }
 
-const GROUPS: { type: CompositionItemType; title: string }[] = [
+const GROUPS: { type: CompositionItemType; title: string; addLabel?: string }[] = [
     { type: "workflow", title: "Workflow" },
-    { type: "action-type", title: "Action types" },
-    { type: "tool", title: "Tools" },
+    { type: "action-type", title: "Action types", addLabel: "Add action type" },
+    { type: "tool", title: "Tools", addLabel: "Add tool" },
 ];
 
 function StatusIcon({ status }: { status: ItemStatus }) {
@@ -70,35 +72,41 @@ export function CompositionTree(props: CompositionTreeProps) {
 
     return (
         <div className="axiom-workbench__tree">
-            {GROUPS.map((g) => (
-                <section key={g.type}>
-                    <div className="axiom-workbench__group">
-                        <h4>{g.title}</h4>
-                        {g.type !== "workflow" && (
-                            <Button variant="link" isInline size="sm" aria-label={`Add ${g.title.toLowerCase()}`}
-                                onClick={() => setAdding(g.type as AddableType)}> +</Button>
-                        )}
-                    </div>
-                    <ul className="axiom-workbench__items">
+            <SimpleList isControlled={false} aria-label="Composition components">
+                {GROUPS.map((g) => (
+                    <SimpleListGroup key={g.type} id={`composition-group-${g.type}`} title={g.title}>
                         {items.filter((i) => i.type === g.type).map((item) => (
-                            <li key={item.id} className={item.id === selected ? "is-selected" : undefined}>
-                                <Button variant="link" isInline data-name={item.name} onClick={() => {
+                            <SimpleListItem key={item.id} itemId={item.id} isActive={item.id === selected}
+                                componentProps={{ "data-name": item.name }}
+                                onClick={() => {
                                     setSelected(item.id);
                                     onOpen(item.id);
-                                }}>{item.name}</Button>{" "}
-                                <StatusIcon status={itemStatus(problems[item.id])} />
-                                {isLockedForUser(item, composition) && <LockIcon aria-label="locked" />}
-                                {isAiTouchedInTurn(item, lastCompletedTurnId) && <Label isCompact color="purple">AI</Label>}
-                                {item.changed && (
-                                    <Tooltip content="Unpublished changes">
-                                        <span className="axiom-workbench__dot" aria-label="Unpublished changes">●</span>
-                                    </Tooltip>
-                                )}
-                            </li>
+                                }}>
+                                <span className="axiom-workbench__item">
+                                    <span className="axiom-workbench__item-name">{item.name}</span>{" "}
+                                    <StatusIcon status={itemStatus(problems[item.id])} />
+                                    {isLockedForUser(item, composition) && <LockIcon aria-label="locked" />}
+                                    {isAiTouchedInTurn(item, lastCompletedTurnId) && (
+                                        <Label isCompact color="purple">AI</Label>
+                                    )}
+                                    {item.changed && (
+                                        <Tooltip content="Unpublished changes">
+                                            <span className="axiom-workbench__dot" aria-label="Unpublished changes">●</span>
+                                        </Tooltip>
+                                    )}
+                                </span>
+                            </SimpleListItem>
                         ))}
-                    </ul>
-                </section>
-            ))}
+                        {g.addLabel && (
+                            <li className="axiom-workbench__add-row">
+                                <Button variant="link" size="sm" icon={<PlusCircleIcon />}
+                                    aria-label={`Add ${g.title.toLowerCase()}`}
+                                    onClick={() => setAdding(g.type as AddableType)}>{g.addLabel}</Button>
+                            </li>
+                        )}
+                    </SimpleListGroup>
+                ))}
+            </SimpleList>
             {selectedItem && (
                 <RevisionList compositionId={composition.id} item={selectedItem} onRestored={onRestored} />
             )}
