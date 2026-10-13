@@ -6,10 +6,15 @@ describe("workbenchPrefs", () => {
 
     it("returns defaults and merges saved values", () => {
         expect(loadPrefs()).toEqual({ applyLayout: "place", focus: false, panes: { left: 260, right: 380 },
-            leftCollapsed: false, rightCollapsed: false });
+            leftCollapsed: false, rightCollapsed: false, testStripCollapsed: true });
         savePrefs({ applyLayout: "tidy", panes: { left: 5000, right: 10 } });
         expect(loadPrefs().applyLayout).toBe("tidy");
         expect(loadPrefs().panes).toEqual({ left: 800, right: 160 });
+    });
+
+    it("remembers the test strip state", () => {
+        savePrefs({ testStripCollapsed: false });
+        expect(loadPrefs().testStripCollapsed).toBe(false);
     });
 
     it("ignores corrupt storage", () => {

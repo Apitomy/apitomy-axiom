@@ -301,3 +301,66 @@ span.axiom-workbench__row-menu {
 :root:where(.pf-v6-theme-dark) .axiom-workbench__item-name.axiom-workbench__item-name--unpublished {
     color: var(--pf-t--color--blue--30);
 }
+
+/* Test output strip at the bottom of the centre pane. */
+.axiom-test-strip {
+    flex: 0 0 auto;
+    border-top: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+}
+
+.axiom-test-strip__header {
+    display: flex;
+    align-items: center;
+    gap: var(--pf-t--global--spacer--sm, 8px);
+    padding: 0 var(--pf-t--global--spacer--sm, 8px);
+}
+
+.axiom-test-strip__body {
+    height: 220px;
+    overflow: auto;
+    padding: 0 var(--pf-t--global--spacer--sm, 8px) var(--pf-t--global--spacer--sm, 8px);
+}
+
+.axiom-test-strip__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.axiom-test-strip__row {
+    display: flex;
+    align-items: center;
+    gap: var(--pf-t--global--spacer--sm, 8px);
+    min-width: 0;
+}
+
+.axiom-test-strip__summary {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.axiom-test-strip__details {
+    padding: 0 0 var(--pf-t--global--spacer--sm, 8px) 56px;
+}
+
+.axiom-test-strip__details h4 {
+    margin-top: var(--pf-t--global--spacer--sm, 8px);
+    font-weight: var(--pf-t--global--font--weight--body--bold, 600);
+}
+
+.axiom-test-strip__details pre {
+    max-height: 200px;
+    overflow: auto;
+    font-family: var(--pf-t--global--font--family--mono);
+    font-size: var(--pf-t--global--font--size--sm);
+    white-space: pre-wrap;
+    background: var(--pf-t--global--background--color--secondary--default);
+    padding: var(--pf-t--global--spacer--xs, 4px) var(--pf-t--global--spacer--sm, 8px);
+}
+
+.axiom-test-strip__empty {
+    margin: var(--pf-t--global--spacer--sm, 8px) 0;
+}

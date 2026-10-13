@@ -7,16 +7,18 @@ import type { WorkbenchState } from "./useWorkbench";
 
 vi.mock("@apitomy/flow-ui", () => ({}));
 const setContent = vi.fn();
+const runTest = vi.fn();
 vi.mock("./useWorkbench", () => ({
     useWorkbench: (): WorkbenchState => ({
         composition: { id: 1, name: "My comp", turnState: "idle", applyMode: "live", createdAt: "", updatedAt: "",
             session: { engine: "claude-code", engineLabel: "Claude Code" } },
         items: [{ id: 10, type: "workflow", name: "main-flow", contentRevision: "r", lastAuthor: "user", changed: false } as never,
             { id: 11, type: "tool", name: "my-tool", contentRevision: "r", lastAuthor: "user", changed: false } as never],
-        contents: { 10: {} }, revisions: {}, problems: {}, pending: null, lastCompletedTurnId: undefined, sessionError: null,
+        contents: { 10: {}, 11: { name: "my-tool", parameters: [{ name: "who", required: true }],
+            scriptTemplate: "echo {{who}}" } }, revisions: {}, problems: {}, pending: null, lastCompletedTurnId: undefined, sessionError: null,
         loadContent: async () => ({}), refreshItems: async () => {}, refreshComposition: async () => {},
         setContent, removeItem: async () => {}, markPendingHandled: () => {}, retrySession: async () => {},
-        testRuns: [], runTest: async () => ({}) as never,
+        testRuns: [], runTest,
     }),
 }));
 
@@ -33,6 +35,20 @@ vi.mock("./WorkflowTab", async () => {
         },
     };
 });
+const itemFlush = vi.fn();
+vi.mock("./ItemTab", async () => {
+    const { useImperativeHandle } = await import("react");
+    return {
+        ItemTab: (props: Record<string, any>) => {
+            useImperativeHandle(props.ref, () => ({ flush: itemFlush }));
+            return <div data-testid="item-tab" />;
+        },
+    };
+});
+vi.mock("../../config/api", async (orig) => ({
+    ...(await orig<Record<string, unknown>>()),
+    fetchSubjects: vi.fn().mockResolvedValue({ items: [], count: 0 }),
+}));
 vi.mock("./PublishDialog", () => ({ PublishDialog: () => <div data-testid="publish-dialog" /> }));
 
 import { act } from "@testing-library/react";
@@ -57,6 +73,10 @@ beforeEach(() => {
     vi.restoreAllMocks();
     setContent.mockReset();
     workflowFlush.mockReset();
+    runTest.mockReset();
+    runTest.mockResolvedValue({});
+    itemFlush.mockReset();
+    itemFlush.mockResolvedValue(undefined);
     localStorage.clear();
 });
 
@@ -179,5 +199,39 @@ describe("WorkbenchPage", () => {
         fireEvent.click(screen.getByRole("button", { name: "Restore side panels" }));
         expect(screen.getByRole("button", { name: "Collapse left pane" })).toBeTruthy();
         expect(screen.getByRole("button", { name: "Collapse chat pane" })).toBeTruthy();
+    });
+
+    it("tests the active tool from the Test output strip", async () => {
+        renderPage();
+        fireEvent.click(screen.getByRole("button", { name: /^my-tool/ }));
+        fireEvent.click(screen.getByRole("button", { name: "Test…" }));
+        fireEvent.change(await screen.findByLabelText("who"), { target: { value: "ann" } });
+        fireEvent.click(screen.getByRole("button", { name: "Run" }));
+        await waitFor(() => expect(runTest).toHaveBeenCalledWith(11, { who: "ann" }, undefined));
+        expect(itemFlush).toHaveBeenCalled();
+    });
+
+    it("shows an error when the test request fails", async () => {
+        runTest.mockRejectedValue(new Error("boom"));
+        renderPage();
+        fireEvent.click(screen.getByRole("button", { name: /^my-tool/ }));
+        fireEvent.click(screen.getByRole("button", { name: "Test…" }));
+        fireEvent.change(await screen.findByLabelText("who"), { target: { value: "ann" } });
+        fireEvent.click(screen.getByRole("button", { name: "Run" }));
+        expect(await screen.findByText(/Could not run the test: boom/)).toBeTruthy();
+        fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+        expect(screen.queryByText(/Could not run the test/)).toBeNull();
+    });
+
+    it("disables Test… on the workflow tab", () => {
+        renderPage();
+        expect((screen.getByRole("button", { name: "Test…" }) as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it("saves the test strip collapsed state", () => {
+        const spy = vi.spyOn(prefs, "savePrefs");
+        renderPage();
+        fireEvent.click(screen.getByRole("button", { name: "Expand test output" }));
+        expect(spy).toHaveBeenCalledWith(expect.objectContaining({ testStripCollapsed: false }));
     });
 });

@@ -23,6 +23,8 @@ import { WorkflowTab, type WorkflowTabHandle } from "./WorkflowTab";
 import { ItemTab, type ItemTabHandle } from "./ItemTab";
 import { itemUsages, mergeCatalog } from "./workbenchLogic";
 import { ChatPane } from "./ChatPane";
+import { TestOutputStrip } from "./TestOutputStrip";
+import { TestRunDialog } from "./TestRunDialog";
 import { findActionTypeIdByName, loadEditorActionTypes } from "../../hooks/useWorkflowEditorSpi";
 import "./WorkbenchPage.css";
 
@@ -69,6 +71,9 @@ export function WorkbenchPage() {
     const workflowTabRef = useRef<WorkflowTabHandle | null>(null);
     /** Handles of the mounted item tabs, by item id (flushed before publishing). */
     const itemTabRefs = useRef<Map<number, ItemTabHandle>>(new Map());
+    const [testing, setTesting] = useState<number | null>(null);
+    const [testError, setTestError] = useState<string | null>(null);
+    const testValues = useRef<Map<number, { values: Record<string, string>; subjectId?: number }>>(new Map());
     const [preparingPublish, setPreparingPublish] = useState<boolean>(false);
     /** Turn id of the last workflow save made for an AI turn (input to undoPlan). */
     const lastWorkflowSaveTurnId = useRef<string | undefined>(undefined);
@@ -230,6 +235,40 @@ export function WorkbenchPage() {
 
     const activeItemId: number | undefined = activeTab === "workflow" ? workflow?.id : Number(activeTab);
     const activeItem: CompositionItem | undefined = wb.items.find((i) => i.id === activeItemId);
+    /** The active action type or tool, if its content is loaded and it can be tested. */
+    const testable: CompositionItem | undefined = activeItem && activeItem.type !== "workflow"
+        && wb.contents[activeItem.id] ? activeItem : undefined;
+
+    /** Flushes the active item's pending save, then opens the test dialog for it. */
+    const openTest = async () => {
+        if (!testable) {
+            return;
+        }
+        await itemTabRefs.current.get(testable.id)?.flush();
+        setTesting(testable.id);
+    };
+
+    /** Starts a test run; the strip shows progress via SSE, request failures show inline. */
+    const runTest = (itemId: number, inputs: Record<string, unknown>, values: Record<string, string>,
+                     subjectId?: number) => {
+        testValues.current.set(itemId, { values, subjectId });
+        setTesting(null);
+        setTestError(null);
+        wb.runTest(itemId, inputs, subjectId).catch((e: unknown) =>
+            setTestError(e instanceof Error ? e.message : String(e)));
+    };
+
+    // Expand the strip when a new run appears (but not for runs loaded on mount).
+    const newestRunId: string | undefined = wb.testRuns[0]?.id;
+    const seenRunId = useRef<string | undefined>(undefined);
+    useEffect(() => {
+        if (newestRunId && seenRunId.current !== undefined && newestRunId !== seenRunId.current
+                && prefs.testStripCollapsed) {
+            updatePrefs({ testStripCollapsed: false });
+        }
+        seenRunId.current = newestRunId ?? seenRunId.current ?? "";
+    }, [newestRunId, prefs.testStripCollapsed, updatePrefs]);
+
     const removingItem: CompositionItem | undefined = removingId === null ? undefined
         : wb.items.find((i) => i.id === removingId);
 
@@ -440,6 +479,22 @@ export function WorkbenchPage() {
                         );
                     })]}
                 </Tabs>
+                {testError && (
+                    <Alert isInline variant="danger" title={`Could not run the test: ${testError}`}
+                        actionLinks={<AlertActionLink onClick={() => setTestError(null)}>Dismiss</AlertActionLink>} />
+                )}
+                <TestOutputStrip runs={wb.testRuns} collapsed={prefs.testStripCollapsed}
+                    onToggle={() => updatePrefs({ testStripCollapsed: !prefs.testStripCollapsed })}
+                    onOpenItem={openItem}
+                    actions={
+                        <Tooltip content={testable ? `Run ${testable.name} with sample inputs`
+                            : "Open an action type or tool to test it"}>
+                            <span>
+                                <Button variant="secondary" size="sm" isDisabled={!testable}
+                                    onClick={() => void openTest()}>Test…</Button>
+                            </span>
+                        </Tooltip>
+                    } />
             </main>
 
             {prefs.rightCollapsed ? <div className="axiom-workbench__splitter axiom-workbench__splitter--right" /> : (
@@ -484,6 +539,16 @@ export function WorkbenchPage() {
                     </ModalBody>
                 </Modal>
             )}
+            {testing !== null && wb.contents[testing] && (() => {
+                const item: CompositionItem | undefined = wb.items.find((i) => i.id === testing);
+                const remembered = testValues.current.get(testing);
+                return item && (
+                    <TestRunDialog itemName={item.name} itemType={item.type === "tool" ? "tool" : "action-type"}
+                        content={wb.contents[testing]} initialValues={remembered?.values ?? {}}
+                        initialSubjectId={remembered?.subjectId} onClose={() => setTesting(null)}
+                        onRun={(inputs, values, subjectId) => runTest(testing, inputs, values, subjectId)} />
+                );
+            })()}
             {publishOpen && (
                 <PublishDialog compositionId={id} items={wb.items} contents={wb.contents} problems={wb.problems}
                     onPublished={() => void wb.refreshItems().catch(console.error)}

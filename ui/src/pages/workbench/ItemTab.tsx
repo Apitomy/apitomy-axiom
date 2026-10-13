@@ -185,8 +185,9 @@ export function ItemTab(props: ItemTabProps) {
                 <Alert isInline variant="danger" title={`Could not save: ${saveError.message}`} />
             )}
             {item.type === "tool" ? (
+                // No toolId: the workbench tests tools through the Test output strip, not the editor's Test tab.
                 <ToolEditor value={value as unknown as NewToolDefinition} readOnly={locked} problems={messages}
-                    toolId={item.baseItemId} onAskAiAboutProblem={askAiAboutProblem} askAiDisabled={aiWorking} fillHeight
+                    onAskAiAboutProblem={askAiAboutProblem} askAiDisabled={aiWorking} fillHeight
                     onChange={(v: NewToolDefinition) => onChange(v as unknown as Record<string, unknown>)} />
             ) : (
                 <ActionTypeEditor value={value as unknown as NewActionType} readOnly={locked} problems={messages}

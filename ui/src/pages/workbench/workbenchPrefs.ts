@@ -8,6 +8,8 @@ export interface WorkbenchPrefs {
     panes: PaneSizes;
     leftCollapsed: boolean;
     rightCollapsed: boolean;
+    /** Whether the Test output strip under the centre pane is collapsed. */
+    testStripCollapsed: boolean;
 }
 
 const KEY: string = "axiom.workbench.prefs";
@@ -16,7 +18,7 @@ const MAX_PANE: number = 800;
 
 function defaults(): WorkbenchPrefs {
     return { applyLayout: "place", focus: false, panes: { left: 260, right: 380 }, leftCollapsed: false,
-        rightCollapsed: false };
+        rightCollapsed: false, testStripCollapsed: true };
 }
 
 function pane(value: unknown, fallback: number): number {
@@ -50,6 +52,7 @@ export function loadPrefs(): WorkbenchPrefs {
         panes: { left: pane(panes.left, d.panes.left), right: pane(panes.right, d.panes.right) },
         leftCollapsed: typeof raw.leftCollapsed === "boolean" ? raw.leftCollapsed : d.leftCollapsed,
         rightCollapsed: typeof raw.rightCollapsed === "boolean" ? raw.rightCollapsed : d.rightCollapsed,
+        testStripCollapsed: typeof raw.testStripCollapsed === "boolean" ? raw.testStripCollapsed : d.testStripCollapsed,
     };
 }
 
