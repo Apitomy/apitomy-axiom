@@ -5,7 +5,9 @@ import {
     Alert, AlertActionLink, Button, Modal, ModalBody, ModalHeader, PageSection, Tab, Tabs, TabTitleText, ToggleGroup,
     ToggleGroupItem, Tooltip, Dropdown, DropdownItem, DropdownList, MenuToggle,
 } from "@patternfly/react-core";
-import { HistoryIcon, PlusCircleIcon } from "@patternfly/react-icons";
+import {
+    CompressArrowsAltIcon, ExpandArrowsAltIcon, ExpandIcon, ExternalLinkAltIcon, HistoryIcon, PlusCircleIcon,
+} from "@patternfly/react-icons";
 import { RevisionList } from "./RevisionList";
 import { addItem, type CompositionItem, fetchItem, updateComposition } from "../../config/compositions";
 import { type AddableType, AddItemDialog, type AddRequest, CompositionTree } from "./CompositionTree";
@@ -248,6 +250,7 @@ export function WorkbenchPage() {
     const setLeft = (w: number) => setPrefs((p) => ({ ...p, panes: { ...p.panes, left: w } }));
     const setRight = (w: number) => setPrefs((p) => ({ ...p, panes: { ...p.panes, right: w } }));
 
+    const focused: boolean = searchParams.get("focus") === "1";
     const chatCollapseButton = (
         <Button variant="plain" size="sm"
             aria-label={prefs.rightCollapsed ? "Expand chat pane" : "Collapse chat pane"}
@@ -278,13 +281,17 @@ export function WorkbenchPage() {
                         onChange={() => updatePrefs({ applyLayout: "tidy" })} />
                 </ToggleGroup>
                 <span className="axiom-workbench__spacer" />
-                <Button variant="plain" onClick={() => updatePrefs({ leftCollapsed: true, rightCollapsed: true })}>
-                    Maximize canvas
-                </Button>
-                <Button variant="secondary" onClick={toggleFocus} title="Ctrl+Shift+F">
-                    {searchParams.get("focus") === "1" ? "Exit focus" : "Focus"}
-                </Button>
-                <Button variant="secondary" onClick={breakOut}>Break out</Button>
+                <Tooltip content="Maximize canvas">
+                    <Button variant="plain" aria-label="Maximize canvas" icon={<ExpandIcon />}
+                        onClick={() => updatePrefs({ leftCollapsed: true, rightCollapsed: true })} />
+                </Tooltip>
+                <Tooltip content={`${focused ? "Exit focus" : "Focus"} (Ctrl+Shift+F)`}>
+                    <Button variant="plain" aria-label={focused ? "Exit focus" : "Focus"} onClick={toggleFocus}
+                        icon={focused ? <CompressArrowsAltIcon /> : <ExpandArrowsAltIcon />} />
+                </Tooltip>
+                <Tooltip content="Break out into a new window">
+                    <Button variant="plain" aria-label="Break out" icon={<ExternalLinkAltIcon />} onClick={breakOut} />
+                </Tooltip>
                 <Button variant="primary" isDisabled={preparingPublish} isLoading={preparingPublish}
                     onClick={() => void openPublish()}>Publish…</Button>
             </div>
