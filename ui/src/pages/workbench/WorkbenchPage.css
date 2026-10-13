@@ -39,11 +39,17 @@
 }
 
 /* Explicit columns: placement never depends on DOM order or on which panes are collapsed. */
-.axiom-workbench__left { grid-column: 1; }
+.axiom-workbench__left {
+    grid-column: 1;
+    border-right: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+}
 .axiom-workbench__splitter--left { grid-column: 2; }
 .axiom-workbench__centre { grid-column: 3; }
 .axiom-workbench__splitter--right { grid-column: 4; }
-.axiom-workbench__right { grid-column: 5; }
+.axiom-workbench__right {
+    grid-column: 5;
+    border-left: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+}
 
 .axiom-workbench__centre {
     display: flex;
