@@ -687,26 +687,6 @@ export async function validateTool(tool: NewToolDefinition): Promise<ToolValidat
     return response.json();
 }
 
-export interface ToolAiEditRequest {
-    message: string;
-    currentTool?: NewToolDefinition;
-}
-
-export interface ToolAiEditResponse {
-    tool?: NewToolDefinition;
-    explanation?: string;
-}
-
-export async function aiEditTool(request: ToolAiEditRequest): Promise<ToolAiEditResponse> {
-    const response = await fetch(`${API}/tools/ai-edit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(request),
-    });
-    if (!response.ok) throw new Error(`Failed to AI edit tool: ${response.status}`);
-    return response.json();
-}
-
 export async function fetchMcpServers(): Promise<McpServer[]> {
     const response = await fetch(`${API}/mcp-servers`);
     if (!response.ok) throw new Error(`Failed to fetch MCP servers: ${response.status}`);

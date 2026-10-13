@@ -1640,38 +1640,6 @@
         }
       ]
     },
-    "/tools/ai-edit": {
-      "post": {
-        "tags": [
-          "Tools"
-        ],
-        "summary": "AI-assisted tool editing",
-        "description": "Invokes Claude Code to generate or update a tool definition based on a natural language instruction.",
-        "operationId": "aiEditTool",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ToolAiEditRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "AI-generated tool definition",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ToolAiEditResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/action-types/{actionTypeId}/tools": {
       "get": {
         "tags": [
@@ -7923,33 +7891,6 @@
           "script": {
             "description": "The generated or updated bash script template",
             "type": "string"
-          },
-          "explanation": {
-            "description": "AI's explanation of what was generated or changed",
-            "type": "string"
-          }
-        }
-      },
-      "ToolAiEditRequest": {
-        "required": [
-          "message"
-        ],
-        "type": "object",
-        "properties": {
-          "message": {
-            "description": "The user's instruction for creating or modifying the tool",
-            "type": "string"
-          },
-          "currentTool": {
-            "$ref": "#/components/schemas/NewToolDefinition"
-          }
-        }
-      },
-      "ToolAiEditResponse": {
-        "type": "object",
-        "properties": {
-          "tool": {
-            "$ref": "#/components/schemas/NewToolDefinition"
           },
           "explanation": {
             "description": "AI's explanation of what was generated or changed",

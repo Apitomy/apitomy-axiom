@@ -4,14 +4,11 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.ToolsResource;
 import io.apitomy.axiom.api.beans.NewToolDefinition;
-import io.apitomy.axiom.api.beans.ToolAiEditRequest;
-import io.apitomy.axiom.api.beans.ToolAiEditResponse;
 import io.apitomy.axiom.api.beans.ToolDefinition;
 import io.apitomy.axiom.api.beans.ToolParameter;
 import io.apitomy.axiom.api.beans.ToolSearchResults;
 import io.apitomy.axiom.api.beans.ToolTestRequest;
 import io.apitomy.axiom.api.beans.ToolTestResponse;
-import io.apitomy.axiom.app.ToolAiService;
 import io.apitomy.axiom.app.validation.ConfigItemType;
 import io.apitomy.axiom.app.validation.ConfigItemValidationService;
 import io.apitomy.axiom.app.validation.ConfigProblem;
@@ -50,9 +47,6 @@ public class ToolsResourceImpl implements ToolsResource {
 
     @Inject
     ObjectMapper objectMapper;
-
-    @Inject
-    ToolAiService toolAiService;
 
     @Inject
     EnvironmentResolver environmentResolver;
@@ -133,16 +127,6 @@ public class ToolsResourceImpl implements ToolsResource {
     public void deleteTool(BigInteger toolId) {
         ToolDefinitionEntity entity = findOrThrow(toolId.longValue());
         entity.delete();
-    }
-
-    // ── AI-Assisted Editing ────────────────────────────────────────
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public ToolAiEditResponse aiEditTool(ToolAiEditRequest data) {
-        return toolAiService.editTool(data);
     }
 
     // ── Tool Validation ───────────────────────────────────────────────

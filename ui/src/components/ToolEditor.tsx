@@ -33,7 +33,6 @@ import { markdownMermaidComponents } from "./MermaidBlock";
 import PlayIcon from "@patternfly/react-icons/dist/esm/icons/play-icon";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import TimesIcon from "@patternfly/react-icons/dist/esm/icons/times-icon";
-import MagicIcon from "@patternfly/react-icons/dist/esm/icons/magic-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import ExclamationTriangleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-triangle-icon";
 import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
@@ -47,7 +46,6 @@ import {
 } from "../config/api";
 import { EditLabelsModal } from "./EditLabelsModal";
 import { LabelDisplay } from "./LabelDisplay";
-import { ToolAiModal } from "./ToolAiModal";
 import { ValidationProblemsPanel } from "./ValidationProblemsPanel";
 
 /** A validation problem shown in the Problems tab. */
@@ -82,7 +80,6 @@ export function ToolEditor({ value, onChange, readOnly = false, problems, onVali
     const params = value.parameters || [];
     const labels = value.labels || [];
     const [activeTab, setActiveTab] = useState(0);
-    const [aiModalOpen, setAiModalOpen] = useState(false);
     const [isLabelsOpen, setIsLabelsOpen] = useState(false);
     const [ownMessages, setOwnMessages] = useState<ValidationMessage[]>([]);
     const onValidationRef = useRef(onValidation);
@@ -131,16 +128,6 @@ export function ToolEditor({ value, onChange, readOnly = false, problems, onVali
 
     return (
         <>
-            {!readOnly && (
-                <Flex justifyContent={{ default: "justifyContentFlexEnd" }} style={{ marginBottom: "8px" }}>
-                    <FlexItem>
-                        <Button variant="tertiary" icon={<MagicIcon />}
-                            onClick={() => setAiModalOpen(true)}>
-                            AI Assistant
-                        </Button>
-                    </FlexItem>
-                </Flex>
-            )}
             <Tabs activeKey={activeTab} onSelect={(_e, k) => setActiveTab(k as number)}>
                 <Tab eventKey={0} title={<TabTitleText>Info</TabTitleText>}>
                     <TabContent id="info-tab" eventKey={0} activeKey={activeTab} style={{ marginTop: "24px" }}>
@@ -196,16 +183,6 @@ export function ToolEditor({ value, onChange, readOnly = false, problems, onVali
                     </Tab>
                 )}
             </Tabs>
-
-            {!readOnly && (
-                <ToolAiModal
-                    isOpen={aiModalOpen}
-                    form={form}
-                    params={params}
-                    onApply={(updates, newParams) => updateForm({ ...updates, parameters: newParams })}
-                    onClose={() => setAiModalOpen(false)}
-                />
-            )}
 
             <EditLabelsModal
                 isOpen={!readOnly && isLabelsOpen}

@@ -33,7 +33,6 @@ describe("ToolEditor", () => {
             onChange={onChange} />);
         expect((screen.getByDisplayValue("d") as HTMLTextAreaElement).disabled).toBe(true);
         expect(screen.queryByLabelText("Edit labels")).toBeNull();
-        expect(screen.queryByText("AI Assistant")).toBeNull();
         fireEvent.click(screen.getByText("Script Template"));
         expect(screen.getByTestId("code-editor").getAttribute("data-readonly")).toBe("true");
         fireEvent.change(screen.getByDisplayValue("d"), { target: { value: "x" } });
