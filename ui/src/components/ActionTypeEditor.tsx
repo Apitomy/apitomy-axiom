@@ -65,6 +65,8 @@ export interface ActionTypeEditorProps {
     onAskAiAboutProblem?: (message: ToolValidationMessage) => void;
     /** Disables the "Ask AI to fix this" actions. */
     askAiDisabled?: boolean;
+    /** Lets the Code tab's editor fill the available height (used by the workbench). */
+    fillHeight?: boolean;
 }
 
 /** Style that makes a fieldset a transparent wrapper (used to disable tab bodies when read-only). */
@@ -86,7 +88,7 @@ function toValidationData(value: NewActionType): NewActionType {
  * Controlled editor for an action type: all tabs, AI helpers, label editing and validation.
  * The value is the single source of truth; every edit emits the complete new value.
  */
-export function ActionTypeEditor({ value, onChange, readOnly = false, problems, onValidation, onAskAiAboutProblem, askAiDisabled }: ActionTypeEditorProps) {
+export function ActionTypeEditor({ value, onChange, readOnly = false, problems, onValidation, onAskAiAboutProblem, askAiDisabled, fillHeight = false }: ActionTypeEditorProps) {
     const form = value;
     const tools = value.allowedTools || [];
     const envVars = value.environment || {};
@@ -306,10 +308,12 @@ export function ActionTypeEditor({ value, onChange, readOnly = false, problems, 
                 )}
                 {form.executionMode === "node" && (
                     <Tab eventKey={11} title={<TabTitleText>Code</TabTitleText>}>
-                        <TabContent id="code-tab" eventKey={11} activeKey={activeTab} style={{ marginTop: "24px" }}>
+                        <TabContent id="code-tab" eventKey={11} activeKey={activeTab} style={{ marginTop: "24px" }}
+                            className="axiom-action-type-editor__code-tab">
                             <fieldset disabled={readOnly} style={READ_ONLY_FIELDSET_STYLE}>
                                 <NodeCodeTab
                                     readOnly={readOnly}
+                                    fillHeight={fillHeight}
                                     value={form.codeTemplate || ""}
                                     onChange={(v) => updateForm({ codeTemplate: v })}
                                 />

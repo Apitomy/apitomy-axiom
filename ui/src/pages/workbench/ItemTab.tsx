@@ -185,7 +185,7 @@ export function ItemTab(props: ItemTabProps) {
                     onChange={(v: NewToolDefinition) => onChange(v as unknown as Record<string, unknown>)} />
             ) : (
                 <ActionTypeEditor value={value as unknown as NewActionType} readOnly={locked} problems={messages}
-                    onAskAiAboutProblem={askAiAboutProblem} askAiDisabled={aiWorking}
+                    onAskAiAboutProblem={askAiAboutProblem} askAiDisabled={aiWorking} fillHeight
                     onChange={(v: NewActionType) => onChange(v as unknown as Record<string, unknown>)} />
             )}
         </div>
