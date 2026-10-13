@@ -21,6 +21,11 @@
     border-bottom: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
 }
 
+/* Extra room between the breadcrumb and the toolbar's first toggle group. */
+.axiom-workbench__toolbar > .axiom-workbench__name {
+    margin-right: var(--pf-t--global--spacer--md, 16px);
+}
+
 .axiom-workbench__spacer {
     flex: 1;
 }
