@@ -6,6 +6,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.CompositionsResource;
 import io.apitomy.axiom.api.beans.AgentChangeSetResult;
+import io.apitomy.axiom.api.beans.CompositionTestValues;
+import io.apitomy.axiom.api.beans.CompositionTestRun;
+import io.apitomy.axiom.api.beans.CompositionTestRequest;
+import io.apitomy.axiom.api.beans.AgentTestRequest;
 import io.apitomy.axiom.api.beans.AgentComposition;
 import io.apitomy.axiom.api.beans.AgentItemResult;
 import io.apitomy.axiom.api.beans.AgentItemSummary;
@@ -39,6 +43,7 @@ import io.apitomy.axiom.app.composition.CompositionItems;
 import io.apitomy.axiom.app.composition.CompositionNotFoundException;
 import io.apitomy.axiom.app.composition.CompositionPublisher;
 import io.apitomy.axiom.app.composition.CompositionService;
+import io.apitomy.axiom.app.composition.CompositionTestRuns;
 import io.apitomy.axiom.app.composition.CompositionTurns;
 import io.apitomy.axiom.app.composition.CompositionValidator;
 import io.apitomy.axiom.app.composition.PublishBlockedException;
@@ -98,6 +103,9 @@ public class CompositionsResourceImpl implements CompositionsResource {
     @Inject
     SessionTokenGuard tokenGuard;
 
+    @Inject
+    CompositionTestRuns testRuns;
+
     @Context
     HttpHeaders httpHeaders;
 
@@ -131,6 +139,7 @@ public class CompositionsResourceImpl implements CompositionsResource {
     @Override
     public void deleteComposition(long compositionId) {
         service.delete(compositionId);
+        testRuns.forget(compositionId);
     }
 
     /** {@inheritDoc} */
@@ -381,6 +390,42 @@ public class CompositionsResourceImpl implements CompositionsResource {
             result.setError(error);
         }
         return result;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public CompositionTestRun testCompositionItem(long compositionId, long itemId, CompositionTestRequest data) {
+        CompositionItemEntity item = service.item(compositionId, itemId);
+        if (ConfigItemType.WORKFLOW.jsonName().equals(item.itemType)) {
+            throw new IllegalArgumentException("The workflow cannot be test-run");
+        }
+        return testRuns.run(compositionId, item, testValues(data.getInputs()), data.getSubjectId(),
+                CompositionService.AUTHOR_USER, null);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public List<CompositionTestRun> listCompositionTestRuns(long compositionId) {
+        service.get(compositionId);
+        return testRuns.list(compositionId);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public CompositionTestRun testAgentItem(long compositionId, AgentTestRequest data) {
+        requireToken(compositionId);
+        String type = data.getType().value();
+        CompositionItemEntity item = service.items(compositionId).stream()
+                .filter(i -> type.equals(i.itemType) && data.getName().equals(i.name))
+                .findFirst()
+                .orElseThrow(() -> new CompositionNotFoundException(
+                        "No " + type + " named " + data.getName() + " in composition " + compositionId));
+        return testRuns.run(compositionId, item, testValues(data.getInputs()), data.getSubjectId(),
+                CompositionService.AUTHOR_AI, turns.currentTurnId(compositionId));
+    }
+
+    private static Map<String, Object> testValues(CompositionTestValues values) {
+        return values == null ? Map.of() : values.getAdditionalProperties();
     }
 
     private void requireToken(long compositionId) {

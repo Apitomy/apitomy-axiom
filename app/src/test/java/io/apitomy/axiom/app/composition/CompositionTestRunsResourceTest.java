@@ -1,0 +1,92 @@
+package io.apitomy.axiom.app.composition;
+
+import io.apitomy.axiom.core.entities.CompositionEntity;
+import io.apitomy.axiom.core.entities.CompositionItemEntity;
+import io.apitomy.axiom.core.entities.CompositionRevisionEntity;
+import io.quarkus.narayana.jta.QuarkusTransaction;
+import io.quarkus.test.junit.QuarkusTest;
+import io.restassured.http.ContentType;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.Map;
+
+import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasSize;
+
+/**
+ * REST tests for test runs of composition drafts.
+ */
+@QuarkusTest
+class CompositionTestRunsResourceTest {
+
+    static final String BASE = "/api/v1/compositions";
+
+    @AfterEach
+    void cleanUp() {
+        QuarkusTransaction.requiringNew().run(() -> {
+            CompositionRevisionEntity.deleteAll();
+            CompositionItemEntity.deleteAll();
+            CompositionEntity.deleteAll();
+        });
+    }
+
+    private long scriptActionType(long compositionId) {
+        long itemId = given().contentType(ContentType.JSON)
+                .body(Map.of("type", "action-type", "name", "greet", "executionMode", "script"))
+                .post(BASE + "/{id}/items", compositionId).then().statusCode(200)
+                .extract().jsonPath().getLong("id");
+        String revision = given().get(BASE + "/{id}/items/{itemId}", compositionId, itemId)
+                .then().statusCode(200).extract().jsonPath().getString("contentRevision");
+        Map<String, Object> content = Map.of("name", "greet", "description", "", "executionMode", "script",
+                "inputs", List.of(Map.of("name", "who", "type", "string", "required", true)),
+                "outputs", List.of(Map.of("name", "greeting", "type", "string", "required", true)),
+                "scriptTemplate", "printf '{\"greeting\":\"hi %s\"}\\n' {{inputs.who}}");
+        given().contentType(ContentType.JSON).body(Map.of("content", content, "baseRevision", revision))
+                .put(BASE + "/{id}/items/{itemId}", compositionId, itemId).then().statusCode(200);
+        return itemId;
+    }
+
+    @Test
+    void runsADraftAndListsTheRun() {
+        long id = CompositionsResourceTest.createComposition();
+        long itemId = scriptActionType(id);
+        given().contentType(ContentType.JSON).body(Map.of("inputs", Map.of("who", "bob")))
+                .post(BASE + "/{id}/items/{itemId}/test", id, itemId).then().statusCode(200)
+                .body("status", equalTo("passed"))
+                .body("author", equalTo("user"))
+                .body("itemName", equalTo("greet"))
+                .body("outputs.greeting", equalTo("hi bob"));
+        given().get(BASE + "/{id}/test-runs", id).then().statusCode(200)
+                .body("$", hasSize(1)).body("[0].status", equalTo("passed"));
+    }
+
+    @Test
+    void rejectsTheWorkflow() {
+        long id = CompositionsResourceTest.createComposition();
+        long workflowId = CompositionsResourceTest.addItem(id, "workflow", "test-wf").getLong("id");
+        given().contentType(ContentType.JSON).body(Map.of())
+                .post(BASE + "/{id}/items/{itemId}/test", id, workflowId).then().statusCode(400);
+    }
+
+    @Test
+    void agentRouteRequiresTheSessionToken() {
+        long id = CompositionsResourceTest.createComposition();
+        given().contentType(ContentType.JSON).body(Map.of("type", "action-type", "name", "greet"))
+                .post(BASE + "/{id}/agent/test", id).then().statusCode(401);
+    }
+
+    @Test
+    void keepsOnlyTheMostRecentRuns() {
+        long id = CompositionsResourceTest.createComposition();
+        long itemId = scriptActionType(id);
+        for (int i = 0; i < CompositionTestRuns.MAX_RUNS + 2; i++) {
+            given().contentType(ContentType.JSON).body(Map.of("inputs", Map.of())).post(
+                    BASE + "/{id}/items/{itemId}/test", id, itemId).then().statusCode(200);
+        }
+        given().get(BASE + "/{id}/test-runs", id).then().statusCode(200)
+                .body("$", hasSize(CompositionTestRuns.MAX_RUNS));
+    }
+}

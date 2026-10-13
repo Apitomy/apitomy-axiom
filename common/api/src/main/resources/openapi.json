@@ -6179,6 +6179,152 @@
           }
         }
       ]
+    },
+    "/compositions/{compositionId}/items/{itemId}/test": {
+      "post": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Test-run a draft action type or tool",
+        "description": "Runs the saved draft with sample inputs and returns the finished run. Only node and script action types and tools can run; other action types return an error run.",
+        "operationId": "testCompositionItem",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompositionTestRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The finished run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionTestRun"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The item is the workflow"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "itemId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/compositions/{compositionId}/test-runs": {
+      "get": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "List recent test runs",
+        "description": "The composition's recent test runs (by the user or the AI), newest first.",
+        "operationId": "listCompositionTestRuns",
+        "responses": {
+          "200": {
+            "description": "The runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CompositionTestRun"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/compositions/{compositionId}/agent/test": {
+      "post": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Agent: test-run a draft action type or tool",
+        "description": "Runs a draft by type and name. Requires the `X-Axiom-Session-Token` header of the composition's live workbench session (401 otherwise).",
+        "operationId": "testAgentItem",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentTestRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The finished run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionTestRun"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session token"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
     }
   },
   "components": {
@@ -11171,6 +11317,143 @@
           },
           "model": {
             "description": "Model passed to the engine, or null when the engine uses its default model",
+            "type": "string"
+          }
+        }
+      },
+      "CompositionTestValues": {
+        "description": "Free-form values by name: test inputs or parameters, or an action type's outputs.",
+        "type": "object",
+        "additionalProperties": true
+      },
+      "CompositionTestRequest": {
+        "type": "object",
+        "properties": {
+          "inputs": {
+            "$ref": "#/components/schemas/CompositionTestValues"
+          },
+          "subjectId": {
+            "description": "Run in this subject's workspace (optional)",
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      },
+      "AgentTestRequest": {
+        "required": [
+          "type",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "type": {
+            "enum": [
+              "action-type",
+              "tool"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "description": "Draft name",
+            "type": "string"
+          },
+          "inputs": {
+            "$ref": "#/components/schemas/CompositionTestValues"
+          },
+          "subjectId": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      },
+      "CompositionTestRun": {
+        "description": "A test run of a draft action type or tool. Runs are kept in memory, the last 50 per composition.",
+        "required": [
+          "id",
+          "itemId",
+          "itemType",
+          "itemName",
+          "author",
+          "status",
+          "startedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "itemId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "itemType": {
+            "enum": [
+              "action-type",
+              "tool"
+            ],
+            "type": "string"
+          },
+          "itemName": {
+            "type": "string"
+          },
+          "author": {
+            "enum": [
+              "user",
+              "ai"
+            ],
+            "type": "string"
+          },
+          "turnId": {
+            "type": "string"
+          },
+          "subjectId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "passed",
+              "failed",
+              "error"
+            ],
+            "type": "string"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "durationMs": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "inputs": {
+            "$ref": "#/components/schemas/CompositionTestValues"
+          },
+          "outputs": {
+            "$ref": "#/components/schemas/CompositionTestValues"
+          },
+          "stdout": {
+            "type": "string"
+          },
+          "stderr": {
+            "type": "string"
+          },
+          "exitCode": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "message": {
+            "description": "Why the run could not start",
+            "type": "string"
+          },
+          "resolvedScript": {
             "type": "string"
           }
         }

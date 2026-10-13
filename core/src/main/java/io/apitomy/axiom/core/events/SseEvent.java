@@ -232,4 +232,16 @@ public record SseEvent(
                 .replace("\n", "\\n")
                 .replace("\r", "\\r");
     }
+
+    /**
+     * Creates a composition-test-run event, emitted when a test run starts and when it finishes.
+     *
+     * @param compositionId the composition id
+     * @param runJson       the run, as raw JSON (embedded unescaped)
+     * @return the SSE event
+     */
+    public static SseEvent compositionTestRun(long compositionId, String runJson) {
+        return new SseEvent("composition-test-run",
+                "{\"compositionId\":" + compositionId + ",\"run\":" + runJson + "}");
+    }
 }
