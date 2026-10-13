@@ -146,7 +146,6 @@ MDC. Notes for a follow-up:
 
 - Any in-progress trace can be named in the caller headers. There is no check that the caller belongs to the
   same subject; the header only affects log correlation.
-- AI editor and assistant sessions (`ActionTypeAiService`, `AssistantSessionManager`) are
-  not traced. Their AI usage rows have no trace ID.
+- Assistant sessions (`AssistantSessionManager`) are not traced. Their AI usage rows have no trace ID.
 - Script-mode tasks have no `ai_usage` row, because no AI is invoked.
 - The lineage view that follows these links across entities is described in [Lineage](lineage.md).

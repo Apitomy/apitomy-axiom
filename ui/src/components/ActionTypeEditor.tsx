@@ -22,7 +22,6 @@ import {
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import HelpIcon from "@patternfly/react-icons/dist/esm/icons/help-icon";
-import MagicIcon from "@patternfly/react-icons/dist/esm/icons/magic-icon";
 import ExclamationTriangleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-triangle-icon";
 import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
@@ -34,7 +33,6 @@ import { ActionTypeFieldsTab } from "./ActionTypeFieldsTab";
 import { LabelDisplay } from "./LabelDisplay";
 import { ToolListEditor } from "./ToolListEditor";
 import { NodeCodeTab } from "./NodeCodeTab";
-import { ActionTypeAiModal } from "./ActionTypeAiModal";
 import { ValidationProblemsPanel } from "./ValidationProblemsPanel";
 import {
     type NewActionType,
@@ -92,7 +90,6 @@ export function ActionTypeEditor({ value, onChange, readOnly = false, problems, 
     const tools = value.allowedTools || [];
     const envVars = value.environment || {};
     const [activeTab, setActiveTab] = useState(0);
-    const [aiModalOpen, setAiModalOpen] = useState(false);
     const [isLabelsOpen, setIsLabelsOpen] = useState(false);
     const [availableModels, setAvailableModels] = useState<string[]>([]);
     const [availableEngines, setAvailableEngines] = useState<string[]>([]);
@@ -181,16 +178,6 @@ export function ActionTypeEditor({ value, onChange, readOnly = false, problems, 
 
     return (
         <>
-            {!readOnly && form.executionMode === "agent" && (
-                <Flex justifyContent={{ default: "justifyContentFlexEnd" }} style={{ marginBottom: "8px" }}>
-                    <FlexItem>
-                        <Button variant="secondary" icon={<MagicIcon />}
-                            onClick={() => setAiModalOpen(true)}>
-                            AI Assistant
-                        </Button>
-                    </FlexItem>
-                </Flex>
-            )}
             <Tabs activeKey={activeTab} onSelect={(_e, k) => setActiveTab(k as number)}>
                 <Tab eventKey={0} title={<TabTitleText>Info</TabTitleText>}>
                     <TabContent id="info-tab" eventKey={0} activeKey={activeTab} style={{ marginTop: "24px" }}>
@@ -337,20 +324,6 @@ export function ActionTypeEditor({ value, onChange, readOnly = false, problems, 
                     </Tab>
                 )}
             </Tabs>
-
-            {!readOnly && form.executionMode === "agent" && (
-                <ActionTypeAiModal
-                    isOpen={aiModalOpen}
-                    promptTemplate={form.promptTemplate || ""}
-                    allowedTools={tools}
-                    actionTypeName={form.name}
-                    actionTypeDescription={form.description}
-                    onApply={(prompt, newTools) => {
-                        updateForm({ promptTemplate: prompt, allowedTools: newTools });
-                    }}
-                    onClose={() => setAiModalOpen(false)}
-                />
-            )}
 
             <EditLabelsModal
                 isOpen={!readOnly && isLabelsOpen}

@@ -4,12 +4,9 @@ import io.apitomy.axiom.api.ActionResource;
 import io.apitomy.axiom.api.beans.ActionType;
 import io.apitomy.axiom.api.beans.ActionTypeSearchResults;
 import io.apitomy.axiom.api.beans.NewActionType;
-import io.apitomy.axiom.api.beans.AiEditPromptRequest;
-import io.apitomy.axiom.api.beans.AiEditPromptResponse;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.beans.Environment;
-import io.apitomy.axiom.app.ActionTypeAiService;
 import io.apitomy.axiom.app.validation.ConfigItemType;
 import io.apitomy.axiom.app.validation.ConfigItemValidationService;
 import io.apitomy.axiom.app.validation.ConfigProblem;
@@ -41,9 +38,6 @@ public class ActionResourceImpl implements ActionResource {
 
     @Inject
     ObjectMapper objectMapper;
-
-    @Inject
-    ActionTypeAiService actionTypeAiService;
 
     @Inject
     ConfigItemValidationService validationService;
@@ -246,14 +240,6 @@ public class ActionResourceImpl implements ActionResource {
         actionType.setEnvironment(jsonToEnvironment(entity.environment));
         actionType.setLabels(entity.labels);
         return actionType;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public AiEditPromptResponse aiEditActionPrompt(AiEditPromptRequest data) {
-        return actionTypeAiService.editActionPrompt(data);
     }
 
     // ── Action Type Tool Associations (deprecated — use allowedTools) ──

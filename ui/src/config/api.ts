@@ -465,16 +465,6 @@ export async function updateActionType(id: number, at: NewActionType): Promise<A
     return response.json();
 }
 
-export async function aiEditActionPrompt(request: AiEditPromptRequest): Promise<AiEditPromptResponse> {
-    const response = await fetch(`${API}/action-types/ai-edit-prompt`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(request),
-    });
-    if (!response.ok) throw new Error(`Failed to AI edit action prompt: ${response.status}`);
-    return response.json();
-}
-
 export async function deleteActionType(id: number): Promise<void> {
     const response = await fetch(`${API}/action-types/${id}`, { method: "DELETE" });
     if (!response.ok) throw new Error(`Failed to delete action type: ${response.status}`);
@@ -854,22 +844,6 @@ export async function fetchThreadEntries(subjectId: number): Promise<ThreadEntry
     const response = await fetch(`${API}/subjects/${subjectId}/thread`);
     if (!response.ok) throw new Error(`Failed to fetch thread: ${response.status}`);
     return response.json();
-}
-
-// ── AI prompt editing ───────────────────────────────────────────
-
-export interface AiEditPromptRequest {
-    message: string;
-    currentPromptTemplate?: string;
-    currentAllowedTools?: string[];
-    name?: string;
-    description?: string;
-}
-
-export interface AiEditPromptResponse {
-    promptTemplate?: string;
-    allowedTools?: string[];
-    explanation?: string;
 }
 
 // ── Metrics ──────────────────────────────────────────────────────

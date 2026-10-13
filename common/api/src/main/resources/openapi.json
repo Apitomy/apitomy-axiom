@@ -1681,37 +1681,6 @@
         }
       ]
     },
-    "/action-types/ai-edit-prompt": {
-      "post": {
-        "tags": [
-          "ActionTypes"
-        ],
-        "summary": "AI-assisted prompt template and tools editing",
-        "description": "Invokes Claude Code to generate or update the prompt template and allowed tools for an agent-mode action type.",
-        "operationId": "aiEditActionPrompt",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AiEditPromptRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AiEditPromptResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/mcp-servers": {
       "get": {
         "tags": [
@@ -10696,57 +10665,6 @@
           },
           "required": {
             "type": "boolean"
-          }
-        }
-      },
-      "AiEditPromptRequest": {
-        "required": [
-          "message"
-        ],
-        "type": "object",
-        "properties": {
-          "message": {
-            "description": "The user's instruction for creating or modifying the prompt",
-            "type": "string"
-          },
-          "currentPromptTemplate": {
-            "description": "The current prompt template, if any",
-            "type": "string"
-          },
-          "currentAllowedTools": {
-            "description": "The current allowed tools list",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "name": {
-            "description": "The name of the item being edited, for context",
-            "type": "string"
-          },
-          "description": {
-            "description": "The description of the item being edited, for context",
-            "type": "string"
-          }
-        }
-      },
-      "AiEditPromptResponse": {
-        "type": "object",
-        "properties": {
-          "promptTemplate": {
-            "description": "The generated or updated prompt template",
-            "type": "string"
-          },
-          "allowedTools": {
-            "description": "Recommended allowed tools",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "explanation": {
-            "description": "AI's explanation of what was generated or changed",
-            "type": "string"
           }
         }
       },
