@@ -144,7 +144,8 @@ export function ActionTypeFieldsTab({ kind, fields, onChange }: {
                                     ))}
                                 </FormSelect>
                             </FlexItem>
-                            <FlexItem>
+                            {/* Same height as the inputs, centred, so it lines up even when an error grows the row. */}
+                            <FlexItem style={{ display: "flex", alignItems: "center", minHeight: "36px" }}>
                                 <Checkbox id={`${kind}-required-${i}`} label="Required"
                                     isChecked={!!f.required}
                                     onChange={(_e, v) => handleUpdate(i, { required: v })} />
