@@ -61,6 +61,10 @@ export interface ActionTypeEditorProps {
     problems?: ValidationMessage[];
     /** Called with the messages of the editor's own validation (only when `problems` is not given). */
     onValidation?: (messages: ValidationMessage[]) => void;
+    /** Workbench only: adds "Ask AI to fix this" to each listed problem. */
+    onAskAiAboutProblem?: (message: ToolValidationMessage) => void;
+    /** Disables the "Ask AI to fix this" actions. */
+    askAiDisabled?: boolean;
 }
 
 /** Style that makes a fieldset a transparent wrapper (used to disable tab bodies when read-only). */
@@ -82,7 +86,7 @@ function toValidationData(value: NewActionType): NewActionType {
  * Controlled editor for an action type: all tabs, AI helpers, label editing and validation.
  * The value is the single source of truth; every edit emits the complete new value.
  */
-export function ActionTypeEditor({ value, onChange, readOnly = false, problems, onValidation }: ActionTypeEditorProps) {
+export function ActionTypeEditor({ value, onChange, readOnly = false, problems, onValidation, onAskAiAboutProblem, askAiDisabled }: ActionTypeEditorProps) {
     const form = value;
     const tools = value.allowedTools || [];
     const envVars = value.environment || {};
@@ -324,7 +328,8 @@ export function ActionTypeEditor({ value, onChange, readOnly = false, problems, 
                         </TabTitleText>
                     }>
                         <TabContent id="problems-tab" eventKey={5} activeKey={activeTab} style={{ marginTop: "24px" }}>
-                            <ValidationProblemsPanel messages={validationMessages} />
+                            <ValidationProblemsPanel messages={validationMessages} onAskAi={onAskAiAboutProblem}
+                                askAiDisabled={askAiDisabled} />
                         </TabContent>
                     </Tab>
                 )}

@@ -65,6 +65,10 @@ export interface ToolEditorProps {
     onValidation?: (messages: ValidationMessage[]) => void;
     /** Saved tool id; the Test tab is shown only when set (testing drafts is Phase 5). */
     toolId?: number;
+    /** Workbench only: adds "Ask AI to fix this" to each listed problem. */
+    onAskAiAboutProblem?: (message: ToolValidationMessage) => void;
+    /** Disables the "Ask AI to fix this" actions. */
+    askAiDisabled?: boolean;
 }
 
 /** Style that makes a fieldset a transparent wrapper (used to disable tab bodies when read-only). */
@@ -75,7 +79,7 @@ const READ_ONLY_FIELDSET_STYLE = { border: 0, padding: 0, margin: 0, minWidth: 0
  * assistant and label editing. The value is the single source of truth; every edit emits the
  * complete new value.
  */
-export function ToolEditor({ value, onChange, readOnly = false, problems, onValidation, toolId }: ToolEditorProps) {
+export function ToolEditor({ value, onChange, readOnly = false, problems, onValidation, toolId, onAskAiAboutProblem, askAiDisabled }: ToolEditorProps) {
     const form = value;
     const params = value.parameters || [];
     const labels = value.labels || [];
@@ -178,7 +182,8 @@ export function ToolEditor({ value, onChange, readOnly = false, problems, onVali
                         </TabTitleText>
                     }>
                         <TabContent id="problems-tab" eventKey={4} activeKey={activeTab} style={{ marginTop: "24px" }}>
-                            <ValidationProblemsPanel messages={validationMessages} />
+                            <ValidationProblemsPanel messages={validationMessages} onAskAi={onAskAiAboutProblem}
+                                askAiDisabled={askAiDisabled} />
                         </TabContent>
                     </Tab>
                 )}

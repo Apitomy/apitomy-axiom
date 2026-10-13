@@ -1,6 +1,6 @@
 import { type Ref, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Alert, AlertActionLink } from "@patternfly/react-core";
-import type { NewActionType, NewToolDefinition } from "../../config/api";
+import type { NewActionType, NewToolDefinition, ToolValidationMessage } from "../../config/api";
 import { ActionTypeEditor, type ValidationMessage } from "../../components/ActionTypeEditor";
 import { ToolEditor } from "../../components/ToolEditor";
 import {
@@ -25,6 +25,8 @@ export interface ItemTabProps {
     composition: Composition;
     problems: ConfigProblem[] | undefined;
     onSaved: (item: CompositionItem, content: Record<string, unknown>) => void;
+    /** Pre-fills the chat; enables "Ask AI to fix this" on each problem. */
+    onAskAi?: (text: string) => void;
     /** Receives the tab's imperative handle. */
     ref?: Ref<ItemTabHandle>;
 }
@@ -159,6 +161,11 @@ export function ItemTab(props: ItemTabProps) {
     const locked: boolean = isLockedForUser(item, composition);
     const messages: ValidationMessage[] = (problems ?? []).map(toValidationMessage);
 
+    const aiWorking: boolean = composition.turnState === "ai-working";
+    const askAiAboutProblem = props.onAskAi
+        ? (message: ToolValidationMessage) => props.onAskAi?.(problemPrefill(item, message))
+        : undefined;
+
     return (
         <div className="axiom-workbench__item-tab">
             {locked && (
@@ -174,12 +181,26 @@ export function ItemTab(props: ItemTabProps) {
             )}
             {item.type === "tool" ? (
                 <ToolEditor value={value as unknown as NewToolDefinition} readOnly={locked} problems={messages}
-                    toolId={item.baseItemId}
+                    toolId={item.baseItemId} onAskAiAboutProblem={askAiAboutProblem} askAiDisabled={aiWorking}
                     onChange={(v: NewToolDefinition) => onChange(v as unknown as Record<string, unknown>)} />
             ) : (
                 <ActionTypeEditor value={value as unknown as NewActionType} readOnly={locked} problems={messages}
+                    onAskAiAboutProblem={askAiAboutProblem} askAiDisabled={aiWorking}
                     onChange={(v: NewActionType) => onChange(v as unknown as Record<string, unknown>)} />
             )}
         </div>
     );
+}
+
+/**
+ * Chat text asking the AI to fix one validation problem of an action type or tool.
+ *
+ * @param item the composition item the problem belongs to
+ * @param message the validation problem
+ * @returns the message to pre-fill in the chat
+ */
+export function problemPrefill(item: CompositionItem, message: ToolValidationMessage): string {
+    const kind: string = item.type === "tool" ? "tool" : "action type";
+    const field: string = message.field ? ` (field \`${message.field}\`)` : "";
+    return `Please fix this problem in ${kind} \`${item.name}\`${field}: ${message.message}`;
 }

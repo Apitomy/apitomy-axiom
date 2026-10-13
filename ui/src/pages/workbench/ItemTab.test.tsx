@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import * as c from "../../config/compositions";
-import { ItemTab, type ItemTabHandle } from "./ItemTab";
+import { ItemTab, type ItemTabHandle, problemPrefill } from "./ItemTab";
 
 vi.mock("../../components/ToolEditor", () => ({
     ToolEditor: ({ value, onChange, readOnly }: { value: { description?: string }; onChange: (v: unknown) => void; readOnly?: boolean }) => (
@@ -75,5 +75,11 @@ describe("ItemTab", () => {
         expect(save).not.toHaveBeenCalled();
         await ref.current!.flush();
         expect(save).toHaveBeenCalledWith(1, 5, { content: { name: "t", description: "now" }, baseRevision: "r0" });
+    });
+
+    it("builds the Ask AI prefill for a problem", () => {
+        expect(problemPrefill({ ...item, name: "gh" } as never,
+            { severity: "error", field: "scriptTemplate", message: "is required" } as never))
+            .toBe("Please fix this problem in tool `gh` (field `scriptTemplate`): is required");
     });
 });

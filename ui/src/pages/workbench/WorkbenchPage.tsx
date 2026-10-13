@@ -382,7 +382,7 @@ export function WorkbenchPage() {
                                 {composition && item && wb.contents[tid] ? (
                                     <ItemTab key={tid} ref={itemTabRef(tid)} compositionId={id} item={item} content={wb.contents[tid]}
                                         contentRevision={wb.revisions[tid]}
-                                        composition={composition} problems={wb.problems[tid]}
+                                        composition={composition} problems={wb.problems[tid]} onAskAi={askAi}
                                         onSaved={(saved, content) => {
                                             wb.setContent(saved.id, content, saved.contentRevision);
                                             void wb.refreshItems().catch(console.error);

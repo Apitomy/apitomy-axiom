@@ -1,14 +1,20 @@
 import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
 import ExclamationTriangleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-triangle-icon";
+import { Button } from "@patternfly/react-core";
 import type { ToolValidationMessage } from "../config/api";
 
 /**
  * Renders a list of validation messages with severity-based styling.
  *
- * Used by ActionTypeDetailPage and ToolDetailPage.
+ * Used by ActionTypeDetailPage and ToolDetailPage. In the workbench, `onAskAi` adds an "Ask AI to fix this"
+ * action to each problem.
  */
-export function ValidationProblemsPanel({ messages }: {
+export function ValidationProblemsPanel({ messages, onAskAi, askAiDisabled }: {
     messages: ToolValidationMessage[];
+    /** When set, each problem offers "Ask AI to fix this", which calls this with the problem. */
+    onAskAi?: (message: ToolValidationMessage) => void;
+    /** Disables the "Ask AI to fix this" actions, for example while the AI is working. */
+    askAiDisabled?: boolean;
 }) {
     return (
         <div style={{ maxWidth: "700px" }}>
@@ -35,6 +41,10 @@ export function ValidationProblemsPanel({ messages }: {
                             Field: <code>{msg.field}</code>
                         </div>
                     </div>
+                    {onAskAi && (
+                        <Button variant="link" isInline size="sm" style={{ marginLeft: "auto", whiteSpace: "nowrap" }}
+                            isDisabled={askAiDisabled} onClick={() => onAskAi(msg)}>Ask AI to fix this</Button>
+                    )}
                 </div>
             ))}
         </div>
