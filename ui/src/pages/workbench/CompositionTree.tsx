@@ -132,10 +132,13 @@ export function CompositionTree(props: CompositionTreeProps) {
                             </SimpleListItem>
                         ))}
                         {g.addLabel && (
-                            <li className="axiom-workbench__add-row">
-                                <Button variant="link" size="sm" icon={<PlusCircleIcon />}
-                                    aria-label={`Add ${g.title.toLowerCase()}`}
-                                    onClick={() => setAdding(g.type as AddableType)}>{g.addLabel}</Button>
+                            // Rendered in the list (the group title is aria-hidden) and positioned in the title row.
+                            <li className="axiom-workbench__group-action">
+                                <Tooltip content={g.addLabel}>
+                                    <Button variant="plain" size="sm" icon={<PlusCircleIcon />}
+                                        aria-label={`Add ${g.title.toLowerCase()}`}
+                                        onClick={() => setAdding(g.type as AddableType)} />
+                                </Tooltip>
                             </li>
                         )}
                     </SimpleListGroup>
