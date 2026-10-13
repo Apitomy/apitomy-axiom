@@ -121,7 +121,11 @@ export function CompositionTree(props: CompositionTreeProps) {
                                     onOpen(item.id);
                                 }}>
                                 <span className="axiom-workbench__item">
-                                    <span className="axiom-workbench__item-name">{item.name}</span>{" "}
+                                    <span className={`axiom-workbench__item-name${item.changed ? " axiom-workbench__item-name--unpublished" : ""}`}
+                                        title={item.changed ? "Unpublished changes" : "Published"}>
+                                        {item.name}
+                                        {item.changed && <span className="pf-v6-screen-reader"> (unpublished changes)</span>}
+                                    </span>{" "}
                                     <span className="axiom-workbench__item-markers">
                                         <StatusIcon problems={problems[item.id]} />
                                         {isLockedForUser(item, composition) && (
@@ -132,11 +136,6 @@ export function CompositionTree(props: CompositionTreeProps) {
                                         {isAiTouchedInTurn(item, lastCompletedTurnId) && (
                                             <Tooltip content="Changed by the last AI turn">
                                                 <Label isCompact color="purple">AI</Label>
-                                            </Tooltip>
-                                        )}
-                                        {item.changed && (
-                                            <Tooltip content="Unpublished changes">
-                                                <span className="axiom-workbench__dot" aria-label="Unpublished changes">●</span>
                                             </Tooltip>
                                         )}
                                     </span>

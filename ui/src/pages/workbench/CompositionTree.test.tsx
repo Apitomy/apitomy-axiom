@@ -33,13 +33,14 @@ describe("CompositionTree", () => {
         expect(rows).toEqual(["wf", "at", "tl"]);
     });
 
-    it("shows status icons, AI label and unpublished dot", () => {
+    it("shows status icons, AI label and marks unpublished names", () => {
         renderTree();
         expect(screen.getByLabelText("valid")).toBeTruthy();
         expect(screen.getByLabelText("warnings")).toBeTruthy();
         expect(screen.getByLabelText("errors")).toBeTruthy();
         expect(screen.getAllByText("AI")).toHaveLength(1);
-        expect(screen.getAllByLabelText("Unpublished changes")).toHaveLength(1);
+        expect(document.querySelectorAll(".axiom-workbench__item-name--unpublished")).toHaveLength(1);
+        expect(screen.getByText("(unpublished changes)", { exact: false })).toBeTruthy();
     });
 
     it("opens a row on click", () => {
