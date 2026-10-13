@@ -135,6 +135,10 @@
     overflow: hidden;
 }
 
+.axiom-workbench__right > .pf-v6-c-button {
+    align-self: flex-start;
+}
+
 .axiom-workbench__chat {
     display: flex;
     flex-direction: column;
