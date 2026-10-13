@@ -38,6 +38,12 @@ describe("WorkflowTab", () => {
         expect(base.onPendingHandled).toHaveBeenCalled();
     });
 
+    it("edits properties in a dialog and hides simulation", () => {
+        render(<WorkflowTab {...base} pending={null} />);
+        expect(editorProps.propertiesDisplay).toBe("dialog");
+        expect(editorProps.features).toEqual({ simulate: false });
+    });
+
     it("resolves stale apply results as stale", async () => {
         handle.apply.mockReturnValue({ status: "rejected", error: { code: "stale", reason: "old" } });
         const resolve = vi.spyOn(c, "resolveChangeSet").mockResolvedValue(undefined);

@@ -5,6 +5,7 @@ import {
     type ApplyResult,
     type ChangeSet,
     type ContextAction,
+    type EditorFeatures,
     type EditorSpi,
     type FlowContext,
     type ProposalOutcome,
@@ -54,6 +55,9 @@ export interface WorkflowTabProps {
     onAskAi: (prefill: string) => void;
     ref?: React.Ref<WorkflowTabHandle>;
 }
+
+/** Canvas toolbar features: simulation is switched off in the workbench for now. */
+const EDITOR_FEATURES: EditorFeatures = { simulate: false };
 
 type SaveError = { kind: "conflict" } | { kind: "error"; message: string };
 
@@ -398,7 +402,8 @@ export function WorkflowTab(props: WorkflowTabProps) {
             <div className="axiom-workbench__workflow-editor">
                 <WorkflowEditor ref={setEditorHandle} workflow={props.initialContent} theme={theme} highlightApplied
                     appliedChangeLayout={props.applyLayout} spi={spi} onChange={onChange}
-                    onProposalResolved={onProposalResolved} onSelectionChange={onSelectionChange} />
+                    onProposalResolved={onProposalResolved} onSelectionChange={onSelectionChange}
+                    propertiesDisplay="dialog" features={EDITOR_FEATURES} />
             </div>
         </div>
     );
