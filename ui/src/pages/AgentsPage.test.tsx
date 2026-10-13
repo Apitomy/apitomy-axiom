@@ -1,7 +1,10 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { render } from "@testing-library/react";
 import { AgentsPage } from "./AgentsPage";
+import * as api from "../config/api";
 import { renderWithRouter } from "../test/renderWithRouter";
 
 vi.mock("../config/api", () => ({
@@ -29,5 +32,18 @@ describe("AgentsPage", () => {
         const closeButtons = within(dialog).getAllByRole("button", { name: "Close" });
         await userEvent.click(closeButtons[closeButtons.length - 1]);
         expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("asks to confirm a delete without opening the agent", async () => {
+        vi.mocked(api.fetchAgents).mockResolvedValueOnce([
+            { id: 7, name: "Blinky", agentType: "claude-code", capabilities: [] } as never,
+        ]);
+        render(<MemoryRouter initialEntries={["/agents"]}><Routes>
+            <Route path="/agents" element={<AgentsPage />} />
+            <Route path="/agents/:id" element={<div>agent opened</div>} />
+        </Routes></MemoryRouter>);
+        await userEvent.click(await screen.findByRole("button", { name: "Delete Blinky" }));
+        expect(screen.queryByText("agent opened")).not.toBeInTheDocument();
+        expect(await screen.findByRole("dialog")).toBeInTheDocument();
     });
 });

@@ -64,7 +64,8 @@ export function AgentsPage() {
         action.then(() => { setIsModalOpen(false); load(); }).catch(console.error);
     };
 
-    const handleDelete = (id: number) => {
+    const handleDelete = (e: React.MouseEvent, id: number) => {
+        e.stopPropagation();
         setDeleteTarget(id);
     };
 
@@ -109,7 +110,8 @@ export function AgentsPage() {
                                     <Td>{a.capabilities?.join(", ") || "—"}</Td>
                                     <Td>
                                         <Button variant="plain" size="sm" style={{ padding: 0 }}
-                                            onClick={() => handleDelete(a.id)}><TrashIcon /></Button>
+                                            aria-label={`Delete ${a.name}`}
+                                            onClick={(e) => handleDelete(e, a.id)}><TrashIcon /></Button>
                                     </Td>
                                 </Tr>
                             ))}
