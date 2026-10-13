@@ -303,7 +303,7 @@ export function WorkbenchPage() {
                     {!prefs.leftCollapsed && <span className="axiom-workbench__pane-title">Components</span>}
                     {!prefs.leftCollapsed && (
                         <Dropdown isOpen={createMenuOpen} onOpenChange={setCreateMenuOpen}
-                            popperProps={{ position: "end" }}
+                            popperProps={{ position: "start" }}
                             onSelect={(_e, value) => {
                                 setCreateMenuOpen(false);
                                 setCreating(value as AddableType);
