@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
     Button, Form, FormGroup, FormSelect, FormSelectOption, Label, Modal, ModalBody, ModalFooter, ModalHeader,
-    Radio, SimpleList, SimpleListGroup, SimpleListItem, TextInput, Tooltip,
+    SimpleList, SimpleListGroup, SimpleListItem, TextInput, ToggleGroup, ToggleGroupItem, Tooltip,
 } from "@patternfly/react-core";
 import {
     CheckCircleIcon, ExclamationCircleIcon, ExclamationTriangleIcon, LockIcon,
@@ -185,10 +185,12 @@ export function AddItemDialog({ type, onSubmit, onClose }: AddItemDialogProps) {
             <ModalHeader title={`Add ${label}`} labelId="add-item-title" />
             <ModalBody>
                 <Form onSubmit={(e) => { e.preventDefault(); if (valid) { submit(); } }}>
-                    <Radio id="add-new" name="add-mode" label="New" isChecked={mode === "new"}
-                        onChange={() => setMode("new")} />
-                    <Radio id="add-existing" name="add-mode" label="Existing" isChecked={mode === "existing"}
-                        onChange={() => setMode("existing")} />
+                    <ToggleGroup aria-label={`New or existing ${label}`}>
+                        <ToggleGroupItem text="New" buttonId="add-new" isSelected={mode === "new"}
+                            onChange={() => setMode("new")} />
+                        <ToggleGroupItem text="Existing" buttonId="add-existing" isSelected={mode === "existing"}
+                            onChange={() => setMode("existing")} />
+                    </ToggleGroup>
                     {mode === "new" ? (
                         <>
                             <FormGroup label="Name" fieldId="add-name">

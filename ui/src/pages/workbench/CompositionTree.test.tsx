@@ -67,6 +67,18 @@ describe("CompositionTree", () => {
         expect(onSubmit).toHaveBeenCalledWith({ type: "action-type", name: "x", executionMode: "script" });
     });
 
+    it("switches between new and existing with a toggle group", async () => {
+        vi.spyOn(api, "fetchActionTypes").mockResolvedValue({ items: [{ id: 7, name: "old" }], count: 1 } as never);
+        const onSubmit = vi.fn();
+        render(<AddItemDialog type="action-type" onSubmit={onSubmit} onClose={vi.fn()} />);
+        expect(screen.getByRole("button", { name: "New" }).getAttribute("aria-pressed")).toBe("true");
+        fireEvent.click(screen.getByRole("button", { name: "Existing" }));
+        expect(screen.getByRole("button", { name: "Existing" }).getAttribute("aria-pressed")).toBe("true");
+        await screen.findByRole("option", { name: "old" });
+        fireEvent.click(screen.getByRole("button", { name: "Add" }));
+        expect(onSubmit).toHaveBeenCalledWith({ type: "action-type", existingItemId: 7 });
+    });
+
     it("does not ask for an execution mode for a new tool", () => {
         vi.spyOn(api, "fetchTools").mockResolvedValue({ items: [], count: 0 } as never);
         const onSubmit = vi.fn();
