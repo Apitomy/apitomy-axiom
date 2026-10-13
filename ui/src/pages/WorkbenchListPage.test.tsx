@@ -18,6 +18,21 @@ vi.mock("@patternfly/react-core", async (orig) => {
 });
 
 describe("WorkbenchListPage", () => {
+    it("opens a composition by clicking anywhere on its row, but not via the delete button", async () => {
+        vi.spyOn(compositions, "listCompositions").mockResolvedValue([
+            { id: 1, name: "Triage", goal: "triage issues", turnState: "idle", applyMode: "live",
+                createdAt: "", updatedAt: "" },
+        ]);
+        render(<MemoryRouter initialEntries={["/workbench"]}><Routes>
+            <Route path="/workbench" element={<WorkbenchListPage />} />
+            <Route path="/workbench/:compositionId" element={<div>opened</div>} />
+        </Routes></MemoryRouter>);
+        fireEvent.click(await screen.findByRole("button", { name: "Delete Triage" }));
+        expect(screen.queryByText("opened")).toBeNull();
+        fireEvent.click(screen.getByText("triage issues"));
+        expect(await screen.findByText("opened")).toBeTruthy();
+    });
+
     it("lists compositions and creates one with a blank workflow", async () => {
         vi.spyOn(compositions, "listCompositions").mockResolvedValue([
             { id: 1, name: "Triage", goal: "triage issues", turnState: "idle", applyMode: "live",

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
     Alert,
     Button,
@@ -113,8 +113,8 @@ export function WorkbenchListPage() {
                         <Thead><Tr><Th>Name</Th><Th>Goal</Th><Th>State</Th><Th>Updated</Th><Th screenReaderText="Actions" /></Tr></Thead>
                         <Tbody>
                             {items.map((c) => (
-                                <Tr key={c.id}>
-                                    <Td dataLabel="Name"><Link to={`/workbench/${c.id}`}>{c.name}</Link></Td>
+                                <Tr key={c.id} isClickable onRowClick={() => navigate(`/workbench/${c.id}`)}>
+                                    <Td dataLabel="Name">{c.name}</Td>
                                     <Td dataLabel="Goal">{c.goal || "—"}</Td>
                                     <Td dataLabel="State">
                                         {c.turnState === "ai-working"
@@ -125,7 +125,10 @@ export function WorkbenchListPage() {
                                     <Td>
                                         <Button variant="plain" size="sm" style={{ padding: 0 }}
                                             aria-label={`Delete ${c.name}`}
-                                            onClick={() => setDeleteTarget(c)}><TrashIcon /></Button>
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setDeleteTarget(c);
+                                            }}><TrashIcon /></Button>
                                     </Td>
                                 </Tr>
                             ))}
