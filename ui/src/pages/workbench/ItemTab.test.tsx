@@ -27,7 +27,7 @@ describe("ItemTab", () => {
         render(<ItemTab compositionId={1} item={item} content={{ name: "t" }}
             composition={{ ...composition, turnState: "ai-working", currentTurnId: "t9" }} problems={[]} onSaved={() => {}} />);
         expect((screen.getByLabelText("description") as HTMLInputElement).disabled).toBe(true);
-        expect(screen.getByText(/the ai is editing this item/i)).toBeTruthy();
+        expect(screen.getByText(/the ai is editing this item/i).closest(".pf-v6-c-banner.pf-m-info")).toBeTruthy();
     });
 
     it("adopts the revision with external content", async () => {

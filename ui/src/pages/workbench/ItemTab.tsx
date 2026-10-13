@@ -1,5 +1,6 @@
 import { type Ref, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { Alert, AlertActionLink } from "@patternfly/react-core";
+import { Alert, AlertActionLink, Banner, Flex } from "@patternfly/react-core";
+import { LockIcon } from "@patternfly/react-icons";
 import type { NewActionType, NewToolDefinition, ToolValidationMessage } from "../../config/api";
 import { ActionTypeEditor, type ValidationMessage } from "../../components/ActionTypeEditor";
 import { ToolEditor } from "../../components/ToolEditor";
@@ -169,8 +170,12 @@ export function ItemTab(props: ItemTabProps) {
     return (
         <div className="axiom-workbench__item-tab">
             {locked && (
-                <Alert isInline variant="info"
-                    title="The AI is editing this item. It will be editable when the turn ends." />
+                <Banner status="info" screenReaderText="Info banner">
+                    <Flex spaceItems={{ default: "spaceItemsSm" }} flexWrap={{ default: "nowrap" }}>
+                        <LockIcon />
+                        <span>The AI is editing this item. It will be editable when the turn ends.</span>
+                    </Flex>
+                </Banner>
             )}
             {saveError?.kind === "conflict" && (
                 <Alert isInline variant="warning" title="Changed elsewhere"
