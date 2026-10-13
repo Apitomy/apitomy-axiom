@@ -244,7 +244,7 @@ export function WorkbenchPage() {
         <PageSection isFilled padding={{ default: "noPadding" }} hasBodyWrapper={false}
             className="axiom-workbench-page">
         <div className="axiom-workbench"
-            style={{ gridTemplateColumns: `${leftWidth}px 6px minmax(0, 1fr) 6px ${rightWidth}px` }}>
+            style={{ gridTemplateColumns: `${leftWidth}px 0px minmax(0, 1fr) 0px ${rightWidth}px` }}>
             <div className="axiom-workbench__toolbar">
                 <strong className="axiom-workbench__name">{composition?.name ?? "Loading..."}</strong>
                 <ToggleGroup aria-label="Apply mode">
