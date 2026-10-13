@@ -240,6 +240,14 @@ export function WorkbenchPage() {
     const setLeft = (w: number) => setPrefs((p) => ({ ...p, panes: { ...p.panes, left: w } }));
     const setRight = (w: number) => setPrefs((p) => ({ ...p, panes: { ...p.panes, right: w } }));
 
+    const chatCollapseButton = (
+        <Button variant="plain" size="sm"
+            aria-label={prefs.rightCollapsed ? "Expand chat pane" : "Collapse chat pane"}
+            onClick={() => updatePrefs({ rightCollapsed: !prefs.rightCollapsed })}>
+            {prefs.rightCollapsed ? "«" : "»"}
+        </Button>
+    );
+
     return (
         <PageSection isFilled padding={{ default: "noPadding" }} hasBodyWrapper={false}
             className="axiom-workbench-page">
@@ -346,15 +354,12 @@ export function WorkbenchPage() {
                     onResizeEnd={(w) => savePrefs({ panes: { left: prefs.panes.left, right: w } })} />
             )}
             <aside className="axiom-workbench__right">
-                <Button variant="plain" size="sm"
-                    aria-label={prefs.rightCollapsed ? "Expand chat pane" : "Collapse chat pane"}
-                    onClick={() => updatePrefs({ rightCollapsed: !prefs.rightCollapsed })}>
-                    {prefs.rightCollapsed ? "«" : "»"}
-                </Button>
+                {(prefs.rightCollapsed || !composition) && chatCollapseButton}
                 {prefs.rightCollapsed
                     ? aiWorking && <span className="axiom-workbench__pulse" aria-label="AI is working" />
                     : composition && (
                         <ChatPane composition={composition} sessionError={wb.sessionError}
+                            toolbarStart={chatCollapseButton}
                             lastCompletedTurnId={wb.lastCompletedTurnId} prefill={prefill}
                             beforeSend={beforeSend} onRetrySession={() => void wb.retrySession()}
                             onReplaceWorkflow={(w) => workflowTabRef.current?.replace(w)}

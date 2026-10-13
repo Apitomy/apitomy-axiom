@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import type { Workflow } from "@apitomy/flow-ui";
-import { Alert, AlertActionCloseButton, AlertActionLink, Button } from "@patternfly/react-core";
+import { Alert, AlertActionCloseButton, AlertActionLink, Button, Tooltip } from "@patternfly/react-core";
+import { UndoIcon } from "@patternfly/react-icons";
 import { AssistantChatPanel } from "../../components/assistant/AssistantChatPanel";
 import { ApiError, type Composition, interruptComposition, sendCompositionMessage, undoTurn,
     type UndoResult } from "../../config/compositions";
@@ -21,6 +22,8 @@ export interface ChatPaneProps {
     onUndone: () => void;
     /** Flushes unsaved editor changes before undoing. */
     beforeUndo?: () => Promise<void>;
+    /** Controls shown at the left of the chat toolbar (for example the pane collapse button). */
+    toolbarStart?: ReactNode;
 }
 
 function summarise(result: UndoResult, workflowRestored: boolean): string {
@@ -31,23 +34,47 @@ function summarise(result: UndoResult, workflowRestored: boolean): string {
 }
 
 /**
- * Workbench chat pane: the composition's assistant chat with an "Undo AI turn" bar.
+ * Workbench chat pane: a toolbar (host controls on the left, "Undo AI turn" on the right) above the
+ * composition's assistant chat.
  */
 export function ChatPane(props: ChatPaneProps) {
-    const { composition, sessionError, lastCompletedTurnId } = props;
+    const { composition, sessionError, lastCompletedTurnId, toolbarStart } = props;
     const [notice, setNotice] = useState<{ variant: "info" | "danger"; title: string; body?: string } | null>(null);
     const [undoing, setUndoing] = useState<boolean>(false);
     const [undoneTurnId, setUndoneTurnId] = useState<string | undefined>(undefined);
 
+    const canUndo: boolean = Boolean(lastCompletedTurnId) && lastCompletedTurnId !== undoneTurnId
+        && composition.turnState === "idle" && !sessionError;
+    const toolbar = (
+        <div className="axiom-workbench__chat-toolbar">
+            {toolbarStart}
+            {canUndo && lastCompletedTurnId && (
+                <Tooltip content="Undo the last AI turn">
+                    <Button variant="plain" size="sm" aria-label="Undo AI turn" icon={<UndoIcon />}
+                        isDisabled={undoing} className="axiom-workbench__chat-toolbar-end"
+                        onClick={() => void undo(lastCompletedTurnId)} />
+                </Tooltip>
+            )}
+        </div>
+    );
+
     if (sessionError) {
         return (
-            <Alert isInline variant="danger" title={`Assistant unavailable: ${sessionError}`}
-                actionLinks={<AlertActionLink onClick={props.onRetrySession}>Retry</AlertActionLink>} />
+            <div className="axiom-workbench__chat">
+                {toolbar}
+                <Alert isInline variant="danger" title={`Assistant unavailable: ${sessionError}`}
+                    actionLinks={<AlertActionLink onClick={props.onRetrySession}>Retry</AlertActionLink>} />
+            </div>
         );
     }
     const sessionId: string | undefined = composition.assistantSessionId;
     if (!sessionId) {
-        return <div className="axiom-workbench__placeholder">Starting the AI…</div>;
+        return (
+            <div className="axiom-workbench__chat">
+                {toolbar}
+                <div className="axiom-workbench__placeholder">Starting the AI…</div>
+            </div>
+        );
     }
 
     const onSend = async (message: string): Promise<void> => {
@@ -90,13 +117,7 @@ export function ChatPane(props: ChatPaneProps) {
 
     return (
         <div className="axiom-workbench__chat">
-            {lastCompletedTurnId && lastCompletedTurnId !== undoneTurnId && composition.turnState === "idle" && (
-                <div className="axiom-workbench__undo-bar">
-                    <span>Last AI turn ·</span>
-                    <Button variant="link" isInline isDisabled={undoing}
-                        onClick={() => void undo(lastCompletedTurnId)}>Undo AI turn</Button>
-                </div>
-            )}
+            {toolbar}
             {notice && (
                 <Alert isInline variant={notice.variant} title={notice.title}
                     actionClose={<AlertActionCloseButton onClose={() => setNotice(null)} />}>

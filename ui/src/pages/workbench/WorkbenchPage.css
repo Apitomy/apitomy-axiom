@@ -151,10 +151,17 @@
     min-height: 0;
 }
 
-.axiom-workbench__undo-bar {
+
+.axiom-workbench__chat-toolbar {
     display: flex;
-    gap: var(--pf-t--global--spacer--xs, 4px);
     align-items: center;
-    padding: var(--pf-t--global--spacer--xs, 4px) var(--pf-t--global--spacer--md, 16px);
+    gap: var(--pf-t--global--spacer--xs, 4px);
+    padding: 0 var(--pf-t--global--spacer--xs, 4px);
     border-bottom: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+    min-height: 36px;
+    flex: 0 0 auto;
+}
+
+.axiom-workbench__chat-toolbar-end {
+    margin-left: auto;
 }
