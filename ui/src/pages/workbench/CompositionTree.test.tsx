@@ -17,7 +17,7 @@ const problems = {
 
 function renderTree(onOpen = vi.fn()) {
     render(<CompositionTree composition={composition} items={items} problems={problems} lastCompletedTurnId="t1"
-        selectedItemId={undefined} onOpen={onOpen} onAdd={() => {}} onRestored={() => {}} />);
+        selectedItemId={undefined} onOpen={onOpen} onAdd={() => {}} />);
     return onOpen;
 }
 
@@ -41,16 +41,9 @@ describe("CompositionTree", () => {
         expect(screen.getAllByLabelText("Unpublished changes")).toHaveLength(1);
     });
 
-    it("opens a row on click and shows its revisions", async () => {
-        vi.spyOn(c, "listRevisions").mockResolvedValue([
-            { id: 1, contentRevision: "a", author: "user", createdAt: "2026-01-01T00:00:00Z" },
-            { id: 2, contentRevision: "b", author: "ai", turnId: "t1", createdAt: "2026-01-02T00:00:00Z" },
-        ]);
+    it("opens a row on click", () => {
         const onOpen = renderTree();
         fireEvent.click(screen.getByRole("button", { name: /^at\b/ }));
         expect(onOpen).toHaveBeenCalledWith(2);
-        const restores = await screen.findAllByRole("button", { name: /restore/i });
-        expect(restores).toHaveLength(2);
-        expect(screen.getAllByText(/^(You|AI)$/).map((e) => e.textContent)).toContain("You");
     });
 });

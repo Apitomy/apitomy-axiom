@@ -9,7 +9,6 @@ import {
 import type { Composition, CompositionItem, CompositionItemType, ConfigProblem } from "../../config/compositions";
 import { fetchActionTypes, fetchTools } from "../../config/api";
 import { isAiTouchedInTurn, isLockedForUser, itemStatus, type ItemStatus } from "./workbenchLogic";
-import { RevisionList } from "./RevisionList";
 
 /** Item types the user can add from the tree. */
 export type AddableType = Exclude<CompositionItemType, "workflow">;
@@ -31,7 +30,6 @@ export interface CompositionTreeProps {
     onOpen(itemId: number): void;
     /** Called with the dialog result; the add dialog is opened by the tree itself. */
     onAdd(request: AddRequest): void;
-    onRestored(item: CompositionItem): void;
 }
 
 const GROUPS: { type: CompositionItemType; title: string; addLabel?: string }[] = [
@@ -58,7 +56,7 @@ function StatusIcon({ status }: { status: ItemStatus }) {
  * selected item's revisions.
  */
 export function CompositionTree(props: CompositionTreeProps) {
-    const { composition, items, problems, lastCompletedTurnId, onOpen, onAdd, onRestored } = props;
+    const { composition, items, problems, lastCompletedTurnId, onOpen, onAdd } = props;
     const [selected, setSelected] = useState<number | undefined>(props.selectedItemId);
     const [adding, setAdding] = useState<AddableType | null>(null);
 
@@ -68,7 +66,6 @@ export function CompositionTree(props: CompositionTreeProps) {
         }
     }, [props.selectedItemId]);
 
-    const selectedItem: CompositionItem | undefined = items.find((i) => i.id === selected);
 
     return (
         <div className="axiom-workbench__tree">
@@ -107,9 +104,6 @@ export function CompositionTree(props: CompositionTreeProps) {
                     </SimpleListGroup>
                 ))}
             </SimpleList>
-            {selectedItem && (
-                <RevisionList compositionId={composition.id} item={selectedItem} onRestored={onRestored} />
-            )}
             {adding && (
                 <AddItemDialog type={adding} onClose={() => setAdding(null)}
                     onSubmit={(r: AddRequest) => {

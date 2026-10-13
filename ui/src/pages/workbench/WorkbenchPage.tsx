@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ActionTypeDescriptor, Workflow } from "@apitomy/flow-ui";
 import { useParams, useSearchParams } from "react-router-dom";
-import { Alert, AlertActionLink, Button, PageSection, Tab, Tabs, TabTitleText, ToggleGroup, ToggleGroupItem } from "@patternfly/react-core";
+import {
+    Alert, AlertActionLink, Button, Modal, ModalBody, ModalHeader, PageSection, Tab, Tabs, TabTitleText, ToggleGroup,
+    ToggleGroupItem, Tooltip,
+} from "@patternfly/react-core";
+import { HistoryIcon } from "@patternfly/react-icons";
+import { RevisionList } from "./RevisionList";
 import { addItem, type CompositionItem, fetchItem, updateComposition } from "../../config/compositions";
 import { type AddRequest, CompositionTree } from "./CompositionTree";
 import { PublishDialog } from "./PublishDialog";
@@ -31,6 +36,7 @@ export function WorkbenchPage() {
     const [brokenOut, setBrokenOut] = useState<boolean>(false);
     const [openTabs, setOpenTabs] = useState<number[]>([]);
     const [activeTab, setActiveTab] = useState<string>("workflow");
+    const [historyOpen, setHistoryOpen] = useState<boolean>(false);
     const [publishOpen, setPublishOpen] = useState<boolean>(false);
 
     const composition = wb.composition;
@@ -191,6 +197,7 @@ export function WorkbenchPage() {
     };
 
     const activeItemId: number | undefined = activeTab === "workflow" ? workflow?.id : Number(activeTab);
+    const activeItem: CompositionItem | undefined = wb.items.find((i) => i.id === activeItemId);
 
     /** Prefills the chat and reveals a collapsed chat pane. */
     const askAi = (text: string) => {
@@ -293,7 +300,15 @@ export function WorkbenchPage() {
             <aside className="axiom-workbench__left">
                 <div className="axiom-workbench__pane-toolbar">
                     {!prefs.leftCollapsed && <span className="axiom-workbench__pane-title">Components</span>}
-                    <Button variant="plain" size="sm" className="axiom-workbench__pane-toolbar-end"
+                    {!prefs.leftCollapsed && (
+                        <Tooltip content="Revision history">
+                            <Button variant="plain" size="sm" icon={<HistoryIcon />} aria-label="Revision history"
+                                className="axiom-workbench__pane-toolbar-end" isDisabled={!activeItem}
+                                onClick={() => setHistoryOpen(true)} />
+                        </Tooltip>
+                    )}
+                    <Button variant="plain" size="sm"
+                        className={prefs.leftCollapsed ? "axiom-workbench__pane-toolbar-end" : undefined}
                         aria-label={prefs.leftCollapsed ? "Expand left pane" : "Collapse left pane"}
                         onClick={() => updatePrefs({ leftCollapsed: !prefs.leftCollapsed })}>
                         {prefs.leftCollapsed ? "»" : "«"}
@@ -303,7 +318,7 @@ export function WorkbenchPage() {
                     <CompositionTree composition={composition} items={wb.items} problems={wb.problems}
                         lastCompletedTurnId={wb.lastCompletedTurnId}
                         selectedItemId={activeTab === "workflow" ? workflow?.id : Number(activeTab)}
-                        onOpen={openItem} onAdd={addToComposition} onRestored={onRestored} />
+                        onOpen={openItem} onAdd={addToComposition} />
                 )}
             </aside>
             {prefs.leftCollapsed ? <div className="axiom-workbench__splitter axiom-workbench__splitter--left" /> : (
@@ -371,6 +386,17 @@ export function WorkbenchPage() {
                             onUndone={() => void wb.refreshItems().catch(console.error)} />
                     )}
             </aside>
+            {historyOpen && activeItem && (
+                <Modal isOpen variant="medium" onClose={() => setHistoryOpen(false)} aria-labelledby="revision-history-title">
+                    <ModalHeader title={`Revision history: ${activeItem.name}`} labelId="revision-history-title" />
+                    <ModalBody>
+                        <RevisionList compositionId={id} item={activeItem} onRestored={(item) => {
+                            setHistoryOpen(false);
+                            onRestored(item);
+                        }} />
+                    </ModalBody>
+                </Modal>
+            )}
             {publishOpen && (
                 <PublishDialog compositionId={id} items={wb.items} contents={wb.contents} problems={wb.problems}
                     onPublished={() => void wb.refreshItems().catch(console.error)}

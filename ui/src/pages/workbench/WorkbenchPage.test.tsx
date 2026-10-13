@@ -135,4 +135,15 @@ describe("WorkbenchPage", () => {
         act(() => workflowTabProps.onSaved({ id: 10, contentRevision: "r2" }, content, undefined));
         expect(setContent).toHaveBeenCalledWith(10, content, "r2");
     });
+
+    it("opens the revision history of the active item from the Components toolbar", async () => {
+        vi.spyOn(c, "listRevisions").mockResolvedValue([
+            { id: 1, contentRevision: "a", author: "user", createdAt: "2026-01-01T00:00:00Z" },
+            { id: 2, contentRevision: "b", author: "ai", turnId: "t1", createdAt: "2026-01-02T00:00:00Z" },
+        ]);
+        renderPage();
+        fireEvent.click(screen.getByRole("button", { name: "Revision history" }));
+        expect(await screen.findByText(/Revision history: main-flow/)).toBeTruthy();
+        expect(await screen.findAllByRole("button", { name: /restore/i })).toHaveLength(2);
+    });
 });

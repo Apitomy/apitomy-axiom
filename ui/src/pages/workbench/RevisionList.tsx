@@ -40,7 +40,6 @@ export function RevisionList({ compositionId, item, onRestored }: RevisionListPr
 
     return (
         <div className="axiom-workbench__revisions">
-            <h4>Revisions of {item.name}</h4>
             {error && <div role="alert">{error}</div>}
             <ul>
                 {revisions.map((r: CompositionRevision) => (
