@@ -32,6 +32,13 @@ class WorkbenchReferenceTest {
     }
 
     @Test
+    void templateAllowsTheTestTools() throws Exception {
+        String tools = template().path("allowedTools").toString();
+        assertTrue(tools.contains("mcp__workbench__test_action_type"));
+        assertTrue(tools.contains("mcp__workbench__test_tool"));
+    }
+
+    @Test
     void promptCarriesEveryRule() throws Exception {
         String prompt = template().path("systemPrompt").asText();
         for (String rule : List.of(
@@ -41,6 +48,7 @@ class WorkbenchReferenceTest {
                 "If no events of that type exist, say so and use the documented event schema",
                 "Prefer node action types for non-AI steps",
                 "Declare an input for everything an action uses",
+                "Test action types and tools you create with test_action_type or test_tool before finishing a turn",
                 "Receive-event nodes must correlate",
                 "Never describe the output format in an agent prompt",
                 "applied by the user's editor when your turn ends",

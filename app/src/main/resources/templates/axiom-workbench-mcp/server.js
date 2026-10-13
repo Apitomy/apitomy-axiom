@@ -166,6 +166,48 @@ function statusOf(r) {
     return problems.length === 0 ? "VALID" : "VALID with warnings";
 }
 
+const TAIL_CHARS = 4000;
+
+/**
+ * Returns the end of a long text with a marker.
+ * @param {string} text the text
+ * @returns {{label: string, text: string}} the label suffix and the (possibly shortened) text
+ */
+function tail(text) {
+    return text.length > TAIL_CHARS
+        ? { label: ` (last ${TAIL_CHARS} chars)`, text: "…" + text.substring(text.length - TAIL_CHARS) }
+        : { label: "", text };
+}
+
+/**
+ * Formats a test run for the agent.
+ * @param {object} run the CompositionTestRun
+ * @returns {string} the summary
+ */
+function formatTestRun(run) {
+    const head = `${String(run.status).toUpperCase()}: ${run.itemType} ${run.itemName}`;
+    if (run.status === "error") {
+        const lines = [head];
+        if (run.message) lines.push(run.message);
+        for (const p of run.problems || []) lines.push(`- ${p}`);
+        return lines.join("\n");
+    }
+    const lines = [`${head} (exit ${run.exitCode}, ${run.durationMs} ms)`];
+    if (run.outputs) lines.push(`Outputs: ${JSON.stringify(run.outputs)}`);
+    if ((run.problems || []).length > 0) {
+        lines.push("Problems:");
+        for (const p of run.problems) lines.push(`- ${p}`);
+    }
+    for (const stream of ["stdout", "stderr"]) {
+        const value = run[stream] || "";
+        if (value) {
+            const t = tail(value);
+            lines.push(`${stream}${t.label}:\n${t.text}`);
+        }
+    }
+    return lines.join("\n");
+}
+
 const TOOLS = [
     {
         name: "get_composition",
@@ -245,6 +287,37 @@ const TOOLS = [
                 const lines = formatProblems(i.problems);
                 return `${i.type}/${i.name}: ${statusOf(i)}` + (lines ? "\n" + lines : "");
             }).join("\n");
+        },
+    },
+    {
+        name: "test_action_type",
+        description: "Run a draft node or script action type with sample inputs. Returns the status, outputs, "
+            + "output-validation problems, exit code, duration, stdout and stderr. The user sees the run in the "
+            + "workbench's Test output strip. AI Agent action types cannot be test-run.",
+        parameters: [
+            { name: "name", type: "string", description: "Draft action type name", required: true },
+            { name: "inputs", type: "object", description: "Input values by name", required: false },
+            { name: "subjectId", type: "number", description: "Optional subject whose workspace to run in", required: false },
+        ],
+        handler: async (args) => {
+            const body = { type: "action-type", name: args.name, inputs: asObject(args.inputs ?? {}, "inputs") };
+            if (args.subjectId !== undefined) body.subjectId = Number(args.subjectId);
+            return formatTestRun(JSON.parse(await axiomApi("POST", `${agentBase()}/test`, body)));
+        },
+    },
+    {
+        name: "test_tool",
+        description: "Run a draft tool's script with sample parameter values, the way agents run it. Returns "
+            + "the status, exit code, duration, stdout and stderr. The user sees the run in the workbench.",
+        parameters: [
+            { name: "name", type: "string", description: "Draft tool name", required: true },
+            { name: "params", type: "object", description: "Parameter values by name", required: false },
+            { name: "subjectId", type: "number", description: "Optional subject whose workspace to run in", required: false },
+        ],
+        handler: async (args) => {
+            const body = { type: "tool", name: args.name, inputs: asObject(args.params ?? {}, "params") };
+            if (args.subjectId !== undefined) body.subjectId = Number(args.subjectId);
+            return formatTestRun(JSON.parse(await axiomApi("POST", `${agentBase()}/test`, body)));
         },
     },
     {
@@ -440,7 +513,7 @@ async function main() {
     await server.connect(transport);
 }
 
-module.exports = { summarizeEvent, pickPath, truncateDeep, formatProblems };
+module.exports = { summarizeEvent, pickPath, truncateDeep, formatProblems, formatTestRun };
 
 if (require.main === module) {
     main().catch(console.error);
