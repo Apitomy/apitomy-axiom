@@ -327,7 +327,7 @@ export function WorkbenchPage() {
             )}
 
             <main className="axiom-workbench__centre">
-                <Tabs activeKey={activeTab} onSelect={(_e, key) => setActiveTab(String(key))}
+                <Tabs isBox variant="secondary" activeKey={activeTab} onSelect={(_e, key) => setActiveTab(String(key))}
                     onClose={(_e, key) => closeTab(Number(key))} className="axiom-workbench__tabs">
                     {[
                     <Tab key="workflow" eventKey="workflow" title={<TabTitleText>{workflow?.name ?? "Workflow"}</TabTitleText>}
