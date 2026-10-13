@@ -121,6 +121,11 @@
     margin-left: auto;
 }
 
+.axiom-workbench__marker {
+    display: inline-flex;
+    align-items: center;
+}
+
 .axiom-workbench__add-row {
     list-style: none;
     padding: 0 var(--pf-t--global--spacer--sm, 8px);

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { CompositionTree } from "./CompositionTree";
+import { CompositionTree, statusTooltip } from "./CompositionTree";
 import * as c from "../../config/compositions";
 
 const composition = { id: 9, name: "c", turnState: "idle", applyMode: "live", createdAt: "", updatedAt: "" } as c.Composition;
@@ -45,5 +45,14 @@ describe("CompositionTree", () => {
         const onOpen = renderTree();
         fireEvent.click(screen.getByRole("button", { name: /^at\b/ }));
         expect(onOpen).toHaveBeenCalledWith(2);
+    });
+
+    it("describes the status with problem counts", () => {
+        expect(statusTooltip([])).toBe("Valid");
+        expect(statusTooltip([{ severity: "warning", code: "w", message: "w" },
+            { severity: "warning", code: "w", message: "w" }])).toBe("2 warnings. Publishing is still allowed.");
+        expect(statusTooltip([{ severity: "error", code: "e", message: "e" },
+            { severity: "warning", code: "w", message: "w" }]))
+            .toBe("1 error, 1 warning. Fix the errors before publishing.");
     });
 });

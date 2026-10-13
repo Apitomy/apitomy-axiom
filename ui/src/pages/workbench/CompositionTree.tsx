@@ -38,17 +38,46 @@ const GROUPS: { type: CompositionItemType; title: string; addLabel?: string }[] 
     { type: "tool", title: "Tools", addLabel: "Add tool" },
 ];
 
-function StatusIcon({ status }: { status: ItemStatus }) {
+function countLabel(n: number, word: string): string {
+    return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+/** Tooltip text for an item's validation status, with problem counts. */
+export function statusTooltip(problems: ConfigProblem[] | undefined): string {
+    const errors: number = (problems ?? []).filter((p) => p.severity === "error").length;
+    const warnings: number = (problems ?? []).filter((p) => p.severity === "warning").length;
+    if (errors > 0) {
+        return warnings > 0
+            ? `${countLabel(errors, "error")}, ${countLabel(warnings, "warning")}. Fix the errors before publishing.`
+            : `${countLabel(errors, "error")}. Fix the errors before publishing.`;
+    }
+    if (warnings > 0) {
+        return `${countLabel(warnings, "warning")}. Publishing is still allowed.`;
+    }
+    return "Valid";
+}
+
+function StatusIcon({ problems }: { problems: ConfigProblem[] | undefined }) {
+    const status: ItemStatus = itemStatus(problems);
+    let icon;
     switch (status) {
         case "valid":
-            return <CheckCircleIcon aria-label="valid" color="var(--pf-t--global--icon--color--status--success--default)" />;
+            icon = <CheckCircleIcon aria-label="valid" color="var(--pf-t--global--icon--color--status--success--default)" />;
+            break;
         case "warnings":
-            return <ExclamationTriangleIcon aria-label="warnings" color="var(--pf-t--global--icon--color--status--warning--default)" />;
+            icon = <ExclamationTriangleIcon aria-label="warnings" color="var(--pf-t--global--icon--color--status--warning--default)" />;
+            break;
         case "errors":
-            return <ExclamationCircleIcon aria-label="errors" color="var(--pf-t--global--icon--color--status--danger--default)" />;
+            icon = <ExclamationCircleIcon aria-label="errors" color="var(--pf-t--global--icon--color--status--danger--default)" />;
+            break;
         default:
             return null;
     }
+    return (
+        <Tooltip content={statusTooltip(problems)}>
+            <span className="axiom-workbench__marker">{icon}</span>
+        </Tooltip>
+    );
 }
 
 /**
@@ -82,10 +111,16 @@ export function CompositionTree(props: CompositionTreeProps) {
                                 <span className="axiom-workbench__item">
                                     <span className="axiom-workbench__item-name">{item.name}</span>{" "}
                                     <span className="axiom-workbench__item-markers">
-                                        <StatusIcon status={itemStatus(problems[item.id])} />
-                                        {isLockedForUser(item, composition) && <LockIcon aria-label="locked" />}
+                                        <StatusIcon problems={problems[item.id]} />
+                                        {isLockedForUser(item, composition) && (
+                                            <Tooltip content="The AI is editing this item. It becomes editable when the turn ends.">
+                                                <span className="axiom-workbench__marker"><LockIcon aria-label="locked" /></span>
+                                            </Tooltip>
+                                        )}
                                         {isAiTouchedInTurn(item, lastCompletedTurnId) && (
-                                            <Label isCompact color="purple">AI</Label>
+                                            <Tooltip content="Changed by the last AI turn">
+                                                <Label isCompact color="purple">AI</Label>
+                                            </Tooltip>
                                         )}
                                         {item.changed && (
                                             <Tooltip content="Unpublished changes">
