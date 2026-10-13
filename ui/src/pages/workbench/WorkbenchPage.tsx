@@ -3,13 +3,15 @@ import type { ActionTypeDescriptor, Workflow } from "@apitomy/flow-ui";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
     Alert, AlertActionLink, Breadcrumb, BreadcrumbItem, Button, Modal, ModalBody, ModalHeader, PageSection, Tab, Tabs, TabTitleText, ToggleGroup,
-    ToggleGroupItem, Tooltip, Dropdown, DropdownItem, DropdownList, MenuToggle,
+    ToggleGroupItem, Tooltip, Dropdown, Label, DropdownItem, DropdownList, MenuToggle,
 } from "@patternfly/react-core";
 import {
     CompressArrowsAltIcon, CompressIcon, ExpandArrowsAltIcon, ExpandIcon, ExternalLinkAltIcon, HistoryIcon, PlusCircleIcon,
 } from "@patternfly/react-icons";
 import { RevisionList } from "./RevisionList";
-import { addItem, type CompositionItem, fetchItem, updateComposition } from "../../config/compositions";
+import {
+    addItem, type CompositionItem, type CompositionSessionInfo, fetchItem, updateComposition,
+} from "../../config/compositions";
 import {
     type AddableType, AddItemDialog, type AddRequest, CompositionTree, RemoveItemDialog,
 } from "./CompositionTree";
@@ -23,6 +25,24 @@ import { itemUsages, mergeCatalog } from "./workbenchLogic";
 import { ChatPane } from "./ChatPane";
 import { findActionTypeIdByName, loadEditorActionTypes } from "../../hooks/useWorkflowEditorSpi";
 import "./WorkbenchPage.css";
+
+/**
+ * Compact label with the engine and model of the composition's running assistant session; hidden until the
+ * session has started.
+ */
+function SessionBadge({ session }: { session: CompositionSessionInfo | undefined }) {
+    if (!session?.engine) {
+        return null;
+    }
+    const engine: string = session.engineLabel || session.engine;
+    const model: string = session.model || "default";
+    return (
+        <Tooltip content={<>Engine: {engine} ({session.engine})<br />Model: {session.model
+            ?? "the engine's default model"}</>}>
+            <Label isCompact className="axiom-workbench__session-badge">{`${engine} · ${model}`}</Label>
+        </Tooltip>
+    );
+}
 
 const RAIL: number = 32;
 
@@ -432,7 +452,8 @@ export function WorkbenchPage() {
                     ? aiWorking && <span className="axiom-workbench__pulse" aria-label="AI is working" />
                     : composition && (
                         <ChatPane composition={composition} sessionError={wb.sessionError}
-                            toolbarStart={<>{chatCollapseButton}<span className="axiom-workbench__pane-title">AI Assistant</span></>}
+                            toolbarStart={<>{chatCollapseButton}<span className="axiom-workbench__pane-title">AI Assistant</span>
+                                <SessionBadge session={composition.session} /></>}
                             lastCompletedTurnId={wb.lastCompletedTurnId} prefill={prefill}
                             beforeSend={beforeSend} onRetrySession={() => void wb.retrySession()}
                             onReplaceWorkflow={(w) => workflowTabRef.current?.replace(w)}

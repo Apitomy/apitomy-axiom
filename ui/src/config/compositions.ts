@@ -29,6 +29,16 @@ export interface Composition {
     currentTurnId?: string;
     pendingTurnId?: string;
     pendingChangeSet?: Record<string, unknown>;
+    /** Engine and model of the running assistant session, when there is one. */
+    session?: CompositionSessionInfo;
+}
+
+/** Engine and model of a composition's running assistant session (mirrors `CompositionSessionInfo`). */
+export interface CompositionSessionInfo {
+    engine?: string;
+    engineLabel?: string;
+    /** Absent when the engine uses its default model. */
+    model?: string;
 }
 
 /** A draft item in a composition (mirrors `CompositionItem`). */

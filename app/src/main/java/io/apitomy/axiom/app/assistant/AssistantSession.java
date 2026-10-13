@@ -513,6 +513,45 @@ public class AssistantSession {
         return engineType;
     }
 
+    private volatile String engineLabel;
+    private volatile String model;
+
+    /**
+     * Returns the human-readable name of the engine, or null when unknown.
+     *
+     * @return the engine label
+     */
+    public String getEngineLabel() {
+        return engineLabel;
+    }
+
+    /**
+     * Sets the human-readable name of the engine.
+     *
+     * @param engineLabel the engine label
+     */
+    public void setEngineLabel(String engineLabel) {
+        this.engineLabel = engineLabel;
+    }
+
+    /**
+     * Returns the model passed to the engine, or null when the engine uses its default model.
+     *
+     * @return the model
+     */
+    public String getModel() {
+        return model;
+    }
+
+    /**
+     * Sets the model passed to the engine.
+     *
+     * @param model the model, or null for the engine's default
+     */
+    public void setModel(String model) {
+        this.model = model;
+    }
+
     private volatile Set<SessionCapability> capabilities = Collections.emptySet();
 
     /**

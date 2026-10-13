@@ -10805,6 +10805,9 @@
           "pendingChangeSet": {
             "$ref": "#/components/schemas/CompositionContent",
             "description": "The combined change set JSON awaiting review"
+          },
+          "session": {
+            "$ref": "#/components/schemas/CompositionSessionInfo"
           }
         }
       },
@@ -11151,6 +11154,24 @@
                 "$ref": "#/components/schemas/ConfigProblem"
               }
             }
+          }
+        }
+      },
+      "CompositionSessionInfo": {
+        "description": "The engine and model of the composition's running assistant session (read-only)",
+        "type": "object",
+        "properties": {
+          "engine": {
+            "description": "Engine type, e.g. claude-code",
+            "type": "string"
+          },
+          "engineLabel": {
+            "description": "Human-readable engine name",
+            "type": "string"
+          },
+          "model": {
+            "description": "Model passed to the engine, or null when the engine uses its default model",
+            "type": "string"
           }
         }
       }

@@ -148,13 +148,43 @@ public class AssistantSessionManager {
      */
     public AssistantSession createSession(String name, String templateId, Long subjectId,
                                           Long compositionId, List<SseEvent> seedHistory) throws IOException {
+        return createSession(name, templateId, subjectId, compositionId, seedHistory, null, null);
+    }
+
+    /**
+     * Creates and starts a new assistant session with optional engine and model overrides.
+     *
+     * <p>An engine override replaces the template's engine. A model override replaces the template's model;
+     * without one, the template's model is used only when the engine is the template's own (a model for one
+     * engine is meaningless to another), otherwise the engine's default model is used.
+     *
+     * @param name the user-visible session name
+     * @param templateId the template to create the session from
+     * @param subjectId optional subject ID to scope the session to
+     * @param compositionId optional composition ID, passed to the workbench MCP server
+     * @param seedHistory events restored into the history (and journal) before the session starts
+     * @param engineOverride engine type to use instead of the template's, or null
+     * @param modelOverride model to use instead of the template's, or null
+     * @return the started session
+     * @throws IOException if the session cannot be created
+     * @throws IllegalStateException if the AI engine does not support interactive sessions or the
+     *         session limit has been reached
+     */
+    public AssistantSession createSession(String name, String templateId, Long subjectId, Long compositionId,
+                                          List<SseEvent> seedHistory, String engineOverride,
+                                          String modelOverride) throws IOException {
         List<SseEvent> seed = seedHistory != null ? seedHistory : List.of();
         SessionTemplateService.SessionTemplate template = templateService.getTemplate(templateId);
         if (template == null) {
             throw new IllegalArgumentException("Template not found: " + templateId);
         }
 
-        Agent agent = resolveSessionAgent(template);
+        String engine = trimToNull(engineOverride);
+        Agent agent = engine != null ? resolveAgentByType(engine, "composition") : resolveSessionAgent(template);
+        String model = trimToNull(modelOverride);
+        if (model == null && (engine == null || engine.equals(trimToNull(template.engine())))) {
+            model = trimToNull(template.model());
+        }
         if (!agent.supportsInteractiveSessions()) {
             throw new IllegalStateException(
                     "The AI Assistant requires an engine that supports interactive sessions. "
@@ -259,7 +289,7 @@ public class AssistantSessionManager {
             String subjectName = subject != null ? subject.name : null;
 
             List<String> command = buildCommand(workDir, sessionDir, systemPrompt,
-                    template.model(), resolvedAllowedTools, mcpConfig != null);
+                    model, resolvedAllowedTools, mcpConfig != null);
 
             AtomicReference<AssistantSession> sessionRef = new AtomicReference<>();
             Consumer<AssistantEventParser.SseEvent> eventSink = event -> {
@@ -286,7 +316,7 @@ public class AssistantSessionManager {
                             subjectName,
                             eventSink,
                             autoApprovalSink,
-                            template.model(),
+                            model,
                             sessionName,
                             mcpConfigs,
                             systemPrompt,
@@ -295,6 +325,8 @@ public class AssistantSessionManager {
             AssistantSession session = new AssistantSession(sessionId, sessionName, templateId, sessionDir,
                     workDir, command, resolvedEnv, agent.getType(), subjectId, subjectName, driver);
             session.setCapabilities(template.capabilities());
+            session.setEngineLabel(agent.getLabel());
+            session.setModel(model);
             session.setMcpToken(mcpToken);
             session.seedHistory(seed);
             sessionRef.set(session);
@@ -518,11 +550,7 @@ public class AssistantSessionManager {
         usage.invocationType = "assistant-session";
         usage.actionType = "assistant-session";
         usage.engine = session.getEngineType();
-        SessionTemplateService.SessionTemplate template =
-                templateService.getTemplate(session.getTemplateId());
-        if (template != null && template.model() != null && !template.model().isBlank()) {
-            usage.model = template.model();
-        }
+        usage.model = session.getModel();
         usage.costUsd = session.getTotalCostUsd();
         usage.inputTokens = session.getTotalInputTokens();
         usage.outputTokens = session.getTotalOutputTokens();

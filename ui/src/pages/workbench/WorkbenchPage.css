@@ -197,7 +197,12 @@
     padding: 0;
 }
 
-.axiom-workbench__pane-toolbar > .axiom-workbench__pane-title {
+.axiom-workbench__pane-toolbar > .axiom-workbench__session-badge {
+    margin-left: var(--pf-t--global--spacer--sm, 8px);
+    min-width: 0;
+}
+
+.axiom-workbench__pane-title {
     margin-left: var(--pf-t--global--spacer--sm, 8px);
 }
 

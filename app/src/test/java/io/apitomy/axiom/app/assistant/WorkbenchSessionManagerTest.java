@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -58,6 +59,17 @@ class WorkbenchSessionManagerTest {
         AssistantSession session = manager.createSession("wb", "axiom-workbench", null, 42L, seed);
         created.add(session.getId());
         return session;
+    }
+
+    @Test
+    void recordsTheEngineAndAppliesAModelOverride() throws IOException {
+        AssistantSession plain = create(List.of());
+        assertNotNull(plain.getEngineLabel());
+        AssistantSession session = manager.createSession("wb", "axiom-workbench", null, 42L, List.of(),
+                plain.getEngineType(), "my-model");
+        created.add(session.getId());
+        assertEquals(plain.getEngineType(), session.getEngineType());
+        assertEquals("my-model", session.getModel());
     }
 
     @Test

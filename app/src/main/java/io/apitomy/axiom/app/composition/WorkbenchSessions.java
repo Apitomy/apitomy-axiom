@@ -112,7 +112,8 @@ public class WorkbenchSessions {
             if (previousDir != null && Files.isDirectory(previousDir)) {
                 seed = HistoryJournal.load(previousDir.resolve(HistoryJournal.FILE_NAME), mapper);
             }
-            AssistantSession session = manager.createSession(composition.name, TEMPLATE_ID, null, compositionId, seed);
+            AssistantSession session = manager.createSession(composition.name, TEMPLATE_ID, null, compositionId, seed,
+                    composition.engine, composition.model);
             session.addListener(event -> onEvent(compositionId, session, event));
             String sessionId = session.getId();
             QuarkusTransaction.requiringNew().run(() -> {

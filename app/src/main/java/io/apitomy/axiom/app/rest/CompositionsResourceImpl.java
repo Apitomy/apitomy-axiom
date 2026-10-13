@@ -23,12 +23,15 @@ import io.apitomy.axiom.api.beans.CompositionMessage;
 import io.apitomy.axiom.api.beans.CompositionPublishRequest;
 import io.apitomy.axiom.api.beans.CompositionPublishResult;
 import io.apitomy.axiom.api.beans.CompositionRevision;
+import io.apitomy.axiom.api.beans.CompositionSessionInfo;
 import io.apitomy.axiom.api.beans.CompositionUndoResult;
 import io.apitomy.axiom.api.beans.CompositionUpdate;
 import io.apitomy.axiom.api.beans.CompositionValidationResult;
 import io.apitomy.axiom.api.beans.ConfigProblem;
 import io.apitomy.axiom.api.beans.NewComposition;
 import io.apitomy.axiom.api.beans.NewCompositionItem;
+import io.apitomy.axiom.app.assistant.AssistantSession;
+import io.apitomy.axiom.app.assistant.AssistantSessionManager;
 import io.apitomy.axiom.app.assistant.SessionTokenGuard;
 import io.apitomy.axiom.app.composition.AgentUnavailableException;
 import io.apitomy.axiom.app.composition.CompositionConflictException;
@@ -70,6 +73,9 @@ public class CompositionsResourceImpl implements CompositionsResource {
 
     @Inject
     CompositionService service;
+
+    @Inject
+    AssistantSessionManager sessionManager;
 
     @Inject
     ObjectMapper mapper;
@@ -419,6 +425,15 @@ public class CompositionsResourceImpl implements CompositionsResource {
         bean.setEngine(entity.engine);
         bean.setModel(entity.model);
         bean.setAssistantSessionId(entity.assistantSessionId);
+        AssistantSession session = entity.assistantSessionId != null
+                ? sessionManager.getSession(entity.assistantSessionId) : null;
+        if (session != null) {
+            CompositionSessionInfo info = new CompositionSessionInfo();
+            info.setEngine(session.getEngineType());
+            info.setEngineLabel(session.getEngineLabel());
+            info.setModel(session.getModel());
+            bean.setSession(info);
+        }
         bean.setTurnState(Composition.TurnState.fromValue(entity.turnState));
         bean.setApplyMode(Composition.ApplyMode.fromValue(entity.applyMode));
         bean.setCreatedAt(Date.from(entity.createdOn));

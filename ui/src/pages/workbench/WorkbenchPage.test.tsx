@@ -9,7 +9,8 @@ vi.mock("@apitomy/flow-ui", () => ({}));
 const setContent = vi.fn();
 vi.mock("./useWorkbench", () => ({
     useWorkbench: (): WorkbenchState => ({
-        composition: { id: 1, name: "My comp", turnState: "idle", applyMode: "live", createdAt: "", updatedAt: "" },
+        composition: { id: 1, name: "My comp", turnState: "idle", applyMode: "live", createdAt: "", updatedAt: "",
+            session: { engine: "claude-code", engineLabel: "Claude Code" } },
         items: [{ id: 10, type: "workflow", name: "main-flow", contentRevision: "r", lastAuthor: "user", changed: false } as never,
             { id: 11, type: "tool", name: "my-tool", contentRevision: "r", lastAuthor: "user", changed: false } as never],
         contents: { 10: {} }, revisions: {}, problems: {}, pending: null, lastCompletedTurnId: undefined, sessionError: null,
@@ -154,6 +155,11 @@ describe("WorkbenchPage", () => {
         fireEvent.click(screen.getByRole("button", { name: "Create" }));
         fireEvent.click(await screen.findByRole("menuitem", { name: "Tool" }));
         expect(await screen.findByText("Add tool")).toBeTruthy();
+    });
+
+    it("shows the session's engine and model in the chat toolbar", () => {
+        renderPage();
+        expect(screen.getByText("Claude Code · default")).toBeTruthy();
     });
 
     it("closes a component tab on middle click", () => {
