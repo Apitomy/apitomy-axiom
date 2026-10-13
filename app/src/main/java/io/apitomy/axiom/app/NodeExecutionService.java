@@ -39,7 +39,7 @@ public class NodeExecutionService {
 
     private static final String RUNNER_RESOURCE = "node-runner/axiom-node-runner.mjs";
     private static final String RUNNER_FILE = "axiom-node-runner.mjs";
-    private static final String NODE_MISSING =
+    static final String NODE_MISSING =
             "Node.js is required to run node action types but was not found on PATH.";
 
     @Inject
