@@ -118,7 +118,7 @@ public class DraftTestRunner {
         if (!run.finished()) {
             problems.add("Timed out.");
         }
-        if (run.exitCode() == 0 && outputs == null) {
+        if (run.exitCode() == 0 && outputs == null && !actionType.outputs.isEmpty()) {
             problems.add(NO_JSON_OUTPUT);
         }
         if (run.exitCode() == 0) {

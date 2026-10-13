@@ -145,6 +145,15 @@ class DraftTestRunnerTest {
     }
 
     @Test
+    void stdoutWithoutJsonPassesWhenNoOutputsAreDeclared() throws Exception {
+        DraftTestRunner.Result r = action("""
+                {"name":"s","executionMode":"script","inputs":[],"outputs":[],
+                 "scriptTemplate":"echo hello"}""", Map.of());
+        assertEquals("passed", r.status(), r.toString());
+        assertTrue(r.problems().isEmpty());
+    }
+
+    @Test
     void slowToolTimesOut() throws Exception {
         JsonNode tool = json("{\"name\":\"t\",\"scriptTemplate\":\"sleep 5\"}");
         runner.setToolTimeoutSeconds(1);
