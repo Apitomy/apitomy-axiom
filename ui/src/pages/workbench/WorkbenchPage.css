@@ -152,7 +152,8 @@
 }
 
 
-.axiom-workbench__chat-toolbar {
+.axiom-workbench__chat-toolbar,
+.axiom-workbench__pane-toolbar {
     display: flex;
     align-items: center;
     gap: var(--pf-t--global--spacer--xs, 4px);
@@ -162,6 +163,12 @@
     flex: 0 0 auto;
 }
 
-.axiom-workbench__chat-toolbar-end {
+.axiom-workbench__chat-toolbar-end,
+.axiom-workbench__pane-toolbar-end {
     margin-left: auto;
+}
+
+/* The left toolbar holds only the collapse button; no side padding so it also fits the 32px rail. */
+.axiom-workbench__pane-toolbar {
+    padding: 0;
 }

@@ -291,11 +291,13 @@ export function WorkbenchPage() {
             )}
 
             <aside className="axiom-workbench__left">
-                <Button variant="plain" size="sm"
-                    aria-label={prefs.leftCollapsed ? "Expand left pane" : "Collapse left pane"}
-                    onClick={() => updatePrefs({ leftCollapsed: !prefs.leftCollapsed })}>
-                    {prefs.leftCollapsed ? "»" : "«"}
-                </Button>
+                <div className="axiom-workbench__pane-toolbar">
+                    <Button variant="plain" size="sm" className="axiom-workbench__pane-toolbar-end"
+                        aria-label={prefs.leftCollapsed ? "Expand left pane" : "Collapse left pane"}
+                        onClick={() => updatePrefs({ leftCollapsed: !prefs.leftCollapsed })}>
+                        {prefs.leftCollapsed ? "»" : "«"}
+                    </Button>
+                </div>
                 {!prefs.leftCollapsed && composition && (
                     <CompositionTree composition={composition} items={wb.items} problems={wb.problems}
                         lastCompletedTurnId={wb.lastCompletedTurnId}
