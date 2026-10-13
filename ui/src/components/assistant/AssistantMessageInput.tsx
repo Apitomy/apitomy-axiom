@@ -29,12 +29,30 @@ export function AssistantMessageInput({
     const [selectedIndex, setSelectedIndex] = useState(0);
     const textAreaRef = useRef<HTMLTextAreaElement>(null);
 
+    /** Resizes the auto-resizing text area to its content; needed when the value is set programmatically. */
+    const resizeToContent = useCallback(() => {
+        const textarea = textAreaRef.current;
+        const parent = textarea?.parentElement;
+        if (textarea && parent) {
+            parent.style.removeProperty("height");
+            parent.style.height = textarea.scrollHeight + "px";
+        }
+    }, []);
+
     useEffect(() => {
         if (prefillNonce === undefined) {
             return;
         }
         setValue(prefillText ?? "");
         textAreaRef.current?.focus();
+        // Wait for the new value to render before measuring it.
+        setTimeout(() => {
+            resizeToContent();
+            const textarea = textAreaRef.current;
+            if (textarea) {
+                textarea.selectionStart = textarea.selectionEnd = textarea.value.length;
+            }
+        }, 0);
         // Only a new nonce applies the prefill; text alone must not overwrite user edits.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [prefillNonce]);
@@ -126,11 +144,7 @@ export function AssistantMessageInput({
                 setValue(newValue);
                 setTimeout(() => {
                     textarea.selectionStart = textarea.selectionEnd = start + 1;
-                    const parent = textarea.parentElement;
-                    if (parent) {
-                        parent.style.removeProperty("height");
-                        parent.style.height = textarea.scrollHeight + "px";
-                    }
+                    resizeToContent();
                 }, 0);
             }
         }
