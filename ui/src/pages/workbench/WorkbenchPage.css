@@ -316,7 +316,7 @@ span.axiom-workbench__row-menu {
 }
 
 .axiom-test-strip__body {
-    height: 220px;
+    height: min(220px, 40vh);
     overflow: auto;
     padding: 0 var(--pf-t--global--spacer--sm, 8px) var(--pf-t--global--spacer--sm, 8px);
 }

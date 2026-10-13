@@ -12,6 +12,7 @@ import {
     listItems,
     listTestRuns,
     mergeTestRun,
+    mergeTestRuns,
     testItem,
     subscribeComposition,
     validateComposition,
@@ -170,6 +171,7 @@ export function useWorkbench(compositionId: number): WorkbenchState {
 
     useEffect(() => {
         aliveRef.current = true;
+        setTestRuns([]);
         let cancelled: boolean = false;
         const isCancelled = (): boolean => cancelled;
         (async () => {
@@ -192,7 +194,7 @@ export function useWorkbench(compositionId: number): WorkbenchState {
                 return;
             }
             void listTestRuns(compositionId)
-                .then((runs) => { if (aliveRef.current && !isCancelled()) setTestRuns(runs); })
+                .then((runs) => { if (aliveRef.current && !isCancelled()) setTestRuns((prev) => mergeTestRuns(prev, runs)); })
                 .catch(console.error);
             // Validation does not depend on the agent: run it alongside the (possibly slow) session start.
             await Promise.all([startSession(isCancelled), validate(isCancelled)]);

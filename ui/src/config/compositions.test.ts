@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, resolveChangeSet, saveItem, subscribeComposition } from "./compositions";
+import { ApiError, mergeTestRun, mergeTestRuns, resolveChangeSet, saveItem, subscribeComposition } from "./compositions";
+import type { CompositionTestRun, TestRunStatus } from "./compositions";
 import { sseClient } from "./sse";
 
 function mockFetch(status: number, body: unknown) {
@@ -44,5 +45,21 @@ describe("compositions api", () => {
         listener!({ type: "composition-changeset", data: { compositionId: 5, turnId: "y", changeSet: { id: "y" } } });
         expect(changeSet).toHaveBeenCalledTimes(1);
         expect(changeSet).toHaveBeenCalledWith({ compositionId: 5, turnId: "y", changeSet: { id: "y" } });
+    });
+});
+
+describe("mergeTestRun keeps finished runs", () => {
+    const r = (id: string, status: TestRunStatus): CompositionTestRun => ({
+        id, itemId: 1, itemType: "tool", itemName: "t", author: "user", status, startedAt: "",
+    });
+
+    it("never replaces a finished run with a running one", () => {
+        expect(mergeTestRun([r("a", "passed")], r("a", "running"))[0].status).toBe("passed");
+        expect(mergeTestRun([r("a", "running")], r("a", "failed"))[0].status).toBe("failed");
+    });
+
+    it("mergeTestRuns keeps runs already in state and prefers finished ones", () => {
+        const merged = mergeTestRuns([r("live", "running"), r("b", "passed")], [r("b", "running"), r("old", "passed")]);
+        expect(merged.map((x) => `${x.id}:${x.status}`)).toEqual(["live:running", "b:passed", "old:passed"]);
     });
 });

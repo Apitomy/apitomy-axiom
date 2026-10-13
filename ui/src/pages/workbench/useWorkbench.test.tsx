@@ -119,6 +119,27 @@ describe("test runs", () => {
     });
 });
 
+describe("test runs during load", () => {
+    it("keeps runs that start while the history loads", async () => {
+        let resolve: (runs: c.CompositionTestRun[]) => void = () => {};
+        vi.spyOn(c, "listTestRuns").mockReturnValue(new Promise((r) => { resolve = r; }));
+        const { result } = renderHook(() => useWorkbench(1));
+        await waitFor(() => expect(c.listTestRuns).toHaveBeenCalled());
+        act(() => sse.testRun?.({ compositionId: 1, run: run("live", "running") }));
+        await act(async () => { resolve([run("old", "passed")]); });
+        expect(result.current.testRuns.map((r) => r.id)).toEqual(["live", "old"]);
+    });
+
+    it("clears runs when the composition changes", async () => {
+        vi.spyOn(c, "listTestRuns").mockResolvedValueOnce([run("a", "passed")])
+            .mockReturnValue(new Promise(() => {}));
+        const { result, rerender } = renderHook(({ id }) => useWorkbench(id), { initialProps: { id: 1 } });
+        await waitFor(() => expect(result.current.testRuns).toHaveLength(1));
+        rerender({ id: 2 });
+        expect(result.current.testRuns).toEqual([]);
+    });
+});
+
 describe("mergeTestRun", () => {
     it("caps the list at 50", () => {
         const many = Array.from({ length: 50 }, (_v, i) => run(String(i), "passed"));

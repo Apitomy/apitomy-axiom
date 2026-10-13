@@ -357,10 +357,26 @@ const MAX_TEST_RUNS: number = 50;
  * @returns the new list
  */
 export function mergeTestRun(runs: CompositionTestRun[], run: CompositionTestRun): CompositionTestRun[] {
-    if (runs.some((r) => r.id === run.id)) {
+    const existing: CompositionTestRun | undefined = runs.find((r) => r.id === run.id);
+    if (existing) {
+        if (existing.status !== "running" && run.status === "running") {
+            return runs;
+        }
         return runs.map((r) => (r.id === run.id ? run : r));
     }
     return [run, ...runs].slice(0, MAX_TEST_RUNS);
+}
+
+/**
+ * Merges loaded run history with the runs already in state (which may have started or finished while the
+ * history loaded). Runs in state stay newest first; a finished version of a run wins over a running one.
+ *
+ * @param current the runs already in state, newest first
+ * @param loaded  the loaded runs, newest first
+ * @returns the merged runs, newest first, capped
+ */
+export function mergeTestRuns(current: CompositionTestRun[], loaded: CompositionTestRun[]): CompositionTestRun[] {
+    return [...current].reverse().reduce((acc, run) => mergeTestRun(acc, run), loaded.slice(0, MAX_TEST_RUNS));
 }
 
 // ── SSE ───────────────────────────────────────────────────────────

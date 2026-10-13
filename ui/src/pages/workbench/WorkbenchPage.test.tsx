@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import * as c from "../../config/compositions";
 import * as prefs from "./workbenchPrefs";
 import type { WorkbenchState } from "./useWorkbench";
@@ -60,11 +60,16 @@ function Probe() {
     return <div data-testid="loc">{loc.search}</div>;
 }
 
+function GoTo2() {
+    const navigate = useNavigate();
+    return <button type="button" onClick={() => navigate("/workbench/2")}>go-2</button>;
+}
+
 function page() {
     return (
         <MemoryRouter initialEntries={["/workbench/1"]}>
             <Routes>
-                <Route path="/workbench/:compositionId" element={<><WorkbenchPage /><Probe /></>} />
+                <Route path="/workbench/:compositionId" element={<><WorkbenchPage /><Probe /><GoTo2 /></>} />
             </Routes>
         </MemoryRouter>
     );
@@ -261,6 +266,17 @@ describe("WorkbenchPage", () => {
         expect(screen.getByRole("button", { name: "Expand test output" })).toBeTruthy();
         testRuns = [run("new", "running"), run("old", "passed")];
         rerender(page());
+        expect(screen.getByRole("button", { name: "Collapse test output" })).toBeTruthy();
+    });
+
+    it("forgets seen runs when the composition changes", () => {
+        const run = (id: string, status: c.TestRunStatus): c.CompositionTestRun => ({ id, itemId: 11,
+            itemType: "tool", itemName: "my-tool", author: "user", status, startedAt: "2026-10-13T10:00:00Z" });
+        testRuns = [run("x", "running")];
+        renderPage();
+        fireEvent.click(screen.getByRole("button", { name: "Collapse test output" }));
+        expect(screen.getByRole("button", { name: "Expand test output" })).toBeTruthy();
+        fireEvent.click(screen.getByRole("button", { name: "go-2" }));
         expect(screen.getByRole("button", { name: "Collapse test output" })).toBeTruthy();
     });
 });
