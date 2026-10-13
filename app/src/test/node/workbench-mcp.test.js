@@ -44,3 +44,16 @@ test("formatTestRun explains a run that could not start", () => {
         message: "Test runs of AI Agent action types are not supported yet.", problems: [], stdout: "", stderr: "" }),
         "ERROR: action-type a\nTest runs of AI Agent action types are not supported yet.");
 });
+
+test("testRunBody builds the agent test request", () => {
+    assert.deepStrictEqual(helpers.testRunBody("tool", "t", { a: 1 }, undefined),
+        { type: "tool", name: "t", inputs: { a: 1 } });
+    assert.deepStrictEqual(helpers.testRunBody("action-type", "s", {}, "7"),
+        { type: "action-type", name: "s", inputs: {}, subjectId: 7 });
+});
+
+test("testRunBody rejects a non-integer subjectId", () => {
+    for (const bad of [1.5, "abc", "", true]) {
+        assert.throws(() => helpers.testRunBody("tool", "t", {}, bad), /subjectId must be an integer/);
+    }
+});

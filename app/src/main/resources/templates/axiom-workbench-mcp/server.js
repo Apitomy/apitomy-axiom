@@ -180,6 +180,40 @@ function tail(text) {
 }
 
 /**
+ * Builds the body of an agent test-run request.
+ * @param {string} type "action-type" or "tool"
+ * @param {string} name the draft name
+ * @param {object} inputs input or parameter values
+ * @param {*} subjectId optional subject id; must be an integer when given
+ * @returns {object} the request body
+ */
+function testRunBody(type, name, inputs, subjectId) {
+    const body = { type, name, inputs };
+    if (subjectId !== undefined && subjectId !== null) {
+        const id = typeof subjectId === "number" || (typeof subjectId === "string" && subjectId.trim() !== "")
+            ? Number(subjectId) : NaN;
+        if (!Number.isInteger(id)) {
+            throw new Error("subjectId must be an integer");
+        }
+        body.subjectId = id;
+    }
+    return body;
+}
+
+/**
+ * Runs a draft through the agent test route and formats the run.
+ * @param {string} type "action-type" or "tool"
+ * @param {string} name the draft name
+ * @param {object} inputs input or parameter values
+ * @param {*} subjectId optional subject id
+ * @returns {Promise<string>} the formatted run
+ */
+async function runTest(type, name, inputs, subjectId) {
+    const body = testRunBody(type, name, inputs, subjectId);
+    return formatTestRun(JSON.parse(await axiomApi("POST", `${agentBase()}/test`, body)));
+}
+
+/**
  * Formats a test run for the agent.
  * @param {object} run the CompositionTestRun
  * @returns {string} the summary
@@ -299,11 +333,7 @@ const TOOLS = [
             { name: "inputs", type: "object", description: "Input values by name", required: false },
             { name: "subjectId", type: "number", description: "Optional subject whose workspace to run in", required: false },
         ],
-        handler: async (args) => {
-            const body = { type: "action-type", name: args.name, inputs: asObject(args.inputs ?? {}, "inputs") };
-            if (args.subjectId !== undefined) body.subjectId = Number(args.subjectId);
-            return formatTestRun(JSON.parse(await axiomApi("POST", `${agentBase()}/test`, body)));
-        },
+        handler: (args) => runTest("action-type", args.name, asObject(args.inputs ?? {}, "inputs"), args.subjectId),
     },
     {
         name: "test_tool",
@@ -314,11 +344,7 @@ const TOOLS = [
             { name: "params", type: "object", description: "Parameter values by name", required: false },
             { name: "subjectId", type: "number", description: "Optional subject whose workspace to run in", required: false },
         ],
-        handler: async (args) => {
-            const body = { type: "tool", name: args.name, inputs: asObject(args.params ?? {}, "params") };
-            if (args.subjectId !== undefined) body.subjectId = Number(args.subjectId);
-            return formatTestRun(JSON.parse(await axiomApi("POST", `${agentBase()}/test`, body)));
-        },
+        handler: (args) => runTest("tool", args.name, asObject(args.params ?? {}, "params"), args.subjectId),
     },
     {
         name: "list_stream_events",
@@ -513,7 +539,7 @@ async function main() {
     await server.connect(transport);
 }
 
-module.exports = { summarizeEvent, pickPath, truncateDeep, formatProblems, formatTestRun };
+module.exports = { summarizeEvent, pickPath, truncateDeep, formatProblems, formatTestRun, testRunBody };
 
 if (require.main === module) {
     main().catch(console.error);
