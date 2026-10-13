@@ -1,8 +1,8 @@
 import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ActionTypeDescriptor, Workflow } from "@apitomy/flow-ui";
-import { useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
-    Alert, AlertActionLink, Button, Modal, ModalBody, ModalHeader, PageSection, Tab, Tabs, TabTitleText, ToggleGroup,
+    Alert, AlertActionLink, Breadcrumb, BreadcrumbItem, Button, Modal, ModalBody, ModalHeader, PageSection, Tab, Tabs, TabTitleText, ToggleGroup,
     ToggleGroupItem, Tooltip, Dropdown, DropdownItem, DropdownList, MenuToggle,
 } from "@patternfly/react-core";
 import {
@@ -277,7 +277,10 @@ export function WorkbenchPage() {
         <div className="axiom-workbench"
             style={{ gridTemplateColumns: `${leftWidth}px 0px minmax(0, 1fr) 0px ${rightWidth}px` }}>
             <div className="axiom-workbench__toolbar">
-                <strong className="axiom-workbench__name">{composition?.name ?? "Loading..."}</strong>
+                <Breadcrumb className="axiom-workbench__name">
+                    <BreadcrumbItem><Link to="/workbench">Workbench</Link></BreadcrumbItem>
+                    <BreadcrumbItem isActive>{composition?.name ?? "Loading..."}</BreadcrumbItem>
+                </Breadcrumb>
                 <ToggleGroup aria-label="Apply mode">
                     <ToggleGroupItem text="Apply live" buttonId="apply-live" isSelected={mode === "live"}
                         onChange={() => changeMode("live")} />

@@ -62,6 +62,7 @@ describe("WorkbenchPage", () => {
     it("shows the composition name and the workflow tab", () => {
         renderPage();
         expect(screen.getByText("My comp")).toBeTruthy();
+        expect(screen.getByRole("link", { name: "Workbench" }).getAttribute("href")).toBe("/workbench");
         expect(screen.getAllByText("main-flow").length).toBeGreaterThan(0);
     });
 
