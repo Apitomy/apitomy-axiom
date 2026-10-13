@@ -214,3 +214,9 @@
 .axiom-workbench__tabs.pf-v6-c-tabs .pf-v6-c-tabs__item-action .pf-v6-c-button {
     padding-block: var(--pf-t--global--spacer--xs, 4px);
 }
+
+/* Action type / tool editors: pad their inner tab panels (Info, Environment, Inputs, ...) away from the borders.
+   The standalone detail pages get this from the page section padding. */
+.axiom-workbench__item-tab .pf-v6-c-tab-content {
+    padding: 0 var(--pf-t--global--spacer--md, 16px) var(--pf-t--global--spacer--md, 16px);
+}
