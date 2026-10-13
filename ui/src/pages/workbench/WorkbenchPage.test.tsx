@@ -8,6 +8,7 @@ import type { WorkbenchState } from "./useWorkbench";
 vi.mock("@apitomy/flow-ui", () => ({}));
 const setContent = vi.fn();
 const runTest = vi.fn();
+let testRuns: c.CompositionTestRun[] = [];
 vi.mock("./useWorkbench", () => ({
     useWorkbench: (): WorkbenchState => ({
         composition: { id: 1, name: "My comp", turnState: "idle", applyMode: "live", createdAt: "", updatedAt: "",
@@ -18,7 +19,7 @@ vi.mock("./useWorkbench", () => ({
             scriptTemplate: "echo {{who}}" } }, revisions: {}, problems: {}, pending: null, lastCompletedTurnId: undefined, sessionError: null,
         loadContent: async () => ({}), refreshItems: async () => {}, refreshComposition: async () => {},
         setContent, removeItem: async () => {}, markPendingHandled: () => {}, retrySession: async () => {},
-        testRuns: [], runTest,
+        testRuns, runTest,
     }),
 }));
 
@@ -59,14 +60,18 @@ function Probe() {
     return <div data-testid="loc">{loc.search}</div>;
 }
 
-function renderPage() {
-    return render(
+function page() {
+    return (
         <MemoryRouter initialEntries={["/workbench/1"]}>
             <Routes>
                 <Route path="/workbench/:compositionId" element={<><WorkbenchPage /><Probe /></>} />
             </Routes>
-        </MemoryRouter>,
+        </MemoryRouter>
     );
+}
+
+function renderPage() {
+    return render(page());
 }
 
 beforeEach(() => {
@@ -74,6 +79,7 @@ beforeEach(() => {
     setContent.mockReset();
     workflowFlush.mockReset();
     runTest.mockReset();
+    testRuns = [];
     runTest.mockResolvedValue({});
     itemFlush.mockReset();
     itemFlush.mockResolvedValue(undefined);
@@ -233,5 +239,28 @@ describe("WorkbenchPage", () => {
         renderPage();
         fireEvent.click(screen.getByRole("button", { name: "Expand test output" }));
         expect(spy).toHaveBeenCalledWith(expect.objectContaining({ testStripCollapsed: false }));
+    });
+
+    it("prefills the Test… dialog with the values typed last time", async () => {
+        renderPage();
+        fireEvent.click(screen.getByRole("button", { name: /^my-tool/ }));
+        fireEvent.click(screen.getByRole("button", { name: "Test…" }));
+        fireEvent.change(await screen.findByLabelText("who"), { target: { value: "ann" } });
+        fireEvent.click(screen.getByRole("button", { name: "Run" }));
+        await waitFor(() => expect(runTest).toHaveBeenCalled());
+        fireEvent.click(screen.getByRole("button", { name: "Test…" }));
+        expect(((await screen.findByLabelText("who")) as HTMLInputElement).value).toBe("ann");
+    });
+
+    it("expands the strip only for live-started runs, not loaded history", () => {
+        const run = (id: string, status: c.TestRunStatus): c.CompositionTestRun => ({ id, itemId: 11,
+            itemType: "tool", itemName: "my-tool", author: "user", status, startedAt: "2026-10-13T10:00:00Z" });
+        const { rerender } = renderPage();
+        testRuns = [run("old", "passed")];
+        rerender(page());
+        expect(screen.getByRole("button", { name: "Expand test output" })).toBeTruthy();
+        testRuns = [run("new", "running"), run("old", "passed")];
+        rerender(page());
+        expect(screen.getByRole("button", { name: "Collapse test output" })).toBeTruthy();
     });
 });

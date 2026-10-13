@@ -58,7 +58,7 @@ function Details({ run }: { run: CompositionTestRun }) {
             <pre>{JSON.stringify(run.inputs ?? {}, null, 2)}</pre>
             {run.outputs && <><h4>Outputs</h4><pre>{JSON.stringify(run.outputs, null, 2)}</pre></>}
             {(run.problems ?? []).length > 0 && (
-                <><h4>Problems</h4><ul>{run.problems?.map((p) => <li key={p}>{p}</li>)}</ul></>
+                <><h4>Problems</h4><ul>{run.problems?.map((p, i) => <li key={`${i}-${p}`}>{p}</li>)}</ul></>
             )}
             {run.stdout && <><h4>stdout</h4><pre>{run.stdout}</pre></>}
             {run.stderr && <><h4>stderr</h4><pre>{run.stderr}</pre></>}

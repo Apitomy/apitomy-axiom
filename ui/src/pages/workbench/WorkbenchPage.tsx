@@ -258,16 +258,21 @@ export function WorkbenchPage() {
             setTestError(e instanceof Error ? e.message : String(e)));
     };
 
-    // Expand the strip when a new run appears (but not for runs loaded on mount).
-    const newestRunId: string | undefined = wb.testRuns[0]?.id;
-    const seenRunId = useRef<string | undefined>(undefined);
+    // Expand the strip when a run starts live: a "running" run whose id has not been seen. Runs loaded from
+    // history (which arrive asynchronously after mount) are finished and never expand it.
+    const seenRunIds = useRef<Set<string>>(new Set<string>());
     useEffect(() => {
-        if (newestRunId && seenRunId.current !== undefined && newestRunId !== seenRunId.current
-                && prefs.testStripCollapsed) {
+        let started: boolean = false;
+        for (const run of wb.testRuns) {
+            if (!seenRunIds.current.has(run.id)) {
+                seenRunIds.current.add(run.id);
+                started = started || run.status === "running";
+            }
+        }
+        if (started && prefs.testStripCollapsed) {
             updatePrefs({ testStripCollapsed: false });
         }
-        seenRunId.current = newestRunId ?? seenRunId.current ?? "";
-    }, [newestRunId, prefs.testStripCollapsed, updatePrefs]);
+    }, [wb.testRuns, prefs.testStripCollapsed, updatePrefs]);
 
     const removingItem: CompositionItem | undefined = removingId === null ? undefined
         : wb.items.find((i) => i.id === removingId);
