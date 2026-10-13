@@ -172,3 +172,14 @@
 .axiom-workbench__pane-toolbar {
     padding: 0;
 }
+
+.axiom-workbench__pane-toolbar > .axiom-workbench__pane-title {
+    margin-left: var(--pf-t--global--spacer--sm, 8px);
+}
+
+.axiom-workbench__pane-title {
+    font-weight: var(--pf-t--global--font--weight--body--bold, 600);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

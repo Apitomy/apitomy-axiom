@@ -292,6 +292,7 @@ export function WorkbenchPage() {
 
             <aside className="axiom-workbench__left">
                 <div className="axiom-workbench__pane-toolbar">
+                    {!prefs.leftCollapsed && <span className="axiom-workbench__pane-title">Components</span>}
                     <Button variant="plain" size="sm" className="axiom-workbench__pane-toolbar-end"
                         aria-label={prefs.leftCollapsed ? "Expand left pane" : "Collapse left pane"}
                         onClick={() => updatePrefs({ leftCollapsed: !prefs.leftCollapsed })}>
@@ -361,7 +362,7 @@ export function WorkbenchPage() {
                     ? aiWorking && <span className="axiom-workbench__pulse" aria-label="AI is working" />
                     : composition && (
                         <ChatPane composition={composition} sessionError={wb.sessionError}
-                            toolbarStart={chatCollapseButton}
+                            toolbarStart={<>{chatCollapseButton}<span className="axiom-workbench__pane-title">AI Assistant</span></>}
                             lastCompletedTurnId={wb.lastCompletedTurnId} prefill={prefill}
                             beforeSend={beforeSend} onRetrySession={() => void wb.retrySession()}
                             onReplaceWorkflow={(w) => workflowTabRef.current?.replace(w)}
