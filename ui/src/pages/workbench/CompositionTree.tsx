@@ -81,16 +81,18 @@ export function CompositionTree(props: CompositionTreeProps) {
                                 }}>
                                 <span className="axiom-workbench__item">
                                     <span className="axiom-workbench__item-name">{item.name}</span>{" "}
-                                    <StatusIcon status={itemStatus(problems[item.id])} />
-                                    {isLockedForUser(item, composition) && <LockIcon aria-label="locked" />}
-                                    {isAiTouchedInTurn(item, lastCompletedTurnId) && (
-                                        <Label isCompact color="purple">AI</Label>
-                                    )}
-                                    {item.changed && (
-                                        <Tooltip content="Unpublished changes">
-                                            <span className="axiom-workbench__dot" aria-label="Unpublished changes">●</span>
-                                        </Tooltip>
-                                    )}
+                                    <span className="axiom-workbench__item-markers">
+                                        <StatusIcon status={itemStatus(problems[item.id])} />
+                                        {isLockedForUser(item, composition) && <LockIcon aria-label="locked" />}
+                                        {isAiTouchedInTurn(item, lastCompletedTurnId) && (
+                                            <Label isCompact color="purple">AI</Label>
+                                        )}
+                                        {item.changed && (
+                                            <Tooltip content="Unpublished changes">
+                                                <span className="axiom-workbench__dot" aria-label="Unpublished changes">●</span>
+                                            </Tooltip>
+                                        )}
+                                    </span>
                                 </span>
                             </SimpleListItem>
                         ))}
