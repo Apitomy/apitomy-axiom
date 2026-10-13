@@ -129,11 +129,17 @@
     50% { opacity: 0.3; }
 }
 
+.axiom-workbench__right {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
 .axiom-workbench__chat {
     display: flex;
     flex-direction: column;
+    flex: 1 1 0;
     min-height: 0;
-    height: 100%;
 }
 
 .axiom-workbench__undo-bar {
