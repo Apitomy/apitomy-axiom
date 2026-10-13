@@ -16,10 +16,12 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -120,5 +122,24 @@ class NodeExecutionServiceTest {
         assertTrue(NodeExecutionService.isNodeMissing(notFound, dir));
         assertFalse(NodeExecutionService.isNodeMissing(notFound, dir.resolve("gone")));
         assertFalse(NodeExecutionService.isNodeMissing(new java.io.IOException("error=13, Permission denied"), dir));
+    }
+
+    @Test
+    void runsANodeActionWithoutATask() throws Exception {
+        ActionTypeEntity at = new ActionTypeEntity();
+        at.name = "draft-node";
+        at.executionMode = "node";
+        at.inputs = new ArrayList<>(List.of(new ActionTypeField("labels", "object", true, null)));
+        at.codeTemplate = "export async function run(inputs, ctx) {\n"
+                + "    ctx.log('counting');\n"
+                + "    return { count: inputs.labels.length, extra: inputs.ignored ?? null };\n"
+                + "}\n";
+        ScriptExecutionService.ActionRun run = QuarkusTransaction.requiringNew().call(() ->
+                nodeExecutionService.runNodeAction(at, Map.of("labels", List.of("x", "y"), "ignored", "z"),
+                        null, "test-run"));
+        assertEquals(0, run.exitCode());
+        assertEquals("{\"count\":2,\"extra\":null}", run.output());
+        assertTrue(run.stderr().contains("counting"));
+        assertNull(run.resolvedScript());
     }
 }

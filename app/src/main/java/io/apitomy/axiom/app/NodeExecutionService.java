@@ -92,7 +92,35 @@ public class NodeExecutionService {
         if (subject == null && task.subjectId != null) {
             subject = SubjectEntity.findById(task.subjectId);
         }
+        LOG.infof("Executing node action for task %d (%s), timeout %ds",
+                task.id, task.actionType, scriptExecutionService.timeoutSeconds());
+        Instant startTime = Instant.now();
+        ScriptExecutionService.ActionRun run = runNodeAction(actionType,
+                InputBindingResolver.parseInputs(task.input, objectMapper), subject, String.valueOf(task.id));
+        if (NODE_MISSING.equals(run.stderr())) {
+            return new ScriptExecutionService.RunResult(1, NODE_MISSING, null);
+        }
+        String executionLog = ScriptExecutionService.buildExecutionLog("Node Execution Log", task, "Code",
+                actionType.codeTemplate, null, run.stdout(), run.stderr(), run.exitCode(), startTime,
+                run.durationMs());
+        return new ScriptExecutionService.RunResult(run.exitCode(), run.output(), executionLog);
+    }
 
+    /**
+     * Runs a node action type with explicit input values, outside any task (used for test runs). Only the
+     * declared inputs are passed to the action.
+     *
+     * @param actionType the action type (may be transient); its {@code codeTemplate} must not be blank
+     * @param inputs     input values by name
+     * @param subject    the subject whose workspace to run in, or {@code null} for a temporary directory
+     * @param runId      identifier exposed to the action as {@code AXIOM_TASK_ID}
+     * @return the run; when node is not installed, exit code 1 with {@link #NODE_MISSING} as stderr
+     * @throws IOException          if files cannot be written
+     * @throws InterruptedException if interrupted while waiting for the process
+     */
+    ScriptExecutionService.ActionRun runNodeAction(ActionTypeEntity actionType, Map<String, Object> inputs,
+                                                   SubjectEntity subject, String runId)
+            throws IOException, InterruptedException {
         Path codeDir = Files.createTempDirectory("axiom-node-");
         ScriptExecutionService.WorkingDirectory workDir = null;
         try {
@@ -101,50 +129,40 @@ public class NodeExecutionService {
             Path actionFile = codeDir.resolve("action.mjs");
             Files.writeString(actionFile, actionType.codeTemplate);
             workDir = scriptExecutionService.workingDirectory(subject);
-
-            LOG.infof("Executing node action for task %d (%s), timeout %ds",
-                    task.id, task.actionType, timeoutSeconds);
-
             ProcessBuilder pb = new ProcessBuilder("node", runner.toString(), actionFile.toString())
                     .directory(workDir.path().toFile());
-            pb.environment().putAll(scriptExecutionService.buildBaseEnvironment(task, workDir.path()));
+            pb.environment().putAll(scriptExecutionService.buildBaseEnvironment(runId, workDir.path()));
             scriptExecutionService.applyActionEnvironment(pb, actionType);
-
-            String inputsJson = objectMapper.writeValueAsString(declaredInputs(task, actionType));
+            byte[] inputBytes = objectMapper.writeValueAsString(declaredInputs(inputs, actionType))
+                    .getBytes(StandardCharsets.UTF_8);
             Instant startTime = Instant.now();
             Process process;
             try {
                 process = pb.start();
             } catch (IOException e) {
                 if (isNodeMissing(e, workDir.path())) {
-                    return new ScriptExecutionService.RunResult(1, NODE_MISSING, null);
+                    return new ScriptExecutionService.ActionRun(1, "", NODE_MISSING, null, 0, true, null);
                 }
                 throw e;
             }
             // Written asynchronously so capture()'s timeout bounds a process that never drains stdin.
-            byte[] inputBytes = inputsJson.getBytes(StandardCharsets.UTF_8);
-            long taskId = task.id;
             CompletableFuture.runAsync(() -> {
                 try (OutputStream stdin = process.getOutputStream()) {
                     stdin.write(inputBytes);
                 } catch (IOException e) {
                     // The process exited before reading its inputs; its stderr explains why.
-                    LOG.debugf("Could not write inputs to node action for task %d: %s", taskId, e.getMessage());
+                    LOG.debugf("Could not write inputs to node action %s: %s", runId, e.getMessage());
                 }
             });
-
             ScriptExecutionService.CapturedOutput captured =
                     ScriptExecutionService.capture(process, timeoutSeconds);
             long durationMs = Duration.between(startTime, Instant.now()).toMillis();
-
             String stdout = captured.stdout();
             if (!captured.finished()) {
                 stdout = stdout + "\n[Node action timed out after " + timeoutSeconds + "s]";
             }
-            String output = ScriptExecutionService.extractScriptOutput(stdout);
-            String executionLog = ScriptExecutionService.buildExecutionLog("Node Execution Log", task, "Code", actionType.codeTemplate,
-                    null, stdout, captured.stderr(), captured.exitCode(), startTime, durationMs);
-            return new ScriptExecutionService.RunResult(captured.exitCode(), output, executionLog);
+            return new ScriptExecutionService.ActionRun(captured.exitCode(), stdout, captured.stderr(),
+                    ScriptExecutionService.extractScriptOutput(stdout), durationMs, captured.finished(), null);
         } finally {
             deleteRecursively(codeDir);
             if (workDir != null) {
@@ -156,8 +174,7 @@ public class NodeExecutionService {
     /**
      * Collects the action type's declared inputs that have a value; undeclared and absent inputs are omitted.
      */
-    private Map<String, Object> declaredInputs(TaskEntity task, ActionTypeEntity actionType) {
-        Map<String, Object> values = InputBindingResolver.parseInputs(task.input, objectMapper);
+    private Map<String, Object> declaredInputs(Map<String, Object> values, ActionTypeEntity actionType) {
         Map<String, Object> declared = new LinkedHashMap<>();
         if (actionType.inputs != null) {
             for (ActionTypeField input : actionType.inputs) {

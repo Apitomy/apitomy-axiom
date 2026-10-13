@@ -1,7 +1,9 @@
 package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ActionTypeField;
+import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.services.WorkspaceService;
@@ -10,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -333,5 +336,36 @@ class ScriptExecutionServiceTest {
             Files.deleteIfExists(scriptFile);
             Files.deleteIfExists(marker);
         }
+    }
+
+    @Test
+    void runsAScriptActionWithoutATask() throws Exception {
+        ActionTypeEntity at = new ActionTypeEntity();
+        at.name = "draft-script";
+        at.executionMode = "script";
+        at.inputs = new ArrayList<>(List.of(new ActionTypeField("name", "string", true, null)));
+        at.scriptTemplate = "#!/usr/bin/env bash\nprintf '{\"greeting\":\"hello %s\"}\\n' {{inputs.name}}\n"
+                + "echo 'log line' >&2\n";
+        ScriptExecutionService svc = newService();
+        // Plain unit test (no database): report a custom, empty environment so no secrets are loaded.
+        svc.environmentResolver = new EnvironmentResolver() {
+            @Override
+            public boolean hasCustomEnvironment(String environmentJson) {
+                return true;
+            }
+
+            @Override
+            public Map<String, String> resolve(String environmentJson) {
+                return Map.of();
+            }
+        };
+        svc.timeoutSeconds = 30;
+        ScriptExecutionService.ActionRun run =
+                svc.runScriptAction(at, Map.of("name", "world"), null, "test-run");
+        assertEquals(0, run.exitCode());
+        assertTrue(run.finished());
+        assertEquals("{\"greeting\":\"hello world\"}", run.output());
+        assertTrue(run.stderr().contains("log line"));
+        assertTrue(run.resolvedScript().contains("AXIOM_INPUT_name"));
     }
 }
