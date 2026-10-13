@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { CompositionTree, statusTooltip } from "./CompositionTree";
+import { AddItemDialog, CompositionTree, statusTooltip } from "./CompositionTree";
 import * as c from "../../config/compositions";
+import * as api from "../../config/api";
 
 const composition = { id: 9, name: "c", turnState: "idle", applyMode: "live", createdAt: "", updatedAt: "" } as c.Composition;
 const items = [
@@ -54,5 +55,25 @@ describe("CompositionTree", () => {
         expect(statusTooltip([{ severity: "error", code: "e", message: "e" },
             { severity: "warning", code: "w", message: "w" }]))
             .toBe("1 error, 1 warning. Fix the errors before publishing.");
+    });
+
+    it("asks for the execution mode of a new action type", () => {
+        vi.spyOn(api, "fetchActionTypes").mockResolvedValue({ items: [], count: 0 } as never);
+        const onSubmit = vi.fn();
+        render(<AddItemDialog type="action-type" onSubmit={onSubmit} onClose={vi.fn()} />);
+        fireEvent.change(screen.getByLabelText("Name"), { target: { value: "x" } });
+        fireEvent.change(screen.getByLabelText("Execution mode"), { target: { value: "script" } });
+        fireEvent.click(screen.getByRole("button", { name: "Add" }));
+        expect(onSubmit).toHaveBeenCalledWith({ type: "action-type", name: "x", executionMode: "script" });
+    });
+
+    it("does not ask for an execution mode for a new tool", () => {
+        vi.spyOn(api, "fetchTools").mockResolvedValue({ items: [], count: 0 } as never);
+        const onSubmit = vi.fn();
+        render(<AddItemDialog type="tool" onSubmit={onSubmit} onClose={vi.fn()} />);
+        expect(screen.queryByLabelText("Execution mode")).toBeNull();
+        fireEvent.change(screen.getByLabelText("Name"), { target: { value: "t" } });
+        fireEvent.click(screen.getByRole("button", { name: "Add" }));
+        expect(onSubmit).toHaveBeenCalledWith({ type: "tool", name: "t" });
     });
 });

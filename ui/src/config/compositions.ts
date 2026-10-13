@@ -214,9 +214,17 @@ export function listItems(id: number): Promise<CompositionItem[]> {
 }
 
 /** Adds a blank item or copies an existing item as a draft. */
-export function addItem(id: number, data: { type: CompositionItemType; name?: string; existingItemId?: number }): Promise<CompositionItem> {
+export function addItem(id: number, data: {
+    type: CompositionItemType;
+    name?: string;
+    existingItemId?: number;
+    executionMode?: ExecutionMode;
+}): Promise<CompositionItem> {
     return request("POST", `${c(id)}/items`, data);
 }
+
+/** Execution mode of an action type. */
+export type ExecutionMode = "agent" | "script" | "node";
 
 /** Fetches one item with content. */
 export function fetchItem(id: number, itemId: number): Promise<CompositionItem> {

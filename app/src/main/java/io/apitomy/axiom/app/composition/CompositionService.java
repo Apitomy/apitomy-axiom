@@ -247,7 +247,23 @@ public class CompositionService {
      */
     @Transactional
     public CompositionItemEntity addBlank(long compositionId, ConfigItemType type, String name) {
-        return addBlank(compositionId, type, name, AUTHOR_USER, null);
+        return addBlank(compositionId, type, name, null);
+    }
+
+    /**
+     * Adds a new, empty draft, using the given execution mode for an action type.
+     *
+     * @param compositionId the composition id
+     * @param type workflow, action type or tool
+     * @param name the item name
+     * @param executionMode agent, script or node for an action type (null means node); ignored otherwise
+     * @return the item
+     * @throws CompositionConflictException for a second workflow or a duplicate name
+     */
+    @Transactional
+    public CompositionItemEntity addBlank(long compositionId, ConfigItemType type, String name,
+                                         String executionMode) {
+        return addBlank(compositionId, type, name, executionMode, AUTHOR_USER, null);
     }
 
     /**
@@ -264,14 +280,32 @@ public class CompositionService {
     @Transactional
     public CompositionItemEntity addBlank(long compositionId, ConfigItemType type, String name, String author,
                                          String turnId) {
+        return addBlank(compositionId, type, name, null, author, turnId);
+    }
+
+    /**
+     * Adds a new, empty draft as the given author, using the given execution mode for an action type.
+     *
+     * @param compositionId the composition id
+     * @param type workflow, action type or tool
+     * @param name the item name
+     * @param executionMode agent, script or node for an action type (null means node); ignored otherwise
+     * @param author {@link #AUTHOR_USER} or {@link #AUTHOR_AI}
+     * @param turnId the AI turn id, or null
+     * @return the item
+     * @throws CompositionConflictException for a second workflow or a duplicate name
+     */
+    @Transactional
+    public CompositionItemEntity addBlank(long compositionId, ConfigItemType type, String name,
+                                         String executionMode, String author, String turnId) {
         requireSupported(type);
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("'name' is required");
         }
         String trimmed = name.trim();
         checkCanAdd(compositionId, type, trimmed);
-        return insert(compositionId, type, trimmed, CompositionItems.blank(type, trimmed, mapper), null, null,
-                author, turnId);
+        return insert(compositionId, type, trimmed, CompositionItems.blank(type, trimmed, executionMode, mapper),
+                null, null, author, turnId);
     }
 
     /**

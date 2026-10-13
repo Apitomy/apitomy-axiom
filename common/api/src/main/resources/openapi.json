@@ -11080,6 +11080,15 @@
             "description": "Database id of an existing item to copy as a draft",
             "format": "int64",
             "type": "integer"
+          },
+          "executionMode": {
+            "description": "Execution mode of a new blank action type (defaults to node; ignored for other types and when existingItemId is set)",
+            "enum": [
+              "agent",
+              "script",
+              "node"
+            ],
+            "type": "string"
           }
         }
       },

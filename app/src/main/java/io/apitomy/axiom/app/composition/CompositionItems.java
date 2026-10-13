@@ -26,6 +26,7 @@ public final class CompositionItems {
 
     private static final String TOOL_PREFIX = "mcp__axiom-tools__";
     private static final String SDK_PREFIX = "sdk:";
+    private static final String BLANK_SCRIPT = "#!/usr/bin/env bash\nset -euo pipefail\n";
     private static final String BLANK_CODE = "export async function run(inputs, ctx) {\n    return {};\n}\n";
 
     private CompositionItems() {
@@ -76,6 +77,19 @@ public final class CompositionItems {
      * @return the item content
      */
     public static ObjectNode blank(ConfigItemType type, String name, ObjectMapper mapper) {
+        return blank(type, name, null, mapper);
+    }
+
+    /**
+     * Builds the content of a new, empty item, using the given execution mode for an action type.
+     *
+     * @param type the item type (must be supported)
+     * @param name the item name
+     * @param executionMode agent, script or node for an action type (null means node); ignored otherwise
+     * @param mapper the JSON mapper
+     * @return the item content
+     */
+    public static ObjectNode blank(ConfigItemType type, String name, String executionMode, ObjectMapper mapper) {
         if (type == ConfigItemType.WORKFLOW) {
             return WorkflowTemplates.emptyWorkflow(name, mapper);
         }
@@ -83,13 +97,19 @@ public final class CompositionItems {
         item.put("name", name);
         item.put("description", "");
         if (type == ConfigItemType.ACTION_TYPE) {
-            item.put("executionMode", "node");
+            String mode = executionMode == null ? "node" : executionMode;
+            item.put("executionMode", mode);
             item.putArray("inputs");
             item.putArray("outputs");
-            item.put("codeTemplate", BLANK_CODE);
+            switch (mode) {
+                case "agent" -> item.put("promptTemplate", "");
+                case "script" -> item.put("scriptTemplate", BLANK_SCRIPT);
+                case "node" -> item.put("codeTemplate", BLANK_CODE);
+                default -> throw new IllegalArgumentException("Unsupported execution mode: " + mode);
+            }
         } else {
             item.putArray("parameters");
-            item.put("scriptTemplate", "#!/usr/bin/env bash\nset -euo pipefail\n");
+            item.put("scriptTemplate", BLANK_SCRIPT);
         }
         return item;
     }

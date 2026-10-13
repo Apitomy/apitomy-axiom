@@ -142,7 +142,8 @@ public class CompositionsResourceImpl implements CompositionsResource {
         ConfigItemType type = CompositionItems.supportedType(data.getType().value());
         CompositionItemEntity item = data.getExistingItemId() != null
                 ? service.addExisting(compositionId, type, data.getExistingItemId())
-                : service.addBlank(compositionId, type, data.getName());
+                : service.addBlank(compositionId, type, data.getName(),
+                        data.getExecutionMode() == null ? null : data.getExecutionMode().value());
         return toBean(item, true);
     }
 

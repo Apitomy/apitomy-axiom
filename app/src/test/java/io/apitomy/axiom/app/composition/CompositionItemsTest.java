@@ -48,6 +48,18 @@ class CompositionItemsTest {
     }
 
     @Test
+    void blankActionTypeUsesTheRequestedExecutionMode() {
+        ObjectNode agent = CompositionItems.blank(ConfigItemType.ACTION_TYPE, "a", "agent", MAPPER);
+        assertEquals("agent", agent.path("executionMode").asText());
+        assertTrue(agent.has("promptTemplate"));
+        ObjectNode script = CompositionItems.blank(ConfigItemType.ACTION_TYPE, "s", "script", MAPPER);
+        assertEquals("script", script.path("executionMode").asText());
+        assertTrue(script.path("scriptTemplate").asText().startsWith("#!/usr/bin/env bash"));
+        ObjectNode node = CompositionItems.blank(ConfigItemType.ACTION_TYPE, "n", "node", MAPPER);
+        assertTrue(node.has("codeTemplate"));
+    }
+
+    @Test
     void nameOfIgnoresBlank() throws Exception {
         assertNull(CompositionItems.nameOf(MAPPER.readTree("{\"name\":\"  \"}")));
         assertNull(CompositionItems.nameOf(MAPPER.readTree("{}")));

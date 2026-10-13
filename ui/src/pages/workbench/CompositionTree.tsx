@@ -6,7 +6,9 @@ import {
 import {
     CheckCircleIcon, ExclamationCircleIcon, ExclamationTriangleIcon, LockIcon,
 } from "@patternfly/react-icons";
-import type { Composition, CompositionItem, CompositionItemType, ConfigProblem } from "../../config/compositions";
+import type {
+    Composition, CompositionItem, CompositionItemType, ConfigProblem, ExecutionMode,
+} from "../../config/compositions";
 import { fetchActionTypes, fetchTools } from "../../config/api";
 import { isAiTouchedInTurn, isLockedForUser, itemStatus, type ItemStatus } from "./workbenchLogic";
 
@@ -18,7 +20,16 @@ export interface AddRequest {
     type: AddableType;
     name?: string;
     existingItemId?: number;
+    /** Execution mode of a new action type. */
+    executionMode?: ExecutionMode;
 }
+
+/** Choices for the execution mode of a new action type. */
+const EXECUTION_MODES: { value: ExecutionMode; label: string }[] = [
+    { value: "agent", label: "AI Agent — executed by an AI agent" },
+    { value: "node", label: "Node.js — runs a JavaScript module" },
+    { value: "script", label: "Script — executes a bash script" },
+];
 
 /** Props for {@link CompositionTree}. */
 export interface CompositionTreeProps {
@@ -148,6 +159,7 @@ export interface AddItemDialogProps {
 export function AddItemDialog({ type, onSubmit, onClose }: AddItemDialogProps) {
     const [mode, setMode] = useState<"new" | "existing">("new");
     const [name, setName] = useState<string>("");
+    const [executionMode, setExecutionMode] = useState<ExecutionMode>("agent");
     const [options, setOptions] = useState<{ id: number; name: string }[]>([]);
     const [existing, setExisting] = useState<string>("");
     const label: string = type === "tool" ? "tool" : "action type";
@@ -165,7 +177,7 @@ export function AddItemDialog({ type, onSubmit, onClose }: AddItemDialogProps) {
 
     const valid: boolean = mode === "new" ? name.trim().length > 0 : existing !== "";
     const submit = () => onSubmit(mode === "new"
-        ? { type, name: name.trim() }
+        ? (type === "action-type" ? { type, name: name.trim(), executionMode } : { type, name: name.trim() })
         : { type, existingItemId: Number(existing) });
 
     return (
@@ -178,9 +190,21 @@ export function AddItemDialog({ type, onSubmit, onClose }: AddItemDialogProps) {
                     <Radio id="add-existing" name="add-mode" label="Existing" isChecked={mode === "existing"}
                         onChange={() => setMode("existing")} />
                     {mode === "new" ? (
-                        <FormGroup label="Name" fieldId="add-name">
-                            <TextInput id="add-name" value={name} onChange={(_e, v) => setName(v)} />
-                        </FormGroup>
+                        <>
+                            <FormGroup label="Name" fieldId="add-name">
+                                <TextInput id="add-name" value={name} onChange={(_e, v) => setName(v)} />
+                            </FormGroup>
+                            {type === "action-type" && (
+                                <FormGroup label="Execution mode" fieldId="add-execution-mode">
+                                    <FormSelect id="add-execution-mode" value={executionMode}
+                                        onChange={(_e, v) => setExecutionMode(v as ExecutionMode)}>
+                                        {EXECUTION_MODES.map((m) => (
+                                            <FormSelectOption key={m.value} value={m.value} label={m.label} />
+                                        ))}
+                                    </FormSelect>
+                                </FormGroup>
+                            )}
+                        </>
                     ) : (
                         <FormGroup label={`Existing ${label}`} fieldId="add-existing-select">
                             <FormSelect id="add-existing-select" value={existing} onChange={(_e, v) => setExisting(v)}>
