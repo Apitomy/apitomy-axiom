@@ -29,14 +29,24 @@ export function AssistantMessageInput({
     const [selectedIndex, setSelectedIndex] = useState(0);
     const textAreaRef = useRef<HTMLTextAreaElement>(null);
 
-    /** Resizes the auto-resizing text area to its content; needed when the value is set programmatically. */
+    /**
+     * Resizes the auto-resizing text area to its content; needed when the value is set programmatically.
+     * Mirrors PatternFly TextArea's own auto-resize: content height plus the field's borders and the
+     * wrapper's padding.
+     */
     const resizeToContent = useCallback(() => {
         const textarea = textAreaRef.current;
         const parent = textarea?.parentElement;
-        if (textarea && parent) {
-            parent.style.removeProperty("height");
-            parent.style.height = textarea.scrollHeight + "px";
+        if (!textarea || !parent) {
+            return;
         }
+        parent.style.setProperty("height", "inherit");
+        const field = window.getComputedStyle(textarea);
+        const wrapper = window.getComputedStyle(parent);
+        const height: number = (parseInt(field.borderTopWidth) || 0) + textarea.scrollHeight
+            + (parseInt(field.borderBottomWidth) || 0)
+            + (parseInt(wrapper.paddingTop) || 0) + (parseInt(wrapper.paddingBottom) || 0);
+        parent.style.setProperty("height", `${height}px`);
     }, []);
 
     useEffect(() => {
