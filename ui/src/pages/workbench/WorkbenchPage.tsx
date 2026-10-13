@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ActionTypeDescriptor, Workflow } from "@apitomy/flow-ui";
 import { useParams, useSearchParams } from "react-router-dom";
 import {
@@ -389,7 +389,19 @@ export function WorkbenchPage() {
                         const item = wb.items.find((i) => i.id === tid);
                         return (
                             <Tab key={tid} eventKey={String(tid)}
-                                title={<TabTitleText>{item?.name ?? `Item ${tid}`}</TabTitleText>}>
+                                title={<TabTitleText>{item?.name ?? `Item ${tid}`}</TabTitleText>}
+                                onMouseDown={(e: MouseEvent) => {
+                                    // Stop the browser's middle-button autoscroll so the click can close the tab.
+                                    if (e.button === 1) {
+                                        e.preventDefault();
+                                    }
+                                }}
+                                onAuxClick={(e: MouseEvent) => {
+                                    if (e.button === 1) {
+                                        e.preventDefault();
+                                        closeTab(tid);
+                                    }
+                                }}>
                                 {composition && item && wb.contents[tid] ? (
                                     <ItemTab key={tid} ref={itemTabRef(tid)} compositionId={id} item={item} content={wb.contents[tid]}
                                         contentRevision={wb.revisions[tid]}

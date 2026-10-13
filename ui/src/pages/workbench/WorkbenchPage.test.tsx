@@ -10,7 +10,8 @@ const setContent = vi.fn();
 vi.mock("./useWorkbench", () => ({
     useWorkbench: (): WorkbenchState => ({
         composition: { id: 1, name: "My comp", turnState: "idle", applyMode: "live", createdAt: "", updatedAt: "" },
-        items: [{ id: 10, type: "workflow", name: "main-flow", contentRevision: "r", lastAuthor: "user", changed: false } as never],
+        items: [{ id: 10, type: "workflow", name: "main-flow", contentRevision: "r", lastAuthor: "user", changed: false } as never,
+            { id: 11, type: "tool", name: "my-tool", contentRevision: "r", lastAuthor: "user", changed: false } as never],
         contents: { 10: {} }, revisions: {}, problems: {}, pending: null, lastCompletedTurnId: undefined, sessionError: null,
         loadContent: async () => ({}), refreshItems: async () => {}, refreshComposition: async () => {},
         setContent, removeItem: async () => {}, markPendingHandled: () => {}, retrySession: async () => {},
@@ -152,6 +153,14 @@ describe("WorkbenchPage", () => {
         fireEvent.click(screen.getByRole("button", { name: "Create" }));
         fireEvent.click(await screen.findByRole("menuitem", { name: "Tool" }));
         expect(await screen.findByText("Add tool")).toBeTruthy();
+    });
+
+    it("closes a component tab on middle click", () => {
+        renderPage();
+        fireEvent.click(screen.getByRole("button", { name: /^my-tool/ }));
+        const tab = screen.getByRole("tab", { name: "my-tool" });
+        fireEvent(tab, new MouseEvent("auxclick", { bubbles: true, button: 1 }));
+        expect(screen.queryByRole("tab", { name: "my-tool" })).toBeNull();
     });
 
     it("maximizes the canvas and restores both side panels on a second click", () => {
