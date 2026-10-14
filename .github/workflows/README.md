@@ -22,7 +22,7 @@ Creates a new release of Apitomy Axiom, including building and publishing Docker
    - `<version>` (e.g., `1.0.0`)
    - `latest`
 6. Creates a GitHub release with auto-generated release notes
-7. Sends Slack notifications (success/failure)
+7. Sends a Slack notification: success to the general channel, failure to the important one
 
 **Required Secrets**:
 - `ACCESS_TOKEN`: GitHub personal access token with repo and packages permissions
@@ -30,8 +30,7 @@ Creates a new release of Apitomy Axiom, including building and publishing Docker
 - `DOCKERHUB_PASSWORD`: Docker Hub password/token
 - `QUAY_USERNAME`: Quay.io username
 - `QUAY_PASSWORD`: Quay.io password/token
-- `SLACK_NOTIFICATION_WEBHOOK`: Slack webhook for general notifications (optional)
-- `SLACK_ERROR_WEBHOOK`: Slack webhook for error notifications (optional)
+- `SLACK_GENERAL_NOTIFICATION_WEBHOOK`, `SLACK_IMPORTANT_NOTIFICATION_WEBHOOK`, `SLACK_USER_MAP`: organization secrets for the Slack notification, sent with [notify-slack](https://github.com/Apicurio/apicurio-github-actions/tree/main/notify-slack) (optional)
 
 **Usage**:
 
