@@ -9,7 +9,7 @@ import io.apitomy.axiom.api.beans.AgentChangeSetResult;
 import io.apitomy.axiom.api.beans.CompositionTestValues;
 import io.apitomy.axiom.api.beans.CompositionTestRun;
 import io.apitomy.axiom.api.beans.CompositionTestRequest;
-import io.apitomy.axiom.api.beans.AgentTestRequest;
+import io.apitomy.axiom.api.beans.AgentTestSuggestion;
 import io.apitomy.axiom.api.beans.AgentComposition;
 import io.apitomy.axiom.api.beans.AgentItemResult;
 import io.apitomy.axiom.api.beans.AgentItemSummary;
@@ -413,7 +413,7 @@ public class CompositionsResourceImpl implements CompositionsResource {
 
     /** {@inheritDoc} */
     @Override
-    public CompositionTestRun testAgentItem(long compositionId, AgentTestRequest data) {
+    public CompositionTestRun suggestAgentTest(long compositionId, AgentTestSuggestion data) {
         requireToken(compositionId);
         String type = data.getType().value();
         CompositionItemEntity item = service.items(compositionId).stream()
@@ -421,8 +421,7 @@ public class CompositionsResourceImpl implements CompositionsResource {
                 .findFirst()
                 .orElseThrow(() -> new CompositionNotFoundException(
                         "No " + type + " named " + data.getName() + " in composition " + compositionId));
-        return testRuns.run(compositionId, item, testValues(data.getInputs()), data.getSubjectId(),
-                CompositionService.AUTHOR_AI, turns.currentTurnId(compositionId));
+        return testRuns.suggest(compositionId, item, testValues(data.getInputs()), turns.currentTurnId(compositionId));
     }
 
     private static Map<String, Object> testValues(CompositionTestValues values) {

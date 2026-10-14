@@ -32,10 +32,11 @@ class WorkbenchReferenceTest {
     }
 
     @Test
-    void templateAllowsTheTestTools() throws Exception {
+    void templateAllowsSuggestingButNotRunningTests() throws Exception {
         String tools = template().path("allowedTools").toString();
-        assertTrue(tools.contains("mcp__workbench__test_action_type"));
-        assertTrue(tools.contains("mcp__workbench__test_tool"));
+        assertTrue(tools.contains("mcp__workbench__suggest_test"));
+        assertFalse(tools.contains("test_action_type"));
+        assertFalse(tools.contains("test_tool"));
     }
 
     @Test
@@ -48,7 +49,11 @@ class WorkbenchReferenceTest {
                 "If no events of that type exist, say so and use the documented event schema",
                 "Prefer node action types for non-AI steps",
                 "Declare an input for everything an action uses",
-                "Test action types and tools you create with test_action_type or test_tool before finishing a turn",
+                "- You cannot run action types or tools. After creating or changing a node or script action type or a tool, "
+                        + "call suggest_test with realistic sample inputs so the user can run it. Never claim it works "
+                        + "until the user reports a passing run.",
+                "For each node or script action type and each tool you create or change, call suggest_test with "
+                        + "realistic sample inputs.",
                 "Receive-event nodes must correlate",
                 "Never describe the output format in an agent prompt",
                 "applied by the user's editor when your turn ends",

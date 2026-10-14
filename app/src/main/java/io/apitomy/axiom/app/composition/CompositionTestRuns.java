@@ -95,6 +95,37 @@ public class CompositionTestRuns {
         }
     }
 
+    /**
+     * Records a test the AI suggests for the user to run. Nothing is executed and no concurrency permit is
+     * taken.
+     *
+     * @param compositionId the composition id
+     * @param item          the action type or tool draft
+     * @param inputs        suggested input or parameter values
+     * @param turnId        the AI turn id, or {@code null}
+     * @return the stored suggested run
+     * @throws IllegalArgumentException for anything but an action type or tool
+     */
+    public CompositionTestRun suggest(long compositionId, CompositionItemEntity item, Map<String, Object> inputs,
+                                      String turnId) {
+        if (!"tool".equals(item.itemType) && !"action-type".equals(item.itemType)) {
+            throw new IllegalArgumentException("Only action types and tools can be test-run");
+        }
+        CompositionTestRun run = new CompositionTestRun();
+        run.setId(UUID.randomUUID().toString());
+        run.setItemId(item.id);
+        run.setItemType(CompositionTestRun.ItemType.fromValue(item.itemType));
+        run.setItemName(item.name);
+        run.setAuthor(CompositionTestRun.Author.fromValue(CompositionService.AUTHOR_AI));
+        run.setTurnId(turnId);
+        run.setStatus(CompositionTestRun.Status.SUGGESTED);
+        run.setStartedAt(Date.from(Instant.now()));
+        run.setInputs(values(inputs != null ? inputs : Map.of()));
+        remember(compositionId, run);
+        fire(compositionId, run);
+        return run;
+    }
+
     private CompositionTestRun execute(long compositionId, CompositionItemEntity item, boolean tool,
                                        Map<String, Object> values, SubjectEntity subject, Long subjectId,
                                        String author, String turnId) {

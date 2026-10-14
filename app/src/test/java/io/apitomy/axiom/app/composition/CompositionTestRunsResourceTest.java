@@ -17,7 +17,10 @@ import java.util.Map;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -88,10 +91,10 @@ class CompositionTestRunsResourceTest {
     }
 
     @Test
-    void agentRouteRequiresTheSessionToken() {
+    void suggestionRouteRequiresTheSessionToken() {
         long id = CompositionsResourceTest.createComposition();
         given().contentType(ContentType.JSON).body(Map.of("type", "action-type", "name", "greet"))
-                .post(BASE + "/{id}/agent/test", id).then().statusCode(401);
+                .post(BASE + "/{id}/agent/test-suggestions", id).then().statusCode(401);
     }
 
     @Test
@@ -107,22 +110,38 @@ class CompositionTestRunsResourceTest {
     }
 
     @Test
-    void agentRouteRunsTheNamedDraftAsTheAi() {
+    void suggestionRouteRecordsASuggestionWithoutRunning() {
         long id = CompositionsResourceTest.createComposition();
-        scriptActionType(id);
+        long itemId = scriptActionType(id);
+        String revision = given().get(BASE + "/{id}/items/{itemId}", id, itemId)
+                .then().statusCode(200).extract().jsonPath().getString("contentRevision");
+        Map<String, Object> content = Map.of("name", "greet", "description", "", "executionMode", "script",
+                "inputs", List.of(Map.of("name", "who", "type", "string", "required", true)),
+                "scriptTemplate", "exit 7");
+        given().contentType(ContentType.JSON).body(Map.of("content", content, "baseRevision", revision))
+                .put(BASE + "/{id}/items/{itemId}", id, itemId).then().statusCode(200);
         given().header("X-Axiom-Session-Token", "good").contentType(ContentType.JSON)
                 .body(Map.of("type", "action-type", "name", "greet", "inputs", Map.of("who", "ann")))
-                .post(BASE + "/{id}/agent/test", id).then().statusCode(200)
-                .body("status", equalTo("passed"))
-                .body("author", equalTo("ai"));
+                .post(BASE + "/{id}/agent/test-suggestions", id).then().statusCode(200)
+                .body("status", equalTo("suggested"))
+                .body("author", equalTo("ai"))
+                .body("itemName", equalTo("greet"))
+                .body("inputs.who", equalTo("ann"))
+                .body("startedAt", notNullValue())
+                .body("$", not(hasKey("exitCode")))
+                .body("$", not(hasKey("durationMs")))
+                .body("$", not(hasKey("stdout")));
+        given().get(BASE + "/{id}/test-runs", id).then().statusCode(200)
+                .body("$", hasSize(1)).body("[0].status", equalTo("suggested"))
+                .body("[0]", not(hasKey("exitCode")));
     }
 
     @Test
-    void agentRouteUnknownDraftIs404() {
+    void suggestionRouteUnknownDraftIs404() {
         long id = CompositionsResourceTest.createComposition();
         given().header("X-Axiom-Session-Token", "good").contentType(ContentType.JSON)
                 .body(Map.of("type", "action-type", "name", "nope"))
-                .post(BASE + "/{id}/agent/test", id).then().statusCode(404);
+                .post(BASE + "/{id}/agent/test-suggestions", id).then().statusCode(404);
     }
 
     @Test

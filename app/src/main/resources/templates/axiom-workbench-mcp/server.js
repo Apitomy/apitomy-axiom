@@ -166,80 +166,16 @@ function statusOf(r) {
     return problems.length === 0 ? "VALID" : "VALID with warnings";
 }
 
-const TAIL_CHARS = 4000;
-
 /**
- * Returns the end of a long text with a marker.
- * @param {string} text the text
- * @returns {{label: string, text: string}} the label suffix and the (possibly shortened) text
+ * Builds the body of a test suggestion request.
+ * @param {object} args the suggest_test arguments: type, name and optional inputs
+ * @returns {{type: string, name: string, inputs: object}} the request body
  */
-function tail(text) {
-    return text.length > TAIL_CHARS
-        ? { label: ` (last ${TAIL_CHARS} chars)`, text: "…" + text.substring(text.length - TAIL_CHARS) }
-        : { label: "", text };
-}
-
-/**
- * Builds the body of an agent test-run request.
- * @param {string} type "action-type" or "tool"
- * @param {string} name the draft name
- * @param {object} inputs input or parameter values
- * @param {*} subjectId optional subject id; must be an integer when given
- * @returns {object} the request body
- */
-function testRunBody(type, name, inputs, subjectId) {
-    const body = { type, name, inputs };
-    if (subjectId !== undefined && subjectId !== null) {
-        const id = typeof subjectId === "number" || (typeof subjectId === "string" && subjectId.trim() !== "")
-            ? Number(subjectId) : NaN;
-        if (!Number.isInteger(id)) {
-            throw new Error("subjectId must be an integer");
-        }
-        body.subjectId = id;
+function suggestionBody(args) {
+    if (args.type !== "action-type" && args.type !== "tool") {
+        throw new Error("type must be action-type or tool");
     }
-    return body;
-}
-
-/**
- * Runs a draft through the agent test route and formats the run.
- * @param {string} type "action-type" or "tool"
- * @param {string} name the draft name
- * @param {object} inputs input or parameter values
- * @param {*} subjectId optional subject id
- * @returns {Promise<string>} the formatted run
- */
-async function runTest(type, name, inputs, subjectId) {
-    const body = testRunBody(type, name, inputs, subjectId);
-    return formatTestRun(JSON.parse(await axiomApi("POST", `${agentBase()}/test`, body)));
-}
-
-/**
- * Formats a test run for the agent.
- * @param {object} run the CompositionTestRun
- * @returns {string} the summary
- */
-function formatTestRun(run) {
-    const head = `${String(run.status).toUpperCase()}: ${run.itemType} ${run.itemName}`;
-    if (run.status === "error") {
-        const lines = [head];
-        if (run.message) lines.push(run.message);
-        for (const p of run.problems || []) lines.push(`- ${p}`);
-        return lines.join("\n");
-    }
-    const lines = [`${head} (exit ${run.exitCode}, ${run.durationMs} ms)`];
-    if (run.outputs) lines.push(`Outputs: ${JSON.stringify(run.outputs)}`);
-    if ((run.problems || []).length > 0) {
-        lines.push("Problems:");
-        for (const p of run.problems) lines.push(`- ${p}`);
-    }
-    for (const stream of ["stdout", "stderr"]) {
-        const value = run[stream] || "";
-        if (value) {
-            const t = tail(value);
-            lines.push(`${stream}${t.label}:\n${t.text}`);
-        }
-    }
-    return lines.join("\n");
+    return { type: args.type, name: args.name, inputs: asObject(args.inputs ?? {}, "inputs") };
 }
 
 const TOOLS = [
@@ -324,27 +260,20 @@ const TOOLS = [
         },
     },
     {
-        name: "test_action_type",
-        description: "Run a draft node or script action type with sample inputs. Returns the status, outputs, "
-            + "output-validation problems, exit code, duration, stdout and stderr. The user sees the run in the "
-            + "workbench's Test output strip. AI Agent action types cannot be test-run.",
+        name: "suggest_test",
+        description: "Suggest a test of a draft node or script action type or a tool with sample inputs. You cannot "
+            + "run it yourself: the suggestion appears in the workbench's Test output strip and the user runs it.",
         parameters: [
-            { name: "name", type: "string", description: "Draft action type name", required: true },
-            { name: "inputs", type: "object", description: "Input values by name", required: false },
-            { name: "subjectId", type: "number", description: "Optional subject whose workspace to run in", required: false },
+            { name: "type", type: "string", description: "action-type or tool", required: true },
+            { name: "name", type: "string", description: "Draft name", required: true },
+            { name: "inputs", type: "object", description: "Input or parameter values by name", required: false },
         ],
-        handler: (args) => runTest("action-type", args.name, asObject(args.inputs ?? {}, "inputs"), args.subjectId),
-    },
-    {
-        name: "test_tool",
-        description: "Run a draft tool's script with sample parameter values, the way agents run it. Returns "
-            + "the status, exit code, duration, stdout and stderr. The user sees the run in the workbench.",
-        parameters: [
-            { name: "name", type: "string", description: "Draft tool name", required: true },
-            { name: "params", type: "object", description: "Parameter values by name", required: false },
-            { name: "subjectId", type: "number", description: "Optional subject whose workspace to run in", required: false },
-        ],
-        handler: (args) => runTest("tool", args.name, asObject(args.params ?? {}, "params"), args.subjectId),
+        handler: async (args) => {
+            const body = suggestionBody(args);
+            await axiomApi("POST", `${agentBase()}/test-suggestions`, body);
+            return `Suggested a test of ${body.type} ${body.name} with inputs ${JSON.stringify(body.inputs)}. `
+                + "The user can run it from the Test output strip; ask them to tell you the result.";
+        },
     },
     {
         name: "list_stream_events",
@@ -539,7 +468,7 @@ async function main() {
     await server.connect(transport);
 }
 
-module.exports = { summarizeEvent, pickPath, truncateDeep, formatProblems, formatTestRun, testRunBody };
+module.exports = { summarizeEvent, pickPath, truncateDeep, formatProblems, suggestionBody };
 
 if (require.main === module) {
     main().catch(console.error);

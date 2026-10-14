@@ -6280,27 +6280,27 @@
         }
       ]
     },
-    "/compositions/{compositionId}/agent/test": {
+    "/compositions/{compositionId}/agent/test-suggestions": {
       "post": {
         "tags": [
           "Compositions"
         ],
-        "summary": "Agent: test-run a draft action type or tool",
-        "description": "Runs a draft by type and name. Requires the `X-Axiom-Session-Token` header of the composition's live workbench session (401 otherwise).",
-        "operationId": "testAgentItem",
+        "summary": "Agent: suggest a test of a draft action type or tool",
+        "description": "Records a suggested test run (status `suggested`) of a draft by type and name for the user to run. Nothing is executed. Requires the `X-Axiom-Session-Token` header of the composition's live workbench session (401 otherwise).",
+        "operationId": "suggestAgentTest",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AgentTestRequest"
+                "$ref": "#/components/schemas/AgentTestSuggestion"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "The finished run",
+            "description": "The suggested run",
             "content": {
               "application/json": {
                 "schema": {
@@ -6314,9 +6314,6 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
-          },
-          "429": {
-            "description": "Too many test runs are in progress for this composition"
           }
         }
       },
@@ -11345,7 +11342,7 @@
           }
         }
       },
-      "AgentTestRequest": {
+      "AgentTestSuggestion": {
         "required": [
           "type",
           "name"
@@ -11365,12 +11362,9 @@
           },
           "inputs": {
             "$ref": "#/components/schemas/CompositionTestValues"
-          },
-          "subjectId": {
-            "format": "int64",
-            "type": "integer"
           }
-        }
+        },
+        "description": "A test the AI suggests for the user to run"
       },
       "CompositionTestRun": {
         "description": "A test run of a draft action type or tool. Runs are kept in memory, the last 50 per composition.",
@@ -11421,7 +11415,8 @@
               "running",
               "passed",
               "failed",
-              "error"
+              "error",
+              "suggested"
             ],
             "type": "string"
           },

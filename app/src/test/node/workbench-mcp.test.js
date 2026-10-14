@@ -26,34 +26,17 @@ test("formatProblems renders one line per problem", () => {
         "- [ERROR] content c: m");
 });
 
-test("formatTestRun summarizes status, outputs, problems and output tails", () => {
-    const text = helpers.formatTestRun({
-        itemType: "action-type", itemName: "greet", status: "failed", exitCode: 0, durationMs: 12,
-        outputs: { greeting: "hi" }, problems: ["Output: Missing required field 'count'."],
-        stdout: "x".repeat(5000), stderr: "warn",
-    });
-    assert.match(text, /^FAILED: action-type greet \(exit 0, 12 ms\)/);
-    assert.match(text, /Outputs: \{"greeting":"hi"\}/);
-    assert.match(text, /- Output: Missing required field 'count'\./);
-    assert.match(text, /stdout \(last 4000 chars\):\n…x{4000}/);
-    assert.match(text, /stderr:\nwarn/);
-});
-
-test("formatTestRun explains a run that could not start", () => {
-    assert.strictEqual(helpers.formatTestRun({ itemType: "action-type", itemName: "a", status: "error",
-        message: "Test runs of AI Agent action types are not supported yet.", problems: [], stdout: "", stderr: "" }),
-        "ERROR: action-type a\nTest runs of AI Agent action types are not supported yet.");
-});
-
-test("testRunBody builds the agent test request", () => {
-    assert.deepStrictEqual(helpers.testRunBody("tool", "t", { a: 1 }, undefined),
+test("suggestionBody builds the suggestion request", () => {
+    assert.deepStrictEqual(helpers.suggestionBody({ type: "tool", name: "t", inputs: { a: 1 } }),
         { type: "tool", name: "t", inputs: { a: 1 } });
-    assert.deepStrictEqual(helpers.testRunBody("action-type", "s", {}, "7"),
-        { type: "action-type", name: "s", inputs: {}, subjectId: 7 });
+    assert.deepStrictEqual(helpers.suggestionBody({ type: "action-type", name: "s", inputs: "{\"x\":2}" }),
+        { type: "action-type", name: "s", inputs: { x: 2 } });
+    assert.deepStrictEqual(helpers.suggestionBody({ type: "tool", name: "t" }),
+        { type: "tool", name: "t", inputs: {} });
 });
 
-test("testRunBody rejects a non-integer subjectId", () => {
-    for (const bad of [1.5, "abc", "", true]) {
-        assert.throws(() => helpers.testRunBody("tool", "t", {}, bad), /subjectId must be an integer/);
+test("suggestionBody rejects an unknown type", () => {
+    for (const bad of [undefined, "workflow", "Tool"]) {
+        assert.throws(() => helpers.suggestionBody({ type: bad, name: "t" }), /type must be action-type or tool/);
     }
 });
