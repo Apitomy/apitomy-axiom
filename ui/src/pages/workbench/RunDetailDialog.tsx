@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
     Alert, Button, Label, Modal, ModalBody, ModalFooter, ModalHeader, Tab, TabContentBody, Tabs, TabTitleText, Title,
 } from "@patternfly/react-core";
@@ -81,15 +81,24 @@ export function RunDetailDialog({ runId, workflowName, onClose, onAskAi }: RunDe
     const [tab, setTab] = useState<RunDialogTab>("graph");
     const theme = useEffectiveTheme();
 
+    // Only the latest load may update the state, so a slow earlier response cannot overwrite a newer one.
+    const sequence = useRef<number>(0);
+
     const load = useCallback(() => {
+        const request: number = ++sequence.current;
+        const latest = (): boolean => request === sequence.current;
         getWorkflowRun(runId)
             .then((r) => {
+                if (!latest()) {
+                    return;
+                }
                 setRun(r);
                 setError(null);
-                return fetchSubjectTasks(r.subjectId);
+                fetchSubjectTasks(r.subjectId)
+                    .then((all) => { if (latest()) setTasks(all.filter((t) => t.workflowRunId === runId)); })
+                    .catch((e: unknown) => console.error("Could not load the run's tasks", e));
             })
-            .then((all) => setTasks(all.filter((t) => t.workflowRunId === runId)))
-            .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+            .catch((e: unknown) => { if (latest()) setError(e instanceof Error ? e.message : String(e)); });
     }, [runId]);
 
     useEffect(() => {
@@ -115,7 +124,7 @@ export function RunDetailDialog({ runId, workflowName, onClose, onAskAi }: RunDe
             return;
         }
         onAskAi(runAnalysisPrefill({ id: runId, status: run.status, currentNodeName: run.currentNodeName,
-            reason: failureText(run, tasks) }, workflowName));
+            reason: failureText(run, tasks) }, workflowName || run.definitionName));
         onClose();
     };
     const title: string = run ? `Run #${runId}: ${run.title || `${run.definitionName} v${run.definitionVersion}`}`

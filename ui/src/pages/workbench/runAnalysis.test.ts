@@ -17,4 +17,9 @@ describe("runAnalysisPrefill", () => {
         expect(runAnalysisPrefill({ id: 2, status: "failed", reason: "\n  first  \nsecond" }, "w"))
             .toBe("Analyze run #2 of workflow `w` (status: failed): first. Find the cause and fix the workflow or its components.");
     });
+
+    it("does not double the full stop", () => {
+        expect(runAnalysisPrefill({ id: 2, status: "failed", reason: "Task failed." }, "w"))
+            .toBe("Analyze run #2 of workflow `w` (status: failed): Task failed. Find the cause and fix the workflow or its components.");
+    });
 });

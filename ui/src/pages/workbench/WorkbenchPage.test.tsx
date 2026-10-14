@@ -64,6 +64,9 @@ vi.mock("../../config/api", async (orig) => ({
     fetchWorkflowRuns: (...a: unknown[]) => fetchWorkflowRunsMock(...a),
 }));
 const fetchWorkflowRunsMock = vi.fn();
+vi.mock("./RunDetailDialog", () => ({
+    RunDetailDialog: (p: { runId: number }) => <div data-testid="run-dialog">run {p.runId}</div>,
+}));
 vi.mock("./PublishDialog", () => ({ PublishDialog: () => <div data-testid="publish-dialog" /> }));
 
 import { act } from "@testing-library/react";
@@ -407,6 +410,18 @@ describe("WorkbenchPage", () => {
         expect(spy).toHaveBeenCalledWith(expect.objectContaining({ bottomPanelTab: "runs" }));
         expect(await screen.findByText("First")).toBeTruthy();
         expect(screen.getByRole("button", { name: "Refresh" })).toBeTruthy();
+    });
+
+    it("opens the run dialog when a run row is clicked", async () => {
+        fetchWorkflowRunsMock.mockResolvedValue({ items: [{ runId: 5, status: "completed", title: "First",
+            definitionVersion: 1, startedOn: "2026-10-14T10:00:00Z" }], totalCount: 1 });
+        renderPage();
+        await waitFor(() => expect(fetchWorkflowRunsMock).toHaveBeenCalled());
+        fireEvent.click(screen.getByRole("button", { name: "Expand bottom panel" }));
+        fireEvent.click(screen.getByRole("tab", { name: /Runs/ }));
+        expect(screen.queryByTestId("run-dialog")).toBeNull();
+        fireEvent.click(await screen.findByRole("button", { name: "Show run #5" }));
+        expect(screen.getByTestId("run-dialog").textContent).toBe("run 5");
     });
 
     it("expands the panel on the Runs tab for a new failed run", async () => {

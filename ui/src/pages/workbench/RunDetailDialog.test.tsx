@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 vi.mock("@apitomy/flow-ui", () => ({
@@ -111,6 +111,38 @@ describe("RunDetailDialog", () => {
             listeners.forEach((l) => l({ type: "workflow-updated", data: { runId: 9 } }));
             await vi.advanceTimersByTimeAsync(400);
             expect(getWorkflowRun.mock.calls.length).toBe(calls + 1);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it("falls back to the definition name when the workflow name is missing", async () => {
+        const { onAskAi } = renderDialog({ workflowName: "" });
+        fireEvent.click(await screen.findByRole("button", { name: "Ask AI to analyze" }));
+        expect(onAskAi.mock.calls[0][0]).toContain("of workflow `triage` ");
+    });
+
+    it("still shows the run when loading its tasks fails", async () => {
+        fetchSubjectTasks.mockRejectedValue(new Error("nope"));
+        renderDialog();
+        expect(await screen.findByText("Run #9: Triage it")).toBeTruthy();
+        await waitFor(() => expect(fetchSubjectTasks).toHaveBeenCalled());
+        expect(screen.queryByText(/Could not load the run/)).toBeNull();
+    });
+
+    it("ignores out-of-order run responses", async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+        try {
+            let resolveSlow: (v: unknown) => void = () => undefined;
+            getWorkflowRun.mockReset()
+                .mockReturnValueOnce(new Promise((r) => { resolveSlow = r; }))
+                .mockResolvedValue({ ...failedRun, title: "Newer" });
+            renderDialog();
+            listeners.forEach((l) => l({ type: "workflow-updated", data: { runId: 9 } }));
+            await vi.advanceTimersByTimeAsync(400);
+            expect(await screen.findByText("Run #9: Newer")).toBeTruthy();
+            await act(async () => { resolveSlow({ ...failedRun, title: "Older" }); });
+            expect(screen.getByText("Run #9: Newer")).toBeTruthy();
         } finally {
             vi.useRealTimers();
         }

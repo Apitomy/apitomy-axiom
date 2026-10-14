@@ -16,7 +16,7 @@ export interface RunAnalysisInput {
 export function runAnalysisPrefill(run: RunAnalysisInput, workflowName: string): string {
     const node: string = run.currentNodeName ? ` at node \`${run.currentNodeName}\`` : "";
     const line: string | undefined = (run.reason ?? "").split("\n").map((l) => l.trim()).find((l) => l.length > 0);
-    const reason: string = line ? `: ${line}` : "";
+    const reason: string = line ? `: ${line.replace(/\.$/, "")}` : "";
     return `Analyze run #${run.id} of workflow \`${workflowName}\` (status: ${run.status}${node})${reason}.`
         + " Find the cause and fix the workflow or its components.";
 }
