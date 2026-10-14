@@ -26,7 +26,6 @@ vi.mock("./useWorkbench", () => ({
 
 let workflowTabProps: Record<string, any> = {};
 const workflowFlush = vi.fn();
-const workflowSelectNode = vi.fn();
 let chatPaneProps: Record<string, any> = {};
 vi.mock("./ChatPane", async (orig) => {
     const real = await orig<typeof import("./ChatPane")>();
@@ -44,7 +43,7 @@ vi.mock("./WorkflowTab", async () => {
         WorkflowTab: (props: Record<string, any>) => {
             workflowTabProps = props;
             useImperativeHandle(props.ref, () => ({ flush: workflowFlush, replace: () => {},
-                selection: () => ({ nodeIds: [], edgeIds: [] }), selectNode: workflowSelectNode }));
+                selection: () => ({ nodeIds: [], edgeIds: [] }) }));
             return <div data-testid="wf" />;
         },
     };
@@ -350,11 +349,11 @@ describe("WorkbenchPage", () => {
         expect(screen.getByTestId("item-tab")).toBeTruthy();
     });
 
-    it("selects the touched node after activating the workflow tab", () => {
-        workflowSelectNode.mockReset();
+    it("activates the workflow tab from a workflow card", () => {
         renderPage();
         act(() => chatPaneProps.toolActions.openItem("tool", "my-tool"));
+        expect(screen.getByTestId("item-tab")).toBeTruthy();
         act(() => chatPaneProps.toolActions.openWorkflow("n1"));
-        expect(workflowSelectNode).toHaveBeenCalledWith("n1");
+        expect(screen.getByRole("tab", { name: "main-flow" }).getAttribute("aria-selected")).toBe("true");
     });
 });

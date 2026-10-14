@@ -60,7 +60,7 @@ describe("renderWorkbenchToolGroup", () => {
         expect(a.openSuggestion).toHaveBeenCalledWith("action-type", "greet");
     });
 
-    it("renders a cardless call for removals", () => {
+    it("renders a removal card without a link", () => {
         const { container } = show([ctx("1", "mcp__workbench__remove_item", { type: "workflow", name: "w" }, "Removed")]);
         expect(container.textContent).toContain("Removed workflow w");
         expect(screen.queryByRole("button", { name: /^Open/ })).toBeNull();

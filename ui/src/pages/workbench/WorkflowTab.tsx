@@ -30,11 +30,6 @@ import { useEffectiveTheme } from "../../hooks/useTheme";
 
 const SAVE_DEBOUNCE_MS: number = 500;
 
-/** Editor handle with the optional `dispatch` that newer flow-ui versions expose. */
-type SelectableEditorHandle = WorkflowEditorHandle & {
-    dispatch?: (command: { type: "select"; nodeId?: string; edgeId?: string }) => void;
-};
-
 /** Imperative API of the workflow tab. */
 export interface WorkflowTabHandle {
     /** Saves any pending debounced change immediately. */
@@ -43,8 +38,6 @@ export interface WorkflowTabHandle {
     replace(workflow: Workflow): void;
     /** Current editor selection. */
     selection(): { nodeIds: string[]; edgeIds: string[] };
-    /** Selects the node with the given id on the canvas. */
-    selectNode(nodeId: string): void;
 }
 
 /** Props of {@link WorkflowTab}. */
@@ -391,9 +384,6 @@ export function WorkflowTab(props: WorkflowTabProps) {
             editorRef.current?.replace(workflow, "host");
         },
         selection: () => selectionRef.current,
-        // flow-ui 3.0.x does not expose dispatch on its handle yet; select once it does (no-op until then).
-        selectNode: (nodeId: string) => (editorRef.current as SelectableEditorHandle | null)
-            ?.dispatch?.({ type: "select", nodeId }),
     }), [flush]);
 
     return (

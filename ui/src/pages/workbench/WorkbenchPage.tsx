@@ -102,16 +102,6 @@ export function WorkbenchPage() {
     const mode: "live" | "review" = applyMode ?? composition?.applyMode ?? "live";
     const workflow: CompositionItem | undefined = wb.items.find((i) => i.type === "workflow");
     const aiWorking: boolean = composition?.turnState === "ai-working";
-    /** Node to select once the workflow tab is rendered (set by chat card links). */
-    const pendingNodeSelection = useRef<string | null>(null);
-    const [selectionRequest, setSelectionRequest] = useState<number>(0);
-    const workflowLoaded: boolean = Boolean(workflow && wb.contents[workflow.id]);
-    useEffect(() => {
-        const nodeId: string | null = pendingNodeSelection.current;
-        if (nodeId === null || activeTab !== "workflow" || !workflowTabRef.current) return;
-        pendingNodeSelection.current = null;
-        workflowTabRef.current.selectNode(nodeId);
-    }, [selectionRequest, activeTab, workflowLoaded]);
 
     const updatePrefs = useCallback((partial: Partial<WorkbenchPrefs>) => {
         setPrefs((prev) => ({ ...prev, ...partial }));
@@ -308,13 +298,8 @@ export function WorkbenchPage() {
             const item: CompositionItem | undefined = wb.items.find((i) => i.type === type && i.name === name);
             if (item) openItem(item.id);
         },
-        openWorkflow: (nodeId) => {
-            setActiveTab("workflow");
-            if (nodeId) {
-                pendingNodeSelection.current = nodeId;
-                setSelectionRequest((n) => n + 1);
-            }
-        },
+        // nodeId is unused: flow-ui 3.0.x has no public node-selection API.
+        openWorkflow: () => setActiveTab("workflow"),
         openSuggestion: (type, name) => {
             const suggestion: CompositionTestRun | undefined = wb.testRuns
                 .filter((r) => r.status === "suggested" && r.itemType === type && r.itemName === name)

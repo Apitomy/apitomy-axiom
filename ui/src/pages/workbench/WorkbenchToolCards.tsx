@@ -18,7 +18,11 @@ import { describeToolCall, groupToolCalls, workbenchTool, type CardTarget, type 
 export interface WorkbenchToolActions {
     /** Opens the tab of the item with the given type and name (no-op when it no longer exists). */
     openItem(type: "action-type" | "tool" | "workflow", name: string): void;
-    /** Activates the workflow tab and selects the node, if given. */
+    /**
+     * Activates the workflow tab.
+     *
+     * @param nodeId first touched node; currently unused, reserved for when Flow exposes node selection
+     */
     openWorkflow(nodeId?: string): void;
     /** Opens the newest test suggestion for the item. */
     openSuggestion(type: "action-type" | "tool", name: string): void;
@@ -132,23 +136,23 @@ function ReadOnlyLine({ entries }: { entries: { ctx: ToolUseRenderContext; card:
  * @param actions navigation callbacks for the card links
  */
 export function renderWorkbenchToolGroup(group: ToolUseRenderContext[], actions: WorkbenchToolActions): ReactNode {
-    const byId: Map<string, ToolUseRenderContext> = new Map(group.map((g) => [g.message.id, g]));
-    const refs: ToolCallRef[] = group.map(({ message: m }) => ({
-        id: m.id,
+    const refs: ToolCallRef[] = group.map(({ message: m }, index: number) => ({
+        id: String(index),
         toolName: m.toolName ?? "",
         card: m.permissionId && !m.permissionResolved
             ? null : describeToolCall(m.toolName ?? "", m.toolInput, m.toolResult, m.isError),
     }));
     return groupToolCalls(refs).map((calls: ToolCallRef[]) => {
         const first: ToolCallRef = calls[0];
-        const ctx: ToolUseRenderContext = byId.get(first.id)!;
+        const ctx: ToolUseRenderContext = group[Number(first.id)];
+        const key: string = ctx.message.id;
         if (first.card === null) {
-            return <Fragment key={first.id}>{ctx.genericBlock}</Fragment>;
+            return <Fragment key={key}>{ctx.genericBlock}</Fragment>;
         }
         if (first.card.readOnly) {
-            return <ReadOnlyLine key={first.id}
-                entries={calls.map((c) => ({ ctx: byId.get(c.id)!, card: c.card as ToolCard }))} />;
+            return <ReadOnlyLine key={key}
+                entries={calls.map((c) => ({ ctx: group[Number(c.id)], card: c.card as ToolCard }))} />;
         }
-        return <CardRow key={first.id} ctx={ctx} card={first.card} actions={actions} />;
+        return <CardRow key={key} ctx={ctx} card={first.card} actions={actions} />;
     });
 }
