@@ -312,7 +312,7 @@ span.axiom-workbench__row-menu {
     display: flex;
     align-items: center;
     gap: var(--pf-t--global--spacer--sm, 8px);
-    padding: 2px var(--pf-t--global--spacer--sm, 8px) 0;
+    padding: 2px var(--pf-t--global--spacer--sm, 8px);
 }
 
 /* Separates the toolbar from the run list (only when expanded; collapsed it sits at the pane's bottom edge). */
