@@ -330,7 +330,12 @@ export function WorkbenchPage() {
         // Open the run's details right away; the dialog shows it running and updates live when it finishes.
         const runId: string = newRunId();
         setSelectedRunId(runId);
-        wb.runTest(itemId, inputs, subjectId, runId).catch((e: unknown) => {
+        wb.runTest(itemId, inputs, subjectId, runId).then((run) => {
+            // If the server recorded the run under another id, keep showing it instead of closing the dialog.
+            if (typeof run?.id === "string" && run.id !== runId) {
+                setSelectedRunId((current) => (current === runId ? run.id : current));
+            }
+        }).catch((e: unknown) => {
             setSelectedRunId((current) => (current === runId ? null : current));
             setTestError({ title: `Could not run the test: ${e instanceof Error ? e.message : String(e)}` });
         });

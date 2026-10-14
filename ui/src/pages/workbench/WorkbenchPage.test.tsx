@@ -236,6 +236,22 @@ describe("WorkbenchPage", () => {
         expect(itemFlush).toHaveBeenCalled();
     });
 
+    it("keeps the dialog open when the server records the run under another id", async () => {
+        runTest.mockResolvedValueOnce({ id: "server-id", itemId: 11, itemType: "tool", itemName: "my-tool", author: "user",
+            status: "passed", startedAt: "2026-10-14T10:00:00Z", exitCode: 0 });
+        const { rerender } = renderPage();
+        fireEvent.click(screen.getByRole("button", { name: /^my-tool/ }));
+        fireEvent.click(screen.getByRole("button", { name: "Test…" }));
+        fireEvent.change(await screen.findByLabelText("who"), { target: { value: "ann" } });
+        fireEvent.click(screen.getByRole("button", { name: "Run" }));
+        await waitFor(() => expect(runTest).toHaveBeenCalled());
+        testRuns = [{ id: "server-id", itemId: 11, itemType: "tool", itemName: "my-tool", author: "user",
+            status: "passed", startedAt: "2026-10-14T10:00:00Z", exitCode: 0 }];
+        rerender(page());
+        expect(await screen.findByText("Test run: my-tool")).toBeTruthy();
+        expect(screen.getByText("passed")).toBeTruthy();
+    });
+
     it("opens the run's details at Run and shows it live as it finishes", async () => {
         const { rerender } = renderPage();
         fireEvent.click(screen.getByRole("button", { name: /^my-tool/ }));
