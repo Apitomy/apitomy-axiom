@@ -334,6 +334,11 @@ span.axiom-workbench__row-menu {
     min-width: 0;
 }
 
+.axiom-test-strip__row > :not(.axiom-test-strip__summary) {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
 .axiom-test-strip__summary {
     flex: 1 1 auto;
     min-width: 0;
