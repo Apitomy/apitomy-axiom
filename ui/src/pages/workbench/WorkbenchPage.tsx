@@ -254,6 +254,22 @@ export function WorkbenchPage() {
         setTesting(testable.id);
     };
 
+    /** Opens the test dialog for any action type or tool (e.g. from its row menu), loading it if needed. */
+    const openTestFor = async (itemId: number) => {
+        setTestError(null);
+        try {
+            if (!wb.contents[itemId]) {
+                await wb.loadContent(itemId);
+            }
+            await itemTabRefs.current.get(itemId)?.flush();
+        } catch (e: unknown) {
+            setTestError({ title: `Could not run the test: ${e instanceof Error ? e.message : String(e)}` });
+            return;
+        }
+        suggestedValues.current = null;
+        setTesting(itemId);
+    };
+
     /** Opens the test dialog for an AI suggestion, pre-filled with its inputs. */
     const runSuggestion = async (run: CompositionTestRun) => {
         const item: CompositionItem | undefined = wb.items.find((i) => i.id === run.itemId);
@@ -463,7 +479,8 @@ export function WorkbenchPage() {
                     <CompositionTree composition={composition} items={wb.items} problems={wb.problems}
                         lastCompletedTurnId={wb.lastCompletedTurnId}
                         selectedItemId={activeTab === "workflow" ? workflow?.id : Number(activeTab)}
-                        onOpen={openItem} onRemove={setRemovingId} />
+                        onOpen={openItem} onRemove={setRemovingId}
+                        onTest={(itemId) => void openTestFor(itemId)} />
                 )}
             </aside>
             {prefs.leftCollapsed ? <div className="axiom-workbench__splitter axiom-workbench__splitter--left" /> : (

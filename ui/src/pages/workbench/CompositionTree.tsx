@@ -41,6 +41,8 @@ export interface CompositionTreeProps {
     onOpen(itemId: number): void;
     /** Called when the user chooses Remove on an action type or tool row. */
     onRemove?(itemId: number): void;
+    /** Called when the user chooses Test… on an action type or tool row. */
+    onTest?(itemId: number): void;
 }
 
 const GROUPS: { type: CompositionItemType; title: string }[] = [
@@ -116,6 +118,7 @@ export function CompositionTree(props: CompositionTreeProps) {
                                 isRemovable={item.type !== "workflow" && !!props.onRemove
                                     && composition.turnState !== "ai-working"}
                                 onRemove={() => props.onRemove?.(item.id)}
+                                onTest={props.onTest ? () => props.onTest?.(item.id) : undefined}
                                 onClick={() => {
                                     setSelected(item.id);
                                     onOpen(item.id);
@@ -149,12 +152,13 @@ export function CompositionTree(props: CompositionTreeProps) {
     );
 }
 
-function ItemRow({ item, isActive, isRemovable, onClick, onRemove, children }: {
+function ItemRow({ item, isActive, isRemovable, onClick, onRemove, onTest, children }: {
     item: CompositionItem;
     isActive: boolean;
     isRemovable: boolean;
     onClick(): void;
     onRemove(): void;
+    onTest?: () => void;
     children: ReactNode;
 }) {
     const [menuOpen, setMenuOpen] = useState<boolean>(false);
@@ -173,6 +177,7 @@ function ItemRow({ item, isActive, isRemovable, onClick, onRemove, children }: {
                             isExpanded={menuOpen} onClick={() => setMenuOpen((o) => !o)} />
                     )}>
                     <DropdownList>
+                        {onTest && <DropdownItem value="test" onClick={onTest}>Test…</DropdownItem>}
                         <DropdownItem value="remove" isDisabled={!isRemovable} onClick={onRemove}>Remove</DropdownItem>
                     </DropdownList>
                 </Dropdown>

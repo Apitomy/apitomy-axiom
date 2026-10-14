@@ -16,9 +16,9 @@ const problems = {
     3: [{ severity: "error", code: "e", message: "e" }],
 } as Record<number, c.ConfigProblem[]>;
 
-function renderTree(onOpen = vi.fn(), onRemove = vi.fn()) {
+function renderTree(onOpen = vi.fn(), onRemove = vi.fn(), onTest = vi.fn()) {
     render(<CompositionTree composition={composition} items={items} problems={problems} lastCompletedTurnId="t1"
-        selectedItemId={undefined} onOpen={onOpen} onRemove={onRemove} />);
+        selectedItemId={undefined} onOpen={onOpen} onRemove={onRemove} onTest={onTest} />);
     return onOpen;
 }
 
@@ -97,6 +97,14 @@ describe("CompositionTree", () => {
         fireEvent.click(screen.getByLabelText("Actions for tl"));
         fireEvent.click(await screen.findByRole("menuitem", { name: "Remove" }));
         expect(onRemove).toHaveBeenCalledWith(3);
+    });
+
+    it("offers Test… on action type and tool rows", async () => {
+        const onTest = vi.fn();
+        renderTree(vi.fn(), vi.fn(), onTest);
+        fireEvent.click(screen.getByLabelText("Actions for at"));
+        fireEvent.click(await screen.findByRole("menuitem", { name: "Test…" }));
+        expect(onTest).toHaveBeenCalledWith(2);
     });
 
     it("warns when the removed item is still in use", () => {
