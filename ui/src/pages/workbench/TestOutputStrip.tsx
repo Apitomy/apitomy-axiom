@@ -78,10 +78,18 @@ export function TestOutputStrip({ runs, collapsed, onToggle, onOpenItem, actions
     const [selectedId, setSelectedId] = useState<string | null>(null);
     // Show the latest version of the selected run (it may still be running when the dialog opens).
     const selected: CompositionTestRun | undefined = runs.find((r) => r.id === selectedId);
-    const onRowKey = (e: KeyboardEvent, id: string) => {
+    /** A suggested run opens the Test dialog (Run…); any other run opens its details. */
+    const activate = (run: CompositionTestRun) => {
+        if (run.status === "suggested" && onRunSuggestion) {
+            onRunSuggestion(run);
+        } else {
+            setSelectedId(run.id);
+        }
+    };
+    const onRowKey = (e: KeyboardEvent, run: CompositionTestRun) => {
         if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            setSelectedId(id);
+            activate(run);
         }
     };
     return (
@@ -106,8 +114,10 @@ export function TestOutputStrip({ runs, collapsed, onToggle, onOpenItem, actions
                         {runs.map((run) => (
                             <li key={run.id}>
                                 <div className="axiom-test-strip__row" role="button" tabIndex={0}
-                                    aria-label={`Show details of the ${run.itemName} test run`}
-                                    onClick={() => setSelectedId(run.id)} onKeyDown={(e) => onRowKey(e, run.id)}>
+                                    aria-label={run.status === "suggested" && onRunSuggestion
+                                        ? `Run the suggested ${run.itemName} test`
+                                        : `Show details of the ${run.itemName} test run`}
+                                    onClick={() => activate(run)} onKeyDown={(e) => onRowKey(e, run)}>
                                     <StatusIcon status={run.status} />
                                     <Button variant="link" isInline onClick={(e) => {
                                         e.stopPropagation();

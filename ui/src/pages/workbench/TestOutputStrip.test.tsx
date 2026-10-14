@@ -62,6 +62,9 @@ describe("TestOutputStrip", () => {
         fireEvent.click(screen.getByRole("button", { name: "Run…" }));
         expect(onRunSuggestion).toHaveBeenCalledWith(suggested);
         expect(screen.queryByRole("dialog")).toBeNull();
+        fireEvent.click(screen.getByRole("button", { name: "Run the suggested list-labels test" }));
+        expect(onRunSuggestion).toHaveBeenCalledTimes(2);
+        expect(screen.queryByRole("dialog")).toBeNull();
     });
 
     it("summarizes a failed run with no problems by its last stderr line", () => {
