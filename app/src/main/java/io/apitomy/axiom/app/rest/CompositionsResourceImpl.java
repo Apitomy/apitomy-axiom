@@ -362,6 +362,7 @@ public class CompositionsResourceImpl implements CompositionsResource {
         result.setType(write.item().itemType);
         result.setName(write.item().name);
         result.setContentRevision(write.item().contentRevision);
+        result.setCreated(write.created());
         result.setValid(isValid(write.problems()));
         result.setProblems(toProblemBeans(write.problems()));
         return result;

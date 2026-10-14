@@ -139,6 +139,7 @@ class CompositionTurnsTest {
         ObjectNode tool = CompositionItems.blank(ConfigItemType.TOOL, "ct-tool", mapper);
         tool.put("description", "v1");
         CompositionTurns.AgentWrite write = turns.upsert(composition.id, "tool", tool);
+        assertTrue(write.created());
         assertEquals("ai", write.item().lastAuthor);
         assertEquals(turnId, write.item().lastTurnId);
         List<CompositionRevisionEntity> created = service.revisions(composition.id, write.item().id);
@@ -146,7 +147,9 @@ class CompositionTurnsTest {
         assertEquals("ai", created.get(0).author);
         assertEquals(turnId, created.get(0).turnId);
         tool.put("description", "v2");
-        assertEquals(turnId, turns.upsert(composition.id, "tool", tool).item().lastTurnId);
+        CompositionTurns.AgentWrite updated = turns.upsert(composition.id, "tool", tool);
+        assertFalse(updated.created());
+        assertEquals(turnId, updated.item().lastTurnId);
         assertEquals(1, service.items(composition.id).stream().filter(i -> "tool".equals(i.itemType)).count());
         assertThrows(IllegalArgumentException.class,
                 () -> turns.upsert(composition.id, "workflow", CompositionItems.blank(ConfigItemType.WORKFLOW, "x", mapper)));

@@ -6540,6 +6540,10 @@
             "items": {
               "$ref": "#/components/schemas/ConfigProblem"
             }
+          },
+          "created": {
+            "description": "True when the call created the item",
+            "type": "boolean"
           }
         }
       },

@@ -97,8 +97,9 @@ public class CompositionTurns {
      *
      * @param item the saved item
      * @param problems its validation problems
+     * @param created true when the write created the item (false when it updated an existing one)
      */
-    public record AgentWrite(CompositionItemEntity item, List<ConfigProblem> problems) {
+    public record AgentWrite(CompositionItemEntity item, List<ConfigProblem> problems, boolean created) {
     }
 
     private static final Logger LOG = Logger.getLogger(CompositionTurns.class);
@@ -294,7 +295,7 @@ public class CompositionTurns {
                     : service.addWithContent(compositionId, itemType, name, content, CompositionService.AUTHOR_AI,
                             turn.turnId);
             List<ConfigProblem> problems = validator.validateContent(compositionId, itemType, saved.name, content);
-            return new AgentWrite(saved, problems);
+            return new AgentWrite(saved, problems, existing == null);
         });
         if (itemType == ConfigItemType.WORKFLOW) {
             setBase(turn, write.item());

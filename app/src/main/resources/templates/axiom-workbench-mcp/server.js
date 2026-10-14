@@ -211,7 +211,7 @@ const TOOLS = [
             const content = asObject(args.item, "item");
             const r = JSON.parse(await axiomApi("PUT", `${agentBase()}/items`, { type: args.type, content }));
             const lines = formatProblems(r.problems);
-            return `${statusOf(r)}: ${r.type}/${r.name} (revision ${r.contentRevision})`
+            return `${statusOf(r)}: ${r.type}/${r.name} (${r.created ? "created" : "updated"}, revision ${r.contentRevision})`
                 + (lines ? "\n" + lines : "");
         },
     },

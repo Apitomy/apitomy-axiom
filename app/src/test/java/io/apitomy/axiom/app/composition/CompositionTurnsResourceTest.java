@@ -106,7 +106,10 @@ class CompositionTurnsResourceTest {
         Map<String, Object> tool = Map.of("type", "tool", "content",
                 Map.of("name", "ctr-tool", "description", "d", "parameters", List.of(), "scriptTemplate", "echo hi"));
         given().header("X-Axiom-Session-Token", "good").contentType(ContentType.JSON).body(tool)
-                .put(BASE + "/{id}/agent/items", compositionId).then().statusCode(200).body("name", equalTo("ctr-tool"));
+                .put(BASE + "/{id}/agent/items", compositionId).then().statusCode(200).body("name", equalTo("ctr-tool"))
+                .body("created", equalTo(true));
+        given().header("X-Axiom-Session-Token", "good").contentType(ContentType.JSON).body(tool)
+                .put(BASE + "/{id}/agent/items", compositionId).then().statusCode(200).body("created", equalTo(false));
         String turnId = given().get(BASE + "/{id}", compositionId).then().extract().path("currentTurnId");
 
         turns.onSessionEvent(new WorkbenchSessionEvent(compositionId, WorkbenchSessionEvent.Kind.TURN_COMPLETE, null));
