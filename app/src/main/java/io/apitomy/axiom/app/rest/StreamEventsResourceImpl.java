@@ -3,6 +3,8 @@ package io.apitomy.axiom.app.rest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.StreamResource;
 import io.apitomy.axiom.app.EventStreamOrchestrator;
+import io.apitomy.axiom.app.RunRequest;
+import io.apitomy.axiom.app.WorkflowRunBeanMapper;
 import io.apitomy.axiom.api.beans.Actor;
 import io.apitomy.axiom.api.beans.EventProcessingEntry;
 import io.apitomy.axiom.api.beans.EventProcessingOutcome;
@@ -12,6 +14,9 @@ import io.apitomy.axiom.api.beans.Payload;
 import io.apitomy.axiom.api.beans.SourceData;
 import io.apitomy.axiom.api.beans.StreamEvent;
 import io.apitomy.axiom.api.beans.StreamEventSearchResults;
+import io.apitomy.axiom.api.beans.StreamEventWorkflowSuggestion;
+import io.apitomy.axiom.api.beans.TriggerWorkflow;
+import io.apitomy.axiom.api.beans.WorkflowInstance;
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.SubjectEntity;
@@ -19,6 +24,7 @@ import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
+import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
@@ -31,6 +37,7 @@ import org.jboss.logging.Logger;
 import java.math.BigInteger;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -51,6 +58,9 @@ public class StreamEventsResourceImpl implements StreamResource {
 
     @Inject
     EventStreamOrchestrator orchestrator;
+
+    @Inject
+    WorkflowRunBeanMapper runBeanMapper;
 
     @Override
     public StreamEventSearchResults listStreamEvents(BigInteger page, BigInteger limit,
@@ -165,6 +175,91 @@ public class StreamEventsResourceImpl implements StreamResource {
             throw new WebApplicationException("Processing entry not found: " + ledgerId, 404);
         }
         return toProcessingEntries(List.of(retried)).get(0);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public WorkflowInstance triggerStreamEventWorkflow(String eventId, TriggerWorkflow data) {
+        if (data == null || data.getWorkflowDefinitionId() == null) {
+            throw new WebApplicationException(
+                    "Missing required 'workflowDefinitionId' field", 400);
+        }
+        StreamEventEntity event = findEventOrThrow(eventId);
+        Map<String, String> labels = new LinkedHashMap<>();
+        if (data.getLabels() != null && data.getLabels().getAdditionalProperties() != null) {
+            data.getLabels().getAdditionalProperties().forEach((key, value) ->
+                    labels.put(key, value != null ? String.valueOf(value) : null));
+        }
+        labels.put("trigger", "manual");
+        RunRequest request = new RunRequest(data.getTitle(), labels,
+                data.getInputs() != null ? data.getInputs().getAdditionalProperties() : null, null);
+        WorkflowRunEntity run = orchestrator.startRunFromEvent(event, data.getWorkflowDefinitionId(),
+                request, null);
+        return runBeanMapper.toBean(run);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List<StreamEventWorkflowSuggestion> listStreamEventWorkflowSuggestions(String eventId) {
+        StreamEventEntity event = findEventOrThrow(eventId);
+        List<EventProcessingLedgerEntity> entries = EventProcessingLedgerEntity
+                .find("eventId = ?1 AND status = 'completed' ORDER BY createdOn ASC", event.id).list();
+        Map<String, StreamEventWorkflowSuggestion> suggestions = new LinkedHashMap<>();
+        Map<Long, WorkflowDefinitionEntity> definitions = new HashMap<>();
+        for (EventProcessingLedgerEntity entry : entries) {
+            EventSubscriptionEntity sub = EventSubscriptionEntity.findById(entry.subscriptionId);
+            if (sub == null || sub.routing == null || sub.routing.isBlank()) {
+                continue;
+            }
+            List<io.apitomy.axiom.api.beans.RoutingRule> rules;
+            try {
+                rules = objectMapper.readValue(sub.routing, objectMapper.getTypeFactory()
+                        .constructCollectionType(List.class, io.apitomy.axiom.api.beans.RoutingRule.class));
+            } catch (Exception ex) {
+                LOG.warnf("Failed to parse routing rules for subscription %d", sub.id);
+                continue;
+            }
+            for (io.apitomy.axiom.api.beans.RoutingRule rule : rules) {
+                Long definitionId = rule.getWorkflowDefinitionId();
+                if (!"create-workflow".equals(String.valueOf(rule.getType())) || definitionId == null) {
+                    continue;
+                }
+                String key = definitionId + "/" + sub.id;
+                if (suggestions.containsKey(key)) {
+                    continue;
+                }
+                WorkflowDefinitionEntity definition = definitions.computeIfAbsent(definitionId,
+                        id -> WorkflowDefinitionEntity.findById(id));
+                if (definition == null) {
+                    continue;
+                }
+                StreamEventWorkflowSuggestion suggestion = new StreamEventWorkflowSuggestion();
+                suggestion.setWorkflowDefinitionId(definitionId);
+                suggestion.setWorkflowName(definition.name);
+                suggestion.setSubscriptionId(sub.id);
+                suggestion.setSubscriptionName(sub.name);
+                suggestions.put(key, suggestion);
+            }
+        }
+        return List.copyOf(suggestions.values());
+    }
+
+    private StreamEventEntity findEventOrThrow(String eventId) {
+        UUID id;
+        try {
+            id = UUID.fromString(eventId);
+        } catch (IllegalArgumentException e) {
+            throw new WebApplicationException("Stream event not found: " + eventId, 404);
+        }
+        StreamEventEntity event = StreamEventEntity.findById(id);
+        if (event == null) {
+            throw new WebApplicationException("Stream event not found: " + eventId, 404);
+        }
+        return event;
     }
 
     /**

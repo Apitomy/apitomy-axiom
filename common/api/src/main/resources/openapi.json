@@ -4181,6 +4181,15 @@
             }
           },
           {
+            "name": "triggerEventId",
+            "in": "query",
+            "description": "Filter by the stream event that triggered the run",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
             "name": "page",
             "in": "query",
             "schema": {
@@ -6325,6 +6334,99 @@
           "schema": {
             "format": "int64",
             "type": "integer"
+          }
+        }
+      ]
+    },
+    "/stream/events/{eventId}/runs": {
+      "post": {
+        "tags": [
+          "StreamEvents"
+        ],
+        "summary": "Start a workflow run from a stream event",
+        "description": "Runs the workflow on the event's subject (found or created from the event ref) with the event in the run context. The run is labelled trigger=manual; no processing (ledger) entry is recorded.",
+        "operationId": "triggerStreamEventWorkflow",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriggerWorkflow"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Workflow triggered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowInstance"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Workflow definition not published or invalid inputs"
+          },
+          "404": {
+            "description": "Event or workflow definition not found"
+          },
+          "409": {
+            "description": "Subject already has an active run of this workflow definition"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "eventId",
+          "in": "path",
+          "description": "Stream event ID",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    "/stream/events/{eventId}/workflow-suggestions": {
+      "get": {
+        "tags": [
+          "StreamEvents"
+        ],
+        "summary": "List workflows suggested for a stream event",
+        "description": "Workflows started by create-workflow routing rules of subscriptions that matched the event.",
+        "operationId": "listStreamEventWorkflowSuggestions",
+        "responses": {
+          "200": {
+            "description": "Suggested workflows",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StreamEventWorkflowSuggestion"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "eventId",
+          "in": "path",
+          "description": "Stream event ID",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
           }
         }
       ]
@@ -11473,6 +11575,31 @@
               "script",
               "node"
             ],
+            "type": "string"
+          }
+        }
+      },
+      "StreamEventWorkflowSuggestion": {
+        "type": "object",
+        "required": [
+          "workflowDefinitionId",
+          "workflowName",
+          "subscriptionId",
+          "subscriptionName"
+        ],
+        "properties": {
+          "workflowDefinitionId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "workflowName": {
+            "type": "string"
+          },
+          "subscriptionId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "subscriptionName": {
             "type": "string"
           }
         }

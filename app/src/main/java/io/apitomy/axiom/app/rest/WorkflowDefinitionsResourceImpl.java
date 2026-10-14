@@ -453,8 +453,17 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
     @Override
     public io.apitomy.axiom.api.beans.WorkflowRunSearchResults listWorkflowRuns(
             Long subjectId, String status, Long definitionId, java.util.List<String> label,
-            java.math.BigInteger page, java.math.BigInteger limit) {
-        return runBeanMapper.search(subjectId, definitionId, status, label, page, limit);
+            String triggerEventId, java.math.BigInteger page, java.math.BigInteger limit) {
+        java.util.UUID eventId = null;
+        if (triggerEventId != null && !triggerEventId.isBlank()) {
+            try {
+                eventId = java.util.UUID.fromString(triggerEventId);
+            } catch (IllegalArgumentException e) {
+                throw new WebApplicationException("Invalid triggerEventId: " + triggerEventId,
+                        Response.Status.BAD_REQUEST);
+            }
+        }
+        return runBeanMapper.search(subjectId, definitionId, status, label, eventId, page, limit);
     }
 
     /**

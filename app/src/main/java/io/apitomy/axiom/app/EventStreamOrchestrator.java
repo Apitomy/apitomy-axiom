@@ -718,12 +718,66 @@ public class EventStreamOrchestrator {
                     "create-workflow routing rule missing workflowDefinitionId");
         }
         Long subjectId = findOrCreateSubjectForEvent(event, null);
+        WorkflowRunEntity run;
+        try {
+            run = startRunFromEvent(event, subjectId, rule.workflowDefinitionId(),
+                    new RunRequest(null, null, null, null), ledgerId);
+        } catch (WorkflowRunConflictException e) {
+            String summary = "Skipped: subject already has an active run of definition "
+                    + rule.workflowDefinitionId();
+            LOG.infof("%s (event %s, subject %d)", summary, event.id, subjectId);
+            RoutingOutcomeEntity skipped = new RoutingOutcomeEntity();
+            skipped.status = "completed";
+            skipped.summary = summary;
+            skipped.subjectId = subjectId;
+            RoutingOutcomeItemEntity item = newItem(RoutingOutcomeItemEntity.TYPE_WORKFLOW_RUN,
+                    "skipped", summary);
+            item.subjectId = subjectId;
+            skipped.pendingItems.add(item);
+            return skipped;
+        }
 
+        RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
+        outcome.status = "completed";
+        outcome.summary = "Created workflow from definition " + rule.workflowDefinitionId();
+        outcome.subjectId = subjectId;
+        outcome.traceId = run != null ? run.traceId : null;
+        RoutingOutcomeItemEntity item = newItem(RoutingOutcomeItemEntity.TYPE_WORKFLOW_RUN,
+                "completed", "Workflow run from definition " + rule.workflowDefinitionId());
+        item.subjectId = subjectId;
+        item.workflowRunId = run != null ? run.id : null;
+        outcome.pendingItems.add(item);
+        return outcome;
+    }
+
+    /**
+     * Starts a run of a workflow definition for a stream event: resolves (or creates) the event's subject,
+     * puts the event into the run context as {@code event}, and starts the run in its own transaction.
+     * Used both by {@code create-workflow} routing rules and by manual "run from event" requests.
+     *
+     * @param event        the stream event
+     * @param definitionId the workflow definition to run
+     * @param request      run title, labels and inputs; its extra context is merged with the event
+     * @param ledgerId     the processing (ledger) entry that triggered the run; null for manual runs
+     * @return the started run
+     * @throws WorkflowRunConflictException if the subject already has an active run of the definition
+     */
+    public WorkflowRunEntity startRunFromEvent(StreamEventEntity event, long definitionId,
+                                               RunRequest request, Long ledgerId) {
+        Long subjectId = findOrCreateSubjectForEvent(event, null);
+        return startRunFromEvent(event, subjectId, definitionId, request, ledgerId);
+    }
+
+    private WorkflowRunEntity startRunFromEvent(StreamEventEntity event, Long subjectId, long definitionId,
+                                                RunRequest request, Long ledgerId) {
         // Build the event as a JsonNode so the workflow context can access
         // event fields via EL expressions (e.g., context.event.type,
         // context.event.payload.issue.title). The flow engine's
         // JsonNodeELResolver handles JsonNode navigation in EL.
         Map<String, Object> extraContext = new HashMap<>();
+        if (request.extraContext() != null) {
+            extraContext.putAll(request.extraContext());
+        }
         try {
             com.fasterxml.jackson.databind.node.ObjectNode eventNode = objectMapper.createObjectNode();
             eventNode.put("id", event.id.toString());
@@ -743,42 +797,16 @@ public class EventStreamOrchestrator {
             LOG.warnf(e, "Failed to build event context for workflow creation");
         }
 
-        WorkflowRunEntity run;
-        try {
-            run = QuarkusTransaction.requiringNew().call(() ->
-                    workflowExecutionService.triggerWorkflow(subjectId, rule.workflowDefinitionId(),
-                            new RunRequest(null, null, null, extraContext),
-                            new EventOrigin(event.id, ledgerId)));
-        } catch (WorkflowRunConflictException e) {
-            String summary = "Skipped: subject already has an active run of definition "
-                    + rule.workflowDefinitionId();
-            LOG.infof("%s (event %s, subject %d)", summary, event.id, subjectId);
-            RoutingOutcomeEntity skipped = new RoutingOutcomeEntity();
-            skipped.status = "completed";
-            skipped.summary = summary;
-            skipped.subjectId = subjectId;
-            RoutingOutcomeItemEntity item = newItem(RoutingOutcomeItemEntity.TYPE_WORKFLOW_RUN,
-                    "skipped", summary);
-            item.subjectId = subjectId;
-            skipped.pendingItems.add(item);
-            return skipped;
-        }
+        RunRequest effective = new RunRequest(request.title(), request.labels(), request.inputs(),
+                extraContext);
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(subjectId, definitionId, effective,
+                        new EventOrigin(event.id, ledgerId)));
         LOG.infof("Created workflow (definition %d) for event %s on subject %d",
-                rule.workflowDefinitionId(), event.id, subjectId);
+                definitionId, event.id, subjectId);
 
         sseEvents.fire(SseEvent.subjectUpdated(subjectId));
-
-        RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
-        outcome.status = "completed";
-        outcome.summary = "Created workflow from definition " + rule.workflowDefinitionId();
-        outcome.subjectId = subjectId;
-        outcome.traceId = run != null ? run.traceId : null;
-        RoutingOutcomeItemEntity item = newItem(RoutingOutcomeItemEntity.TYPE_WORKFLOW_RUN,
-                "completed", "Workflow run from definition " + rule.workflowDefinitionId());
-        item.subjectId = subjectId;
-        item.workflowRunId = run != null ? run.id : null;
-        outcome.pendingItems.add(item);
-        return outcome;
+        return run;
     }
 
     private Long findOrCreateSubjectForEvent(StreamEventEntity event, UUID traceId) {

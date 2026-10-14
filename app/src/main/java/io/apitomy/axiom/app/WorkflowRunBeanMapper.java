@@ -243,6 +243,26 @@ public class WorkflowRunBeanMapper {
      */
     public WorkflowRunSearchResults search(Long subjectId, Long definitionId, String status,
                                            List<String> labels, BigInteger page, BigInteger limit) {
+        return search(subjectId, definitionId, status, labels, null, page, limit);
+    }
+
+    /**
+     * Searches runs with optional subject/definition/status/label/triggering-event filters, newest first.
+     * Label filtering works as described in
+     * {@link #search(Long, Long, String, List, BigInteger, BigInteger)}.
+     *
+     * @param subjectId      optional subject filter (nullable)
+     * @param definitionId   optional definition filter (nullable)
+     * @param status         optional comma-separated status filter (nullable)
+     * @param labels         optional label filters in {@code key:value} form (nullable)
+     * @param triggerEventId optional filter on the stream event that triggered the run (nullable)
+     * @param page           1-based page number (nullable → 1)
+     * @param limit          page size (nullable → 20)
+     * @return paginated run summaries
+     */
+    public WorkflowRunSearchResults search(Long subjectId, Long definitionId, String status,
+                                           List<String> labels, java.util.UUID triggerEventId,
+                                           BigInteger page, BigInteger limit) {
         int pageNum = page != null ? Math.max(1, page.intValue()) : 1;
         int pageSize = limit != null ? Math.max(1, limit.intValue()) : 20;
 
@@ -255,6 +275,10 @@ public class WorkflowRunBeanMapper {
         if (definitionId != null) {
             hql.append(" and definitionId = :definitionId");
             params.put("definitionId", definitionId);
+        }
+        if (triggerEventId != null) {
+            hql.append(" and triggerEventId = :triggerEventId");
+            params.put("triggerEventId", triggerEventId);
         }
         if (status != null && !status.isBlank()) {
             hql.append(" and status in :statuses");
