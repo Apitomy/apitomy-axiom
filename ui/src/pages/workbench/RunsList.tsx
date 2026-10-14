@@ -42,14 +42,14 @@ export function RunsList({ runs, published, error, onOpenRun, onAskAi }: RunsLis
                             onClick={() => onOpenRun(run.runId)} onKeyDown={(e) => onRowKey(e, run)}>
                             <Label isCompact color={STATUS_COLORS[run.status] || "grey"}>{run.status}</Label>
                             <span>#{run.runId}</span>
-                            <span>{run.title}</span>
+                            {/* The title takes the remaining width and is truncated, so the row never scrolls sideways. */}
+                            <span className="axiom-test-strip__summary" title={run.title}>{run.title}</span>
                             <span className="axiom-text-subtle">v{run.definitionVersion}</span>
                             <span className="axiom-text-subtle">
                                 {new Date(run.startedOn).toLocaleString()}
                                 {(run.status === "failed" || run.status === "waiting") && run.currentNodeName
                                     ? ` · ${run.currentNodeName}` : ""}
                             </span>
-                            <span className="axiom-test-strip__summary" />
                             {run.status === "failed" && (
                                 <Button variant="link" isInline size="sm" onClick={(e) => {
                                     e.stopPropagation();
