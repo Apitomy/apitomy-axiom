@@ -119,6 +119,12 @@ export function TestRunDetailModal({ run, onClose, onOpenItem, onRunSuggestion }
                     )}
                 </dl>
 
+                {run.status === "suggested" && onRunSuggestion && (
+                    <p className="axiom-text-subtle axiom-test-run__section">
+                        The AI suggested this test. Choose Run… to review and edit the {run.itemType === "tool"
+                            ? "parameters" : "inputs"} before running it.
+                    </p>
+                )}
                 {run.message && <Alert isInline variant="warning" title={run.message} className="axiom-test-run__section" />}
                 {problems.length > 0 && (
                     <Alert isInline variant="danger" title="Problems" className="axiom-test-run__section">

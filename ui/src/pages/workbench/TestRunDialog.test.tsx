@@ -48,4 +48,11 @@ describe("TestRunDialog", () => {
         expect(screen.getByText("Test runs of AI Agent action types are not supported yet.")).toBeTruthy();
         expect(screen.queryByRole("button", { name: "Run" })).toBeNull();
     });
+
+    it("invites the user to review an AI suggestion", () => {
+        render(<TestRunDialog itemName="greet" itemType="action-type" content={content} initialValues={{ who: "ai" }}
+            isSuggestion onRun={vi.fn()} onClose={vi.fn()} />);
+        expect(screen.getByText("Suggested by AI")).toBeTruthy();
+        expect((screen.getByLabelText("who") as HTMLInputElement).value).toBe("ai");
+    });
 });

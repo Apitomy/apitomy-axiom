@@ -14,6 +14,8 @@ export interface TestRunDialogProps {
     /** Texts typed in the previous run of this item. */
     initialValues: Record<string, string>;
     initialSubjectId?: number;
+    /** True when the values come from an AI-suggested test; the dialog then invites the user to review them. */
+    isSuggestion?: boolean;
     /** Called with the parsed inputs, the raw texts and the chosen subject. */
     onRun(inputs: Record<string, unknown>, values: Record<string, string>, subjectId?: number): void;
     onClose(): void;
@@ -62,6 +64,11 @@ export function TestRunDialog(props: TestRunDialogProps) {
             <ModalBody>
                 {unsupported ? <Alert isInline variant="info" title={unsupported} /> : (
                     <Form onSubmit={(e) => { e.preventDefault(); run(); }}>
+                        {props.isSuggestion && (
+                            <Alert isInline variant="info" title="Suggested by AI">
+                                These are the AI's sample {noun}. Review and change them as needed before running.
+                            </Alert>
+                        )}
                         {fields.length === 0 && <p className="axiom-text-subtle">No {noun} are declared.</p>}
                         {fields.map((field) => {
                             const multiline: boolean = field.type === "object" || field.type === "array";

@@ -608,6 +608,7 @@ export function WorkbenchPage() {
                 return item && (
                     <TestRunDialog itemName={item.name} itemType={item.type === "tool" ? "tool" : "action-type"}
                         content={wb.contents[testing]} initialValues={remembered?.values ?? {}}
+                        isSuggestion={suggestion !== null}
                         initialSubjectId={remembered?.subjectId} onClose={() => {
                             suggestedValues.current = null;
                             setTesting(null);
