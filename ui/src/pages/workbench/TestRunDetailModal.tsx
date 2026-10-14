@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
-    Alert, Button, DescriptionList, DescriptionListDescription, DescriptionListGroup, DescriptionListTerm,
-    ExpandableSection, Label, Modal, ModalBody, ModalFooter, ModalHeader, Title,
+    Alert, Button, ExpandableSection, Label, Modal, ModalBody, ModalFooter, ModalHeader, Title,
 } from "@patternfly/react-core";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import type { CompositionTestRun } from "../../config/compositions";
@@ -85,42 +84,40 @@ export function TestRunDetailModal({ run, onClose, onOpenItem, onRunSuggestion }
             elementToFocus="#test-run-detail-primary">
             <ModalHeader title={`Test run: ${run.itemName}`} labelId="test-run-detail-title" />
             <ModalBody>
-                <DescriptionList isHorizontal isCompact columnModifier={{ default: "2Col" }}>
-                    <DescriptionListGroup>
-                        <DescriptionListTerm>Status</DescriptionListTerm>
-                        <DescriptionListDescription>
-                            <Label isCompact color={STATUS_COLOR[run.status]}>{run.status}</Label>
-                        </DescriptionListDescription>
-                    </DescriptionListGroup>
-                    <DescriptionListGroup>
-                        <DescriptionListTerm>{kind}</DescriptionListTerm>
-                        <DescriptionListDescription>
+                <dl className="axiom-test-run__meta">
+                    <div>
+                        <dt>Status</dt>
+                        <dd><Label isCompact color={STATUS_COLOR[run.status]}>{run.status}</Label></dd>
+                    </div>
+                    <div>
+                        <dt>{kind}</dt>
+                        <dd>
                             <Button variant="link" isInline onClick={() => { onOpenItem(run.itemId); onClose(); }}>
                                 {run.itemName}
                             </Button>
-                        </DescriptionListDescription>
-                    </DescriptionListGroup>
-                    <DescriptionListGroup>
-                        <DescriptionListTerm>Started</DescriptionListTerm>
-                        <DescriptionListDescription>{new Date(run.startedAt).toLocaleString()}</DescriptionListDescription>
-                    </DescriptionListGroup>
-                    <DescriptionListGroup>
-                        <DescriptionListTerm>By</DescriptionListTerm>
-                        <DescriptionListDescription>{run.author === "ai" ? "AI" : "You"}</DescriptionListDescription>
-                    </DescriptionListGroup>
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>Started</dt>
+                        <dd>{new Date(run.startedAt).toLocaleString()}</dd>
+                    </div>
+                    <div>
+                        <dt>By</dt>
+                        <dd>{run.author === "ai" ? "AI" : "You"}</dd>
+                    </div>
                     {run.durationMs !== undefined && run.status !== "suggested" && (
-                        <DescriptionListGroup>
-                            <DescriptionListTerm>Duration</DescriptionListTerm>
-                            <DescriptionListDescription>{run.durationMs} ms</DescriptionListDescription>
-                        </DescriptionListGroup>
+                        <div>
+                            <dt>Duration</dt>
+                            <dd>{run.durationMs} ms</dd>
+                        </div>
                     )}
                     {run.exitCode !== undefined && (
-                        <DescriptionListGroup>
-                            <DescriptionListTerm>Exit code</DescriptionListTerm>
-                            <DescriptionListDescription>{run.exitCode}</DescriptionListDescription>
-                        </DescriptionListGroup>
+                        <div>
+                            <dt>Exit code</dt>
+                            <dd>{run.exitCode}</dd>
+                        </div>
                     )}
-                </DescriptionList>
+                </dl>
 
                 {run.message && <Alert isInline variant="warning" title={run.message} className="axiom-test-run__section" />}
                 {problems.length > 0 && (

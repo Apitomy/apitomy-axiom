@@ -380,3 +380,26 @@ span.axiom-workbench__row-menu {
 .axiom-test-strip__header {
     background-color: var(--pf-t--global--background--color--secondary--default);
 }
+
+/* Test run metadata on one wrapping line of compact "term value" pairs. */
+.axiom-test-run__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pf-t--global--spacer--xs, 4px) var(--pf-t--global--spacer--lg, 24px);
+    margin: 0;
+}
+
+.axiom-test-run__meta > div {
+    display: flex;
+    align-items: center;
+    gap: var(--pf-t--global--spacer--sm, 8px);
+}
+
+.axiom-test-run__meta dt {
+    color: var(--pf-t--global--text--color--subtle);
+}
+
+.axiom-test-run__meta dd {
+    margin: 0;
+}
