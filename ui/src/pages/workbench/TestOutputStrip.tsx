@@ -63,6 +63,10 @@ export function runSummary(run: CompositionTestRun): string {
     if (run.itemType === "action-type" && run.outputs) {
         return `Outputs: ${JSON.stringify(run.outputs)}`;
     }
+    // A tool has no declared outputs: show the last line it printed.
+    if (run.itemType === "tool") {
+        return (run.stdout ?? "").split("\n").map((l) => l.trim()).filter((l) => l !== "").pop() ?? "";
+    }
     return "";
 }
 

@@ -58,4 +58,9 @@ describe("TestOutputStrip", () => {
             status: "failed", startedAt: "", exitCode: 1, problems: [], stderr: "first\nError: HTTP 404: Not Found\n    at run (action.mjs:3:9)\n\n" }))
             .toBe("Error: HTTP 404: Not Found");
     });
+
+    it("summarizes a passed tool run by its last stdout line", () => {
+        expect(runSummary({ id: "t", itemId: 1, itemType: "tool", itemName: "x", author: "user",
+            status: "passed", startedAt: "", exitCode: 0, problems: [], stdout: "counting\n4\n" })).toBe("4");
+    });
 });
