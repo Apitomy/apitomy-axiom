@@ -88,4 +88,19 @@ describe("ChatPane", () => {
         await expect(chatProps.onSend("  /clear ")).rejects.toThrow("Clearing the conversation isn't supported in the workbench.");
         expect(send).not.toHaveBeenCalled();
     });
+
+    it("renders workbench tool calls as cards when tool actions are given", () => {
+        const toolActions = { openItem: vi.fn(), openWorkflow: vi.fn(), openSuggestion: vi.fn() };
+        render(<ChatPane {...props} toolActions={toolActions} />);
+        const out = chatProps.renderToolUseGroup([{ message: { id: "m", type: "tool_use",
+            toolName: "mcp__workbench__remove_item", toolInput: { type: "tool", name: "x" }, toolResult: "ok" },
+            genericBlock: null }]);
+        render(<div data-testid="out">{out}</div>);
+        expect(screen.getByTestId("out").textContent).toContain("Removed tool x");
+    });
+
+    it("keeps the generic tool blocks without tool actions", () => {
+        render(<ChatPane {...props} />);
+        expect(chatProps.renderToolUseGroup).toBeUndefined();
+    });
 });

@@ -3,9 +3,11 @@ import type { Workflow } from "@apitomy/flow-ui";
 import { Alert, AlertActionCloseButton, AlertActionLink, Button, Tooltip } from "@patternfly/react-core";
 import { UndoIcon } from "@patternfly/react-icons";
 import { AssistantChatPanel } from "../../components/assistant/AssistantChatPanel";
+import type { ToolUseRenderContext } from "../../components/assistant/AssistantMessageList";
 import { ApiError, type Composition, interruptComposition, sendCompositionMessage, undoTurn,
     type UndoResult } from "../../config/compositions";
 import { undoPlan } from "./workbenchLogic";
+import { renderWorkbenchToolGroup, type WorkbenchToolActions } from "./WorkbenchToolCards";
 
 /** Props for {@link ChatPane}. */
 export interface ChatPaneProps {
@@ -24,6 +26,8 @@ export interface ChatPaneProps {
     beforeUndo?: () => Promise<void>;
     /** Controls shown at the left of the chat toolbar (for example the pane collapse button). */
     toolbarStart?: ReactNode;
+    /** Navigation for the compact tool-call cards; without it tool calls render as generic blocks. */
+    toolActions?: WorkbenchToolActions;
 }
 
 function summarise(result: UndoResult, workflowRestored: boolean): string {
@@ -38,7 +42,7 @@ function summarise(result: UndoResult, workflowRestored: boolean): string {
  * composition's assistant chat.
  */
 export function ChatPane(props: ChatPaneProps) {
-    const { composition, sessionError, lastCompletedTurnId, toolbarStart } = props;
+    const { composition, sessionError, lastCompletedTurnId, toolbarStart, toolActions } = props;
     const [notice, setNotice] = useState<{ variant: "info" | "danger"; title: string; body?: string } | null>(null);
     const [undoing, setUndoing] = useState<boolean>(false);
     const [undoneTurnId, setUndoneTurnId] = useState<string | undefined>(undefined);
@@ -127,7 +131,9 @@ export function ChatPane(props: ChatPaneProps) {
             <AssistantChatPanel sessionId={sessionId} onSend={onSend}
                 onInterrupt={() => interruptComposition(composition.id)}
                 disabledReason={composition.turnState === "ai-working" ? "The AI is working…" : undefined}
-                prefill={props.prefill} />
+                prefill={props.prefill}
+                renderToolUseGroup={toolActions
+                    ? (group: ToolUseRenderContext[]) => renderWorkbenchToolGroup(group, toolActions) : undefined} />
         </div>
     );
 }

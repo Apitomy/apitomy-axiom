@@ -316,7 +316,7 @@ export function AssistantMessageList({ messages, onPermissionRespond, onCreateAu
                     const custom: ReactNode | null = renderToolUseGroup(segment.msgs.map((m, i) => (
                         { message: m, genericBlock: items[i] })));
                     if (custom === null || custom === undefined) {
-                        return items;
+                        return <Fragment key={`group-${segment.msgs[0].id}`}>{items}</Fragment>;
                     }
                     return <Fragment key={`group-${segment.msgs[0].id}`}>{custom}</Fragment>;
                 })

@@ -1,11 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { act, render, waitFor } from "@testing-library/react";
-import { useImperativeHandle } from "react";
+import { createRef, useImperativeHandle } from "react";
 import * as c from "../../config/compositions";
-import { WorkflowTab } from "./WorkflowTab";
+import { WorkflowTab, type WorkflowTabHandle } from "./WorkflowTab";
 
 const handle = { apply: vi.fn(), propose: vi.fn(), replace: vi.fn(), withdraw: vi.fn(), clearHighlights: vi.fn(),
-    getSnapshot: vi.fn() };
+    getSnapshot: vi.fn(), dispatch: vi.fn() };
 let editorProps: Record<string, any> = {};
 vi.mock("@apitomy/flow-ui", () => ({
     WorkflowEditor: (props: Record<string, any>) => {
@@ -153,5 +153,12 @@ describe("WorkflowTab", () => {
         act(() => editorProps.onChange(agent, { contentRevision: "x2", origin: "agent:axiom-workbench" }));
         await waitFor(() => expect(save).toHaveBeenCalledTimes(2), { timeout: 2000 });
         expect(save.mock.calls[1][2]).toEqual({ content: agent, baseRevision: "r1" });
+    });
+
+    it("selects a node through the editor", () => {
+        const ref = createRef<WorkflowTabHandle>();
+        render(<WorkflowTab {...base} pending={null} ref={ref} />);
+        ref.current!.selectNode("n1");
+        expect(handle.dispatch).toHaveBeenCalledWith({ type: "select", nodeId: "n1" });
     });
 });

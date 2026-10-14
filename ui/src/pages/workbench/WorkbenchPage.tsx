@@ -23,6 +23,7 @@ import { WorkflowTab, type WorkflowTabHandle } from "./WorkflowTab";
 import { ItemTab, type ItemTabHandle } from "./ItemTab";
 import { itemUsages, mergeCatalog } from "./workbenchLogic";
 import { ChatPane } from "./ChatPane";
+import type { WorkbenchToolActions } from "./WorkbenchToolCards";
 import { TestOutputStrip } from "./TestOutputStrip";
 import { TestRunDialog } from "./TestRunDialog";
 import { valuesFromInputs } from "./testRunLogic";
@@ -101,6 +102,16 @@ export function WorkbenchPage() {
     const mode: "live" | "review" = applyMode ?? composition?.applyMode ?? "live";
     const workflow: CompositionItem | undefined = wb.items.find((i) => i.type === "workflow");
     const aiWorking: boolean = composition?.turnState === "ai-working";
+    /** Node to select once the workflow tab is rendered (set by chat card links). */
+    const pendingNodeSelection = useRef<string | null>(null);
+    const [selectionRequest, setSelectionRequest] = useState<number>(0);
+    const workflowLoaded: boolean = Boolean(workflow && wb.contents[workflow.id]);
+    useEffect(() => {
+        const nodeId: string | null = pendingNodeSelection.current;
+        if (nodeId === null || activeTab !== "workflow" || !workflowTabRef.current) return;
+        pendingNodeSelection.current = null;
+        workflowTabRef.current.selectNode(nodeId);
+    }, [selectionRequest, activeTab, workflowLoaded]);
 
     const updatePrefs = useCallback((partial: Partial<WorkbenchPrefs>) => {
         setPrefs((prev) => ({ ...prev, ...partial }));
@@ -289,6 +300,31 @@ export function WorkbenchPage() {
         }
         suggestedValues.current = { itemId: item.id, values: valuesFromInputs(run.inputs) };
         setTesting(item.id);
+    };
+
+    /** Navigation for the compact chat cards of workbench tool calls. */
+    const toolActions: WorkbenchToolActions = {
+        openItem: (type, name) => {
+            const item: CompositionItem | undefined = wb.items.find((i) => i.type === type && i.name === name);
+            if (item) openItem(item.id);
+        },
+        openWorkflow: (nodeId) => {
+            setActiveTab("workflow");
+            if (nodeId) {
+                pendingNodeSelection.current = nodeId;
+                setSelectionRequest((n) => n + 1);
+            }
+        },
+        openSuggestion: (type, name) => {
+            const suggestion: CompositionTestRun | undefined = wb.testRuns
+                .filter((r) => r.status === "suggested" && r.itemType === type && r.itemName === name)
+                .sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0];
+            if (suggestion) {
+                void runSuggestion(suggestion);
+            } else {
+                toolActions.openItem(type, name);
+            }
+        },
     };
 
     /** Starts a test run; the strip shows progress via SSE, request failures show inline. */
@@ -571,7 +607,7 @@ export function WorkbenchPage() {
                             toolbarStart={<>{chatCollapseButton}<span className="axiom-workbench__pane-title">AI Assistant</span>
                                 <SessionBadge session={composition.session} /></>}
                             lastCompletedTurnId={wb.lastCompletedTurnId} prefill={prefill}
-                            beforeSend={beforeSend} onRetrySession={() => void wb.retrySession()}
+                            beforeSend={beforeSend} toolActions={toolActions} onRetrySession={() => void wb.retrySession()}
                             onReplaceWorkflow={(w) => workflowTabRef.current?.replace(w)}
                             lastWorkflowSaveTurnId={lastWorkflowSaveTurnId.current}
                             beforeUndo={() => workflowTabRef.current?.flush() ?? Promise.resolve()}

@@ -58,4 +58,20 @@ describe("AssistantMessageList tool use groups", () => {
         expect(container.querySelector("[data-tool-use-id='tu2']")).toBeTruthy();
         expect(renderer.mock.calls.flat(2).some((g) => g.message.id === "t2")).toBe(false);
     });
+
+    it("lets a call join a group once its permission is resolved", () => {
+        const pending: ChatMessage[] = [
+            { id: "t1", type: "tool_use", toolName: "tool_one", toolUseId: "tu1", toolResult: "ok" },
+            { id: "t2", type: "tool_use", toolName: "tool_two", toolUseId: "tu2", permissionId: "p1" },
+        ];
+        const renderer = vi.fn<ToolUseGroupRenderer>((group) =>
+            <div data-testid="card">{group.map((g) => g.message.id).join(",")}</div>);
+        const { rerender } = renderList(pending, renderer);
+        expect(screen.getAllByTestId("card").map((c) => c.textContent)).toEqual(["t1"]);
+        const resolved: ChatMessage[] = [pending[0],
+            { ...pending[1], permissionResolved: true, permissionAllowed: true, toolResult: "ok" }];
+        rerender(<AssistantMessageList messages={resolved} onPermissionRespond={vi.fn()}
+            renderToolUseGroup={renderer} />);
+        expect(screen.getAllByTestId("card").map((c) => c.textContent)).toEqual(["t1,t2"]);
+    });
 });

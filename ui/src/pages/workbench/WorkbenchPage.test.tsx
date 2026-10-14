@@ -26,13 +26,25 @@ vi.mock("./useWorkbench", () => ({
 
 let workflowTabProps: Record<string, any> = {};
 const workflowFlush = vi.fn();
+const workflowSelectNode = vi.fn();
+let chatPaneProps: Record<string, any> = {};
+vi.mock("./ChatPane", async (orig) => {
+    const real = await orig<typeof import("./ChatPane")>();
+    return {
+        ChatPane: (props: Record<string, any>) => {
+            chatPaneProps = props;
+            const RealChatPane = real.ChatPane as (p: Record<string, any>) => React.ReactNode;
+            return <RealChatPane {...props} />;
+        },
+    };
+});
 vi.mock("./WorkflowTab", async () => {
     const { useImperativeHandle } = await import("react");
     return {
         WorkflowTab: (props: Record<string, any>) => {
             workflowTabProps = props;
             useImperativeHandle(props.ref, () => ({ flush: workflowFlush, replace: () => {},
-                selection: () => ({ nodeIds: [], edgeIds: [] }) }));
+                selection: () => ({ nodeIds: [], edgeIds: [] }), selectNode: workflowSelectNode }));
             return <div data-testid="wf" />;
         },
     };
@@ -55,6 +67,7 @@ vi.mock("./PublishDialog", () => ({ PublishDialog: () => <div data-testid="publi
 
 import { act } from "@testing-library/react";
 import { WorkbenchPage } from "./WorkbenchPage";
+import { renderWorkbenchToolGroup } from "./WorkbenchToolCards";
 
 function Probe() {
     const loc = useLocation();
@@ -324,5 +337,24 @@ describe("WorkbenchPage", () => {
             startedAt: "2026-10-13T10:00:00Z", inputs: {} }];
         rerender(page());
         expect(screen.getByRole("button", { name: "Collapse test output" })).toBeTruthy();
+    });
+
+    it("opens the tool's tab from an Updated tool card in the chat", () => {
+        renderPage();
+        const out = renderWorkbenchToolGroup([{ message: { id: "m", type: "tool_use",
+            toolName: "mcp__workbench__upsert_item", toolInput: { type: "tool", name: "my-tool" },
+            toolResult: "VALID: tool/my-tool (updated, revision r2)" }, genericBlock: null }], chatPaneProps.toolActions);
+        render(<div data-testid="cards">{out}</div>);
+        expect(screen.getByTestId("cards").textContent).toContain("Updated tool my-tool");
+        fireEvent.click(screen.getByRole("button", { name: "Open" }));
+        expect(screen.getByTestId("item-tab")).toBeTruthy();
+    });
+
+    it("selects the touched node after activating the workflow tab", () => {
+        workflowSelectNode.mockReset();
+        renderPage();
+        act(() => chatPaneProps.toolActions.openItem("tool", "my-tool"));
+        act(() => chatPaneProps.toolActions.openWorkflow("n1"));
+        expect(workflowSelectNode).toHaveBeenCalledWith("n1");
     });
 });
