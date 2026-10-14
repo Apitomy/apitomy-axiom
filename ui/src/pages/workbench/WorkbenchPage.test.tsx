@@ -9,6 +9,7 @@ vi.mock("@apitomy/flow-ui", () => ({}));
 const setContent = vi.fn();
 const runTest = vi.fn();
 let testRuns: c.CompositionTestRun[] = [];
+let testRunsLoaded: boolean = true;
 vi.mock("./useWorkbench", () => ({
     useWorkbench: (): WorkbenchState => ({
         composition: { id: 1, name: "My comp", turnState: "idle", applyMode: "live", createdAt: "", updatedAt: "",
@@ -19,7 +20,7 @@ vi.mock("./useWorkbench", () => ({
             scriptTemplate: "echo {{who}}" } }, revisions: {}, problems: {}, pending: null, lastCompletedTurnId: undefined, sessionError: null,
         loadContent: async () => ({}), refreshItems: async () => {}, refreshComposition: async () => {},
         setContent, removeItem: async () => {}, markPendingHandled: () => {}, retrySession: async () => {},
-        testRuns, runTest,
+        testRuns, testRunsLoaded, runTest,
     }),
 }));
 
@@ -85,6 +86,7 @@ beforeEach(() => {
     workflowFlush.mockReset();
     runTest.mockReset();
     testRuns = [];
+    testRunsLoaded = true;
     runTest.mockResolvedValue({});
     itemFlush.mockReset();
     itemFlush.mockResolvedValue(undefined);
@@ -272,8 +274,9 @@ describe("WorkbenchPage", () => {
     it("forgets seen runs when the composition changes", () => {
         const run = (id: string, status: c.TestRunStatus): c.CompositionTestRun => ({ id, itemId: 11,
             itemType: "tool", itemName: "my-tool", author: "user", status, startedAt: "2026-10-13T10:00:00Z" });
+        const { rerender } = renderPage();
         testRuns = [run("x", "running")];
-        renderPage();
+        rerender(page());
         fireEvent.click(screen.getByRole("button", { name: "Collapse test output" }));
         expect(screen.getByRole("button", { name: "Expand test output" })).toBeTruthy();
         fireEvent.click(screen.getByRole("button", { name: "go-2" }));
@@ -284,6 +287,7 @@ describe("WorkbenchPage", () => {
         testRuns = [{ id: "s", itemId: 11, itemType: "tool", itemName: "my-tool", author: "ai", status: "suggested",
             startedAt: "2026-10-13T10:00:00Z", inputs: { who: "bob" } }];
         renderPage();
+        fireEvent.click(screen.getByRole("button", { name: "Expand test output" }));
         fireEvent.click(screen.getByRole("button", { name: "Run…" }));
         expect(((await screen.findByLabelText("who")) as HTMLInputElement).value).toBe("bob");
         fireEvent.click(screen.getByRole("button", { name: "Run" }));
@@ -294,8 +298,23 @@ describe("WorkbenchPage", () => {
         testRuns = [{ id: "s", itemId: 99, itemType: "tool", itemName: "gone", author: "ai", status: "suggested",
             startedAt: "2026-10-13T10:00:00Z", inputs: {} }];
         renderPage();
+        fireEvent.click(screen.getByRole("button", { name: "Expand test output" }));
         fireEvent.click(screen.getByRole("button", { name: "Run…" }));
-        expect(await screen.findByText(/The suggested item no longer exists\./)).toBeTruthy();
+        expect(await screen.findByText("The suggested item no longer exists.")).toBeTruthy();
+    });
+
+    it("expands the strip for a new suggestion but not for suggestions in the loaded history", () => {
+        const suggestion = (id: string): c.CompositionTestRun => ({ id, itemId: 11, itemType: "tool",
+            itemName: "my-tool", author: "ai", status: "suggested", startedAt: "2026-10-13T10:00:00Z", inputs: {} });
+        testRunsLoaded = false;
+        const { rerender } = renderPage();
+        testRuns = [suggestion("old")];
+        testRunsLoaded = true;
+        rerender(page());
+        expect(screen.getByRole("button", { name: "Expand test output" })).toBeTruthy();
+        testRuns = [suggestion("new"), suggestion("old")];
+        rerender(page());
+        expect(screen.getByRole("button", { name: "Collapse test output" })).toBeTruthy();
     });
 
     it("expands the strip for a new suggestion", () => {

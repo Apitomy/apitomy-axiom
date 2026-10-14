@@ -51,6 +51,8 @@ export interface WorkbenchState {
     retrySession(): Promise<void>;
     /** Recent test runs of this composition, newest first (loaded on mount, updated by SSE and runTest). */
     testRuns: CompositionTestRun[];
+    /** Whether the initial run history of the current composition has loaded (or failed to load). */
+    testRunsLoaded: boolean;
     /** Test-runs a draft action type or tool, records the finished run and returns it. */
     runTest(itemId: number, inputs: Record<string, unknown>, subjectId?: number): Promise<CompositionTestRun>;
 }
@@ -91,6 +93,8 @@ export function useWorkbench(compositionId: number): WorkbenchState {
     const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const aliveRef = useRef<boolean>(true);
     const [testRuns, setTestRuns] = useState<CompositionTestRun[]>([]);
+    /** Composition whose initial run history has loaded; compared to compositionId so a switch resets it at once. */
+    const [testRunsLoadedFor, setTestRunsLoadedFor] = useState<number | null>(null);
 
     const updatePending = useCallback((p: PendingChangeSet | null) => {
         pendingRef.current = p;
@@ -195,7 +199,8 @@ export function useWorkbench(compositionId: number): WorkbenchState {
             }
             void listTestRuns(compositionId)
                 .then((runs) => { if (aliveRef.current && !isCancelled()) setTestRuns((prev) => mergeTestRuns(prev, runs)); })
-                .catch(console.error);
+                .catch(console.error)
+                .finally(() => { if (aliveRef.current && !isCancelled()) setTestRunsLoadedFor(compositionId); });
             // Validation does not depend on the agent: run it alongside the (possibly slow) session start.
             await Promise.all([startSession(isCancelled), validate(isCancelled)]);
         })();
@@ -311,7 +316,7 @@ export function useWorkbench(compositionId: number): WorkbenchState {
     }, [compositionId]);
 
     return {
-        testRuns, runTest,
+        testRuns, testRunsLoaded: testRunsLoadedFor === compositionId, runTest,
         composition, items, contents, revisions, problems, pending, lastCompletedTurnId, sessionError,
         loadContent, refreshItems, refreshComposition, setContent, removeItem, markPendingHandled, retrySession: () => startSession(),
     };

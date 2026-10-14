@@ -73,7 +73,8 @@ export function WorkbenchPage() {
     /** Handles of the mounted item tabs, by item id (flushed before publishing). */
     const itemTabRefs = useRef<Map<number, ItemTabHandle>>(new Map());
     const [testing, setTesting] = useState<number | null>(null);
-    const [testError, setTestError] = useState<string | null>(null);
+    /** Title of the test error alert. */
+    const [testError, setTestError] = useState<{ title: string } | null>(null);
     const testValues = useRef<Map<number, { values: Record<string, string>; subjectId?: number }>>(new Map());
     const [preparingPublish, setPreparingPublish] = useState<boolean>(false);
     /** Turn id of the last workflow save made for an AI turn (input to undoPlan). */
@@ -240,6 +241,9 @@ export function WorkbenchPage() {
     const testable: CompositionItem | undefined = activeItem && activeItem.type !== "workflow"
         && wb.contents[activeItem.id] ? activeItem : undefined;
 
+    /** Values (and no subject) to pre-fill the next test dialog with, from an AI suggestion. */
+    const suggestedValues = useRef<{ itemId: number; values: Record<string, string> } | null>(null);
+
     /** Flushes the active item's pending save, then opens the test dialog for it. */
     const openTest = async () => {
         if (!testable) {
@@ -250,14 +254,11 @@ export function WorkbenchPage() {
         setTesting(testable.id);
     };
 
-    /** Values (and no subject) to pre-fill the next test dialog with, from an AI suggestion. */
-    const suggestedValues = useRef<{ itemId: number; values: Record<string, string> } | null>(null);
-
     /** Opens the test dialog for an AI suggestion, pre-filled with its inputs. */
     const runSuggestion = async (run: CompositionTestRun) => {
         const item: CompositionItem | undefined = wb.items.find((i) => i.id === run.itemId);
         if (!item) {
-            setTestError("The suggested item no longer exists.");
+            setTestError({ title: "The suggested item no longer exists." });
             return;
         }
         setTestError(null);
@@ -267,7 +268,7 @@ export function WorkbenchPage() {
             }
             await itemTabRefs.current.get(item.id)?.flush();
         } catch (e: unknown) {
-            setTestError(e instanceof Error ? e.message : String(e));
+            setTestError({ title: `Could not run the test: ${e instanceof Error ? e.message : String(e)}` });
             return;
         }
         suggestedValues.current = { itemId: item.id, values: valuesFromInputs(run.inputs) };
@@ -282,29 +283,33 @@ export function WorkbenchPage() {
         setTesting(null);
         setTestError(null);
         wb.runTest(itemId, inputs, subjectId).catch((e: unknown) =>
-            setTestError(e instanceof Error ? e.message : String(e)));
+            setTestError({ title: `Could not run the test: ${e instanceof Error ? e.message : String(e)}` }));
     };
 
-    // Expand the strip when a run starts live: a "running" run whose id has not been seen. Runs loaded from
-    // history (which arrive asynchronously after mount) are finished and never expand it.
+    // Expand the strip when a run starts live or the AI suggests one: an unseen "running" or "suggested" run that
+    // arrives after the run history has loaded. Runs present until then, including those in the render where the
+    // history arrives (wb.testRunsLoaded turns true together with the history), are only marked seen.
     const seenRunIds = useRef<Set<string>>(new Set<string>());
     const seenForId = useRef<number>(id);
+    const historyLoaded = useRef<boolean>(false);
     useEffect(() => {
         if (seenForId.current !== id) {
             seenForId.current = id;
             seenRunIds.current = new Set<string>();
         }
+        const live: boolean = historyLoaded.current && wb.testRunsLoaded;
+        historyLoaded.current = wb.testRunsLoaded;
         let started: boolean = false;
         for (const run of wb.testRuns) {
             if (!seenRunIds.current.has(run.id)) {
                 seenRunIds.current.add(run.id);
-                started = started || run.status === "running" || run.status === "suggested";
+                started = started || (live && (run.status === "running" || run.status === "suggested"));
             }
         }
         if (started && prefs.testStripCollapsed) {
             updatePrefs({ testStripCollapsed: false });
         }
-    }, [id, wb.testRuns, prefs.testStripCollapsed, updatePrefs]);
+    }, [id, wb.testRuns, wb.testRunsLoaded, prefs.testStripCollapsed, updatePrefs]);
 
     const removingItem: CompositionItem | undefined = removingId === null ? undefined
         : wb.items.find((i) => i.id === removingId);
@@ -517,7 +522,7 @@ export function WorkbenchPage() {
                     })]}
                 </Tabs>
                 {testError && (
-                    <Alert isInline variant="danger" title={`Could not run the test: ${testError}`}
+                    <Alert isInline variant="danger" title={testError.title}
                         actionLinks={<AlertActionLink onClick={() => setTestError(null)}>Dismiss</AlertActionLink>} />
                 )}
                 <TestOutputStrip runs={wb.testRuns} collapsed={prefs.testStripCollapsed}

@@ -137,6 +137,21 @@ describe("test runs during load", () => {
         await waitFor(() => expect(result.current.testRuns).toHaveLength(1));
         rerender({ id: 2 });
         expect(result.current.testRuns).toEqual([]);
+        expect(result.current.testRunsLoaded).toBe(false);
+    });
+
+    it("reports when the run history has loaded, also on failure", async () => {
+        let resolve: (runs: c.CompositionTestRun[]) => void = () => {};
+        vi.spyOn(c, "listTestRuns").mockReturnValueOnce(new Promise((r) => { resolve = r; }))
+            .mockRejectedValueOnce(new Error("x"));
+        const { result, rerender } = renderHook(({ id }) => useWorkbench(id), { initialProps: { id: 1 } });
+        await waitFor(() => expect(c.listTestRuns).toHaveBeenCalled());
+        expect(result.current.testRunsLoaded).toBe(false);
+        await act(async () => { resolve([run("a", "passed")]); });
+        expect(result.current.testRunsLoaded).toBe(true);
+        rerender({ id: 2 });
+        expect(result.current.testRunsLoaded).toBe(false);
+        await waitFor(() => expect(result.current.testRunsLoaded).toBe(true));
     });
 });
 
