@@ -107,3 +107,18 @@ jobs:
           git add -A
           git commit -m "Prepare next development version ${{ steps.next-version.outputs.next-version }}"
           git push origin HEAD
+
+      # Slack: success to the general channel, failure to the important one,
+      # mentioning whoever ran the release.
+      - name: Notify
+        if: ${{ !cancelled() }}
+        uses: Apicurio/apicurio-github-actions/notify-slack@bd19cbe33797325a571cd7ffd58f639b62e128a2 # v2.4.0
+        with:
+          level: ${{ job.status == 'success' && 'general' || 'important' }}
+          text: "${{ job.status == 'success' && format(':rocket: {0} {1} released', github.repository, steps.version.outputs.release-version) || format(':x: {0}: release {1} failed', github.repository, steps.version.outputs.release-version) }}"
+          link: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          mention: ${{ job.status != 'success' && github.actor || '' }}
+          machine-users: apitomy-ci
+          user-map: ${{ secrets.SLACK_USER_MAP }}
+          important-webhook: ${{ secrets.SLACK_IMPORTANT_NOTIFICATION_WEBHOOK }}
+          general-webhook: ${{ secrets.SLACK_GENERAL_NOTIFICATION_WEBHOOK }}
