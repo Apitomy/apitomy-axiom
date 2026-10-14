@@ -37,6 +37,6 @@ describe("EventStreamPage", () => {
         renderWithRouter(<EventStreamPage />);
         await screen.findByText("jsenko");
         await userEvent.click(screen.getByRole("button", { name: "Event Type" }));
-        expect(await screen.findByRole("button", { name: "Actor" })).toBeInTheDocument();
+        expect(await screen.findByRole("option", { name: "Actor" })).toBeInTheDocument();
     });
 });
