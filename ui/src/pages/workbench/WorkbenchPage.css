@@ -372,3 +372,11 @@ span.axiom-workbench__row-menu {
 .axiom-test-run__section > h3 {
     margin-bottom: var(--pf-t--global--spacer--xs, 4px);
 }
+
+/* Pane toolbars (Components, AI Assistant, Test output) share a subtle tinted background, like the Flow
+   canvas palette bar; the centre tab bar stays on the regular background. */
+.axiom-workbench__pane-toolbar,
+.axiom-workbench__chat-toolbar,
+.axiom-test-strip__header {
+    background-color: var(--pf-t--global--background--color--secondary--default);
+}
