@@ -407,6 +407,61 @@ class WorkflowInstanceResourceTest {
 
     // -- Helpers --
 
+    @Test
+    void appliesStartInputDefaultsForInputsNotSupplied() {
+        int subjectId = createSubject("WF Start Defaults Subject");
+        int definitionId = createAndPublishStartInputsDefinition("Start Defaults WF");
+        given().contentType(ContentType.JSON)
+                .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
+                .when().post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                .then().statusCode(200)
+                .body("history[0].input.attempts", equalTo(0))
+                .body("history[0].input.mode", equalTo("fast"))
+                .body("history[0].input.containsKey('noDefault')", equalTo(false));
+    }
+
+    @Test
+    void suppliedInputsOverrideStartInputDefaults() {
+        int subjectId = createSubject("WF Start Defaults Override Subject");
+        int definitionId = createAndPublishStartInputsDefinition("Start Defaults Override WF");
+        given().contentType(ContentType.JSON)
+                .body("{\"workflowDefinitionId\": %d, \"inputs\": {\"attempts\": 3}}".formatted(definitionId))
+                .when().post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                .then().statusCode(200)
+                .body("history[0].input.attempts", equalTo(3))
+                .body("history[0].input.mode", equalTo("fast"));
+    }
+
+    /** A start→end workflow whose Start node declares optional inputs with and without defaults. */
+    private int createAndPublishStartInputsDefinition(String name) {
+        int id = createDefinition(name);
+        given().contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "id": "wf-defaults",
+                        "name": "Defaults",
+                        "nodes": [
+                            {"id": "s1", "type": "start", "name": "Start",
+                             "config": {"inputs": [
+                                 {"name": "attempts", "type": "number", "required": false, "defaultValue": 0},
+                                 {"name": "mode", "type": "string", "required": false, "defaultValue": "fast"},
+                                 {"name": "noDefault", "type": "string", "required": false}
+                             ]},
+                             "position": {"x": 100, "y": 100}},
+                            {"id": "e1", "type": "end", "name": "End", "config": {},
+                             "position": {"x": 100, "y": 300}}
+                        ],
+                        "edges": [
+                            {"id": "edge1", "source": "s1", "target": "e1", "priority": 0, "isDefault": false}
+                        ]
+                    }
+                    """)
+                .when().put(WORKFLOWS_PATH + "/" + id + "/content")
+                .then().statusCode(204);
+        given().when().post(WORKFLOWS_PATH + "/" + id + "/publish").then().statusCode(200);
+        return id;
+    }
+
     private int createSubject(String name) {
         return given()
                 .contentType(ContentType.JSON)

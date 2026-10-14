@@ -44,7 +44,8 @@ public class AssistantReferenceGenerator {
     static final Map<NodeType, String> NODE_CONFIG_DOCS = Map.of(
             NodeType.START, "Exactly one per workflow. `config.inputs`: optional array of "
                     + "`{name, type, required, description, defaultValue}` declaring the run's inputs "
-                    + "(`type` is string|number|boolean|object; object is any JSON object or array). Built-in inputs are `subjectId`, `ref`, "
+                    + "(`type` is string|number|boolean|object; object is any JSON object or array). An input that the "
+                    + "run is started without (or with null) gets its `defaultValue`. Built-in inputs are `subjectId`, `ref`, "
                     + "`event`, `subjectName`, `repository`.",
             NodeType.END, "Terminates the run (or the current branch). `config` is `{}`.",
             NodeType.ACTION, "Runs an action type as a task. `config.actionType` (required): an action type name "

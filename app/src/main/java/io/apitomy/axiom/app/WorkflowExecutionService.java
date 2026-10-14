@@ -26,6 +26,7 @@ import io.apitomy.flow.model.ActiveBranch;
 import io.apitomy.flow.model.EventLookback;
 import io.apitomy.flow.model.HumanTaskInfo;
 import io.apitomy.flow.model.InstanceStatus;
+import io.apitomy.flow.model.NodeConfig;
 import io.apitomy.flow.model.NodeType;
 import io.apitomy.flow.model.ReceiveEventInfo;
 import io.apitomy.flow.model.WaitInfo;
@@ -170,6 +171,33 @@ public class WorkflowExecutionService {
         return triggerWorkflow(subjectId, definitionId, RunRequest.EMPTY, null);
     }
 
+    /**
+     * Applies the Start node's declared input defaults: every input with a non-null {@code defaultValue} that the
+     * caller did not supply (absent or null) starts with its default. Protected inputs are never defaulted.
+     * The Flow engine treats {@code defaultValue} on start inputs as advisory, so Axiom applies it here for every
+     * way a run is started (subjects, subscriptions, stream events and schedules).
+     *
+     * @param workflow the workflow being started
+     * @param context the initial run context, updated in place
+     */
+    static void applyStartInputDefaults(Workflow workflow, Map<String, Object> context) {
+        for (WorkflowNode node : workflow.nodes()) {
+            if (node.type() != NodeType.START || !(node.typedConfig() instanceof NodeConfig.Start start)) {
+                continue;
+            }
+            for (NodeConfig.Field field : start.inputs()) {
+                String name = field.name();
+                Object defaultValue = field.defaultValue();
+                if (name == null || name.isBlank() || defaultValue == null || PROTECTED_INPUTS.contains(name)) {
+                    continue;
+                }
+                if (context.get(name) == null) {
+                    context.put(name, defaultValue);
+                }
+            }
+        }
+    }
+
     private WorkflowRunEntity startRun(long subjectId, long definitionId, RunRequest request,
                                        EventOrigin origin, LogContext logCtx) {
         SubjectEntity subject = SubjectEntity.findById(subjectId);
@@ -231,6 +259,8 @@ public class WorkflowExecutionService {
                 }
             });
         }
+
+        applyStartInputDefaults(workflow, context);
 
         WorkflowInstance instance;
         try {
