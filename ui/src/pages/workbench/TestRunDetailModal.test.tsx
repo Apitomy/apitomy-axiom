@@ -3,12 +3,6 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import type { CompositionTestRun } from "../../config/compositions";
 import { prettyJson, TestRunDetailModal } from "./TestRunDetailModal";
 
-vi.mock("@patternfly/react-code-editor", () => ({
-    Language: { json: "json", plaintext: "plaintext", shell: "shell", javascript: "javascript" },
-    CodeEditor: ({ code, language }: { code: string; language: string }) =>
-        <pre data-language={language}>{code}</pre>,
-}));
-
 const run: CompositionTestRun = { id: "r", itemId: 7, itemType: "action-type", itemName: "greet", author: "user",
     status: "failed", startedAt: "2026-10-13T10:00:00Z", durationMs: 12, exitCode: 0,
     inputs: { who: "bob" }, outputs: { a: 1 }, problems: ["Output: Missing required field 'b'."],
@@ -26,10 +20,12 @@ describe("TestRunDetailModal", () => {
         render(<TestRunDetailModal run={run} onClose={vi.fn()} onOpenItem={vi.fn()} />);
         expect(screen.getByText("failed")).toBeTruthy();
         expect(screen.getByText("Output: Missing required field 'b'.")).toBeTruthy();
-        expect(screen.getByLabelText("Inputs").querySelector("pre")?.getAttribute("data-language")).toBe("json");
+        expect(screen.getByLabelText("Inputs").getAttribute("data-language")).toBe("json");
+        expect(screen.getByLabelText("Inputs").querySelector("code.language-json")).toBeTruthy();
         expect(screen.getByLabelText("Inputs").textContent).toBe('{\n  "who": "bob"\n}');
-        expect(screen.getByLabelText("stdout").querySelector("pre")?.getAttribute("data-language")).toBe("json");
-        expect(screen.getByLabelText("stderr").querySelector("pre")?.getAttribute("data-language")).toBe("plaintext");
+        expect(screen.getByLabelText("stdout").getAttribute("data-language")).toBe("json");
+        expect(screen.getByLabelText("stderr").getAttribute("data-language")).toBe("plaintext");
+        expect(screen.getByLabelText("stderr").textContent).toBe("plain warning");
     });
 
     it("opens the item and offers Run… for a suggestion", () => {

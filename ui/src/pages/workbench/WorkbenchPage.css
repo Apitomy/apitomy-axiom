@@ -536,3 +536,28 @@ span.axiom-workbench__row-menu {
     margin: 0 0 4px 24px;
     color: var(--pf-t--global--text--color--subtle);
 }
+
+/* Code blocks in the test run dialog: highlighted with SyntaxHighlighter, scroll when long, copy at top right. */
+.axiom-test-run__code {
+    position: relative;
+    max-height: 400px;
+    overflow: auto;
+    border: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+    border-radius: var(--pf-t--global--border--radius--small, 4px);
+}
+
+.axiom-test-run__code > .pf-v6-c-button.axiom-test-run__copy {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    z-index: 1;
+}
+
+.axiom-test-run__plain {
+    margin: 0;
+    padding: 8px 40px 8px 12px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: var(--pf-t--global--font--family--mono);
+    font-size: 13px;
+}

@@ -2,12 +2,22 @@ import { useState } from "react";
 import {
     Alert, Button, ExpandableSection, Label, Modal, ModalBody, ModalFooter, ModalHeader, Title,
 } from "@patternfly/react-core";
-import { CodeEditor, Language } from "@patternfly/react-code-editor";
+import { Light as SyntaxHighlighter } from "react-syntax-highlighter";
+import bash from "react-syntax-highlighter/dist/esm/languages/hljs/bash";
+import javascript from "react-syntax-highlighter/dist/esm/languages/hljs/javascript";
+import json from "react-syntax-highlighter/dist/esm/languages/hljs/json";
+import { stackoverflowDark, stackoverflowLight } from "react-syntax-highlighter/dist/esm/styles/hljs";
+import CheckIcon from "@patternfly/react-icons/dist/esm/icons/check-icon";
+import CopyIcon from "@patternfly/react-icons/dist/esm/icons/copy-icon";
 import type { CompositionTestRun } from "../../config/compositions";
 import { useEffectiveTheme } from "../../hooks/useTheme";
 
-/** Maximum height of a code block in the dialog; longer content scrolls inside the editor. */
-const MAX_LINES: number = 20;
+SyntaxHighlighter.registerLanguage("json", json);
+SyntaxHighlighter.registerLanguage("bash", bash);
+SyntaxHighlighter.registerLanguage("javascript", javascript);
+
+/** Languages a code block can be highlighted as; "plaintext" is shown without highlighting. */
+type CodeLanguage = "json" | "bash" | "javascript" | "plaintext";
 
 /**
  * Pretty-prints text when it is a JSON object or array.
@@ -26,19 +36,31 @@ export function prettyJson(text: string | undefined): string | null {
     }
 }
 
-function lineHeight(code: string): string {
-    const lines: number = Math.min(MAX_LINES, Math.max(1, code.split("\n").length));
-    return `${lines * 19 + 12}px`;
-}
-
-/** Read-only, highlighted code block sized to its content (up to {@link MAX_LINES} lines). */
-function CodeBlock({ code, language, label }: { code: string; language: Language; label: string }) {
+/**
+ * Read-only code block highlighted with SyntaxHighlighter (the same highlighter as the chat), with a copy
+ * button. Long content scrolls inside the block.
+ */
+function CodeBlock({ code, language, label }: { code: string; language: CodeLanguage; label: string }) {
     const theme = useEffectiveTheme();
+    const [copied, setCopied] = useState<boolean>(false);
+    const copy = () => {
+        void navigator.clipboard?.writeText(code).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+        });
+    };
     return (
-        <div aria-label={label} className="axiom-test-run__code">
-            <CodeEditor code={code} language={language} isReadOnly isDarkTheme={theme === "dark"}
-                isCopyEnabled height={lineHeight(code)}
-                options={{ wordWrap: "on", scrollBeyondLastLine: false, minimap: { enabled: false } }} />
+        <div aria-label={label} className="axiom-test-run__code" data-language={language}>
+            <Button variant="plain" size="sm" className="axiom-test-run__copy" aria-label={`Copy ${label}`}
+                icon={copied ? <CheckIcon /> : <CopyIcon />} onClick={copy} />
+            {language === "plaintext"
+                ? <pre className="axiom-test-run__plain">{code}</pre>
+                : (
+                    <SyntaxHighlighter language={language} style={theme === "dark" ? stackoverflowDark : stackoverflowLight}
+                        wrapLongLines customStyle={{ margin: 0, padding: "8px 40px 8px 12px", fontSize: "13px" }}>
+                        {code}
+                    </SyntaxHighlighter>
+                )}
         </div>
     );
 }
@@ -52,7 +74,7 @@ function OutputSection({ title, text }: { title: string; text: string | undefine
     return (
         <section className="axiom-test-run__section">
             <Title headingLevel="h3" size="md">{title}</Title>
-            <CodeBlock code={json ?? text} language={json ? Language.json : Language.plaintext} label={title} />
+            <CodeBlock code={json ?? text} language={json ? "json" : "plaintext"} label={title} />
         </section>
     );
 }
@@ -134,13 +156,13 @@ export function TestRunDetailModal({ run, onClose, onOpenItem, onRunSuggestion }
 
                 <section className="axiom-test-run__section">
                     <Title headingLevel="h3" size="md">{run.itemType === "tool" ? "Parameters" : "Inputs"}</Title>
-                    <CodeBlock code={JSON.stringify(run.inputs ?? {}, null, 2)} language={Language.json}
+                    <CodeBlock code={JSON.stringify(run.inputs ?? {}, null, 2)} language="json"
                         label={run.itemType === "tool" ? "Parameters" : "Inputs"} />
                 </section>
                 {run.outputs && (
                     <section className="axiom-test-run__section">
                         <Title headingLevel="h3" size="md">Outputs</Title>
-                        <CodeBlock code={JSON.stringify(run.outputs, null, 2)} language={Language.json} label="Outputs" />
+                        <CodeBlock code={JSON.stringify(run.outputs, null, 2)} language="json" label="Outputs" />
                     </section>
                 )}
                 <OutputSection title="stdout" text={run.stdout} />
@@ -149,7 +171,7 @@ export function TestRunDetailModal({ run, onClose, onOpenItem, onRunSuggestion }
                     <ExpandableSection className="axiom-test-run__section" toggleText="Resolved script"
                         isExpanded={scriptOpen} onToggle={(_e, open) => setScriptOpen(open)}>
                         <CodeBlock code={run.resolvedScript}
-                            language={run.resolvedScript.startsWith("export ") ? Language.javascript : Language.shell}
+                            language={run.resolvedScript.startsWith("export ") ? "javascript" : "bash"}
                             label="Resolved script" />
                     </ExpandableSection>
                 )}
