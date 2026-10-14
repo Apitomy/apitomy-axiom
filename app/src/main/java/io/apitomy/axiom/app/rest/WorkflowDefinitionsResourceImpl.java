@@ -68,6 +68,9 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
     @Inject
     WorkflowPublisher workflowPublisher;
 
+    @Inject
+    io.apitomy.axiom.app.EventStreamOrchestrator orchestrator;
+
     // ── List ────────────────────────────────────────────────────────
 
     /**
@@ -485,6 +488,49 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
     @Override
     public void cancelWorkflowRun(long runId) {
         workflowExecutionService.cancelWorkflowRun(runId);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public io.apitomy.axiom.api.beans.WorkflowInstance rerunWorkflowRun(long runId) {
+        io.apitomy.axiom.core.entities.WorkflowRunEntity original =
+                io.apitomy.axiom.core.entities.WorkflowRunEntity.findById(runId);
+        if (original == null) {
+            throw new jakarta.ws.rs.NotFoundException("Workflow run not found: " + runId);
+        }
+        if (!"failed".equals(original.status)) {
+            throw new jakarta.ws.rs.WebApplicationException(jakarta.ws.rs.core.Response.status(409)
+                    .entity(java.util.Map.of("message", "Only failed runs can be re-run; run " + runId + " is "
+                            + original.status + "."))
+                    .build());
+        }
+        java.util.Map<String, String> labels = new java.util.LinkedHashMap<>(readMap(original.labels, String.class));
+        labels.put("rerunOf", String.valueOf(runId));
+        java.util.Map<String, Object> inputs = readMap(original.inputs, Object.class);
+        io.apitomy.axiom.app.RunRequest request = new io.apitomy.axiom.app.RunRequest(original.title, labels,
+                inputs.isEmpty() ? null : inputs, null);
+        io.apitomy.axiom.core.entities.StreamEventEntity event = original.triggerEventId == null ? null
+                : io.apitomy.axiom.core.entities.StreamEventEntity.findById(original.triggerEventId);
+        // A run started by a stream event is re-run from that event, so it gets the same context.event.
+        io.apitomy.axiom.core.entities.WorkflowRunEntity rerun = event != null
+                ? orchestrator.startRunFromEvent(event, original.definitionId, request, null)
+                : workflowExecutionService.triggerWorkflow(original.subjectId, original.definitionId, request, null);
+        return runBeanMapper.toBean(rerun);
+    }
+
+    /** Reads a JSON object column into a map; null or invalid JSON gives an empty map. */
+    private <V> java.util.Map<String, V> readMap(String json, Class<V> valueType) {
+        if (json == null || json.isBlank()) {
+            return java.util.Map.of();
+        }
+        try {
+            return objectMapper.readValue(json, objectMapper.getTypeFactory()
+                    .constructMapType(java.util.LinkedHashMap.class, String.class, valueType));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            return java.util.Map.of();
+        }
     }
 
     /**

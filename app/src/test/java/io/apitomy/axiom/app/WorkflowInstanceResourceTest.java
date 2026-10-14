@@ -462,6 +462,55 @@ class WorkflowInstanceResourceTest {
         return id;
     }
 
+    @Test
+    void rerunsAFailedRunAsANewRunOfTheLatestVersion() {
+        int subjectId = createSubject("WF Rerun Subject");
+        int definitionId = createAndPublishDefinition("Rerun WF");
+        long failedRunId = persistRun(subjectId, definitionId, "failed",
+                "{\"team\":\"core\"}", "{\"attempts\":2}");
+
+        int newRunId = given().contentType(ContentType.JSON)
+                .when().post("/api/v1/workflow/runs/" + failedRunId + "/rerun")
+                .then().statusCode(200)
+                .body("subjectId", equalTo(subjectId))
+                .body("definitionId", equalTo(definitionId))
+                .body("definitionVersion", equalTo(1))
+                .body("title", equalTo("Original title"))
+                .body("labels.team", equalTo("core"))
+                .body("labels.rerunOf", equalTo(String.valueOf(failedRunId)))
+                .body("inputs.attempts", equalTo(2))
+                .extract().path("runId");
+        org.junit.jupiter.api.Assertions.assertNotEquals(failedRunId, (long) newRunId);
+    }
+
+    @Test
+    void rerunRejectsRunsThatDidNotFailAndUnknownRuns() {
+        int subjectId = createSubject("WF Rerun Rejects Subject");
+        int definitionId = createAndPublishDefinition("Rerun Rejects WF");
+        long completed = persistRun(subjectId, definitionId, "completed", null, null);
+        given().when().post("/api/v1/workflow/runs/" + completed + "/rerun").then().statusCode(409);
+        given().when().post("/api/v1/workflow/runs/999999999/rerun").then().statusCode(404);
+    }
+
+    /** Persists a terminal run directly (no engine), as the run to re-run. */
+    private static long persistRun(int subjectId, int definitionId, String status, String labels, String inputs) {
+        return io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().call(() -> {
+            io.apitomy.axiom.core.entities.WorkflowRunEntity run = new io.apitomy.axiom.core.entities.WorkflowRunEntity();
+            run.subjectId = (long) subjectId;
+            run.definitionId = (long) definitionId;
+            run.definitionVersion = 1;
+            run.title = "Original title";
+            run.labels = labels;
+            run.inputs = inputs;
+            run.instanceState = "{}";
+            run.status = status;
+            run.startedOn = java.time.Instant.now();
+            run.completedOn = java.time.Instant.now();
+            run.persist();
+            return run.id;
+        });
+    }
+
     private int createSubject(String name) {
         return given()
                 .contentType(ContentType.JSON)

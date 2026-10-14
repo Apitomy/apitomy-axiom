@@ -113,6 +113,33 @@ class EventManualRunTest {
     }
 
     @Test
+    void rerunOfAnEventTriggeredRunStartsFromTheSameEvent() throws Exception {
+        long definitionId = createDefinition("Rerun Event WF", "rerun-await-" + UUID.randomUUID());
+        UUID eventId = UUID.randomUUID();
+        createEvent(eventId, "issue.created", eventRef(eventId));
+        int firstRunId = given().contentType(ContentType.JSON)
+                .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
+            .when().post("/api/v1/stream/events/" + eventId + "/runs")
+            .then().statusCode(200).extract().path("runId");
+        // Mark the first run failed, as if it had failed.
+        QuarkusTransaction.requiringNew().run(() -> {
+            WorkflowRunEntity run = WorkflowRunEntity.findById((long) firstRunId);
+            run.status = "failed";
+        });
+
+        int rerunId = given().when().post("/api/v1/workflow/runs/" + firstRunId + "/rerun")
+            .then().statusCode(200)
+                .body("triggerEventId", equalTo(eventId.toString()))
+                .body("labels.rerunOf", equalTo(String.valueOf(firstRunId)))
+                .body("labels.trigger", equalTo("manual"))
+                .extract().path("runId");
+        WorkflowRunEntity rerun = QuarkusTransaction.requiringNew().call(() ->
+                WorkflowRunEntity.<WorkflowRunEntity>findById((long) rerunId));
+        JsonNode context = objectMapper.readTree(rerun.instanceState).path("context");
+        assertEquals(eventId.toString(), context.path("event").path("id").asText());
+    }
+
+    @Test
     void manualTriggerUnknownEventIs404() {
         given()
                 .contentType(ContentType.JSON)

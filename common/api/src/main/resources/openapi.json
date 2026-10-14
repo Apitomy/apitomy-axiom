@@ -6439,6 +6439,49 @@
           }
         }
       ]
+    },
+    "/workflow/runs/{runId}/rerun": {
+      "post": {
+        "tags": [
+          "WorkflowRuns"
+        ],
+        "summary": "Re-run a failed workflow run",
+        "description": "Starts a new run of the same workflow (latest published version) for the same subject, with the original title, labels (plus rerunOf=<runId>) and inputs. A run started by a stream event is re-run from that event. Only failed runs can be re-run.",
+        "operationId": "rerunWorkflowRun",
+        "responses": {
+          "200": {
+            "description": "The new run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowInstance"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The workflow has no published version or the inputs are invalid"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "The run did not fail, or the subject already has an active run of the workflow"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "runId",
+          "in": "path",
+          "description": "Workflow run ID",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
     }
   },
   "components": {
