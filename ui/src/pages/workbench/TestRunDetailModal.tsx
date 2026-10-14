@@ -157,16 +157,6 @@ export function sourceTab(run: CompositionTestRun): { title: string; language: "
     return run.executionMode === "node" ? { title: "Code", language: "javascript" } : { title: "Script", language: "bash" };
 }
 
-/** The tab shown first: what the user most likely wants to see for the run's state. */
-function initialTab(run: CompositionTestRun): RunTab {
-    if (run.status === "suggested" || run.status === "running") {
-        return "inputs";
-    }
-    if (run.status === "passed" && run.itemType === "action-type" && run.outputs) {
-        return "outputs";
-    }
-    return run.stdout || run.stderr ? "streams" : "inputs";
-}
 
 /** Props for {@link TestRunDetailModal}. */
 export interface TestRunDetailModalProps {
@@ -187,8 +177,9 @@ const STATUS_COLOR: Record<CompositionTestRun["status"], "blue" | "green" | "red
  * stderr and the resolved script.
  */
 export function TestRunDetailModal({ run, onClose, onOpenItem, onRunSuggestion }: TestRunDetailModalProps) {
-    const [tab, setTab] = useState<RunTab>(() => initialTab(run));
     const source = sourceTab(run);
+    // Always open on the first tab: Script/Code when the run has one, otherwise Inputs/Parameters.
+    const [tab, setTab] = useState<RunTab>(source ? "source" : "inputs");
     const inputsTitle: string = run.itemType === "tool" ? "Parameters" : "Inputs";
     const [valuesView, setValuesView] = useState<ValuesView>("list");
     const kind: string = run.itemType === "tool" ? "Tool" : "Action type";

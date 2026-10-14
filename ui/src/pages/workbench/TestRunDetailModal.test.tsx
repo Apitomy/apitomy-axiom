@@ -25,11 +25,11 @@ describe("TestRunDetailModal", () => {
         expect(prettyJson(undefined)).toBeNull();
     });
 
-    it("shows problems and opens a failed run on Stdout/err, with highlighted JSON and plain text", () => {
+    it("shows problems and stdout/stderr as highlighted JSON and plain text", () => {
         render(<TestRunDetailModal run={run} onClose={vi.fn()} onOpenItem={vi.fn()} />);
         expect(screen.getByText("failed")).toBeTruthy();
         expect(screen.getByText("Output: Missing required field 'b'.")).toBeTruthy();
-        expect(screen.getByRole("tab", { name: "Stdout/err" }).getAttribute("aria-selected")).toBe("true");
+        fireEvent.click(screen.getByRole("tab", { name: "Stdout/err" }));
         expect(block("stdout").getAttribute("data-language")).toBe("json");
         expect(block("stderr").getAttribute("data-language")).toBe("plaintext");
         expect(block("stderr").textContent).toBe("plain warning");
@@ -64,7 +64,7 @@ describe("TestRunDetailModal", () => {
     it("lists values: scalars inline, objects and arrays as JSON, empty strings marked", () => {
         render(<TestRunDetailModal run={{ ...run, status: "passed", problems: [],
             outputs: { count: 3, labels: ["bug", "ui"], note: "", ok: true } }} onClose={vi.fn()} onOpenItem={vi.fn()} />);
-        expect(screen.getByRole("tab", { name: "Outputs" }).getAttribute("aria-selected")).toBe("true");
+        fireEvent.click(screen.getByRole("tab", { name: "Outputs" }));
         expect((screen.getByRole("textbox", { name: "count" }) as HTMLInputElement).value).toBe("3");
         expect((screen.getByRole("textbox", { name: "ok" }) as HTMLInputElement).value).toBe("true");
         expect((screen.getByRole("textbox", { name: "note" }) as HTMLInputElement).placeholder).toBe("(empty)");
@@ -85,9 +85,14 @@ describe("TestRunDetailModal", () => {
         expect(screen.getByRole("tab", { name: "Script" })).toBeTruthy();
     });
 
-    it("opens a passed action type run on Outputs", () => {
-        render(<TestRunDetailModal run={{ ...run, status: "passed", problems: [] }} onClose={vi.fn()} onOpenItem={vi.fn()} />);
-        expect(screen.getByRole("tab", { name: "Outputs" }).getAttribute("aria-selected")).toBe("true");
+    it("always opens on the first tab", () => {
+        const { unmount } = render(<TestRunDetailModal run={{ ...run, status: "passed", problems: [] }}
+            onClose={vi.fn()} onOpenItem={vi.fn()} />);
+        expect(screen.getByRole("tab", { name: "Inputs" }).getAttribute("aria-selected")).toBe("true");
+        unmount();
+        render(<TestRunDetailModal run={{ ...run, executionMode: "script", resolvedScript: "echo" }}
+            onClose={vi.fn()} onOpenItem={vi.fn()} />);
+        expect(screen.getByRole("tab", { name: "Script" }).getAttribute("aria-selected")).toBe("true");
     });
 
     it("opens the item and offers Run… for a suggestion", () => {
