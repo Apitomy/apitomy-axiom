@@ -312,7 +312,7 @@ span.axiom-workbench__row-menu {
     display: flex;
     align-items: center;
     gap: var(--pf-t--global--spacer--sm, 8px);
-    padding: 0 var(--pf-t--global--spacer--sm, 8px);
+    padding: 2px var(--pf-t--global--spacer--sm, 8px) 0;
 }
 
 .axiom-test-strip__body {
