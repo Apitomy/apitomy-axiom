@@ -52,6 +52,14 @@ export function runSummary(run: CompositionTestRun): string {
     if (run.problems && run.problems.length > 0) {
         return run.problems[0];
     }
+    // A failed run without problems: show the last meaningful stderr line (skipping stack frames).
+    if (run.status === "failed") {
+        const lastErrorLine: string | undefined = (run.stderr ?? "").split("\n").map((l) => l.trim())
+            .filter((l) => l !== "" && !l.startsWith("at ") && l !== "}" && l !== "{").pop();
+        if (lastErrorLine) {
+            return lastErrorLine;
+        }
+    }
     if (run.itemType === "action-type" && run.outputs) {
         return `Outputs: ${JSON.stringify(run.outputs)}`;
     }

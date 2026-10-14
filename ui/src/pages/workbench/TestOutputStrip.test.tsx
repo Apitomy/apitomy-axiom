@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { CompositionTestRun } from "../../config/compositions";
-import { TestOutputStrip } from "./TestOutputStrip";
+import { runSummary, TestOutputStrip } from "./TestOutputStrip";
 
 const runs: CompositionTestRun[] = [
     { id: "b", itemId: 11, itemType: "action-type", itemName: "greet", author: "ai", status: "failed",
@@ -51,5 +51,11 @@ describe("TestOutputStrip", () => {
         expect(screen.getByText('Inputs: {"repo":"x"}')).toBeTruthy();
         fireEvent.click(screen.getByRole("button", { name: "Run…" }));
         expect(onRunSuggestion).toHaveBeenCalledWith(suggested);
+    });
+
+    it("summarizes a failed run with no problems by its last stderr line", () => {
+        expect(runSummary({ id: "f", itemId: 1, itemType: "action-type", itemName: "x", author: "user",
+            status: "failed", startedAt: "", exitCode: 1, problems: [], stderr: "first\nError: HTTP 404: Not Found\n    at run (action.mjs:3:9)\n\n" }))
+            .toBe("Error: HTTP 404: Not Found");
     });
 });
