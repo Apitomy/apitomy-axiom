@@ -33,7 +33,7 @@ describe("renderWorkbenchToolGroup", () => {
         show([ctx("1", "workbench_upsert_item", { type: "tool", name: "t" }, "INVALID: tool/t (created, x)")]);
         expect(screen.getByText("INVALID")).toBeTruthy();
         expect(screen.queryByTestId("generic-1")).toBeNull();
-        fireEvent.click(screen.getByRole("button", { name: "Show details" }));
+        fireEvent.click(screen.getByRole("button", { name: /Created tool t/ }));
         expect(screen.getByTestId("generic-1")).toBeTruthy();
     });
 
@@ -44,6 +44,11 @@ describe("renderWorkbenchToolGroup", () => {
         expect(container.textContent).toContain("Proposed 1 workflow change added Log");
         fireEvent.click(screen.getByRole("button", { name: "Open workflow" }));
         expect(a.openWorkflow).toHaveBeenCalledWith("n1");
+    });
+
+    it("renders cards as PatternFly disclosure sections", () => {
+        const { container } = show([ctx("1", "workbench_upsert_item", { type: "tool", name: "t" }, "VALID: tool/t (updated, x)")]);
+        expect(container.querySelector(".pf-v6-c-expandable-section.pf-m-display-lg")).toBeTruthy();
     });
 
     it("renders rejected workflow changes as a danger card", () => {
@@ -77,7 +82,7 @@ describe("renderWorkbenchToolGroup", () => {
             ctx("3", "mcp__workbench__validate_composition", {}, "ok")]);
         expect(screen.getByText("Read 3 things")).toBeTruthy();
         expect(screen.queryByTestId("generic-1")).toBeNull();
-        fireEvent.click(screen.getByRole("button", { name: "Show details" }));
+        fireEvent.click(screen.getByRole("button", { name: /Read 3 things/ }));
         expect(screen.getByText("Read the composition")).toBeTruthy();
         expect(screen.getByText("Checked the composition")).toBeTruthy();
         ["1", "2", "3"].forEach((id) => expect(screen.getByTestId(`generic-${id}`)).toBeTruthy());

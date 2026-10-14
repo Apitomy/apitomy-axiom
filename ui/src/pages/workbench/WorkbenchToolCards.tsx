@@ -1,7 +1,5 @@
 import { Fragment, useState, type ReactNode } from "react";
-import { Button, Label } from "@patternfly/react-core";
-import AngleDownIcon from "@patternfly/react-icons/dist/esm/icons/angle-down-icon";
-import AngleRightIcon from "@patternfly/react-icons/dist/esm/icons/angle-right-icon";
+import { Button, ExpandableSection, Label } from "@patternfly/react-core";
 import CodeIcon from "@patternfly/react-icons/dist/esm/icons/code-icon";
 import EditIcon from "@patternfly/react-icons/dist/esm/icons/edit-icon";
 import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
@@ -76,55 +74,63 @@ function CardText({ card }: { card: ToolCard }) {
     );
 }
 
-function ExpandToggle({ expanded, onToggle }: { expanded: boolean; onToggle: () => void }) {
+/**
+ * A tool card as a PatternFly disclosure (large expandable section): the header is the toggle and the details
+ * hold the raw tool call. Links are placed beside the toggle, not inside it (a button cannot contain a button).
+ */
+function Disclosure({ className, header, link, children }: {
+    className: string;
+    header: ReactNode;
+    link?: ReactNode;
+    children: ReactNode;
+}) {
+    const [expanded, setExpanded] = useState<boolean>(false);
     return (
-        <Button variant="plain" size="sm" className="axiom-workbench__tool-card-toggle"
-            aria-label={expanded ? "Hide details" : "Show details"} aria-expanded={expanded} onClick={onToggle}
-            icon={expanded ? <AngleDownIcon /> : <AngleRightIcon />} />
+        <div className={`axiom-workbench__tool-card ${className}${link ? " axiom-workbench__tool-card--linked" : ""}`}>
+            <ExpandableSection displaySize="lg" isIndented isExpanded={expanded}
+                onToggle={(_e, open) => setExpanded(open)}
+                toggleContent={<span className="axiom-workbench__tool-card-row">{header}</span>}>
+                {/* Rendered only when open, so collapsed cards don't mount the raw tool blocks. */}
+                {expanded && children}
+            </ExpandableSection>
+            {link && <span className="axiom-workbench__tool-card-link">{link}</span>}
+        </div>
     );
 }
 
 function CardRow({ ctx, card, actions }: { ctx: ToolUseRenderContext; card: ToolCard; actions: WorkbenchToolActions }) {
-    const [expanded, setExpanded] = useState<boolean>(false);
     const danger: boolean = card.variant === "danger";
     return (
-        <div className={`axiom-workbench__tool-card${danger ? " axiom-workbench__tool-card--danger" : ""}`}>
-            <div className="axiom-workbench__tool-card-row">
-                <ExpandToggle expanded={expanded} onToggle={() => setExpanded(!expanded)} />
+        <Disclosure className={danger ? "axiom-workbench__tool-card--danger" : ""}
+            link={linkFor(card.target, actions)}
+            header={<>
                 <span className="axiom-workbench__tool-card-icon">
                     {iconFor(workbenchTool(ctx.message.toolName ?? ""), card)}
                 </span>
                 <CardText card={card} />
                 {card.status && <Label isCompact color={STATUS_COLOR[card.status]}>{card.status}</Label>}
-                {linkFor(card.target, actions)}
-            </div>
-            {expanded && <div className="axiom-workbench__tool-card-details">{ctx.genericBlock}</div>}
-        </div>
+            </>}>
+            {ctx.genericBlock}
+        </Disclosure>
     );
 }
 
 function ReadOnlyLine({ entries }: { entries: { ctx: ToolUseRenderContext; card: ToolCard }[] }) {
-    const [expanded, setExpanded] = useState<boolean>(false);
     const single: boolean = entries.length === 1;
     return (
-        <div className="axiom-workbench__tool-card axiom-workbench__tool-card--quiet">
-            <div className="axiom-workbench__tool-card-row">
-                <ExpandToggle expanded={expanded} onToggle={() => setExpanded(!expanded)} />
+        <Disclosure className="axiom-workbench__tool-card--quiet"
+            header={<>
                 <span className="axiom-workbench__tool-card-icon"><SearchIcon /></span>
                 {single ? <CardText card={entries[0].card} />
                     : <span className="axiom-workbench__tool-card-text">{`Read ${entries.length} things`}</span>}
-            </div>
-            {expanded && (
-                <div className="axiom-workbench__tool-card-details">
-                    {!single && (
-                        <ul className="axiom-workbench__tool-card-list">
-                            {entries.map((e) => <li key={e.ctx.message.id}><CardText card={e.card} /></li>)}
-                        </ul>
-                    )}
-                    {entries.map((e) => <Fragment key={e.ctx.message.id}>{e.ctx.genericBlock}</Fragment>)}
-                </div>
+            </>}>
+            {!single && (
+                <ul className="axiom-workbench__tool-card-list">
+                    {entries.map((e) => <li key={e.ctx.message.id}><CardText card={e.card} /></li>)}
+                </ul>
             )}
-        </div>
+            {entries.map((e) => <Fragment key={e.ctx.message.id}>{e.ctx.genericBlock}</Fragment>)}
+        </Disclosure>
     );
 }
 

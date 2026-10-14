@@ -404,12 +404,39 @@ span.axiom-workbench__row-menu {
     margin: 0;
 }
 
-/* Compact chat cards for workbench tool calls: same inset as the generic tool blocks. The text may wrap
-   (the chat pane is narrow); the toggle, icon and link stay on the first line. */
+/* Workbench tool calls in the chat: PatternFly disclosure sections (ExpandableSection displaySize="lg").
+   The header text may wrap (the chat pane is narrow); a card's link sits beside the toggle, top right. */
 .axiom-workbench__tool-card {
-    margin: 0;
-    padding: 4px 0;
+    position: relative;
+    margin: 4px 0;
     font-size: var(--pf-t--global--font--size--sm);
+}
+
+/* The toggle is a PatternFly link button (nowrap); let the card header wrap inside the narrow chat pane. */
+.axiom-workbench__tool-card .pf-v6-c-expandable-section__toggle {
+    min-width: 0;
+}
+
+.axiom-workbench__tool-card .pf-v6-c-expandable-section__toggle > .pf-v6-c-button {
+    max-width: 100%;
+    white-space: normal;
+    align-items: flex-start;
+    text-align: start;
+}
+
+.axiom-workbench__tool-card .pf-v6-c-expandable-section__toggle .pf-v6-c-button__text {
+    min-width: 0;
+}
+
+.axiom-workbench__tool-card--linked .pf-v6-c-expandable-section__toggle {
+    padding-inline-end: 96px;
+}
+
+.axiom-workbench__tool-card-link {
+    position: absolute;
+    top: var(--pf-t--global--spacer--md, 16px);
+    right: var(--pf-t--global--spacer--md, 16px);
+    white-space: nowrap;
 }
 
 .axiom-workbench__tool-card-row {
@@ -417,22 +444,8 @@ span.axiom-workbench__row-menu {
     align-items: flex-start;
     gap: 6px;
     min-width: 0;
-}
-
-.axiom-workbench__tool-card-toggle {
-    padding: 0 2px;
-}
-
-.axiom-workbench__tool-card-icon {
-    display: inline-flex;
-    color: var(--pf-t--global--icon--color--subtle);
-}
-
-.axiom-workbench__tool-card-text {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow-wrap: anywhere;
-    padding-top: 2px;
+    text-align: start;
+    font-weight: var(--pf-t--global--font--weight--body--default, 400);
 }
 
 .axiom-workbench__tool-card-row > :not(.axiom-workbench__tool-card-text) {
@@ -441,7 +454,16 @@ span.axiom-workbench__row-menu {
 }
 
 .axiom-workbench__tool-card-icon {
-    padding-top: 4px;
+    display: inline-flex;
+    padding-top: 2px;
+    color: var(--pf-t--global--icon--color--subtle);
+}
+
+.axiom-workbench__tool-card-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--pf-t--global--text--color--regular);
 }
 
 .axiom-workbench__tool-card--quiet .axiom-workbench__tool-card-text {
@@ -451,10 +473,6 @@ span.axiom-workbench__row-menu {
 .axiom-workbench__tool-card--danger .axiom-workbench__tool-card-text,
 .axiom-workbench__tool-card--danger .axiom-workbench__tool-card-icon {
     color: var(--pf-t--global--text--color--status--danger--default);
-}
-
-.axiom-workbench__tool-card-details {
-    padding-top: 4px;
 }
 
 .axiom-workbench__tool-card-list {
