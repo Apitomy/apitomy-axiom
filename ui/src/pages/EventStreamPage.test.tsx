@@ -27,7 +27,8 @@ describe("EventStreamPage", () => {
         renderWithRouter(<EventStreamPage />);
         await userEvent.click(await screen.findByText("jsenko"));
         await waitFor(() => expect(lastActorFilter()).toBe("jsenko"));
-        expect(screen.getByText("Actor")).toBeInTheDocument();
+        const chips = document.querySelector(".pf-v6-c-label-group") as HTMLElement;
+        expect(chips.textContent).toContain("Actor: jsenko");
         await userEvent.click(screen.getByRole("button", { name: "Close label group Filters" }));
         await waitFor(() => expect(lastActorFilter()).toBeUndefined());
     });
@@ -36,6 +37,6 @@ describe("EventStreamPage", () => {
         renderWithRouter(<EventStreamPage />);
         await screen.findByText("jsenko");
         await userEvent.click(screen.getByRole("button", { name: "Event Type" }));
-        expect(await screen.findByText("Actor")).toBeInTheDocument();
+        expect(await screen.findByRole("button", { name: "Actor" })).toBeInTheDocument();
     });
 });
