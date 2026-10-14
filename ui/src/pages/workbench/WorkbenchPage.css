@@ -610,3 +610,12 @@ code.axiom-test-run__value {
 .axiom-test-run__fields .axiom-test-run__code {
     max-height: 240px;
 }
+
+/* The graph of the run dialog fills its fixed-height tab. */
+.pf-v6-c-tab-content__body.axiom-run-detail__graph {
+    overflow: hidden;
+}
+
+.axiom-run-detail__graph > * {
+    height: 100%;
+}

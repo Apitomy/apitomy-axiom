@@ -19,11 +19,7 @@ import {
 } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 import { useEffectiveTheme } from "../hooks/useTheme";
-
-const STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
-    running: "blue", waiting: "orange", completed: "green",
-    failed: "red", cancelled: "grey",
-};
+import { STATUS_COLORS, toFlowInstance } from "../components/workflowRun";
 
 /** Shows a single workflow run: diagram (default tab), overview, timeline, trace and lineage. */
 export function WorkflowRunDetailPage() {
@@ -63,32 +59,8 @@ export function WorkflowRunDetailPage() {
 
     const workflowContent = useMemo(
         () => (run?.workflowContent as Workflow | undefined), [run]);
-    const viewerInstance = useMemo<FlowInstance | undefined>(() => {
-        if (!run) return undefined;
-        return {
-            id: String(run.id),
-            workflowId: String(run.definitionId),
-            currentNodeId: run.currentNodeId ?? null,
-            activeBranches: (run.activeBranches ?? []).map((b) => ({
-                branchId: b.branchId ?? "",
-                nodeId: b.nodeId ?? "",
-            })),
-            joinArrivals: {},
-            status: run.status as any,
-            context: run.context || {},
-            history: (run.history ?? []).map((h) => ({
-                nodeId: h.nodeId, nodeName: h.nodeName,
-                edgeId: h.edgeId ?? "", edgeCondition: h.edgeCondition ?? "",
-                enteredOn: h.enteredOn, completedOn: h.completedOn ?? "",
-                output: h.output ?? {},
-                ...(h.input ? { input: h.input } : {}),
-                ...(h.title ? { title: h.title } : {}),
-            })),
-            failureReason: run.failureReason,
-            createdOn: run.startedOn,
-            updatedOn: run.completedOn ?? run.startedOn,
-        } as FlowInstance;
-    }, [run]);
+    const viewerInstance = useMemo<FlowInstance | undefined>(
+        () => (run ? toFlowInstance(run) : undefined), [run]);
 
     if (!run) {
         return <PageSection><p>Loading workflow run...</p></PageSection>;

@@ -18,7 +18,7 @@ SyntaxHighlighter.registerLanguage("bash", bash);
 SyntaxHighlighter.registerLanguage("javascript", javascript);
 
 /** Languages a code block can be highlighted as; "plaintext" is shown without highlighting. */
-type CodeLanguage = "json" | "bash" | "javascript" | "plaintext";
+export type CodeLanguage = "json" | "bash" | "javascript" | "plaintext";
 
 /**
  * Pretty-prints text when it is a JSON object or array.
@@ -41,7 +41,7 @@ export function prettyJson(text: string | undefined): string | null {
  * Read-only code block highlighted with SyntaxHighlighter (the same highlighter as the chat), with a copy
  * button. Long content scrolls inside the block.
  */
-function CodeBlock({ code, language, label }: { code: string; language: CodeLanguage; label: string }) {
+export function CodeBlock({ code, language, label }: { code: string; language: CodeLanguage; label: string }) {
     const theme = useEffectiveTheme();
     const [copied, setCopied] = useState<boolean>(false);
     const copy = () => {

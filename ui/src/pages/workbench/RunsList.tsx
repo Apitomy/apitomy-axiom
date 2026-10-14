@@ -1,15 +1,7 @@
 import type { KeyboardEvent } from "react";
 import { Button, Label } from "@patternfly/react-core";
 import type { WorkflowRunSummary } from "../../config/api";
-
-/** Status label colours, as on the Runs page. */
-const STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
-    running: "blue",
-    waiting: "orange",
-    completed: "green",
-    failed: "red",
-    cancelled: "grey",
-};
+import { STATUS_COLORS } from "../../components/workflowRun";
 
 /** Props for {@link RunsList}. */
 export interface RunsListProps {

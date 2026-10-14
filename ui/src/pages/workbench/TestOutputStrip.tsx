@@ -119,7 +119,7 @@ export function TestOutputStrip(props: TestOutputStripProps) {
         <section className="axiom-test-strip" aria-label="Test output">
             <div className="axiom-test-strip__header">
                 <Button variant="plain" size="sm" onClick={onToggle}
-                    aria-label={collapsed ? "Expand test output" : "Collapse test output"}
+                    aria-label={`${collapsed ? "Expand" : "Collapse"} ${bottomTabs ? "bottom panel" : "test output"}`}
                     icon={collapsed ? <AngleUpIcon /> : <AngleDownIcon />} />
                 {bottomTabs ? (
                     <Tabs isSubtab activeKey={bottomTabs.active} aria-label="Bottom panel"

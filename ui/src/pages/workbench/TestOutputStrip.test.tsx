@@ -93,6 +93,14 @@ describe("TestOutputStrip with Tests and Runs tabs", () => {
         expect(screen.getByRole("button", { name: "Test…" })).toBeTruthy();
         expect(screen.queryByRole("button", { name: "Refresh" })).toBeNull();
         expect(screen.getByRole("button", { name: "greet" })).toBeTruthy();
+        expect(screen.getByRole("button", { name: "Collapse bottom panel" })).toBeTruthy();
+    });
+
+    it("labels the toggle for the bottom panel when it has tabs", () => {
+        render(<TestOutputStrip runs={runs} collapsed onToggle={vi.fn()} onOpenItem={vi.fn()}
+            bottomTabs={tabsProps("runs")} />);
+        expect(screen.getByRole("button", { name: "Expand bottom panel" })).toBeTruthy();
+        expect(screen.queryByRole("button", { name: "Expand test output" })).toBeNull();
     });
 
     it("shows the runs tab content and actions, and reports tab switches", () => {

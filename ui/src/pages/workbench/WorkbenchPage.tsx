@@ -26,6 +26,8 @@ import { ChatPane } from "./ChatPane";
 import type { WorkbenchToolActions } from "./WorkbenchToolCards";
 import { TestOutputStrip } from "./TestOutputStrip";
 import { RunsList } from "./RunsList";
+import { RunDetailDialog } from "./RunDetailDialog";
+import { runAnalysisPrefill } from "./runAnalysis";
 import { useWorkflowRuns } from "./useWorkflowRuns";
 import { TestRunDialog } from "./TestRunDialog";
 import { valuesFromInputs } from "./testRunLogic";
@@ -85,6 +87,8 @@ export function WorkbenchPage() {
     const [testing, setTesting] = useState<number | null>(null);
     /** Title of the test error alert. */
     const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+    /** Id of the workflow run shown in the run dialog. */
+    const [openRunId, setOpenRunId] = useState<number | null>(null);
     const [testError, setTestError] = useState<{ title: string } | null>(null);
     const testValues = useRef<Map<number, { values: Record<string, string>; subjectId?: number }>>(new Map());
     const [preparingPublish, setPreparingPublish] = useState<boolean>(false);
@@ -631,10 +635,9 @@ export function WorkbenchPage() {
                         runsContent: (
                             <RunsList runs={workflowRuns.runs} published={definitionId !== null}
                                 error={workflowRuns.error}
-                                onOpenRun={() => { /* run details dialog: Task 3 */ }}
-                                // Placeholder prefill; Task 3 replaces it with the full analysis prompt.
-                                onAskAi={(run) => askAi(`Analyze run #${run.runId} of workflow \`${workflowItem?.name ?? ""}\``
-                                    + ` (status: ${run.status}). Find the cause and fix the workflow or its components.`)} />
+                                onOpenRun={setOpenRunId}
+                                onAskAi={(run) => askAi(runAnalysisPrefill({ id: run.runId, status: run.status,
+                                    currentNodeName: run.currentNodeName }, workflowItem?.name ?? run.definitionName ?? ""))} />
                         ),
                     }}
                     actions={
@@ -706,6 +709,10 @@ export function WorkbenchPage() {
                         onRun={(inputs, values, subjectId) => runTest(testing, inputs, values, subjectId)} />
                 );
             })()}
+            {openRunId !== null && (
+                <RunDetailDialog runId={openRunId} workflowName={workflowItem?.name ?? ""}
+                    onClose={() => setOpenRunId(null)} onAskAi={askAi} />
+            )}
             {publishOpen && (
                 <PublishDialog compositionId={id} items={wb.items} contents={wb.contents} problems={wb.problems}
                     onPublished={() => void wb.refreshItems().catch(console.error)}

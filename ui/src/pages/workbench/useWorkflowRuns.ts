@@ -28,25 +28,30 @@ export function useWorkflowRuns(definitionId: number | null): WorkflowRunsState 
     const [loadedFor, setLoadedFor] = useState<number | null>(null);
     const current = useRef<number | null>(definitionId);
     current.current = definitionId;
+    // Only the latest request may update the state, so a slow earlier response cannot overwrite a newer one.
+    const sequence = useRef<number>(0);
 
     const refresh = useCallback(() => {
         if (definitionId === null) {
+            sequence.current++;
             setRuns([]);
             setError(null);
             return;
         }
         setLoading(true);
+        const request: number = ++sequence.current;
+        const latest = (): boolean => request === sequence.current && current.current === definitionId;
         fetchWorkflowRuns(1, 50, { definitionId }).then((result) => {
-            if (current.current === definitionId) {
+            if (latest()) {
                 setRuns(result.items ?? []);
                 setError(null);
             }
         }).catch((e: unknown) => {
-            if (current.current === definitionId) {
+            if (latest()) {
                 setError(e instanceof Error ? e.message : String(e));
             }
         }).finally(() => {
-            if (current.current === definitionId) {
+            if (latest()) {
                 setLoading(false);
                 setLoadedFor(definitionId);
             }

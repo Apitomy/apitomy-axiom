@@ -25,14 +25,7 @@ import {
     fetchWorkflowDefinitions, fetchWorkflowRuns,
 } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
-
-const STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
-    running: "blue",
-    waiting: "orange",
-    completed: "green",
-    failed: "red",
-    cancelled: "grey",
-};
+import { STATUS_COLORS } from "../components/workflowRun";
 
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "status", label: "Status", testId: "runs-filter-status" },

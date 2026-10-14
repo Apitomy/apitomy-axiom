@@ -294,7 +294,7 @@ describe("WorkbenchPage", () => {
     it("saves the test strip collapsed state", () => {
         const spy = vi.spyOn(prefs, "savePrefs");
         renderPage();
-        fireEvent.click(screen.getByRole("button", { name: "Expand test output" }));
+        fireEvent.click(screen.getByRole("button", { name: "Expand bottom panel" }));
         expect(spy).toHaveBeenCalledWith(expect.objectContaining({ testStripCollapsed: false }));
     });
 
@@ -315,10 +315,10 @@ describe("WorkbenchPage", () => {
         const { rerender } = renderPage();
         testRuns = [run("old", "passed")];
         rerender(page());
-        expect(screen.getByRole("button", { name: "Expand test output" })).toBeTruthy();
+        expect(screen.getByRole("button", { name: "Expand bottom panel" })).toBeTruthy();
         testRuns = [run("new", "running"), run("old", "passed")];
         rerender(page());
-        expect(screen.getByRole("button", { name: "Collapse test output" })).toBeTruthy();
+        expect(screen.getByRole("button", { name: "Collapse bottom panel" })).toBeTruthy();
     });
 
     it("forgets seen runs when the composition changes", () => {
@@ -327,17 +327,17 @@ describe("WorkbenchPage", () => {
         const { rerender } = renderPage();
         testRuns = [run("x", "running")];
         rerender(page());
-        fireEvent.click(screen.getByRole("button", { name: "Collapse test output" }));
-        expect(screen.getByRole("button", { name: "Expand test output" })).toBeTruthy();
+        fireEvent.click(screen.getByRole("button", { name: "Collapse bottom panel" }));
+        expect(screen.getByRole("button", { name: "Expand bottom panel" })).toBeTruthy();
         fireEvent.click(screen.getByRole("button", { name: "go-2" }));
-        expect(screen.getByRole("button", { name: "Collapse test output" })).toBeTruthy();
+        expect(screen.getByRole("button", { name: "Collapse bottom panel" })).toBeTruthy();
     });
 
     it("runs an AI suggestion pre-filled from its inputs", async () => {
         testRuns = [{ id: "s", itemId: 11, itemType: "tool", itemName: "my-tool", author: "ai", status: "suggested",
             startedAt: "2026-10-13T10:00:00Z", inputs: { who: "bob" } }];
         renderPage();
-        fireEvent.click(screen.getByRole("button", { name: "Expand test output" }));
+        fireEvent.click(screen.getByRole("button", { name: "Expand bottom panel" }));
         fireEvent.click(screen.getByRole("button", { name: "Run…" }));
         expect(((await screen.findByLabelText("who")) as HTMLInputElement).value).toBe("bob");
         fireEvent.click(screen.getByRole("button", { name: "Run" }));
@@ -348,7 +348,7 @@ describe("WorkbenchPage", () => {
         testRuns = [{ id: "s", itemId: 99, itemType: "tool", itemName: "gone", author: "ai", status: "suggested",
             startedAt: "2026-10-13T10:00:00Z", inputs: {} }];
         renderPage();
-        fireEvent.click(screen.getByRole("button", { name: "Expand test output" }));
+        fireEvent.click(screen.getByRole("button", { name: "Expand bottom panel" }));
         fireEvent.click(screen.getByRole("button", { name: "Run…" }));
         expect(await screen.findByText("The suggested item no longer exists.")).toBeTruthy();
     });
@@ -361,19 +361,19 @@ describe("WorkbenchPage", () => {
         testRuns = [suggestion("old")];
         testRunsLoaded = true;
         rerender(page());
-        expect(screen.getByRole("button", { name: "Expand test output" })).toBeTruthy();
+        expect(screen.getByRole("button", { name: "Expand bottom panel" })).toBeTruthy();
         testRuns = [suggestion("new"), suggestion("old")];
         rerender(page());
-        expect(screen.getByRole("button", { name: "Collapse test output" })).toBeTruthy();
+        expect(screen.getByRole("button", { name: "Collapse bottom panel" })).toBeTruthy();
     });
 
     it("expands the strip for a new suggestion", () => {
         const { rerender } = renderPage();
-        expect(screen.getByRole("button", { name: "Expand test output" })).toBeTruthy();
+        expect(screen.getByRole("button", { name: "Expand bottom panel" })).toBeTruthy();
         testRuns = [{ id: "s", itemId: 11, itemType: "tool", itemName: "my-tool", author: "ai", status: "suggested",
             startedAt: "2026-10-13T10:00:00Z", inputs: {} }];
         rerender(page());
-        expect(screen.getByRole("button", { name: "Collapse test output" })).toBeTruthy();
+        expect(screen.getByRole("button", { name: "Collapse bottom panel" })).toBeTruthy();
     });
 
     it("opens the tool's tab from an Updated tool card in the chat", () => {
@@ -402,7 +402,7 @@ describe("WorkbenchPage", () => {
         const spy = vi.spyOn(prefs, "savePrefs");
         renderPage();
         await waitFor(() => expect(fetchWorkflowRunsMock).toHaveBeenCalledWith(1, 50, { definitionId: 42 }));
-        fireEvent.click(screen.getByRole("button", { name: "Expand test output" }));
+        fireEvent.click(screen.getByRole("button", { name: "Expand bottom panel" }));
         fireEvent.click(screen.getByRole("tab", { name: /Runs/ }));
         expect(spy).toHaveBeenCalledWith(expect.objectContaining({ bottomPanelTab: "runs" }));
         expect(await screen.findByText("First")).toBeTruthy();
@@ -416,15 +416,15 @@ describe("WorkbenchPage", () => {
         renderPage();
         await waitFor(() => expect(fetchWorkflowRunsMock).toHaveBeenCalled());
         await act(async () => {});
-        expect(screen.getByRole("button", { name: "Expand test output" })).toBeTruthy();
+        expect(screen.getByRole("button", { name: "Expand bottom panel" })).toBeTruthy();
         fetchWorkflowRunsMock.mockResolvedValue({ items: [r(2, "failed"), r(1, "failed")], totalCount: 2 });
         // Refresh (Runs tab action) loads the new run while the panel stays collapsed; then go back to Tests.
         fireEvent.click(screen.getByRole("tab", { name: /Runs/ }));
         fireEvent.click(screen.getByRole("tab", { name: /Tests/ }));
-        expect(screen.getByRole("button", { name: "Expand test output" })).toBeTruthy();
+        expect(screen.getByRole("button", { name: "Expand bottom panel" })).toBeTruthy();
         fireEvent.click(screen.getByRole("tab", { name: /Runs/ }));
         fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
-        expect(await screen.findByRole("button", { name: "Collapse test output" })).toBeTruthy();
+        expect(await screen.findByRole("button", { name: "Collapse bottom panel" })).toBeTruthy();
         expect(screen.getByRole("tab", { name: /Runs/ }).getAttribute("aria-selected")).toBe("true");
     });
 });

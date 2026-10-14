@@ -54,4 +54,16 @@ describe("useWorkflowRuns", () => {
         await act(async () => { vi.advanceTimersByTime(500); });
         expect(fetchWorkflowRuns).toHaveBeenCalledTimes(2);
     });
+
+    it("ignores out-of-order responses", async () => {
+        let resolveFirst: (v: unknown) => void = () => undefined;
+        fetchWorkflowRuns.mockReset()
+            .mockReturnValueOnce(new Promise((r) => { resolveFirst = r; }))
+            .mockResolvedValueOnce({ items: [{ ...run, runId: 8 }], totalCount: 1 });
+        const { result } = renderHook(() => useWorkflowRuns(5));
+        act(() => result.current.refresh());
+        await waitFor(() => expect(result.current.runs[0]?.runId).toBe(8));
+        await act(async () => { resolveFirst({ items: [{ ...run, runId: 1 }], totalCount: 1 }); });
+        expect(result.current.runs[0]?.runId).toBe(8);
+    });
 });
