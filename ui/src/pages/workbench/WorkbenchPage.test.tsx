@@ -14,7 +14,7 @@ vi.mock("./useWorkbench", () => ({
     useWorkbench: (): WorkbenchState => ({
         composition: { id: 1, name: "My comp", turnState: "idle", applyMode: "live", createdAt: "", updatedAt: "",
             session: { engine: "claude-code", engineLabel: "Claude Code" } },
-        items: [{ id: 10, type: "workflow", name: "main-flow", contentRevision: "r", lastAuthor: "user", changed: false } as never,
+        items: [{ id: 10, type: "workflow", name: "main-flow", baseItemId: 42, contentRevision: "r", lastAuthor: "user", changed: false } as never,
             { id: 11, type: "tool", name: "my-tool", contentRevision: "r", lastAuthor: "user", changed: false } as never],
         contents: { 10: {}, 11: { name: "my-tool", parameters: [{ name: "who", required: true }],
             scriptTemplate: "echo {{who}}" } }, revisions: {}, problems: {}, pending: null, lastCompletedTurnId: undefined, sessionError: null,
@@ -61,7 +61,9 @@ vi.mock("./ItemTab", async () => {
 vi.mock("../../config/api", async (orig) => ({
     ...(await orig<Record<string, unknown>>()),
     fetchSubjects: vi.fn().mockResolvedValue({ items: [], count: 0 }),
+    fetchWorkflowRuns: (...a: unknown[]) => fetchWorkflowRunsMock(...a),
 }));
+const fetchWorkflowRunsMock = vi.fn();
 vi.mock("./PublishDialog", () => ({ PublishDialog: () => <div data-testid="publish-dialog" /> }));
 
 import { act } from "@testing-library/react";
@@ -103,6 +105,8 @@ beforeEach(() => {
     itemFlush.mockReset();
     itemFlush.mockResolvedValue(undefined);
     localStorage.clear();
+    fetchWorkflowRunsMock.mockReset();
+    fetchWorkflowRunsMock.mockResolvedValue({ items: [], totalCount: 0 });
 });
 
 describe("WorkbenchPage", () => {
@@ -390,5 +394,37 @@ describe("WorkbenchPage", () => {
         expect(screen.getByTestId("item-tab")).toBeTruthy();
         act(() => chatPaneProps.toolActions.openWorkflow("n1"));
         expect(screen.getByRole("tab", { name: "main-flow" }).getAttribute("aria-selected")).toBe("true");
+    });
+
+    it("lists the runs of the published workflow on the Runs tab", async () => {
+        fetchWorkflowRunsMock.mockResolvedValue({ items: [{ runId: 5, status: "completed", title: "First",
+            definitionVersion: 1, startedOn: "2026-10-14T10:00:00Z" }], totalCount: 1 });
+        const spy = vi.spyOn(prefs, "savePrefs");
+        renderPage();
+        await waitFor(() => expect(fetchWorkflowRunsMock).toHaveBeenCalledWith(1, 50, { definitionId: 42 }));
+        fireEvent.click(screen.getByRole("button", { name: "Expand test output" }));
+        fireEvent.click(screen.getByRole("tab", { name: /Runs/ }));
+        expect(spy).toHaveBeenCalledWith(expect.objectContaining({ bottomPanelTab: "runs" }));
+        expect(await screen.findByText("First")).toBeTruthy();
+        expect(screen.getByRole("button", { name: "Refresh" })).toBeTruthy();
+    });
+
+    it("expands the panel on the Runs tab for a new failed run", async () => {
+        const r = (runId: number, status: string) => ({ runId, status, title: `R${runId}`, definitionVersion: 1,
+            startedOn: "2026-10-14T10:00:00Z" });
+        fetchWorkflowRunsMock.mockResolvedValue({ items: [r(1, "failed")], totalCount: 1 });
+        renderPage();
+        await waitFor(() => expect(fetchWorkflowRunsMock).toHaveBeenCalled());
+        await act(async () => {});
+        expect(screen.getByRole("button", { name: "Expand test output" })).toBeTruthy();
+        fetchWorkflowRunsMock.mockResolvedValue({ items: [r(2, "failed"), r(1, "failed")], totalCount: 2 });
+        // Refresh (Runs tab action) loads the new run while the panel stays collapsed; then go back to Tests.
+        fireEvent.click(screen.getByRole("tab", { name: /Runs/ }));
+        fireEvent.click(screen.getByRole("tab", { name: /Tests/ }));
+        expect(screen.getByRole("button", { name: "Expand test output" })).toBeTruthy();
+        fireEvent.click(screen.getByRole("tab", { name: /Runs/ }));
+        fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+        expect(await screen.findByRole("button", { name: "Collapse test output" })).toBeTruthy();
+        expect(screen.getByRole("tab", { name: /Runs/ }).getAttribute("aria-selected")).toBe("true");
     });
 });

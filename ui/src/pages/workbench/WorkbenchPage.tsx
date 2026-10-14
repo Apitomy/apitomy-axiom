@@ -25,6 +25,8 @@ import { itemUsages, mergeCatalog } from "./workbenchLogic";
 import { ChatPane } from "./ChatPane";
 import type { WorkbenchToolActions } from "./WorkbenchToolCards";
 import { TestOutputStrip } from "./TestOutputStrip";
+import { RunsList } from "./RunsList";
+import { useWorkflowRuns } from "./useWorkflowRuns";
 import { TestRunDialog } from "./TestRunDialog";
 import { valuesFromInputs } from "./testRunLogic";
 import { findActionTypeIdByName, loadEditorActionTypes } from "../../hooks/useWorkflowEditorSpi";
@@ -362,9 +364,40 @@ export function WorkbenchPage() {
             }
         }
         if (started && prefs.testStripCollapsed) {
-            updatePrefs({ testStripCollapsed: false });
+            updatePrefs({ testStripCollapsed: false, bottomPanelTab: "tests" });
         }
     }, [id, wb.testRuns, wb.testRunsLoaded, prefs.testStripCollapsed, updatePrefs]);
+
+    // Runs of the published workflow (the workflow item's baseItemId is the published definition id).
+    const workflowItem: CompositionItem | undefined = wb.items.find((i) => i.type === "workflow");
+    const definitionId: number | null = workflowItem?.baseItemId ?? null;
+    const workflowRuns = useWorkflowRuns(definitionId);
+    // Expand the panel on the Runs tab when a new run (unseen, after the first load) arrives failed.
+    const seenWorkflowRunIds = useRef<Set<number>>(new Set<number>());
+    const runsBaseline = useRef<boolean>(false);
+    const seenForDefinition = useRef<number | null>(definitionId);
+    useEffect(() => {
+        if (seenForDefinition.current !== definitionId) {
+            seenForDefinition.current = definitionId;
+            seenWorkflowRunIds.current = new Set<number>();
+            runsBaseline.current = false;
+        }
+        if (!workflowRuns.loaded) {
+            return;
+        }
+        const live: boolean = runsBaseline.current;
+        runsBaseline.current = true;
+        let failed: boolean = false;
+        for (const run of workflowRuns.runs) {
+            if (!seenWorkflowRunIds.current.has(run.runId)) {
+                seenWorkflowRunIds.current.add(run.runId);
+                failed = failed || (live && run.status === "failed");
+            }
+        }
+        if (failed && prefs.testStripCollapsed) {
+            updatePrefs({ testStripCollapsed: false, bottomPanelTab: "runs" });
+        }
+    }, [definitionId, workflowRuns.loaded, workflowRuns.runs, prefs.testStripCollapsed, updatePrefs]);
 
     const removingItem: CompositionItem | undefined = removingId === null ? undefined
         : wb.items.find((i) => i.id === removingId);
@@ -587,6 +620,23 @@ export function WorkbenchPage() {
                     onToggle={() => updatePrefs({ testStripCollapsed: !prefs.testStripCollapsed })}
                     onOpenItem={openItem}
                     onRunSuggestion={(run) => void runSuggestion(run)}
+                    bottomTabs={{
+                        active: prefs.bottomPanelTab,
+                        onSelect: (tab) => updatePrefs({ bottomPanelTab: tab }),
+                        runsCount: workflowRuns.runs.length,
+                        runsActions: (
+                            <Button variant="secondary" size="sm" isDisabled={definitionId === null}
+                                onClick={() => workflowRuns.refresh()}>Refresh</Button>
+                        ),
+                        runsContent: (
+                            <RunsList runs={workflowRuns.runs} published={definitionId !== null}
+                                error={workflowRuns.error}
+                                onOpenRun={() => { /* run details dialog: Task 3 */ }}
+                                // Placeholder prefill; Task 3 replaces it with the full analysis prompt.
+                                onAskAi={(run) => askAi(`Analyze run #${run.runId} of workflow \`${workflowItem?.name ?? ""}\``
+                                    + ` (status: ${run.status}). Find the cause and fix the workflow or its components.`)} />
+                        ),
+                    }}
                     actions={
                         <Tooltip content={testable ? `Run ${testable.name} with sample inputs`
                             : "Open an action type or tool to test it"}>

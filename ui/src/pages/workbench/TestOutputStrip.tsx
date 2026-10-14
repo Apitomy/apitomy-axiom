@@ -1,11 +1,23 @@
 import { type KeyboardEvent, type ReactNode, useState } from "react";
-import { Button, Label, Spinner } from "@patternfly/react-core";
+import { Button, Label, Spinner, Tab, Tabs, TabTitleText } from "@patternfly/react-core";
 import {
     AngleDownIcon, AngleUpIcon, CheckCircleIcon, ExclamationCircleIcon, ExclamationTriangleIcon,
     OutlinedLightbulbIcon,
 } from "@patternfly/react-icons";
 import type { CompositionTestRun } from "../../config/compositions";
 import { TestRunDetailModal } from "./TestRunDetailModal";
+import type { BottomPanelTab } from "./workbenchPrefs";
+
+/** The Tests/Runs tabs of the bottom panel; when given, the strip shows them instead of its title. */
+export interface BottomPanelTabs {
+    active: BottomPanelTab;
+    onSelect(tab: BottomPanelTab): void;
+    runsCount: number;
+    /** Body of the Runs tab. */
+    runsContent: ReactNode;
+    /** Header controls of the Runs tab. */
+    runsActions?: ReactNode;
+}
 
 /** Props for {@link TestOutputStrip}. */
 export interface TestOutputStripProps {
@@ -22,6 +34,8 @@ export interface TestOutputStripProps {
     selectedRunId?: string | null;
     /** Called when the details dialog of a run opens (id) or closes (null). */
     onSelectRun?(runId: string | null): void;
+    /** Shows the Tests and Runs tabs; the props above then describe the Tests tab. */
+    bottomTabs?: BottomPanelTabs;
 }
 
 function StatusIcon({ status }: { status: CompositionTestRun["status"] }) {
@@ -79,7 +93,8 @@ export function runSummary(run: CompositionTestRun): string {
  * Collapsible list of the composition's recent test runs, by the user and the AI.
  */
 export function TestOutputStrip(props: TestOutputStripProps) {
-    const { runs, collapsed, onToggle, onOpenItem, actions, onRunSuggestion } = props;
+    const { runs, collapsed, onToggle, onOpenItem, actions, onRunSuggestion, bottomTabs } = props;
+    const runsTab: boolean = bottomTabs?.active === "runs";
     const [ownSelectedId, setOwnSelectedId] = useState<string | null>(null);
     const controlled: boolean = props.selectedRunId !== undefined && props.onSelectRun !== undefined;
     const selectedId: string | null = controlled ? props.selectedRunId ?? null : ownSelectedId;
@@ -106,12 +121,23 @@ export function TestOutputStrip(props: TestOutputStripProps) {
                 <Button variant="plain" size="sm" onClick={onToggle}
                     aria-label={collapsed ? "Expand test output" : "Collapse test output"}
                     icon={collapsed ? <AngleUpIcon /> : <AngleDownIcon />} />
-                <span className="axiom-workbench__pane-title">Test output</span>
-                <Label isCompact>{runs.length}</Label>
+                {bottomTabs ? (
+                    <Tabs isSubtab activeKey={bottomTabs.active} aria-label="Bottom panel"
+                        onSelect={(_e, key) => bottomTabs.onSelect(key === "runs" ? "runs" : "tests")}>
+                        <Tab eventKey="tests" title={<TabTitleText>Tests <Label isCompact>{runs.length}</Label></TabTitleText>} />
+                        <Tab eventKey="runs" title={<TabTitleText>Runs <Label isCompact>{bottomTabs.runsCount}</Label></TabTitleText>} />
+                    </Tabs>
+                ) : (
+                    <>
+                        <span className="axiom-workbench__pane-title">Test output</span>
+                        <Label isCompact>{runs.length}</Label>
+                    </>
+                )}
                 <span className="axiom-workbench__spacer" />
-                {actions}
+                {runsTab ? bottomTabs?.runsActions : actions}
             </div>
-            {!collapsed && (
+            {!collapsed && runsTab && <div className="axiom-test-strip__body">{bottomTabs?.runsContent}</div>}
+            {!collapsed && !runsTab && (
                 <div className="axiom-test-strip__body">
                     {runs.length === 0 && (
                         <p className="axiom-text-subtle axiom-test-strip__empty">

@@ -78,3 +78,32 @@ describe("TestOutputStrip", () => {
             status: "passed", startedAt: "", exitCode: 0, problems: [], stdout: "counting\n4\n" })).toBe("4");
     });
 });
+
+describe("TestOutputStrip with Tests and Runs tabs", () => {
+    const tabsProps = (active: "tests" | "runs", onSelect = vi.fn()) => ({
+        active, onSelect, runsCount: 4, runsContent: <p>runs-body</p>,
+        runsActions: <button type="button">Refresh</button>,
+    });
+
+    it("shows tabs with counts and the tests tab content and actions", () => {
+        render(<TestOutputStrip runs={runs} collapsed={false} onToggle={vi.fn()} onOpenItem={vi.fn()}
+            actions={<button type="button">Test…</button>} bottomTabs={tabsProps("tests")} />);
+        expect(screen.getByRole("tab", { name: /Tests\s*2/ })).toBeTruthy();
+        expect(screen.getByRole("tab", { name: /Runs\s*4/ })).toBeTruthy();
+        expect(screen.getByRole("button", { name: "Test…" })).toBeTruthy();
+        expect(screen.queryByRole("button", { name: "Refresh" })).toBeNull();
+        expect(screen.getByRole("button", { name: "greet" })).toBeTruthy();
+    });
+
+    it("shows the runs tab content and actions, and reports tab switches", () => {
+        const onSelect = vi.fn();
+        render(<TestOutputStrip runs={runs} collapsed={false} onToggle={vi.fn()} onOpenItem={vi.fn()}
+            actions={<button type="button">Test…</button>} bottomTabs={tabsProps("runs", onSelect)} />);
+        expect(screen.getByText("runs-body")).toBeTruthy();
+        expect(screen.getByRole("button", { name: "Refresh" })).toBeTruthy();
+        expect(screen.queryByRole("button", { name: "Test…" })).toBeNull();
+        expect(screen.queryByRole("button", { name: "greet" })).toBeNull();
+        fireEvent.click(screen.getByRole("tab", { name: /Tests/ }));
+        expect(onSelect).toHaveBeenCalledWith("tests");
+    });
+});

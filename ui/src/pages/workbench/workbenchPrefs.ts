@@ -10,7 +10,12 @@ export interface WorkbenchPrefs {
     rightCollapsed: boolean;
     /** Whether the Test output strip under the centre pane is collapsed. */
     testStripCollapsed: boolean;
+    /** The active tab of the bottom panel. */
+    bottomPanelTab: BottomPanelTab;
 }
+
+/** Tabs of the bottom panel under the centre pane. */
+export type BottomPanelTab = "tests" | "runs";
 
 const KEY: string = "axiom.workbench.prefs";
 const MIN_PANE: number = 160;
@@ -18,7 +23,7 @@ const MAX_PANE: number = 800;
 
 function defaults(): WorkbenchPrefs {
     return { applyLayout: "place", focus: false, panes: { left: 260, right: 380 }, leftCollapsed: false,
-        rightCollapsed: false, testStripCollapsed: true };
+        rightCollapsed: false, testStripCollapsed: true, bottomPanelTab: "tests" };
 }
 
 function pane(value: unknown, fallback: number): number {
@@ -53,6 +58,7 @@ export function loadPrefs(): WorkbenchPrefs {
         leftCollapsed: typeof raw.leftCollapsed === "boolean" ? raw.leftCollapsed : d.leftCollapsed,
         rightCollapsed: typeof raw.rightCollapsed === "boolean" ? raw.rightCollapsed : d.rightCollapsed,
         testStripCollapsed: typeof raw.testStripCollapsed === "boolean" ? raw.testStripCollapsed : d.testStripCollapsed,
+        bottomPanelTab: raw.bottomPanelTab === "tests" || raw.bottomPanelTab === "runs" ? raw.bottomPanelTab : d.bottomPanelTab,
     };
 }
 
