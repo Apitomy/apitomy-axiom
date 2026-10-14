@@ -566,8 +566,16 @@ span.axiom-workbench__row-menu {
     margin-top: var(--pf-t--global--spacer--md, 16px);
 }
 
+/* Every tab gets the same fixed height so the dialog doesn't resize when switching tabs; long content scrolls. */
 .axiom-test-run__tab-body {
     padding-top: var(--pf-t--global--spacer--md, 16px);
+    height: min(55vh, 520px);
+    overflow: auto;
+    box-sizing: border-box;
+}
+
+.axiom-test-run__tab-body > .axiom-test-run__code {
+    max-height: 100%;
 }
 
 .axiom-test-run__tab-body > .axiom-test-run__section:first-child {
