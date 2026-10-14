@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { AssistantMessageList, type ChatMessage } from "./AssistantMessageList";
+import { AssistantMessageList, type ChatMessage, type ToolUseGroupRenderer } from "./AssistantMessageList";
 import { AssistantMessageInput } from "./AssistantMessageInput";
 import { AssistantSubagentPanel } from "./AssistantSubagentPanel";
 import { type AssistantTodo } from "./AssistantTodoPanel";
@@ -45,11 +45,13 @@ interface AssistantChatPanelProps {
     disabledReason?: string;
     /** When the nonce changes, puts the text into the input and focuses it. */
     prefill?: { text: string; nonce: number };
+    /** Optional custom rendering of runs of consecutive tool calls (see AssistantMessageList). */
+    renderToolUseGroup?: ToolUseGroupRenderer;
 }
 
 let messageIdCounter = 0;
 
-export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, onAutoApprovalCountChange, onAllowAllChanged, onModelDetected, onCostUpdate, onSend, onInterrupt, disabledReason, prefill }: AssistantChatPanelProps) {
+export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, onAutoApprovalCountChange, onAllowAllChanged, onModelDetected, onCostUpdate, onSend, onInterrupt, disabledReason, prefill, renderToolUseGroup }: AssistantChatPanelProps) {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [todos, setTodos] = useState<AssistantTodo[]>([]);
     const [isProcessing, setIsProcessingState] = useState(false);
@@ -897,6 +899,7 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                     processingText={processingText}
                     onSubagentClick={handleSubagentClick}
                     highlightedAgentBlockId={highlightedAgentBlockId}
+                    renderToolUseGroup={renderToolUseGroup}
                 />
                 <AssistantMessageInput
                     onSend={handleSend}
