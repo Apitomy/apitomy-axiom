@@ -54,7 +54,11 @@ export interface WorkbenchState {
     /** Whether the initial run history of the current composition has loaded (or failed to load). */
     testRunsLoaded: boolean;
     /** Test-runs a draft action type or tool, records the finished run and returns it. */
-    runTest(itemId: number, inputs: Record<string, unknown>, subjectId?: number): Promise<CompositionTestRun>;
+    /**
+     * Starts a test run. With a `runId`, a "running" placeholder for that id is added to `testRuns` at once, so
+     * the run can be shown before the request returns.
+     */
+    runTest(itemId: number, inputs: Record<string, unknown>, subjectId?: number, runId?: string): Promise<CompositionTestRun>;
 }
 
 const VALIDATE_DEBOUNCE_MS: number = 800;
@@ -306,11 +310,38 @@ export function useWorkbench(compositionId: number): WorkbenchState {
         updatePending(null);
     }, [updatePending]);
 
-    const runTest = useCallback(async (itemId: number, inputs: Record<string, unknown>, subjectId?: number) => {
-        const run: CompositionTestRun = await testItem(compositionId, itemId,
-            subjectId === undefined ? { inputs } : { inputs, subjectId });
+    const itemsRef = useRef<CompositionItem[]>([]);
+    itemsRef.current = items;
+
+    const runTest = useCallback(async (itemId: number, inputs: Record<string, unknown>, subjectId?: number,
+                                       runId?: string) => {
+        const item: CompositionItem | undefined = itemsRef.current.find((i) => i.id === itemId);
+        if (runId && item && item.type !== "workflow") {
+            const placeholder: CompositionTestRun = { id: runId, itemId, itemType: item.type, itemName: item.name,
+                author: "user", status: "running", startedAt: new Date().toISOString(), inputs, subjectId };
+            setTestRuns((prev) => mergeTestRun(prev, placeholder));
+        }
+        const data: { inputs: Record<string, unknown>; subjectId?: number; runId?: string } = { inputs };
+        if (subjectId !== undefined) {
+            data.subjectId = subjectId;
+        }
+        if (runId) {
+            data.runId = runId;
+        }
+        let run: CompositionTestRun;
+        try {
+            run = await testItem(compositionId, itemId, data);
+        } catch (e) {
+            // The run never started: drop its placeholder.
+            if (runId && aliveRef.current) {
+                setTestRuns((prev) => prev.filter((r) => r.id !== runId || r.status !== "running"));
+            }
+            throw e;
+        }
         if (aliveRef.current) {
-            setTestRuns((prev) => mergeTestRun(prev, run));
+            // If the server chose another id, the placeholder would stay "running" forever: drop it.
+            setTestRuns((prev) => mergeTestRun(runId && run.id !== runId
+                ? prev.filter((r) => r.id !== runId) : prev, run));
         }
         return run;
     }, [compositionId]);

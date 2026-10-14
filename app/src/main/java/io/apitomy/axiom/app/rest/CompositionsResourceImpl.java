@@ -402,7 +402,7 @@ public class CompositionsResourceImpl implements CompositionsResource {
             throw new IllegalArgumentException("The workflow cannot be test-run");
         }
         return testRuns.run(compositionId, item, testValues(data.getInputs()), data.getSubjectId(),
-                CompositionService.AUTHOR_USER, null);
+                CompositionService.AUTHOR_USER, null, data.getRunId());
     }
 
     /** {@inheritDoc} */

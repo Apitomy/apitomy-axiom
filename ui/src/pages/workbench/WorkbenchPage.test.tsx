@@ -232,8 +232,26 @@ describe("WorkbenchPage", () => {
         fireEvent.click(screen.getByRole("button", { name: "Test…" }));
         fireEvent.change(await screen.findByLabelText("who"), { target: { value: "ann" } });
         fireEvent.click(screen.getByRole("button", { name: "Run" }));
-        await waitFor(() => expect(runTest).toHaveBeenCalledWith(11, { who: "ann" }, undefined));
+        await waitFor(() => expect(runTest).toHaveBeenCalledWith(11, { who: "ann" }, undefined, expect.any(String)));
         expect(itemFlush).toHaveBeenCalled();
+    });
+
+    it("opens the run's details at Run and shows it live as it finishes", async () => {
+        const { rerender } = renderPage();
+        fireEvent.click(screen.getByRole("button", { name: /^my-tool/ }));
+        fireEvent.click(screen.getByRole("button", { name: "Test…" }));
+        fireEvent.change(await screen.findByLabelText("who"), { target: { value: "ann" } });
+        fireEvent.click(screen.getByRole("button", { name: "Run" }));
+        await waitFor(() => expect(runTest).toHaveBeenCalled());
+        const runId: string = runTest.mock.calls[runTest.mock.calls.length - 1][3];
+        testRuns = [{ id: runId, itemId: 11, itemType: "tool", itemName: "my-tool", author: "user", status: "running",
+            startedAt: "2026-10-14T10:00:00Z", inputs: { who: "ann" } }];
+        rerender(page());
+        expect(await screen.findByText("Test run: my-tool")).toBeTruthy();
+        expect(screen.getByText("running")).toBeTruthy();
+        testRuns = [{ ...testRuns[0], status: "passed", exitCode: 0, stdout: "hi ann\n" }];
+        rerender(page());
+        expect(screen.getByText("passed")).toBeTruthy();
     });
 
     it("shows an error when the test request fails", async () => {
@@ -303,7 +321,7 @@ describe("WorkbenchPage", () => {
         fireEvent.click(screen.getByRole("button", { name: "Run…" }));
         expect(((await screen.findByLabelText("who")) as HTMLInputElement).value).toBe("bob");
         fireEvent.click(screen.getByRole("button", { name: "Run" }));
-        await waitFor(() => expect(runTest).toHaveBeenCalledWith(11, { who: "bob" }, undefined));
+        await waitFor(() => expect(runTest).toHaveBeenCalledWith(11, { who: "bob" }, undefined, expect.any(String)));
     });
 
     it("shows an error when the suggested item no longer exists", async () => {

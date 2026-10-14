@@ -117,6 +117,35 @@ describe("test runs", () => {
         expect(test).toHaveBeenCalledWith(1, 11, { inputs: { who: "bob" }, subjectId: 5 });
         expect(result.current.testRuns[0].id).toBe("c");
     });
+
+    it("shows a running placeholder for a run id at once and replaces it with the result", async () => {
+        vi.spyOn(c, "listItems").mockResolvedValue([{ id: 11, type: "tool", name: "t", contentRevision: "r",
+            lastAuthor: "user", changed: true }]);
+        let finish: (r: c.CompositionTestRun) => void = () => {};
+        const test = vi.spyOn(c, "testItem").mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+        const { result } = renderHook(() => useWorkbench(1));
+        await waitFor(() => expect(result.current.items).toHaveLength(1));
+        let done: Promise<c.CompositionTestRun> = Promise.resolve({} as never);
+        act(() => { done = result.current.runTest(11, { a: 1 }, undefined, "client-run-1"); });
+        expect(test).toHaveBeenCalledWith(1, 11, { inputs: { a: 1 }, runId: "client-run-1" });
+        expect(result.current.testRuns[0]).toEqual(expect.objectContaining({ id: "client-run-1", status: "running",
+            itemName: "t" }));
+        await act(async () => { finish({ ...run("client-run-1", "passed"), itemId: 11 }); await done; });
+        expect(result.current.testRuns.filter((r) => r.id === "client-run-1")).toHaveLength(1);
+        expect(result.current.testRuns[0].status).toBe("passed");
+    });
+
+    it("drops the placeholder when the run request fails", async () => {
+        vi.spyOn(c, "listItems").mockResolvedValue([{ id: 11, type: "tool", name: "t", contentRevision: "r",
+            lastAuthor: "user", changed: true }]);
+        vi.spyOn(c, "testItem").mockRejectedValue(new Error("busy"));
+        const { result } = renderHook(() => useWorkbench(1));
+        await waitFor(() => expect(result.current.items).toHaveLength(1));
+        await act(async () => {
+            await expect(result.current.runTest(11, {}, undefined, "client-run-2")).rejects.toThrow("busy");
+        });
+        expect(result.current.testRuns.find((r) => r.id === "client-run-2")).toBeUndefined();
+    });
 });
 
 describe("test runs during load", () => {

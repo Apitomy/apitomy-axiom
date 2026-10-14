@@ -18,6 +18,10 @@ export interface TestOutputStripProps {
     actions?: ReactNode;
     /** Called when the user chooses to run an AI-suggested test. */
     onRunSuggestion?(run: CompositionTestRun): void;
+    /** Id of the run whose details dialog is open; when given (with `onSelectRun`) the selection is controlled. */
+    selectedRunId?: string | null;
+    /** Called when the details dialog of a run opens (id) or closes (null). */
+    onSelectRun?(runId: string | null): void;
 }
 
 function StatusIcon({ status }: { status: CompositionTestRun["status"] }) {
@@ -74,8 +78,12 @@ export function runSummary(run: CompositionTestRun): string {
 /**
  * Collapsible list of the composition's recent test runs, by the user and the AI.
  */
-export function TestOutputStrip({ runs, collapsed, onToggle, onOpenItem, actions, onRunSuggestion }: TestOutputStripProps) {
-    const [selectedId, setSelectedId] = useState<string | null>(null);
+export function TestOutputStrip(props: TestOutputStripProps) {
+    const { runs, collapsed, onToggle, onOpenItem, actions, onRunSuggestion } = props;
+    const [ownSelectedId, setOwnSelectedId] = useState<string | null>(null);
+    const controlled: boolean = props.selectedRunId !== undefined && props.onSelectRun !== undefined;
+    const selectedId: string | null = controlled ? props.selectedRunId ?? null : ownSelectedId;
+    const setSelectedId = (id: string | null) => (controlled ? props.onSelectRun?.(id) : setOwnSelectedId(id));
     // Show the latest version of the selected run (it may still be running when the dialog opens).
     const selected: CompositionTestRun | undefined = runs.find((r) => r.id === selectedId);
     /** A suggested run opens the Test dialog (Run…); any other run opens its details. */

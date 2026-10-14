@@ -35,6 +35,8 @@ public class CompositionTestRuns {
 
     private static final Logger LOG = Logger.getLogger(CompositionTestRuns.class);
 
+    private static final java.util.regex.Pattern RUN_ID = java.util.regex.Pattern.compile("[A-Za-z0-9-]{8,64}");
+
     /** Runs kept per composition. */
     public static final int MAX_RUNS = 50;
 
@@ -72,6 +74,26 @@ public class CompositionTestRuns {
      */
     public CompositionTestRun run(long compositionId, CompositionItemEntity item, Map<String, Object> inputs,
                                   Long subjectId, String author, String turnId) {
+        return run(compositionId, item, inputs, subjectId, author, turnId, null);
+    }
+
+    /**
+     * Runs an action type or tool draft and records the run under the caller's run id, so the caller can follow
+     * the run (e.g. show it) before this method returns.
+     *
+     * @param compositionId the composition id
+     * @param item          the draft (not the workflow)
+     * @param inputs        input or parameter values
+     * @param subjectId     the subject to run in, or {@code null}
+     * @param author        {@link CompositionService#AUTHOR_USER} or {@link CompositionService#AUTHOR_AI}
+     * @param turnId        the AI turn id, or {@code null}
+     * @param runId         the id to use; a new id is generated when it is null, invalid or already used
+     * @return the finished run
+     * @throws IllegalArgumentException for the workflow or an unknown subject
+     * @throws TooManyTestRunsException when the composition already has the maximum number of runs in progress
+     */
+    public CompositionTestRun run(long compositionId, CompositionItemEntity item, Map<String, Object> inputs,
+                                  Long subjectId, String author, String turnId, String runId) {
         boolean tool = "tool".equals(item.itemType);
         if (!tool && !"action-type".equals(item.itemType)) {
             throw new IllegalArgumentException("Only action types and tools can be test-run");
@@ -89,7 +111,7 @@ public class CompositionTestRuns {
         }
         try {
             return execute(compositionId, item, tool, inputs != null ? inputs : Map.of(), subject, subjectId,
-                    author, turnId);
+                    author, turnId, runIdFor(compositionId, runId));
         } finally {
             semaphore.release();
         }
@@ -129,9 +151,9 @@ public class CompositionTestRuns {
 
     private CompositionTestRun execute(long compositionId, CompositionItemEntity item, boolean tool,
                                        Map<String, Object> values, SubjectEntity subject, Long subjectId,
-                                       String author, String turnId) {
+                                       String author, String turnId, String runId) {
         CompositionTestRun run = new CompositionTestRun();
-        run.setId(UUID.randomUUID().toString());
+        run.setId(runId);
         run.setItemId(item.id);
         run.setItemType(CompositionTestRun.ItemType.fromValue(item.itemType));
         run.setItemName(item.name);
@@ -226,6 +248,15 @@ public class CompositionTestRuns {
                 }
             }
         }
+    }
+
+    /** Uses the caller's run id when it is well-formed and not already used by this composition. */
+    private String runIdFor(long compositionId, String requested) {
+        if (requested != null && RUN_ID.matcher(requested).matches()
+                && list(compositionId).stream().noneMatch(r -> requested.equals(r.getId()))) {
+            return requested;
+        }
+        return UUID.randomUUID().toString();
     }
 
     /** The execution mode of an action type draft, or null for a tool or an unknown mode. */

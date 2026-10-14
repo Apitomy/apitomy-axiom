@@ -342,7 +342,7 @@ export interface CompositionTestRunEvent {
 
 /** Test-runs a draft action type or tool and returns the finished run. */
 export function testItem(id: number, itemId: number,
-    data: { inputs: Record<string, unknown>; subjectId?: number }): Promise<CompositionTestRun> {
+    data: { inputs: Record<string, unknown>; subjectId?: number; runId?: string }): Promise<CompositionTestRun> {
     return request("POST", `${it(id, itemId)}/test`, data);
 }
 

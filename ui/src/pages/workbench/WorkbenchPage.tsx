@@ -30,6 +30,13 @@ import { valuesFromInputs } from "./testRunLogic";
 import { findActionTypeIdByName, loadEditorActionTypes } from "../../hooks/useWorkflowEditorSpi";
 import "./WorkbenchPage.css";
 
+/** A new id for a test run, so its dialog can open before the run request returns. */
+function newRunId(): string {
+    return typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 /**
  * Compact label with the engine and model of the composition's running assistant session; hidden until the
  * session has started.
@@ -75,6 +82,7 @@ export function WorkbenchPage() {
     const itemTabRefs = useRef<Map<number, ItemTabHandle>>(new Map());
     const [testing, setTesting] = useState<number | null>(null);
     /** Title of the test error alert. */
+    const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
     const [testError, setTestError] = useState<{ title: string } | null>(null);
     const testValues = useRef<Map<number, { values: Record<string, string>; subjectId?: number }>>(new Map());
     const [preparingPublish, setPreparingPublish] = useState<boolean>(false);
@@ -319,8 +327,13 @@ export function WorkbenchPage() {
         suggestedValues.current = null;
         setTesting(null);
         setTestError(null);
-        wb.runTest(itemId, inputs, subjectId).catch((e: unknown) =>
-            setTestError({ title: `Could not run the test: ${e instanceof Error ? e.message : String(e)}` }));
+        // Open the run's details right away; the dialog shows it running and updates live when it finishes.
+        const runId: string = newRunId();
+        setSelectedRunId(runId);
+        wb.runTest(itemId, inputs, subjectId, runId).catch((e: unknown) => {
+            setSelectedRunId((current) => (current === runId ? null : current));
+            setTestError({ title: `Could not run the test: ${e instanceof Error ? e.message : String(e)}` });
+        });
     };
 
     // Expand the strip when a run starts live or the AI suggests one: an unseen "running" or "suggested" run that
@@ -565,6 +578,7 @@ export function WorkbenchPage() {
                         actionLinks={<AlertActionLink onClick={() => setTestError(null)}>Dismiss</AlertActionLink>} />
                 )}
                 <TestOutputStrip runs={wb.testRuns} collapsed={prefs.testStripCollapsed}
+                    selectedRunId={selectedRunId} onSelectRun={setSelectedRunId}
                     onToggle={() => updatePrefs({ testStripCollapsed: !prefs.testStripCollapsed })}
                     onOpenItem={openItem}
                     onRunSuggestion={(run) => void runSuggestion(run)}

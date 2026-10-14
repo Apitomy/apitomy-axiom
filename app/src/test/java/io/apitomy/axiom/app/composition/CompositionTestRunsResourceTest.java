@@ -84,6 +84,24 @@ class CompositionTestRunsResourceTest {
     }
 
     @Test
+    void usesTheCallersRunIdOnlyWhenValidAndUnused() {
+        long id = CompositionsResourceTest.createComposition();
+        long itemId = scriptActionType(id);
+        given().contentType(ContentType.JSON).body(Map.of("inputs", Map.of("who", "a"), "runId", "client-run-0001"))
+                .post(BASE + "/{id}/items/{itemId}/test", id, itemId).then().statusCode(200)
+                .body("id", equalTo("client-run-0001"));
+        String second = given().contentType(ContentType.JSON)
+                .body(Map.of("inputs", Map.of("who", "a"), "runId", "client-run-0001"))
+                .post(BASE + "/{id}/items/{itemId}/test", id, itemId).then().statusCode(200)
+                .extract().jsonPath().getString("id");
+        org.junit.jupiter.api.Assertions.assertNotEquals("client-run-0001", second);
+        String invalid = given().contentType(ContentType.JSON).body(Map.of("inputs", Map.of("who", "a"), "runId", "x y"))
+                .post(BASE + "/{id}/items/{itemId}/test", id, itemId).then().statusCode(200)
+                .extract().jsonPath().getString("id");
+        org.junit.jupiter.api.Assertions.assertNotEquals("x y", invalid);
+    }
+
+    @Test
     void rejectsTheWorkflow() {
         long id = CompositionsResourceTest.createComposition();
         long workflowId = CompositionsResourceTest.addItem(id, "workflow", "test-wf").getLong("id");
