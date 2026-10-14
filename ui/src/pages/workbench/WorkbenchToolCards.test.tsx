@@ -25,16 +25,39 @@ describe("renderWorkbenchToolGroup", () => {
         expect(container.textContent).toContain("Updated tool");
         expect(screen.getByText("my-tool").tagName).toBe("CODE");
         expect(screen.getByText("VALID")).toBeTruthy();
+        expect(screen.queryByRole("button", { name: "Open" })).toBeNull();
+        fireEvent.click(screen.getByRole("button", { name: /Updated tool my-tool/ }));
         fireEvent.click(screen.getByRole("button", { name: "Open" }));
         expect(a.openItem).toHaveBeenCalledWith("tool", "my-tool");
     });
 
-    it("shows the generic block when a card is expanded", () => {
-        show([ctx("1", "workbench_upsert_item", { type: "tool", name: "t" }, "INVALID: tool/t (created, x)")]);
+    it("unpacks an item write: result, problems and the item, without the generic block", () => {
+        show([ctx("1", "workbench_upsert_item", { type: "tool", name: "t", item: { name: "t", scriptTemplate: "echo" } },
+            "INVALID: tool/t (created, x)\n- [ERROR] scriptTemplate missing: Script is required")]);
         expect(screen.getByText("INVALID")).toBeTruthy();
-        expect(screen.queryByTestId("generic-1")).toBeNull();
         fireEvent.click(screen.getByRole("button", { name: /Created tool t/ }));
-        expect(screen.getByTestId("generic-1")).toBeTruthy();
+        expect(screen.queryByTestId("generic-1")).toBeNull();
+        expect(screen.getByText("[ERROR] scriptTemplate missing: Script is required")).toBeTruthy();
+        expect(screen.getByText("Item")).toBeTruthy();
+        expect(document.body.textContent).toContain('"scriptTemplate": "echo"');
+    });
+
+    it("unpacks workflow changes into a list of changes", () => {
+        show([ctx("1", "workbench_propose_workflow_changes", { changeSet: { ops: [
+            { op: "addNode", node: { id: "n1", name: "Log" } }, { op: "addEdge", edge: { id: "e", source: "a", target: "n1" } }] } },
+            "APPLIED. New revision: r9")]);
+        fireEvent.click(screen.getByRole("button", { name: /Proposed 2 workflow changes/ }));
+        expect(screen.getByText("added Log")).toBeTruthy();
+        expect(screen.getByText("connected a → n1")).toBeTruthy();
+        expect(screen.getByText("APPLIED. New revision: r9")).toBeTruthy();
+    });
+
+    it("unpacks an expression evaluation", () => {
+        show([ctx("1", "workbench_evaluate_expression", { expression: "context.repo", scope: "edge" },
+            'OK (string): "o/r"')]);
+        fireEvent.click(screen.getByRole("button", { name: /Evaluated/ }));
+        expect(screen.getByText("Value (string)")).toBeTruthy();
+        expect(screen.getByText("edge")).toBeTruthy();
     });
 
     it("links workflow changes to the first touched node", () => {
@@ -42,6 +65,7 @@ describe("renderWorkbenchToolGroup", () => {
         const { container } = show([ctx("1", "mcp__workbench__propose_workflow_changes",
             { changeSet: { ops: [{ op: "addNode", node: { id: "n1", name: "Log" } }] } }, "APPLIED")], a);
         expect(container.textContent).toContain("Proposed 1 workflow change added Log");
+        fireEvent.click(screen.getByRole("button", { name: /Proposed 1 workflow change/ }));
         fireEvent.click(screen.getByRole("button", { name: "Open workflow" }));
         expect(a.openWorkflow).toHaveBeenCalledWith("n1");
     });
@@ -61,6 +85,7 @@ describe("renderWorkbenchToolGroup", () => {
     it("opens the suggestion of a suggest_test card", () => {
         const a = actions();
         show([ctx("1", "mcp__workbench__suggest_test", { type: "action-type", name: "greet" }, "Suggested.")], a);
+        fireEvent.click(screen.getByRole("button", { name: /Suggested a test/ }));
         fireEvent.click(screen.getByRole("button", { name: "Run…" }));
         expect(a.openSuggestion).toHaveBeenCalledWith("action-type", "greet");
     });
@@ -85,7 +110,8 @@ describe("renderWorkbenchToolGroup", () => {
         fireEvent.click(screen.getByRole("button", { name: /Read 3 things/ }));
         expect(screen.getByText("Read the composition")).toBeTruthy();
         expect(screen.getByText("Checked the composition")).toBeTruthy();
-        ["1", "2", "3"].forEach((id) => expect(screen.getByTestId(`generic-${id}`)).toBeTruthy());
+        expect(screen.queryByTestId("generic-1")).toBeNull();
+        expect(screen.getAllByText("Result").length).toBe(3);
     });
 
     it("falls back to the generic block in place for unknown or running calls", () => {

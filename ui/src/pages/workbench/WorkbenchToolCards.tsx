@@ -11,6 +11,7 @@ import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import type { ToolUseRenderContext } from "../../components/assistant/AssistantMessageList";
 import { describeToolCall, groupToolCalls, workbenchTool, type CardTarget, type ToolCallRef, type ToolCard,
     type WorkbenchTool } from "./toolCards";
+import { ToolCallDetails } from "./ToolCallDetails";
 
 /** Navigation callbacks used by the workbench chat cards. */
 export interface WorkbenchToolActions {
@@ -44,7 +45,7 @@ const STATUS_COLOR: Record<NonNullable<ToolCard["status"]>, "green" | "orange" |
     "VALID": "green", "VALID with warnings": "orange", "INVALID": "red",
 };
 
-function linkFor(target: CardTarget | undefined, actions: WorkbenchToolActions): ReactNode {
+function actionFor(target: CardTarget | undefined, actions: WorkbenchToolActions): ReactNode {
     if (!target) return null;
     let label: string;
     let onClick: () => void;
@@ -61,7 +62,7 @@ function linkFor(target: CardTarget | undefined, actions: WorkbenchToolActions):
             label = "Run…";
             onClick = () => actions.openSuggestion(target.itemType, target.name);
     }
-    return <Button variant="link" isInline size="sm" onClick={onClick}>{label}</Button>;
+    return <Button variant="secondary" size="sm" onClick={onClick}>{label}</Button>;
 }
 
 function CardText({ card }: { card: ToolCard }) {
@@ -74,35 +75,31 @@ function CardText({ card }: { card: ToolCard }) {
     );
 }
 
-/**
- * A tool card as a PatternFly disclosure (large expandable section): the header is the toggle and the details
- * hold the raw tool call. Links are placed beside the toggle, not inside it (a button cannot contain a button).
- */
-function Disclosure({ className, header, link, children }: {
-    className: string;
-    header: ReactNode;
-    link?: ReactNode;
-    children: ReactNode;
-}) {
+/** A tool card as a PatternFly disclosure (large expandable section); the details render only when open. */
+function Disclosure({ className, header, children }: { className: string; header: ReactNode; children: ReactNode }) {
     const [expanded, setExpanded] = useState<boolean>(false);
     return (
-        <div className={`axiom-workbench__tool-card ${className}${link ? " axiom-workbench__tool-card--linked" : ""}`}>
+        <div className={`axiom-workbench__tool-card ${className}`}>
             <ExpandableSection displaySize="lg" isIndented isExpanded={expanded}
                 onToggle={(_e, open) => setExpanded(open)}
                 toggleContent={<span className="axiom-workbench__tool-card-row">{header}</span>}>
-                {/* Rendered only when open, so collapsed cards don't mount the raw tool blocks. */}
                 {expanded && children}
             </ExpandableSection>
-            {link && <span className="axiom-workbench__tool-card-link">{link}</span>}
         </div>
     );
 }
 
+function detailsOf(ctx: ToolUseRenderContext): ReactNode {
+    const m = ctx.message;
+    return <ToolCallDetails tool={workbenchTool(m.toolName ?? "")} input={m.toolInput} result={m.toolResult}
+        isError={m.isError} />;
+}
+
 function CardRow({ ctx, card, actions }: { ctx: ToolUseRenderContext; card: ToolCard; actions: WorkbenchToolActions }) {
     const danger: boolean = card.variant === "danger";
+    const action: ReactNode = actionFor(card.target, actions);
     return (
         <Disclosure className={danger ? "axiom-workbench__tool-card--danger" : ""}
-            link={linkFor(card.target, actions)}
             header={<>
                 <span className="axiom-workbench__tool-card-icon">
                     {iconFor(workbenchTool(ctx.message.toolName ?? ""), card)}
@@ -110,7 +107,8 @@ function CardRow({ ctx, card, actions }: { ctx: ToolUseRenderContext; card: Tool
                 <CardText card={card} />
                 {card.status && <Label isCompact color={STATUS_COLOR[card.status]}>{card.status}</Label>}
             </>}>
-            {ctx.genericBlock}
+            {detailsOf(ctx)}
+            {action && <div className="axiom-workbench__tool-card-actions">{action}</div>}
         </Disclosure>
     );
 }
@@ -124,12 +122,12 @@ function ReadOnlyLine({ entries }: { entries: { ctx: ToolUseRenderContext; card:
                 {single ? <CardText card={entries[0].card} />
                     : <span className="axiom-workbench__tool-card-text">{`Read ${entries.length} things`}</span>}
             </>}>
-            {!single && (
-                <ul className="axiom-workbench__tool-card-list">
-                    {entries.map((e) => <li key={e.ctx.message.id}><CardText card={e.card} /></li>)}
-                </ul>
-            )}
-            {entries.map((e) => <Fragment key={e.ctx.message.id}>{e.ctx.genericBlock}</Fragment>)}
+            {single ? detailsOf(entries[0].ctx) : entries.map((e) => (
+                <div key={e.ctx.message.id} className="axiom-workbench__tool-card-entry">
+                    <div className="axiom-workbench__tool-card-entry-title"><CardText card={e.card} /></div>
+                    {detailsOf(e.ctx)}
+                </div>
+            ))}
         </Disclosure>
     );
 }

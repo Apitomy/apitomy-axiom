@@ -428,15 +428,59 @@ span.axiom-workbench__row-menu {
     min-width: 0;
 }
 
-.axiom-workbench__tool-card--linked .pf-v6-c-expandable-section__toggle {
-    padding-inline-end: 96px;
+.axiom-workbench__tool-card-actions {
+    margin-top: var(--pf-t--global--spacer--sm, 8px);
 }
 
-.axiom-workbench__tool-card-link {
-    position: absolute;
-    top: var(--pf-t--global--spacer--md, 16px);
-    right: var(--pf-t--global--spacer--md, 16px);
-    white-space: nowrap;
+.axiom-workbench__tool-card-entry + .axiom-workbench__tool-card-entry {
+    margin-top: var(--pf-t--global--spacer--md, 16px);
+}
+
+.axiom-workbench__tool-card-entry-title {
+    font-weight: var(--pf-t--global--font--weight--body--bold, 600);
+    margin-bottom: 2px;
+}
+
+/* Unpacked tool call details inside a card. */
+.axiom-tool-details__section + .axiom-tool-details__section {
+    margin-top: var(--pf-t--global--spacer--sm, 8px);
+}
+
+.axiom-tool-details__label {
+    font-size: var(--pf-t--global--font--size--xs);
+    font-weight: var(--pf-t--global--font--weight--body--bold, 600);
+    color: var(--pf-t--global--text--color--subtle);
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.axiom-tool-details__label--danger,
+.axiom-tool-details__text--danger {
+    color: var(--pf-t--global--text--color--status--danger--default);
+}
+
+.axiom-tool-details__code {
+    max-height: 240px;
+    overflow: auto;
+    border-radius: var(--pf-t--global--border--radius--small, 4px);
+}
+
+.axiom-tool-details__text {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: var(--pf-t--global--font--family--mono);
+    font-size: 12px;
+}
+
+.axiom-tool-details__list {
+    margin: 0 0 0 18px;
+}
+
+.axiom-tool-details__list--mono {
+    font-family: var(--pf-t--global--font--family--mono);
+    font-size: 12px;
+    overflow-wrap: anywhere;
 }
 
 .axiom-workbench__tool-card-row {

@@ -345,6 +345,7 @@ describe("WorkbenchPage", () => {
             toolResult: "VALID: tool/my-tool (updated, revision r2)" }, genericBlock: null }], chatPaneProps.toolActions);
         render(<div data-testid="cards">{out}</div>);
         expect(screen.getByTestId("cards").textContent).toContain("Updated tool my-tool");
+        fireEvent.click(screen.getByRole("button", { name: /Updated tool my-tool/ }));
         fireEvent.click(screen.getByRole("button", { name: "Open" }));
         expect(screen.getByTestId("item-tab")).toBeTruthy();
     });

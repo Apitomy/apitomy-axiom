@@ -64,7 +64,7 @@ function plural(n: number, word: string): string {
 }
 
 /** Unwraps results delivered as JSON content arrays (`[{type:"text",text}]`) or JSON-encoded strings. */
-function unwrapResult(result: string): string {
+export function unwrapResult(result: string): string {
     const trimmed: string = result.trim();
     if (!(trimmed.startsWith("[") || trimmed.startsWith("\""))) return result;
     try {
@@ -86,9 +86,11 @@ function card(readOnly: boolean, lead: string, name?: string, detail?: string,
     return { readOnly, text, lead, name: name || undefined, detail: detail || undefined, variant: "default", ...extra };
 }
 
-type Op = Record<string, unknown>;
+/** One change-set op. */
+export type Op = Record<string, unknown>;
 
-function opsOf(input: Record<string, unknown> | undefined): Op[] {
+/** The ops of a propose_workflow_changes input (whose changeSet may be a JSON string). */
+export function opsOf(input: Record<string, unknown> | undefined): Op[] {
     let changeSet: unknown = input?.changeSet;
     if (typeof changeSet === "string") {
         try {
@@ -107,7 +109,8 @@ function nodeIdOf(op: Op): string | undefined {
     return typeof id === "string" ? id : undefined;
 }
 
-function summarizeOp(op: Op): string {
+/** One-line summary of a change-set op, e.g. "added Log" or "connected a → b". */
+export function summarizeOp(op: Op): string {
     const node: Op = (op.node as Op | undefined) ?? {};
     const edge: Op = (op.edge as Op | undefined) ?? {};
     switch (op.op) {
