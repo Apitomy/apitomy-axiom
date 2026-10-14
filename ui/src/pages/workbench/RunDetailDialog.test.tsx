@@ -41,7 +41,7 @@ describe("RunDetailDialog", () => {
         listeners.length = 0;
         getWorkflowRun.mockReset().mockResolvedValue(failedRun);
         fetchSubjectTasks.mockReset().mockResolvedValue([
-            { id: 31, subjectId: 3, workflowRunId: 9, nodeId: "classify", actionType: "x", status: "failed",
+            { id: 31, subjectId: 3, workflowRunId: 9, nodeId: "classify", actionType: "x", status: "Failed",
                 output: "{\"error\":\"bad\"}", createdOn: "c", createdBy: "u" },
             { id: 32, subjectId: 3, workflowRunId: 9, nodeId: "start", actionType: "x", status: "completed",
                 output: "ok", createdOn: "c", createdBy: "u" },
@@ -146,5 +146,11 @@ describe("RunDetailDialog", () => {
         } finally {
             vi.useRealTimers();
         }
+    });
+
+    it("focuses Ask AI to analyze once a failed run has loaded", async () => {
+        render(<RunDetailDialog runId={9} workflowName="triage" onClose={vi.fn()} onAskAi={vi.fn()} />);
+        const button = await screen.findByRole("button", { name: "Ask AI to analyze" });
+        await waitFor(() => expect(document.activeElement).toBe(button));
     });
 });

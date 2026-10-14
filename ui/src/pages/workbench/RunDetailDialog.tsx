@@ -37,13 +37,18 @@ const REFRESH_DEBOUNCE_MS: number = 300;
  * @returns the reason, if known
  */
 function failureText(run: WorkflowInstanceInfo, tasks: Task[]): string | undefined {
-    return run.failureReason || tasks.find((t) => t.status === "failed")?.output || undefined;
+    return run.failureReason || tasks.find(isFailedTask)?.output || undefined;
 }
 
 /** Text shown as highlighted JSON when it is JSON, otherwise as plain text. */
 function TextBlock({ text, label }: { text: string; label: string }) {
     const json: string | null = prettyJson(text);
     return <CodeBlock code={json ?? text} language={json ? "json" : "plaintext"} label={label} />;
+}
+
+/** Whether a task failed; task statuses are capitalised by the backend ("Failed"), so compare ignoring case. */
+export function isFailedTask(task: Task): boolean {
+    return String(task.status).toLowerCase() === "failed";
 }
 
 /** One failed task: its output and its execution log. */
@@ -116,8 +121,17 @@ export function RunDetailDialog({ runId, workflowName, onClose, onAskAi }: RunDe
         };
     }, [runId, load]);
 
+    // The modal chooses its initial focus before the run has loaded (only Close exists then); once the run is
+    // known, move focus to the primary footer button (Ask AI to analyze for a failed run).
+    const runLoaded: boolean = run !== null;
+    useEffect(() => {
+        if (runLoaded) {
+            document.getElementById("run-detail-primary")?.focus();
+        }
+    }, [runLoaded]);
+
     const failed: boolean = run?.status === "failed";
-    const failedTasks: Task[] = tasks.filter((t) => t.status === "failed");
+    const failedTasks: Task[] = tasks.filter(isFailedTask);
     const activeTab: RunDialogTab = tab === "failure" && !failed ? "graph" : tab;
     const askAi = () => {
         if (!run) {
