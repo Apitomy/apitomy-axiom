@@ -397,7 +397,7 @@ span.axiom-workbench__row-menu {
 }
 
 .axiom-test-run__meta dt {
-    color: var(--pf-t--global--text--color--subtle);
+    font-weight: var(--pf-t--global--font--weight--body--bold, 600);
 }
 
 .axiom-test-run__meta dd {
