@@ -49,14 +49,14 @@ describe("AppSidebar", () => {
         expect(screen.queryByText("Job Runs")).not.toBeInTheDocument();
     });
 
-    it("keeps only Runs, Subjects, Inbox and Dashboards as top-level items", async () => {
+    it("keeps only Runs, Subjects, Inbox, Dashboards and Workbench as top-level items", async () => {
         const { container } = renderWithRouter(<AppSidebar />);
         await screen.findByText("Inbox");
         const rootList = container.querySelector(".pf-v6-c-nav__list") as HTMLElement;
         const topLevel = Array.from(rootList.querySelectorAll(":scope > li"))
             .filter((li) => li.querySelector("button[aria-expanded]") === null)
             .map((li) => li.textContent?.trim());
-        expect(topLevel).toEqual(["Runs", "Subjects", "Inbox", "Dashboards"]);
+        expect(topLevel).toEqual(["Runs", "Subjects", "Inbox", "Dashboards", "Workbench"]);
     });
 
     it("groups event pages under an expanded Events section", async () => {
@@ -76,29 +76,29 @@ describe("AppSidebar", () => {
         expect(screen.getByText("Action Types")).toBeVisible();
     });
 
-    it("lists Workbench first, then the remaining Components items in alphabetical order", async () => {
+    it("lists the Components items in alphabetical order, without Workbench", async () => {
         renderWithRouter(<AppSidebar />, "/components/workflows");
         const toggle = await screen.findByRole("button", { name: "Components" });
         const group = toggle.closest("li") as HTMLElement;
         const labels = Array.from(group.querySelectorAll("ul li")).map((li) => li.textContent?.trim() ?? "");
-        expect(labels).toHaveLength(9);
-        expect(labels[0]).toBe("Workbench");
-        const rest = labels.slice(1);
-        const sorted = [...rest].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
-        expect(rest).toEqual(sorted);
+        expect(labels).toHaveLength(8);
+        expect(labels).not.toContain("Workbench");
+        const sorted = [...labels].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
+        expect(labels).toEqual(sorted);
     });
 
-    it("expands Components on /workbench and navigates Workbench to /workbench", async () => {
+    it("marks the top-level Workbench item active on a workbench page and navigates it to /workbench", async () => {
         renderWithRouter(
             <Routes>
                 <Route path="*" element={<><AppSidebar /><LocationProbe /></>} />
             </Routes>,
-            "/workbench"
+            "/workbench/3"
         );
         const toggle = await screen.findByRole("button", { name: "Components" });
-        expect(toggle).toHaveAttribute("aria-expanded", "true");
-        await userEvent.click(screen.getByText("Agents"));
-        await userEvent.click(screen.getByText("Workbench"));
+        expect(toggle).toHaveAttribute("aria-expanded", "false");
+        const item = screen.getByText("Workbench").closest("a, button") as HTMLElement;
+        expect(item.className).toContain("pf-m-current");
+        await userEvent.click(item);
         expect(screen.getByTestId("location")).toHaveTextContent("/workbench");
     });
 

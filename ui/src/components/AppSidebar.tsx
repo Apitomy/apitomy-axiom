@@ -13,7 +13,7 @@ import { fetchInboxCount } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 
 const COMPONENT_PATHS = [
-    "/workbench", "/components/workflows", "/action-types", "/agents", "/session-templates", "/mcp-servers", "/secrets",
+    "/components/workflows", "/action-types", "/agents", "/session-templates", "/mcp-servers", "/secrets",
     "/tools", "/toolsets",
 ];
 const EVENTS_PATHS = ["/events"];
@@ -67,6 +67,10 @@ export function AppSidebar() {
                         <NavItem isActive={location.pathname.startsWith("/dashboards")} onClick={() => navigate("/dashboards")}>
                             Dashboards
                         </NavItem>
+                        <NavItem isActive={location.pathname === "/workbench" || location.pathname.startsWith("/workbench/")}
+                            onClick={() => navigate("/workbench")}>
+                            Workbench
+                        </NavItem>
                         <NavExpandable title="Events" isActive={isEventsActive} isExpanded={isEventsActive}>
                             <NavItem isActive={location.pathname.startsWith("/events/sources")} onClick={() => navigate("/events/sources")}>
                                 Event Sources
@@ -102,9 +106,6 @@ export function AppSidebar() {
                             </NavItem>
                         </NavExpandable>
                         <NavExpandable title="Components" isActive={isComponentsActive} isExpanded={isComponentsActive}>
-                            <NavItem isActive={location.pathname === "/workbench" || location.pathname.startsWith("/workbench/")} onClick={() => navigate("/workbench")}>
-                                Workbench
-                            </NavItem>
                             <NavItem isActive={location.pathname.startsWith("/action-types")} onClick={() => navigate("/action-types")}>
                                 Action Types
                             </NavItem>
