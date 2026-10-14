@@ -34,8 +34,8 @@ describe("TestRunDetailModal", () => {
         expect(block("stderr").getAttribute("data-language")).toBe("plaintext");
         expect(block("stderr").textContent).toBe("plain warning");
         fireEvent.click(screen.getByRole("tab", { name: "Inputs" }));
-        expect(screen.getByText("who").tagName).toBe("CODE");
-        expect(screen.getByText("bob")).toBeTruthy();
+        expect((screen.getByRole("textbox", { name: "who" }) as HTMLInputElement).value).toBe("bob");
+        expect((screen.getByRole("textbox", { name: "who" }) as HTMLInputElement).readOnly).toBe(true);
         fireEvent.click(screen.getByRole("button", { name: "JSON" }));
         expect(block("Inputs").querySelector("code.language-json")).toBeTruthy();
         expect(block("Inputs").textContent).toBe('{\n  "who": "bob"\n}');
@@ -65,9 +65,9 @@ describe("TestRunDetailModal", () => {
         render(<TestRunDetailModal run={{ ...run, status: "passed", problems: [],
             outputs: { count: 3, labels: ["bug", "ui"], note: "", ok: true } }} onClose={vi.fn()} onOpenItem={vi.fn()} />);
         expect(screen.getByRole("tab", { name: "Outputs" }).getAttribute("aria-selected")).toBe("true");
-        expect(screen.getByText("3")).toBeTruthy();
-        expect(screen.getByText("true")).toBeTruthy();
-        expect(screen.getByText("(empty)")).toBeTruthy();
+        expect((screen.getByRole("textbox", { name: "count" }) as HTMLInputElement).value).toBe("3");
+        expect((screen.getByRole("textbox", { name: "ok" }) as HTMLInputElement).value).toBe("true");
+        expect((screen.getByRole("textbox", { name: "note" }) as HTMLInputElement).placeholder).toBe("(empty)");
         expect(block("labels").textContent).toBe('[\n  "bug",\n  "ui"\n]');
     });
 

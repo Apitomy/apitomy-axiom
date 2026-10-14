@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
-    Alert, Button, DescriptionList, DescriptionListDescription, DescriptionListGroup, DescriptionListTerm, Label,
-    Modal, ModalBody, ModalFooter, ModalHeader, Tab, TabContentBody, Tabs, TabTitleText, Title, ToggleGroup,
+    Alert, Button, Form, FormGroup, Label, Modal, ModalBody, ModalFooter, ModalHeader, Tab, TabContentBody, Tabs, TabTitleText, TextArea, TextInput, Title, ToggleGroup,
     ToggleGroupItem,
 } from "@patternfly/react-core";
 import { Light as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -80,17 +79,17 @@ function StreamSection({ title, text }: { title: string; text: string | undefine
 }
 
 /** One value of a field list: scalars inline, objects and arrays as highlighted JSON. */
-function FieldValue({ name, value }: { name: string; value: unknown }) {
+function FieldValue({ id, name, value }: { id: string; name: string; value: unknown }) {
     if (value !== null && typeof value === "object") {
         return <CodeBlock code={JSON.stringify(value, null, 2)} language="json" label={name} />;
     }
-    if (value === "") {
-        return <span className="axiom-text-subtle">(empty)</span>;
+    const text: string = typeof value === "string" ? value : String(value);
+    if (text.includes("\n")) {
+        return <TextArea id={id} value={text} readOnlyVariant="default" aria-label={name} autoResize
+            resizeOrientation="vertical" />;
     }
-    if (typeof value === "string") {
-        return <span className="axiom-test-run__value">{value}</span>;
-    }
-    return <code className="axiom-test-run__value">{String(value)}</code>;
+    return <TextInput id={id} value={text} readOnlyVariant="default" aria-label={name}
+        placeholder={value === "" ? "(empty)" : undefined} />;
 }
 
 /** How the Inputs/Parameters/Outputs tabs show their values. */
@@ -129,15 +128,16 @@ function ValuesPanel({ label, values, view, onViewChange, emptyText }: {
                     })}>Copy as JSON</Button>
             </div>
             {view === "json" ? <CodeBlock code={json} language="json" label={label} /> : (
-                <DescriptionList isCompact isHorizontal horizontalTermWidthModifier={{ default: "20ch" }}
-                    aria-label={label} className="axiom-test-run__fields">
-                    {entries.map(([name, value]) => (
-                        <DescriptionListGroup key={name}>
-                            <DescriptionListTerm><code>{name}</code></DescriptionListTerm>
-                            <DescriptionListDescription><FieldValue name={name} value={value} /></DescriptionListDescription>
-                        </DescriptionListGroup>
-                    ))}
-                </DescriptionList>
+                <Form aria-label={label} className="axiom-test-run__fields" onSubmit={(e) => e.preventDefault()}>
+                    {entries.map(([name, value]) => {
+                        const id: string = `test-run-${label}-${name}`.toLowerCase();
+                        return (
+                            <FormGroup key={name} label={name} fieldId={id}>
+                                <FieldValue id={id} name={name} value={value} />
+                            </FormGroup>
+                        );
+                    })}
+                </Form>
             )}
         </>
     );

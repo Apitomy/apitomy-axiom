@@ -590,9 +590,10 @@ span.axiom-workbench__row-menu {
     margin-bottom: var(--pf-t--global--spacer--sm, 8px);
 }
 
-.axiom-test-run__fields code {
+/* Read-only form fields show values in monospace, like the code blocks. */
+.axiom-test-run__fields .pf-v6-c-form-control input,
+.axiom-test-run__fields .pf-v6-c-form-control textarea {
     font-family: var(--pf-t--global--font--family--mono);
-    font-weight: var(--pf-t--global--font--weight--body--bold, 600);
 }
 
 .axiom-test-run__value {
