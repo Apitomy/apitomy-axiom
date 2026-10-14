@@ -84,6 +84,19 @@ class CompositionTurnsResourceTest {
     }
 
     @Test
+    void agentCompositionExposesPublishedWorkflowDefinitionId() {
+        given().header("X-Axiom-Session-Token", "good").get(BASE + "/{id}/agent/composition", compositionId)
+                .then().statusCode(200).body("workflowDefinitionId", org.hamcrest.Matchers.nullValue());
+        QuarkusTransaction.requiringNew().run(() -> {
+            CompositionItemEntity item = CompositionItemEntity.<CompositionItemEntity>list("compositionId", compositionId)
+                    .stream().filter(i -> ConfigItemType.WORKFLOW.jsonName().equals(i.itemType)).findFirst().orElseThrow();
+            item.baseItemId = 4242L;
+        });
+        given().header("X-Axiom-Session-Token", "good").get(BASE + "/{id}/agent/composition", compositionId)
+                .then().statusCode(200).body("workflowDefinitionId", equalTo(4242));
+    }
+
+    @Test
     void fullTurnThroughRest() {
         given().contentType(ContentType.JSON).body(Map.of("message", "rename start", "nodeIds", List.of("start-1")))
                 .post(BASE + "/{id}/messages", compositionId).then().statusCode(200)

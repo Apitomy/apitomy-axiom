@@ -178,6 +178,102 @@ function suggestionBody(args) {
     return { type: args.type, name: args.name, inputs: asObject(args.inputs ?? {}, "inputs") };
 }
 
+/**
+ * Renders a value as compact single-line JSON with long strings and arrays truncated.
+ * @param {*} value the value
+ * @returns {string} the compact JSON
+ */
+function compactJson(value) {
+    return JSON.stringify(truncateDeep(value, 500, 20));
+}
+
+/**
+ * Formats workflow runs, one line each.
+ * @param {Array<object>} runs the run summaries (newest first)
+ * @returns {string} the lines joined by newlines
+ */
+function formatRunList(runs) {
+    if (!runs || runs.length === 0) return "No runs found.";
+    return runs.map(r => `#${r.runId ?? r.id} ${r.status} v${r.definitionVersion} ${r.title || ""} `
+        + `started ${r.startedOn}` + (r.currentNodeName ? ` at ${r.currentNodeName}` : "")).join("\n");
+}
+
+/**
+ * Formats a workflow run: header, history and the details of its failed tasks.
+ * @param {object} run the workflow instance
+ * @param {Array<{taskId: number, nodeName: string, output: *, log: ?string}>} failedTasks failed task details
+ * @returns {string} the formatted run
+ */
+function formatRun(run, failedTasks) {
+    const lines = [`Run #${run.id}: ${run.title || ""}`, `status: ${run.status}`];
+    if (run.definitionVersion !== undefined && run.definitionVersion !== null) {
+        lines.push(`version: ${run.definitionVersion}`);
+    }
+    if (run.currentNodeName || run.currentNodeId) {
+        lines.push(`current node: ${run.currentNodeName || "-"} (${run.currentNodeId || "-"})`);
+    }
+    if (run.failureReason) lines.push(`failure reason: ${run.failureReason}`);
+    if (run.traceId) lines.push(`traceId: ${run.traceId}`);
+    lines.push("", "History:");
+    for (const h of run.history || []) {
+        let line = `- ${h.nodeName || "-"} (${h.nodeId}) ${h.taskStatus || "-"}`;
+        if (h.input !== undefined && h.input !== null) line += ` input=${compactJson(h.input)}`;
+        if (h.output !== undefined && h.output !== null) line += ` output=${compactJson(h.output)}`;
+        lines.push(line);
+    }
+    for (const t of failedTasks || []) {
+        lines.push("", `Failed task ${t.taskId} (${t.nodeName || "-"})`,
+            `output: ${t.output === undefined || t.output === null ? "none" : compactJson(t.output)}`);
+        if (t.log) {
+            lines.push("log (tail):", t.log);
+        } else {
+            lines.push("log: none");
+        }
+    }
+    return lines.join("\n");
+}
+
+/**
+ * Formats a trace and its nodes, failed nodes first.
+ * @param {{trace: object, nodes: Array<object>}} detail the trace detail
+ * @returns {string} the formatted trace
+ */
+function formatTrace(detail) {
+    const t = detail.trace || {};
+    const isFailed = n => /fail|error/i.test(String(n.status || ""));
+    const nodes = [...(detail.nodes || [])].sort((a, b) => Number(isFailed(b)) - Number(isFailed(a)));
+    return [`Trace ${t.traceId}: ${t.status}` + (t.summary ? ` - ${t.summary}` : "")]
+        .concat(nodes.map(n => `- ${n.nodeType} ${n.status} ${n.summary || ""}`
+            + (n.durationMs !== undefined && n.durationMs !== null ? ` (${n.durationMs} ms)` : "")))
+        .join("\n");
+}
+
+/**
+ * Returns the published workflow definition id of the bound composition, or null when never published.
+ * @returns {Promise<?number>} the definition id
+ */
+async function workflowDefinitionId() {
+    const c = JSON.parse(await axiomApi("GET", `${agentBase()}/composition`));
+    return c.workflowDefinitionId ?? null;
+}
+
+/**
+ * Reads the tail of a task log, or null when the task has no log.
+ * @param {string} subjectId the subject id
+ * @param {number} taskId the task id
+ * @returns {Promise<?string>} the last 4000 characters of the log
+ */
+async function taskLogTail(subjectId, taskId) {
+    const path = `/subjects/${encodeURIComponent(subjectId)}/tasks/${encodeURIComponent(taskId)}/log`;
+    const headers = { "Accept": "text/plain" };
+    if (AXIOM_SESSION_TOKEN) headers["X-Axiom-Session-Token"] = AXIOM_SESSION_TOKEN;
+    const resp = await fetch(`${AXIOM_API_URL}${path}`, { method: "GET", headers });
+    if (resp.status === 404) return null;
+    const text = await resp.text();
+    if (!resp.ok) throw new Error(`Axiom API GET ${path} returned ${resp.status}: ${text.substring(0, 500)}`);
+    return text.length > 4000 ? text.substring(text.length - 4000) : text;
+}
+
 const TOOLS = [
     {
         name: "get_composition",
@@ -334,6 +430,72 @@ const TOOLS = [
         },
     },
     {
+        name: "list_workflow_runs",
+        description: "List runs of this composition's published workflow, newest first. Read-only.",
+        parameters: [
+            { name: "status", type: "string", description: "Optional status filter", required: false },
+            { name: "limit", type: "number", description: "Max results (default 10, max 20)", required: false },
+        ],
+        handler: async (args) => {
+            const definitionId = await workflowDefinitionId();
+            if (definitionId === null) return "The workflow has not been published yet, so it has no runs.";
+            const limit = Math.max(1, Math.min(20, Number(args.limit) || 10));
+            const params = new URLSearchParams();
+            params.set("definitionId", String(definitionId));
+            params.set("limit", String(limit));
+            if (args.status) params.set("status", args.status);
+            const result = JSON.parse(await axiomApi("GET", `/workflow/runs?${params.toString()}`));
+            return formatRunList(result.items || []);
+        },
+    },
+    {
+        name: "get_workflow_run",
+        description: "Get a run of this composition's workflow: status, failure, history, and the output and log "
+            + "tail of failed tasks. Read-only.",
+        parameters: [
+            { name: "runId", type: "number", description: "The run id", required: true },
+        ],
+        handler: async (args) => {
+            const definitionId = await workflowDefinitionId();
+            const run = JSON.parse(await axiomApi("GET", `/workflow/runs/${encodeURIComponent(args.runId)}`));
+            if (definitionId === null || Number(run.definitionId) !== Number(definitionId)) {
+                return `Run ${args.runId} is not a run of this composition's workflow.`;
+            }
+            const failed = (run.history || []).filter(h => h.taskId !== undefined && h.taskId !== null
+                && /fail|error/i.test(String(h.taskStatus || "")));
+            const details = [];
+            for (const h of failed) {
+                let output = null;
+                try {
+                    const task = JSON.parse(await axiomApi("GET",
+                        `/subjects/${encodeURIComponent(run.subjectId)}/tasks/${encodeURIComponent(h.taskId)}`));
+                    output = task.output ?? null;
+                } catch (e) {
+                    output = `(could not read task: ${e.message})`;
+                }
+                let logTail = null;
+                try {
+                    logTail = await taskLogTail(run.subjectId, h.taskId);
+                } catch (e) {
+                    logTail = `(could not read log: ${e.message})`;
+                }
+                details.push({ taskId: h.taskId, nodeName: h.nodeName, output, log: logTail });
+            }
+            return formatRun(run, details);
+        },
+    },
+    {
+        name: "get_trace",
+        description: "Get a trace (e.g. a run's traceId): its status, summary and nodes, failed nodes first. Read-only.",
+        parameters: [
+            { name: "traceId", type: "string", description: "The trace id", required: true },
+        ],
+        handler: async (args) => {
+            const detail = JSON.parse(await axiomApi("GET", `/traces/${encodeURIComponent(args.traceId)}`));
+            return formatTrace(detail);
+        },
+    },
+    {
         name: "axiom_list_tools",
         description: "List all existing tool definitions in Axiom. Returns names and descriptions of configured script tools.",
         parameters: [],
@@ -468,7 +630,9 @@ async function main() {
     await server.connect(transport);
 }
 
-module.exports = { summarizeEvent, pickPath, truncateDeep, formatProblems, suggestionBody };
+module.exports = {
+    summarizeEvent, pickPath, truncateDeep, formatProblems, suggestionBody, formatRunList, formatRun, formatTrace,
+};
 
 if (require.main === module) {
     main().catch(console.error);

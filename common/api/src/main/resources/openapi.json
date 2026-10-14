@@ -6589,6 +6589,12 @@
           "workflowRevision": {
             "type": "string"
           },
+          "workflowDefinitionId": {
+            "format": "int64",
+            "description": "The published workflow definition of this composition, or null when never published",
+            "type": "integer",
+            "nullable": true
+          },
           "workflow": {
             "$ref": "#/components/schemas/CompositionContent"
           },

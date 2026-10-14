@@ -40,6 +40,15 @@ class WorkbenchReferenceTest {
     }
 
     @Test
+    void templateAllowsReadingRuns() throws Exception {
+        String tools = template().path("allowedTools").toString();
+        for (String tool : List.of("mcp__workbench__list_workflow_runs", "mcp__workbench__get_workflow_run",
+                "mcp__workbench__get_trace")) {
+            assertTrue(tools.contains("\"" + tool + "\""), tool);
+        }
+    }
+
+    @Test
     void promptCarriesEveryRule() throws Exception {
         String prompt = template().path("systemPrompt").asText();
         for (String rule : List.of(
@@ -59,6 +68,9 @@ class WorkbenchReferenceTest {
                 "applied by the user's editor when your turn ends",
                 "Do not set or adjust node positions; the user's editor lays out the workflow when your changes are applied.",
                 "Do not mark an edge as the default unless its node also has conditional edges",
+                "- When asked about a workflow run, read it with get_workflow_run (and get_trace when the cause is "
+                        + "unclear) before changing anything; fix the cause in the workflow or its components, then "
+                        + "summarise what failed and what you changed.",
                 "{{reference}}",
                 "{{changesetReference}}")) {
             assertTrue(prompt.contains(rule), "prompt must contain: " + rule);

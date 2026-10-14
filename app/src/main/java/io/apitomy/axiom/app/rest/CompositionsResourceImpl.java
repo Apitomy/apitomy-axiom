@@ -318,6 +318,7 @@ public class CompositionsResourceImpl implements CompositionsResource {
         List<AgentItemSummary> items = service.items(compositionId).stream().map(item -> {
             if (ConfigItemType.WORKFLOW.jsonName().equals(item.itemType)) {
                 result.setWorkflowName(item.name);
+                result.setWorkflowDefinitionId(item.baseItemId);
             }
             List<io.apitomy.axiom.app.validation.ConfigProblem> itemProblems =
                     problems.getOrDefault(item.id, List.of());
