@@ -34,6 +34,9 @@ describe("TestRunDetailModal", () => {
         expect(block("stderr").getAttribute("data-language")).toBe("plaintext");
         expect(block("stderr").textContent).toBe("plain warning");
         fireEvent.click(screen.getByRole("tab", { name: "Inputs" }));
+        expect(screen.getByText("who").tagName).toBe("CODE");
+        expect(screen.getByText("bob")).toBeTruthy();
+        fireEvent.click(screen.getByRole("button", { name: "JSON" }));
         expect(block("Inputs").querySelector("code.language-json")).toBeTruthy();
         expect(block("Inputs").textContent).toBe('{\n  "who": "bob"\n}');
         fireEvent.click(screen.getByRole("tab", { name: "Outputs" }));
@@ -56,6 +59,22 @@ describe("TestRunDetailModal", () => {
         expect(sourceTab({ ...run, resolvedScript: undefined })).toBeNull();
         expect(sourceTab({ ...run, itemType: "tool", resolvedScript: "x" })?.title).toBe("Script");
         expect(sourceTab({ ...run, executionMode: "node", resolvedScript: "x" })?.title).toBe("Code");
+    });
+
+    it("lists values: scalars inline, objects and arrays as JSON, empty strings marked", () => {
+        render(<TestRunDetailModal run={{ ...run, status: "passed", problems: [],
+            outputs: { count: 3, labels: ["bug", "ui"], note: "", ok: true } }} onClose={vi.fn()} onOpenItem={vi.fn()} />);
+        expect(screen.getByRole("tab", { name: "Outputs" }).getAttribute("aria-selected")).toBe("true");
+        expect(screen.getByText("3")).toBeTruthy();
+        expect(screen.getByText("true")).toBeTruthy();
+        expect(screen.getByText("(empty)")).toBeTruthy();
+        expect(block("labels").textContent).toBe('[\n  "bug",\n  "ui"\n]');
+    });
+
+    it("says when no inputs were given", () => {
+        render(<TestRunDetailModal run={{ ...run, inputs: {} }} onClose={vi.fn()} onOpenItem={vi.fn()} />);
+        fireEvent.click(screen.getByRole("tab", { name: "Inputs" }));
+        expect(screen.getByText("No inputs were given.")).toBeTruthy();
     });
 
     it("has no Outputs tab for tools", () => {

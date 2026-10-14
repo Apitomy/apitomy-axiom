@@ -1,6 +1,8 @@
 import { useState } from "react";
 import {
-    Alert, Button, Label, Modal, ModalBody, ModalFooter, ModalHeader, Tab, TabContentBody, Tabs, TabTitleText, Title,
+    Alert, Button, DescriptionList, DescriptionListDescription, DescriptionListGroup, DescriptionListTerm, Label,
+    Modal, ModalBody, ModalFooter, ModalHeader, Tab, TabContentBody, Tabs, TabTitleText, Title, ToggleGroup,
+    ToggleGroupItem,
 } from "@patternfly/react-core";
 import { Light as SyntaxHighlighter } from "react-syntax-highlighter";
 import bash from "react-syntax-highlighter/dist/esm/languages/hljs/bash";
@@ -77,6 +79,70 @@ function StreamSection({ title, text }: { title: string; text: string | undefine
     );
 }
 
+/** One value of a field list: scalars inline, objects and arrays as highlighted JSON. */
+function FieldValue({ name, value }: { name: string; value: unknown }) {
+    if (value !== null && typeof value === "object") {
+        return <CodeBlock code={JSON.stringify(value, null, 2)} language="json" label={name} />;
+    }
+    if (value === "") {
+        return <span className="axiom-text-subtle">(empty)</span>;
+    }
+    if (typeof value === "string") {
+        return <span className="axiom-test-run__value">{value}</span>;
+    }
+    return <code className="axiom-test-run__value">{String(value)}</code>;
+}
+
+/** How the Inputs/Parameters/Outputs tabs show their values. */
+export type ValuesView = "list" | "json";
+
+/**
+ * A set of named values (inputs, parameters or outputs) as a list of fields, or as one JSON object. The
+ * header has the list/JSON switch and a button that copies the whole set as JSON.
+ */
+function ValuesPanel({ label, values, view, onViewChange, emptyText }: {
+    label: string;
+    values: Record<string, unknown>;
+    view: ValuesView;
+    onViewChange(view: ValuesView): void;
+    emptyText: string;
+}) {
+    const entries: [string, unknown][] = Object.entries(values);
+    const json: string = JSON.stringify(values, null, 2);
+    const [copied, setCopied] = useState<boolean>(false);
+    if (entries.length === 0) {
+        return <p className="axiom-text-subtle">{emptyText}</p>;
+    }
+    return (
+        <>
+            <div className="axiom-test-run__values-toolbar">
+                <ToggleGroup isCompact aria-label={`Show ${label.toLowerCase()} as`}>
+                    <ToggleGroupItem text="List" buttonId={`${label}-list`} isSelected={view === "list"}
+                        onChange={() => onViewChange("list")} />
+                    <ToggleGroupItem text="JSON" buttonId={`${label}-json`} isSelected={view === "json"}
+                        onChange={() => onViewChange("json")} />
+                </ToggleGroup>
+                <Button variant="link" size="sm" icon={copied ? <CheckIcon /> : <CopyIcon />}
+                    onClick={() => void navigator.clipboard?.writeText(json).then(() => {
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 1500);
+                    })}>Copy as JSON</Button>
+            </div>
+            {view === "json" ? <CodeBlock code={json} language="json" label={label} /> : (
+                <DescriptionList isCompact isHorizontal horizontalTermWidthModifier={{ default: "20ch" }}
+                    aria-label={label} className="axiom-test-run__fields">
+                    {entries.map(([name, value]) => (
+                        <DescriptionListGroup key={name}>
+                            <DescriptionListTerm><code>{name}</code></DescriptionListTerm>
+                            <DescriptionListDescription><FieldValue name={name} value={value} /></DescriptionListDescription>
+                        </DescriptionListGroup>
+                    ))}
+                </DescriptionList>
+            )}
+        </>
+    );
+}
+
 /** Tabs of the test run dialog. */
 type RunTab = "source" | "inputs" | "outputs" | "streams";
 
@@ -124,6 +190,7 @@ export function TestRunDetailModal({ run, onClose, onOpenItem, onRunSuggestion }
     const [tab, setTab] = useState<RunTab>(() => initialTab(run));
     const source = sourceTab(run);
     const inputsTitle: string = run.itemType === "tool" ? "Parameters" : "Inputs";
+    const [valuesView, setValuesView] = useState<ValuesView>("list");
     const kind: string = run.itemType === "tool" ? "Tool" : "Action type";
     const problems: string[] = run.problems ?? [];
     return (
@@ -190,14 +257,17 @@ export function TestRunDetailModal({ run, onClose, onOpenItem, onRunSuggestion }
                     )}
                     <Tab eventKey="inputs" title={<TabTitleText>{inputsTitle}</TabTitleText>}>
                         <TabContentBody className="axiom-test-run__tab-body">
-                            <CodeBlock code={JSON.stringify(run.inputs ?? {}, null, 2)} language="json" label={inputsTitle} />
+                            <ValuesPanel label={inputsTitle} values={run.inputs ?? {}} view={valuesView}
+                                onViewChange={setValuesView}
+                                emptyText={`No ${inputsTitle.toLowerCase()} were given.`} />
                         </TabContentBody>
                     </Tab>
                     {run.itemType !== "tool" && (
                         <Tab eventKey="outputs" title={<TabTitleText>Outputs</TabTitleText>}>
                             <TabContentBody className="axiom-test-run__tab-body">
                                 {run.outputs
-                                    ? <CodeBlock code={JSON.stringify(run.outputs, null, 2)} language="json" label="Outputs" />
+                                    ? <ValuesPanel label="Outputs" values={run.outputs} view={valuesView}
+                                        onViewChange={setValuesView} emptyText="The action returned an empty object." />
                                     : <p className="axiom-text-subtle">
                                         No outputs (the action did not print a JSON object).
                                     </p>}

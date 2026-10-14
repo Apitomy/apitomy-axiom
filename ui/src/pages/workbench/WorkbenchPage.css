@@ -581,3 +581,31 @@ span.axiom-workbench__row-menu {
 .axiom-test-run__tab-body > .axiom-test-run__section:first-child {
     margin-top: 0;
 }
+
+/* Inputs/Parameters/Outputs as a field list (or JSON) in the test run dialog. */
+.axiom-test-run__values-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--pf-t--global--spacer--sm, 8px);
+}
+
+.axiom-test-run__fields code {
+    font-family: var(--pf-t--global--font--family--mono);
+    font-weight: var(--pf-t--global--font--weight--body--bold, 600);
+}
+
+.axiom-test-run__value {
+    font-family: var(--pf-t--global--font--family--mono);
+    font-size: 13px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+code.axiom-test-run__value {
+    font-weight: normal;
+}
+
+.axiom-test-run__fields .axiom-test-run__code {
+    max-height: 240px;
+}
