@@ -1831,6 +1831,8 @@ export interface WorkflowRunFilters {
     definitionId?: number;
     /** Labels in `key:value` form; all must match. */
     labels?: string[];
+    /** Id (UUID) of the stream event that started the runs. */
+    triggerEventId?: string;
 }
 
 export async function fetchWorkflowRuns(
@@ -1843,6 +1845,7 @@ export async function fetchWorkflowRuns(
     if (filters.status) params.set("status", filters.status);
     if (filters.definitionId != null) params.set("definitionId", String(filters.definitionId));
     (filters.labels ?? []).forEach((l) => params.append("label", l));
+    if (filters.triggerEventId) params.set("triggerEventId", filters.triggerEventId);
     const response = await fetch(`${API}/workflow/runs?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch workflow runs: ${response.status}`);
     return response.json();
@@ -1851,6 +1854,60 @@ export async function fetchWorkflowRuns(
 export async function getWorkflowRun(runId: number): Promise<WorkflowInstanceInfo> {
     const response = await fetch(`${API}/workflow/runs/${runId}`);
     if (!response.ok) throw new Error(`Failed to fetch workflow run: ${response.status}`);
+    return response.json();
+}
+
+/** Request body for manually running a workflow from a stream event. */
+export interface TriggerStreamEventWorkflowRequest {
+    workflowDefinitionId: number;
+    title?: string;
+    labels?: Record<string, string>;
+    inputs?: Record<string, unknown>;
+}
+
+/** A workflow suggested for a stream event because a subscription matching the event uses it. */
+export interface StreamEventWorkflowSuggestion {
+    workflowDefinitionId: number;
+    workflowName: string;
+    subscriptionId: number;
+    subscriptionName: string;
+}
+
+/**
+ * Manually starts a workflow run on the subject of a stream event, with the event in `context.event`.
+ *
+ * @param eventId the stream event id (UUID)
+ * @param data the workflow and optional title, labels and inputs
+ * @returns the started workflow instance
+ */
+export async function triggerStreamEventWorkflow(
+    eventId: string, data: TriggerStreamEventWorkflowRequest
+): Promise<WorkflowInstanceInfo> {
+    const response = await fetch(`${API}/stream/events/${encodeURIComponent(eventId)}/runs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+        throw new Error(await extractErrorMessage(response, "Failed to run workflow"));
+    }
+    return response.json();
+}
+
+/**
+ * Lists the workflows used by subscriptions that match a stream event.
+ *
+ * @param eventId the stream event id (UUID)
+ * @returns the suggested workflows
+ */
+export async function fetchStreamEventWorkflowSuggestions(
+    eventId: string
+): Promise<StreamEventWorkflowSuggestion[]> {
+    const response = await fetch(
+        `${API}/stream/events/${encodeURIComponent(eventId)}/workflow-suggestions`);
+    if (!response.ok) {
+        throw new Error(await extractErrorMessage(response, "Failed to fetch workflow suggestions"));
+    }
     return response.json();
 }
 
