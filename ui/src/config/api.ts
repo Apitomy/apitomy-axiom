@@ -2116,7 +2116,7 @@ export interface StreamEvent {
 
 export async function fetchStreamEvents(
     page = 1, limit = 20,
-    filterType?: string, filterEventSourceId?: string, filterRef?: string
+    filterType?: string, filterEventSourceId?: string, filterRef?: string, filterActor?: string
 ): Promise<SearchResults<StreamEvent>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
@@ -2124,6 +2124,7 @@ export async function fetchStreamEvents(
     if (filterType) params.set("filterType", filterType);
     if (filterEventSourceId) params.set("filterEventSourceId", filterEventSourceId);
     if (filterRef) params.set("filterRef", filterRef);
+    if (filterActor) params.set("filterActor", filterActor);
     const response = await fetch(`${API}/stream/events?${params}`);
     if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch stream events"));
     return response.json();

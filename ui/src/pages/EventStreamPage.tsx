@@ -36,6 +36,7 @@ const FILTER_TYPES: ChipFilterType[] = [
     { value: "type", label: "Event Type", testId: "stream-filter-type" },
     { value: "eventSourceId", label: "Event Source", testId: "stream-filter-event-source" },
     { value: "ref", label: "Ref", testId: "stream-filter-ref" },
+    { value: "actor", label: "Actor", testId: "stream-filter-actor" },
 ];
 
 /**
@@ -78,6 +79,7 @@ export function EventStreamPage() {
     const filterType = filters.find((f) => f.filterBy.value === "type")?.filterValue;
     const filterEventSourceId = filters.find((f) => f.filterBy.value === "eventSourceId")?.filterValue;
     const filterRef = filters.find((f) => f.filterBy.value === "ref")?.filterValue;
+    const filterActor = filters.find((f) => f.filterBy.value === "actor")?.filterValue;
     const isFiltered = filters.length > 0;
 
     const loadData = useCallback(() => {
@@ -86,7 +88,8 @@ export function EventStreamPage() {
             page, perPage,
             filterType || undefined,
             filterEventSourceId || undefined,
-            filterRef || undefined
+            filterRef || undefined,
+            filterActor || undefined
         )
             .then((results) => {
                 setEvents(results.items);
@@ -94,7 +97,7 @@ export function EventStreamPage() {
             })
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [page, perPage, filterType, filterEventSourceId, filterRef]);
+    }, [page, perPage, filterType, filterEventSourceId, filterRef, filterActor]);
 
     useEffect(() => { loadData(); }, [loadData]);
 
@@ -245,9 +248,16 @@ export function EventStreamPage() {
                                         {formatRef(event.ref)}
                                     </Td>
                                     <Td>
-                                        {(event.actor?.login as string)
-                                            || (event.actor?.displayName as string)
-                                            || "—"}
+                                        {event.actor?.login ? (
+                                            <Label isCompact variant="outline" onClick={(e) => {
+                                                e.stopPropagation();
+                                                const actorFilter = FILTER_TYPES.find((t) => t.value === "actor")!;
+                                                onAddFilterCriteria({ filterBy: actorFilter,
+                                                    filterValue: event.actor?.login as string });
+                                            }}>
+                                                {event.actor.login as string}
+                                            </Label>
+                                        ) : ((event.actor?.displayName as string) || "—")}
                                     </Td>
                                 </Tr>
                             ))}

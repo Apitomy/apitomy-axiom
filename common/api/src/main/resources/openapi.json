@@ -4580,6 +4580,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "filterActor",
+            "in": "query",
+            "description": "Filter by actor login (exact, case-insensitive)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {

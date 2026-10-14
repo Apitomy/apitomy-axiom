@@ -62,10 +62,24 @@ public class StreamEventsResourceImpl implements StreamResource {
     @Inject
     WorkflowRunBeanMapper runBeanMapper;
 
+    /** Escapes LIKE wildcards (and the escape character) in a literal pattern fragment. */
+    private static String likeEscape(String text) {
+        return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    }
+
+    /** Encodes a value as a JSON string literal, the way the actor JSON was written. */
+    private String jsonString(String value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     @Override
     public StreamEventSearchResults listStreamEvents(BigInteger page, BigInteger limit,
                                                      String filterType, String filterEventSourceId,
-                                                     String filterRef) {
+                                                     String filterRef, String filterActor) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
@@ -83,6 +97,11 @@ public class StreamEventsResourceImpl implements StreamResource {
         if (filterRef != null && !filterRef.isBlank()) {
             hql.append(" and lower(ref) like :ref");
             params.put("ref", "%" + filterRef.toLowerCase() + "%");
+        }
+        if (filterActor != null && !filterActor.isBlank()) {
+            // The actor is stored as compact JSON ({"login":"...",...}); match the login exactly, ignoring case.
+            hql.append(" and lower(actor) like :actor escape '\\'");
+            params.put("actor", "%" + likeEscape("\"login\":" + jsonString(filterActor.trim().toLowerCase())) + "%");
         }
 
         long totalCount = StreamEventEntity.count(hql.toString(), params);
