@@ -428,6 +428,19 @@ span.axiom-workbench__row-menu {
     min-width: 0;
 }
 
+/* Tighter than PatternFly's disclosure defaults (16px sides, 30px content indent) for the narrow chat pane. */
+.axiom-workbench__tool-card .pf-v6-c-expandable-section.pf-m-display-lg {
+    padding-inline: var(--pf-t--global--spacer--sm, 8px);
+}
+
+.axiom-workbench__tool-card .pf-v6-c-expandable-section.pf-m-display-lg.pf-m-expanded {
+    padding-block-end: var(--pf-t--global--spacer--sm, 8px);
+}
+
+.axiom-workbench__tool-card .pf-v6-c-expandable-section__content {
+    padding-inline-start: var(--pf-t--global--spacer--sm, 8px);
+}
+
 .axiom-workbench__tool-card-actions {
     margin-top: var(--pf-t--global--spacer--sm, 8px);
 }
