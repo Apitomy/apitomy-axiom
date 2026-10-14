@@ -65,11 +65,13 @@ export function parseFieldValue(field: TestField, text: string): { value?: unkno
                 : text.trim() === "false" ? { value: false } : { error: "Enter true or false." };
         case "array":
         case "object": {
-            const message: string = field.type === "array" ? "Enter a JSON array." : "Enter a JSON object.";
+            // Axiom's "object" type accepts any structured JSON value, an object or an array, matching the
+            // backend's input validation (ActionTypeIoValidator). "array" is kept for completeness.
+            const message: string = field.type === "array" ? "Enter a JSON array." : "Enter a JSON object or array.";
             try {
                 const parsed: unknown = JSON.parse(text);
                 const ok: boolean = field.type === "array" ? Array.isArray(parsed)
-                    : !!parsed && typeof parsed === "object" && !Array.isArray(parsed);
+                    : !!parsed && typeof parsed === "object";
                 return ok ? { value: parsed } : { error: message };
             } catch {
                 return { error: message };

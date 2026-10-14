@@ -27,7 +27,9 @@ describe("testRunLogic", () => {
         expect(parseFieldValue(f("array"), "[1,2]")).toEqual({ value: [1, 2] });
         expect(parseFieldValue(f("array"), "{}").error).toBe("Enter a JSON array.");
         expect(parseFieldValue(f("object"), "{\"a\":1}")).toEqual({ value: { a: 1 } });
-        expect(parseFieldValue(f("object"), "[").error).toBe("Enter a JSON object.");
+        expect(parseFieldValue(f("object"), "[").error).toBe("Enter a JSON object or array.");
+        expect(parseFieldValue(f("object"), '["bug","ui"]')).toEqual({ value: ["bug", "ui"] });
+        expect(parseFieldValue(f("object"), "42").error).toBe("Enter a JSON object or array.");
     });
 
     it("turns suggested inputs into form values", () => {
