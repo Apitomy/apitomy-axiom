@@ -315,6 +315,11 @@ span.axiom-workbench__row-menu {
     padding: 2px var(--pf-t--global--spacer--sm, 8px) 0;
 }
 
+/* Separates the toolbar from the run list (only when expanded; collapsed it sits at the pane's bottom edge). */
+.axiom-test-strip__header:not(:last-child) {
+    border-bottom: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+}
+
 .axiom-test-strip__body {
     height: min(220px, 40vh);
     overflow: auto;
