@@ -1,7 +1,7 @@
 # Workbench: Testing Workflows — Design
 
 Status: proposed (not scheduled). Follows Phase 5 (test runs of action types and tools) and Phase 5b (the AI
-only suggests tests). Tracking issue: see the GitHub issue linked from the commit that adds this file.
+only suggests tests). Tracking issue: https://github.com/Apitomy/apitomy-axiom/issues/469
 
 ## Goal
 
