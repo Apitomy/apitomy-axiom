@@ -43,6 +43,8 @@ export interface CompositionTreeProps {
     onRemove?(itemId: number): void;
     /** Called when the user chooses Test… on an action type or tool row. */
     onTest?(itemId: number): void;
+    /** Called when the user chooses Ask AI about this… on an action type or tool row. */
+    onAskAi?(item: CompositionItem): void;
 }
 
 const GROUPS: { type: CompositionItemType; title: string }[] = [
@@ -119,6 +121,8 @@ export function CompositionTree(props: CompositionTreeProps) {
                                     && composition.turnState !== "ai-working"}
                                 onRemove={() => props.onRemove?.(item.id)}
                                 onTest={props.onTest ? () => props.onTest?.(item.id) : undefined}
+                                onAskAi={props.onAskAi ? () => props.onAskAi?.(item) : undefined}
+                                isAskAiDisabled={composition.turnState === "ai-working"}
                                 onClick={() => {
                                     setSelected(item.id);
                                     onOpen(item.id);
@@ -152,13 +156,15 @@ export function CompositionTree(props: CompositionTreeProps) {
     );
 }
 
-function ItemRow({ item, isActive, isRemovable, onClick, onRemove, onTest, children }: {
+function ItemRow({ item, isActive, isRemovable, onClick, onRemove, onTest, onAskAi, isAskAiDisabled, children }: {
     item: CompositionItem;
     isActive: boolean;
     isRemovable: boolean;
     onClick(): void;
     onRemove(): void;
     onTest?: () => void;
+    onAskAi?: () => void;
+    isAskAiDisabled?: boolean;
     children: ReactNode;
 }) {
     const [menuOpen, setMenuOpen] = useState<boolean>(false);
@@ -178,12 +184,27 @@ function ItemRow({ item, isActive, isRemovable, onClick, onRemove, onTest, child
                     )}>
                     <DropdownList>
                         {onTest && <DropdownItem value="test" onClick={onTest}>Test…</DropdownItem>}
+                        {onAskAi && (
+                            <DropdownItem value="ask-ai" isDisabled={isAskAiDisabled} onClick={onAskAi}>
+                                Ask AI about this…
+                            </DropdownItem>
+                        )}
                         <DropdownItem value="remove" isDisabled={!isRemovable} onClick={onRemove}>Remove</DropdownItem>
                     </DropdownList>
                 </Dropdown>
             )}
         </li>
     );
+}
+
+/**
+ * Chat prefill for asking the AI about an action type or tool, in the style of the canvas menu items.
+ * @param item the item
+ * @returns the prefill text
+ */
+export function askAiAboutItemPrefill(item: CompositionItem): string {
+    const kind: string = item.type === "tool" ? "tool" : "action type";
+    return `About ${kind} \`${item.name}\`: `;
 }
 
 /** Props for {@link RemoveItemDialog}. */

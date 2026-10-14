@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { AddItemDialog, CompositionTree, RemoveItemDialog, statusTooltip } from "./CompositionTree";
+import {
+    AddItemDialog, askAiAboutItemPrefill, CompositionTree, RemoveItemDialog, statusTooltip,
+} from "./CompositionTree";
 import * as c from "../../config/compositions";
 import * as api from "../../config/api";
 
@@ -105,6 +107,25 @@ describe("CompositionTree", () => {
         fireEvent.click(screen.getByLabelText("Actions for at"));
         fireEvent.click(await screen.findByRole("menuitem", { name: "Test…" }));
         expect(onTest).toHaveBeenCalledWith(2);
+    });
+
+    it("offers Ask AI about this… on rows, disabled while the AI works", async () => {
+        const onAskAi = vi.fn();
+        const { rerender } = render(<CompositionTree composition={composition} items={items} problems={problems}
+            lastCompletedTurnId="t1" selectedItemId={undefined} onOpen={vi.fn()} onAskAi={onAskAi} />);
+        fireEvent.click(screen.getByLabelText("Actions for tl"));
+        fireEvent.click(await screen.findByRole("menuitem", { name: "Ask AI about this…" }));
+        expect(onAskAi).toHaveBeenCalledWith(items[0]);
+        rerender(<CompositionTree composition={{ ...composition, turnState: "ai-working" }} items={items}
+            problems={problems} lastCompletedTurnId="t1" selectedItemId={undefined} onOpen={vi.fn()} onAskAi={onAskAi} />);
+        fireEvent.click(screen.getByLabelText("Actions for at"));
+        const item = await screen.findByRole("menuitem", { name: "Ask AI about this…" });
+        expect(item.getAttribute("aria-disabled") === "true" || (item as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it("prefills the chat with the item's kind and name", () => {
+        expect(askAiAboutItemPrefill(items[0])).toBe("About tool `tl`: ");
+        expect(askAiAboutItemPrefill(items[1])).toBe("About action type `at`: ");
     });
 
     it("warns when the removed item is still in use", () => {

@@ -13,7 +13,7 @@ import {
     addItem, type CompositionItem, type CompositionSessionInfo, type CompositionTestRun, fetchItem, updateComposition,
 } from "../../config/compositions";
 import {
-    type AddableType, AddItemDialog, type AddRequest, CompositionTree, RemoveItemDialog,
+    type AddableType, AddItemDialog, type AddRequest, askAiAboutItemPrefill, CompositionTree, RemoveItemDialog,
 } from "./CompositionTree";
 import { PublishDialog } from "./PublishDialog";
 import { loadPrefs, savePrefs, type WorkbenchPrefs } from "./workbenchPrefs";
@@ -480,7 +480,8 @@ export function WorkbenchPage() {
                         lastCompletedTurnId={wb.lastCompletedTurnId}
                         selectedItemId={activeTab === "workflow" ? workflow?.id : Number(activeTab)}
                         onOpen={openItem} onRemove={setRemovingId}
-                        onTest={(itemId) => void openTestFor(itemId)} />
+                        onTest={(itemId) => void openTestFor(itemId)}
+                        onAskAi={(item) => askAi(askAiAboutItemPrefill(item))} />
                 )}
             </aside>
             {prefs.leftCollapsed ? <div className="axiom-workbench__splitter axiom-workbench__splitter--left" /> : (
