@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseFieldValue, testFields, testUnsupportedReason } from "./testRunLogic";
+import { parseFieldValue, valuesFromInputs, testFields, testUnsupportedReason } from "./testRunLogic";
 
 describe("testRunLogic", () => {
     it("reads action type inputs and tool parameters", () => {
@@ -28,5 +28,11 @@ describe("testRunLogic", () => {
         expect(parseFieldValue(f("array"), "{}").error).toBe("Enter a JSON array.");
         expect(parseFieldValue(f("object"), "{\"a\":1}")).toEqual({ value: { a: 1 } });
         expect(parseFieldValue(f("object"), "[").error).toBe("Enter a JSON object.");
+    });
+
+    it("turns suggested inputs into form values", () => {
+        expect(valuesFromInputs(undefined)).toEqual({});
+        expect(valuesFromInputs({ a: "x", b: 2, c: true, d: [1], e: { k: "v" } }))
+            .toEqual({ a: "x", b: "2", c: "true", d: "[1]", e: "{\"k\":\"v\"}" });
     });
 });

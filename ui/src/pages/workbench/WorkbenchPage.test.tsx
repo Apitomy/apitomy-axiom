@@ -279,4 +279,31 @@ describe("WorkbenchPage", () => {
         fireEvent.click(screen.getByRole("button", { name: "go-2" }));
         expect(screen.getByRole("button", { name: "Collapse test output" })).toBeTruthy();
     });
+
+    it("runs an AI suggestion pre-filled from its inputs", async () => {
+        testRuns = [{ id: "s", itemId: 11, itemType: "tool", itemName: "my-tool", author: "ai", status: "suggested",
+            startedAt: "2026-10-13T10:00:00Z", inputs: { who: "bob" } }];
+        renderPage();
+        fireEvent.click(screen.getByRole("button", { name: "Run…" }));
+        expect(((await screen.findByLabelText("who")) as HTMLInputElement).value).toBe("bob");
+        fireEvent.click(screen.getByRole("button", { name: "Run" }));
+        await waitFor(() => expect(runTest).toHaveBeenCalledWith(11, { who: "bob" }, undefined));
+    });
+
+    it("shows an error when the suggested item no longer exists", async () => {
+        testRuns = [{ id: "s", itemId: 99, itemType: "tool", itemName: "gone", author: "ai", status: "suggested",
+            startedAt: "2026-10-13T10:00:00Z", inputs: {} }];
+        renderPage();
+        fireEvent.click(screen.getByRole("button", { name: "Run…" }));
+        expect(await screen.findByText(/The suggested item no longer exists\./)).toBeTruthy();
+    });
+
+    it("expands the strip for a new suggestion", () => {
+        const { rerender } = renderPage();
+        expect(screen.getByRole("button", { name: "Expand test output" })).toBeTruthy();
+        testRuns = [{ id: "s", itemId: 11, itemType: "tool", itemName: "my-tool", author: "ai", status: "suggested",
+            startedAt: "2026-10-13T10:00:00Z", inputs: {} }];
+        rerender(page());
+        expect(screen.getByRole("button", { name: "Collapse test output" })).toBeTruthy();
+    });
 });

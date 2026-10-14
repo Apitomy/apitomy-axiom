@@ -2,6 +2,7 @@ import { type ReactNode, useState } from "react";
 import { Button, ExpandableSection, Label, Spinner } from "@patternfly/react-core";
 import {
     AngleDownIcon, AngleRightIcon, AngleUpIcon, CheckCircleIcon, ExclamationCircleIcon, ExclamationTriangleIcon,
+    OutlinedLightbulbIcon,
 } from "@patternfly/react-icons";
 import type { CompositionTestRun } from "../../config/compositions";
 
@@ -14,12 +15,16 @@ export interface TestOutputStripProps {
     onOpenItem(itemId: number): void;
     /** Controls shown at the right of the header (e.g. the Test… button). */
     actions?: ReactNode;
+    /** Called when the user chooses to run an AI-suggested test. */
+    onRunSuggestion?(run: CompositionTestRun): void;
 }
 
 function StatusIcon({ status }: { status: CompositionTestRun["status"] }) {
     switch (status) {
         case "running":
             return <Spinner size="sm" aria-label="running" />;
+        case "suggested":
+            return <OutlinedLightbulbIcon aria-label="suggested" color="var(--pf-t--global--icon--color--status--info--default)" />;
         case "passed":
             return <CheckCircleIcon aria-label="passed" color="var(--pf-t--global--icon--color--status--success--default)" />;
         case "failed":
@@ -37,6 +42,9 @@ function StatusIcon({ status }: { status: CompositionTestRun["status"] }) {
 export function runSummary(run: CompositionTestRun): string {
     if (run.status === "running") {
         return "Running…";
+    }
+    if (run.status === "suggested") {
+        return `Inputs: ${JSON.stringify(run.inputs ?? {})}`;
     }
     if (run.message) {
         return run.message;
@@ -75,7 +83,7 @@ function Details({ run }: { run: CompositionTestRun }) {
 /**
  * Collapsible list of the composition's recent test runs, by the user and the AI.
  */
-export function TestOutputStrip({ runs, collapsed, onToggle, onOpenItem, actions }: TestOutputStripProps) {
+export function TestOutputStrip({ runs, collapsed, onToggle, onOpenItem, actions, onRunSuggestion }: TestOutputStripProps) {
     const [open, setOpen] = useState<Set<string>>(new Set<string>());
     const toggle = (id: string) => setOpen((prev) => {
         const next = new Set<string>(prev);
@@ -113,13 +121,19 @@ export function TestOutputStrip({ runs, collapsed, onToggle, onOpenItem, actions
                                         icon={open.has(run.id) ? <AngleDownIcon /> : <AngleRightIcon />} />
                                     <StatusIcon status={run.status} />
                                     <Button variant="link" isInline onClick={() => onOpenItem(run.itemId)}>{run.itemName}</Button>
-                                    {run.author === "ai" && <Label isCompact color="purple">AI</Label>}
+                                    {run.status === "suggested"
+                                        ? <Label isCompact color="purple">Suggested by AI</Label>
+                                        : run.author === "ai" && <Label isCompact color="purple">AI</Label>}
                                     <span className="axiom-text-subtle">
                                         {new Date(run.startedAt).toLocaleTimeString()}
-                                        {run.durationMs !== undefined && run.status !== "running" ? ` · ${run.durationMs} ms` : ""}
-                                        {run.exitCode !== undefined ? ` · exit ${run.exitCode}` : ""}
+                                        {run.durationMs !== undefined && run.status !== "running" && run.status !== "suggested" ? ` · ${run.durationMs} ms` : ""}
+                                        {run.exitCode !== undefined && run.status !== "suggested" ? ` · exit ${run.exitCode}` : ""}
                                     </span>
                                     <span className="axiom-test-strip__summary">{runSummary(run)}</span>
+                                    {run.status === "suggested" && (
+                                        <Button variant="secondary" size="sm"
+                                            onClick={() => onRunSuggestion?.(run)}>Run…</Button>
+                                    )}
                                 </div>
                                 {open.has(run.id) && <Details run={run} />}
                             </li>

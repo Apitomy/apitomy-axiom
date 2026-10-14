@@ -10,7 +10,7 @@ import {
 } from "@patternfly/react-icons";
 import { RevisionList } from "./RevisionList";
 import {
-    addItem, type CompositionItem, type CompositionSessionInfo, fetchItem, updateComposition,
+    addItem, type CompositionItem, type CompositionSessionInfo, type CompositionTestRun, fetchItem, updateComposition,
 } from "../../config/compositions";
 import {
     type AddableType, AddItemDialog, type AddRequest, CompositionTree, RemoveItemDialog,
@@ -25,6 +25,7 @@ import { itemUsages, mergeCatalog } from "./workbenchLogic";
 import { ChatPane } from "./ChatPane";
 import { TestOutputStrip } from "./TestOutputStrip";
 import { TestRunDialog } from "./TestRunDialog";
+import { valuesFromInputs } from "./testRunLogic";
 import { findActionTypeIdByName, loadEditorActionTypes } from "../../hooks/useWorkflowEditorSpi";
 import "./WorkbenchPage.css";
 
@@ -245,13 +246,39 @@ export function WorkbenchPage() {
             return;
         }
         await itemTabRefs.current.get(testable.id)?.flush();
+        suggestedValues.current = null;
         setTesting(testable.id);
+    };
+
+    /** Values (and no subject) to pre-fill the next test dialog with, from an AI suggestion. */
+    const suggestedValues = useRef<{ itemId: number; values: Record<string, string> } | null>(null);
+
+    /** Opens the test dialog for an AI suggestion, pre-filled with its inputs. */
+    const runSuggestion = async (run: CompositionTestRun) => {
+        const item: CompositionItem | undefined = wb.items.find((i) => i.id === run.itemId);
+        if (!item) {
+            setTestError("The suggested item no longer exists.");
+            return;
+        }
+        setTestError(null);
+        try {
+            if (!wb.contents[item.id]) {
+                await wb.loadContent(item.id);
+            }
+            await itemTabRefs.current.get(item.id)?.flush();
+        } catch (e: unknown) {
+            setTestError(e instanceof Error ? e.message : String(e));
+            return;
+        }
+        suggestedValues.current = { itemId: item.id, values: valuesFromInputs(run.inputs) };
+        setTesting(item.id);
     };
 
     /** Starts a test run; the strip shows progress via SSE, request failures show inline. */
     const runTest = (itemId: number, inputs: Record<string, unknown>, values: Record<string, string>,
                      subjectId?: number) => {
         testValues.current.set(itemId, { values, subjectId });
+        suggestedValues.current = null;
         setTesting(null);
         setTestError(null);
         wb.runTest(itemId, inputs, subjectId).catch((e: unknown) =>
@@ -271,7 +298,7 @@ export function WorkbenchPage() {
         for (const run of wb.testRuns) {
             if (!seenRunIds.current.has(run.id)) {
                 seenRunIds.current.add(run.id);
-                started = started || run.status === "running";
+                started = started || run.status === "running" || run.status === "suggested";
             }
         }
         if (started && prefs.testStripCollapsed) {
@@ -496,6 +523,7 @@ export function WorkbenchPage() {
                 <TestOutputStrip runs={wb.testRuns} collapsed={prefs.testStripCollapsed}
                     onToggle={() => updatePrefs({ testStripCollapsed: !prefs.testStripCollapsed })}
                     onOpenItem={openItem}
+                    onRunSuggestion={(run) => void runSuggestion(run)}
                     actions={
                         <Tooltip content={testable ? `Run ${testable.name} with sample inputs`
                             : "Open an action type or tool to test it"}>
@@ -551,11 +579,16 @@ export function WorkbenchPage() {
             )}
             {testing !== null && wb.contents[testing] && (() => {
                 const item: CompositionItem | undefined = wb.items.find((i) => i.id === testing);
-                const remembered = testValues.current.get(testing);
+                const suggestion = suggestedValues.current?.itemId === testing ? suggestedValues.current : null;
+                const remembered = suggestion ? { values: suggestion.values, subjectId: undefined }
+                    : testValues.current.get(testing);
                 return item && (
                     <TestRunDialog itemName={item.name} itemType={item.type === "tool" ? "tool" : "action-type"}
                         content={wb.contents[testing]} initialValues={remembered?.values ?? {}}
-                        initialSubjectId={remembered?.subjectId} onClose={() => setTesting(null)}
+                        initialSubjectId={remembered?.subjectId} onClose={() => {
+                            suggestedValues.current = null;
+                            setTesting(null);
+                        }}
                         onRun={(inputs, values, subjectId) => runTest(testing, inputs, values, subjectId)} />
                 );
             })()}

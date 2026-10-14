@@ -307,7 +307,7 @@ export function undoTurn(id: number, turnId: string): Promise<UndoResult> {
 }
 
 /** Status of a composition test run. */
-export type TestRunStatus = "running" | "passed" | "failed" | "error";
+export type TestRunStatus = "running" | "passed" | "failed" | "error" | "suggested";
 
 /** One test run of a draft action type or tool. */
 export interface CompositionTestRun {

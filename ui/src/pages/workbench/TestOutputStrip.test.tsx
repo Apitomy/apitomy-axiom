@@ -38,4 +38,18 @@ describe("TestOutputStrip", () => {
         fireEvent.click(screen.getByRole("button", { name: "Expand test output" }));
         expect(onToggle).toHaveBeenCalled();
     });
+
+    it("renders a suggested run with Run…", () => {
+        const onRunSuggestion = vi.fn();
+        const suggested: CompositionTestRun = { id: "s", itemId: 12, itemType: "tool", itemName: "list-labels",
+            author: "ai", status: "suggested", startedAt: "2026-10-13T10:01:00Z", inputs: { repo: "x" } };
+        render(<TestOutputStrip runs={[suggested]} collapsed={false} onToggle={vi.fn()} onOpenItem={vi.fn()}
+            onRunSuggestion={onRunSuggestion} />);
+        expect(screen.getByLabelText("suggested")).toBeTruthy();
+        expect(screen.getByText("Suggested by AI")).toBeTruthy();
+        expect(screen.queryByText("AI")).toBeNull();
+        expect(screen.getByText('Inputs: {"repo":"x"}')).toBeTruthy();
+        fireEvent.click(screen.getByRole("button", { name: "Run…" }));
+        expect(onRunSuggestion).toHaveBeenCalledWith(suggested);
+    });
 });

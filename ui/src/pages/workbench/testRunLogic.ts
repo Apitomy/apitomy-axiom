@@ -79,3 +79,13 @@ export function parseFieldValue(field: TestField, text: string): { value?: unkno
             return { value: text };
     }
 }
+
+/**
+ * Turns a run's inputs into test form values: strings as-is, other values as JSON.
+ * @param inputs the inputs
+ * @returns the form values, by field name
+ */
+export function valuesFromInputs(inputs: Record<string, unknown> | undefined): Record<string, string> {
+    return Object.fromEntries(Object.entries(inputs ?? {})
+        .map(([k, v]: [string, unknown]) => [k, typeof v === "string" ? v : JSON.stringify(v)]));
+}
