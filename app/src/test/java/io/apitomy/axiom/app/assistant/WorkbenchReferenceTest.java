@@ -58,6 +58,7 @@ class WorkbenchReferenceTest {
                 "Never describe the output format in an agent prompt",
                 "applied by the user's editor when your turn ends",
                 "Do not set or adjust node positions; the user's editor lays out the workflow when your changes are applied.",
+                "Do not mark an edge as the default unless its node also has conditional edges",
                 "{{reference}}",
                 "{{changesetReference}}")) {
             assertTrue(prompt.contains(rule), "prompt must contain: " + rule);

@@ -155,9 +155,9 @@ public class AssistantReferenceGenerator {
                 { "op": "addNode", "node": { "id": "wait-1", "type": "wait", "name": "Wait an hour",
                   "config": { "duration": "PT1H" } } },
                 { "op": "addEdge", "edge": { "id": "edge-2", "source": "start-1", "target": "wait-1",
-                  "priority": 0, "isDefault": true } },
+                  "priority": 0, "isDefault": false } },
                 { "op": "addEdge", "edge": { "id": "edge-3", "source": "wait-1", "target": "end-1",
-                  "priority": 0, "isDefault": true } }
+                  "priority": 0, "isDefault": false } }
               ]
             }
             ```
@@ -204,6 +204,9 @@ public class AssistantReferenceGenerator {
                         .collect(Collectors.joining(", ")))
                 .append(".\n\n")
                 .append("Graph rules:\n\n")
+                .append("- Mark an edge as the default (`isDefault: true`) only when its node also has conditional ")
+                .append("edges: the default is the fallback when no condition matches. A node with a single outgoing ")
+                .append("edge, and every edge of a fork, uses an unconditional edge with `isDefault: false`.\n")
                 .append("- At most one default edge (`isDefault: true`) per node.\n")
                 .append("- A node with conditional edges needs exactly one default edge (no condition) as its ")
                 .append("fallback; this includes a node with a single conditional edge.\n")

@@ -181,4 +181,12 @@ class AssistantReferenceTest {
             Files.writeString(f, e.getValue());
         }
     }
+
+    @Test
+    void changeSetExampleUsesUnconditionalNonDefaultEdgesForSingleOutgoingEdges() {
+        String reference = generator.generateChangeSetReference();
+        org.junit.jupiter.api.Assertions.assertFalse(reference.contains("\"isDefault\": true"), reference);
+        org.junit.jupiter.api.Assertions.assertTrue(generator.generate().contains(
+                "Mark an edge as the default (`isDefault: true`) only when its node also has conditional edges"));
+    }
 }
