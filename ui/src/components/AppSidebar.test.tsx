@@ -49,7 +49,7 @@ describe("AppSidebar", () => {
         expect(screen.queryByText("Job Runs")).not.toBeInTheDocument();
     });
 
-    it("keeps only Runs, Subjects, Inbox, Dashboards and Workbench as top-level items", async () => {
+    it("keeps only Runs, Subjects, Inbox, Dashboards and Workbench as top-level items, Workbench after Events", async () => {
         const { container } = renderWithRouter(<AppSidebar />);
         await screen.findByText("Inbox");
         const rootList = container.querySelector(".pf-v6-c-nav__list") as HTMLElement;
@@ -57,6 +57,9 @@ describe("AppSidebar", () => {
             .filter((li) => li.querySelector("button[aria-expanded]") === null)
             .map((li) => li.textContent?.trim());
         expect(topLevel).toEqual(["Runs", "Subjects", "Inbox", "Dashboards", "Workbench"]);
+        const all = Array.from(rootList.querySelectorAll(":scope > li")).map((li) =>
+            li.querySelector(":scope > button, :scope > a")?.textContent?.trim());
+        expect(all.indexOf("Workbench")).toBe(all.indexOf("Events") + 1);
     });
 
     it("groups event pages under an expanded Events section", async () => {

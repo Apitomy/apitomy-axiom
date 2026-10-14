@@ -67,10 +67,6 @@ export function AppSidebar() {
                         <NavItem isActive={location.pathname.startsWith("/dashboards")} onClick={() => navigate("/dashboards")}>
                             Dashboards
                         </NavItem>
-                        <NavItem isActive={location.pathname === "/workbench" || location.pathname.startsWith("/workbench/")}
-                            onClick={() => navigate("/workbench")}>
-                            Workbench
-                        </NavItem>
                         <NavExpandable title="Events" isActive={isEventsActive} isExpanded={isEventsActive}>
                             <NavItem isActive={location.pathname.startsWith("/events/sources")} onClick={() => navigate("/events/sources")}>
                                 Event Sources
@@ -82,6 +78,10 @@ export function AppSidebar() {
                                 Event Stream
                             </NavItem>
                         </NavExpandable>
+                        <NavItem isActive={location.pathname === "/workbench" || location.pathname.startsWith("/workbench/")}
+                            onClick={() => navigate("/workbench")}>
+                            Workbench
+                        </NavItem>
                         <NavExpandable title="Logs"
                             isActive={location.pathname.startsWith("/logs")}
                             isExpanded={location.pathname.startsWith("/logs")}>
