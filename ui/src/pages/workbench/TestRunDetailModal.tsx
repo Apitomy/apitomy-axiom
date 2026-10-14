@@ -193,17 +193,17 @@ export function TestRunDetailModal({ run, onClose, onOpenItem, onRunSuggestion }
                             <CodeBlock code={JSON.stringify(run.inputs ?? {}, null, 2)} language="json" label={inputsTitle} />
                         </TabContentBody>
                     </Tab>
-                    <Tab eventKey="outputs" title={<TabTitleText>Outputs</TabTitleText>}>
-                        <TabContentBody className="axiom-test-run__tab-body">
-                            {run.outputs
-                                ? <CodeBlock code={JSON.stringify(run.outputs, null, 2)} language="json" label="Outputs" />
-                                : <p className="axiom-text-subtle">
-                                    {run.itemType === "tool"
-                                        ? "Tools have no declared outputs; see Stdout/err for what the tool printed."
-                                        : "No outputs (the action did not print a JSON object)."}
-                                </p>}
-                        </TabContentBody>
-                    </Tab>
+                    {run.itemType !== "tool" && (
+                        <Tab eventKey="outputs" title={<TabTitleText>Outputs</TabTitleText>}>
+                            <TabContentBody className="axiom-test-run__tab-body">
+                                {run.outputs
+                                    ? <CodeBlock code={JSON.stringify(run.outputs, null, 2)} language="json" label="Outputs" />
+                                    : <p className="axiom-text-subtle">
+                                        No outputs (the action did not print a JSON object).
+                                    </p>}
+                            </TabContentBody>
+                        </Tab>
+                    )}
                     <Tab eventKey="streams" title={<TabTitleText>Stdout/err</TabTitleText>}>
                         <TabContentBody className="axiom-test-run__tab-body">
                             <StreamSection title="stdout" text={run.stdout} />

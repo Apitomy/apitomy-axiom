@@ -58,6 +58,14 @@ describe("TestRunDetailModal", () => {
         expect(sourceTab({ ...run, executionMode: "node", resolvedScript: "x" })?.title).toBe("Code");
     });
 
+    it("has no Outputs tab for tools", () => {
+        render(<TestRunDetailModal run={{ ...run, itemType: "tool", outputs: undefined, resolvedScript: "echo" }}
+            onClose={vi.fn()} onOpenItem={vi.fn()} />);
+        expect(screen.queryByRole("tab", { name: "Outputs" })).toBeNull();
+        expect(screen.getByRole("tab", { name: "Parameters" })).toBeTruthy();
+        expect(screen.getByRole("tab", { name: "Script" })).toBeTruthy();
+    });
+
     it("opens a passed action type run on Outputs", () => {
         render(<TestRunDetailModal run={{ ...run, status: "passed", problems: [] }} onClose={vi.fn()} onOpenItem={vi.fn()} />);
         expect(screen.getByRole("tab", { name: "Outputs" }).getAttribute("aria-selected")).toBe("true");
