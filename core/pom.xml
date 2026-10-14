@@ -35,7 +35,7 @@
         <dependency>
             <groupId>io.apitomy</groupId>
             <artifactId>apitomy-flow-engine</artifactId>
-            <version>2.5.0</version>
+            <version>2.7.1</version>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
