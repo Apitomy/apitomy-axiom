@@ -38,7 +38,7 @@ const FILTER_TYPES: ChipFilterType[] = [
     { value: "status", label: "Status", testId: "runs-filter-status" },
     { value: "workflow", label: "Workflow", testId: "runs-filter-workflow" },
     { value: "subject", label: "Subject ID", testId: "runs-filter-subject" },
-    { value: "label", label: "Label (key:value)", testId: "runs-filter-label" },
+    { value: "label", label: "Label", testId: "runs-filter-label" },
 ];
 
 /** Filter types that can appear several times (each value is an extra condition); the others replace. */
