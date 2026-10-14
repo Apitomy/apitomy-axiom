@@ -24,13 +24,14 @@ const AXIOM_SESSION_TOKEN = process.env.AXIOM_SESSION_TOKEN || "";
  * @param {string} method HTTP method
  * @param {string} path path relative to AXIOM_API_URL
  * @param {*} [body] JSON body
- * @returns {Promise<string>} the response text
+ * @param {{accept?: string, allow404?: boolean}} [options] Accept header override; allow404 returns null on 404
+ * @returns {Promise<?string>} the response text (null on an allowed 404)
  */
-async function axiomApi(method, path, body) {
+async function axiomApi(method, path, body, options = {}) {
     const url = `${AXIOM_API_URL}${path}`;
     const opts = {
         method,
-        headers: { "Accept": "application/json" },
+        headers: { "Accept": options.accept || "application/json" },
     };
     if (AXIOM_SESSION_TOKEN) {
         opts.headers["X-Axiom-Session-Token"] = AXIOM_SESSION_TOKEN;
@@ -40,6 +41,9 @@ async function axiomApi(method, path, body) {
         opts.body = JSON.stringify(body);
     }
     const resp = await fetch(url, opts);
+    if (options.allow404 && resp.status === 404) {
+        return null;
+    }
     const text = await resp.text();
     if (!resp.ok) {
         throw new Error(`Axiom API ${method} ${path} returned ${resp.status}: ${text.substring(0, 500)}`);
@@ -264,13 +268,10 @@ async function workflowDefinitionId() {
  * @returns {Promise<?string>} the last 4000 characters of the log
  */
 async function taskLogTail(subjectId, taskId) {
-    const path = `/subjects/${encodeURIComponent(subjectId)}/tasks/${encodeURIComponent(taskId)}/log`;
-    const headers = { "Accept": "text/plain" };
-    if (AXIOM_SESSION_TOKEN) headers["X-Axiom-Session-Token"] = AXIOM_SESSION_TOKEN;
-    const resp = await fetch(`${AXIOM_API_URL}${path}`, { method: "GET", headers });
-    if (resp.status === 404) return null;
-    const text = await resp.text();
-    if (!resp.ok) throw new Error(`Axiom API GET ${path} returned ${resp.status}: ${text.substring(0, 500)}`);
+    const text = await axiomApi("GET",
+        `/subjects/${encodeURIComponent(subjectId)}/tasks/${encodeURIComponent(taskId)}/log`,
+        undefined, { accept: "text/plain", allow404: true });
+    if (text === null) return null;
     return text.length > 4000 ? text.substring(text.length - 4000) : text;
 }
 
@@ -457,8 +458,11 @@ const TOOLS = [
         ],
         handler: async (args) => {
             const definitionId = await workflowDefinitionId();
+            if (definitionId === null) {
+                return "The workflow has not been published yet, so it has no runs.";
+            }
             const run = JSON.parse(await axiomApi("GET", `/workflow/runs/${encodeURIComponent(args.runId)}`));
-            if (definitionId === null || Number(run.definitionId) !== Number(definitionId)) {
+            if (Number(run.definitionId) !== Number(definitionId)) {
                 return `Run ${args.runId} is not a run of this composition's workflow.`;
             }
             const failed = (run.history || []).filter(h => h.taskId !== undefined && h.taskId !== null

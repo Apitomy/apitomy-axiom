@@ -86,3 +86,8 @@ test("formatTrace lists failed nodes first", () => {
     assert.strictEqual(lines[1], "- tool failed bad (9 ms)");
     assert.strictEqual(lines[2], "- action completed ok (5 ms)");
 });
+
+test("formatRunList uses the runId of run summaries", () => {
+    assert.strictEqual(helpers.formatRunList([{ runId: 42, status: "running", definitionVersion: 1, title: "T",
+        startedOn: "s" }]), "#42 running v1 T started s");
+});
