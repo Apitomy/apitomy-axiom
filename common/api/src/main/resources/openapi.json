@@ -11459,6 +11459,16 @@
             "type": "string"
           },
           "resolvedScript": {
+            "type": "string",
+            "description": "The script that ran after placeholder substitution, or the code of a node action type"
+          },
+          "executionMode": {
+            "description": "Execution mode of a tested action type (absent for tools)",
+            "enum": [
+              "agent",
+              "script",
+              "node"
+            ],
             "type": "string"
           }
         }

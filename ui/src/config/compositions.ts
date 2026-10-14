@@ -328,7 +328,10 @@ export interface CompositionTestRun {
     exitCode?: number;
     problems?: string[];
     message?: string;
+    /** The script that ran (after placeholder substitution), or the code of a node action type. */
     resolvedScript?: string;
+    /** Execution mode of a tested action type; absent for tools. */
+    executionMode?: ExecutionMode;
 }
 
 /** SSE payload of a "composition-test-run" event. */

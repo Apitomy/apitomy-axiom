@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -80,6 +81,24 @@ class DraftTestRunnerTest {
         assertEquals("error", r.status());
         assertEquals(List.of("Input: Missing required field 'who'."), r.problems());
         assertNull(r.exitCode());
+    }
+
+    @Test
+    void nodeActionReportsItsCodeAsTheResolvedScript() throws Exception {
+        Assumptions.assumeTrue(nodeAvailable(), "node is not installed");
+        String code = "export async function run(inputs, ctx) { return { n: 1 }; }";
+        DraftTestRunner.Result r = action("{\"name\":\"n\",\"executionMode\":\"node\",\"codeTemplate\":"
+                + mapper.writeValueAsString(code) + "}", Map.of());
+        assertEquals("passed", r.status(), r.toString());
+        assertEquals(code, r.resolvedScript());
+    }
+
+    private static boolean nodeAvailable() {
+        try {
+            return new ProcessBuilder("node", "--version").start().waitFor() == 0;
+        } catch (java.io.IOException | InterruptedException e) {
+            return false;
+        }
     }
 
     @Test

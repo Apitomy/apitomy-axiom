@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-    Alert, Button, ExpandableSection, Label, Modal, ModalBody, ModalFooter, ModalHeader, Title,
+    Alert, Button, Label, Modal, ModalBody, ModalFooter, ModalHeader, Tab, TabContentBody, Tabs, TabTitleText, Title,
 } from "@patternfly/react-core";
 import { Light as SyntaxHighlighter } from "react-syntax-highlighter";
 import bash from "react-syntax-highlighter/dist/esm/languages/hljs/bash";
@@ -65,18 +65,41 @@ function CodeBlock({ code, language, label }: { code: string; language: CodeLang
     );
 }
 
-/** A section for text output: highlighted as JSON when it is JSON, otherwise plain text. */
-function OutputSection({ title, text }: { title: string; text: string | undefined }) {
-    if (!text) {
-        return null;
-    }
+/** A titled stream (stdout or stderr): highlighted as JSON when it is JSON, otherwise plain text. */
+function StreamSection({ title, text }: { title: string; text: string | undefined }) {
     const json: string | null = prettyJson(text);
     return (
         <section className="axiom-test-run__section">
             <Title headingLevel="h3" size="md">{title}</Title>
-            <CodeBlock code={json ?? text} language={json ? "json" : "plaintext"} label={title} />
+            {text ? <CodeBlock code={json ?? text} language={json ? "json" : "plaintext"} label={title} />
+                : <p className="axiom-text-subtle">(empty)</p>}
         </section>
     );
+}
+
+/** Tabs of the test run dialog. */
+type RunTab = "source" | "inputs" | "outputs" | "streams";
+
+/**
+ * The source tab of a run: "Script" for script action types and tools, "Code" for node action types, none
+ * otherwise (agent action types, or a run that never got to run).
+ */
+export function sourceTab(run: CompositionTestRun): { title: string; language: "bash" | "javascript" } | null {
+    if (!run.resolvedScript) {
+        return null;
+    }
+    return run.executionMode === "node" ? { title: "Code", language: "javascript" } : { title: "Script", language: "bash" };
+}
+
+/** The tab shown first: what the user most likely wants to see for the run's state. */
+function initialTab(run: CompositionTestRun): RunTab {
+    if (run.status === "suggested" || run.status === "running") {
+        return "inputs";
+    }
+    if (run.status === "passed" && run.itemType === "action-type" && run.outputs) {
+        return "outputs";
+    }
+    return run.stdout || run.stderr ? "streams" : "inputs";
 }
 
 /** Props for {@link TestRunDetailModal}. */
@@ -98,7 +121,9 @@ const STATUS_COLOR: Record<CompositionTestRun["status"], "blue" | "green" | "red
  * stderr and the resolved script.
  */
 export function TestRunDetailModal({ run, onClose, onOpenItem, onRunSuggestion }: TestRunDetailModalProps) {
-    const [scriptOpen, setScriptOpen] = useState<boolean>(false);
+    const [tab, setTab] = useState<RunTab>(() => initialTab(run));
+    const source = sourceTab(run);
+    const inputsTitle: string = run.itemType === "tool" ? "Parameters" : "Inputs";
     const kind: string = run.itemType === "tool" ? "Tool" : "Action type";
     const problems: string[] = run.problems ?? [];
     return (
@@ -154,27 +179,38 @@ export function TestRunDetailModal({ run, onClose, onOpenItem, onRunSuggestion }
                     </Alert>
                 )}
 
-                <section className="axiom-test-run__section">
-                    <Title headingLevel="h3" size="md">{run.itemType === "tool" ? "Parameters" : "Inputs"}</Title>
-                    <CodeBlock code={JSON.stringify(run.inputs ?? {}, null, 2)} language="json"
-                        label={run.itemType === "tool" ? "Parameters" : "Inputs"} />
-                </section>
-                {run.outputs && (
-                    <section className="axiom-test-run__section">
-                        <Title headingLevel="h3" size="md">Outputs</Title>
-                        <CodeBlock code={JSON.stringify(run.outputs, null, 2)} language="json" label="Outputs" />
-                    </section>
-                )}
-                <OutputSection title="stdout" text={run.stdout} />
-                <OutputSection title="stderr" text={run.stderr} />
-                {run.resolvedScript && (
-                    <ExpandableSection className="axiom-test-run__section" toggleText="Resolved script"
-                        isExpanded={scriptOpen} onToggle={(_e, open) => setScriptOpen(open)}>
-                        <CodeBlock code={run.resolvedScript}
-                            language={run.resolvedScript.startsWith("export ") ? "javascript" : "bash"}
-                            label="Resolved script" />
-                    </ExpandableSection>
-                )}
+                <Tabs className="axiom-test-run__tabs" activeKey={tab} onSelect={(_e, key) => setTab(key as RunTab)}
+                    aria-label="Test run details" mountOnEnter>
+                    {source && (
+                        <Tab eventKey="source" title={<TabTitleText>{source.title}</TabTitleText>}>
+                            <TabContentBody className="axiom-test-run__tab-body">
+                                <CodeBlock code={run.resolvedScript ?? ""} language={source.language} label={source.title} />
+                            </TabContentBody>
+                        </Tab>
+                    )}
+                    <Tab eventKey="inputs" title={<TabTitleText>{inputsTitle}</TabTitleText>}>
+                        <TabContentBody className="axiom-test-run__tab-body">
+                            <CodeBlock code={JSON.stringify(run.inputs ?? {}, null, 2)} language="json" label={inputsTitle} />
+                        </TabContentBody>
+                    </Tab>
+                    <Tab eventKey="outputs" title={<TabTitleText>Outputs</TabTitleText>}>
+                        <TabContentBody className="axiom-test-run__tab-body">
+                            {run.outputs
+                                ? <CodeBlock code={JSON.stringify(run.outputs, null, 2)} language="json" label="Outputs" />
+                                : <p className="axiom-text-subtle">
+                                    {run.itemType === "tool"
+                                        ? "Tools have no declared outputs; see Stdout/err for what the tool printed."
+                                        : "No outputs (the action did not print a JSON object)."}
+                                </p>}
+                        </TabContentBody>
+                    </Tab>
+                    <Tab eventKey="streams" title={<TabTitleText>Stdout/err</TabTitleText>}>
+                        <TabContentBody className="axiom-test-run__tab-body">
+                            <StreamSection title="stdout" text={run.stdout} />
+                            <StreamSection title="stderr" text={run.stderr} />
+                        </TabContentBody>
+                    </Tab>
+                </Tabs>
             </ModalBody>
             <ModalFooter>
                 {run.status === "suggested" && onRunSuggestion && (

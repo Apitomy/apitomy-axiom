@@ -55,7 +55,8 @@ public class DraftTestRunner {
      * @param durationMs     how long the process ran
      * @param problems       input, parameter and output-validation problems
      * @param message        why the run could not start, or {@code null}
-     * @param resolvedScript the script after placeholder substitution, or {@code null}
+     * @param resolvedScript the script after placeholder substitution (or the code of a node action type), or
+     *                       {@code null}
      */
     public record Result(String status, Map<String, Object> outputs, String stdout, String stderr,
                          Integer exitCode, long durationMs, List<String> problems, String message,
@@ -127,7 +128,8 @@ public class DraftTestRunner {
         }
         String status = run.exitCode() == 0 && problems.isEmpty() ? "passed" : "failed";
         return new Result(status, outputs, truncate(run.stdout()), truncate(run.stderr()), run.exitCode(),
-                run.durationMs(), problems, null, run.resolvedScript());
+                run.durationMs(), problems, null,
+                "node".equals(mode) ? actionType.codeTemplate : run.resolvedScript());
     }
 
     /**

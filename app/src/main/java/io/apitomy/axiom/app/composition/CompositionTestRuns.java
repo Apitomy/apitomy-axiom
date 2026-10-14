@@ -119,6 +119,7 @@ public class CompositionTestRuns {
         run.setAuthor(CompositionTestRun.Author.fromValue(CompositionService.AUTHOR_AI));
         run.setTurnId(turnId);
         run.setStatus(CompositionTestRun.Status.SUGGESTED);
+        run.setExecutionMode(executionModeOf(item));
         run.setStartedAt(Date.from(Instant.now()));
         run.setInputs(values(inputs != null ? inputs : Map.of()));
         remember(compositionId, run);
@@ -138,6 +139,7 @@ public class CompositionTestRuns {
         run.setTurnId(turnId);
         run.setSubjectId(subjectId);
         run.setStatus(CompositionTestRun.Status.RUNNING);
+        run.setExecutionMode(executionModeOf(item));
         run.setStartedAt(Date.from(Instant.now()));
         run.setInputs(values(values));
         remember(compositionId, run);
@@ -226,6 +228,18 @@ public class CompositionTestRuns {
         }
     }
 
+    /** The execution mode of an action type draft, or null for a tool or an unknown mode. */
+    private CompositionTestRun.ExecutionMode executionModeOf(CompositionItemEntity item) {
+        if (!"action-type".equals(item.itemType)) {
+            return null;
+        }
+        String mode = service.contentOf(item).path("executionMode").asText("");
+        return switch (mode) {
+            case "agent", "script", "node" -> CompositionTestRun.ExecutionMode.fromValue(mode);
+            default -> null;
+        };
+    }
+
     private static CompositionTestRun copyStart(CompositionTestRun run) {
         CompositionTestRun copy = new CompositionTestRun();
         copy.setId(run.getId());
@@ -237,6 +251,7 @@ public class CompositionTestRuns {
         copy.setSubjectId(run.getSubjectId());
         copy.setStartedAt(run.getStartedAt());
         copy.setInputs(run.getInputs());
+        copy.setExecutionMode(run.getExecutionMode());
         return copy;
     }
 

@@ -561,3 +561,15 @@ span.axiom-workbench__row-menu {
     font-family: var(--pf-t--global--font--family--mono);
     font-size: 13px;
 }
+
+.axiom-test-run__tabs {
+    margin-top: var(--pf-t--global--spacer--md, 16px);
+}
+
+.axiom-test-run__tab-body {
+    padding-top: var(--pf-t--global--spacer--md, 16px);
+}
+
+.axiom-test-run__tab-body > .axiom-test-run__section:first-child {
+    margin-top: 0;
+}

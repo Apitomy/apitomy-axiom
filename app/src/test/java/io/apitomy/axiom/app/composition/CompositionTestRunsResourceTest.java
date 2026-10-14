@@ -77,7 +77,8 @@ class CompositionTestRunsResourceTest {
                 .body("status", equalTo("passed"))
                 .body("author", equalTo("user"))
                 .body("itemName", equalTo("greet"))
-                .body("outputs.greeting", equalTo("hi bob"));
+                .body("outputs.greeting", equalTo("hi bob"))
+                .body("executionMode", equalTo("script"));
         given().get(BASE + "/{id}/test-runs", id).then().statusCode(200)
                 .body("$", hasSize(1)).body("[0].status", equalTo("passed"));
     }
