@@ -404,7 +404,8 @@ span.axiom-workbench__row-menu {
     margin: 0;
 }
 
-/* Compact chat cards for workbench tool calls: single-line rows, same inset as the generic tool blocks. */
+/* Compact chat cards for workbench tool calls: same inset as the generic tool blocks. The text may wrap
+   (the chat pane is narrow); the toggle, icon and link stay on the first line. */
 .axiom-workbench__tool-card {
     margin: 0;
     padding: 4px 0;
@@ -413,7 +414,7 @@ span.axiom-workbench__row-menu {
 
 .axiom-workbench__tool-card-row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 6px;
     min-width: 0;
 }
@@ -428,10 +429,19 @@ span.axiom-workbench__row-menu {
 }
 
 .axiom-workbench__tool-card-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    flex: 1 1 auto;
     min-width: 0;
+    overflow-wrap: anywhere;
+    padding-top: 2px;
+}
+
+.axiom-workbench__tool-card-row > :not(.axiom-workbench__tool-card-text) {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.axiom-workbench__tool-card-icon {
+    padding-top: 4px;
 }
 
 .axiom-workbench__tool-card--quiet .axiom-workbench__tool-card-text {
