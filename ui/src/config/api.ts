@@ -1791,6 +1791,20 @@ export async function getWorkflowInstance(
     return response.json();
 }
 
+/**
+ * Re-runs a failed workflow run: starts a new run of the same workflow (latest published version) for the same
+ * subject, with the original title, labels (plus rerunOf) and inputs.
+ * @param runId the failed run
+ * @returns the new run
+ */
+export async function rerunWorkflowRun(runId: number): Promise<WorkflowInstanceInfo> {
+    const response = await fetch(`${API}/workflow/runs/${runId}/rerun`, { method: "POST" });
+    if (!response.ok) {
+        throw new Error(await extractErrorMessage(response, "Failed to re-run workflow run"));
+    }
+    return response.json();
+}
+
 export async function cancelWorkflowRun(
     runId: number
 ): Promise<void> {

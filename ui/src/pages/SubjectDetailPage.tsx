@@ -5,6 +5,8 @@ import remarkGfm from "remark-gfm";
 import { markdownMermaidComponents } from "../components/MermaidBlock";
 import "../axiom-markdown.css";
 import {
+    Alert,
+    AlertActionCloseButton,
     Breadcrumb,
     BreadcrumbItem,
     Button,
@@ -22,6 +24,10 @@ import {
     Gallery,
     GalleryItem,
     Label,
+    Modal,
+    ModalBody,
+    ModalFooter,
+    ModalHeader,
     PageSection,
     Tab,
     TabTitleText,
@@ -37,6 +43,7 @@ import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import PencilAltIcon from "@patternfly/react-icons/dist/esm/icons/pencil-alt-icon";
 import CheckIcon from "@patternfly/react-icons/dist/esm/icons/check-icon";
 import TimesIcon from "@patternfly/react-icons/dist/esm/icons/times-icon";
+import RedoIcon from "@patternfly/react-icons/dist/esm/icons/redo-icon";
 import CodeBranchIcon from "@patternfly/react-icons/dist/esm/icons/code-branch-icon";
 import BugIcon from "@patternfly/react-icons/dist/esm/icons/bug-icon";
 import GithubIcon from "@patternfly/react-icons/dist/esm/icons/github-icon";
@@ -53,6 +60,7 @@ import {
     type WorkflowRunSummary,
     fetchAgents,
     fetchWorkflowRuns,
+    rerunWorkflowRun,
     fetchSubject,
     fetchSubjectMetrics,
     fetchSubjectTasks,
@@ -454,7 +462,7 @@ export function SubjectDetailPage() {
                             )}
                         </div>
                     )}
-                    {activeTab === RUNS_TAB && <RunsTimeline runs={runs} />}
+                    {activeTab === RUNS_TAB && <RunsTimeline runs={runs} onRerun={loadData} />}
                     {activeTab === 1 && (
                         <TasksTab tasks={tasks} subjectId={id} agentNames={agentNames} onRefresh={loadData} />
                     )}
@@ -506,8 +514,29 @@ export function SubjectDetailPage() {
     );
 }
 
-/** Renders the subject's workflow runs, newest first. */
-function RunsTimeline({ runs }: { runs: WorkflowRunSummary[] }) {
+/** Renders the subject's workflow runs, newest first; failed runs can be re-run. */
+function RunsTimeline({ runs, onRerun }: { runs: WorkflowRunSummary[]; onRerun: () => void }) {
+    const [confirming, setConfirming] = useState<WorkflowRunSummary | null>(null);
+    const [busy, setBusy] = useState<boolean>(false);
+    const [result, setResult] = useState<{ variant: "success" | "danger"; title: string; runId?: number } | null>(null);
+
+    const rerun = (run: WorkflowRunSummary) => {
+        setBusy(true);
+        rerunWorkflowRun(run.runId)
+            .then((created) => {
+                const newRunId: number = created.runId ?? created.id;
+                setResult({ variant: "success", title: `Started run #${newRunId} as a re-run of run #${run.runId}.`,
+                    runId: newRunId });
+                onRerun();
+            })
+            .catch((e: unknown) => setResult({ variant: "danger",
+                title: `Could not re-run run #${run.runId}: ${e instanceof Error ? e.message : String(e)}` }))
+            .finally(() => {
+                setBusy(false);
+                setConfirming(null);
+            });
+    };
+
     if (runs.length === 0) {
         return (
             <EmptyState>
@@ -516,38 +545,72 @@ function RunsTimeline({ runs }: { runs: WorkflowRunSummary[] }) {
         );
     }
     return (
-        <Table aria-label="Runs timeline" variant="compact">
-            <Thead>
-                <Tr>
-                    <Th>Status</Th>
-                    <Th>Title</Th>
-                    <Th>Workflow</Th>
-                    <Th>Started</Th>
-                    <Th>Completed</Th>
-                </Tr>
-            </Thead>
-            <Tbody>
-                {runs.map((run) => (
-                    <Tr key={run.runId}>
-                        <Td>
-                            <Label isCompact color={RUN_STATUS_COLORS[run.status] || "grey"}>
-                                {run.status}
-                            </Label>
-                        </Td>
-                        <Td>
-                            <Link to={`/runs/${run.runId}`}>{run.title}</Link>
-                        </Td>
-                        <Td>
-                            {run.definitionName || `Definition #${run.definitionId}`} v{run.definitionVersion}
-                        </Td>
-                        <Td style={{ whiteSpace: "nowrap" }}>{new Date(run.startedOn).toLocaleString()}</Td>
-                        <Td style={{ whiteSpace: "nowrap" }}>
-                            {run.completedOn ? new Date(run.completedOn).toLocaleString() : "—"}
-                        </Td>
+        <>
+            {result && (
+                <Alert isInline variant={result.variant} title={result.title} style={{ marginBottom: "16px" }}
+                    actionClose={<AlertActionCloseButton onClose={() => setResult(null)} />}
+                    actionLinks={result.runId !== undefined
+                        ? <Link to={`/runs/${result.runId}`}>View run #{result.runId}</Link> : undefined} />
+            )}
+            <Table aria-label="Runs timeline" variant="compact">
+                <Thead>
+                    <Tr>
+                        <Th>Status</Th>
+                        <Th>Title</Th>
+                        <Th>Workflow</Th>
+                        <Th>Started</Th>
+                        <Th>Completed</Th>
+                        <Th screenReaderText="Actions" />
                     </Tr>
-                ))}
-            </Tbody>
-        </Table>
+                </Thead>
+                <Tbody>
+                    {runs.map((run) => (
+                        <Tr key={run.runId}>
+                            <Td>
+                                <Label isCompact color={RUN_STATUS_COLORS[run.status] || "grey"}>
+                                    {run.status}
+                                </Label>
+                            </Td>
+                            <Td>
+                                <Link to={`/runs/${run.runId}`}>{run.title}</Link>
+                            </Td>
+                            <Td>
+                                {run.definitionName || `Definition #${run.definitionId}`} v{run.definitionVersion}
+                            </Td>
+                            <Td style={{ whiteSpace: "nowrap" }}>{new Date(run.startedOn).toLocaleString()}</Td>
+                            <Td style={{ whiteSpace: "nowrap" }}>
+                                {run.completedOn ? new Date(run.completedOn).toLocaleString() : "—"}
+                            </Td>
+                            <Td isActionCell>
+                                {run.status === "failed" && (
+                                    <Button variant="secondary" size="sm" icon={<RedoIcon />}
+                                        aria-label={`Re-run run #${run.runId}`}
+                                        onClick={() => setConfirming(run)}>
+                                        Re-run
+                                    </Button>
+                                )}
+                            </Td>
+                        </Tr>
+                    ))}
+                </Tbody>
+            </Table>
+            {confirming && (
+                <Modal isOpen variant="small" onClose={() => setConfirming(null)} aria-labelledby="rerun-title"
+                    elementToFocus="#rerun-confirm">
+                    <ModalHeader title="Re-run workflow run" labelId="rerun-title" />
+                    <ModalBody>
+                        Start a new run of <strong>{confirming.definitionName || `Definition #${confirming.definitionId}`}</strong>{" "}
+                        for this subject, using the latest published version of the workflow and the same inputs as
+                        run #{confirming.runId}? The workflow&apos;s actions run again.
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button id="rerun-confirm" variant="primary" isLoading={busy} isDisabled={busy}
+                            onClick={() => rerun(confirming)}>Re-run</Button>
+                        <Button variant="link" onClick={() => setConfirming(null)}>Cancel</Button>
+                    </ModalFooter>
+                </Modal>
+            )}
+        </>
     );
 }
 
