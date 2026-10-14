@@ -1,10 +1,11 @@
-import { type ReactNode, useState } from "react";
-import { Button, ExpandableSection, Label, Spinner } from "@patternfly/react-core";
+import { type KeyboardEvent, type ReactNode, useState } from "react";
+import { Button, Label, Spinner } from "@patternfly/react-core";
 import {
-    AngleDownIcon, AngleRightIcon, AngleUpIcon, CheckCircleIcon, ExclamationCircleIcon, ExclamationTriangleIcon,
+    AngleDownIcon, AngleUpIcon, CheckCircleIcon, ExclamationCircleIcon, ExclamationTriangleIcon,
     OutlinedLightbulbIcon,
 } from "@patternfly/react-icons";
 import type { CompositionTestRun } from "../../config/compositions";
+import { TestRunDetailModal } from "./TestRunDetailModal";
 
 /** Props for {@link TestOutputStrip}. */
 export interface TestOutputStripProps {
@@ -70,42 +71,19 @@ export function runSummary(run: CompositionTestRun): string {
     return "";
 }
 
-function Details({ run }: { run: CompositionTestRun }) {
-    const [scriptOpen, setScriptOpen] = useState<boolean>(false);
-    return (
-        <div className="axiom-test-strip__details">
-            <h4>Inputs</h4>
-            <pre>{JSON.stringify(run.inputs ?? {}, null, 2)}</pre>
-            {run.outputs && <><h4>Outputs</h4><pre>{JSON.stringify(run.outputs, null, 2)}</pre></>}
-            {(run.problems ?? []).length > 0 && (
-                <><h4>Problems</h4><ul>{run.problems?.map((p, i) => <li key={`${i}-${p}`}>{p}</li>)}</ul></>
-            )}
-            {run.stdout && <><h4>stdout</h4><pre>{run.stdout}</pre></>}
-            {run.stderr && <><h4>stderr</h4><pre>{run.stderr}</pre></>}
-            {run.resolvedScript && (
-                <ExpandableSection toggleText="Resolved script" isExpanded={scriptOpen}
-                    onToggle={(_e, open) => setScriptOpen(open)}>
-                    <pre>{run.resolvedScript}</pre>
-                </ExpandableSection>
-            )}
-        </div>
-    );
-}
-
 /**
  * Collapsible list of the composition's recent test runs, by the user and the AI.
  */
 export function TestOutputStrip({ runs, collapsed, onToggle, onOpenItem, actions, onRunSuggestion }: TestOutputStripProps) {
-    const [open, setOpen] = useState<Set<string>>(new Set<string>());
-    const toggle = (id: string) => setOpen((prev) => {
-        const next = new Set<string>(prev);
-        if (next.has(id)) {
-            next.delete(id);
-        } else {
-            next.add(id);
+    const [selectedId, setSelectedId] = useState<string | null>(null);
+    // Show the latest version of the selected run (it may still be running when the dialog opens).
+    const selected: CompositionTestRun | undefined = runs.find((r) => r.id === selectedId);
+    const onRowKey = (e: KeyboardEvent, id: string) => {
+        if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setSelectedId(id);
         }
-        return next;
-    });
+    };
     return (
         <section className="axiom-test-strip" aria-label="Test output">
             <div className="axiom-test-strip__header">
@@ -127,12 +105,14 @@ export function TestOutputStrip({ runs, collapsed, onToggle, onOpenItem, actions
                     <ul className="axiom-test-strip__list">
                         {runs.map((run) => (
                             <li key={run.id}>
-                                <div className="axiom-test-strip__row">
-                                    <Button variant="plain" size="sm" aria-label={open.has(run.id) ? "Hide details" : "Show details"}
-                                        aria-expanded={open.has(run.id)} onClick={() => toggle(run.id)}
-                                        icon={open.has(run.id) ? <AngleDownIcon /> : <AngleRightIcon />} />
+                                <div className="axiom-test-strip__row" role="button" tabIndex={0}
+                                    aria-label={`Show details of the ${run.itemName} test run`}
+                                    onClick={() => setSelectedId(run.id)} onKeyDown={(e) => onRowKey(e, run.id)}>
                                     <StatusIcon status={run.status} />
-                                    <Button variant="link" isInline onClick={() => onOpenItem(run.itemId)}>{run.itemName}</Button>
+                                    <Button variant="link" isInline onClick={(e) => {
+                                        e.stopPropagation();
+                                        onOpenItem(run.itemId);
+                                    }}>{run.itemName}</Button>
                                     {run.status === "suggested"
                                         ? <Label isCompact color="purple">Suggested by AI</Label>
                                         : run.author === "ai" && <Label isCompact color="purple">AI</Label>}
@@ -144,14 +124,20 @@ export function TestOutputStrip({ runs, collapsed, onToggle, onOpenItem, actions
                                     <span className="axiom-test-strip__summary">{runSummary(run)}</span>
                                     {run.status === "suggested" && (
                                         <Button variant="secondary" size="sm"
-                                            onClick={() => onRunSuggestion?.(run)}>Run…</Button>
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onRunSuggestion?.(run);
+                                            }}>Run…</Button>
                                     )}
                                 </div>
-                                {open.has(run.id) && <Details run={run} />}
                             </li>
                         ))}
                     </ul>
                 </div>
+            )}
+            {selected && (
+                <TestRunDetailModal run={selected} onClose={() => setSelectedId(null)} onOpenItem={onOpenItem}
+                    onRunSuggestion={onRunSuggestion} />
             )}
         </section>
     );

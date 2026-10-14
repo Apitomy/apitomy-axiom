@@ -22,13 +22,23 @@ describe("TestOutputStrip", () => {
         expect(screen.getByText("Output: Missing required field 'greeting'.")).toBeTruthy();
     });
 
-    it("opens the item and expands details", () => {
+    it("opens the item from its name without opening the details", () => {
         const onOpenItem = vi.fn();
         render(<TestOutputStrip runs={runs} collapsed={false} onToggle={vi.fn()} onOpenItem={onOpenItem} />);
         fireEvent.click(screen.getByRole("button", { name: "greet" }));
         expect(onOpenItem).toHaveBeenCalledWith(11);
-        fireEvent.click(screen.getAllByRole("button", { name: "Show details" })[0]);
-        expect(screen.getByText("warn")).toBeTruthy();
+        expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    it("opens a details dialog when a row is clicked or activated with the keyboard", () => {
+        render(<TestOutputStrip runs={runs} collapsed={false} onToggle={vi.fn()} onOpenItem={vi.fn()} />);
+        fireEvent.click(screen.getByRole("button", { name: "Show details of the greet test run" }));
+        expect(screen.getByRole("dialog")).toBeTruthy();
+        expect(screen.getByText("Test run: greet")).toBeTruthy();
+        fireEvent.click(screen.getAllByRole("button", { name: "Close" }).pop() as HTMLElement);
+        expect(screen.queryByRole("dialog")).toBeNull();
+        fireEvent.keyDown(screen.getByRole("button", { name: "Show details of the list-labels test run" }), { key: "Enter" });
+        expect(screen.getByText("Test run: list-labels")).toBeTruthy();
     });
 
     it("hides the list when collapsed", () => {
@@ -51,6 +61,7 @@ describe("TestOutputStrip", () => {
         expect(screen.getByText('Inputs: {"repo":"x"}')).toBeTruthy();
         fireEvent.click(screen.getByRole("button", { name: "Run…" }));
         expect(onRunSuggestion).toHaveBeenCalledWith(suggested);
+        expect(screen.queryByRole("dialog")).toBeNull();
     });
 
     it("summarizes a failed run with no problems by its last stderr line", () => {

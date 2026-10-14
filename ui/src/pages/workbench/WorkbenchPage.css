@@ -329,6 +329,9 @@ span.axiom-workbench__row-menu {
 
 .axiom-test-strip__row {
     display: flex;
+    cursor: pointer;
+    padding: 2px var(--pf-t--global--spacer--xs, 4px);
+    border-radius: var(--pf-t--global--border--radius--small, 4px);
     align-items: center;
     gap: var(--pf-t--global--spacer--sm, 8px);
     min-width: 0;
@@ -347,25 +350,20 @@ span.axiom-workbench__row-menu {
     white-space: nowrap;
 }
 
-.axiom-test-strip__details {
-    padding: 0 0 var(--pf-t--global--spacer--sm, 8px) 56px;
-}
-
-.axiom-test-strip__details h4 {
-    margin-top: var(--pf-t--global--spacer--sm, 8px);
-    font-weight: var(--pf-t--global--font--weight--body--bold, 600);
-}
-
-.axiom-test-strip__details pre {
-    max-height: 200px;
-    overflow: auto;
-    font-family: var(--pf-t--global--font--family--mono);
-    font-size: var(--pf-t--global--font--size--sm);
-    white-space: pre-wrap;
-    background: var(--pf-t--global--background--color--secondary--default);
-    padding: var(--pf-t--global--spacer--xs, 4px) var(--pf-t--global--spacer--sm, 8px);
-}
-
 .axiom-test-strip__empty {
     margin: var(--pf-t--global--spacer--sm, 8px) 0;
+}
+
+.axiom-test-strip__row:hover,
+.axiom-test-strip__row:focus-visible {
+    background: var(--pf-t--global--background--color--primary--hover);
+}
+
+/* Test run details dialog. */
+.axiom-test-run__section {
+    margin-top: var(--pf-t--global--spacer--md, 16px);
+}
+
+.axiom-test-run__section > h3 {
+    margin-bottom: var(--pf-t--global--spacer--xs, 4px);
 }
