@@ -45,6 +45,8 @@ export interface WorkbenchState {
     refreshItems(): Promise<void>;
     refreshComposition(): Promise<void>;
     setContent(itemId: number, content: Record<string, unknown>, revision: string): void;
+    /** Replaces one item's metadata (e.g. after toggling a subscription's enabled flag). */
+    replaceItem(item: CompositionItem): void;
     /** Removes an item from the composition, drops its loaded content and revalidates. */
     removeItem(itemId: number): Promise<void>;
     markPendingHandled(): void;
@@ -285,6 +287,10 @@ export function useWorkbench(compositionId: number): WorkbenchState {
         scheduleValidate();
     }, [scheduleValidate]);
 
+    const replaceItem = useCallback((item: CompositionItem) => {
+        setItems((prev) => prev.map((i) => (i.id === item.id ? item : i)));
+    }, []);
+
     const removeItem = useCallback(async (itemId: number) => {
         await deleteItem(compositionId, itemId);
         delete revisionsRef.current[itemId];
@@ -350,6 +356,6 @@ export function useWorkbench(compositionId: number): WorkbenchState {
     return {
         testRuns, testRunsLoaded: testRunsLoadedFor === compositionId, runTest,
         composition, items, contents, revisions, problems, pending, lastCompletedTurnId, sessionError,
-        loadContent, refreshItems, refreshComposition, setContent, removeItem, markPendingHandled, retrySession: () => startSession(),
+        loadContent, refreshItems, refreshComposition, setContent, replaceItem, removeItem, markPendingHandled, retrySession: () => startSession(),
     };
 }

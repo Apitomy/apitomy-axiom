@@ -30,7 +30,7 @@ describe("CompositionTree", () => {
     it("orders groups and rows workflow, action types, tools", () => {
         renderTree();
         const headings = [...document.querySelectorAll(".pf-v6-c-simple-list__title")].map((h) => h.textContent);
-        expect(headings).toEqual(["Workflow", "Action types", "Tools"]);
+        expect(headings).toEqual(["Workflow", "Action types", "Tools", "Subscriptions"]);
         const rows = screen.getAllByRole("button", { name: /^(wf|at|tl)\b/ }).map((b) => b.getAttribute("data-name"));
         expect(rows).toEqual(["wf", "at", "tl"]);
     });
@@ -107,6 +107,30 @@ describe("CompositionTree", () => {
         fireEvent.click(screen.getByLabelText("Actions for at"));
         fireEvent.click(await screen.findByRole("menuitem", { name: "Test…" }));
         expect(onTest).toHaveBeenCalledWith(2);
+    });
+
+    it("groups subscriptions and offers no Test… on their rows", async () => {
+        const sub = { id: 4, type: "subscription", name: "sub", contentRevision: "r", lastAuthor: "user", changed: true } as c.CompositionItem;
+        render(<CompositionTree composition={composition} items={[...items, sub]} problems={problems} lastCompletedTurnId="t1"
+            selectedItemId={undefined} onOpen={vi.fn()} onRemove={vi.fn()} onTest={vi.fn()} />);
+        const headings = [...document.querySelectorAll(".pf-v6-c-simple-list__title")].map((h) => h.textContent);
+        expect(headings).toContain("Subscriptions");
+        fireEvent.click(screen.getByLabelText("Actions for sub"));
+        expect(await screen.findByRole("menuitem", { name: "Remove" })).toBeTruthy();
+        expect(screen.queryByRole("menuitem", { name: /Test/ })).toBeNull();
+    });
+
+    it("adds a new subscription by name only", () => {
+        const fetchTools = vi.spyOn(api, "fetchTools");
+        const fetchActionTypes = vi.spyOn(api, "fetchActionTypes");
+        const onSubmit = vi.fn();
+        render(<AddItemDialog type="subscription" onSubmit={onSubmit} onClose={vi.fn()} />);
+        expect(screen.queryByText("Existing")).toBeNull();
+        fireEvent.change(screen.getByLabelText("Name"), { target: { value: "s1" } });
+        fireEvent.click(screen.getByRole("button", { name: "Add" }));
+        expect(onSubmit).toHaveBeenCalledWith({ type: "subscription", name: "s1" });
+        expect(fetchTools).not.toHaveBeenCalled();
+        expect(fetchActionTypes).not.toHaveBeenCalled();
     });
 
     it("offers Ask AI about this… on rows, disabled while the AI works", async () => {

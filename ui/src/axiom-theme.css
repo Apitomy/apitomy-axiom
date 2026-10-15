@@ -216,3 +216,7 @@
     padding-top: var(--pf-t--global--spacer--sm, 8px);
     overflow-wrap: anywhere;
 }
+
+.axiom-monospace {
+    font-family: var(--pf-t--global--font--family--mono);
+}

@@ -13,8 +13,20 @@ vi.mock("../../components/ActionTypeEditor", () => ({ ActionTypeEditor: () => <d
 const item = { id: 5, type: "tool", name: "t", contentRevision: "r0", lastAuthor: "user", changed: true, lastTurnId: "t9" } as c.CompositionItem;
 const composition = { id: 1, name: "C", turnState: "idle", applyMode: "live", createdAt: "", updatedAt: "" } as c.Composition;
 
+vi.mock("../../components/SubscriptionItemEditor", () => ({
+    SubscriptionItemEditor: ({ value, workflowName }: { value: { filterExpression?: string }; workflowName: string }) => (
+        <input aria-label="Filter expression" data-workflow={workflowName} value={value.filterExpression ?? ""} readOnly />),
+}));
+
 describe("ItemTab", () => {
     afterEach(() => vi.restoreAllMocks());
+
+    it("renders the subscription editor for a subscription item", () => {
+        render(<ItemTab compositionId={1} item={{ ...item, type: "subscription" }} content={{ name: "s", filterExpression: "true" }}
+            composition={composition} problems={[]} onSaved={() => {}} workflowName="wf" />);
+        expect(screen.getByLabelText("Filter expression")).toHaveAttribute("data-workflow", "wf");
+        expect(screen.queryByLabelText("description")).toBeNull();
+    });
     it("saves edits with the base revision", async () => {
         const save = vi.spyOn(c, "saveItem").mockResolvedValue({ ...item, contentRevision: "r1" });
         render(<ItemTab compositionId={1} item={item} content={{ name: "t", description: "" }} composition={composition}

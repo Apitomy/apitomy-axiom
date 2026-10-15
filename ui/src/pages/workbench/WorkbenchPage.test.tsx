@@ -19,7 +19,7 @@ vi.mock("./useWorkbench", () => ({
         contents: { 10: {}, 11: { name: "my-tool", parameters: [{ name: "who", required: true }],
             scriptTemplate: "echo {{who}}" } }, revisions: {}, problems: {}, pending: null, lastCompletedTurnId: undefined, sessionError: null,
         loadContent: async () => ({}), refreshItems: async () => {}, refreshComposition: async () => {},
-        setContent, removeItem: async () => {}, markPendingHandled: () => {}, retrySession: async () => {},
+        setContent, replaceItem: () => {}, removeItem: async () => {}, markPendingHandled: () => {}, retrySession: async () => {},
         testRuns, testRunsLoaded, runTest,
     }),
 }));

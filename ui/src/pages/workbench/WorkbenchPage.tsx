@@ -253,7 +253,7 @@ export function WorkbenchPage() {
     const activeItemId: number | undefined = activeTab === "workflow" ? workflow?.id : Number(activeTab);
     const activeItem: CompositionItem | undefined = wb.items.find((i) => i.id === activeItemId);
     /** The active action type or tool, if its content is loaded and it can be tested. */
-    const testable: CompositionItem | undefined = activeItem && activeItem.type !== "workflow"
+    const testable: CompositionItem | undefined = activeItem && (activeItem.type === "action-type" || activeItem.type === "tool")
         && wb.contents[activeItem.id] ? activeItem : undefined;
 
     /** Values (and no subject) to pre-fill the next test dialog with, from an AI suggestion. */
@@ -534,6 +534,7 @@ export function WorkbenchPage() {
                             <DropdownList>
                                 <DropdownItem value="action-type">Action Type</DropdownItem>
                                 <DropdownItem value="tool">Tool</DropdownItem>
+                                <DropdownItem value="subscription">Subscription</DropdownItem>
                             </DropdownList>
                         </Dropdown>
                     )}
@@ -604,6 +605,9 @@ export function WorkbenchPage() {
                                     <ItemTab key={tid} ref={itemTabRef(tid)} compositionId={id} item={item} content={wb.contents[tid]}
                                         contentRevision={wb.revisions[tid]}
                                         composition={composition} problems={wb.problems[tid]} onAskAi={askAi}
+                                        workflowName={workflowItem?.name}
+                                        workflowPublished={workflowItem?.baseItemId != null}
+                                        onItemChanged={wb.replaceItem}
                                         onSaved={(saved, content) => {
                                             wb.setContent(saved.id, content, saved.contentRevision);
                                             void wb.refreshItems().catch(console.error);

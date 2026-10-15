@@ -4,6 +4,7 @@ import { LockIcon } from "@patternfly/react-icons";
 import type { NewActionType, NewToolDefinition, ToolValidationMessage } from "../../config/api";
 import { ActionTypeEditor, type ValidationMessage } from "../../components/ActionTypeEditor";
 import { ToolEditor } from "../../components/ToolEditor";
+import { SubscriptionItemEditor } from "../../components/SubscriptionItemEditor";
 import {
     ApiError,
     type Composition,
@@ -11,8 +12,9 @@ import {
     type ConfigProblem,
     fetchItem,
     saveItem,
+    setItemEnabled,
 } from "../../config/compositions";
-import { isLockedForUser } from "./workbenchLogic";
+import { isLockedForUser, itemKindLabel } from "./workbenchLogic";
 
 const SAVE_DEBOUNCE_MS: number = 500;
 
@@ -30,6 +32,12 @@ export interface ItemTabProps {
     onAskAi?: (text: string) => void;
     /** Receives the tab's imperative handle. */
     ref?: Ref<ItemTabHandle>;
+    /** Name of the composition's workflow (targeted by subscription start rules). */
+    workflowName?: string;
+    /** Whether the composition's workflow is published. */
+    workflowPublished?: boolean;
+    /** Called with an item's updated metadata (e.g. after toggling a subscription's enabled flag). */
+    onItemChanged?: (item: CompositionItem) => void;
 }
 
 /** Imperative handle of {@link ItemTab}. */
@@ -50,7 +58,7 @@ export function toValidationMessage(p: ConfigProblem): ValidationMessage {
 }
 
 /**
- * Editor tab for an action type or tool composition item: autosaves with optimistic concurrency.
+ * Editor tab for an action type, tool or subscription composition item: autosaves with optimistic concurrency.
  */
 export function ItemTab(props: ItemTabProps) {
     const { compositionId, item, content, composition, problems } = props;
@@ -184,7 +192,18 @@ export function ItemTab(props: ItemTabProps) {
             {saveError?.kind === "error" && (
                 <Alert isInline variant="danger" title={`Could not save: ${saveError.message}`} />
             )}
-            {item.type === "tool" ? (
+            {item.type === "subscription" ? (
+                <SubscriptionItemEditor value={value} readOnly={locked} problems={messages}
+                    onChange={onChange} workflowName={props.workflowName ?? ""}
+                    published={item.baseItemId != null} workflowPublished={props.workflowPublished ?? false}
+                    enabled={item.enabled ?? false}
+                    onToggleEnabled={(enabled: boolean) => {
+                        setItemEnabled(compositionId, item.id, enabled)
+                            .then((updated) => props.onItemChanged?.(updated))
+                            .catch((e: unknown) => setSaveError({ kind: "error",
+                                message: e instanceof Error ? e.message : String(e) }));
+                    }} />
+            ) : item.type === "tool" ? (
                 // No toolId: the workbench tests tools through the Test output strip, not the editor's Test tab.
                 <ToolEditor value={value as unknown as NewToolDefinition} readOnly={locked} problems={messages}
                     onAskAiAboutProblem={askAiAboutProblem} askAiDisabled={aiWorking} fillHeight
@@ -199,14 +218,14 @@ export function ItemTab(props: ItemTabProps) {
 }
 
 /**
- * Chat text asking the AI to fix one validation problem of an action type or tool.
+ * Chat text asking the AI to fix one validation problem of an action type, tool or subscription.
  *
  * @param item the composition item the problem belongs to
  * @param message the validation problem
  * @returns the message to pre-fill in the chat
  */
 export function problemPrefill(item: CompositionItem, message: ToolValidationMessage): string {
-    const kind: string = item.type === "tool" ? "tool" : "action type";
+    const kind: string = itemKindLabel(item.type);
     const field: string = message.field ? ` (field \`${message.field}\`)` : "";
     return `Please fix this problem in ${kind} \`${item.name}\`${field}: ${message.message}`;
 }

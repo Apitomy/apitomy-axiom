@@ -10,7 +10,7 @@ import type {
     Composition, CompositionItem, CompositionItemType, ConfigProblem, ExecutionMode,
 } from "../../config/compositions";
 import { fetchActionTypes, fetchTools } from "../../config/api";
-import { isAiTouchedInTurn, isLockedForUser, itemStatus, type ItemStatus } from "./workbenchLogic";
+import { isAiTouchedInTurn, isLockedForUser, itemKindLabel, itemStatus, type ItemStatus } from "./workbenchLogic";
 
 /** Item types the user can add from the tree. */
 export type AddableType = Exclude<CompositionItemType, "workflow">;
@@ -51,6 +51,7 @@ const GROUPS: { type: CompositionItemType; title: string }[] = [
     { type: "workflow", title: "Workflow" },
     { type: "action-type", title: "Action types" },
     { type: "tool", title: "Tools" },
+    { type: "subscription", title: "Subscriptions" },
 ];
 
 function countLabel(n: number, word: string): string {
@@ -120,7 +121,7 @@ export function CompositionTree(props: CompositionTreeProps) {
                                 isRemovable={item.type !== "workflow" && !!props.onRemove
                                     && composition.turnState !== "ai-working"}
                                 onRemove={() => props.onRemove?.(item.id)}
-                                onTest={props.onTest ? () => props.onTest?.(item.id) : undefined}
+                                onTest={props.onTest && (item.type === "action-type" || item.type === "tool") ? () => props.onTest?.(item.id) : undefined}
                                 onAskAi={props.onAskAi ? () => props.onAskAi?.(item) : undefined}
                                 isAskAiDisabled={composition.turnState === "ai-working"}
                                 onClick={() => {
@@ -203,7 +204,7 @@ function ItemRow({ item, isActive, isRemovable, onClick, onRemove, onTest, onAsk
  * @returns the prefill text
  */
 export function askAiAboutItemPrefill(item: CompositionItem): string {
-    const kind: string = item.type === "tool" ? "tool" : "action type";
+    const kind: string = itemKindLabel(item.type);
     return `About ${kind} \`${item.name}\`: `;
 }
 
@@ -220,7 +221,7 @@ export interface RemoveItemDialogProps {
  * Confirms removing an action type or tool draft from the composition, warning when it is still in use.
  */
 export function RemoveItemDialog({ item, usages, onConfirm, onClose }: RemoveItemDialogProps) {
-    const label: string = item.type === "tool" ? "tool" : "action type";
+    const label: string = itemKindLabel(item.type);
     return (
         <Modal isOpen variant="small" onClose={onClose} aria-labelledby="remove-item-title">
             <ModalHeader title={`Remove ${label}`} labelId="remove-item-title" titleIconVariant="warning" />
@@ -254,7 +255,7 @@ export interface AddItemDialogProps {
 }
 
 /**
- * Dialog to add a new or existing action type or tool to the composition.
+ * Dialog to add a new or existing action type or tool, or a new subscription, to the composition.
  */
 export function AddItemDialog({ type, onSubmit, onClose }: AddItemDialogProps) {
     const [mode, setMode] = useState<"new" | "existing">("new");
@@ -262,9 +263,13 @@ export function AddItemDialog({ type, onSubmit, onClose }: AddItemDialogProps) {
     const [executionMode, setExecutionMode] = useState<ExecutionMode>("agent");
     const [options, setOptions] = useState<{ id: number; name: string }[]>([]);
     const [existing, setExisting] = useState<string>("");
-    const label: string = type === "tool" ? "tool" : "action type";
+    const label: string = itemKindLabel(type);
+    const newOnly: boolean = type === "subscription";
 
     useEffect(() => {
+        if (newOnly) {
+            return;
+        }
         const load = type === "tool" ? fetchTools(1, 1000) : fetchActionTypes(1, 1000);
         load.then((r) => {
             const opts = r.items.map((i: { id: number; name: string }) => ({ id: i.id, name: i.name }));
@@ -273,10 +278,10 @@ export function AddItemDialog({ type, onSubmit, onClose }: AddItemDialogProps) {
                 setExisting(String(opts[0].id));
             }
         }).catch(console.error);
-    }, [type]);
+    }, [type, newOnly]);
 
-    const valid: boolean = mode === "new" ? name.trim().length > 0 : existing !== "";
-    const submit = () => onSubmit(mode === "new"
+    const valid: boolean = mode === "new" || newOnly ? name.trim().length > 0 : existing !== "";
+    const submit = () => onSubmit(mode === "new" || newOnly
         ? (type === "action-type" ? { type, name: name.trim(), executionMode } : { type, name: name.trim() })
         : { type, existingItemId: Number(existing) });
 
@@ -285,13 +290,15 @@ export function AddItemDialog({ type, onSubmit, onClose }: AddItemDialogProps) {
             <ModalHeader title={`Add ${label}`} labelId="add-item-title" />
             <ModalBody>
                 <Form onSubmit={(e) => { e.preventDefault(); if (valid) { submit(); } }}>
-                    <ToggleGroup aria-label={`New or existing ${label}`}>
-                        <ToggleGroupItem text="New" buttonId="add-new" isSelected={mode === "new"}
-                            onChange={() => setMode("new")} />
-                        <ToggleGroupItem text="Existing" buttonId="add-existing" isSelected={mode === "existing"}
-                            onChange={() => setMode("existing")} />
-                    </ToggleGroup>
-                    {mode === "new" ? (
+                    {!newOnly && (
+                        <ToggleGroup aria-label={`New or existing ${label}`}>
+                            <ToggleGroupItem text="New" buttonId="add-new" isSelected={mode === "new"}
+                                onChange={() => setMode("new")} />
+                            <ToggleGroupItem text="Existing" buttonId="add-existing" isSelected={mode === "existing"}
+                                onChange={() => setMode("existing")} />
+                        </ToggleGroup>
+                    )}
+                    {mode === "new" || newOnly ? (
                         <>
                             <FormGroup label="Name" fieldId="add-name">
                                 <TextInput id="add-name" value={name} onChange={(_e, v) => setName(v)} />

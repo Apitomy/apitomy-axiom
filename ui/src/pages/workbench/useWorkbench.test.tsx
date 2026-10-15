@@ -19,6 +19,13 @@ beforeEach(() => {
 });
 
 describe("useWorkbench", () => {
+    it("replaces one item's metadata", async () => {
+        const { result } = renderHook(() => useWorkbench(1));
+        await waitFor(() => expect(result.current.items).toHaveLength(1));
+        act(() => result.current.replaceItem({ ...result.current.items[0], enabled: true }));
+        expect(result.current.items[0].enabled).toBe(true);
+    });
+
     it("loads, ensures the session and adopts a stored pending change set", async () => {
         const { result } = renderHook(() => useWorkbench(1));
         await waitFor(() => expect(result.current.contents[10]).toBeTruthy());
