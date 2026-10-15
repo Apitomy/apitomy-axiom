@@ -20,7 +20,7 @@ subscription explicitly.
 | Enabling | Sets `enabled = true` and `processEventsFrom = now` (no backlog) |
 | Republish | Never changes a published subscription's enabled state |
 | Removing a draft / deleting the composition | Published subscription untouched (same as other item types) |
-| Filter preview | Endpoint over the 200 most recent stream events; AI tool `preview_subscription` and a UI panel |
+| Filter preview | Existing `POST /subscriptions/preview` over the 200 most recent events, plus error info; AI tool `preview_subscription` and a UI panel |
 
 ## Current State (for reference)
 
@@ -58,8 +58,12 @@ subscription explicitly.
 
 ## 3. Publishing and Enabling
 
-- Publish passes subscriptions through the existing pack import, then forces `enabled = false` on newly
-  created subscriptions and preserves the current `enabled` (and `processEventsFrom`) on updated ones.
+- Publish passes subscriptions through the existing pack import. Before import it removes `enabled` and
+  `processEventsFrom` from each subscription pack item and sets them from the published subscription (when one
+  exists) or to `enabled: false` (new; `processEventsFrom` then defaults to creation time). The import's
+  update path otherwise resets `enabled` to false.
+- The published-content revision used for "changed outside the workbench" detection excludes `enabled` and
+  `processEventsFrom`, so toggling the switch is not an outside change.
 - New endpoint (contract-first):
   `PUT /compositions/{compositionId}/items/{itemId}/enabled` with body `{"enabled": boolean}`.
   - 404 when the item is not in the composition; 409 when it is not a subscription or not yet published.
@@ -71,14 +75,15 @@ subscription explicitly.
 
 ## 4. Filter Preview
 
-- New endpoint (contract-first): `POST /subscriptions/preview` with body `{"filterExpression": string}`.
-  - Evaluates the filter against the 200 most recent stream events (by `createdOn`), each as
-    `EventStreamOrchestrator.filterEventMap`, with `ConditionEvaluator` directly so errors are reported.
-  - Response: `{evaluated, matchedCount, errorCount, firstError, matches: [{id, type, ref, actor, timestamp}]}`
-    (`actor` = actor login when present; `matches` newest first, all matches within the 200).
-  - A syntactically invalid filter returns 200 with `errorCount = evaluated` and `firstError` set.
-- AI tool `preview_subscription(filterExpression)` in the workbench MCP server: formats the counts and up to
-  20 matches, one line each.
+- Reuse the existing `POST /subscriptions/preview` (`previewSubscriptionFilter`; used today by the Subscriptions
+  page) with `{"filterExpression": ..., "limit": 200}`: it evaluates the filter against the most recent events
+  (by `timestamp`) and returns each with `matched`, plus `totalMatched` over all events.
+- Extend its response (contract-first, backward compatible) with `errorCount` (events on this page whose
+  evaluation threw) and `firstError` (that first error message). Matching semantics are unchanged (an error is
+  no match), so the Subscriptions page behaves as before.
+- AI tool `preview_subscription(filterExpression)` in the workbench MCP server: calls the endpoint with
+  `limit: 200` and formats "N of M recent events match", the error count/first error, and up to 20 matches
+  (type, ref, actor login, timestamp), one line each.
 
 ## 5. Workbench AI
 
@@ -96,7 +101,7 @@ subscription explicitly.
 ## 6. UI
 
 - Composition tree: a **Subscriptions** group listing subscription items; "add" creates an empty item.
-- Subscription editor: name, description, filter expression (code editor), routing rules (type select;
+- Subscription editor: name, description, filter expression (monospace text area), routing rules (type select;
   `create-workflow` fixed to the composition's workflow), labels; and a **Matching events** panel that calls
   the preview endpoint for the current filter (debounced) and shows "N of 200 recent events match", errors, and
   the matched events linking to `/events/stream/{id}`.
