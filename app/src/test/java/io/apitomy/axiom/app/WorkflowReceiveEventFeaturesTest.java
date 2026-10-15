@@ -42,7 +42,7 @@ class WorkflowReceiveEventFeaturesTest {
     @Inject
     WorkflowWaitScheduler waitScheduler;
 
-    /** start(inputs: orderId) → receive-event(config) → end; plus an optional timeout path. */
+    /** start(inputs: subject) → receive-event(config) → end; plus an optional timeout path. */
     private static String receiveWorkflow(String eventType, String receiveConfig, boolean withTimeoutEdge) {
         String timeoutNode = withTimeoutEdge
                 ? """
@@ -59,7 +59,7 @@ class WorkflowReceiveEventFeaturesTest {
                 "id": "rx-wf", "name": "Receive WF",
                 "nodes": [
                     {"id": "s1", "type": "start", "name": "Start",
-                     "config": {"inputs": [{"name": "orderId", "type": "string"}]},
+                     "config": {"inputs": [{"name": "subject", "type": "object", "required": true}]},
                      "position": {"x": 100, "y": 100}},
                     {"id": "r1", "type": "receive-event", "name": "Await",
                      "config": %s, "position": {"x": 100, "y": 200}},
@@ -80,19 +80,20 @@ class WorkflowReceiveEventFeaturesTest {
     void correlationKeyIsStoredAndOnlyEqualKeysMatch() {
         String config = """
             {"eventType": "$TYPE", "lookback": "none",
-             "correlationKey": {"subscriptionKey": "context.orderId", "eventKey": "event.payload.orderId"}}""";
-        long[] ids = setup("Correlation Subject", receiveWorkflow("order.shipped", config, false));
-        WorkflowRunEntity run = trigger(ids, Map.of("orderId", "A-1"));
+             "correlationKey": {"subscriptionKey": "context.subject.name", "eventKey": "event.payload.orderId"}}""";
+        String orderId = "A-1-" + UUID.randomUUID();
+        long[] ids = setup(orderId, receiveWorkflow("order.shipped", config, false));
+        WorkflowRunEntity run = trigger(ids);
 
         QuarkusTransaction.requiringNew().run(() -> {
             WorkflowEventSubscriptionEntity sub = WorkflowEventSubscriptionEntity.find("runId", run.id).firstResult();
-            assertEquals("A-1", sub.correlationKey);
+            assertEquals(orderId, sub.correlationKey);
         });
 
         dispatcher.dispatchStreamEvent("order.shipped", eventMap("order.shipped", Map.of("orderId", "B-2")));
         assertRunStatus(run.id, "waiting");
 
-        dispatcher.dispatchStreamEvent("order.shipped", eventMap("order.shipped", Map.of("orderId", "A-1")));
+        dispatcher.dispatchStreamEvent("order.shipped", eventMap("order.shipped", Map.of("orderId", orderId)));
         assertRunStatus(run.id, "completed");
     }
 
@@ -102,7 +103,7 @@ class WorkflowReceiveEventFeaturesTest {
     void timedOutBranchFollowsTimeoutEdge() {
         String config = "{\"eventType\": \"$TYPE\", \"lookback\": \"none\", \"timeout\": \"PT1H\"}";
         long[] ids = setup("Timeout Subject", receiveWorkflow("never.happens", config, true));
-        WorkflowRunEntity run = trigger(ids, Map.of());
+        WorkflowRunEntity run = trigger(ids);
 
         long subId = QuarkusTransaction.requiringNew().call(() -> {
             WorkflowEventSubscriptionEntity sub = WorkflowEventSubscriptionEntity.find("runId", run.id).firstResult();
@@ -127,7 +128,7 @@ class WorkflowReceiveEventFeaturesTest {
     void notYetDueTimeoutDoesNothing() {
         String config = "{\"eventType\": \"$TYPE\", \"lookback\": \"none\", \"timeout\": \"PT1H\"}";
         long[] ids = setup("Timeout Not Due Subject", receiveWorkflow("never.happens", config, true));
-        WorkflowRunEntity run = trigger(ids, Map.of());
+        WorkflowRunEntity run = trigger(ids);
         long subId = QuarkusTransaction.requiringNew().call(() ->
                 ((WorkflowEventSubscriptionEntity) WorkflowEventSubscriptionEntity.find("runId", run.id)
                         .firstResult()).id);
@@ -145,7 +146,7 @@ class WorkflowReceiveEventFeaturesTest {
         UUID eventId = storeEvent(type, true);
         long[] ids = setup("Lookback Hit Subject", receiveWorkflow(type, "{\"eventType\": \"$TYPE\"}", false));
 
-        WorkflowRunEntity run = trigger(ids, Map.of());
+        WorkflowRunEntity run = trigger(ids);
 
         assertRunStatus(run.id, "completed");
         QuarkusTransaction.requiringNew().run(() -> assertEquals(1,
@@ -163,7 +164,7 @@ class WorkflowReceiveEventFeaturesTest {
         UUID eventId = storeEvent(type, true, "pending", false);
         long[] ids = setup("Lookback Inflight Subject", receiveWorkflow(type, "{\"eventType\": \"$TYPE\"}", false));
 
-        WorkflowRunEntity run = trigger(ids, Map.of());
+        WorkflowRunEntity run = trigger(ids);
 
         assertRunStatus(run.id, "completed");
         QuarkusTransaction.requiringNew().run(() -> assertEquals(1,
@@ -177,7 +178,7 @@ class WorkflowReceiveEventFeaturesTest {
         storeEvent(type, true, "skipped", false);
         long[] ids = setup("Lookback Skipped Subject", receiveWorkflow(type, "{\"eventType\": \"$TYPE\"}", false));
 
-        WorkflowRunEntity run = trigger(ids, Map.of());
+        WorkflowRunEntity run = trigger(ids);
 
         assertRunStatus(run.id, "waiting");
     }
@@ -187,7 +188,7 @@ class WorkflowReceiveEventFeaturesTest {
     void liveEventAfterEmptyLookbackResumesOnce() {
         String type = "lookback.live";
         long[] ids = setup("Lookback Live Subject", receiveWorkflow(type, "{\"eventType\": \"$TYPE\"}", false));
-        WorkflowRunEntity run = trigger(ids, Map.of());
+        WorkflowRunEntity run = trigger(ids);
         assertRunStatus(run.id, "waiting");
 
         assertEquals(1, dispatcher.dispatchStreamEvent(type, eventMap(type, Map.of()), null).size());
@@ -202,7 +203,7 @@ class WorkflowReceiveEventFeaturesTest {
         long[] ids = setup("Lookback None Subject",
                 receiveWorkflow(type, "{\"eventType\": \"$TYPE\", \"lookback\": \"none\"}", false));
 
-        WorkflowRunEntity run = trigger(ids, Map.of());
+        WorkflowRunEntity run = trigger(ids);
 
         assertRunStatus(run.id, "waiting");
         QuarkusTransaction.requiringNew().run(() -> assertNull(
@@ -216,7 +217,7 @@ class WorkflowReceiveEventFeaturesTest {
         storeEvent(type, false);
         long[] ids = setup("Lookback Unrouted Subject", receiveWorkflow(type, "{\"eventType\": \"$TYPE\"}", false));
 
-        WorkflowRunEntity run = trigger(ids, Map.of());
+        WorkflowRunEntity run = trigger(ids);
 
         assertRunStatus(run.id, "waiting");
         QuarkusTransaction.requiringNew().run(() -> {
@@ -248,10 +249,10 @@ class WorkflowReceiveEventFeaturesTest {
                 "id": "ht-wf", "name": "Human Title WF",
                 "nodes": [
                     {"id": "s1", "type": "start", "name": "Start",
-                     "config": {"inputs": [{"name": "orderId", "type": "string"}]},
+                     "config": {"inputs": [{"name": "subject", "type": "object", "required": true}]},
                      "position": {"x": 100, "y": 100}},
                     {"id": "h1", "type": "human-task", "name": "Review",
-                     "config": {"title": "'Review order ' += context.orderId",
+                     "config": {"title": "'Review order ' += context.subject.name",
                                 "outputs": [{"name": "ok", "type": "boolean"}]},
                      "position": {"x": 100, "y": 200}},
                     {"id": "e1", "type": "end", "name": "End", "config": {},
@@ -263,8 +264,8 @@ class WorkflowReceiveEventFeaturesTest {
                 ]
             }
             """;
-        long[] ids = setup("Human Title Subject", content);
-        WorkflowRunEntity run = trigger(ids, Map.of("orderId", "A-7"));
+        long[] ids = setup("A-7", content);
+        WorkflowRunEntity run = trigger(ids);
 
         QuarkusTransaction.requiringNew().run(() -> {
             TaskEntity task = TaskEntity.find("workflowRunId", run.id).firstResult();
@@ -363,9 +364,9 @@ class WorkflowReceiveEventFeaturesTest {
         });
     }
 
-    private WorkflowRunEntity trigger(long[] ids, Map<String, Object> inputs) {
+    private WorkflowRunEntity trigger(long[] ids) {
         return QuarkusTransaction.requiringNew().call(() ->
-                workflowExecutionService.triggerWorkflow(ids[0], ids[1], inputs));
+                workflowExecutionService.triggerWorkflow(ids[0], ids[1]));
     }
 
     private static Map<String, Object> eventMap(String type, Map<String, Object> payload) {

@@ -175,7 +175,7 @@ class SdkResourceTest {
         long definitionId = TestFixtures.createWaitDefinition("SDK Get Run");
         WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
                 workflowExecutionService.triggerWorkflow(subjectId, definitionId,
-                        new RunRequest("SDK run", Map.of("team", "core"), null, null), null));
+                        new RunRequest("SDK run", Map.of("team", "core")), null));
 
         SdkCallService.SdkCallResult result = QuarkusTransaction.requiringNew().call(() ->
                 sdkCallService.execute("axiom_get_workflow_run", Map.of("runId", run.id)));

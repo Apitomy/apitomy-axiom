@@ -516,9 +516,7 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
         }
         java.util.Map<String, String> labels = new java.util.LinkedHashMap<>(readMap(original.labels, String.class));
         labels.put("rerunOf", String.valueOf(runId));
-        java.util.Map<String, Object> inputs = readMap(original.inputs, Object.class);
-        io.apitomy.axiom.app.RunRequest request = new io.apitomy.axiom.app.RunRequest(original.title, labels,
-                inputs.isEmpty() ? null : inputs, null);
+        io.apitomy.axiom.app.RunRequest request = new io.apitomy.axiom.app.RunRequest(original.title, labels);
         io.apitomy.axiom.core.entities.StreamEventEntity event = original.triggerEventId == null ? null
                 : io.apitomy.axiom.core.entities.StreamEventEntity.findById(original.triggerEventId);
         // A run started by a stream event is re-run from that event, so it gets the same context.event.

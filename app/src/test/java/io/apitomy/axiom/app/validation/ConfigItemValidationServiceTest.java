@@ -182,10 +182,18 @@ class ConfigItemValidationServiceTest {
     @Test
     void requiredBuiltInStartInputIsRejected() throws Exception {
         String bad = VALID_WORKFLOW.replace("\"name\": \"Start\", \"config\": {}",
-                "\"name\": \"Start\", \"config\": {\"inputs\": [{\"name\": \"event\", \"required\": true}]}");
+                "\"name\": \"Start\", \"config\": {\"inputs\": [{\"name\": \"repository\", \"required\": true}]}");
         List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW, json(bad), actionTypes("do-it"));
         assertTrue(problems.stream().anyMatch(p -> p.isError() && p.code().equals("INVALID_START_INPUT")
                 && p.path().equals("content.nodes[0].config.inputs")), problems.toString());
+    }
+
+    @Test
+    void requiredEventStartInputIsAccepted() throws Exception {
+        String ok = VALID_WORKFLOW.replace("\"name\": \"Start\", \"config\": {}",
+                "\"name\": \"Start\", \"config\": {\"inputs\": [{\"name\": \"event\", \"required\": true}]}");
+        List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW, json(ok), actionTypes("do-it"));
+        assertTrue(problems.stream().noneMatch(p -> p.code().equals("INVALID_START_INPUT")), problems.toString());
     }
 
     @Test

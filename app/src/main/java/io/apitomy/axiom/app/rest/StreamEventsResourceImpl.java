@@ -212,8 +212,7 @@ public class StreamEventsResourceImpl implements StreamResource {
                     labels.put(key, value != null ? String.valueOf(value) : null));
         }
         labels.put("trigger", "manual");
-        RunRequest request = new RunRequest(data.getTitle(), labels,
-                data.getInputs() != null ? data.getInputs().getAdditionalProperties() : null, null);
+        RunRequest request = new RunRequest(data.getTitle(), labels);
         WorkflowRunEntity run = orchestrator.startRunFromEvent(event, data.getWorkflowDefinitionId(),
                 request, null);
         return runBeanMapper.toBean(run);

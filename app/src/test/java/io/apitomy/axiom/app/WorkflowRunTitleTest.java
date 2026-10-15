@@ -103,10 +103,11 @@ class WorkflowRunTitleTest {
             {
                 "id": "title-wf", "name": "Title Setter",
                 "nodes": [
-                    {"id": "s1", "type": "start", "name": "Start", "config": {}, "position": {"x": 0, "y": 0}},
+                    {"id": "s1", "type": "start", "name": "Start", "position": {"x": 0, "y": 0},
+                     "config": {"inputs": [{"name": "subject", "type": "object", "required": true}]}},
                     {"id": "a1", "type": "action", "name": "Set title", "position": {"x": 0, "y": 100},
                      "config": {"actionType": "sdk:axiom_set_workflow_run_title",
-                                "inputs": {"title": "'Checking ' += context.subjectName"}}},
+                                "inputs": {"title": "'Checking ' += context.subject.name"}}},
                     {"id": "w1", "type": "wait", "name": "Hold", "config": {"duration": "PT1H"},
                      "position": {"x": 0, "y": 200}},
                     {"id": "e1", "type": "end", "name": "End", "config": {}, "position": {"x": 0, "y": 300}}

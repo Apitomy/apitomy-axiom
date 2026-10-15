@@ -45,7 +45,6 @@ class WorkflowScheduleTriggerSchedulerTest {
         assertEquals("schedule:" + subjectName, subjects.get(0).ref);
         List<WorkflowRunEntity> runs = runsFor(subjects.get(0).id);
         assertEquals(1, runs.size());
-        assertTrue(runs.get(0).inputs.contains("high"), "static inputs are passed to the run");
         WorkflowScheduleTriggerEntity trigger = loadTrigger(triggerId);
         assertEquals("started", trigger.lastOutcome);
         assertEquals(now, trigger.lastRunAt);

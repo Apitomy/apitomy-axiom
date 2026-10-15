@@ -1,7 +1,5 @@
 package io.apitomy.axiom.app;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.entities.WorkflowScheduleTriggerEntity;
@@ -39,9 +37,6 @@ public class WorkflowScheduleTriggerScheduler {
 
     @Inject
     WorkflowExecutionService workflowExecutionService;
-
-    @Inject
-    ObjectMapper objectMapper;
 
     private volatile boolean shuttingDown = false;
 
@@ -164,15 +159,8 @@ public class WorkflowScheduleTriggerScheduler {
     }
 
     private void startRun(Attempt attempt) {
-        Map<String, Object> inputs;
-        try {
-            inputs = attempt.inputs() == null ? null
-                    : objectMapper.readValue(attempt.inputs(), new TypeReference<Map<String, Object>>() { });
-        } catch (Exception e) {
-            throw new IllegalStateException("Invalid trigger inputs: " + e.getMessage(), e);
-        }
         workflowExecutionService.triggerWorkflow(attempt.subjectId(), attempt.definitionId(),
-                new RunRequest(null, Map.of("trigger", "schedule"), inputs, null), null);
+                new RunRequest(null, Map.of("trigger", "schedule")), null);
     }
 
     /**

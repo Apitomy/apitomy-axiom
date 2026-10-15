@@ -15,7 +15,7 @@ public final class WorkflowTemplates {
     }
 
     /**
-     * Builds a new workflow with a Start node (declaring the standard subjectId, ref and event inputs), an End
+     * Builds a new workflow with a Start node (declaring every standard input, all required), an End
      * node and one default edge between them.
      *
      * @param name the workflow name
@@ -33,10 +33,9 @@ public final class WorkflowTemplates {
         start.put("type", "start");
         start.put("name", "Start");
         ArrayNode inputs = start.putObject("config").putArray("inputs");
-        input(inputs, "subjectId", "number", true, "The Axiom subject ID");
-        input(inputs, "ref", "string", true, "Full URL identifying the subject");
-        input(inputs, "event", "object", false,
-                "The triggering event (present when created by subscription routing)");
+        for (StandardInputs.StandardInput standard : StandardInputs.ALL) {
+            input(inputs, standard.name(), standard.type(), true, standard.description());
+        }
 
         ObjectNode end = nodes.addObject();
         end.put("id", "end-1");

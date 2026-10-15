@@ -388,9 +388,7 @@ public class SubjectsResourceImpl implements SubjectsResource {
                     "Missing required 'workflowDefinitionId' field", 400);
         }
         RunRequest request = new RunRequest(data.getTitle(),
-                toStringMap(data.getLabels() != null ? data.getLabels().getAdditionalProperties() : null),
-                data.getInputs() != null ? data.getInputs().getAdditionalProperties() : null,
-                null);
+                toStringMap(data.getLabels() != null ? data.getLabels().getAdditionalProperties() : null));
         WorkflowRunEntity entity = workflowExecutionService
                 .triggerWorkflow(subjectId, data.getWorkflowDefinitionId(), request, null);
         return toWorkflowInstanceBean(entity);

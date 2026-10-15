@@ -392,7 +392,8 @@ class EventWorkflowLinksTest {
                 "name": "Links Parallel WF",
                 "nodes": [
                     {"id": "s1", "type": "start", "name": "Start",
-                     "config": {}, "position": {"x": 100, "y": 100}},
+                     "config": {"inputs": [{"name": "event", "type": "object", "required": false}]},
+                     "position": {"x": 100, "y": 100}},
                     %s,
                     %s,
                     {"id": "e1", "type": "end", "name": "End",
@@ -445,7 +446,8 @@ class EventWorkflowLinksTest {
                 "name": "Links WF",
                 "nodes": [
                     {"id": "s1", "type": "start", "name": "Start",
-                     "config": {}, "position": {"x": 100, "y": 100}},
+                     "config": {"inputs": [{"name": "event", "type": "object", "required": false}]},
+                     "position": {"x": 100, "y": 100}},
                     {"id": "r1", "type": "receive-event", "name": "Await Event",
                      "config": {"eventType": "%s"},
                      "position": {"x": 100, "y": 200}},

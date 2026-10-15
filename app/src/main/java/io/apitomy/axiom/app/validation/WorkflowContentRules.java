@@ -22,7 +22,7 @@ import java.util.regex.Pattern;
 public final class WorkflowContentRules {
 
     /** Built-in Start inputs that may not be marked required. */
-    public static final Set<String> OPTIONAL_BUILT_IN_INPUTS = Set.of("subjectName", "repository", "event");
+    public static final Set<String> OPTIONAL_BUILT_IN_INPUTS = Set.of("subjectName", "repository");
     /** Valid Start input names. */
     public static final Pattern INPUT_NAME_PATTERN = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 

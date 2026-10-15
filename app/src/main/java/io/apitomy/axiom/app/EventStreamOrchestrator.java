@@ -721,7 +721,7 @@ public class EventStreamOrchestrator {
         WorkflowRunEntity run;
         try {
             run = startRunFromEvent(event, subjectId, rule.workflowDefinitionId(),
-                    new RunRequest(null, null, null, null), ledgerId);
+                    RunRequest.EMPTY, ledgerId);
         } catch (WorkflowRunConflictException e) {
             String summary = "Skipped: subject already has an active run of definition "
                     + rule.workflowDefinitionId();
@@ -752,12 +752,13 @@ public class EventStreamOrchestrator {
 
     /**
      * Starts a run of a workflow definition for a stream event: resolves (or creates) the event's subject,
-     * puts the event into the run context as {@code event}, and starts the run in its own transaction.
+     * and starts the run in its own transaction. The run's {@code event} input is the event when its Start node
+     * declares {@code event}.
      * Used both by {@code create-workflow} routing rules and by manual "run from event" requests.
      *
      * @param event        the stream event
      * @param definitionId the workflow definition to run
-     * @param request      run title, labels and inputs; its extra context is merged with the event
+     * @param request      run title and labels
      * @param ledgerId     the processing (ledger) entry that triggered the run; null for manual runs
      * @return the started run
      * @throws WorkflowRunConflictException if the subject already has an active run of the definition
@@ -770,37 +771,8 @@ public class EventStreamOrchestrator {
 
     private WorkflowRunEntity startRunFromEvent(StreamEventEntity event, Long subjectId, long definitionId,
                                                 RunRequest request, Long ledgerId) {
-        // Build the event as a JsonNode so the workflow context can access
-        // event fields via EL expressions (e.g., context.event.type,
-        // context.event.payload.issue.title). The flow engine's
-        // JsonNodeELResolver handles JsonNode navigation in EL.
-        Map<String, Object> extraContext = new HashMap<>();
-        if (request.extraContext() != null) {
-            extraContext.putAll(request.extraContext());
-        }
-        try {
-            com.fasterxml.jackson.databind.node.ObjectNode eventNode = objectMapper.createObjectNode();
-            eventNode.put("id", event.id.toString());
-            eventNode.put("type", event.type);
-            eventNode.put("source", event.source);
-            eventNode.put("eventSourceId", event.eventSourceId);
-            eventNode.put("ref", event.ref);
-            eventNode.put("timestamp", event.timestamp.toString());
-            if (event.actor != null) {
-                eventNode.set("actor", objectMapper.readTree(event.actor));
-            }
-            if (event.payload != null) {
-                eventNode.set("payload", objectMapper.readTree(event.payload));
-            }
-            extraContext.put("event", eventNode);
-        } catch (Exception e) {
-            LOG.warnf(e, "Failed to build event context for workflow creation");
-        }
-
-        RunRequest effective = new RunRequest(request.title(), request.labels(), request.inputs(),
-                extraContext);
         WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
-                workflowExecutionService.triggerWorkflow(subjectId, definitionId, effective,
+                workflowExecutionService.triggerWorkflow(subjectId, definitionId, request,
                         new EventOrigin(event.id, ledgerId)));
         LOG.infof("Created workflow (definition %d) for event %s on subject %d",
                 definitionId, event.id, subjectId);

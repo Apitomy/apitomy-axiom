@@ -549,9 +549,10 @@ class WorkflowDefinitionsResourceTest {
                 .then()
                     .statusCode(200)
                     .body("content.nodes[0].type", equalTo("start"))
-                    .body("content.nodes[0].config.inputs.size()", equalTo(3))
+                    .body("content.nodes[0].config.inputs.size()", equalTo(2))
                     .body("content.nodes[0].config.inputs.name",
-                            hasItems("subjectId", "ref", "event"));
+                            hasItems("subject", "event"))
+                    .body("content.nodes[0].config.inputs.required", everyItem(equalTo(true)));
     }
 
     // -- Helpers --

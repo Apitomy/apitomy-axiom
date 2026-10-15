@@ -1,5 +1,6 @@
 package io.apitomy.axiom.app;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.beans.OutputSchema;
@@ -26,7 +27,7 @@ import io.apitomy.flow.model.ActiveBranch;
 import io.apitomy.flow.model.EventLookback;
 import io.apitomy.flow.model.HumanTaskInfo;
 import io.apitomy.flow.model.InstanceStatus;
-import io.apitomy.flow.model.NodeConfig;
+import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.flow.model.NodeType;
 import io.apitomy.flow.model.ReceiveEventInfo;
 import io.apitomy.flow.model.WaitInfo;
@@ -50,6 +51,7 @@ import org.jboss.logging.Logger;
 
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -64,10 +66,6 @@ public class WorkflowExecutionService {
                     NodeType.WAIT, NodeType.RECEIVE_EVENT);
 
     private static final int MAX_TITLE_LENGTH = 500;
-
-    /** Built-in inputs that supplied run inputs may never override. */
-    private static final Set<String> PROTECTED_INPUTS = Set.of(
-            "subjectId", "subjectName", "ref", "repository", "event");
 
     @Inject
     ObjectMapper objectMapper;
@@ -106,8 +104,8 @@ public class WorkflowExecutionService {
     }
 
     /**
-     * Triggers a workflow on a subject with optional run metadata (title, labels, inputs) and extra
-     * context. When {@code origin} is non-null the run records the event and ledger entry that
+     * Triggers a workflow on a subject with optional run metadata (title, labels). The run's initial context
+     * holds the standard inputs its Start node declares. When {@code origin} is non-null the run records the event and ledger entry that
      * started it, and its trace records the event.
      *
      * @param subjectId    the subject to run the workflow on
@@ -126,40 +124,6 @@ public class WorkflowExecutionService {
     }
 
     /**
-     * Triggers a workflow on a subject because of a stream event (create-workflow routing).
-     *
-     * @param subjectId    the subject to run the workflow on
-     * @param definitionId the workflow definition to instantiate
-     * @param extraContext additional key-value pairs merged into the workflow
-     *                     context (e.g., event data as a JsonNode)
-     * @param origin       the event that started the run; null if not started by an event
-     * @return the created workflow run entity
-     */
-    @Transactional
-    public WorkflowRunEntity triggerWorkflow(long subjectId, long definitionId,
-                                              Map<String, Object> extraContext,
-                                              EventOrigin origin) {
-        return triggerWorkflow(subjectId, definitionId,
-                new RunRequest(null, null, null, extraContext), origin);
-    }
-
-    /**
-     * Triggers a workflow on a subject with additional context variables
-     * merged into the initial workflow context.
-     *
-     * @param subjectId    the subject to run the workflow on
-     * @param definitionId the workflow definition to instantiate
-     * @param extraContext additional key-value pairs merged into the workflow
-     *                     context (e.g., event data as a JsonNode)
-     * @return the created workflow run entity
-     */
-    @Transactional
-    public WorkflowRunEntity triggerWorkflow(long subjectId, long definitionId,
-                                              Map<String, Object> extraContext) {
-        return triggerWorkflow(subjectId, definitionId, extraContext, null);
-    }
-
-    /**
      * Triggers a workflow on a subject (e.g. manually). The run has no trigger event.
      *
      * @param subjectId    the subject to run the workflow on
@@ -169,33 +133,6 @@ public class WorkflowExecutionService {
     @Transactional
     public WorkflowRunEntity triggerWorkflow(long subjectId, long definitionId) {
         return triggerWorkflow(subjectId, definitionId, RunRequest.EMPTY, null);
-    }
-
-    /**
-     * Applies the Start node's declared input defaults: every input with a non-null {@code defaultValue} that the
-     * caller did not supply (absent or null) starts with its default. Protected inputs are never defaulted.
-     * The Flow engine treats {@code defaultValue} on start inputs as advisory, so Axiom applies it here for every
-     * way a run is started (subjects, subscriptions, stream events and schedules).
-     *
-     * @param workflow the workflow being started
-     * @param context the initial run context, updated in place
-     */
-    static void applyStartInputDefaults(Workflow workflow, Map<String, Object> context) {
-        for (WorkflowNode node : workflow.nodes()) {
-            if (node.type() != NodeType.START || !(node.typedConfig() instanceof NodeConfig.Start start)) {
-                continue;
-            }
-            for (NodeConfig.Field field : start.inputs()) {
-                String name = field.name();
-                Object defaultValue = field.defaultValue();
-                if (name == null || name.isBlank() || defaultValue == null || PROTECTED_INPUTS.contains(name)) {
-                    continue;
-                }
-                if (context.get(name) == null) {
-                    context.put(name, defaultValue);
-                }
-            }
-        }
     }
 
     private WorkflowRunEntity startRun(long subjectId, long definitionId, RunRequest request,
@@ -238,29 +175,22 @@ public class WorkflowExecutionService {
 
         validateNodeTypes(workflow);
 
-        Map<String, Object> context = new HashMap<>();
-
-        // Merge extra context (e.g., event data from create-workflow routing). Subject keys are
-        // applied afterwards so extra context can never clobber them.
-        if (request.extraContext() != null) {
-            context.putAll(request.extraContext());
+        JsonNode eventValue = null;
+        if (origin != null && origin.eventId() != null) {
+            StreamEventEntity event = StreamEventEntity.findById(origin.eventId());
+            if (event != null) {
+                eventValue = StandardInputs.eventValue(event, objectMapper);
+            }
         }
-        context.put("subjectId", subject.id);
-        context.put("subjectName", subject.name != null ? subject.name : "");
-        context.put("ref", subject.ref != null ? subject.ref : "");
-        context.put("repository", subject.repository != null ? subject.repository : "");
-        // Supplied inputs join the initial context; the engine validates them against the Start
-        // node's declared inputs. Protected inputs (subjectId, subjectName, ref, repository, event)
-        // cannot be overridden.
-        if (request.inputs() != null) {
-            request.inputs().forEach((key, value) -> {
-                if (!PROTECTED_INPUTS.contains(key)) {
-                    context.put(key, value);
-                }
-            });
+        StandardInputs.Resolution resolution = StandardInputs.resolve(workflow, subject, eventValue);
+        if (!resolution.missingRequired().isEmpty()) {
+            String message = "Cannot start workflow \"" + definition.name + "\": required input(s) not available: "
+                    + String.join(", ", resolution.missingRequired());
+            // The message constructor keeps getMessage() meaningful for schedule trigger outcomes.
+            throw new WebApplicationException(message,
+                    Response.status(400).entity(Map.of("message", message)).build());
         }
-
-        applyStartInputDefaults(workflow, context);
+        Map<String, Object> context = new HashMap<>(resolution.context());
 
         WorkflowInstance instance;
         try {
@@ -279,7 +209,9 @@ public class WorkflowExecutionService {
         entity.definitionVersion = definition.currentVersion;
         entity.title = resolveTitle(request.title());
         entity.labels = toJsonOrNull(request.labels());
-        entity.inputs = toJsonOrNull(request.inputs());
+        Map<String, Object> storedInputs = new LinkedHashMap<>(resolution.context());
+        storedInputs.remove(StandardInputs.EVENT); // the event is linked as the run's trigger
+        entity.inputs = storedInputs.isEmpty() ? null : toJsonOrNull(storedInputs);
         entity.startedOn = Instant.now();
         if (origin != null) {
             entity.triggerEventId = origin.eventId();
