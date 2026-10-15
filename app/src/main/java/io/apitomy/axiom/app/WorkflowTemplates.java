@@ -49,7 +49,7 @@ public final class WorkflowTemplates {
         edge.put("source", "start-1");
         edge.put("target", "end-1");
         edge.put("priority", 0);
-        edge.put("isDefault", true);
+        edge.put("isDefault", false);
         return workflow;
     }
 

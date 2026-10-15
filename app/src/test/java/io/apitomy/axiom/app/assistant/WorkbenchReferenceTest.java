@@ -99,4 +99,10 @@ class WorkbenchReferenceTest {
             assertTrue(reference.contains(code), code);
         }
     }
+
+    @Test
+    void blankWorkflowEdgeIsNotADefaultEdge() {
+        JsonNode edge = WorkflowTemplates.emptyWorkflow("wf", MAPPER).path("edges").get(0);
+        assertFalse(edge.path("isDefault").asBoolean(true), "a single outgoing edge must not be marked default");
+    }
 }
