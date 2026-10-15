@@ -51,4 +51,4 @@ echo "Claude: $(command -v claude 2>/dev/null || echo 'not found')"
 echo ""
 
 # Run the build with all tests enabled
-AXIOM_CLAUDE_TESTS=true mvn clean package "$@"
+mvn clean package "$@"

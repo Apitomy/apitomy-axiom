@@ -77,7 +77,8 @@ Intended for a full build including tests that need a real AI agent CLI. The scr
 ./build-all.sh
 ```
 
-Runs: `AXIOM_CLAUDE_TESTS=true mvn clean package`. Extra arguments are passed to Maven.
+Runs: `mvn clean package`, after checking for Java 25, Maven and the `claude` CLI. Extra arguments are
+passed to Maven.
 
 Tests tagged `live-cli` start a real `opencode` or `claude` CLI and may consume tokens. They are excluded by
 default. Enable them with the `live-cli-tests` profile:
