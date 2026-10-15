@@ -96,3 +96,22 @@ test("formatRunList uses the runId of run summaries", () => {
     assert.strictEqual(helpers.formatRunList([{ runId: 42, status: "running", definitionVersion: 1,
         subjectName: "S", startedOn: "s" }]), "#42 running v1 S started s");
 });
+
+test("formatSubscriptionPreview summarises matches and errors", () => {
+    const text = helpers.formatSubscriptionPreview({
+        results: [
+            { matched: true, event: { id: "e1", type: "pr.created", ref: "https://x/pull/1", actor: { login: "renovate[bot]" },
+                timestamp: "2026-10-15T10:00:00Z" } },
+            { matched: false, event: { id: "e2", type: "issue.created", ref: "https://x/issues/2", timestamp: "t" } },
+        ],
+        totalMatched: 7, errorCount: 1, firstError: "boom",
+    });
+    assert.strictEqual(text, "1 of 2 recent events match (7 in all events).\n"
+        + "1 event(s) could not be evaluated; first error: boom\n"
+        + "- e1 pr.created https://x/pull/1 by renovate[bot] at 2026-10-15T10:00:00Z");
+});
+
+test("formatSubscriptionPreview with no matches", () => {
+    assert.strictEqual(helpers.formatSubscriptionPreview({ results: [], totalMatched: 0, errorCount: 0 }),
+        "0 of 0 recent events match (0 in all events).");
+});

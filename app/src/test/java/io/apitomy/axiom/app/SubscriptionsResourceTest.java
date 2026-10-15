@@ -325,4 +325,20 @@ class SubscriptionsResourceTest {
             return def.id;
         });
     }
+
+    @Test
+    void previewReportsEvaluationErrors() {
+        QuarkusTransaction.requiringNew().run(() ->
+                createStreamEvent("preview-err-" + UUID.randomUUID(), "github", "issue.created", Instant.now()));
+        given().contentType(ContentType.JSON)
+                .body("{\"filterExpression\": \"event.type.noSuchMethod()\", \"limit\": 200}")
+                .when().post("/api/v1/subscriptions/preview")
+                .then().statusCode(200)
+                .body("errorCount", greaterThan(0))
+                .body("firstError", notNullValue());
+        given().contentType(ContentType.JSON)
+                .body("{\"filterExpression\": \"event.type != ''\", \"limit\": 200}")
+                .when().post("/api/v1/subscriptions/preview")
+                .then().statusCode(200).body("errorCount", equalTo(0));
+    }
 }

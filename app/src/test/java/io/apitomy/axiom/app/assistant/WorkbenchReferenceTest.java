@@ -59,7 +59,7 @@ class WorkbenchReferenceTest {
     void templateAllowsReadingRuns() throws Exception {
         String tools = template().path("allowedTools").toString();
         for (String tool : List.of("mcp__workbench__list_workflow_runs", "mcp__workbench__get_workflow_run",
-                "mcp__workbench__get_trace")) {
+                "mcp__workbench__get_trace", "mcp__workbench__preview_subscription")) {
             assertTrue(tools.contains("\"" + tool + "\""), tool);
         }
     }
@@ -82,6 +82,8 @@ class WorkbenchReferenceTest {
                 "Receive-event nodes must correlate",
                 "- Declare only the standard Start inputs (subject, event); require event only when the workflow "
                         + "must be started from an event.",
+                "- Never say the automation is live: published subscriptions stay disabled until the user enables "
+                        + "them in the workbench.",
                 "Never describe the output format in an agent prompt",
                 "applied by the user's editor when your turn ends",
                 "Do not set or adjust node positions; the user's editor lays out the workflow when your changes are applied.",
@@ -150,5 +152,16 @@ class WorkbenchReferenceTest {
     void blankWorkflowEdgeIsNotADefaultEdge() {
         JsonNode edge = WorkflowTemplates.emptyWorkflow("wf", MAPPER).path("edges").get(0);
         assertFalse(edge.path("isDefault").asBoolean(true), "a single outgoing edge must not be marked default");
+    }
+
+    @Test
+    void referenceExplainsWorkbenchSubscriptions() {
+        String reference = new AssistantReferenceGenerator().generateChangeSetReference();
+        assertTrue(reference.contains("# Subscriptions in the workbench"), reference);
+        assertTrue(reference.contains("upsert_item"), reference);
+        assertTrue(reference.contains("workflowDefinitionName"), reference);
+        assertTrue(reference.contains("workflow-dispatch"), reference);
+        assertTrue(reference.contains("preview_subscription"), reference);
+        assertTrue(reference.contains("Do not set `enabled`"), reference);
     }
 }

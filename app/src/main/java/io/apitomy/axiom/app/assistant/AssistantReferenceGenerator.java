@@ -96,7 +96,7 @@ public class AssistantReferenceGenerator {
      * @return Markdown workbench reference
      */
     public String generateChangeSetReference() {
-        return CHANGE_SET_REFERENCE + "\n" + expressionScopesReference();
+        return CHANGE_SET_REFERENCE + "\n" + expressionScopesReference() + "\n" + WORKBENCH_SUBSCRIPTIONS_REFERENCE;
     }
 
     /**
@@ -118,6 +118,22 @@ public class AssistantReferenceGenerator {
                 .append("event, including `subscription-filter`, need an `eventId`.\n");
         return sb.toString();
     }
+
+    private static final String WORKBENCH_SUBSCRIPTIONS_REFERENCE = """
+            # Subscriptions in the workbench
+
+            A composition may define subscriptions that start or feed its workflow. Create and change them with
+            `upsert_item` (type `subscription`): `{name, description, filterExpression, routing, labels}`.
+
+            - A `create-workflow` rule must start this composition's workflow: set `workflowDefinitionName` to the
+              workflow's name (never `workflowDefinitionId`).
+            - Add a `workflow-dispatch` subscription whenever the workflow has `receive-event` nodes; without one,
+              waiting runs never receive events.
+            - Check a filter with `preview_subscription` before relying on it, and single events with
+              `evaluate_expression` (scope `subscription-filter`).
+            - Do not set `enabled`: publishing leaves subscriptions disabled, and the user enables each one in the
+              workbench.
+            """;
 
     private static final String CHANGE_SET_REFERENCE = """
             # Workflow Change Sets

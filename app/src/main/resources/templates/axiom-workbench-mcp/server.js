@@ -244,6 +244,26 @@ function formatRun(run, failedTasks) {
  * @param {{trace: object, nodes: Array<object>}} detail the trace detail
  * @returns {string} the formatted trace
  */
+/**
+ * Formats a subscription filter preview: counts, errors and the matched events (at most 20).
+ * @param {object} r the SubscriptionPreviewResponse
+ * @returns {string} the summary
+ */
+function formatSubscriptionPreview(r) {
+    const results = r.results || [];
+    const matches = results.filter(x => x.matched);
+    const lines = [`${matches.length} of ${results.length} recent events match (${r.totalMatched ?? 0} in all events).`];
+    if (r.errorCount) {
+        lines.push(`${r.errorCount} event(s) could not be evaluated; first error: ${r.firstError}`);
+    }
+    for (const m of matches.slice(0, 20)) {
+        const e = m.event || {};
+        const actor = e.actor && e.actor.login ? ` by ${e.actor.login}` : "";
+        lines.push(`- ${e.id} ${e.type} ${e.ref}${actor} at ${e.timestamp}`);
+    }
+    return lines.join("\n");
+}
+
 function formatTrace(detail) {
     const t = detail.trace || {};
     const isFailed = n => /fail|error/i.test(String(n.status || ""));
@@ -301,7 +321,7 @@ const TOOLS = [
     },
     {
         name: "upsert_item",
-        description: "Create or replace a composition item (e.g. action-type, tool). item is the full JSON object.",
+        description: "Create or replace a composition item (action-type, tool or subscription). item is the full JSON object.",
         parameters: [
             { name: "type", type: "string", description: "Item type", required: true },
             { name: "item", type: "object", description: "The complete item JSON", required: true },
@@ -432,6 +452,16 @@ const TOOLS = [
             const r = JSON.parse(await axiomApi("POST", "/expressions/evaluate", body));
             return r.ok ? `OK (${r.valueType}): ${r.valueJson}` : `ERROR: ${r.error}`;
         },
+    },
+    {
+        name: "preview_subscription",
+        description: "Show which of the 200 most recent stream events a subscription filter expression matches, "
+            + "evaluated exactly as subscription matching does (evaluation errors are reported). Read-only.",
+        parameters: [
+            { name: "filterExpression", type: "string", description: "The subscription filterExpression", required: true },
+        ],
+        handler: async (args) => formatSubscriptionPreview(JSON.parse(await axiomApi("POST", "/subscriptions/preview",
+            { filterExpression: args.filterExpression, limit: 200 }))),
     },
     {
         name: "list_workflow_runs",
@@ -639,6 +669,7 @@ async function main() {
 
 module.exports = {
     summarizeEvent, pickPath, truncateDeep, formatProblems, suggestionBody, formatRunList, formatRun, formatTrace,
+    formatSubscriptionPreview,
 };
 
 if (require.main === module) {

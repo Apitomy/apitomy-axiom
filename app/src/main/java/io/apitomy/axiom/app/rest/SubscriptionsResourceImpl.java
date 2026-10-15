@@ -163,13 +163,24 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
 
         List<SubscriptionPreviewResult> results = new ArrayList<>();
         long totalMatched = 0;
+        int errorCount = 0;
+        String firstError = null;
 
         for (StreamEventEntity entity : entities) {
             boolean beforeCutoff = fromTs != null && entity.timestamp != null
                     && entity.timestamp.isBefore(fromTs);
             Map<String, Object> eventMap = buildEventMap(entity);
-            boolean matched = !beforeCutoff
-                    && filterEvaluator.matches(filterExpression, eventMap);
+            boolean matched = false;
+            if (!beforeCutoff) {
+                try {
+                    matched = filterEvaluator.evaluate(filterExpression, eventMap);
+                } catch (RuntimeException e) {
+                    errorCount++;
+                    if (firstError == null) {
+                        firstError = e.getMessage() != null ? e.getMessage() : e.toString();
+                    }
+                }
+            }
 
             SubscriptionPreviewResult result = new SubscriptionPreviewResult();
             result.setEvent(toStreamEventBean(entity));
@@ -191,6 +202,8 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
         response.setTotalMatched(totalMatched);
         response.setPage(pageNum);
         response.setLimit(pageSize);
+        response.setErrorCount(errorCount);
+        response.setFirstError(firstError);
         return response;
     }
 

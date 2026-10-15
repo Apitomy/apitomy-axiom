@@ -11035,6 +11035,15 @@
           "limit": {
             "format": "int32",
             "type": "integer"
+          },
+          "errorCount": {
+            "format": "int32",
+            "type": "integer",
+            "description": "Events on this page whose filter evaluation failed (counted as not matched)"
+          },
+          "firstError": {
+            "type": "string",
+            "description": "The first evaluation error on this page"
           }
         }
       },
