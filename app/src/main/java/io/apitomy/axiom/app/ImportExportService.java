@@ -850,7 +850,13 @@ public class ImportExportService {
         return n;
     }
 
-    private ObjectNode serializeSubscription(EventSubscriptionEntity e) {
+    /**
+     * Serializes a subscription in configuration-pack form.
+     *
+     * @param e the subscription
+     * @return the pack item
+     */
+    public ObjectNode serializeSubscription(EventSubscriptionEntity e) {
         ObjectNode n = objectMapper.createObjectNode();
         n.put("name", e.name);
         putIfNotNull(n, "description", e.description);

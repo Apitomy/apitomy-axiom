@@ -13,7 +13,9 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 
 import static io.restassured.RestAssured.given;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
@@ -126,5 +128,22 @@ class CompositionsResourceTest {
                 .body(Map.of("content", content, "baseRevision", tool.getString("contentRevision"), "turnId", " "))
                 .put(BASE + "/{id}/items/{itemId}", id, tool.getLong("id")).then().statusCode(200)
                 .body("lastAuthor", equalTo("user")).body("lastTurnId", nullValue());
+    }
+
+    @Test
+    void addsABlankSubscriptionItem() {
+        long compositionId = createComposition();
+        JsonPath item = addItem(compositionId, "subscription", "on-pr");
+        assertEquals("subscription", item.getString("type"));
+        assertEquals("on-pr", item.getString("name"));
+        assertEquals(0, item.getList("content.routing").size());
+        given().get(BASE + "/{id}/items", compositionId).then().statusCode(200).body("type", hasItem("subscription"));
+    }
+
+    @Test
+    void existingSubscriptionsCannotBeAdded() {
+        long compositionId = createComposition();
+        given().contentType(ContentType.JSON).body(Map.of("type", "subscription", "existingItemId", 1))
+                .post(BASE + "/{id}/items", compositionId).then().statusCode(400);
     }
 }

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.app.WorkflowTemplates;
 import io.apitomy.axiom.app.validation.ConfigItemType;
+import io.apitomy.axiom.core.events.model.RoutingRule;
 import io.apitomy.flow.changeset.ContentRevision;
 
 import java.util.Arrays;
@@ -22,7 +23,8 @@ public final class CompositionItems {
 
     /** Item types a composition can hold. */
     public static final Set<ConfigItemType> SUPPORTED = Collections.unmodifiableSet(
-            EnumSet.of(ConfigItemType.WORKFLOW, ConfigItemType.ACTION_TYPE, ConfigItemType.TOOL));
+            EnumSet.of(ConfigItemType.WORKFLOW, ConfigItemType.ACTION_TYPE, ConfigItemType.TOOL,
+                    ConfigItemType.SUBSCRIPTION));
 
     private static final String TOOL_PREFIX = "mcp__axiom-tools__";
     private static final String SDK_PREFIX = "sdk:";
@@ -96,6 +98,11 @@ public final class CompositionItems {
         ObjectNode item = mapper.createObjectNode();
         item.put("name", name);
         item.put("description", "");
+        if (type == ConfigItemType.SUBSCRIPTION) {
+            item.put("filterExpression", "");
+            item.putArray("routing");
+            return item;
+        }
         if (type == ConfigItemType.ACTION_TYPE) {
             String mode = executionMode == null ? "node" : executionMode;
             item.put("executionMode", mode);
@@ -140,13 +147,14 @@ public final class CompositionItems {
      * Returns the configuration-pack array that holds items of a type.
      *
      * @param type the item type (must be supported)
-     * @return {@code workflowDefinitions}, {@code actionTypes} or {@code tools}
+     * @return {@code workflowDefinitions}, {@code actionTypes}, {@code tools} or {@code subscriptions}
      */
     public static String packArray(ConfigItemType type) {
         return switch (type) {
             case WORKFLOW -> "workflowDefinitions";
             case ACTION_TYPE -> "actionTypes";
             case TOOL -> "tools";
+            case SUBSCRIPTION -> "subscriptions";
             default -> throw new IllegalArgumentException("Item type not supported in compositions: " + type);
         };
     }
@@ -187,6 +195,24 @@ public final class CompositionItems {
             String trimmed = entry.trim();
             if (trimmed.startsWith(TOOL_PREFIX) && trimmed.length() > TOOL_PREFIX.length()) {
                 names.add(trimmed.substring(TOOL_PREFIX.length()));
+            }
+        }
+        return names;
+    }
+
+    /**
+     * Returns the workflow names a subscription starts: the {@code workflowDefinitionName} of each
+     * {@code create-workflow} routing rule.
+     *
+     * @param subscription the subscription item content
+     * @return the referenced workflow names
+     */
+    public static Set<String> referencedWorkflows(JsonNode subscription) {
+        Set<String> names = new LinkedHashSet<>();
+        for (JsonNode rule : subscription.path("routing")) {
+            String name = rule.path("workflowDefinitionName").asText("");
+            if (RoutingRule.TYPE_CREATE_WORKFLOW.equals(rule.path("type").asText()) && !name.isBlank()) {
+                names.add(name);
             }
         }
         return names;

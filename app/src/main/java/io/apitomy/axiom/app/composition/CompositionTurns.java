@@ -542,7 +542,7 @@ public class CompositionTurns {
     private static ConfigItemType agentType(String type) {
         ConfigItemType itemType = type == null ? null : CompositionItems.supportedType(type);
         if (itemType == null) {
-            throw new IllegalArgumentException("'type' must be workflow, action-type or tool");
+            throw new IllegalArgumentException("'type' must be workflow, action-type, tool or subscription");
         }
         return itemType;
     }

@@ -19,7 +19,7 @@ public class CompositionItemEntity extends PanacheEntity {
     @Column(name = "composition_id", nullable = false)
     public Long compositionId;
 
-    /** The {@code ConfigItemType} JSON name: workflow, action-type or tool. */
+    /** The {@code ConfigItemType} JSON name: workflow, action-type, tool or subscription. */
     @Column(name = "item_type", nullable = false)
     public String itemType;
 

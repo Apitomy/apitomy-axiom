@@ -104,4 +104,29 @@ class CompositionItemsTest {
         assertEquals(Set.of("x"), CompositionItems.referencedTools(asArray));
         assertFalse(CompositionItems.referencedTools(MAPPER.readTree("{}")).iterator().hasNext());
     }
+
+    @Test
+    void subscriptionIsSupportedWithABlankItemAndPackArray() {
+        assertEquals(ConfigItemType.SUBSCRIPTION, CompositionItems.supportedType("subscription"));
+        assertEquals("subscriptions", CompositionItems.packArray(ConfigItemType.SUBSCRIPTION));
+        ObjectNode blank = CompositionItems.blank(ConfigItemType.SUBSCRIPTION, "on-pr", new ObjectMapper());
+        assertEquals("on-pr", blank.path("name").asText());
+        assertEquals("", blank.path("description").asText());
+        assertEquals("", blank.path("filterExpression").asText());
+        assertTrue(blank.path("routing").isArray());
+        assertEquals(0, blank.path("routing").size());
+        assertFalse(blank.has("enabled"));
+        assertFalse(blank.has("scriptTemplate"));
+    }
+
+    @Test
+    void referencedWorkflowsAreTheCreateWorkflowNames() throws Exception {
+        JsonNode sub = new ObjectMapper().readTree("""
+            {"name": "s", "routing": [
+              {"type": "create-workflow", "workflowDefinitionName": "wf-a"},
+              {"type": "workflow-dispatch"},
+              {"type": "create-workflow", "workflowDefinitionId": 7}]}
+            """);
+        assertEquals(Set.of("wf-a"), CompositionItems.referencedWorkflows(sub));
+    }
 }

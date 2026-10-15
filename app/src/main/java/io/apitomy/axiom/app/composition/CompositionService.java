@@ -3,12 +3,14 @@ package io.apitomy.axiom.app.composition;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.app.ImportExportService;
 import io.apitomy.axiom.app.validation.ConfigItemType;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.CompositionEntity;
 import io.apitomy.axiom.core.entities.CompositionItemEntity;
 import io.apitomy.axiom.core.entities.CompositionRevisionEntity;
+import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.events.SseEvent;
@@ -199,7 +201,8 @@ public class CompositionService {
         return switch (itemType) {
             case "workflow" -> 0;
             case "action-type" -> 1;
-            default -> 2;
+            case "tool" -> 2;
+            default -> 3;
         };
     }
 
@@ -347,6 +350,10 @@ public class CompositionService {
     @Transactional
     public CompositionItemEntity addExisting(long compositionId, ConfigItemType type, long existingId) {
         requireSupported(type);
+        if (type == ConfigItemType.SUBSCRIPTION) {
+            throw new IllegalArgumentException("Existing subscriptions cannot be added to a composition; "
+                    + "create a new subscription instead");
+        }
         String name = publishedName(type, existingId);
         if (name == null) {
             throw new IllegalArgumentException("No " + type.jsonName() + " with id " + existingId);
@@ -561,6 +568,10 @@ public class CompositionService {
                 ToolDefinitionEntity e = ToolDefinitionEntity.findById(id);
                 yield e == null ? null : e.name;
             }
+            case SUBSCRIPTION -> {
+                EventSubscriptionEntity e = EventSubscriptionEntity.findById(id);
+                yield e == null ? null : e.name;
+            }
             default -> null;
         };
     }
@@ -574,6 +585,14 @@ public class CompositionService {
             }
             case ACTION_TYPE -> importExportService.serializeActionType(ActionTypeEntity.findById(id));
             case TOOL -> importExportService.serializeTool(ToolDefinitionEntity.findById(id));
+            case SUBSCRIPTION -> {
+                // enabled and processEventsFrom are runtime state, changed by the Enabled switch, not content.
+                ObjectNode content = importExportService.serializeSubscription(
+                        EventSubscriptionEntity.findById(id));
+                content.remove("enabled");
+                content.remove("processEventsFrom");
+                yield content;
+            }
             default -> throw new IllegalArgumentException("Unsupported type " + type);
         };
     }

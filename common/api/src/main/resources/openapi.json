@@ -6704,7 +6704,8 @@
             "enum": [
               "workflow",
               "action-type",
-              "tool"
+              "tool",
+              "subscription"
             ],
             "type": "string"
           },
@@ -11219,7 +11220,8 @@
             "enum": [
               "workflow",
               "action-type",
-              "tool"
+              "tool",
+              "subscription"
             ],
             "type": "string"
           },
@@ -11270,7 +11272,8 @@
             "enum": [
               "workflow",
               "action-type",
-              "tool"
+              "tool",
+              "subscription"
             ],
             "type": "string"
           },
@@ -11378,7 +11381,8 @@
             "enum": [
               "workflow",
               "action-type",
-              "tool"
+              "tool",
+              "subscription"
             ],
             "type": "string"
           },
