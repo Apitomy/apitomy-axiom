@@ -121,6 +121,11 @@ class WorkflowRunTitleTest {
         long runId = QuarkusTransaction.requiringNew().call(() ->
                 workflowExecutionService.triggerWorkflow(subjectId, definitionId, RunRequest.EMPTY, null).id);
         assertEquals("Checking title-from-workflow", titleOf(runId));
+        // The node's outputs (success, output and the function's result fields) join the run context.
+        given().when().get("/api/v1/workflow/runs/" + runId)
+                .then().statusCode(200)
+                .body("context.success", equalTo(true))
+                .body("context.title", equalTo("Checking title-from-workflow"));
     }
 
     /**

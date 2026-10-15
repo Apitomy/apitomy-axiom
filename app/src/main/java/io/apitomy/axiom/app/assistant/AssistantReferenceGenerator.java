@@ -22,6 +22,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /** Builds the Configuration Assistant's reference text from code and the bundled examples. */
@@ -226,10 +227,40 @@ public class AssistantReferenceGenerator {
                 .append("(the triggering or received event).\n\n")
                 .append("Start inputs: names must match `").append(WorkflowContentRules.INPUT_NAME_PATTERN.pattern())
                 .append("`; these built-in inputs may not be marked required: ")
-                .append(codeList(WorkflowContentRules.OPTIONAL_BUILT_IN_INPUTS)).append(".\n\n")
-                .append("An `action` node's `actionType` may be `sdk:<function>` for: ")
-                .append(codeList(SdkFunctionRegistry.sdkCallFunctions().stream().map(SdkFunction::name).toList()))
-                .append(".\n\n");
+                .append(codeList(WorkflowContentRules.OPTIONAL_BUILT_IN_INPUTS)).append(".\n\n");
+        appendSdkActionNodes(sb);
+    }
+
+    /** Parameters the engine fills in from the node's own run when an {@code sdk:} node does not map them. */
+    private static final Set<String> ENGINE_FILLED_SDK_PARAMS = Set.of("subjectId", "runId");
+
+    /**
+     * Documents {@code sdk:} action nodes: each SDK function usable as a node, with its parameters and
+     * description (from the SDK function registry), what the engine fills in, the node's outputs, and an
+     * example.
+     */
+    private static void appendSdkActionNodes(StringBuilder sb) {
+        sb.append("### SDK action nodes\n\n")
+                .append("An `action` node can call an Axiom SDK function directly with `actionType` ")
+                .append("`sdk:<function>`; no action type is needed. Map the parameters in `config.inputs`. ")
+                .append("Parameters marked `?` may be left unmapped. `subjectId` and `runId` are filled in ")
+                .append("from the node's own run; map them only to act on another subject or run.\n\n");
+        for (SdkFunction fn : SdkFunctionRegistry.sdkCallFunctions()) {
+            String params = fn.parameters().stream()
+                    .map(p -> ENGINE_FILLED_SDK_PARAMS.contains(p.name()) || !p.required() ? p.name() + "?" : p.name())
+                    .collect(Collectors.joining(", "));
+            sb.append("- `sdk:").append(fn.name()).append("(").append(params).append(")` — ")
+                    .append(fn.description()).append("\n");
+        }
+        sb.append("\nOutputs join the run context without being declared: `context.success`, `context.output` ")
+                .append("(a message) and the function's result fields (for example `context.title` after ")
+                .append("`axiom_set_workflow_run_title`). A failed call fails the node, and so the run.\n\n")
+                .append("Example — title the run after its subject:\n\n")
+                .append("```json\n")
+                .append("{\"id\": \"set-title\", \"type\": \"action\", \"name\": \"Set run title\",\n")
+                .append(" \"config\": {\"actionType\": \"sdk:axiom_set_workflow_run_title\",\n")
+                .append("            \"inputs\": {\"title\": \"'Checking ' += context.subjectName\"}}}\n")
+                .append("```\n\n");
     }
 
     private static void appendActionTypes(StringBuilder sb) {

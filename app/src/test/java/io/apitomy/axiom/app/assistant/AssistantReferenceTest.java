@@ -56,6 +56,21 @@ class AssistantReferenceTest {
     }
 
     @Test
+    void referenceDocumentsSdkActionNodes() {
+        String ref = generator.generate();
+        assertTrue(ref.contains("### SDK action nodes"), ref);
+        // Each function: signature (engine-filled parameters marked ?) and its description.
+        assertTrue(ref.contains("- `sdk:axiom_set_workflow_run_title(runId?, title)` — Set a workflow run's title"), ref);
+        assertTrue(ref.contains("- `sdk:axiom_add_subject_label(subjectId?, label)`"), ref);
+        assertTrue(ref.contains("`subjectId` and `runId` are filled in from the node's own run"), ref);
+        assertTrue(ref.contains("Parameters marked `?` may be left unmapped"), ref);
+        assertTrue(ref.contains("`context.success`"), ref);
+        assertTrue(ref.contains("A failed call fails the node"), ref);
+        assertTrue(ref.contains("\"actionType\": \"sdk:axiom_set_workflow_run_title\""), ref);
+        assertFalse(ref.contains("may be `sdk:<function>` for:"), "the bare name list is replaced");
+    }
+
+    @Test
     void referenceDocumentsNodeMode() {
         String ref = generator.generate();
         assertTrue(ref.contains("run(inputs, ctx)"), ref);

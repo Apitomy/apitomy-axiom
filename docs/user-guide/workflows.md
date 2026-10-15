@@ -253,6 +253,10 @@ The **Axiom SDK** is a set of functions for reading and updating Axiom data. The
 
 - **SDK action nodes** — every SDK function appears in the workflow editor palette (as `SDK: …`, stored as
   `sdk:<function>`) and runs directly, without an AI agent
+  - `subjectId` and `runId` default to the node's own run, so they can usually be left unmapped
+  - the node's outputs join the run context without being declared: `context.success`, `context.output`
+    (a message) and the function's result fields (for example `context.title`)
+  - a failed call (for example an over-long title) fails the node, and so the run
 - **Agent tools** — an action type or session template can allow `mcp__axiom-sdk__<function>` in its
   Allowed Tools, making the function available to the agent through the `axiom-sdk` MCP server
 
