@@ -408,6 +408,19 @@ class WorkflowInstanceResourceTest {
     // -- Helpers --
 
     @Test
+    void aRunStartedWithoutATitleHasNoTitle() {
+        int subjectId = createSubject("WF No Title Subject");
+        int definitionId = createAndPublishDefinition("No Title WF");
+        given().contentType(ContentType.JSON)
+                .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
+                .when().post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                .then().statusCode(200)
+                .body("title", nullValue())
+                .body("definitionName", equalTo("No Title WF"))
+                .body("subjectName", equalTo("WF No Title Subject"));
+    }
+
+    @Test
     void appliesStartInputDefaultsForInputsNotSupplied() {
         int subjectId = createSubject("WF Start Defaults Subject");
         int definitionId = createAndPublishStartInputsDefinition("Start Defaults WF");

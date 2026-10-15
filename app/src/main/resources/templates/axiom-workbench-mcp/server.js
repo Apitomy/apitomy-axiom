@@ -198,8 +198,8 @@ function compactJson(value) {
  */
 function formatRunList(runs) {
     if (!runs || runs.length === 0) return "No runs found.";
-    return runs.map(r => `#${r.runId ?? r.id} ${r.status} v${r.definitionVersion} ${r.title || ""} `
-        + `started ${r.startedOn}` + (r.currentNodeName ? ` at ${r.currentNodeName}` : "")).join("\n");
+    return runs.map(r => `#${r.runId ?? r.id} ${r.status} v${r.definitionVersion} ${r.subjectName || ""}`
+        + (r.title ? ` "${r.title}"` : "") + ` started ${r.startedOn}` + (r.currentNodeName ? ` at ${r.currentNodeName}` : "")).join("\n");
 }
 
 /**
@@ -209,7 +209,9 @@ function formatRunList(runs) {
  * @returns {string} the formatted run
  */
 function formatRun(run, failedTasks) {
-    const lines = [`Run #${run.id}: ${run.title || ""}`, `status: ${run.status}`];
+    const lines = [run.title ? `Run #${run.id}: ${run.title}` : `Run #${run.id}`];
+    if (run.subjectName) lines.push(`subject: ${run.subjectName}`);
+    lines.push(`status: ${run.status}`);
     if (run.definitionVersion !== undefined && run.definitionVersion !== null) {
         lines.push(`version: ${run.definitionVersion}`);
     }

@@ -77,6 +77,10 @@ public class WorkflowRunBeanMapper {
         if (definition != null) {
             bean.setDefinitionName(definition.name);
         }
+        SubjectEntity subject = SubjectEntity.findById(entity.subjectId);
+        if (subject != null) {
+            bean.setSubjectName(subject.name);
+        }
 
         WorkflowDefinitionVersionEntity version =
                 WorkflowDefinitionVersionEntity

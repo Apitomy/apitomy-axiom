@@ -9979,6 +9979,10 @@
             "format": "int64",
             "type": "integer"
           },
+          "subjectName": {
+            "type": "string",
+            "description": "Name of the subject the run belongs to"
+          },
           "definitionId": {
             "format": "int64",
             "type": "integer"
@@ -9991,7 +9995,8 @@
             "type": "string"
           },
           "title": {
-            "type": "string"
+            "type": "string",
+            "description": "Title the run was started with; absent when none was given"
           },
           "labels": {
             "type": "object",
@@ -10148,7 +10153,8 @@
             "type": "string"
           },
           "title": {
-            "type": "string"
+            "type": "string",
+            "description": "Title the run was started with; absent when none was given"
           },
           "labels": {
             "type": "object",

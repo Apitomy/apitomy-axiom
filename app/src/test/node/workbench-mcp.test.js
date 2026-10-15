@@ -41,14 +41,14 @@ test("suggestionBody rejects an unknown type", () => {
     }
 });
 
-test("formatRunList renders one line per run with the current node when known", () => {
+test("formatRunList renders one line per run: subject, optional title, current node", () => {
     const text = helpers.formatRunList([
-        { id: 7, status: "failed", definitionVersion: 3, title: "Fix bug", startedOn: "2026-10-14T10:00:00Z",
-            currentNodeName: "Build" },
-        { id: 6, status: "completed", definitionVersion: 2, title: "Other", startedOn: "2026-10-13T10:00:00Z" },
+        { id: 7, status: "failed", definitionVersion: 3, subjectName: "PR 12", title: "Fix bug",
+            startedOn: "2026-10-14T10:00:00Z", currentNodeName: "Build" },
+        { id: 6, status: "completed", definitionVersion: 2, subjectName: "PR 11", startedOn: "2026-10-13T10:00:00Z" },
     ]);
-    assert.strictEqual(text, "#7 failed v3 Fix bug started 2026-10-14T10:00:00Z at Build\n"
-        + "#6 completed v2 Other started 2026-10-13T10:00:00Z");
+    assert.strictEqual(text, "#7 failed v3 PR 12 \"Fix bug\" started 2026-10-14T10:00:00Z at Build\n"
+        + "#6 completed v2 PR 11 started 2026-10-13T10:00:00Z");
     assert.strictEqual(helpers.formatRunList([]), "No runs found.");
 });
 
@@ -73,6 +73,11 @@ test("formatRun says when a failed task has no log", () => {
     assert.match(text, /log: none/);
 });
 
+test("formatRun omits the title when the run has none and names the subject", () => {
+    const text = helpers.formatRun({ id: 3, status: "running", subjectName: "PR 9", history: [] }, []);
+    assert.match(text, /^Run #3\nsubject: PR 9\nstatus: running/);
+});
+
 test("formatTrace lists failed nodes first", () => {
     const text = helpers.formatTrace({
         trace: { traceId: "tr-1", status: "failed", summary: "s" },
@@ -88,6 +93,6 @@ test("formatTrace lists failed nodes first", () => {
 });
 
 test("formatRunList uses the runId of run summaries", () => {
-    assert.strictEqual(helpers.formatRunList([{ runId: 42, status: "running", definitionVersion: 1, title: "T",
-        startedOn: "s" }]), "#42 running v1 T started s");
+    assert.strictEqual(helpers.formatRunList([{ runId: 42, status: "running", definitionVersion: 1,
+        subjectName: "S", startedOn: "s" }]), "#42 running v1 S started s");
 });

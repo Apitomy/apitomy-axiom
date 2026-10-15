@@ -14,6 +14,7 @@ import java.util.UUID;
 import jakarta.ws.rs.WebApplicationException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -28,17 +29,17 @@ class WorkflowRunMetadataTest {
     WorkflowExecutionService workflowExecutionService;
 
     /**
-     * When no title is supplied the default "&lt;definition&gt; — &lt;subject&gt;" title is used.
+     * A run started without a title has none; nothing is generated from the definition and subject.
      */
     @Test
-    void defaultTitleCombinesDefinitionAndSubject() {
+    void runWithoutTitleHasNoTitle() {
         long subjectId = TestFixtures.createSubject("meta-default");
         long defId = TestFixtures.createWaitDefinition("Meta Def");
 
         WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
                 workflowExecutionService.triggerWorkflow(subjectId, defId, RunRequest.EMPTY, null));
 
-        assertEquals("Meta Def — meta-default", run.title);
+        assertNull(run.title);
     }
 
     /**
@@ -72,20 +73,6 @@ class WorkflowRunMetadataTest {
                 QuarkusTransaction.requiringNew().call(() ->
                         workflowExecutionService.triggerWorkflow(subjectId, defId, request, null)));
         assertEquals(400, ex.getResponse().getStatus());
-    }
-
-    /**
-     * A default title longer than 500 characters is truncated to 500.
-     */
-    @Test
-    void longDefaultTitleIsTruncated() {
-        long subjectId = TestFixtures.createSubject("s".repeat(250));
-        long defId = TestFixtures.createWaitDefinition("d".repeat(250));
-
-        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
-                workflowExecutionService.triggerWorkflow(subjectId, defId, RunRequest.EMPTY, null));
-
-        assertEquals(500, run.title.length());
     }
 
     /**

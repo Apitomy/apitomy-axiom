@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -485,7 +486,7 @@ class WorkflowRunsResourceTest {
                 .body("{\"workflowDefinitionId\": %d, \"labels\": {\"filter\": \"beta\"}}"
                         .formatted(definitionId))
                 .when().post(SUBJECTS_PATH + "/" + subjectB + "/workflow")
-                .then().statusCode(200).body("title", equalTo("Filter WF — filter-subject-b"));
+                .then().statusCode(200).body("title", nullValue());
 
         given()
                 .when().get("/api/v1/workflow/runs?label=filter:alpha&definitionId=" + definitionId)

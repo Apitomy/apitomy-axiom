@@ -277,7 +277,7 @@ public class WorkflowExecutionService {
         entity.subjectId = subjectId;
         entity.definitionId = definitionId;
         entity.definitionVersion = definition.currentVersion;
-        entity.title = resolveTitle(request.title(), definition.name, subject.name);
+        entity.title = resolveTitle(request.title());
         entity.labels = toJsonOrNull(request.labels());
         entity.inputs = toJsonOrNull(request.inputs());
         entity.startedOn = Instant.now();
@@ -1175,17 +1175,17 @@ public class WorkflowExecutionService {
         }
     }
 
-    private static String resolveTitle(String requested, String definitionName, String subjectName) {
-        if (requested != null && !requested.isBlank()) {
-            if (requested.length() > MAX_TITLE_LENGTH) {
-                throw new WebApplicationException(Response.status(400)
-                        .entity(Map.of("message", "Run title must be at most " + MAX_TITLE_LENGTH + " characters"))
-                        .build());
-            }
-            return requested;
+    private static String resolveTitle(String requested) {
+        if (requested == null || requested.isBlank()) {
+            // No generated title: lists show the workflow and subject, which is all a default title said.
+            return null;
         }
-        String title = definitionName + " — " + subjectName;
-        return title.length() > MAX_TITLE_LENGTH ? title.substring(0, MAX_TITLE_LENGTH) : title;
+        if (requested.length() > MAX_TITLE_LENGTH) {
+            throw new WebApplicationException(Response.status(400)
+                    .entity(Map.of("message", "Run title must be at most " + MAX_TITLE_LENGTH + " characters"))
+                    .build());
+        }
+        return requested.trim();
     }
 
     private String toJsonOrNull(Map<String, ?> values) {
