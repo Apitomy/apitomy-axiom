@@ -1,5 +1,6 @@
 package io.apitomy.axiom.app.validation;
 
+import io.apitomy.axiom.app.StandardInputs;
 import io.apitomy.flow.engine.ConditionEvaluator;
 import io.apitomy.flow.model.NodeConfig;
 import io.apitomy.flow.model.NodeType;
@@ -21,8 +22,6 @@ import java.util.regex.Pattern;
 /** Rules for workflow content shared by publish and configuration validation. */
 public final class WorkflowContentRules {
 
-    /** Built-in Start inputs that may not be marked required. */
-    public static final Set<String> OPTIONAL_BUILT_IN_INPUTS = Set.of("subjectName", "repository");
     /** Valid Start input names. */
     public static final Pattern INPUT_NAME_PATTERN = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 
@@ -30,8 +29,8 @@ public final class WorkflowContentRules {
     }
 
     /**
-     * Checks Start node input declarations: every name must be a valid identifier, and the built-in inputs
-     * Axiom does not always provide may not be marked required.
+     * Checks Start node input declarations: every name must be a valid identifier and a standard input,
+     * declared with the standard type and no defaultValue.
      *
      * @param workflow the workflow
      * @return the first violation message, or empty if valid
@@ -56,9 +55,20 @@ public final class WorkflowContentRules {
                         + "Names must start with a letter or underscore and "
                         + "contain only letters, digits and underscores.");
             }
-            if (Boolean.TRUE.equals(input.get("required")) && OPTIONAL_BUILT_IN_INPUTS.contains(name)) {
-                return Optional.of("Start node input '" + name + "' cannot be marked "
-                        + "required because Axiom does not always provide it.");
+            Optional<StandardInputs.StandardInput> standard = StandardInputs.find(name);
+            if (standard.isEmpty()) {
+                return Optional.of("Start node input '" + name + "' is not a standard input. A Start node may "
+                        + "declare only: " + StandardInputs.ALL.stream().map(StandardInputs.StandardInput::name)
+                                .collect(java.util.stream.Collectors.joining(", ")) + ".");
+            }
+            Object type = input.get("type");
+            if (type != null && !type.toString().isBlank() && !standard.get().type().equals(type.toString())) {
+                return Optional.of("Start node input '" + name + "' must have type '" + standard.get().type()
+                        + "', not '" + type + "'.");
+            }
+            if (input.containsKey("defaultValue") && input.get("defaultValue") != null) {
+                return Optional.of("Start node input '" + name + "' cannot declare a defaultValue; Axiom "
+                        + "provides standard inputs itself.");
             }
         }
         return Optional.empty();
@@ -93,9 +103,8 @@ public final class WorkflowContentRules {
         }
     }
 
-    /** Context keys every run provides. */
-    public static final Set<String> BUILT_IN_CONTEXT_KEYS =
-            Set.of("subjectId", "subjectName", "ref", "repository", "event");
+    /** Context keys a run can be given at start: the standard input names. */
+    public static final Set<String> BUILT_IN_CONTEXT_KEYS = StandardInputs.names();
 
     private static final Pattern CONTEXT_KEY_REFERENCE =
             Pattern.compile("(?<![\\w.])context\\.([A-Za-z_][A-Za-z0-9_]*)");

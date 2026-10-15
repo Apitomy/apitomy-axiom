@@ -287,7 +287,7 @@ class WorkflowDefinitionsResourceTest {
     }
 
     @Test
-    void testPublishAcceptsCustomRequiredStartInput() {
+    void testPublishRejectsNonStandardStartInput() {
         int id = createDefinition("Custom Input WF");
 
         given()
@@ -321,8 +321,7 @@ class WorkflowDefinitionsResourceTest {
                 .when()
                     .post(BASE_PATH + "/" + id + "/publish")
                 .then()
-                    .statusCode(200)
-                    .body("version", equalTo(1));
+                    .statusCode(400);
     }
 
 
@@ -365,8 +364,8 @@ class WorkflowDefinitionsResourceTest {
     }
 
     @Test
-    void testPublishRejectsRequiredOptionalInput() {
-        int id = createDefinition("Required Optional Input WF");
+    void testPublishRejectsStartInputDefaultValue() {
+        int id = createDefinition("Default Value Input WF");
 
         given()
                 .contentType(ContentType.JSON)
@@ -377,8 +376,8 @@ class WorkflowDefinitionsResourceTest {
                         "nodes": [
                             {"id": "s1", "type": "start", "name": "Start",
                              "config": {"inputs": [
-                                 {"name": "repository", "type": "string",
-                                  "required": true}
+                                 {"name": "event", "type": "object",
+                                  "defaultValue": {}}
                              ]},
                              "position": {"x": 100, "y": 100}},
                             {"id": "e1", "type": "end", "name": "End",
@@ -415,10 +414,10 @@ class WorkflowDefinitionsResourceTest {
                         "nodes": [
                             {"id": "s1", "type": "start", "name": "Start",
                              "config": {"inputs": [
-                                 {"name": "subjectId", "type": "number",
+                                 {"name": "subject", "type": "object",
                                   "required": true},
-                                 {"name": "repository", "type": "string",
-                                  "required": false}
+                                 {"name": "event", "type": "object",
+                                  "required": true}
                              ]},
                              "position": {"x": 100, "y": 100}},
                             {"id": "e1", "type": "end", "name": "End",

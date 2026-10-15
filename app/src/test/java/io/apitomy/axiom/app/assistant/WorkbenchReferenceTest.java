@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -29,6 +30,19 @@ class WorkbenchReferenceTest {
                 "/templates/assistant-templates/axiom-workbench.json")) {
             return MAPPER.readTree(is);
         }
+    }
+
+    @Test
+    void newWorkflowsDeclareSubjectAndEventBothRequired() {
+        com.fasterxml.jackson.databind.node.ObjectNode wf =
+                io.apitomy.axiom.app.WorkflowTemplates.emptyWorkflow("X", new com.fasterxml.jackson.databind.ObjectMapper());
+        com.fasterxml.jackson.databind.JsonNode inputs = wf.path("nodes").get(0).path("config").path("inputs");
+        assertEquals(2, inputs.size());
+        assertEquals("subject", inputs.get(0).path("name").asText());
+        assertEquals("object", inputs.get(0).path("type").asText());
+        assertTrue(inputs.get(0).path("required").asBoolean());
+        assertEquals("event", inputs.get(1).path("name").asText());
+        assertTrue(inputs.get(1).path("required").asBoolean());
     }
 
     @Test

@@ -225,9 +225,7 @@ public class AssistantReferenceGenerator {
                 .append("Conditions are raw EL without `${}`, e.g. `context.needsInfo == true`. Variables: ")
                 .append("`context.<key>` (run context: inputs and merged node outputs) and `event.<field>` ")
                 .append("(the triggering or received event).\n\n")
-                .append("Start inputs: names must match `").append(WorkflowContentRules.INPUT_NAME_PATTERN.pattern())
-                .append("`; these built-in inputs may not be marked required: ")
-                .append(codeList(WorkflowContentRules.OPTIONAL_BUILT_IN_INPUTS)).append(".\n\n");
+                .append("Start inputs: see Start inputs below.\n\n");
         appendSdkActionNodes(sb);
     }
 

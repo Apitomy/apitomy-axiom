@@ -229,14 +229,14 @@ class ConfigItemValidationServiceTest {
     @Test
     void mappedRequiredInputPassesWithOptionalUnmapped() throws Exception {
         List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW,
-                json(withNodeInputs("{\"ref\": \"context.ref\"}")), withInputs());
+                json(withNodeInputs("{\"ref\": \"context.subject.ref\"}")), withInputs());
         assertFalse(ConfigItemValidationService.hasErrors(problems), problems.toString());
     }
 
     @Test
     void unknownInputMappingIsRejected() throws Exception {
         List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW,
-                json(withNodeInputs("{\"ref\": \"context.ref\", \"bogus\": \"1\"}")), withInputs());
+                json(withNodeInputs("{\"ref\": \"context.subject.ref\", \"bogus\": \"1\"}")), withInputs());
         assertTrue(problems.stream().anyMatch(p -> p.isError() && p.code().equals("UNKNOWN_INPUT_MAPPING")
                 && p.path().equals("content.nodes[1].config.inputs.bogus")), problems.toString());
     }
@@ -252,7 +252,7 @@ class ConfigItemValidationServiceTest {
     @Test
     void invalidElInputMappingIsRejected() throws Exception {
         List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW,
-                json(withNodeInputs("{\"ref\": \"context.ref ==\"}")), withInputs());
+                json(withNodeInputs("{\"ref\": \"context.subject.ref ==\"}")), withInputs());
         assertTrue(problems.stream().anyMatch(p -> p.isError() && p.code().equals("INVALID_INPUT_EXPRESSION")
                 && p.path().equals("content.nodes[1].config.inputs.ref")), problems.toString());
     }
@@ -269,20 +269,10 @@ class ConfigItemValidationServiceTest {
     @Test
     void unknownContextKeyInOptionalMappingWarns() throws Exception {
         List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW,
-                json(withNodeInputs("{\"ref\": \"context.ref\", \"note\": \"context.nothing\"}")), withInputs());
+                json(withNodeInputs("{\"ref\": \"context.subject.ref\", \"note\": \"context.nothing\"}")), withInputs());
         assertFalse(ConfigItemValidationService.hasErrors(problems), problems.toString());
         assertTrue(problems.stream().anyMatch(p -> !p.isError() && p.code().equals("UNKNOWN_CONTEXT_KEY")
                 && p.path().equals("content.nodes[1].config.inputs.note")), problems.toString());
-    }
-
-    @Test
-    void contextKeysFromStartInputsAreKnown() throws Exception {
-        String wf = withNodeInputs("{\"ref\": \"context.ref\", \"note\": \"context.priority\"}")
-                .replace("{\"id\": \"s\", \"type\": \"start\", \"name\": \"Start\", \"config\": {}",
-                        "{\"id\": \"s\", \"type\": \"start\", \"name\": \"Start\", "
-                                + "\"config\": {\"inputs\": [{\"name\": \"priority\", \"type\": \"string\"}]}");
-        List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW, json(wf), withInputs());
-        assertTrue(problems.stream().noneMatch(p -> p.code().equals("UNKNOWN_CONTEXT_KEY")), problems.toString());
     }
 
     @Test
