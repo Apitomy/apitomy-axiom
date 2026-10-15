@@ -1,6 +1,7 @@
 package io.apitomy.axiom.app.assistant;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.apitomy.axiom.app.StandardInputs;
 import io.apitomy.axiom.app.validation.ConfigItemType;
 import io.apitomy.axiom.app.validation.WorkflowContentRules;
 import io.apitomy.axiom.core.SdkFunction;
@@ -43,21 +44,18 @@ public class AssistantReferenceGenerator {
      * Kept next to the generator so a new node type fails {@code AssistantReferenceTest}.
      */
     static final Map<NodeType, String> NODE_CONFIG_DOCS = Map.of(
-            NodeType.START, "Exactly one per workflow. `config.inputs`: optional array of "
-                    + "`{name, type, required, description, defaultValue}` declaring the run's inputs "
-                    + "(`type` is string|number|boolean|object; object is any JSON object or array). An input that the "
-                    + "run is started without (or with null) gets its `defaultValue`. Built-in inputs are `subjectId`, `ref`, "
-                    + "`event`, `subjectName`, `repository`.",
+            NodeType.START, "Exactly one per workflow. `config.inputs`: array of `{name, type, required, description}` declaring "
+                    + "which standard inputs the run receives (see Start inputs below).",
             NodeType.END, "Terminates the run (or the current branch). `config` is `{}`.",
             NodeType.ACTION, "Runs an action type as a task. `config.actionType` (required): an action type name "
                     + "or `sdk:<function>`. `config.inputs`: optional map of input name → EL expression "
-                    + "(raw EL, e.g. `context.ref` or a quoted literal `'normal'`). The task's output fields "
+                    + "(raw EL, e.g. `context.subject.ref` or a quoted literal `'normal'`). The task's output fields "
                     + "are merged into the run context under their names, so a later condition can read "
                     + "`context.<outputName>`. `config.outputs`: optional array of "
                     + "`{name, type, required, contextKey}` to rename or require outputs.",
             NodeType.HUMAN_TASK, "Creates a task for a person and waits for completion. `config.title`: optional "
                     + "EL expression used as the task's inbox subject (join text with `+=`, e.g. "
-                    + "`'Review ' += context.ref`; falls back to the node name). `config.description`, "
+                    + "`'Review ' += context.subject.ref`; falls back to the node name). `config.description`, "
                     + "`config.inputs` (map of name → EL expression shown to the person), `config.outputs` "
                     + "(array of `{name, type, required, contextKey, label, description, widget, defaultValue, options}`; "
                     + "answers are merged into the context under `contextKey`, or the output's name if unset).",
@@ -224,13 +222,35 @@ public class AssistantReferenceGenerator {
                 .append("`wait` or `receive-event` node).\n\n")
                 .append("Conditions are raw EL without `${}`, e.g. `context.needsInfo == true`. Variables: ")
                 .append("`context.<key>` (run context: inputs and merged node outputs) and `event.<field>` ")
-                .append("(the triggering or received event).\n\n")
-                .append("Start inputs: see Start inputs below.\n\n");
+                .append("(the triggering or received event).\n\n");
+        appendStartInputs(sb);
         appendSdkActionNodes(sb);
     }
 
     /** Parameters the engine fills in from the node's own run when an {@code sdk:} node does not map them. */
     private static final Set<String> ENGINE_FILLED_SDK_PARAMS = Set.of("subjectId", "runId");
+
+    /** Documents the standard Start inputs, generated from {@link StandardInputs}. */
+    private static void appendStartInputs(StringBuilder sb) {
+        sb.append("### Start inputs\n\n")
+                .append("A run receives only the inputs its Start node declares. Declare only these inputs; no ")
+                .append("other names and no `defaultValue`:\n\n")
+                .append("| Input | Type | Available |\n|---|---|---|\n");
+        for (StandardInputs.StandardInput input : StandardInputs.ALL) {
+            sb.append("| `").append(input.name()).append("` | ").append(input.type()).append(" | ")
+                    .append(input.availability()).append(" |\n");
+        }
+        sb.append("\n`subject` fields: ")
+                .append(StandardInputs.SUBJECT_FIELDS.stream().map(f -> "`" + f + "`").collect(Collectors.joining(", ")))
+                .append(" (missing values are null). Read them as `context.subject.<field>`, e.g. ")
+                .append("`context.subject.ref`; read the event as `context.event.<field>`, e.g. ")
+                .append("`context.event.payload`.\n\n")
+                .append("- Mark `event` required only if the workflow must be started from an event; a ")
+                .append("schedule-triggered workflow must not require it.\n")
+                .append("- A required input that is not available stops the run from being created.\n")
+                .append("- Do not give a node output the name of a declared input: it overwrites the input for ")
+                .append("later nodes (validation warns with `SHADOWS_WORKFLOW_INPUT`).\n\n");
+    }
 
     /**
      * Documents {@code sdk:} action nodes: each SDK function usable as a node, with its parameters and
@@ -253,11 +273,11 @@ public class AssistantReferenceGenerator {
         sb.append("\nOutputs join the run context without being declared: `context.success`, `context.output` ")
                 .append("(a message) and the function's result fields (for example `context.title` after ")
                 .append("`axiom_set_workflow_run_title`). A failed call fails the node, and so the run.\n\n")
-                .append("Example — title the run after its subject:\n\n")
+                .append("Example — title the run after its subject (the workflow's Start node declares `subject`):\n\n")
                 .append("```json\n")
                 .append("{\"id\": \"set-title\", \"type\": \"action\", \"name\": \"Set run title\",\n")
                 .append(" \"config\": {\"actionType\": \"sdk:axiom_set_workflow_run_title\",\n")
-                .append("            \"inputs\": {\"title\": \"'Checking ' += context.subjectName\"}}}\n")
+                .append("            \"inputs\": {\"title\": \"'Checking ' += context.subject.name\"}}}\n")
                 .append("```\n\n");
     }
 

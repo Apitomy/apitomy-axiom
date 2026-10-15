@@ -47,6 +47,22 @@ class AssistantReferenceTest {
     ValidationContextFactory contextFactory;
 
     @Test
+    void referenceDocumentsStandardStartInputs() {
+        String ref = generator.generate();
+        assertTrue(ref.contains("### Start inputs"), ref);
+        assertTrue(ref.contains("| `subject` | object | always |"), ref);
+        assertTrue(ref.contains("| `event` | object | only when the run was started from a stream event |"), ref);
+        assertTrue(ref.contains("`subject` fields: `id`, `name`, `type`, `ref`, `refSource`, `repository`"), ref);
+        assertTrue(ref.contains("Declare only these inputs"), ref);
+        assertTrue(ref.contains("SHADOWS_WORKFLOW_INPUT"), ref);
+        assertFalse(ref.contains("gets its `defaultValue`"), ref);
+        assertFalse(ref.contains("{name, type, required, description, defaultValue}"), ref);
+        assertFalse(ref.contains("context.ref"), ref);
+        assertFalse(ref.contains("context.subjectName"), ref);
+        assertTrue(ref.contains("context.subject.name"), ref);
+    }
+
+    @Test
     void referenceExplainsHowScriptsReturnOutputs() {
         String ref = generator.generate();
         assertTrue(ref.contains("printing one JSON object to stdout"), ref);

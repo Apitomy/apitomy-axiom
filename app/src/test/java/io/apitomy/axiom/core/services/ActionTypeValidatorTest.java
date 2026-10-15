@@ -160,7 +160,7 @@ class ActionTypeValidatorTest {
     void removedPromptPlaceholderIsRejectedWithHint() {
         NewActionType def = makeActor("p", "desc", "Triage {{ref}}");
         ValidationResult result = ActionTypeValidator.validate(def);
-        assertTrue(result.errors().stream().anyMatch(m -> m.message().contains("context.ref")),
+        assertTrue(result.errors().stream().anyMatch(m -> m.message().contains("context.subject.ref")),
                 result.toString());
     }
 
@@ -635,5 +635,15 @@ class ActionTypeValidatorTest {
         f.setName(name);
         f.setType(type);
         return f;
+    }
+
+    @Test
+    void removedPlaceholderHintsUseTheSubjectInput() {
+        assertEquals("Declare an input 'ref' and map it from context.subject.ref on the workflow node.",
+                ActionTypeValidator.REMOVED_PLACEHOLDER_HINTS.get("ref"));
+        assertEquals("Declare an input 'subjectId' and map it from context.subject.id on the workflow node.",
+                ActionTypeValidator.REMOVED_PLACEHOLDER_HINTS.get("subjectId"));
+        assertTrue(ActionTypeValidator.REMOVED_PLACEHOLDER_HINTS.values().stream()
+                .noneMatch(h -> h.matches(".*context\\.(ref|repository|subjectName|subjectId)\\b.*")));
     }
 }

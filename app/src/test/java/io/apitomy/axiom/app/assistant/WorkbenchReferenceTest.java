@@ -78,6 +78,8 @@ class WorkbenchReferenceTest {
                 "For each node or script action type and each tool you create or change, call suggest_test with "
                         + "realistic sample inputs.",
                 "Receive-event nodes must correlate",
+                "- Declare only the standard Start inputs (subject, event); require event only when the workflow "
+                        + "must be started from an event.",
                 "Never describe the output format in an agent prompt",
                 "applied by the user's editor when your turn ends",
                 "Do not set or adjust node positions; the user's editor lays out the workflow when your changes are applied.",

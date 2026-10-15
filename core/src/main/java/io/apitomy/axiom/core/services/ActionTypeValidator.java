@@ -29,13 +29,13 @@ public final class ActionTypeValidator {
             Pattern.compile("\\{\\{\\s+|\\s+\\}\\}|\\{\\{[^}]*$");
     /** Former placeholders and how to replace them; any of these in a template is an error. */
     public static final Map<String, String> REMOVED_PLACEHOLDER_HINTS = Map.ofEntries(
-            Map.entry("ref", "Declare an input 'ref' and map it from context.ref on the workflow node."),
+            Map.entry("ref", "Declare an input 'ref' and map it from context.subject.ref on the workflow node."),
             Map.entry("repository",
-                    "Declare an input 'repository' and map it from context.repository on the workflow node."),
+                    "Declare an input 'repository' and map it from context.subject.repository on the workflow node."),
             Map.entry("subjectName",
-                    "Declare an input 'subjectName' and map it from context.subjectName on the workflow node."),
+                    "Declare an input 'subjectName' and map it from context.subject.name on the workflow node."),
             Map.entry("subjectId",
-                    "Declare an input 'subjectId' and map it from context.subjectId on the workflow node."),
+                    "Declare an input 'subjectId' and map it from context.subject.id on the workflow node."),
             Map.entry("eventId",
                     "Declare an input 'eventId' and map it from context.event.id on the workflow node."),
             Map.entry("workDir", "Not a placeholder. Scripts can use $AXIOM_WORK_DIR; agents already run there."),
