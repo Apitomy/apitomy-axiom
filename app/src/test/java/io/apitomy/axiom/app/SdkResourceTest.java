@@ -34,7 +34,7 @@ class SdkResourceTest {
                 .get(SDK_PATH)
             .then()
                 .statusCode(200)
-                .body("size()", equalTo(19))
+                .body("size()", equalTo(20))
                 .body("name", hasItems(
                     "axiom_add_subject_label",
                     "axiom_fire_event",

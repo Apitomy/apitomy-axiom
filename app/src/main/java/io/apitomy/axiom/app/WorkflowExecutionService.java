@@ -597,6 +597,28 @@ public class WorkflowExecutionService {
     }
 
     /**
+     * Sets a run's title; a null or blank title clears it. Workflows set it through the
+     * {@code axiom_set_workflow_run_title} SDK function.
+     *
+     * @param runId the workflow run id
+     * @param title the new title, or null/blank to clear it
+     * @return the stored title (trimmed), or null when cleared
+     * @throws WebApplicationException 404 when the run does not exist, 400 when the title is too long
+     */
+    // Validation failures must not roll back the caller's transaction: an sdk: node reports them as a failed call.
+    @Transactional(dontRollbackOn = WebApplicationException.class)
+    public String setRunTitle(long runId, String title) {
+        WorkflowRunEntity entity = WorkflowRunEntity.findById(runId);
+        if (entity == null) {
+            throw new WebApplicationException(Response.status(404)
+                    .entity(Map.of("message", "Workflow run not found: " + runId)).build());
+        }
+        entity.title = resolveTitle(title);
+        sseEvents.fire(SseEvent.workflowUpdated(entity.subjectId, entity.id, entity.status));
+        return entity.title;
+    }
+
+    /**
      * Cancels a running or waiting workflow run.
      *
      * @param runId the workflow run id

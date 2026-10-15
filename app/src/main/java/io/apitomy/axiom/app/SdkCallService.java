@@ -9,6 +9,7 @@ import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.quarkus.panache.common.Sort;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.ws.rs.WebApplicationException;
 import org.jboss.logging.Logger;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -30,6 +31,10 @@ public class SdkCallService {
 
     @Inject
     ObjectMapper objectMapper;
+
+    /** Lazy: the workflow engine itself calls this service for {@code sdk:} nodes. */
+    @Inject
+    jakarta.enterprise.inject.Instance<WorkflowExecutionService> workflowExecutionService;
 
     /**
      * Result of an SDK call.
@@ -67,6 +72,7 @@ public class SdkCallService {
             case "axiom_create_subject" -> createSubject(params);
             case "axiom_update_subject_body" -> updateSubjectBody(params);
             case "axiom_get_workflow_run" -> getWorkflowRun(params);
+            case "axiom_set_workflow_run_title" -> setWorkflowRunTitle(params);
             case "axiom_list_subject_runs" -> listSubjectRuns(params);
             default -> SdkCallResult.error("Unknown SDK function: " + functionName);
         };
@@ -261,6 +267,28 @@ public class SdkCallService {
         result.put("startedOn", run.startedOn.toString());
         result.put("completedOn", run.completedOn != null ? run.completedOn.toString() : null);
         return SdkCallResult.ok("Workflow run found", result);
+    }
+
+    /**
+     * Sets a run's title; a blank title clears it. {@code runId} defaults to the calling run, which the
+     * workflow engine supplies for {@code sdk:} nodes.
+     */
+    private SdkCallResult setWorkflowRunTitle(Map<String, Object> params) {
+        Long runId = toLong(params.get("runId"));
+        if (runId == null) return SdkCallResult.error("runId is required");
+        try {
+            String title = workflowExecutionService.get().setRunTitle(runId, toString(params.get("title")));
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("runId", runId);
+            result.put("title", title);
+            return SdkCallResult.ok(title == null ? "Title of run " + runId + " cleared"
+                    : "Title of run " + runId + " set to '" + title + "'", result);
+        } catch (WebApplicationException e) {
+            Object entity = e.getResponse().getEntity();
+            String message = entity instanceof Map<?, ?> m && m.get("message") != null
+                    ? String.valueOf(m.get("message")) : e.getMessage();
+            return SdkCallResult.error(message);
+        }
     }
 
     private SdkCallResult listSubjectRuns(Map<String, Object> params) {

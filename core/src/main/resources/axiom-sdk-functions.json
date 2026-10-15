@@ -166,6 +166,15 @@
     "sdkCallSupported": true
   },
   {
+    "name": "axiom_set_workflow_run_title",
+    "description": "Set a workflow run's title, shown in the Runs list and on the run's page. A blank title clears it; at most 500 characters. In a workflow sdk: action node, runId defaults to the node's own run.",
+    "parameters": [
+      { "name": "runId", "type": "number", "description": "The workflow run ID", "required": true },
+      { "name": "title", "type": "string", "description": "The new title; blank clears it", "required": true }
+    ],
+    "sdkCallSupported": true
+  },
+  {
     "name": "axiom_list_subject_runs",
     "description": "List workflow runs for a subject, newest first (at most 50 runs).",
     "parameters": [

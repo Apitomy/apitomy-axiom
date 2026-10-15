@@ -119,9 +119,10 @@ A workflow run can be started in these ways:
 
 ### Run Title, Labels, and Inputs
 
-A run can have a **title** of at most 500 characters. Only runs started with one have a title (for example
-from the **Title** field of an event's **Run workflow…** dialog, or the REST API); lists and headers name
-other runs by their subject and workflow. Runs also carry free-form key/value **labels** (runs started by a schedule trigger are
+A run can have a **title** of at most 500 characters. A run gets one when it is started with one (for
+example from the **Title** field of an event's **Run workflow…** dialog, or the REST API), or when the
+workflow sets it with the `axiom_set_workflow_run_title` SDK function (see
+[Axiom SDK Functions](#axiom-sdk-functions)); lists and headers name other runs by their subject and workflow. Runs also carry free-form key/value **labels** (runs started by a schedule trigger are
 labeled `trigger: schedule`) and the **inputs** they were started with. Supplied inputs join the run's
 initial context and are validated against the Start node's declared inputs (see
 [Workflow Input Contract](../developer-guide/workflow-input-contract.md)); `subjectId`, `subjectName`, `ref`,
@@ -271,6 +272,7 @@ The authoritative list lives in `core/src/main/resources/axiom-sdk-functions.jso
 | `axiom_get_task_status` | Get the status and details of a task on a subject |
 | `axiom_respond_to_task` | Submit a response to a task awaiting human input |
 | `axiom_get_workflow_run` | Get a workflow run (`runId`, required): title, status, subject, definition and version, labels, inputs, current node. In an `sdk:` action node, `runId` is filled in automatically with the node's own run. |
+| `axiom_set_workflow_run_title` | Set a workflow run's title (`runId`, `title`; a blank title clears it; at most 500 characters). In an `sdk:` action node, `runId` is filled in automatically, so a node with actionType `sdk:axiom_set_workflow_run_title` and input `title` (for example `'Checking ' += context.subjectName`) titles its own run. |
 | `axiom_list_subject_runs` | List workflow runs for a subject (`subjectId`, required; optional `status`), newest first, at most 50 |
 | `axiom_fire_event` | Fire a new event into Axiom for processing by subscriptions and workflows |
 | `axiom_get_activity_log` | Read the activity log, optionally filtered by subject |

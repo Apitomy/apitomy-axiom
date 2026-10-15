@@ -57,10 +57,21 @@ public final class TestFixtures {
      * @return the definition id
      */
     public static long createWaitDefinition(String name) {
+        return createDefinition(name, WAIT_CONTENT);
+    }
+
+    /**
+     * Creates a workflow definition with the given content, published as version 1.
+     *
+     * @param name the definition name
+     * @param content the workflow JSON
+     * @return the definition id
+     */
+    public static long createDefinition(String name, String content) {
         return QuarkusTransaction.requiringNew().call(() -> {
             WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
             def.name = name;
-            def.content = WAIT_CONTENT;
+            def.content = content;
             def.currentVersion = 1;
             def.createdOn = Instant.now();
             def.updatedOn = Instant.now();
@@ -68,7 +79,7 @@ public final class TestFixtures {
             WorkflowDefinitionVersionEntity version = new WorkflowDefinitionVersionEntity();
             version.definitionId = def.id;
             version.version = 1;
-            version.content = WAIT_CONTENT;
+            version.content = content;
             version.createdOn = Instant.now();
             version.persist();
             return def.id;

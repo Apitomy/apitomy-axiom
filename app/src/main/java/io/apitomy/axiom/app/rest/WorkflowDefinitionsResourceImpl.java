@@ -494,6 +494,14 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
      * {@inheritDoc}
      */
     @Override
+    public void setWorkflowRunTitle(long runId, io.apitomy.axiom.api.beans.WorkflowRunTitle data) {
+        workflowExecutionService.setRunTitle(runId, data.getTitle());
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public io.apitomy.axiom.api.beans.WorkflowInstance rerunWorkflowRun(long runId) {
         io.apitomy.axiom.core.entities.WorkflowRunEntity original =
                 io.apitomy.axiom.core.entities.WorkflowRunEntity.findById(runId);

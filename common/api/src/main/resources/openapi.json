@@ -6482,6 +6482,49 @@
           }
         }
       ]
+    },
+    "/workflow/runs/{runId}/title": {
+      "put": {
+        "tags": [
+          "WorkflowRuns"
+        ],
+        "summary": "Set a workflow run's title",
+        "description": "Sets the run's title. An absent or blank title clears it. Backs the axiom_set_workflow_run_title SDK function.",
+        "operationId": "setWorkflowRunTitle",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowRunTitle"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "The title was set"
+          },
+          "400": {
+            "description": "The title is longer than 500 characters"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "runId",
+          "in": "path",
+          "description": "Workflow run ID",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
     }
   },
   "components": {
@@ -11664,6 +11707,17 @@
           },
           "subscriptionName": {
             "type": "string"
+          }
+        }
+      },
+      "WorkflowRunTitle": {
+        "type": "object",
+        "description": "A workflow run's title",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "The new title; absent or blank clears it"
           }
         }
       }

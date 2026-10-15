@@ -162,6 +162,14 @@ const HANDLERS = {
             completedOn: run.completedOn || null,
         }, null, 2);
     },
+    axiom_set_workflow_run_title: async (args) => {
+        if (!args.runId) {
+            throw new Error("runId is required");
+        }
+        const title = (args.title || "").trim();
+        await axiomApi("PUT", `/workflow/runs/${args.runId}/title`, { title });
+        return title ? `Title of run ${args.runId} set to '${title}'` : `Title of run ${args.runId} cleared`;
+    },
     axiom_list_subject_runs: async (args) => {
         const params = new URLSearchParams();
         params.set("limit", "50");
