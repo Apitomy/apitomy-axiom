@@ -243,12 +243,12 @@ export function fetchItem(id: number, itemId: number): Promise<CompositionItem> 
     return request("GET", it(id, itemId));
 }
 
-/** Saves item content against a base revision; throws ApiError 409 when stale. */
 /** Enables or disables a published subscription item; enabling skips events before now. */
 export function setItemEnabled(id: number, itemId: number, enabled: boolean): Promise<CompositionItem> {
     return request("PUT", `${c(id)}/items/${itemId}/enabled`, { enabled });
 }
 
+/** Saves item content against a base revision; throws ApiError 409 when stale. */
 export function saveItem(
     id: number,
     itemId: number,
