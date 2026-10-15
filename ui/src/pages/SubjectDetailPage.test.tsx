@@ -38,7 +38,6 @@ vi.mock("../config/api", () => ({
     completeInboxItem: vi.fn(),
 }));
 vi.mock("../components/assistant/CreateSessionModal", () => ({ CreateSessionModal: () => null }));
-vi.mock("../components/WorkflowTab", () => ({ WorkflowTab: () => null }));
 
 describe("SubjectDetailPage", () => {
     it("shows the subject's runs in the timeline", async () => {
@@ -48,6 +47,7 @@ describe("SubjectDetailPage", () => {
         expect(await screen.findByText("First run")).toBeInTheDocument();
         expect(screen.getByText("Second run")).toBeInTheDocument();
         expect(screen.getByText("Inactive")).toBeInTheDocument();
+        expect(screen.queryByRole("tab", { name: /^Workflow/ })).toBeNull();
     });
 
     it("re-runs a failed run after confirmation and links to the new run", async () => {

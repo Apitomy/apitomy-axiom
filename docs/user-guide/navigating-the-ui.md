@@ -106,8 +106,6 @@ Click any subject to open its detail page, which has several tabs:
   results, notes)
 - **Events** — raw stream events from event sources associated with this subject
 - **Metrics** — AI cost, token usage, and disk usage for this subject
-- **Workflow** — start a run of a published workflow definition (**Run Workflow**), optionally with a
-  title, labels, and inputs
 
 From the subject detail page you can also edit labels and delete the subject.
 

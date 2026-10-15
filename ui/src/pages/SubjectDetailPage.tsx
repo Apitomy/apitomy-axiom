@@ -79,7 +79,6 @@ import { ExecutionLogModal } from "../components/ExecutionLogModal";
 import { LineageModal } from "../components/LineageModal";
 import { CreateSessionModal } from "../components/assistant/CreateSessionModal";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
-import { WorkflowTab } from "../components/WorkflowTab";
 import { DynamicFormRenderer } from "../components/DynamicFormRenderer";
 
 const STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
@@ -369,9 +368,8 @@ export function SubjectDetailPage() {
                     <Tab eventKey={2} title={<TabTitleText>Thread ({thread.length})</TabTitleText>} />
                     <Tab eventKey={3} title={<TabTitleText>Events ({events.length})</TabTitleText>} />
                     <Tab eventKey={4} title={<TabTitleText>Metrics</TabTitleText>} />
-                    <Tab eventKey={5} title={<TabTitleText>Workflow{subject?.hasWorkflowInstance ? " ●" : ""}</TabTitleText>} />
                 </Tabs>
-                <div className={`subject-detail__tab-content${activeTab === 5 ? " subject-detail__tab-content--fill" : ""}`}>
+                <div className="subject-detail__tab-content">
                     {activeTab === 0 && (
                         <div style={{
                             padding: "0 14px",
@@ -469,13 +467,6 @@ export function SubjectDetailPage() {
                     {activeTab === 2 && <ThreadTab entries={thread} />}
                     {activeTab === 3 && <EventsTab events={events} />}
                     {activeTab === 4 && <MetricsTab metrics={metrics} />}
-                    {activeTab === 5 && subject && (
-                        <WorkflowTab
-                            subjectId={subject.id}
-                            hasWorkflowInstance={subject.hasWorkflowInstance ?? false}
-                            onRefresh={loadData}
-                        />
-                    )}
                 </div>
             </div>
 

@@ -1747,55 +1747,6 @@ export interface HistoryEntryInfo {
     title?: string;
 }
 
-export interface TriggerWorkflowRequest {
-    workflowDefinitionId: number;
-    /** Run title; defaults to "<workflow> — <subject>". */
-    title?: string;
-    labels?: Record<string, string>;
-    /** Values for the workflow's Start inputs. */
-    inputs?: Record<string, unknown>;
-}
-
-export async function triggerWorkflow(
-    subjectId: number, data: TriggerWorkflowRequest
-): Promise<WorkflowInstanceInfo> {
-    const response = await fetch(
-        `${API}/subjects/${subjectId}/workflow`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data),
-        });
-    if (!response.ok) {
-        let message = `Failed to trigger workflow: ${response.status}`;
-        try {
-            const body = await response.json();
-            if (body && typeof body === "object"
-                    && typeof body.message === "string" && body.message) {
-                message = body.message;
-            } else if (typeof body === "string" && body) {
-                message = body;
-            }
-        } catch {
-            // No JSON body; keep the status-based message.
-        }
-        throw new Error(message);
-    }
-    return response.json();
-}
-
-export async function getWorkflowInstance(
-    subjectId: number
-): Promise<WorkflowInstanceInfo> {
-    const response = await fetch(
-        `${API}/subjects/${subjectId}/workflow`);
-    if (!response.ok) {
-        if (response.status === 404) return null as any;
-        throw new Error(
-            `Failed to get workflow instance: ${response.status}`);
-    }
-    return response.json();
-}
-
 /**
  * Re-runs a failed workflow run: starts a new run of the same workflow (latest published version) for the same
  * subject, with the original title, labels (plus rerunOf) and inputs.

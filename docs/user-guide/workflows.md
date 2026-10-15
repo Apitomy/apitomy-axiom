@@ -105,10 +105,6 @@ executing. The **Runs** tab lists the runs of the definition.
 
 A workflow run can be started in these ways:
 
-- **Manually from a subject** — on a subject's detail page, open the **Workflow** tab, click
-  **Run Workflow**, select a published definition and optionally enter a title, labels (`key:value,
-  key:value`) and inputs (a JSON object). The run starts with `subjectId`, `subjectName`, `ref` and
-  `repository` in its context. The REST endpoint is `POST /api/v1/subjects/{subjectId}/workflow`.
 - **Manually from a stream event** — on an event's detail page (**Events > Event Stream**, then click an
   event), click **Run workflow…** and pick any published workflow. Workflows used by subscriptions that
   matched the event are listed first, under **Suggested**. You may supply a title, labels, and inputs. The
@@ -154,7 +150,7 @@ A trigger that would violate the rule is handled as follows:
 
 | Trigger | Behavior |
 |---------|----------|
-| Manual (**Run Workflow**, **Run workflow…**, **Re-run**) | Rejected with HTTP 409 |
+| Manual (**Run workflow…**, **Re-run**) | Rejected with HTTP 409 |
 | `create-workflow` routing rule | Skipped (not queued); the skip is recorded in the routing outcome |
 | Schedule trigger | Skipped (not queued); the trigger's last outcome is recorded as `skipped` |
 
