@@ -10,18 +10,24 @@ versioned workflows that delegate work to AI agents, scripts, and humans.
 - **Event Sources & Subscriptions** — polls GitHub and Jira for activity, then routes matched events
   to workflows: `create-workflow` starts a run, `workflow-dispatch` resumes waiting runs
 - **Schedule Triggers** — cron schedules that start workflow runs on a fixed subject
+- **Workflow Workbench** — an authoring workspace for a workflow and its action types and tools, with a
+  workflow canvas, editors, test runs, run history and an AI Assistant that proposes changes you can
+  review or apply live
 - **Subjects** — the issue, pull request, or named subject a run is about, with a shared workspace and
   thread
 - **Human + AI Agents** — pluggable agent pool supports Claude Code, OpenCode, GitHub Copilot CLI, and
   human-completed tasks
+- **Inbox & Dashboards** — human tasks waiting for a person, and configurable dashboards
 - **Web UI** — React + PatternFly UI with real-time SSE updates
 - **AI Assistant** — interactive conversational interface with customizable session templates,
   real-time tool permission management, and plan mode
-- **Pluggable AI Agents** — swap between Claude Code CLI, OpenCode, and GitHub Copilot CLI without code changes
+- **Pluggable AI Agents** — swap between Claude Code CLI, OpenCode, and GitHub Copilot CLI without code
+  changes
 
 ## Quick Links
 
 - [Running Axiom](getting-started/running-axiom.md) — Prerequisites and running Axiom
+- [Configuring Axiom](getting-started/configuring-axiom.md) — AI engines, profiles, and properties
 - [User Guide](user-guide/concepts.md) — Core concepts, configuration, and extending Axiom
 - [GitHub Repository](https://github.com/Apitomy/apitomy-axiom) — Source code and issues
 
@@ -29,11 +35,12 @@ versioned workflows that delegate work to AI agents, scripts, and humans.
 
 | Component | Technology |
 |-----------|-----------|
-| Backend | Java / Quarkus |
+| Backend | Java 25 / Quarkus |
 | Frontend | TypeScript / React / PatternFly |
 | Database | H2 (in-memory dev, file-based prod) |
 | Migrations | Flyway (automatic on startup) |
 | AI Agents | Claude Code CLI, OpenCode, GitHub Copilot CLI (pluggable) |
+| Workflows | Apitomy Flow (editor and engine) |
 | API | Contract-first OpenAPI + Apitomy Codegen |
 
 ## Community

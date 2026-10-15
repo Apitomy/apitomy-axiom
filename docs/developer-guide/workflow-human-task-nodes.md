@@ -9,46 +9,51 @@ endpoint, and Axiom resumes the workflow with the answers merged into context.
 
 ## Authoring a Human-Task Node
 
-A `human-task` node in a Flow workflow definition configures three things:
+A `human-task` node in a Flow workflow definition configures these things under `config`:
 
-1. **Node name** — becomes the task title shown in the Inbox.
-2. **Inputs** — mapped to read-only `details` displayed to the user for context.
-3. **Outputs** — define the completion form fields (`outputSchema`) that the user fills in.
+1. **Title** (`title`, optional) — an EL expression for the task title shown in the Inbox, for example
+   `'Review ' += context.ref`. When it is absent or fails, the node's name is used.
+2. **Description** (`description`, optional) — text shown with the task.
+3. **Inputs** — mapped to read-only `details` displayed to the user for context.
+4. **Outputs** — define the completion form fields (`outputSchema`) that the user fills in.
 
 ### Inputs (Display Context)
 
-A human-task node's `inputs` list declares what workflow context values should be shown to the user as
-read-only context. Each input is resolved from the current workflow context and displayed in the Inbox
-task's details section.
+A human-task node's `inputs` is a map from a display name to an EL expression. Each expression is
+evaluated against the current workflow context, and the result is shown in the Inbox task's details section
+as a read-only value under its name.
 
-Example (in Flow authoring UI):
+Example (from `templates/assistant-reference/examples/workflows/issue-triage.json`):
 
 ```json
 {
-  "inputs": [
-    { "name": "issueTitle", "type": "string" },
-    { "name": "repository", "type": "string" }
-  ]
+  "inputs": {
+    "issue": "context.ref",
+    "severity": "context.severity"
+  }
 }
 ```
 
-At run time, if the workflow context contains `{ issueTitle: "Fix login bug", repository:
-"apitomy/axiom" }`, the inbox task's details will show those values as read-only fields.
+At run time, if the workflow context contains `{ ref: "https://github.com/apitomy/axiom/issues/7", severity:
+"high" }`, the inbox task's details show `issue` and `severity` with those values. Values that are not
+strings are shown as their string form.
 
 ### Outputs (Completion Form)
 
 A human-task node's `outputs` list declares the form fields the user must complete. Each output becomes a
 field in the task's completion form, with its `type` determining the input widget and validation.
 
-Axiom supports **optional rich metadata** on each output:
+Each output has a `name` and a semantic `type` (`string`, `number`, `boolean` or `object`), and may be
+marked `required`. Axiom also supports **optional rich metadata** on each output:
 
 | property       | purpose                                                  | default if omitted           |
 |----------------|----------------------------------------------------------|------------------------------|
 | `label`        | Human-readable field label                               | The output's `name` verbatim |
 | `description`  | Help text shown below the field                          | Empty                        |
-| `widget`       | UI control hint (text/textarea/number/checkbox/select)   | Inferred from semantic `type` |
+| `widget`       | UI control (`text`, `textarea`, `number`, `checkbox`, `select`) | `text`                |
 | `defaultValue` | Pre-filled value when the form loads                     | Empty                        |
-| `options`      | List of choices (for `select` widget only)               | Empty array                  |
+| `options`      | List of `{ label, value }` choices (for the `select` widget only) | Empty array         |
+| `contextKey`   | Context key the answer is stored under                   | The output's `name`          |
 
 Example (in Flow authoring UI):
 
@@ -72,12 +77,14 @@ Example (in Flow authoring UI):
 }
 ```
 
-When metadata is omitted, Axiom derives sensible defaults:
+When metadata is omitted, Axiom uses these defaults (`WorkflowHumanTaskMapper.toOutputSchema`):
 
 - `label` defaults to the output's `name` verbatim (e.g., an output named `approvedByManager` shows the
   label `approvedByManager`).
-- `widget` is inferred from the semantic `type`: `boolean` defaults to `checkbox`, `number` to `number`,
-  `string` to `text`.
+- The form field's control comes from `widget` only; it is not inferred from `type`. An output without a
+  `widget` is a `text` field, so set `widget` to `checkbox` for a `boolean` output and to `number` for a
+  `number` output. The widget value `boolean` is also accepted as `checkbox`.
+- A node with no outputs gets no `outputSchema`, and the task takes a free-form response.
 
 ---
 
@@ -88,12 +95,13 @@ When metadata is omitted, Axiom derives sensible defaults:
 When a running workflow reaches a human-task node:
 
 1. The Flow engine transitions the workflow instance to `WAITING`.
-2. Axiom creates an inbox task with:
-   - `title` = the node's name
-   - `description` = the node's description (if provided)
-   - `details` = a read-only map of the node's resolved inputs
+2. Axiom creates an inbox task (`WorkflowExecutionService.createHumanTaskForNode`) with:
+   - the task name (`actionType`) = the evaluated `title`, or the node's name when there is none
+   - `humanContext.title` = the node's name, `humanContext.description` = the node's description (if
+     provided), and `humanContext.details` = the node's resolved inputs
    - `outputSchema` = the completion form derived from the node's outputs
    - `status` = `AwaitingInput`
+   - `traceId` = the run's trace; a `task` trace node with summary `Human task: <title>` is added to it
 
 ### Task Completion
 
@@ -119,12 +127,15 @@ This endpoint is used by:
 
 On completion, Axiom:
 
+Only a task with status `AwaitingInput` can be completed; any other task returns HTTP 404.
+
 1. **Validates** the submission against the task's `outputSchema` before completion — missing required
    fields or wrong-typed values are rejected with HTTP 400.
 2. **Coerces** the accepted answers to the node's declared semantic types (`string`, `number`,
    `boolean`, `object`) so downstream edge conditions compare correctly.
-3. **Merges** the coerced answers into the workflow's context (top-level keys).
-4. **Resumes** the workflow by calling the Flow engine's `completeCurrentNode` with the answers.
+3. **Merges** the coerced answers into the workflow's context, each under its output's `contextKey` (or its
+   `name` when no `contextKey` is set).
+4. **Resumes** the workflow by calling the Flow engine's `completeNode` with the answers.
 
 Downstream nodes and edge conditions can reference the answers via their keys (e.g., `approved`,
 `comments`).
@@ -137,7 +148,7 @@ Axiom workflows currently support the following node types:
 
 - `start` — workflow entry point (see [Workflow Input Contract](workflow-input-contract.md))
 - `end` — workflow termination
-- `action` — executes a tool or script
+- `action` — runs an action type (AI agent, Node.js or script)
 - `human-task` — pauses for user input (this doc)
 - `wait` — pauses the instance for a fixed duration before resuming automatically
 - `receive-event` — pauses the instance until a matching stream event is dispatched to it by a
@@ -156,11 +167,13 @@ A workflow that waits for manager approval before deploying:
    [Workflow Input Contract](workflow-input-contract.md)).
 2. **Action node** — runs a build script, outputs `buildArtifact`.
 3. **Human-task node** (`Manager Approval`) —
-   - Inputs: `ref`, `buildArtifact` (shown as read-only context)
+   - Inputs: `{ "ref": "context.ref", "buildArtifact": "context.buildArtifact" }` (shown as read-only
+     context)
    - Outputs:
      ```json
      [
-       { "name": "approved", "type": "boolean", "label": "Approve deployment?" },
+       { "name": "approved", "type": "boolean", "required": true, "label": "Approve deployment?",
+         "widget": "checkbox" },
        { "name": "notes", "type": "string", "widget": "textarea", "description": "Optional comments" }
      ]
      ```

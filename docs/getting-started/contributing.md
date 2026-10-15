@@ -18,9 +18,9 @@ kinds — bug reports, feature requests, documentation improvements, and code co
 
 To build and run Axiom for development, you'll need:
 
-- **Java**
-- **Maven**
-- **Node.js** and **npm** (for the UI)
+- **Java 25+**
+- **Maven 3.9+**
+- **Node.js 20+** and **npm** (for the UI)
 
 ```bash
 git clone https://github.com/Apitomy/apitomy-axiom.git
@@ -29,6 +29,7 @@ cd apitomy-axiom
 ```
 
 This builds the backend, then starts it together with the Vite UI dev server on
-`http://localhost:9191` (backend on `http://localhost:9090`). See the
+`http://localhost:9191` (backend on `http://localhost:9090`). See
+[Running Axiom](running-axiom.md#running-from-source) for the `dev.sh` options and the
 [README](https://github.com/Apitomy/apitomy-axiom/blob/main/README.md) for full build
 instructions and development workflow details.

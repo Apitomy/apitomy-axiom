@@ -42,8 +42,9 @@ variables and API callbacks. Each trace has a `traceType` (see below), a status
 UUID of the originating `stream_event` row. It is a soft reference (no foreign key): stream events are
 purged by the event retention policy while traces are retained, so the UUID may outlive its event.
 
-Every trace is currently of type `workflow`, created when a workflow run starts (manually, by a
-`create-workflow` routing rule, or by a schedule trigger). Tasks created by the run's action and human-task
+Every trace is currently of type `workflow`, created when a workflow run starts (manually on a subject,
+manually from a stream event, by a `create-workflow` routing rule, by a schedule trigger, or as a re-run of a
+failed run). Tasks created by the run's action and human-task
 nodes, and tool calls made by their agents, are recorded as nodes of the run's trace.
 
 ### TraceNodeEntity
@@ -185,9 +186,16 @@ trace lifecycle.
 
 ### Workflow traces and events
 
-- A run started by a `create-workflow` routing rule gets a `workflow` trace with `eventId` set to the
-  stream event, so the trace appears in `GET /traces?filterEventId=...`. The routing outcome's `traceId`
-  is the run's trace. Runs started manually or by a schedule trigger have no `eventId`.
+- A run started from a stream event gets a `workflow` trace with `eventId` set to the stream event, so the
+  trace appears in `GET /traces?filterEventId=...`. This covers runs started by a `create-workflow` routing
+  rule, manual runs started from the event (`POST /stream/events/{eventId}/runs`), and re-runs of a failed
+  run that was started from an event. All of them go through `EventStreamOrchestrator.startRunFromEvent`.
+  For a routing rule, the routing outcome's `traceId` is the run's trace. Manual runs from an event have no
+  ledger entry or routing outcome.
+- Runs started manually on a subject or by a schedule trigger have no `eventId`. A re-run of such a run has
+  none either.
+- A re-run (`POST /workflow/runs/{runId}/rerun`) is a new run with its own trace. It is linked to the
+  original run only by its `rerunOf:<runId>` label, not through the trace.
 - A `create-workflow` rule that is skipped because the subject already has an active run of the definition
   creates no run and no trace.
 - When a stream event resumes a run parked at a receive-event step, the receive-event `task` node

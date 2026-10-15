@@ -49,7 +49,7 @@ subprocesses, where the `gh` CLI picks it up automatically.
 
 ### Step 2: Add an Event Source
 
-Navigate to **Event Sources** and click **Add Event Source**:
+Navigate to **Events > Event Sources** and click **Add Event Source**:
 
 | Field | Value |
 |-------|-------|
@@ -158,12 +158,12 @@ gh issue edit "{{issue_url}}" --add-label "{{labels}}"
 
 ### Step 4: Create the Action Type
 
-Navigate to **Action Types** and click **Create Action Type**:
+Navigate to **Components > Action Types** and click **Create Action Type**:
 
 | Field | Value |
 |-------|-------|
 | **Name** | `Auto-Label Issue` |
-| **Execution Mode** | Agent |
+| **Execution Mode** | Agent — AI agent |
 
 On the detail page, configure the remaining fields:
 
@@ -216,41 +216,47 @@ make any changes.
 
 ### Step 5: Create the Workflow
 
-Navigate to **Workflows** and click **Create Workflow** with the name
+Navigate to **Components > Workflows** and click **Create Workflow Definition** with the name
 `Auto-Label New Issues`. The new definition is scaffolded with a Start node (declaring `subjectId`,
 `ref`, and `event`) connected to an End node. In the editor:
 
 1. Drag an **Auto-Label Issue** action node from the palette (every action type appears there) between
    Start and End
-2. On the action node, map its inputs from the run context: `ref` ← `context.ref` and `repository` ←
-   `context.repository`
+2. Double-click the action node to open its properties and map its inputs from the run context:
+   `ref` ← `context.ref` and `repository` ← `context.repository`
 3. Connect Start → Auto-Label Issue → End
 4. Click **Publish**
 
+!!! tip "Using the Workbench"
+    You can also build the workflow, the action type and the tools together in the
+    [Workbench](workbench.md), with the AI Assistant's help, and publish them in one step.
+
 ### Step 6: Add a Subscription
 
-Navigate to **Subscriptions** and click **Add Subscription**:
+Navigate to **Events > Subscriptions** and click **Add Subscription** with the name
+`Label new issues`. Then configure it on the detail page:
 
 | Field | Value |
 |-------|-------|
-| **Name** | e.g. `Label new issues` |
 | **Filter Expression** | `event.type == 'issue.created'` |
 | **Enabled** | Yes |
 
-Under **Routing Rules**, add one rule of type **Create workflow** and select the
-`Auto-Label New Issues` definition. Use **Preview** on the subscription editor to confirm the filter
-matches the events you expect before saving.
+Under **Routing Rules**, add one rule of type **Create Workflow** and select the
+`Auto-Label New Issues` definition. Use the **Preview** on the subscription page to confirm the filter
+matches the events you expect, then click **Save Changes**.
 
 ### Step 7: Ensure a Matching Agent Exists
 
 Navigate to **Components > Agents**. You need at least one enabled agent whose
-capabilities match this action type. If none exist, click **Create Agent**:
+capabilities match this action type. A new installation already has four agents with capability `*`.
+If none exist, click **Create Agent**:
 
-| Field | Value           |
-|-------|-----------------|
+| Field | Value |
+|-------|-------|
 | **Name** | e.g. `AI Agent` |
 | **Type** | Claude Code (or your preferred agent type) |
-| **Capabilities** | `*`             |
+
+Then add the capability `*` on the agent's **Capabilities** tab.
 
 A capability of `*` matches any work, including the `action:Auto-Label Issue`
 capability this task will request. See
@@ -351,8 +357,8 @@ only @mentions. The `since` parameter limits results to the summary's time windo
 
 ### Step 3: Create the Action Type
 
-Navigate to **Action Types** and click **Create Action Type** with the name
-`Summarize @Mentions` and execution mode **Agent**. On the detail page:
+Navigate to **Components > Action Types** and click **Create Action Type** with the name
+`Summarize @Mentions` and execution mode **Agent — AI agent**. On the detail page:
 
 **Allowed Tools tab** — add the tool and the SDK functions used to find the subject and post to its
 thread:
@@ -384,7 +390,7 @@ Summarize all GitHub @mentions from the past 7 days.
 
 ### Step 4: Create the Workflow and Schedule Trigger
 
-Navigate to **Workflows**, create a workflow named `Weekly @Mentions`, add a
+Navigate to **Components > Workflows**, create a workflow definition named `Weekly @Mentions`, add a
 **Summarize @Mentions** action node between Start and End, map its `subjectName` input from
 `context.subjectName`, and click **Publish**.
 

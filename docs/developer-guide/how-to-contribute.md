@@ -40,8 +40,11 @@ When making changes, use this guide to find the right module:
 | GitHub polling | `events/github/` |
 | Jira polling | `events/jira/` |
 | Event stream routing, workflow, and pipeline orchestration | `app/` (`EventStreamOrchestrator`, `TaskExecutionService`, `WorkflowExecutionService`, etc.) |
-| UI page or component | `ui/src/pages/` or `ui/src/components/` |
-| API client functions | `ui/src/config/api.ts` |
+| Workflow Workbench (compositions, AI turns, test runs, publishing) | `app/src/main/java/io/apitomy/axiom/app/composition/` + `CompositionsResourceImpl` |
+| AI Assistant sessions and engine drivers | `app/src/main/java/io/apitomy/axiom/app/assistant/` |
+| Built-in MCP servers and assistant templates | `app/src/main/resources/templates/` |
+| UI page or component | `ui/src/pages/` (workbench: `ui/src/pages/workbench/`) or `ui/src/components/` |
+| API client functions | `ui/src/config/api.ts` (workbench: `ui/src/config/compositions.ts`) |
 | Database schema | `app/src/main/resources/db/migration/V1__baseline.sql` (edit in place until the first release) |
 
 ---
@@ -98,8 +101,10 @@ docs: add extending-axiom developer guide
    ```
 2. **Make your changes** following the conventions above
 3. **Test locally**:
-   - `mvn test` — run backend unit tests
+   - `mvn test` — run backend unit tests (or one test:
+     `mvn -q -pl app -am test -Dtest=MyTest -Dsurefire.failIfNoSpecifiedTests=false`)
    - `cd ui && npm run build` — type-check the frontend
+   - `cd ui && npm test` — run the UI unit tests
    - `./dev.sh` — verify the change works end-to-end
 4. **Commit** with a conventional commit message
 5. **Push** and open a pull request against `main`
@@ -121,8 +126,12 @@ All submissions require code review before merging.
 
 ### Unit Tests
 
-Standard Maven tests — run with `mvn test` from the project root or a specific module
-directory.
+Standard JUnit 5 tests — run with `mvn test` from the project root. To run one test class in a module and
+build the modules it depends on:
+
+```bash
+mvn -q -pl app -am test -Dtest=MyTest -Dsurefire.failIfNoSpecifiedTests=false
+```
 
 ### UI Tests
 
@@ -131,14 +140,14 @@ UI unit and component tests use Vitest — run them with `cd ui && npm test`. Th
 
 ### Integration Tests
 
-Some tests require a running AI agent CLI. These are gated behind an environment
-variable:
+Some tests start a real AI agent CLI (`opencode` or `claude`) and may consume tokens. They are tagged
+`live-cli` and excluded by default. Enable them with the `live-cli-tests` profile:
 
 ```bash
-AXIOM_CLAUDE_TESTS=true mvn test
+mvn test -Plive-cli-tests
 ```
 
-This requires the `claude` CLI on your PATH and a valid `ANTHROPIC_API_KEY`.
+This requires the agent CLI on your PATH and valid credentials for it.
 
 ---
 
@@ -160,3 +169,5 @@ This starts a local server at `http://localhost:8000` with live reload.
 1. Create a Markdown file in the appropriate `docs/` subdirectory
 2. Add a nav entry in `mkdocs.yml`
 3. Verify the build: `python3 -m mkdocs build --strict`
+
+Install the tools with `pip install mkdocs mkdocs-material`.

@@ -93,6 +93,11 @@ Each node has at most one origin, except workflow runs, which can also have resu
 | workflow run        | `trigger_event_id` → event (`triggered`); each `workflow_run_resume.event_id` → event (`resumed`) |
 | event               | none                                                                                        |
 
+`trigger_event_id` is set for every run started from an event: by a `create-workflow` routing rule, manually
+from the event detail page, or as a re-run of a run that was started from an event. Manual runs from an event
+have no ledger entry or routing outcome, so they are linked only through `trigger_event_id`. A re-run is not
+linked to the run it repeats; that link exists only as the run's `rerunOf:<runId>` label.
+
 ### Downstream (results)
 
 | Node                | Results                                                                                    |

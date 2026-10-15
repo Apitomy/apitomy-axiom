@@ -14,35 +14,40 @@ versioned workflows that delegate work to AI agents, scripts, and humans.
 - Workflow action nodes run action types through a pool of AI agents (or as scripts); human-task nodes
   wait in the Inbox
 - Subjects (issues, pull requests, named subjects) hold the workspace and thread shared by their runs
+- The Workflow Workbench is an authoring workspace where you build a workflow together with its action
+  types and tools, test them, and work with an AI Assistant that proposes changes
 - A UI with Runs as its landing page provides visibility into runs, subjects, tasks, and configuration
 
 ## Tech Stack
 
 | Component | Technology |
 |-----------|-----------|
-| Backend | Java 25 / Quarkus 3.33 LTS |
+| Backend | Java 25 / Quarkus 3.40 |
 | Frontend | TypeScript / React / PatternFly |
 | Database | H2 (in-memory dev, file-based prod) |
-| AI | Pluggable: Claude Code CLI or OpenCode (configurable) |
+| AI | Pluggable: Claude Code CLI, OpenCode or GitHub Copilot CLI (configurable) |
+| Workflow editor/engine | Apitomy Flow 3.0.2 (`@apitomy/flow-ui`, `apitomy-flow-engine`) |
 | API | Contract-first OpenAPI + apitomy-codegen |
 
 ## AI Engine
 
-Axiom's AI engine is pluggable. Set `axiom.ai-engine` in `application.properties` to
-select which engine to use:
+Axiom's AI engine is pluggable. Set `axiom.agent.default-type` (for example with the
+`AXIOM_AGENT_DEFAULT_TYPE` environment variable) or use **Settings > AI Engine** in the UI to select the
+default engine:
 
 | Engine | Config Value | Binary | Install |
 |--------|-------------|--------|---------|
 | Claude Code | `claude-code` (default) | `claude` | `npm install -g @anthropic-ai/claude-code` |
 | OpenCode | `opencode` | `opencode` | `curl -fsSL https://opencode.ai/install \| bash` |
+| GitHub Copilot CLI | `copilot` | `copilot` | `npm install -g @github/copilot` |
 
-Only the selected engine's binary needs to be installed. Both can coexist for testing.
+Only the selected engine's binary needs to be installed. Several engines can coexist.
 
 ## Prerequisites
 
 - Java 25+
 - Maven 3.9+
-- Node.js 20+ (for UI and MCP tool server)
+- Node.js 20.19+ or 22.12+ (for UI and MCP tool server)
 - One of the AI engine CLIs (see table above)
 - API key for your LLM provider (e.g. `ANTHROPIC_API_KEY`)
 
@@ -88,11 +93,17 @@ dev server side by side:
 - UI starts on **http://localhost:9191** (proxies API requests to the backend)
 - Both run in the foreground — **Ctrl+C** stops everything
 
-To run the backend only (no UI):
+Other options:
 
 ```bash
-./dev.sh --skip-ui
+./dev.sh --skip-ui          # backend only (no UI)
+./dev.sh --persist          # use the persist profile (file-based H2 database in ~/.axiom/data)
+./dev.sh --dataDir=/path    # store the H2 database in /path (implies --persist)
+./dev.sh --portOffset=100   # offset both ports (backend 9190, UI 9291)
 ```
+
+Without `--persist` the backend uses the `dev` profile: an in-memory database that is recreated on every
+restart.
 
 ## Project Structure
 
@@ -130,7 +141,10 @@ See [Database & Migrations](docs/developer-guide/database-and-migrations.md).
 
 ## Documentation
 
+- [Running Axiom](docs/getting-started/running-axiom.md)
+- [Configuring Axiom](docs/getting-started/configuring-axiom.md)
 - [Concepts](docs/user-guide/concepts.md)
+- [Navigating the UI](docs/user-guide/navigating-the-ui.md)
 - [Workflows](docs/user-guide/workflows.md)
 - [Stack & Architecture](docs/developer-guide/stack-and-architecture.md)
 

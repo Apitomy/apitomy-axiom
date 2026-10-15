@@ -39,16 +39,18 @@ went wrong and examining the logs at that stage.
 
 | Symptom | Where to check first |
 |---------|---------------------|
-| No events appearing at all | **Event Sources** > event source detail page > Poll Log tab |
-| Events appear but no subscription matches | **Subscriptions** — use Preview to test the filter expression |
-| A subscription matched but no run started | Subscription's routing rules — confirm a `create-workflow` rule is configured; check the routing outcome for a `skipped` run (the subject already had an active run of that definition) |
+| No events appearing at all | **Events > Event Sources** > event source detail page > **Poll Logs** tab |
+| Events appear but no subscription matches | **Events > Subscriptions** — use the **Preview** on the **Filter** tab to test the filter expression |
+| A subscription matched but no run started | Event detail page > **Processing** tab — check the routing outcome (a `skipped` run means the subject already had an active run of that definition); confirm a `create-workflow` rule is configured |
 | A waiting run never received an event | Confirm a `workflow-dispatch` rule matches the event and the `receive-event` node's event type and condition match |
 | A schedule trigger didn't start a run | Workflow definition > **Triggers** tab — check **Enabled**, **Next run**, and **Last outcome** (`skipped` or `failed: …`) |
 | Workflow run stuck or failed | **Runs** — open the run, check the current node, status, and failure reason |
+| Which runs did this event start? | Event detail page > **Runs** tab |
+| A run failed and you fixed the cause | Subject detail page > **Runs** tab > **Re-run** |
 | Task was created but failed | **Logs > Tasks** — click **View Log** on the failed task |
-| Task completed but result is wrong | Run detail page or subject **Tasks** tab > **View Log** |
+| Task completed but result is wrong | Run detail page **Overview** tab (**log** link of the task) or subject **Tasks** tab > **View Log** |
 | No agent picks up a task | **Components > Agents** — confirm an enabled agent's capabilities match `action:<name>` |
-| Want to see the full run tree for one workflow run | **Logs > Traces** |
+| Want to see the full run tree for one workflow run | Run detail page > **Execution Trace** tab, or **Logs > Traces** |
 | Want to see where a task or run came from and everything it led to | **Lineage** panel (see below) |
 | Don't know where to start | **Logs > All Activity** — scan the timeline |
 
@@ -75,11 +77,12 @@ Every entry has a **type** label that tells you what happened, including:
 
 ### Filtering the Activity Log
 
-The activity log can be filtered by:
+The activity log can be filtered with filter chips by:
 
 - **Entry Type** — show only workflow activity, only task activity, etc.
 - **Summary** — text search across activity summaries
 - **Subject ID** — show all activity for a specific subject
+- **Event ID** and **Trace ID** — show the activity of one event or one trace
 
 ### Viewing Execution Logs
 
@@ -92,51 +95,72 @@ full AI agent output showing what the agent did.
 
 ### Step 1: Verify Events Are Being Received
 
-Navigate to **Event Stream**. This page shows every event that Axiom has recorded from its event sources.
-Each event shows:
+Navigate to **Events > Event Stream**. This page shows every event that Axiom has recorded from its event
+sources. Each event shows:
 
 - **Source** — which event source produced it (e.g. `github`)
 - **Type** — the normalized event type (e.g. `issue.created`, `pr.merged`)
 - **Ref** — the full URL identifying the subject of the event
 - **Timestamp** — when the activity occurred in the source system
 
-Click any event row to open the detail view, which shows the full typed payload. This is useful for
-verifying that the event source is producing the data you expect.
+Narrow the list with filter chips for **Event Type**, **Event Source**, **Ref** and **Actor** (the exact
+login, case-insensitive). Clicking an event's type, source or actor label adds it as a filter.
+
+Click any event row to open the event detail page. It has three tabs:
+
+- **Event** — the full typed payload. This is useful for verifying that the event source is producing the
+  data you expect.
+- **Processing** — the event processing trail: one entry per subscription that evaluated the event, with
+  its status, attempts and routing outcome (see [Step 2](#step-2-verify-a-subscription-matched)).
+- **Runs** — the workflow runs started from this event, by routing rules or manually.
+
+Use **Run workflow…** on the event detail page to start any published workflow from the event by hand,
+for example to test a workflow against a real event. See
+[Triggering a Workflow](workflows.md#triggering-a-workflow).
 
 **If no events appear**, check the event source configuration:
 
-1. Navigate to **Event Sources** and click on the event source
-2. Check the **Poll Log** tab — this shows the result of each poll cycle, including any errors
+1. Navigate to **Events > Event Sources** and click on the event source
+2. Check the **Poll Logs** tab — this shows the result of each poll cycle, including any errors
 3. Verify the event source is **Enabled**
 4. Verify the **Authentication Secret** is set and the token is valid
 5. Check the **Poll Interval** — a long interval means events may be delayed
 
 ### Step 2: Verify a Subscription Matched
 
-If events are appearing in the stream but nothing downstream is happening, check **Subscriptions**:
+If events are appearing in the stream but nothing downstream is happening, check **Events >
+Subscriptions**:
 
 1. Open the subscription you expect to match the event
-2. Use **Preview** to test the filter expression against recent events and confirm it matches
+2. On the **Filter** tab, use **Preview** to test the filter expression against recent events and confirm
+   it matches
 3. Verify the subscription is **Enabled**
 4. Check **Process Events From** — events that occurred before this cutoff are never evaluated against the
    subscription
-5. Confirm at least one routing rule is configured with the type you expect (`create-workflow` or
-   `workflow-dispatch`)
+5. Confirm at least one routing rule is configured on the **Routing** tab with the type you expect
+   (`create-workflow` or `workflow-dispatch`)
 
-Each (event, subscription) pair is tracked in a processing ledger with a status of `skipped` (filter didn't
-match), `completed` (routing succeeded), or `failed` (routing threw an exception, retried automatically on
-each tick). A `create-workflow` rule whose subject already has an active run of the same definition
-completes with a **skipped** run item in its routing outcome — no run is queued.
+Each (event, subscription) pair is tracked in a processing ledger, shown on the event's **Processing**
+tab. Its status is `skipped` (filter didn't match), `completed` (routing succeeded), `failed` (routing
+threw an exception and will be retried), or `exhausted` (all attempts failed). A failed entry is retried
+with a growing delay, up to `axiom.stream-pipeline.max-attempts` attempts in total (default 3). The entry
+shows its attempts, last attempt and next retry; use **Retry now** (or **Retry once more** for an
+exhausted entry) to retry immediately. A `create-workflow` rule whose subject already has an active run of
+the same definition completes with a **skipped** run item in its routing outcome — no run is queued.
 
 ### Step 3: Check the Run
 
-Open the **Runs** page and filter by subject or definition. The run detail page shows:
+Open the **Runs** page and filter by subject, workflow, status or label. The run detail page shows:
 
-- The node the run is currently at (or where it stopped) and any failure reason
-- Whether it's waiting on a timer (`wait` node), an external event (`receive-event` node), or a human
-  response (`human-task` node, visible in the Inbox)
-- The triggering event, the run's inputs and labels, and the tasks created by its nodes
-- A link to the run's execution trace
+- On the **Overview** tab: the run's status, any failure reason, the triggering event, the events that
+  resumed it, its inputs and labels, and the tasks created by its nodes with their output and log
+- On the **Diagram** tab: where the run is in the graph — whether it's waiting on a timer (`wait` node), an
+  external event (`receive-event` node), or a human response (`human-task` node, visible in the Inbox)
+- On the **Timeline** tab: the nodes the run passed through, in order
+- On the **Execution Trace** tab: the run's trace (see [Using Traces](#using-traces))
+
+If you fix the cause of a failed run, start it again with **Re-run** on the subject's **Runs** tab. See
+[Re-running a Failed Run](workflows.md#re-running-a-failed-run).
 
 See [Workflows](workflows.md) for the full authoring and run-time reference.
 
@@ -181,12 +205,16 @@ The subject detail page brings together all the information about a single subje
 
 ### Runs Tab
 
-A timeline of every workflow run on the subject, active and past. Click a run to open its detail page.
+A list of every workflow run on the subject, active and past, newest first. Click a run to open its detail
+page. Failed runs have a **Re-run** button that starts a new run of the latest published version of the
+workflow with the same title, labels and inputs (see
+[Re-running a Failed Run](workflows.md#re-running-a-failed-run)).
 
 ### Tasks Tab
 
 Shows every task created by runs on this subject. Each task lists its action type, assigned agent, status,
-and timestamps. Click **View Log** on any completed or failed task to see exactly what the agent did.
+and timestamps. Click **View Log** on any completed or failed task to see exactly what the agent did, or
+**Lineage** to see where the task came from.
 
 ### Thread Tab
 
@@ -205,7 +233,7 @@ Shows all stream events (from event sources) that were associated with this subj
 The **Lineage** panel shows the chain of work an item belongs to, so you do not have to hop between the event,
 trace, workflow run, task and usage pages. It is available on:
 
-- the event detail page (expand **Lineage** below the summary),
+- the event detail page (expand **Lineage** below the tabs),
 - the workflow run detail page (**Lineage** tab),
 - the **Logs > Tasks** page and the subject **Tasks** tab (**Lineage** button on each task).
 
@@ -236,9 +264,10 @@ what order, and how long did each step take?"
 
 ### Accessing Traces
 
-- **Logs > Traces** — browse all traces with filtering by status
-- **Subject detail page** and **workflow run detail page** — traces associated with
-  that subject or run
+- **Logs > Traces** — browse all traces, with filter chips for type and status
+- The workflow run detail page's **Execution Trace** tab — the trace of that run
+- The **Logs > All Activity** page — the **Trace** column links each entry to its trace, and the subject
+  **Tasks** tab has a **Trace** column for each task
 
 ### Reading the Trace Graph
 
@@ -270,11 +299,12 @@ and re-renders the graph when the trace changes.
 
 When something isn't working, work through the pipeline in order:
 
-1. **Is the event source polling?** Check the event source detail page > Poll Log tab.
-2. **Are events being recorded?** Check **Event Stream**.
-3. **Does a subscription match?** Check **Subscriptions** and use Preview.
-4. **Did the routing rule fire?** Check the ledger status and routing outcome for that (event,
-   subscription) pair — including `skipped` run items — or look for the run on the **Runs** page.
+1. **Is the event source polling?** Check the event source detail page > **Poll Logs** tab.
+2. **Are events being recorded?** Check **Events > Event Stream**.
+3. **Does a subscription match?** Check **Events > Subscriptions** and use Preview.
+4. **Did the routing rule fire?** Check the event's **Processing** tab for the ledger status and routing
+   outcome of that (event, subscription) pair — including `skipped` run items — and its **Runs** tab, or
+   look for the run on the **Runs** page.
 5. **For schedules, did the trigger fire?** Check the **Triggers** tab's last outcome.
 6. **Where is the run?** Open the run and check its current node, status, and failure reason.
 7. **Was an agent available?** Check **Components > Agents** — is there an enabled agent with matching

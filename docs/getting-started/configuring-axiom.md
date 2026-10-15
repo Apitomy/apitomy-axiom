@@ -39,6 +39,12 @@ The active default agent can also be changed at runtime from **Settings > AI Eng
 the UI, without restarting the server. The UI setting takes precedence over
 `axiom.agent.default-type` once it has been set.
 
+### Server
+
+| Property | Default | Description |
+|----------|---------|--------------|
+| `quarkus.http.port` | `9090` (`9191` in the `prod` profile) | HTTP port of the UI and REST API (`/api/v1`) |
+
 ### AI Agents
 
 Axiom supports multiple pluggable AI agents (Claude Code, OpenCode, and GitHub Copilot
@@ -56,10 +62,10 @@ CLI). Set the default agent used for tasks
 |----------|---------|--------------|
 | `axiom.agent.claude-code.executable` | `claude` | Path to the Claude CLI binary |
 | `axiom.agent.claude-code.model` | *(agent default)* | AI model override |
-| `axiom.agent.claude-code.max-steps` | `50` | Maximum agentic steps per task |
+| `axiom.agent.claude-code.max-steps` | `50` | Maximum agentic turns per task (passed as `--max-turns`) |
 | `axiom.agent.claude-code.max-budget-usd` | `5.0` | Maximum cost per task in USD |
 | `axiom.agent.claude-code.timeout-seconds` | `600` | Subprocess timeout |
-| `axiom.agent.claude-code.available-models` | *(empty)* | Comma-separated model list for the UI model picker |
+| `axiom.agent.claude-code.available-models` | *(see `application.properties`)* | Comma-separated model list for the UI model picker |
 
 #### OpenCode Settings
 
@@ -68,10 +74,10 @@ CLI). Set the default agent used for tasks
 | `axiom.agent.opencode.executable` | `opencode` | Path to the OpenCode CLI binary |
 | `axiom.agent.opencode.server.hostname` | `127.0.0.1` | OpenCode server hostname |
 | `axiom.agent.opencode.server.port` | `4096` | OpenCode server port |
-| `axiom.agent.opencode.model` | *(agent default)* | Model in `provider/model` format |
+| `axiom.agent.opencode.model` | *(see `application.properties`)* | Model in `provider/model` format |
 | `axiom.agent.opencode.max-steps` | `50` | Maximum agent steps per task |
 | `axiom.agent.opencode.timeout-seconds` | `600` | HTTP request timeout |
-| `axiom.agent.opencode.available-models` | *(empty)* | Comma-separated model list for the UI model picker |
+| `axiom.agent.opencode.available-models` | *(see `application.properties`)* | Comma-separated model list for the UI model picker |
 | `axiom.agent.opencode.model-discovery.enabled` | `true` | Enable dynamic model discovery from the OpenCode server |
 | `axiom.agent.opencode.model-discovery.timeout-seconds` | `8` | Timeout for a model discovery request |
 | `axiom.agent.opencode.model-discovery.cache-seconds` | `86400` | How long discovered models are cached |
@@ -83,17 +89,7 @@ CLI). Set the default agent used for tasks
 | `axiom.agent.copilot.executable` | `copilot` | Path to the Copilot CLI binary |
 | `axiom.agent.copilot.model` | *(agent default)* | AI model override |
 | `axiom.agent.copilot.timeout-seconds` | `600` | Subprocess timeout |
-| `axiom.agent.copilot.available-models` | *(empty)* | Comma-separated model list for the UI model picker |
-
-### Helper Services
-
-The AI helper services behind the prompt, script, and tool editors in the UI can use a different agent
-type or model than the global default.
-
-| Property | Default | Description |
-|----------|---------|--------------|
-| `axiom.helper-services.engine` | *(global default)* | Agent type override for the AI helper services |
-| `axiom.helper-services.model` | *(agent default)* | Model override for the AI helper services (formerly `axiom.manager.model`) |
+| `axiom.agent.copilot.available-models` | *(see `application.properties`)* | Comma-separated model list for the UI model picker |
 
 ### Event Stream Pipeline
 
@@ -114,6 +110,12 @@ not greater than zero, or `retry-max-delay` is less than `retry-initial-delay` (
 | `axiom.workflow.schedule-poll-interval` | `30s` | How often to check for due workflow schedule triggers. Schedule triggers fire on a single node only; running several Axiom nodes against one database is not supported for schedule triggers. |
 | `axiom.workflow.wait-poll-interval` | `10s` | How often to resume workflow runs whose `wait` node has elapsed |
 
+### Scripts
+
+| Property | Default | Description |
+|----------|---------|--------------|
+| `axiom.script.timeout-seconds` | `60` | Maximum run time, in seconds, of a Script or Node.js action type; output gets a `[Script timed out after Ns]` note (Script) or a `[Node action timed out after Ns]` note (Node.js) when it is exceeded. Tools are not affected: they time out after a fixed 30 seconds. |
+
 ### AI Assistant
 
 The interactive AI Assistant allows users to create and update configuration items through
@@ -121,9 +123,16 @@ conversation.
 
 | Property | Default | Description |
 |----------|---------|--------------|
-| `axiom.assistant.max-sessions` | `3` | Maximum concurrent assistant sessions |
+| `axiom.assistant.max-sessions` | `12` | Maximum concurrent assistant sessions |
 | `axiom.assistant.opencode.executable` | `opencode` | OpenCode CLI executable used for interactive sessions |
 | `axiom.assistant.opencode.startup-timeout-seconds` | `30` | Per-session server startup timeout |
+| `axiom.assistant.opencode.server.port` | *(unset)* | Port for each interactive OpenCode server; when unset, port `0` is used |
+
+### Workflow Workbench
+
+| Property | Default | Description |
+|----------|---------|--------------|
+| `axiom.workbench.interrupt-timeout-seconds` | `30` | When the user stops an AI turn in the workbench and the session has not ended it after this many seconds, the turn is finished as failed |
 
 Session availability also depends on which registered agents support interactive
 sessions — see [AI Assistant](../user-guide/ai-assistant.md).

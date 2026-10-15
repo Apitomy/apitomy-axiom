@@ -50,6 +50,7 @@ nav:
     - Navigating the UI: user-guide/navigating-the-ui.md
     - Usage Examples: user-guide/usage-examples.md
     - Workflows: user-guide/workflows.md
+    - Workflow Workbench: user-guide/workbench.md
     - AI Assistant: user-guide/ai-assistant.md
     - Logging and Debugging: user-guide/logging-and-debugging.md
   - Developer Guide:

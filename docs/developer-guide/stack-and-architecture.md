@@ -11,16 +11,36 @@ the authoritative reference and change more often than documentation should chas
 
 | Layer | Technology |
 |-------|-----------|
-| Language | Java |
-| Framework | Quarkus |
+| Language | Java 25 |
+| Framework | Quarkus 3 |
 | Database | H2 (in-memory for dev, file-based for prod) |
 | ORM | Hibernate with Panache (active record pattern) |
 | Migrations | Flyway |
-| Frontend | TypeScript, React, PatternFly |
+| Frontend | TypeScript, React 19, PatternFly 6 |
+| Workflow engine and editor | Apitomy Flow 3.0.2 (`apitomy-flow-engine`, `@apitomy/flow-ui`) |
 | Build (frontend) | Vite |
 | Build (backend) | Maven |
 | API | Contract-first OpenAPI with Apitomy Codegen |
 | AI Agents | Claude Code CLI, OpenCode, GitHub Copilot CLI (pluggable) |
+
+---
+
+## Module Layout
+
+The root `pom.xml` lists these modules:
+
+| Module | Contents |
+|--------|----------|
+| `common/api` | `openapi.json` and the JAX-RS interfaces and beans generated from it |
+| `core` | Entities, SSE events, filters, tracing and other shared services |
+| `agents/spi` | The `Agent` SPI |
+| `agents/claude-code`, `agents/opencode`, `agents/copilot` | Agent implementations |
+| `events/core` | Event stream persistence and the event source SPI |
+| `events/github`, `events/jira` | Event source pollers |
+| `notifications/spi` | The notification channel SPI |
+| `notifications/slack`, `notifications/telegram` | Notification channels |
+| `app` | The Quarkus application: REST resources, workflow execution, AI Assistant sessions and the workbench |
+| `ui-bundle` | Packages the React UI from `ui/` into the JAR (only with the `ui` profile) |
 
 ---
 
@@ -139,7 +159,7 @@ AssistantSessionManager
   │  Runs optional init script
   │
   ▼
-InteractiveSessionDriver (Claude Code or OpenCode)
+InteractiveSessionDriver (ClaudeInteractiveSessionDriver or OpenCodeInteractiveSessionDriver)
   │  ProcessBuilder or HTTP session with stream-json / SSE I/O
   │  Virtual threads: stdout reader, stderr reader, process monitor
   │
@@ -154,8 +174,42 @@ JAX-RS SSE endpoint (per-session)
   │  Full event history replay on reconnect
 ```
 
-Sessions are in-memory — they do not survive server restarts. Cost and token usage
-are accumulated per-session and persisted to `AiUsageEntity` on session destruction.
+Live sessions are held in memory, and the agent process does not survive a server restart. Each session's
+events are also appended to a JSON Lines history journal (`HistoryJournal`), so a conversation can be shown
+again after a restart. Cost and token usage are accumulated per session and persisted to `AiUsageEntity` when
+the session is destroyed (only if the session had at least one turn).
+
+Each session gets an MCP token. REST routes that only a session's own MCP server may call check the
+`X-Axiom-Session-Token` header with `SessionTokenGuard` and return 401 if it is missing or wrong. The token
+keeps sessions apart; it does not protect Axiom from the agent itself, which can read the token from its
+environment.
+
+### Workflow Workbench
+
+```
+CompositionsResourceImpl (REST, /compositions)
+  │
+  ▼
+CompositionService          → saves composition items (workflow, action types, tools) as drafts,
+  │                           checks the base revision, records revisions, fires composition-item-changed
+  ├── WorkbenchSessions     → binds each composition to one agent session (template "axiom-workbench")
+  ├── CompositionTurns      → runs AI turns; collects workflow change sets, fires composition-turn and
+  │                           composition-changeset
+  ├── TurnUndo              → undoes an AI turn
+  ├── CompositionValidator  → validates drafts with the same rules as publishing
+  ├── CompositionTestRuns   → runs node/script action type and tool drafts, fires composition-test-run
+  └── CompositionPublisher  → publishes selected drafts as one configuration pack in one transaction
+```
+
+The workbench agent reaches Axiom through the built-in `@axiom-workbench` MCP server
+(`app/src/main/resources/templates/axiom-workbench-mcp/server.js`). Its tools read the composition, write
+action types and tools (`upsert_item`, `remove_item`), propose workflow changes
+(`propose_workflow_changes`), validate, suggest tests (`suggest_test`), and look up events, runs, traces and
+existing components. The agent cannot run tests or change the workflow directly: workflow change sets are
+applied by the user's editor when the turn ends, and only the user runs tests. Calls from the MCP server to
+the `/compositions/{compositionId}/agent/...` routes are checked by `SessionTokenGuard`.
+
+See [Workflow Workbench](../user-guide/workbench.md) for the user-facing description.
 
 #### Init Script Security
 
@@ -183,6 +237,11 @@ server-level code execution.
 
 ### Real-Time Updates (SSE)
 
+Event types include `subject-updated`, `task-updated`, `workflow-updated`, `stream-event`, `trace-updated`,
+`inbox-updated`, `notification`, `activity`, `assistant-session-event`, the workbench events
+`composition-item-changed`, `composition-turn`, `composition-changeset` and `composition-test-run`, and
+`heartbeat`. See `core/src/main/java/io/apitomy/axiom/core/events/SseEvent.java` for the full list.
+
 ```
 Any service fires CDI event: Event<SseEvent>
   │
@@ -191,8 +250,8 @@ SseResource (@Observes SseEvent)
   │  Broadcasts to all connected clients
   │
   ▼
-SseClient (browser)
-  │  EventSource with auto-reconnect
+ui/src/config/sse.ts (browser)
+  │  Shared connection (sse-worker.ts) with auto-reconnect
   │  UI components update reactively
 ```
 

@@ -25,10 +25,14 @@ leaves its current value unchanged.
 
 ## Batching and Retries
 
-Every job runs hourly (staggered with `delayed`), selects at most 500 IDs per transaction, and deletes by
-those IDs or with sub-selects, never with an unbounded `IN` list. Each batch runs in its own transaction
-through `CleanupRetry`, which retries database lock failures. Each job has a package-private `doCleanup()`
-that runs all batches in the caller's transaction; tests use it.
+Every job runs hourly. `TraceCleanup`, `StreamEventCleanup` and `HistoryCleanup` are batched: they are
+staggered with `delayed` start times of 3, 6 and 9 minutes, select at most 500 IDs (`BATCH_SIZE`) per
+transaction, and delete by those IDs or with sub-selects, never with an unbounded `IN` list. Each batch runs
+in its own transaction through `CleanupRetry`, which retries database lock failures. Each of these three jobs
+has a package-private `doCleanup()` that runs all batches in the caller's transaction; tests use it.
+
+`InactiveSubjectCleanup` is not batched. It runs hourly without a start delay and deletes all qualifying
+subjects in one `@Transactional` method through `SubjectDeletionService`, without `CleanupRetry`.
 
 ## What Each Job Does
 
@@ -82,6 +86,13 @@ added later are kept until the list is updated. Deleting a workflow run deletes 
 `workflow_event_subscription` and `workflow_run_resume` rows and clears `task.workflow_run_id` and
 `routing_outcome_item.workflow_run_id`. Tasks are kept: they belong to the subject and are deleted with it.
 The run's trace follows trace retention.
+
+## Data Not Covered by Retention
+
+Workbench test runs of draft action types and tools (`CompositionTestRuns`) are not stored in the database.
+They are kept in memory, at most 50 per composition (the oldest is dropped first), and are lost when the
+server restarts. Deleting a composition drops its test runs. They create no traces, tasks or workflow runs, so
+no cleanup job handles them.
 
 ## Concurrency
 

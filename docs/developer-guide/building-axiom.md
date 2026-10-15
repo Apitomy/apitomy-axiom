@@ -8,9 +8,9 @@ This guide covers how to build, run, and develop Axiom locally.
 
 | Requirement | Purpose |
 |------------|---------|
-| Java | Backend compilation and runtime |
-| Maven | Build system |
-| Node.js and npm | UI build (auto-installed by Maven in release builds) and runtime support for custom MCP tool servers and the AI Assistant's MCP server |
+| Java 25+ | Backend compilation and runtime |
+| Maven 3.9+ | Build system |
+| Node.js 20.19+ or 22.12+ and npm | UI build (auto-installed by Maven in release builds) and runtime support for custom MCP tool servers and the AI Assistant's MCP server |
 | AI agent CLI | One of `claude`, `opencode`, or `copilot` for AI features |
 | API key | `ANTHROPIC_API_KEY` or provider-specific key |
 
@@ -59,25 +59,32 @@ and package the resulting `dist/` folder into `META-INF/resources/` inside the J
 
 The `-Pprod` profile configures Quarkus to produce an uber-jar.
 
-Output: `app/target/quarkus-app/quarkus-run.jar` (the release workflow republishes
-this as `app/target/apitomy-axiom-app-<version>-runner.jar`)
+Output: `app/target/apitomy-axiom-app-<version>-runner.jar` (the release workflow republishes
+this as `apitomy-axiom-<version>.jar`)
 
 The resulting application can be started with:
 
 ```bash
-java -jar app/target/quarkus-app/quarkus-run.jar
+java -jar app/target/apitomy-axiom-app-<version>-runner.jar
 ```
 
 ### `build-all.sh` — Full Build with Integration Tests
 
-Includes integration tests that require the Claude Code CLI to be installed and an
-`ANTHROPIC_API_KEY` set.
+Intended for a full build including tests that need a real AI agent CLI. The script warns if the
+`claude` CLI is not on the `PATH` or `ANTHROPIC_API_KEY` is not set.
 
 ```bash
 ./build-all.sh
 ```
 
-Runs: `AXIOM_CLAUDE_TESTS=true mvn clean package`
+Runs: `AXIOM_CLAUDE_TESTS=true mvn clean package`. Extra arguments are passed to Maven.
+
+Tests tagged `live-cli` start a real `opencode` or `claude` CLI and may consume tokens. They are excluded by
+default. Enable them with the `live-cli-tests` profile:
+
+```bash
+./build-all.sh -Plive-cli-tests
+```
 
 ### `dev.sh` — Development Mode
 
@@ -111,12 +118,14 @@ Both processes run in the foreground — **Ctrl+C** stops everything.
 | `--skip-ui` | Start backend only, no Vite dev server |
 | `--persist` | Use file-based H2 database (survives restarts) |
 | `--portOffset=N` | Offset both the backend and UI dev server ports by `N` |
+| `--dataDir=PATH` | Store the H2 database in `PATH` (implies `--persist`) |
 
 ```bash
 ./dev.sh --skip-ui              # Backend only
 ./dev.sh --persist              # Persistent database
 ./dev.sh --persist --skip-ui    # Both flags
 ./dev.sh --portOffset=100       # Backend on 9190, UI on 9291
+./dev.sh --dataDir=/tmp/axiom   # Persistent database in /tmp/axiom
 ```
 
 ---
@@ -127,6 +136,7 @@ Both processes run in the foreground — **Ctrl+C** stops everything.
 |---------|-------------|-------------|
 | `ui` | Includes the `ui-bundle` module (builds and packages the React UI) | `-Pui` |
 | `prod` | Produces an uber-jar with production settings | `-Pprod` or auto in `build-release.sh` |
+| `live-cli-tests` | Runs tests tagged `live-cli`, which start a real agent CLI | `-Plive-cli-tests` |
 
 ---
 
@@ -155,7 +165,14 @@ A typical development loop:
 3. Edit frontend TypeScript/React code — Vite hot-reloads instantly
 4. Edit backend Java code — re-run `./dev.sh` (or use `mvn quarkus:dev` from the `app`
    module for hot reload)
-5. Run `mvn test` in a module directory to run unit tests for that module
+5. Run the tests of one module (and build the modules it depends on) from the project root, for example:
+
+    ```bash
+    mvn -q -pl app -am test -Dtest=WorkflowScheduleTriggersResourceTest
+    ```
+
+    Add `-Dsurefire.failIfNoSpecifiedTests=false` when the selected test class is not present in every
+    built module.
 
 ---
 
@@ -164,7 +181,7 @@ A typical development loop:
 | Port | Service | Mode |
 |------|---------|------|
 | 9090 | Backend | Development (`./dev.sh` or `mvn quarkus:dev`) |
-| 9191 | Vite UI dev server | Development (`npm run dev`) |
+| 9191 | Vite UI dev server | Development (`./dev.sh` or `npm run dev`) |
 | 9191 | Backend | Production (release JAR) |
 
 ---

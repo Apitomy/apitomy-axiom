@@ -26,7 +26,7 @@ configuration or, for agent pool work, by capability matching.
 ## Adding an AI Agent
 
 An agent provides the ability to invoke an LLM for task execution (workflow action
-nodes), the AI helper services, and AI Assistant sessions. Axiom ships with three
+nodes) and AI Assistant sessions (including the Workflow Workbench chat). Axiom ships with three
 agent implementations: Claude Code, OpenCode, and GitHub Copilot CLI.
 
 ### Interface: `Agent`
@@ -38,7 +38,9 @@ Location: `agents/spi/src/main/java/io/apitomy/axiom/agents/spi/Agent.java`
 | `String getType()` | Agent type identifier (e.g. `"claude-code"`, `"opencode"`, `"copilot"`) |
 | `String getLabel()` | Human-readable display label |
 | `List<String> getAvailableModels()` | Models available for the UI model picker |
-| `boolean supportsInteractiveSessions()` | Whether this agent can back AI Assistant sessions |
+| `String getModelSource()` | `"configured"` (default) or `"dynamic"` (models discovered at runtime) |
+| `void refreshAvailableModels()` | Refresh a cached model list (default: no-op) |
+| `boolean supportsInteractiveSessions()` | Whether this agent can back AI Assistant sessions (default: `false`) |
 | `CompletableFuture<AgentResult> execute(AgentRequest request)` | Invoke the agent with a prompt |
 | `CompletableFuture<AgentResult> executeWithSchema(AgentRequest request, String jsonSchema)` | Invoke with a JSON schema constraint for structured output |
 | `void cancel(String executionId)` | Best-effort cancellation of a running execution |
@@ -101,7 +103,12 @@ session lifecycle, prompt submission, permission handling, and interrupt/teardow
 `InteractiveSessionDriverFactory` selects the concrete driver per session
 (`ClaudeInteractiveSessionDriver` or `OpenCodeInteractiveSessionDriver`) based on the
 session's resolved agent type, and enforces fail-closed OpenCode compatibility checks
-before allowing session startup.
+before allowing session startup. Only Claude Code and OpenCode have interactive session drivers; the GitHub
+Copilot CLI agent runs tasks only.
+
+Workflow Workbench compositions use the same session runtime with the built-in `axiom-workbench` session
+template and `@axiom-workbench` MCP server (see
+[Stack & Architecture](stack-and-architecture.md#workflow-workbench)).
 
 ---
 
@@ -228,6 +235,7 @@ validated. It is called by:
 - `ImportExportService` — configuration-pack import (including import from the UI) and assistant Apply
 - `AssistantItemValidator` — the Configuration Assistant's live feedback, the `axiom_validate_item` MCP
   tool, and `POST /api/v1/assistant/sessions/{sessionId}/validate`
+- `CompositionValidator` and `CompositionPublisher` — Workflow Workbench draft validation and publishing
 
 Workflow publishing does not call the service. `WorkflowPublisher` calls
 `WorkflowContentRules.engineProblems` and `WorkflowContentRules.startInputViolation` directly. The service's

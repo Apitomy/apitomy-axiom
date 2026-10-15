@@ -19,6 +19,8 @@ Activate the `persist` profile during development:
 
 ```bash
 ./dev.sh --persist
+# or, with the database in another directory
+./dev.sh --dataDir=/path/to/data
 # or
 mvn quarkus:dev -Dquarkus.profile=persist
 ```

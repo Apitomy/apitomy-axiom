@@ -5,7 +5,7 @@ downloads and runs the latest release automatically.
 
 ## Prerequisites
 
-- **Java**
+- **Java 25+**
 - **curl** and **jq** (for downloading releases)
 - **Node.js** and **npm** (used by Axiom at runtime for custom MCP tool servers and the
   AI Assistant's MCP server)
@@ -39,9 +39,26 @@ The script will:
 
 1. Query GitHub for the latest Apitomy Axiom release
 2. Download the application JAR (cached in `~/.axiom/releases/` for future runs)
-3. Start the application on **http://localhost:9191**
+3. Start the application on **http://localhost:9191** with the `prod` profile (file-based H2 database
+   in `~/.axiom/data/`)
 
-Open **http://localhost:9191** in your browser to access the Axiom dashboard.
+Open **http://localhost:9191** in your browser to access the Axiom UI. The REST API is served under
+`http://localhost:9191/api/v1`. Arguments passed to the script are passed on to `java -jar`.
+
+## Running from Source
+
+To run the current source code, clone the repository and run `./dev.sh` (requires Java 25+, Maven 3.9+,
+Node.js 20.19+ or 22.12+ and npm). It builds all modules, then starts the backend on
+**http://localhost:9090** and the Vite UI dev server on **http://localhost:9191**, which proxies API requests to the backend.
+
+| Option | Effect |
+|--------|--------|
+| `--skip-ui` | Start the backend only |
+| `--persist` | Use the `persist` profile (file-based H2 database in `~/.axiom/data/`) instead of the in-memory `dev` database |
+| `--dataDir=/path` | Store the H2 database in `/path` (implies `--persist`) |
+| `--portOffset=N` | Add `N` to both ports (for example `100` gives backend 9190 and UI 9291) |
+
+Press **Ctrl+C** to stop both processes.
 
 ## Next Steps
 

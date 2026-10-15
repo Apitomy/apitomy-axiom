@@ -90,6 +90,32 @@ expression, each routing rule executes in order. There are exactly two routing t
 A subscription with no routing rules matches events silently (useful for previewing
 matches before committing to a routing destination).
 
+Event processing is driven by `EventStreamOrchestrator`, a scheduled job that runs every
+`axiom.stream-pipeline.poll-interval` (default 5s). Each tick evaluates new events against enabled
+subscriptions, records the result in the processing ledger (below), runs the routing rules of matching
+subscriptions, and then retries failed ledger entries that are due.
+
+### Starting a run from an event
+
+`create-workflow` rules start runs through `EventStreamOrchestrator.startRunFromEvent`. The same method is
+used for two runs that are not started by a subscription:
+
+- **Manual runs from an event.** The event detail page's "Run workflow…" action
+  (`POST /stream/events/{eventId}/runs`) starts any published workflow for the event. Workflows started by
+  `create-workflow` rules of subscriptions that matched the event are suggested first
+  (`GET /stream/events/{eventId}/workflow-suggestions`). The run gets the label `trigger:manual` in addition
+  to any labels in the request.
+- **Re-runs.** `POST /workflow/runs/{runId}/rerun` re-runs a failed run. When the failed run was started
+  from an event that still exists, the re-run is started from that event.
+
+`startRunFromEvent` finds or creates the subject from the event's `ref`, puts the event into the run's
+context as `event`, and starts the run in its own transaction with the event recorded as its trigger. The
+run, its trace and its `event` context are the same however the run was started. The difference is the
+ledger: only a subscription's `create-workflow` rule has a ledger entry. Manual runs and re-runs write no
+ledger entry and no routing outcome, so their `trigger_ledger_id` is null. If the subject already has an
+active run of the workflow, a manual run fails with HTTP 409 (a routing rule records a `skipped` item
+instead).
+
 ## Processing Ledger
 
 The `event_processing_ledger` table provides durable, restart-safe event processing.
@@ -111,20 +137,20 @@ Each `(event_id, subscription_id)` pair gets a ledger entry with one of four sta
   events whose `timestamp` is at or after that cutoff are ever evaluated against the
   subscription. Enabling a subscription does not retroactively evaluate events that
   occurred before its cutoff.
-- **Retry:** Each ledger entry tracks its attempts: `attempt_count` (the first try
-  included), `last_attempt_at` and, while it is `failed`, `next_attempt_at`. A failed attempt sets
-  `next_attempt_at = now + min(retry-initial-delay * 2^(n-1), retry-max-delay)` where `n` is the number of
-  the attempt that failed (defaults 30s and 1h: 30s, 1m, 2m, ... capped at 1h). The retry pass selects
-  only `failed` entries whose `next_attempt_at` has passed (index on `(status, next_attempt_at)`), and
-  never an entry attempted since the tick started, so the first pass and the retry pass cannot both run
-  an entry in one tick. A retry marks the entry `pending`, increments `attempt_count` and sets
-  `last_attempt_at` before routing, in one conditional update (`... where id = ? and status =
-  'failed'`). If it changes no row, a manual retry or another node got the entry first and it is skipped,
-  so two nodes can never start the same attempt. A retry that re-evaluates the filter (see below) and
-  marks the entry `skipped` still counts as an attempt. When the attempt that reaches
-  `axiom.stream-pipeline.max-attempts` (default 3) fails, the entry becomes `exhausted` (a distinct status rather than `failed` with a null
-  `next_attempt_at`, so lists, filters and the UI can tell "will retry" from "gave up" by status alone),
-  "(giving up after N attempts)" is appended to its error message and a WARN is logged once.
+- **Retry:** Each ledger entry tracks its attempts: `attempt_count` (the first try included),
+  `last_attempt_at` and, while it is `failed`, `next_attempt_at`. A failed attempt sets `next_attempt_at = now
+  + min(retry-initial-delay * 2^(n-1), retry-max-delay)` where `n` is the number of the attempt that failed
+  (defaults 30s and 1h: 30s, 1m, 2m, ... capped at 1h). The retry pass selects only `failed` entries whose
+  `next_attempt_at` has passed (index on `(status, next_attempt_at)`), and never an entry attempted since the
+  tick started, so the first pass and the retry pass cannot both run an entry in one tick. A retry marks the
+  entry `pending`, increments `attempt_count` and sets `last_attempt_at` before routing, in one conditional
+  update (`... where id = ? and status = 'failed'`). If it changes no row, a manual retry or another node got
+  the entry first and it is skipped, so two nodes can never start the same attempt. A retry that re-evaluates
+  the filter (see below) and marks the entry `skipped` still counts as an attempt. When the attempt that
+  reaches `axiom.stream-pipeline.max-attempts` (default 3) fails, the entry becomes `exhausted` (a distinct
+  status rather than `failed` with a null `next_attempt_at`, so lists, filters and the UI can tell "will
+  retry" from "gave up" by status alone), "(giving up after N attempts)" is appended to its error message and
+  a WARN is logged once.
 - **Manual retry:** `POST /stream/events/{eventId}/processing/{ledgerId}/retry` (the retry button on the
   event detail page) makes a `failed` or `exhausted` entry `failed` and due immediately, with one
   conditional update (`... where status in ('failed', 'exhausted')`); it returns 409 for any other status,
@@ -187,10 +213,13 @@ Events and workflow runs are linked both ways. None of these links are foreign k
 event retention deletes events and ledger entries while runs are kept (but never while the run is still
 running or waiting).
 
-- **Started runs (`create-workflow`).** The run stores `trigger_event_id` and `trigger_ledger_id`; the
-  run's `workflow` trace has `eventId` set to the event; the run's context has the event ID as
-  `event.id`; and the outcome's `trace_id` is the run's trace. Runs started any other way (e.g.
-  `POST /subjects/{id}/workflow` or a schedule trigger) have null trigger fields.
+- **Started runs.** A run started from an event (by a `create-workflow` rule, manually from the event, or
+  as a re-run of a run started from an event) stores `trigger_event_id`; the run's `workflow` trace has
+  `eventId` set to the event; and the run's context has the event ID as `event.id`. Only runs started by a
+  `create-workflow` rule also store `trigger_ledger_id`, and their outcome's `trace_id` is the run's trace.
+  Runs started any other way (e.g. `POST /subjects/{id}/workflow` or a schedule trigger) have null trigger
+  fields. `GET /workflow/runs?triggerEventId=<id>` lists the runs started from an event; the event detail
+  page shows them on its "Runs" tab.
 - **Resumed runs (`workflow-dispatch`).** `WorkflowEventDispatcher.dispatchStreamEvent` returns the
   runs it resumed (run, node, trace and receive-event trace node). The `workflow_event_subscription` row
   is deleted when it is consumed, so each resumption is recorded as a `workflow_run_resume` row (run,
@@ -223,8 +252,12 @@ items of an attempt stay on that attempt's outcome and never appear on a later a
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/stream/events` | Browse events (paginated; filters `filterType`, `filterEventSourceId`, `filterRef`) |
+| GET | `/stream/events` | Browse events (paginated; filters `filterType`, `filterEventSourceId`, `filterRef`, `filterActor`) |
 | GET | `/stream/events/{eventId}` | Get a single event with full typed payload |
+| GET | `/stream/events/{eventId}/processing` | Ledger entries, routing outcomes and items for the event |
+| POST | `/stream/events/{eventId}/processing/{ledgerId}/retry` | Retry a `failed` or `exhausted` ledger entry |
+| POST | `/stream/events/{eventId}/runs` | Start a workflow run from the event (label `trigger:manual`, no ledger entry) |
+| GET | `/stream/events/{eventId}/workflow-suggestions` | Workflows started by `create-workflow` rules of subscriptions that matched the event |
 
 ### Subscriptions
 
@@ -232,9 +265,9 @@ items of an attempt stay on that attempt's outcome and never appear on a later a
 |--------|------|---------|
 | GET | `/subscriptions` | List all subscriptions |
 | POST | `/subscriptions` | Create a subscription |
-| GET | `/subscriptions/{id}` | Get a subscription |
-| PUT | `/subscriptions/{id}` | Update a subscription |
-| DELETE | `/subscriptions/{id}` | Delete a subscription |
+| GET | `/subscriptions/{subscriptionId}` | Get a subscription |
+| PUT | `/subscriptions/{subscriptionId}` | Update a subscription |
+| DELETE | `/subscriptions/{subscriptionId}` | Delete a subscription |
 | POST | `/subscriptions/preview` | Preview filter expression against existing events |
 
 ## Retention

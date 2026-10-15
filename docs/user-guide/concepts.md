@@ -36,7 +36,8 @@ workspace) once its most recent run finished longer ago than the **Inactive subj
 (see [Data Retention](../getting-started/configuring-axiom.md#data-retention)).
 
 The subject detail page shows the subject header (ref, metadata, derived active state), a timeline of all
-runs on the subject (active and past), the thread, and workspace/metrics information.
+runs on the subject (active and past, with **Re-run** on failed runs), the thread, and workspace/metrics
+information.
 
 ---
 
@@ -45,6 +46,13 @@ runs on the subject (active and past), the thread, and workspace/metrics informa
 A **Workflow Definition** is a versioned, visually authored graph of nodes — actions, human tasks,
 branches, waits, and `receive-event` nodes. For the full authoring and run-time reference, see
 [Workflows](workflows.md).
+
+### Compositions and the Workbench
+
+A **composition** groups a workflow with the action types and tools it uses, so they can be designed
+together in the **Workbench** (with an AI Assistant at hand). Changes made in a composition are kept as
+**drafts** until you publish them; unpublished items are shown in blue. **Publish…** makes the drafts live.
+Runs always use the published workflow. See [Workbench](workbench.md).
 
 ### Workflow Runs
 
@@ -60,8 +68,15 @@ A **Workflow Run** is one execution of a workflow definition against a subject. 
 | **Inputs** | The values passed to the run when it was started |
 
 Runs have **no outputs**. The result of each step is available from the task output of each action node.
-The Runs page filters runs by status, definition, subject, and label; individual runs can be cancelled
-from the run detail page.
+The Runs page can filter runs with filter chips; see [Runs](navigating-the-ui.md#runs). Individual runs
+can be cancelled from the run detail page.
+
+When a run starts without a value for a Start node input (or with `null`), the input's declared
+**default value** is used, if it has one.
+
+A failed run can be **re-run** from the subject's **Runs** tab; see
+[Re-running a Failed Run](workflows.md#re-running-a-failed-run). Runs started manually from an event carry
+the label `trigger:manual`.
 
 ### Concurrency Rule
 
@@ -98,9 +113,11 @@ already has an active run of the definition, the firing is skipped. See
 
 ## Action Types
 
-An Action Type defines a kind of work that a workflow `action` node performs. Action types are invoked
-**only** from workflow action nodes — there is no event, UI, or API entry point that runs an action type
-directly. Every action type is available in the workflow editor palette. Each action type specifies:
+An Action Type defines a kind of work that a workflow `action` node performs. In a run, action types are
+invoked **only** from workflow action nodes — there is no event or API entry point that starts an action
+type outside a workflow (the Workbench can test-run script and node action types). Every action type is
+available in the workflow editor palette. Action types are listed under **Components > Action Types**, and
+can also be created and edited in the [Workbench](workbench.md). Each action type specifies:
 
 | Field | Purpose |
 |-------|---------|
@@ -312,8 +329,10 @@ a GitHub Enterprise instance.
 
 Every event an event source detects is normalized into a single, browsable stream of typed events (issue,
 pull request, and repository activity for GitHub; issue activity for Jira). Events are deduplicated so the
-same source activity is never recorded twice. You can browse the raw stream from **Event Stream**
-in the UI, independent of whether any subscription has matched it yet.
+same source activity is never recorded twice. You can browse the raw stream from **Events > Event Stream**
+in the UI, independent of whether any subscription has matched it yet, and filter it by event type, event
+source, ref and actor. From an event's detail page, **Run workflow…** starts a run of any published
+workflow with that event, and the **Runs** tab lists the runs started from the event.
 
 ### Subscriptions
 
@@ -375,6 +394,8 @@ Each tool has:
   name (e.g. `mcp__axiom-tools__github_open_prs`)
 - **Description** — what the tool does (helps the AI agent decide when to use it)
 - **Labels** — for organization and filtering
+- **Parameters** and a **script template** — for script-based tools, the typed parameters and the bash
+  script that runs when the tool is called
 
 Tools are referenced in the **Allowed Tools** list of action types. Only tools explicitly listed are
 available to the agent — unlisted tools are denied.

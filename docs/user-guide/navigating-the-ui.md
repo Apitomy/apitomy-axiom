@@ -76,17 +76,19 @@ to adjust its settings.
 
 ## Sidebar Navigation
 
-The sidebar lists the primary pages first — Runs, Subjects, Workflows, Action Types, Event Sources,
-Subscriptions, and Inbox — followed by Dashboards, Event Stream, and the Logs, Metrics, Components, and
-Settings sections.
+The sidebar lists, in order: Runs, Subjects, Inbox, Dashboards, the **Events** section (Event Sources,
+Subscriptions, Event Stream), Workbench, and the **Logs**, **Metrics**, **Components** and **Settings**
+sections.
 
 ### Runs
 
 **Runs** is the landing page (`/runs`). It lists every workflow run across all subjects with its title,
-status, definition, subject, labels, and start time. Filter by status, definition, subject, or label
-(`key:value`). Click a run to open its detail page, which shows the workflow graph with the current node
-highlighted, the run's inputs and labels, the triggering event, the tasks created by its nodes (with their
-outputs), and a **Cancel** button for active runs. See [Workflows](workflows.md#following-a-run).
+status, definition, subject, labels, and start time. Filter chips narrow the list by **Status**,
+**Workflow** (name or ID), **Subject ID**, and **Label** (`key:value`; add several labels to require all of
+them). Clicking a run's status or workflow adds it as a filter. Click a run to open its detail page, which
+shows the workflow graph with the current node highlighted, the run's inputs and labels, the triggering
+event, the tasks created by its nodes (with their outputs), and a **Cancel** button for active runs.
+See [Workflows](workflows.md#following-a-run).
 
 ### Subjects
 
@@ -96,7 +98,8 @@ labels.
 
 Click any subject to open its detail page, which has several tabs:
 
-- **Runs** — a timeline of every workflow run on this subject, active and past
+- **Runs** — a timeline of every workflow run on this subject, active and past. Failed runs have a
+  **Re-run** button; see [Re-running a Failed Run](workflows.md#re-running-a-failed-run)
 - **Body** — the subject's Markdown body
 - **Tasks** — all tasks created by runs on this subject, with status and execution details
 - **Thread** — a chronological log of everything that happened on the subject (events received, task
@@ -108,28 +111,6 @@ Click any subject to open its detail page, which has several tabs:
 
 From the subject detail page you can also edit labels and delete the subject.
 
-### Workflows
-
-The **Workflows** page lists workflow definitions. Each definition's detail page has the visual editor,
-the **Versions** tab, and the **Triggers** tab for schedule triggers. See [Workflows](workflows.md).
-
-### Action Types
-
-The **Action Types** page defines the kinds of work that workflow `action` nodes run — prompt or script
-templates, allowed tools, execution mode, and model/engine overrides. Action types are run only from
-workflow action nodes.
-
-### Event Sources, Subscriptions, and Event Stream
-
-These pages cover the event-source-based event pipeline described in
-[Events and Subscriptions](concepts.md#events-and-subscriptions):
-
-| Page | What it shows |
-|------|--------------|
-| **Event Sources** | Configured event sources to GitHub/Jira, their poll status, and poll log history |
-| **Subscriptions** | Filtered, routed views over the event stream (`create-workflow` and `workflow-dispatch` rules) — create, edit, and preview filter expressions here |
-| **Event Stream** | Every normalized event Axiom has recorded from its event sources, browsable and filterable. Click a row to view the full typed payload. |
-
 ### Inbox
 
 The **Inbox** page shows tasks with status **AwaitingInput** — tasks created by workflow `human-task`
@@ -139,6 +120,28 @@ item to review its context and respond; the waiting workflow run then resumes.
 ### Dashboards
 
 See [Dashboards](#dashboards) above.
+
+### Events
+
+The **Events** section covers the event pipeline described in
+[Events and Subscriptions](concepts.md#events-and-subscriptions):
+
+| Page | What it shows |
+|------|--------------|
+| **Event Sources** | Configured event sources to GitHub/Jira, their poll status, and poll log history |
+| **Subscriptions** | Filtered, routed views over the event stream (`create-workflow` and `workflow-dispatch` rules) — create, edit, and preview filter expressions here |
+| **Event Stream** | Every normalized event Axiom has recorded from its event sources. Filter chips narrow it by **Event Type**, **Event Source**, **Ref** and **Actor** (exact login, case-insensitive); clicking a type, source or actor in a row adds it as a filter. Click a row to open the event. |
+
+The event detail page shows the full typed payload (**Event** tab), how subscriptions processed it
+(**Processing** tab), and the runs started from it (**Runs** tab). **Run workflow…** starts a run of any
+published workflow with the event, listing suggested workflows first; such runs get the label
+`trigger:manual`.
+
+### Workbench
+
+The **Workbench** (`/workbench`) lists compositions. Open one to design a workflow together with its
+action types and tools, with an AI Assistant chat beside the canvas, test script and Node.js items, review
+the composition's runs, and publish the drafts. See [Workbench](workbench.md).
 
 ### Logs
 
@@ -172,17 +175,18 @@ The **Metrics** section has two sub-pages:
 
 ### Components
 
-The **Components** section contains the supporting configuration used by action types and the AI
-Assistant:
+The **Components** section contains workflows and the building blocks they and the AI Assistant use:
 
 | Page | Purpose |
 |------|---------|
+| **Action Types** | Define the kinds of work that workflow `action` nodes run — execution mode (agent, script or Node.js), prompt, script or code template, inputs and outputs, allowed tools, and model/engine overrides |
 | **Agents** | Register AI agent slots with capabilities that determine which work they're eligible for |
 | **AI Assistant** (Session Templates) | Define AI Assistant session templates with system prompts, agent type, tools, and MCP servers |
 | **MCP Servers** | Register external MCP tool servers (HTTP or stdio) |
 | **Secrets** | Store encrypted credentials injected into subprocesses |
 | **Tools** | Define script-based tools with parameters and bash templates |
 | **Toolsets** | Group tools into named collections for reuse |
+| **Workflows** | Workflow definitions (`/components/workflows`); each detail page has the **Design**, **Versions**, **Runs** and **Triggers** (schedule triggers) tabs. See [Workflows](workflows.md) |
 
 ### Settings
 

@@ -35,8 +35,11 @@ The generated code includes:
 
 - **Resource interfaces** — one per API tag/group, with JAX-RS annotations
   (`@Path`, `@GET`, `@POST`, etc.)
-- **Model classes** — POJOs with Jackson `@JsonProperty` annotations for
-  request/response bodies
+- **Bean classes** (package `io.apitomy.axiom.api.beans`) — POJOs with Jackson `@JsonProperty` annotations
+  for request/response bodies
+
+Resource methods take and return these generated beans. Do not use raw `JsonNode` for request or response
+bodies.
 
 The plugin is configured in `common/api/pom.xml`:
 
@@ -45,7 +48,11 @@ The plugin is configured in `common/api/pom.xml`:
     <groupId>io.apitomy</groupId>
     <artifactId>apitomy-codegen-maven-plugin</artifactId>
     <configuration>
-        <javaPackage>io.apitomy.axiom.api</javaPackage>
+        <projectSettings>
+            <javaPackage>io.apitomy.axiom.api</javaPackage>
+            <generatesOpenApi>false</generatesOpenApi>
+        </projectSettings>
+        <inputSpec>${project.basedir}/src/main/resources/openapi.json</inputSpec>
     </configuration>
 </plugin>
 ```
@@ -74,7 +81,8 @@ public class SubjectsResourceImpl implements SubjectsResource {
 ```
 
 The generated interface provides the JAX-RS annotations — the implementation class
-only needs to provide the business logic.
+only needs to provide the business logic. Never put `@Path` on an implementation class; the paths come from
+the generated interface.
 
 ---
 
@@ -87,11 +95,11 @@ Add the path, operation, and any new schemas to `common/api/src/main/resources/o
 ### Step 2: Regenerate Interfaces
 
 ```bash
-cd common/api
-mvn compile
+mvn -q -pl common/api install
 ```
 
-This regenerates the JAX-RS interfaces. Check
+This regenerates the JAX-RS interfaces and beans and installs the module, so that `app` builds against the
+new interface (`./build.sh` also does this). Check
 `target/generated-sources/jaxrs/io/apitomy/axiom/api/` to see the new interface
 method.
 
@@ -102,19 +110,19 @@ In `app/src/main/java/io/apitomy/axiom/app/rest/`, either update an existing
 
 ### Step 4: Add UI API Functions
 
-In `ui/src/config/api.ts`, add:
+In `ui/src/config/api.ts` (or `ui/src/config/compositions.ts` for the workbench `/compositions` API), add:
 
 1. TypeScript interfaces matching the request/response schemas
 2. A `fetch()` function calling the new endpoint
 
-All API functions follow the same pattern:
+Most API functions in `api.ts` follow the same pattern:
 
 ```typescript
-const API_BASE = `${getApiBaseUrl()}/api/v1`;
+const API = `${getApiBaseUrl()}/api/v1`;
 
 export async function fetchWidgets(): Promise<Widget[]> {
-    const resp = await fetch(`${API_BASE}/widgets`);
-    if (!resp.ok) throw new Error("Failed to fetch widgets");
+    const resp = await fetch(`${API}/widgets`);
+    if (!resp.ok) throw new Error(await extractErrorMessage(resp, "Failed to fetch widgets"));
     return resp.json();
 }
 ```
@@ -127,10 +135,11 @@ The API base URL is resolved differently in development and production:
 
 | Mode | Base URL | Mechanism |
 |------|----------|-----------|
-| Development | (empty string) | Vite proxy forwards `/api` to `localhost:9090` |
-| Production | From `window.AXIOM_API_URL` | Injected by the backend at runtime |
+| Development | (empty string) | Vite proxy forwards `/api` to the backend (`localhost:9090` by default) |
+| Production | (empty string) | The backend serves the UI and the API from the same origin |
 
-This is handled by `getApiBaseUrl()` in `api.ts`.
+This is handled by `getApiBaseUrl()` in `api.ts`. If a global `window.AXIOM_API_URL` string is defined, it is
+used as the base URL instead; the backend does not set it.
 
 ---
 

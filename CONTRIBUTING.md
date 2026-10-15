@@ -38,13 +38,18 @@ cd ui && npm install && npm test
 
 # Build the UI on its own
 cd ui && npm run build
+
+# Start the backend (port 9090) and the UI dev server (port 9191)
+./dev.sh
 ```
+
+Tests that launch a real AI CLI are tagged `@Tag("live-cli")` and only run with `mvn test -Plive-cli-tests`.
 
 ## Coding Standards
 
 - Follow the existing code style in the project
-- Code is formatted and linted with [Biome](https://biomejs.dev/)
-- Run `npm test` before committing to ensure the UI tests pass
+- UI code must type-check (`npm run build` runs `tsc -b`)
+- Run `./build.sh` and `cd ui && npm test` before committing to ensure the Java and UI tests pass
 - Write clear, descriptive commit messages
 - Add tests for new features when applicable
 - Update documentation when adding or changing features
@@ -52,7 +57,7 @@ cd ui && npm run build
 ## Pull Request Process
 
 1. **Update documentation** if your changes affect user-facing behavior
-2. **Ensure all tests pass** and linting succeeds
+2. **Ensure all tests pass** and the build succeeds
 3. **Update the README** if necessary with details of changes to the interface
 4. **Reference related issues** in your PR description (e.g., "Fixes #123")
 5. **Be responsive** to review feedback and questions
@@ -62,8 +67,7 @@ cd ui && npm run build
 - Keep PRs focused on a single feature or bug fix
 - Include a clear description of what the PR does and why
 - Link to any related issues
-- Ensure the PR passes all CI checks (linting, building)
-- Update CHANGELOG.md if your changes are user-facing
+- Ensure the PR passes all CI checks (build and tests)
 
 ## Code Review
 
@@ -87,7 +91,7 @@ When reporting bugs, please include:
 - A clear, descriptive title
 - Detailed steps to reproduce the issue
 - Expected behavior vs. actual behavior
-- Your environment (Node.js version, OS, etc.)
+- Your environment (Axiom version, Java and Node.js versions, AI engine, OS)
 - Relevant logs or error messages
 - Configuration files (with sensitive data removed)
 
@@ -110,7 +114,8 @@ If you have questions about contributing, feel free to:
 
 ## License
 
-By contributing to Apitomy Axiom, you agree that your contributions will be licensed under the Apache License 2.0.
+By contributing to Apitomy Axiom, you agree that your contributions will be licensed under the Apache License
+2.0.
 
 ---
 

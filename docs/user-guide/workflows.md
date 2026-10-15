@@ -21,30 +21,75 @@ triggers.
 | `wait` | Pauses the instance for a fixed duration, then resumes automatically |
 | `receive-event` | Pauses the instance until a matching stream event is dispatched to it |
 
-Edges connect nodes and may carry a priority and an EL condition, so a node can branch
-to different next steps based on the values already in the workflow's context (e.g. an
-action's output, or a human-task's submitted answers).
+The main configuration of each node type:
+
+| Node Type | Configuration |
+|-----------|---------------|
+| `start` | `inputs`: the run's declared inputs (`name`, `type` — `string`, `number`, `boolean` or `object` —, `required`, `description`, `defaultValue`) |
+| `end` | None. Ends the run, or the current branch of a parallel region |
+| `action` | `actionType` (an action type name, or `sdk:<function>`); `inputs`: a map of input name to EL expression; optional `outputs` to rename or require task outputs. Task outputs are merged into the run context under their names |
+| `human-task` | Optional `title` and `description`; `inputs` shown to the person; `outputs`: the form fields, whose answers are merged into the context |
+| `wait` | `duration`: an ISO-8601 duration such as `PT1H` or `P1D` |
+| `receive-event` | `eventType` (required); optional `match` conditions, `outputs` (`{contextKey, expression}`), `correlationKey`, `lookback` and `timeout` (see [Dispatching Events to a Waiting Workflow](#dispatching-events-to-a-waiting-workflow)) |
+
+### Edges
+
+Edges connect nodes. Each edge may carry a **priority**, an EL **condition**, a **default** flag, and a
+label. Conditions let a node branch to different next steps based on the values already in the run's
+context (e.g. an action's output, or a human-task's submitted answers). The rules are:
+
+- A node with a single outgoing edge uses an unconditional edge that is **not** marked default.
+- A node with conditional edges (an exclusive choice) needs exactly one **default** edge, without a
+  condition. It is the fallback when no condition matches. This includes a node with a single
+  conditional edge.
+- Mark an edge as default only for such conditional choices. A node has at most one default edge.
+- Several unconditional, non-default edges leaving one node form a **fork**: the branches run in parallel.
+  Do not mix fork edges with conditional or default edges. Parallel branches must re-join at a single
+  node before they reach an `end` node.
+- Edges leaving the same node should have distinct priorities.
+- A `receive-event` node with a `timeout` needs exactly one timeout edge plus a normal outgoing edge.
+
+### Expressions
+
+Conditions, `action` input mappings, `human-task` titles and `receive-event` settings are
+[Jakarta Expression Language](https://jakarta.ee/specifications/expression-language/) (EL) expressions,
+written without `${}`. They read `context.<key>` (the run context: inputs and merged node outputs) and,
+where an event is involved, `event.<field>`. Action inputs can only read `context`; use
+`context.event` for the triggering event. Examples:
+
+- `context.needsInfo == true`
+- `context.priority eq 'high' and not empty context.assignee`
+- `'Review ' += context.ref` (join text with `+=`)
+
+EL has no fallback operator. `a || b` is a boolean OR and `??` is not valid syntax. To fall back to a
+default value, use `empty`: `empty context.label ? 'triage' : context.label`.
 
 ## Authoring a Workflow
 
-Navigate to **Workflows** and click **Create Workflow**. New definitions
+Navigate to **Components > Workflows** and click **Create Workflow Definition**. New definitions
 are scaffolded with a Start node (declaring `subjectId`, `ref`, and an optional `event`
 input) connected directly to an End node — extend the graph from there.
 
-The workflow editor lets you add and connect nodes, configure each node's inputs and
-outputs, and edit conditional edges. An `action` node must map every required input of its action type,
+The **Design** tab holds the workflow editor (Apitomy Flow 3.0.2). It lets you add and connect nodes,
+configure each node's inputs and outputs, and edit conditional edges. An `action` node must map every
+required input of its action type,
 usually from the run context (`context.subjectId`, `context.subjectName`, `context.ref`,
 `context.repository`, `context.event`) or from outputs of earlier nodes; optional inputs may be left
 unmapped. See [Inputs, Placeholders and Mappings](concepts.md#inputs-placeholders-and-mappings).
-Changes are saved as **draft content** on the
+Click **Save** to store your changes as **draft content** on the
 definition; they are not usable by running instances until you **publish**.
+
+To build a workflow together with its action types and tools, with an AI assistant at hand, click
+**Open in workbench** (available once your changes are saved). See [Workflow Workbench](workbench.md).
 
 ### Publishing and Versions
 
-Click **Publish** on the workflow detail page to validate the current draft and create
-a new immutable version. Publishing fails with a description of the problem if:
+Click **Publish** on the workflow detail page to validate the saved draft and create
+a new immutable version. **Publish** is disabled while there are unsaved changes or validation errors.
+Publishing fails with a description of the problem if:
 
-- The graph is structurally invalid (e.g. disconnected nodes, missing Start/End)
+- The graph is structurally invalid (e.g. disconnected nodes, missing Start/End, or edges that break the
+  rules in [Edges](#edges))
 - The graph contains a node type Axiom doesn't support
 - The Start node declares an input whose name is not a valid identifier, or marks
   `event`, `subjectName` or `repository` as required (see the
@@ -54,19 +99,27 @@ Each publish creates a new version. The **Versions** tab lists every published v
 lets you diff any two versions side by side, and shows which version is currently
 active (`currentVersion`). Existing runs continue to use the version they were started
 with — publishing a new version never changes the definition an in-flight run is
-executing.
+executing. The **Runs** tab lists the runs of the definition.
 
 ## Triggering a Workflow
 
-A workflow run can be started in three ways:
+A workflow run can be started in these ways:
 
-- **Manually** — from a subject's detail page, choose **Run Workflow** and select a published
-  definition. You may supply a run title, labels, and inputs. The run starts with `subjectId`, `subjectName`,
-  `ref` and `repository` in its context, plus any supplied inputs.
+- **Manually from a subject** — on a subject's detail page, open the **Workflow** tab, click
+  **Run Workflow** and select a published definition. The run starts with `subjectId`, `subjectName`,
+  `ref` and `repository` in its context. The REST endpoint
+  (`POST /api/v1/subjects/{subjectId}/workflow`) also accepts a run title, labels, and inputs.
+- **Manually from a stream event** — on an event's detail page (**Events > Event Stream**, then click an
+  event), click **Run workflow…** and pick any published workflow. Workflows used by subscriptions that
+  matched the event are listed first, under **Suggested**. You may supply a title, labels, and inputs. The
+  run is started as a `create-workflow` rule would start it: on the subject found or created from the
+  event's `ref`, with the event in its context as `event`. Manual runs get the label `trigger:manual`.
+  REST: `POST /api/v1/stream/events/{eventId}/runs`.
 - **From a subscription** — a subscription routing rule of type `create-workflow` finds or creates a
   subject from the triggering event's `ref`, then starts the specified definition with `subjectId`, `ref`,
   and `event` (the triggering event's envelope) in its context.
 - **From a schedule trigger** — see [Schedule Triggers](#schedule-triggers) below.
+- **By re-running a failed run** — see [Re-running a Failed Run](#re-running-a-failed-run) below.
 
 ### Run Title, Labels, and Inputs
 
@@ -83,6 +136,11 @@ digits and underscores, not starting with a digit) and may be marked required; a
 required custom input fails to start (a schedule trigger records `failed: <reason>` as its last outcome).
 Supplied custom inputs are available in the run's context alongside the built-in inputs.
 
+A Start input may declare a **`defaultValue`**. When a run starts without that input, or with `null`,
+the default is put into the run's context, so a required input with a default never blocks a run.
+This applies to every way a run is started. Defaults are not applied to the protected built-in inputs.
+The run's recorded **inputs** show only the values that were supplied.
+
 Workflow runs have **no outputs**. The result of each step is available from the task output of the
 corresponding `action` node (and the submitted answers of each `human-task` node).
 
@@ -96,7 +154,7 @@ A trigger that would violate the rule is handled as follows:
 
 | Trigger | Behavior |
 |---------|----------|
-| Manual (**Run Workflow**) | Rejected with HTTP 409 |
+| Manual (**Run Workflow**, **Run workflow…**, **Re-run**) | Rejected with HTTP 409 |
 | `create-workflow` routing rule | Skipped (not queued); the skip is recorded in the routing outcome |
 | Schedule trigger | Skipped (not queued); the trigger's last outcome is recorded as `skipped` |
 
@@ -125,6 +183,15 @@ Axiom checks for due triggers every `axiom.workflow.schedule-poll-interval` (def
 assumes a single Axiom node; running multiple nodes against one database is not supported for schedule
 triggers.
 
+### Re-running a Failed Run
+
+On a subject's **Runs** tab, each `failed` run has a **Re-run** button. After you confirm, Axiom starts a
+new run of the **latest published version** of the same workflow on the same subject. The new run keeps
+the original title, labels and inputs, and gets the extra label `rerunOf:<original run id>`. A run that
+was started from a stream event is re-run from that event, so the new run has the same `context.event`.
+The workflow's actions run again. Only failed runs can be re-run (REST:
+`POST /api/v1/workflow/runs/{runId}/rerun`; other statuses are rejected with HTTP 409).
+
 ### Dispatching Events to a Waiting Workflow
 
 Independent of `create-workflow`, a subscription routing rule of type `workflow-dispatch` **broadcasts**
@@ -152,19 +219,23 @@ task's subject in the Inbox; it falls back to the node name.
 ## Following a Run
 
 **Runs** is Axiom's landing page (`/runs`). It lists every workflow run across all subjects with its
-title, status, definition, subject, and labels, and can be filtered by status, definition, subject, and
-label (`key:value`). The same filters are available on `GET /api/v1/workflow/runs` as the `status`,
-`definitionId`, `subjectId`, and `label` query parameters. Each run detail page shows:
+status, title, subject, workflow and version, start time and duration. Filter chips narrow the list; see
+[Runs](navigating-the-ui.md#runs). The same filters are available on `GET /api/v1/workflow/runs` as the
+`status`, `definitionId`, `subjectId`, and `label` query parameters (and `triggerEventId` for runs started
+from one event). Each run detail page has
+these tabs:
 
-- The full node graph with the current node highlighted
-- The run's status: `running`, `waiting`, `completed`, `failed`, or `cancelled`
-- The run's inputs, labels, and triggering event (when started by a subscription)
-- Any tasks created by `action` or `human-task` nodes, with their outputs and links to their execution
-  logs
-- A link to the run's execution trace, which records every node transition — see
+- **Diagram** — the node graph with the run's progress; a node's menu opens its task's execution log
+- **Overview** — title, subject, labels, inputs, workflow version, status, start and end times, the
+  failure reason, a link to the trace, the triggering event (when started from an event), the events that
+  resumed the run, and the tasks created by `action` or `human-task` nodes with their outputs and logs
+- **Timeline** — the nodes the run passed through, in order
+- **Execution Trace** — the run's trace, which records every node transition — see
   [Tracing](../developer-guide/tracing.md)
+- **Lineage** — where the run came from and what it produced
 
-The subject detail page shows a timeline of every run (active and past) on that subject.
+A run's status is `running`, `waiting`, `completed`, `failed`, or `cancelled`.
+The subject detail page's **Runs** tab lists every run (active and past) on that subject.
 
 A run parked at a `human-task` node surfaces its pending task in the **Inbox**; a run parked at a `wait`
 node resumes automatically once its resume time elapses; a run parked at a `receive-event` node resumes
@@ -172,7 +243,7 @@ once a matching event is dispatched to it.
 
 ### Cancelling a Run
 
-Cancellation is per run: use **Cancel** on the run detail page (REST:
+Cancellation is per run: use **Cancel run** on the run detail page of a `running` or `waiting` run (REST:
 `POST /api/v1/workflow/runs/{runId}/cancel`). Cancelling marks the run `cancelled`, fails any in-progress
 task the run created, and removes any pending wait or event-subscription state associated with it. A
 cancelled run cannot be resumed. Other runs on the same subject are unaffected.
