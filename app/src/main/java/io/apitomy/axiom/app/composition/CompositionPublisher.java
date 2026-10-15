@@ -8,7 +8,6 @@ import io.apitomy.axiom.app.validation.ConfigItemType;
 import io.apitomy.axiom.app.validation.ConfigProblem;
 import io.apitomy.axiom.app.validation.ConfigValidationException;
 import io.apitomy.axiom.app.validation.ValidationContext;
-import io.apitomy.axiom.app.validation.ConfigItemValidationService;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.CompositionEntity;
 import io.apitomy.axiom.core.entities.CompositionItemEntity;
@@ -52,9 +51,6 @@ public class CompositionPublisher {
     CompositionValidator validator;
 
     @Inject
-    ConfigItemValidationService validationService;
-
-    @Inject
     ImportExportService importExportService;
 
     @Inject
@@ -82,8 +78,8 @@ public class CompositionPublisher {
         checkDependencies(compositionId, selected, blocked);
         ValidationContext context = validator.context(compositionId);
         for (CompositionItemEntity item : selected) {
-            List<ConfigProblem> errors = validationService.validate(ConfigItemType.fromName(item.itemType),
-                    validator.packItem(item), context).stream().filter(ConfigProblem::isError).toList();
+            List<ConfigProblem> errors = validator.validateItem(compositionId,
+                    ConfigItemType.fromName(item.itemType), validator.packItem(item), context).stream().filter(ConfigProblem::isError).toList();
             if (!errors.isEmpty()) {
                 blocked.computeIfAbsent(key(item), k -> new ArrayList<>()).addAll(errors);
             }
