@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.BooleanNode;
 import com.fasterxml.jackson.databind.node.NullNode;
+import io.apitomy.axiom.app.EventStreamOrchestrator;
+import io.apitomy.axiom.app.StandardInputs;
 import io.apitomy.axiom.app.WorkflowEventMapper;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.flow.engine.ConditionEvaluator;
@@ -29,11 +31,13 @@ import java.util.stream.Collectors;
  * <tr><td>{@code correlation-event-key}</td><td>value</td><td>{@code event} only</td></tr>
  * <tr><td>{@code receive-event-match}</td><td>boolean</td><td>{@code context}, {@code event}</td></tr>
  * <tr><td>{@code receive-event-output}</td><td>value</td><td>{@code context}, {@code event}</td></tr>
+ * <tr><td>{@code subscription-filter}</td><td>boolean</td><td>{@code event} only</td></tr>
  * </table>
  *
  * <p>{@code event} is {@link WorkflowEventMapper#toEventMap(StreamEventEntity, ObjectMapper)} of the stored
- * stream event. Context scopes given an event ID also see {@code context.event}, unless the context already
- * has {@code event}.</p>
+ * stream event; for {@code subscription-filter} it is the map subscription matching uses. Context scopes given
+ * an event ID see the standard inputs a run started from that event would receive: {@code context.event} and
+ * {@code context.subject} (see {@link StandardInputs}), unless the supplied context already has them.</p>
  */
 @ApplicationScoped
 public class ExpressionService {
@@ -42,21 +46,30 @@ public class ExpressionService {
      * An authoring scope for an EL expression.
      */
     public enum Scope {
-        EDGE_CONDITION("edge-condition", true, false, true),
-        ACTION_INPUT("action-input", true, false, false),
-        HUMAN_TASK_TITLE("human-task-title", true, false, false),
-        CORRELATION_SUBSCRIPTION_KEY("correlation-subscription-key", true, false, false),
-        CORRELATION_EVENT_KEY("correlation-event-key", false, true, false),
-        RECEIVE_EVENT_MATCH("receive-event-match", true, true, true),
-        RECEIVE_EVENT_OUTPUT("receive-event-output", true, true, false);
+        EDGE_CONDITION("edge-condition", true, false, true, "an edge condition (boolean; sees context)"),
+        ACTION_INPUT("action-input", true, false, false, "an action node input mapping (value; sees context)"),
+        HUMAN_TASK_TITLE("human-task-title", true, false, false,
+                "a human-task title or description (value; sees context)"),
+        CORRELATION_SUBSCRIPTION_KEY("correlation-subscription-key", true, false, false,
+                "a receive-event correlationKey.subscriptionKey (value; sees context)"),
+        CORRELATION_EVENT_KEY("correlation-event-key", false, true, false,
+                "a receive-event correlationKey.eventKey (value; sees only the received event)"),
+        RECEIVE_EVENT_MATCH("receive-event-match", true, true, true,
+                "a receive-event match condition (boolean; sees context and the received event)"),
+        RECEIVE_EVENT_OUTPUT("receive-event-output", true, true, false,
+                "a receive-event output mapping (value; sees context and the received event)"),
+        SUBSCRIPTION_FILTER("subscription-filter", false, true, true,
+                "a subscription filterExpression (boolean; sees only the event)");
 
         private final String jsonName;
         private final boolean context;
         private final boolean event;
         private final boolean bool;
+        private final String description;
 
-        Scope(String jsonName, boolean context, boolean event, boolean bool) {
+        Scope(String jsonName, boolean context, boolean event, boolean bool, String description) {
             this.jsonName = jsonName;
+            this.description = description;
             this.context = context;
             this.event = event;
             this.bool = bool;
@@ -67,6 +80,13 @@ public class ExpressionService {
          */
         public String jsonName() {
             return jsonName;
+        }
+
+        /**
+         * @return where an expression of this scope is used, its result kind and its variables
+         */
+        public String description() {
+            return description;
         }
 
         /**
@@ -121,6 +141,9 @@ public class ExpressionService {
     @Inject
     ObjectMapper mapper;
 
+    @Inject
+    EventStreamOrchestrator orchestrator;
+
     private final ConditionEvaluator evaluator = new ConditionEvaluator();
 
     /**
@@ -157,12 +180,23 @@ public class ExpressionService {
             if (entity == null) {
                 return Result.failure("Stream event '" + eventId + "' not found");
             }
-            event = WorkflowEventMapper.toEventMap(entity, mapper);
+            event = s == Scope.SUBSCRIPTION_FILTER ? orchestrator.filterEventMap(entity)
+                    : WorkflowEventMapper.toEventMap(entity, mapper);
+            if (s.usesContext()) {
+                // The standard inputs a run started from this event would receive.
+                try {
+                    if (!contextMap.containsKey(StandardInputs.EVENT)) {
+                        contextMap.put(StandardInputs.EVENT, StandardInputs.eventValue(entity, mapper));
+                    }
+                    if (!contextMap.containsKey(StandardInputs.SUBJECT)) {
+                        contextMap.put(StandardInputs.SUBJECT, orchestrator.subjectValueForEvent(entity));
+                    }
+                } catch (IllegalStateException e) {
+                    return Result.failure(e.getMessage());
+                }
+            }
         } else if (s.usesEvent()) {
             return Result.failure("Scope '" + s.jsonName() + "' needs an eventId");
-        }
-        if (event != null && s.usesContext() && !contextMap.containsKey("event")) {
-            contextMap.put("event", event);
         }
         Map<String, Object> elContext = s.usesContext() ? contextMap : Map.of();
 

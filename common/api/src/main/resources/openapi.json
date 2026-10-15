@@ -11039,11 +11039,12 @@
               "correlation-subscription-key",
               "correlation-event-key",
               "receive-event-match",
-              "receive-event-output"
+              "receive-event-output",
+              "subscription-filter"
             ]
           },
           "eventId": {
-            "description": "ID of a stored stream event to use as `event`",
+            "description": "ID of a stored stream event to use as `event`. Scopes that see `context` also get the standard inputs a run started from this event would receive (`context.event` and `context.subject`), unless `context` already has them",
             "type": "string"
           },
           "context": {

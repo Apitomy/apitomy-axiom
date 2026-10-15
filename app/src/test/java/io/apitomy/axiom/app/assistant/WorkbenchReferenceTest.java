@@ -3,12 +3,14 @@ package io.apitomy.axiom.app.assistant;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.app.WorkflowTemplates;
+import io.apitomy.axiom.app.expressions.ExpressionService;
 import io.apitomy.flow.changeset.ChangeSetResult;
 import io.apitomy.flow.changeset.ChangeSets;
 import io.apitomy.flow.changeset.ContentRevision;
 import org.junit.jupiter.api.Test;
 
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -100,6 +102,34 @@ class WorkbenchReferenceTest {
             assertTrue(name.startsWith("mcp__workbench__") || name.equals("Bash(jq *)"), name);
         }
         assertFalse(template().path("allowedTools").toString().contains("Write"));
+    }
+
+    /** The workbench reference lists every evaluate_expression scope with where it is used. */
+    @Test
+    void referenceListsEveryExpressionScope() {
+        String reference = new AssistantReferenceGenerator().generateChangeSetReference();
+        assertTrue(reference.contains("# Checking expressions"), reference);
+        for (ExpressionService.Scope scope : ExpressionService.Scope.values()) {
+            assertTrue(reference.contains("| `" + scope.jsonName() + "` | " + scope.description() + " |"),
+                    scope.jsonName());
+        }
+        assertTrue(reference.contains("`context.subject` and `context.event`"), reference);
+    }
+
+    /** The evaluate_expression tool's scope parameter names every valid scope. */
+    @Test
+    void evaluateExpressionToolNamesEveryScope() throws Exception {
+        String server;
+        try (InputStream is = WorkbenchReferenceTest.class.getResourceAsStream(
+                "/templates/axiom-workbench-mcp/server.js")) {
+            server = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        Matcher scopeParam = Pattern.compile("\\{ name: \"scope\", type: \"string\", description: \"([^\"]*)\"")
+                .matcher(server);
+        assertTrue(scopeParam.find(), "evaluate_expression must declare a scope parameter");
+        for (ExpressionService.Scope scope : ExpressionService.Scope.values()) {
+            assertTrue(scopeParam.group(1).contains(scope.jsonName()), scope.jsonName());
+        }
     }
 
     @Test

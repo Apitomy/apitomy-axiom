@@ -2,6 +2,7 @@ package io.apitomy.axiom.app.assistant;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.apitomy.axiom.app.StandardInputs;
+import io.apitomy.axiom.app.expressions.ExpressionService;
 import io.apitomy.axiom.app.validation.ConfigItemType;
 import io.apitomy.axiom.app.validation.WorkflowContentRules;
 import io.apitomy.axiom.core.SdkFunction;
@@ -89,13 +90,33 @@ public class AssistantReferenceGenerator {
     }
 
     /**
-     * Returns the change-set reference used by the workbench assistant: shape, ops, patch semantics, error
-     * codes and one complete example.
+     * Returns the reference used only by the workbench assistant: the change-set shape, ops, patch semantics,
+     * error codes and one complete example, then how to check expressions with {@code evaluate_expression}.
      *
-     * @return Markdown change-set reference
+     * @return Markdown workbench reference
      */
     public String generateChangeSetReference() {
-        return CHANGE_SET_REFERENCE;
+        return CHANGE_SET_REFERENCE + "\n" + expressionScopesReference();
+    }
+
+    /**
+     * Documents the {@code evaluate_expression} scopes, generated from {@link ExpressionService.Scope}.
+     *
+     * @return Markdown section
+     */
+    private static String expressionScopesReference() {
+        StringBuilder sb = new StringBuilder("# Checking expressions\n\n")
+                .append("`evaluate_expression` takes the expression, a `scope` saying where it is used, and ")
+                .append("optionally an `eventId` and a `context` object. Valid scopes:\n\n")
+                .append("| Scope | Use it for |\n| --- | --- |\n");
+        for (ExpressionService.Scope scope : ExpressionService.Scope.values()) {
+            sb.append("| `").append(scope.jsonName()).append("` | ").append(scope.description()).append(" |\n");
+        }
+        sb.append("\nWith an `eventId`, scopes that see context get `context.subject` and `context.event` exactly ")
+                .append("as a run started from that event would (the event's subject, or the one the run would ")
+                .append("create). Pass `context` to add node outputs or to override them. Scopes that see the ")
+                .append("event, including `subscription-filter`, need an `eventId`.\n");
+        return sb.toString();
     }
 
     private static final String CHANGE_SET_REFERENCE = """

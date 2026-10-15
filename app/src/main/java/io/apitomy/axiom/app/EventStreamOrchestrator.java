@@ -816,7 +816,65 @@ public class EventStreamOrchestrator {
         }
 
         // Auto-create with metadata from the payload
-        subject = new SubjectEntity();
+        subject = newSubjectFor(event);
+        subject.persist();
+
+        LOG.infof("Auto-created subject %d for %s", subject.id, event.ref);
+
+        logActivity(subject.id, null, event.id, "subject-created",
+                "Subject auto-created from " + event.type + " event", traceId);
+        addThreadEntry(subject.id, "system", "message",
+                "Subject created from " + event.source + " event: " + event.type);
+
+        // Ensure the workspace directory exists
+        try {
+            workspaceService.ensureWorkspace(subject);
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to create workspace for subject %d", subject.id);
+        }
+
+        return subject;
+    }
+
+    /**
+     * The {@code subject} standard input a run started from this event would receive, without creating or
+     * changing anything: the event's existing subject (with a missing GitHub repository filled in, as run
+     * creation does), or a preview of the subject run creation would create (with a null {@code id}).
+     *
+     * @param event the stream event
+     * @return the subject input value
+     */
+    public Map<String, Object> subjectValueForEvent(StreamEventEntity event) {
+        SubjectEntity existing = SubjectEntity.find("ref", event.ref).firstResult();
+        if (existing == null) {
+            return StandardInputs.subjectValue(newSubjectFor(event));
+        }
+        Map<String, Object> value = StandardInputs.subjectValue(existing);
+        if (value.get("repository") == null) {
+            value.put("repository", repositoryFor(event));
+        }
+        return value;
+    }
+
+    /**
+     * The event map subscription filters are evaluated against.
+     *
+     * @param event the stream event
+     * @return the event map exposed as {@code event} to filter expressions
+     */
+    public Map<String, Object> filterEventMap(StreamEventEntity event) {
+        return buildEventMap(event, parsePayload(event));
+    }
+
+    /**
+     * Builds, without persisting, the subject auto-created for an event that has none: ref, source, GitHub
+     * repository, type from the event type, and name and body from the normalized payload.
+     *
+     * @param event the stream event
+     * @return the unsaved subject
+     */
+    private SubjectEntity newSubjectFor(StreamEventEntity event) {
+        SubjectEntity subject = new SubjectEntity();
         subject.ref = event.ref;
         subject.refSource = event.source;
         subject.repository = repositoryFor(event);
@@ -838,23 +896,6 @@ public class EventStreamOrchestrator {
         } catch (Exception e) {
             subject.name = event.ref;
         }
-
-        subject.persist();
-
-        LOG.infof("Auto-created subject %d for %s", subject.id, event.ref);
-
-        logActivity(subject.id, null, event.id, "subject-created",
-                "Subject auto-created from " + event.type + " event", traceId);
-        addThreadEntry(subject.id, "system", "message",
-                "Subject created from " + event.source + " event: " + event.type);
-
-        // Ensure the workspace directory exists
-        try {
-            workspaceService.ensureWorkspace(subject);
-        } catch (Exception e) {
-            LOG.warnf(e, "Failed to create workspace for subject %d", subject.id);
-        }
-
         return subject;
     }
 

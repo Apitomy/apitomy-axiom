@@ -417,11 +417,12 @@ const TOOLS = [
     },
     {
         name: "evaluate_expression",
-        description: "Evaluate an expression in a scope, optionally against a stream event and extra context.",
+        description: "Evaluate an expression where it is used, optionally against a stream event and extra context. "
+            + "With an eventId, context scopes get context.subject and context.event as a run started from that event would.",
         parameters: [
             { name: "expression", type: "string", description: "The expression", required: true },
-            { name: "scope", type: "string", description: "The evaluation scope", required: true },
-            { name: "eventId", type: "string", description: "Optional stream event id", required: false },
+            { name: "scope", type: "string", description: "Where the expression is used: edge-condition, action-input, human-task-title, correlation-subscription-key, correlation-event-key, receive-event-match, receive-event-output or subscription-filter", required: true },
+            { name: "eventId", type: "string", description: "Optional stream event id (required for correlation-event-key, receive-event-match, receive-event-output and subscription-filter)", required: false },
             { name: "context", type: "object", description: "Optional extra context", required: false },
         ],
         handler: async (args) => {
