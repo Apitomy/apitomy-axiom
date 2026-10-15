@@ -64,6 +64,7 @@ export function ItemTab(props: ItemTabProps) {
     const { compositionId, item, content, composition, problems } = props;
     const [value, setValue] = useState<Record<string, unknown>>(content);
     const [saveError, setSaveError] = useState<SaveError | null>(null);
+    const [enabling, setEnabling] = useState<boolean>(false);
     const baseRevision = useRef<string>(item.contentRevision);
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const pendingContent = useRef<Record<string, unknown> | null>(null);
@@ -196,12 +197,14 @@ export function ItemTab(props: ItemTabProps) {
                 <SubscriptionItemEditor value={value} readOnly={locked} problems={messages}
                     onChange={onChange} workflowName={props.workflowName ?? ""}
                     published={item.baseItemId != null} workflowPublished={props.workflowPublished ?? false}
-                    enabled={item.enabled ?? false}
+                    enabled={item.enabled ?? false} enabledBusy={enabling}
                     onToggleEnabled={(enabled: boolean) => {
+                        setEnabling(true);
                         setItemEnabled(compositionId, item.id, enabled)
                             .then((updated) => props.onItemChanged?.(updated))
                             .catch((e: unknown) => setSaveError({ kind: "error",
-                                message: e instanceof Error ? e.message : String(e) }));
+                                message: e instanceof Error ? e.message : String(e) }))
+                            .finally(() => setEnabling(false));
                     }} />
             ) : item.type === "tool" ? (
                 // No toolId: the workbench tests tools through the Test output strip, not the editor's Test tab.

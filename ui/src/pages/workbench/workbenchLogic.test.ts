@@ -99,4 +99,13 @@ describe("subscriptions", () => {
         };
         expect(publishSelection(items, contents, [2])).toEqual([1, 2]);
     });
+
+    it("publishing a subscription with non-array routing selects just it", () => {
+        const items = [
+            { id: 1, type: "workflow", name: "wf", changed: true, contentRevision: "r", lastAuthor: "user" },
+            { id: 2, type: "subscription", name: "on-pr", changed: true, contentRevision: "r", lastAuthor: "user" },
+        ] as CompositionItem[];
+        const contents = { 1: { id: "wf", name: "wf", nodes: [], edges: [] }, 2: { name: "on-pr", routing: "x" } };
+        expect(publishSelection(items, contents, [2])).toEqual([2]);
+    });
 });

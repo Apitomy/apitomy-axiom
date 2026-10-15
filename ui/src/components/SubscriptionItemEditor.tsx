@@ -31,6 +31,8 @@ export interface SubscriptionItemEditorProps {
     workflowPublished: boolean;
     /** Whether the published subscription is enabled. */
     enabled: boolean;
+    /** Whether an Enabled change is being saved (the switch is disabled meanwhile). */
+    enabledBusy?: boolean;
     /** Called when the user flips the Enabled switch. */
     onToggleEnabled(enabled: boolean): void;
 }
@@ -41,7 +43,7 @@ export interface SubscriptionItemEditorProps {
  */
 export function SubscriptionItemEditor(props: SubscriptionItemEditorProps) {
     const { value, onChange, readOnly, problems, workflowName } = props;
-    const routing: Rule[] = (value.routing as Rule[] | undefined) ?? [];
+    const routing: Rule[] = Array.isArray(value.routing) ? (value.routing as Rule[]) : [];
     const filter: string = (value.filterExpression as string | undefined) ?? "";
     const [preview, setPreview] = useState<SubscriptionPreviewResponse | null>(null);
     const [previewError, setPreviewError] = useState<string | null>(null);
@@ -67,7 +69,7 @@ export function SubscriptionItemEditor(props: SubscriptionItemEditorProps) {
                         <Tooltip content="Publish the workflow before enabling this subscription"
                             trigger={props.workflowPublished ? "manual" : "mouseenter focus"}>
                             <Switch id="subscription-enabled" label="Enabled" aria-label="Enabled"
-                                isChecked={props.enabled} isDisabled={!props.workflowPublished}
+                                isChecked={props.enabled} isDisabled={!props.workflowPublished || !!props.enabledBusy}
                                 onChange={(_e, checked) => props.onToggleEnabled(checked)} />
                         </Tooltip>
                     </FlexItem>

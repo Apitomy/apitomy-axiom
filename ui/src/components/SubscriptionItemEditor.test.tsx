@@ -56,6 +56,17 @@ describe("SubscriptionItemEditor", () => {
         expect(screen.queryByRole("switch", { name: "Enabled" })).toBeNull();
     });
 
+    it("does not crash when routing is not an array", () => {
+        renderEditor({ value: { ...base, routing: {} } });
+        expect(screen.getByLabelText("Name")).toHaveValue("on-pr");
+        expect(screen.queryByRole("button", { name: /Remove rule/ })).toBeNull();
+    });
+
+    it("disables the Enabled switch while a toggle is saving", () => {
+        renderEditor({ published: true, workflowPublished: true, enabledBusy: true });
+        expect(screen.getByRole("switch", { name: "Enabled" })).toBeDisabled();
+    });
+
     it("toggles enabled when published", async () => {
         const props = renderEditor({ published: true, workflowPublished: true });
         await userEvent.click(screen.getByRole("switch", { name: "Enabled" }));

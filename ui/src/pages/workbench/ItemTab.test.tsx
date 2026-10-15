@@ -14,8 +14,12 @@ const item = { id: 5, type: "tool", name: "t", contentRevision: "r0", lastAuthor
 const composition = { id: 1, name: "C", turnState: "idle", applyMode: "live", createdAt: "", updatedAt: "" } as c.Composition;
 
 vi.mock("../../components/SubscriptionItemEditor", () => ({
-    SubscriptionItemEditor: ({ value, workflowName }: { value: { filterExpression?: string }; workflowName: string }) => (
-        <input aria-label="Filter expression" data-workflow={workflowName} value={value.filterExpression ?? ""} readOnly />),
+    SubscriptionItemEditor: ({ value, workflowName, enabledBusy, onToggleEnabled }: { value: { filterExpression?: string };
+        workflowName: string; enabledBusy?: boolean; onToggleEnabled: (enabled: boolean) => void }) => (
+        <>
+            <input aria-label="Filter expression" data-workflow={workflowName} value={value.filterExpression ?? ""} readOnly />
+            <button aria-label="Enabled" disabled={!!enabledBusy} onClick={() => onToggleEnabled(true)} />
+        </>),
 }));
 
 describe("ItemTab", () => {
@@ -26,6 +30,18 @@ describe("ItemTab", () => {
             composition={composition} problems={[]} onSaved={() => {}} workflowName="wf" />);
         expect(screen.getByLabelText("Filter expression")).toHaveAttribute("data-workflow", "wf");
         expect(screen.queryByLabelText("description")).toBeNull();
+    });
+
+    it("disables the Enabled switch while the enable request is in flight", async () => {
+        let resolve: (v: c.CompositionItem) => void = () => {};
+        vi.spyOn(c, "setItemEnabled").mockReturnValue(new Promise<c.CompositionItem>((r) => { resolve = r; }));
+        render(<ItemTab compositionId={1} item={{ ...item, type: "subscription", baseItemId: 9 }}
+            content={{ name: "s", filterExpression: "true" }} composition={composition} problems={[]}
+            onSaved={() => {}} workflowName="wf" workflowPublished />);
+        fireEvent.click(screen.getByLabelText("Enabled"));
+        await waitFor(() => expect(screen.getByLabelText("Enabled")).toBeDisabled());
+        resolve({ ...item, type: "subscription", enabled: true });
+        await waitFor(() => expect(screen.getByLabelText("Enabled")).toBeEnabled());
     });
     it("saves edits with the base revision", async () => {
         const save = vi.spyOn(c, "saveItem").mockResolvedValue({ ...item, contentRevision: "r1" });

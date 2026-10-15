@@ -122,7 +122,8 @@ export function publishSelection(items: CompositionItem[],
                 .map((n: string) => findChanged("tool", n))
                 .filter((d: CompositionItem | undefined): d is CompositionItem => !!d);
         } else if (item.type === "subscription") {
-            const routing = (content.routing as { type?: string; workflowDefinitionName?: string }[] | undefined) ?? [];
+            const routing: { type?: string; workflowDefinitionName?: string }[] = Array.isArray(content.routing)
+                ? (content.routing as { type?: string; workflowDefinitionName?: string }[]) : [];
             deps = routing.filter((r) => r.type === "create-workflow" && !!r.workflowDefinitionName)
                 .map((r) => findChanged("workflow", r.workflowDefinitionName as string))
                 .filter((d: CompositionItem | undefined): d is CompositionItem => !!d);
