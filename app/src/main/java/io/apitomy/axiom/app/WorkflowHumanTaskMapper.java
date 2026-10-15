@@ -37,8 +37,9 @@ public final class WorkflowHumanTaskMapper {
      */
     public static HumanContext toHumanContext(HumanTaskInfo hti) {
         HumanContext ctx = new HumanContext();
-        String name = hti.nodeName();
-        ctx.setTitle(name != null && !name.isBlank() ? name : DEFAULT_TITLE);
+        // The computed task title (the node's title expression) wins; it defaults to the node name.
+        String title = hti.title() != null && !hti.title().isBlank() ? hti.title() : hti.nodeName();
+        ctx.setTitle(title != null && !title.isBlank() ? title : DEFAULT_TITLE);
         ctx.setDescription(hti.description());
 
         if (hti.inputs() != null && !hti.inputs().isEmpty()) {
