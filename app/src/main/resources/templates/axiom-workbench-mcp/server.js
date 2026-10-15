@@ -244,6 +244,16 @@ function formatRun(run, failedTasks) {
  * @param {{trace: object, nodes: Array<object>}} detail the trace detail
  * @returns {string} the formatted trace
  */
+function formatTrace(detail) {
+    const t = detail.trace || {};
+    const isFailed = n => /fail|error/i.test(String(n.status || ""));
+    const nodes = [...(detail.nodes || [])].sort((a, b) => Number(isFailed(b)) - Number(isFailed(a)));
+    return [`Trace ${t.traceId}: ${t.status}` + (t.summary ? ` - ${t.summary}` : "")]
+        .concat(nodes.map(n => `- ${n.nodeType} ${n.status} ${n.summary || ""}`
+            + (n.durationMs !== undefined && n.durationMs !== null ? ` (${n.durationMs} ms)` : "")))
+        .join("\n");
+}
+
 /**
  * Formats a subscription filter preview: counts, errors and the matched events (at most 20).
  * @param {object} r the SubscriptionPreviewResponse
@@ -262,16 +272,6 @@ function formatSubscriptionPreview(r) {
         lines.push(`- ${e.id} ${e.type} ${e.ref}${actor} at ${e.timestamp}`);
     }
     return lines.join("\n");
-}
-
-function formatTrace(detail) {
-    const t = detail.trace || {};
-    const isFailed = n => /fail|error/i.test(String(n.status || ""));
-    const nodes = [...(detail.nodes || [])].sort((a, b) => Number(isFailed(b)) - Number(isFailed(a)));
-    return [`Trace ${t.traceId}: ${t.status}` + (t.summary ? ` - ${t.summary}` : "")]
-        .concat(nodes.map(n => `- ${n.nodeType} ${n.status} ${n.summary || ""}`
-            + (n.durationMs !== undefined && n.durationMs !== null ? ` (${n.durationMs} ms)` : "")))
-        .join("\n");
 }
 
 /**
