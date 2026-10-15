@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -135,22 +136,23 @@ public final class StandardInputs {
      *
      * @param workflow the workflow being started
      * @param subject  the run's subject
-     * @param event    the {@code event} value when started from a stream event, else null
+     * @param event    supplies the {@code event} value; called only when the Start node declares {@code event}.
+     *                 A null supplier, or one returning null, means the run was not started from a stream event
      * @return the context to start with and any required inputs that are not available
      */
-    public static Resolution resolve(Workflow workflow, SubjectEntity subject, JsonNode event) {
+    public static Resolution resolve(Workflow workflow, SubjectEntity subject, Supplier<JsonNode> event) {
         Map<String, Object> context = new LinkedHashMap<>();
         List<String> missing = new ArrayList<>();
         for (NodeConfig.Field field : startInputs(workflow)) {
             String name = field.name();
-            Object value = switch (name == null ? "" : name) {
-                case SUBJECT -> subjectValue(subject);
-                case EVENT -> event;
-                default -> null;
-            };
             if (find(name).isEmpty()) {
                 continue;
             }
+            Object value = switch (name) {
+                case SUBJECT -> subjectValue(subject);
+                case EVENT -> event != null ? event.get() : null;
+                default -> null;
+            };
             if (value != null) {
                 context.put(name, value);
             } else if (field.required()) {

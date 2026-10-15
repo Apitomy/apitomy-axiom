@@ -48,6 +48,10 @@ class WorkflowTriggerInputGuardTest {
     private static final String EVENT_OPTIONAL = "[{\"name\": \"event\", \"type\": \"object\", \"required\": false}]";
 
     private static UUID event() {
+        return event("{\"n\": 5}");
+    }
+
+    private static UUID event(String payload) {
         UUID id = UUID.randomUUID();
         QuarkusTransaction.requiringNew().run(() -> {
             StreamEventEntity e = new StreamEventEntity();
@@ -59,7 +63,7 @@ class WorkflowTriggerInputGuardTest {
             e.ref = "test/inputs-event-" + id;
             e.timestamp = Instant.now();
             e.actor = "{\"login\": \"tester\"}";
-            e.payload = "{\"n\": 5}";
+            e.payload = payload;
             e.createdOn = Instant.now();
             e.persist();
         });
@@ -138,5 +142,16 @@ class WorkflowTriggerInputGuardTest {
                 .body("context.event.payload.n", equalTo(5))
                 .body("inputs.event", nullValue())
                 .body("inputs.subject.id", org.hamcrest.Matchers.notNullValue());
+    }
+
+    @Test
+    void malformedEventPayloadDoesNotBlockAWorkflowThatDoesNotDeclareEvent() {
+        UUID eventId = event("{not json");
+        long defId = TestFixtures.createDefinition("Subject Only Bad Event", content(SUBJECT_REQUIRED));
+        given().contentType(ContentType.JSON).body("{\"workflowDefinitionId\": %d}".formatted(defId))
+                .when().post("/api/v1/stream/events/" + eventId + "/runs")
+                .then().statusCode(200)
+                .body("context.event", nullValue())
+                .body("context.subject.id", org.hamcrest.Matchers.notNullValue());
     }
 }

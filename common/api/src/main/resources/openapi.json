@@ -6377,7 +6377,7 @@
             }
           },
           "400": {
-            "description": "Workflow definition not published or invalid inputs"
+            "description": "Workflow definition not published, or a required input is not available"
           },
           "404": {
             "description": "Event or workflow definition not found"
@@ -6460,7 +6460,7 @@
             }
           },
           "400": {
-            "description": "The workflow has no published version or the inputs are invalid"
+            "description": "The workflow has no published version, or a required input is not available"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"

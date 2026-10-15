@@ -16,6 +16,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Unit tests for the standard workflow inputs registry. */
@@ -78,9 +79,10 @@ class StandardInputsTest {
 
     @Test
     void resolvesOnlyDeclaredInputs() throws Exception {
+        JsonNode event = MAPPER.readTree("{\"type\": \"t\"}");
         StandardInputs.Resolution r = StandardInputs.resolve(
                 workflow("[{\"name\": \"subject\", \"type\": \"object\", \"required\": true}]"), subject(),
-                MAPPER.readTree("{\"type\": \"t\"}"));
+                () -> event);
         assertEquals(List.of("subject"), List.copyOf(r.context().keySet()));
         assertTrue(r.missingRequired().isEmpty());
     }
@@ -100,6 +102,27 @@ class StandardInputsTest {
     @Test
     void noDeclaredInputsGivesEmptyContext() throws Exception {
         JsonNode event = MAPPER.readTree("{}");
-        assertTrue(StandardInputs.resolve(workflow("[]"), subject(), event).context().isEmpty());
+        assertTrue(StandardInputs.resolve(workflow("[]"), subject(), () -> event).context().isEmpty());
+    }
+
+    @Test
+    void eventSupplierIsNotCalledWhenEventIsNotDeclared() throws Exception {
+        StandardInputs.Resolution r = StandardInputs.resolve(
+                workflow("[{\"name\": \"subject\", \"type\": \"object\", \"required\": true}]"), subject(),
+                () -> {
+                    throw new AssertionError("event supplier must not be called");
+                });
+        assertEquals(List.of("subject"), List.copyOf(r.context().keySet()));
+    }
+
+    @Test
+    void eventValueRejectsInvalidPayloadJsonNamingTheEvent() {
+        StreamEventEntity e = new StreamEventEntity();
+        e.id = UUID.randomUUID();
+        e.type = "issue.created";
+        e.payload = "{not json";
+        IllegalStateException ex = assertThrows(IllegalStateException.class,
+                () -> StandardInputs.eventValue(e, MAPPER));
+        assertTrue(ex.getMessage().contains(e.id.toString()), ex.getMessage());
     }
 }

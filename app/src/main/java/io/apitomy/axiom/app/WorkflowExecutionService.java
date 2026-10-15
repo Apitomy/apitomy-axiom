@@ -56,6 +56,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 @ApplicationScoped
 public class WorkflowExecutionService {
@@ -175,13 +176,14 @@ public class WorkflowExecutionService {
 
         validateNodeTypes(workflow);
 
-        JsonNode eventValue = null;
-        if (origin != null && origin.eventId() != null) {
-            StreamEventEntity event = StreamEventEntity.findById(origin.eventId());
-            if (event != null) {
-                eventValue = StandardInputs.eventValue(event, objectMapper);
+        // Resolved lazily: the event is loaded and parsed only when the Start node declares it.
+        Supplier<JsonNode> eventValue = () -> {
+            if (origin == null || origin.eventId() == null) {
+                return null;
             }
-        }
+            StreamEventEntity event = StreamEventEntity.findById(origin.eventId());
+            return event != null ? StandardInputs.eventValue(event, objectMapper) : null;
+        };
         StandardInputs.Resolution resolution = StandardInputs.resolve(workflow, subject, eventValue);
         if (!resolution.missingRequired().isEmpty()) {
             String message = "Cannot start workflow \"" + definition.name + "\": required input(s) not available: "
