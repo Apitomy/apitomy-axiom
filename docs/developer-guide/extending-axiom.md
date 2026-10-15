@@ -42,7 +42,6 @@ Location: `agents/spi/src/main/java/io/apitomy/axiom/agents/spi/Agent.java`
 | `void refreshAvailableModels()` | Refresh a cached model list (default: no-op) |
 | `boolean supportsInteractiveSessions()` | Whether this agent can back AI Assistant sessions (default: `false`) |
 | `CompletableFuture<AgentResult> execute(AgentRequest request)` | Invoke the agent with a prompt |
-| `CompletableFuture<AgentResult> executeWithSchema(AgentRequest request, String jsonSchema)` | Invoke with a JSON schema constraint for structured output |
 | `void cancel(String executionId)` | Best-effort cancellation of a running execution |
 | `List<AgentCheckResult> healthCheck()` | Startup health checks |
 
