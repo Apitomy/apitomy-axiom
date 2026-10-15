@@ -1749,6 +1749,11 @@ export interface HistoryEntryInfo {
 
 export interface TriggerWorkflowRequest {
     workflowDefinitionId: number;
+    /** Run title; defaults to "<workflow> — <subject>". */
+    title?: string;
+    labels?: Record<string, string>;
+    /** Values for the workflow's Start inputs. */
+    inputs?: Record<string, unknown>;
 }
 
 export async function triggerWorkflow(

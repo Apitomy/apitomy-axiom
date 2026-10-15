@@ -106,9 +106,9 @@ executing. The **Runs** tab lists the runs of the definition.
 A workflow run can be started in these ways:
 
 - **Manually from a subject** — on a subject's detail page, open the **Workflow** tab, click
-  **Run Workflow** and select a published definition. The run starts with `subjectId`, `subjectName`,
-  `ref` and `repository` in its context. The REST endpoint
-  (`POST /api/v1/subjects/{subjectId}/workflow`) also accepts a run title, labels, and inputs.
+  **Run Workflow**, select a published definition and optionally enter a title, labels (`key:value,
+  key:value`) and inputs (a JSON object). The run starts with `subjectId`, `subjectName`, `ref` and
+  `repository` in its context. The REST endpoint is `POST /api/v1/subjects/{subjectId}/workflow`.
 - **Manually from a stream event** — on an event's detail page (**Events > Event Stream**, then click an
   event), click **Run workflow…** and pick any published workflow. Workflows used by subscriptions that
   matched the event are listed first, under **Suggested**. You may supply a title, labels, and inputs. The

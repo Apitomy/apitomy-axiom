@@ -5,7 +5,7 @@ import {
     Button, EmptyState, EmptyStateBody,
     Flex, FlexItem, Label, Modal, ModalBody,
     ModalFooter, ModalHeader, Form, FormGroup,
-    FormSelect, FormSelectOption,
+    FormSelect, FormSelectOption, FormHelperText, HelperText, HelperTextItem, TextArea, TextInput,
 } from "@patternfly/react-core";
 import { WorkflowViewer } from "@apitomy/flow-ui";
 import type {
@@ -14,8 +14,9 @@ import type {
 import { useEffectiveTheme } from "../hooks/useTheme";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
 import { ExecutionLogModal } from "./ExecutionLogModal";
+import { parseInputs, parseLabels } from "./RunWorkflowFromEventModal";
 import {
-    type WorkflowDefinition, type WorkflowInstanceInfo,
+    type TriggerWorkflowRequest, type WorkflowDefinition, type WorkflowInstanceInfo,
     fetchWorkflowDefinitions, triggerWorkflow,
     getWorkflowInstance, cancelWorkflowRun,
 } from "../config/api";
@@ -41,6 +42,11 @@ export function WorkflowTab({
     const [definitions, setDefinitions] =
         useState<WorkflowDefinition[]>([]);
     const [selectedDefId, setSelectedDefId] = useState("");
+    const [runTitle, setRunTitle] = useState("");
+    const [runLabels, setRunLabels] = useState("");
+    const [runInputs, setRunInputs] = useState("");
+    const parsedLabels: Record<string, string> | null = parseLabels(runLabels);
+    const parsedInputs: Record<string, unknown> | null = parseInputs(runInputs);
     const [submitting, setSubmitting] = useState(false);
     const [triggerError, setTriggerError] = useState<string | null>(null);
 
@@ -93,6 +99,9 @@ export function WorkflowTab({
                     setSelectedDefId(String(published[0].id));
                 }
                 setTriggerError(null);
+                setRunTitle("");
+                setRunLabels("");
+                setRunInputs("");
                 setIsTriggerOpen(true);
             })
             .catch(console.error);
@@ -102,9 +111,12 @@ export function WorkflowTab({
         if (!selectedDefId) return;
         setSubmitting(true);
         setTriggerError(null);
-        triggerWorkflow(subjectId, {
-            workflowDefinitionId: Number(selectedDefId),
-        })
+        if (parsedLabels === null || parsedInputs === null) return;
+        const request: TriggerWorkflowRequest = { workflowDefinitionId: Number(selectedDefId) };
+        if (runTitle.trim()) request.title = runTitle.trim();
+        if (Object.keys(parsedLabels).length > 0) request.labels = parsedLabels;
+        if (Object.keys(parsedInputs).length > 0) request.inputs = parsedInputs;
+        triggerWorkflow(subjectId, request)
             .then(() => {
                 setIsTriggerOpen(false);
                 onRefresh();
@@ -115,7 +127,7 @@ export function WorkflowTab({
                     ? err.message
                     : "Failed to run workflow"))
             .finally(() => setSubmitting(false));
-    }, [subjectId, selectedDefId, onRefresh, loadInstance]);
+    }, [subjectId, selectedDefId, runTitle, parsedLabels, parsedInputs, onRefresh, loadInstance]);
 
     const handleCancel = useCallback(() => {
         if (!instance) return;
@@ -228,6 +240,29 @@ export function WorkflowTab({
                                 ))}
                             </FormSelect>
                         </FormGroup>
+                        <FormGroup label="Title" fieldId="wf-run-title">
+                            <TextInput id="wf-run-title" value={runTitle} onChange={(_e, v) => setRunTitle(v)}
+                                placeholder="Workflow — subject" />
+                        </FormGroup>
+                        <FormGroup label="Labels" fieldId="wf-run-labels">
+                            <TextInput id="wf-run-labels" value={runLabels} onChange={(_e, v) => setRunLabels(v)}
+                                placeholder="key:value, key:value" validated={parsedLabels === null ? "error" : "default"} />
+                            {parsedLabels === null && (
+                                <FormHelperText><HelperText><HelperTextItem variant="error">
+                                    Use key:value pairs separated by commas.
+                                </HelperTextItem></HelperText></FormHelperText>
+                            )}
+                        </FormGroup>
+                        <FormGroup label="Inputs" fieldId="wf-run-inputs">
+                            <TextArea id="wf-run-inputs" value={runInputs} onChange={(_e, v) => setRunInputs(v)}
+                                placeholder="{}" rows={4} resizeOrientation="vertical"
+                                validated={parsedInputs === null ? "error" : "default"} />
+                            <FormHelperText><HelperText>
+                                {parsedInputs === null
+                                    ? <HelperTextItem variant="error">Enter a JSON object.</HelperTextItem>
+                                    : <HelperTextItem>Values for the workflow&apos;s Start inputs (JSON object).</HelperTextItem>}
+                            </HelperText></FormHelperText>
+                        </FormGroup>
                     </Form>
                 )}
             </ModalBody>
@@ -236,6 +271,8 @@ export function WorkflowTab({
                     onClick={handleTrigger}
                     isDisabled={
                         !selectedDefId
+                        || parsedLabels === null
+                        || parsedInputs === null
                         || definitions.length === 0
                         || submitting}
                     isLoading={submitting}>
