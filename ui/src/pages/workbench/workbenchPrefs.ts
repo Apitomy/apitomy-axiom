@@ -57,7 +57,9 @@ export function loadPrefs(): WorkbenchPrefs {
         panes: { left: pane(panes.left, d.panes.left), right: pane(panes.right, d.panes.right) },
         leftCollapsed: typeof raw.leftCollapsed === "boolean" ? raw.leftCollapsed : d.leftCollapsed,
         rightCollapsed: typeof raw.rightCollapsed === "boolean" ? raw.rightCollapsed : d.rightCollapsed,
-        testStripCollapsed: typeof raw.testStripCollapsed === "boolean" ? raw.testStripCollapsed : d.testStripCollapsed,
+        // The bottom panel (Tests | Runs) always starts collapsed when a composition is opened; only its tab is
+        // remembered.
+        testStripCollapsed: d.testStripCollapsed,
         bottomPanelTab: raw.bottomPanelTab === "tests" || raw.bottomPanelTab === "runs" ? raw.bottomPanelTab : d.bottomPanelTab,
     };
 }

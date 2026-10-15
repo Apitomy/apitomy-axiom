@@ -12,9 +12,10 @@ describe("workbenchPrefs", () => {
         expect(loadPrefs().panes).toEqual({ left: 800, right: 160 });
     });
 
-    it("remembers the test strip state", () => {
+    it("always opens the bottom panel collapsed", () => {
         savePrefs({ testStripCollapsed: false });
-        expect(loadPrefs().testStripCollapsed).toBe(false);
+        // The bottom panel always opens collapsed, whatever was saved.
+        expect(loadPrefs().testStripCollapsed).toBe(true);
     });
 
     it("remembers the bottom panel tab", () => {
