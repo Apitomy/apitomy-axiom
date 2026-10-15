@@ -25,7 +25,7 @@ The main configuration of each node type:
 
 | Node Type | Configuration |
 |-----------|---------------|
-| `start` | `inputs`: the run's declared inputs (`name`, `type` — `string`, `number`, `boolean` or `object` —, `required`, `description`); only the standard inputs `subject` and `event` (both `object`) may be declared |
+| `start` | `inputs`: the run's declared inputs, each with `name`, `type`, `required` and `description`; only the standard inputs `subject` and `event` may be declared, and both have type `object` |
 | `end` | None. Ends the run, or the current branch of a parallel region |
 | `action` | `actionType` (an action type name, or `sdk:<function>`); `inputs`: a map of input name to EL expression; optional `outputs` to rename or require task outputs. Task outputs are merged into the run context under their names |
 | `human-task` | Optional `title` and `description`; `inputs` shown to the person; `outputs`: the form fields, whose answers are merged into the context |
