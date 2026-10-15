@@ -12,7 +12,7 @@ endpoint, and Axiom resumes the workflow with the answers merged into context.
 A `human-task` node in a Flow workflow definition configures these things under `config`:
 
 1. **Title** (`title`, optional) — an EL expression for the task title shown in the Inbox, for example
-   `'Review ' += context.ref`. When it is absent or fails, the node's name is used.
+   `'Review ' += context.subject.ref`. When it is absent or fails, the node's name is used.
 2. **Description** (`description`, optional) — text shown with the task.
 3. **Inputs** — mapped to read-only `details` displayed to the user for context.
 4. **Outputs** — define the completion form fields (`outputSchema`) that the user fills in.
@@ -28,7 +28,7 @@ Example (from `templates/assistant-reference/examples/workflows/issue-triage.jso
 ```json
 {
   "inputs": {
-    "issue": "context.ref",
+    "issue": "context.subject.ref",
     "severity": "context.severity"
   }
 }
@@ -163,11 +163,11 @@ For the full authoring and run-time reference across all node types, see
 
 A workflow that waits for manager approval before deploying:
 
-1. **Start node** — receives `subjectId` and `ref` (canonical inputs; see
+1. **Start node** — declares the standard input `subject` (see
    [Workflow Input Contract](workflow-input-contract.md)).
 2. **Action node** — runs a build script, outputs `buildArtifact`.
 3. **Human-task node** (`Manager Approval`) —
-   - Inputs: `{ "ref": "context.ref", "buildArtifact": "context.buildArtifact" }` (shown as read-only
+   - Inputs: `{ "ref": "context.subject.ref", "buildArtifact": "context.buildArtifact" }` (shown as read-only
      context)
    - Outputs:
      ```json

@@ -217,13 +217,13 @@ make any changes.
 ### Step 5: Create the Workflow
 
 Navigate to **Components > Workflows** and click **Create Workflow Definition** with the name
-`Auto-Label New Issues`. The new definition is scaffolded with a Start node (declaring `subjectId`,
-`ref`, and `event`) connected to an End node. In the editor:
+`Auto-Label New Issues`. The new definition is scaffolded with a Start node (declaring `subject`
+and `event`) connected to an End node. In the editor:
 
 1. Drag an **Auto-Label Issue** action node from the palette (every action type appears there) between
    Start and End
 2. Double-click the action node to open its properties and map its inputs from the run context:
-   `ref` ← `context.ref` and `repository` ← `context.repository`
+   `ref` ← `context.subject.ref` and `repository` ← `context.subject.repository`
 3. Connect Start → Auto-Label Issue → End
 4. Click **Publish**
 
@@ -392,7 +392,8 @@ Summarize all GitHub @mentions from the past 7 days.
 
 Navigate to **Components > Workflows**, create a workflow definition named `Weekly @Mentions`, add a
 **Summarize @Mentions** action node between Start and End, map its `subjectName` input from
-`context.subjectName`, and click **Publish**.
+`context.subject.name`, and remove the `event` input from the Start node (a schedule trigger has no
+event, so a required `event` would stop every firing), and click **Publish**.
 
 On the workflow's **Triggers** tab, add a schedule trigger:
 

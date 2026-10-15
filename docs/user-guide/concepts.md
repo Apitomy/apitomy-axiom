@@ -102,7 +102,6 @@ workflow definition page:
 |-------|---------|
 | **Cron** | A 5-field Unix cron expression, evaluated in UTC |
 | **Subject name** | A fixed subject (at most 246 characters); created on first firing and reused afterwards |
-| **Inputs** | Optional static inputs passed to every run |
 | **Enabled** | Whether the trigger fires |
 
 Because every firing reuses the same subject, run history accumulates on that subject. If the subject
@@ -147,17 +146,16 @@ declared input; any other `{{...}}` placeholder is rejected by validation. Actio
 subject data — values reach them only through inputs.
 
 Each workflow `action` node maps values into the action type's inputs, typically from the run context
-(`context.*`) or from outputs of earlier nodes. The run context always provides:
+(`context.*`) or from outputs of earlier nodes. The run context holds the standard inputs that the
+workflow's Start node declares, plus the outputs that nodes write as the run proceeds:
 
 | Context key | Value |
 |-------------|-------|
-| `subjectId` | Internal subject ID |
-| `subjectName` | Subject name |
-| `ref` | Full URL identifying the subject (empty when unknown) |
-| `repository` | Repository, when applicable (empty otherwise) |
-| `event` | The triggering event, for event-started runs |
+| `subject` | The run's subject: `id`, `name`, `type`, `ref` (full URL identifying the subject), `refSource` and `repository`; a field with no value is `null`. Read fields as `context.subject.ref` |
+| `event` | The triggering event, for runs started from a stream event only |
 
-These keys cannot be overridden by supplied run inputs. Mapping rules:
+A run receives only the standard inputs its Start node declares (see the
+[Workflow Input Contract](../developer-guide/workflow-input-contract.md)). Mapping rules:
 
 - Every **required** input must be mapped on the node.
 - Mapping a name that is not a declared input is an error.
@@ -172,7 +170,7 @@ These keys cannot be overridden by supplied run inputs. Mapping rules:
   example a missing payload field). A task whose required input has no value fails when it starts.
 
 For example, an action type declaring a required `ref` input and an optional `repository` input, used by a
-node that maps `ref` from `context.ref` and `repository` from `context.repository`:
+node that maps `ref` from `context.subject.ref` and `repository` from `context.subject.repository`:
 
 ```
 Triage the issue at {{inputs.ref}}.
@@ -201,8 +199,8 @@ files in `$AXIOM_WORK_DIR` or create them with `mktemp`, not at fixed `/tmp` pat
 API base URL), `AXIOM_TASK_ID` and `AXIOM_WORK_DIR`, plus secrets and the action type's environment.
 A script runs in its subject's workspace (`AXIOM_WORK_DIR`), or in a temporary directory when the task has
 no subject; it never runs in Axiom's own directory. A required input whose value is empty counts as missing,
-so the task fails before the script runs. For subjects created from GitHub events, `context.repository` is
-the event's `owner/repo`.
+so the task fails before the script runs. For subjects created from GitHub events,
+`context.subject.repository` is the event's `owner/repo`.
 Agents receive none of these; they run in the task workspace and get data only through declared inputs.
 Subject data is not passed through the environment; declare an input instead, e.g.
 `curl "$AXIOM_API_URL/subjects/{{inputs.subjectId}}"`.
@@ -354,7 +352,7 @@ saving.
 
 | Type | What Happens |
 |------|--------------|
-| **`create-workflow`** | Finds or creates the subject from the event's `ref` URL, then starts a run of the configured workflow definition on that subject (with `subjectId`, `ref`, and `event` in context). If the subject already has an active run of that definition, the run is skipped and the skip is recorded in the routing outcome. |
+| **`create-workflow`** | Finds or creates the subject from the event's `ref` URL, then starts a run of the configured workflow definition on that subject (with its declared `subject` and `event` inputs in context). If the subject already has an active run of that definition, the run is skipped and the skip is recorded in the routing outcome. |
 | **`workflow-dispatch`** | Broadcasts the event to **every** waiting run on the correlated subject that is parked at a `receive-event` node with a matching event type (and EL match). If the event does not correlate to a subject, it is delivered to all waiting runs with a matching event type. |
 
 A subscription with no routing rules matches events silently, which is useful for previewing matches
