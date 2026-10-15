@@ -119,8 +119,9 @@ A workflow run can be started in these ways:
 
 ### Run Title, Labels, and Inputs
 
-Every run has a **title**, which defaults to `<definition name> — <subject name>` and may be at most 500
-characters. Runs also carry free-form key/value **labels** (runs started by a schedule trigger are
+A run can have a **title** of at most 500 characters. Only runs started with one have a title (for example
+from the **Title** field of an event's **Run workflow…** dialog, or the REST API); lists and headers name
+other runs by their subject and workflow. Runs also carry free-form key/value **labels** (runs started by a schedule trigger are
 labeled `trigger: schedule`) and the **inputs** they were started with. Supplied inputs join the run's
 initial context and are validated against the Start node's declared inputs (see
 [Workflow Input Contract](../developer-guide/workflow-input-contract.md)); `subjectId`, `subjectName`, `ref`,
@@ -222,7 +223,8 @@ from one event). Each run detail page has
 these tabs:
 
 - **Diagram** — the node graph with the run's progress; a node's menu opens its task's execution log
-- **Overview** — title, subject, labels, inputs, workflow version, status, start and end times, the
+- **Overview** — a form with the title (when the run has one), the subject and workflow (each linked to
+  its page), the workflow version, status, start and end times, labels, inputs, the
   failure reason, a link to the trace, the triggering event (when started from an event), the events that
   resumed the run, and the tasks created by `action` or `human-task` nodes with their outputs and logs
 - **Timeline** — the nodes the run passed through, in order

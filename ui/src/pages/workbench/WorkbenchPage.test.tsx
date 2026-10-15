@@ -400,7 +400,7 @@ describe("WorkbenchPage", () => {
     });
 
     it("lists the runs of the published workflow on the Runs tab", async () => {
-        fetchWorkflowRunsMock.mockResolvedValue({ items: [{ runId: 5, status: "completed", title: "First",
+        fetchWorkflowRunsMock.mockResolvedValue({ items: [{ runId: 5, status: "completed", subjectId: 4, subjectName: "PR 4", title: "First",
             definitionVersion: 1, startedOn: "2026-10-14T10:00:00Z" }], totalCount: 1 });
         const spy = vi.spyOn(prefs, "savePrefs");
         renderPage();
@@ -408,12 +408,12 @@ describe("WorkbenchPage", () => {
         fireEvent.click(screen.getByRole("button", { name: "Expand bottom panel" }));
         fireEvent.click(screen.getByRole("tab", { name: /Runs/ }));
         expect(spy).toHaveBeenCalledWith(expect.objectContaining({ bottomPanelTab: "runs" }));
-        expect(await screen.findByText("First")).toBeTruthy();
+        expect(await screen.findByText("PR 4 · First")).toBeTruthy();
         expect(screen.getByRole("button", { name: "Refresh" })).toBeTruthy();
     });
 
     it("opens the run dialog when a run row is clicked", async () => {
-        fetchWorkflowRunsMock.mockResolvedValue({ items: [{ runId: 5, status: "completed", title: "First",
+        fetchWorkflowRunsMock.mockResolvedValue({ items: [{ runId: 5, status: "completed", subjectId: 4, subjectName: "PR 4", title: "First",
             definitionVersion: 1, startedOn: "2026-10-14T10:00:00Z" }], totalCount: 1 });
         renderPage();
         await waitFor(() => expect(fetchWorkflowRunsMock).toHaveBeenCalled());

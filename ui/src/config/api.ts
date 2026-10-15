@@ -1696,10 +1696,13 @@ export interface ActiveBranchInfo {
 export interface WorkflowInstanceInfo {
     id: number;
     subjectId: number;
+    /** Name of the subject the run belongs to. */
+    subjectName?: string;
     definitionId: number;
     definitionVersion: number;
     definitionName: string;
-    title: string;
+    /** Title the run was started with; absent when none was given. */
+    title?: string;
     labels?: Record<string, string>;
     inputs?: Record<string, unknown>;
     status: string;
@@ -1781,7 +1784,8 @@ export interface WorkflowRunSummary {
     definitionId: number;
     definitionName?: string;
     definitionVersion: number;
-    title: string;
+    /** Title the run was started with; absent when none was given. */
+    title?: string;
     labels?: Record<string, string>;
     inputs?: Record<string, unknown>;
     status: string;

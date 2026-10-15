@@ -259,8 +259,8 @@ The **Runs** tab of the bottom panel lists the runs of the composition's publish
 Until the workflow is published, the tab shows "Publish the workflow to see its runs here." Use **Refresh** to
 reload the list.
 
-Each row shows the status, run number, title, workflow version, start time and, for failed or waiting runs,
-the current node. Failed runs have an **Ask AI to analyze** link.
+Each row shows the status, run number, subject (followed by the run's title when it has one), workflow
+version, start time and, for failed or waiting runs, the current node. Failed runs have an **Ask AI to analyze** link.
 
 Click a row to open the run details dialog. It shows the status, version, start time, duration and current
 node, the failure reason, and these tabs:

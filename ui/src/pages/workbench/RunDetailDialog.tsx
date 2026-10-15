@@ -141,7 +141,8 @@ export function RunDetailDialog({ runId, workflowName, onClose, onAskAi }: RunDe
             reason: failureText(run, tasks) }, workflowName || run.definitionName));
         onClose();
     };
-    const title: string = run ? `Run #${runId}: ${run.title || `${run.definitionName} v${run.definitionVersion}`}`
+    const title: string = run
+        ? `Run #${runId}: ${run.title || run.subjectName || `${run.definitionName} v${run.definitionVersion}`}`
         : `Run #${runId}`;
     return (
         <Modal isOpen variant="large" onClose={onClose} aria-labelledby="run-detail-title"

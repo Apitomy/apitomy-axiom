@@ -1,13 +1,15 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { render } from "@testing-library/react";
 import { normalizeRunFilter, resolveWorkflowFilter, WorkflowRunsPage } from "./WorkflowRunsPage";
 import { renderWithRouter } from "../test/renderWithRouter";
 import * as api from "../config/api";
 
-function run(runId: number, title: string) {
+function run(runId: number, title?: string) {
     return {
-        runId, title, subjectId: 1, subjectName: "Subject", definitionId: 2,
+        runId, title, subjectId: 1, subjectName: `Subject ${runId}`, definitionId: 2,
         definitionName: "Triage", definitionVersion: 1, status: "completed",
         startedOn: "2026-10-01T00:00:00Z", completedOn: "2026-10-01T00:01:00Z",
     };
@@ -23,7 +25,7 @@ vi.mock("../config/sse", () => ({
 
 beforeEach(() => {
     vi.mocked(api.fetchWorkflowRuns).mockReset().mockResolvedValue({
-        items: [run(1, "Run A"), run(2, "Run B")], totalCount: 2, page: 1, limit: 20,
+        items: [run(1, "Run A"), run(2)], totalCount: 2, page: 1, limit: 20,
     } as never);
     vi.mocked(api.fetchWorkflowDefinitions).mockReset().mockResolvedValue({
         items: [{ id: 2, name: "Triage" }], totalCount: 1, page: 1, limit: 100,
@@ -36,25 +38,39 @@ function lastFilters(): Record<string, unknown> {
 }
 
 describe("WorkflowRunsPage", () => {
-    it("renders run titles and the chip filter input instead of separate controls", async () => {
+    it("renders one Run column: subject and workflow, with the title below only when there is one", async () => {
         renderWithRouter(<WorkflowRunsPage />);
-        expect(await screen.findByText("Run A")).toBeInTheDocument();
-        expect(screen.getByText("Run B")).toBeInTheDocument();
+        expect(await screen.findByText("Subject 1 — Triage v1")).toBeInTheDocument();
+        expect(screen.getByText("Run A")).toBeInTheDocument();
+        expect(screen.getByText("Subject 2 — Triage v1")).toBeInTheDocument();
+        const headers: string[] = screen.getAllByRole("columnheader").map((h) => h.textContent ?? "");
+        expect(headers).toEqual(["Status", "Run", "Started", "Duration"]);
+        expect(screen.queryByRole("link")).toBeNull();
         expect(screen.queryByLabelText("Status")).toBeNull();
         expect(screen.queryByPlaceholderText("Subject ID")).toBeNull();
         expect(screen.queryByText("No workflow runs match the current filters.")).toBeNull();
     });
 
-    it("adds status and workflow chips from the table and filters by them", async () => {
+    it("opens the run detail page when a row is clicked", async () => {
+        render(
+            <MemoryRouter initialEntries={["/runs"]}>
+                <Routes>
+                    <Route path="/runs" element={<WorkflowRunsPage />} />
+                    <Route path="/runs/:runId" element={<p>run detail page</p>} />
+                </Routes>
+            </MemoryRouter>);
+        await userEvent.click(await screen.findByText("Subject 2 — Triage v1"));
+        expect(await screen.findByText("run detail page")).toBeInTheDocument();
+    });
+
+    it("adds a status chip from the table without leaving the page, and filters by it", async () => {
         renderWithRouter(<WorkflowRunsPage />);
         await screen.findByText("Run A");
         await userEvent.click(screen.getAllByText("completed")[0]);
         await waitFor(() => expect(lastFilters().status).toBe("completed"));
-        await userEvent.click(screen.getAllByRole("button", { name: "Triage" })[0]);
-        await waitFor(() => expect(lastFilters().definitionId).toBe(2));
         expect(screen.getByText("Filters")).toBeInTheDocument();
         await userEvent.click(screen.getByRole("button", { name: "Close label group Filters" }));
-        await waitFor(() => expect(lastFilters()).toEqual(expect.objectContaining({ status: undefined, definitionId: undefined })));
+        await waitFor(() => expect(lastFilters()).toEqual(expect.objectContaining({ status: undefined })));
     });
 
     it("normalises and validates typed filter values", () => {

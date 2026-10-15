@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
-    Breadcrumb, BreadcrumbItem, Button, Flex, FlexItem, Label,
-    PageSection, Tab, TabTitleText, Tabs, Title,
+    Breadcrumb, BreadcrumbItem, Button, CodeBlock, CodeBlockCode, Flex, FlexItem, Form, FormGroup, Label,
+    LabelGroup, PageSection, Tab, TabTitleText, Tabs, Title,
 } from "@patternfly/react-core";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import { WorkflowViewer } from "@apitomy/flow-ui";
@@ -20,6 +20,20 @@ import {
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import { STATUS_COLORS, toFlowInstance } from "../components/workflowRun";
+
+/**
+ * One read-only field of the run Overview form.
+ *
+ * @param props the field label, its id and its content
+ * @returns the form group
+ */
+function OverviewField({ label, id, children }: { label: string; id: string; children: ReactNode }) {
+    return (
+        <FormGroup label={label} fieldId={id}>
+            <div id={id} className="axiom-run-overview__value">{children}</div>
+        </FormGroup>
+    );
+}
 
 /** Shows a single workflow run: diagram (default tab), overview, timeline, trace and lineage. */
 export function WorkflowRunDetailPage() {
@@ -104,7 +118,8 @@ export function WorkflowRunDetailPage() {
                 style={{ marginBottom: "16px" }}>
                 <FlexItem>
                     <Title headingLevel="h1" size="lg">
-                        {run.title || `${run.definitionName} v${run.definitionVersion}`}{" "}
+                        {run.title || `${run.subjectName || `Subject #${run.subjectId}`} — `
+                            + `${run.definitionName || `Workflow #${run.definitionId}`} v${run.definitionVersion}`}{" "}
                         <Label color={STATUS_COLORS[run.status] || "grey"}>
                             {run.status}
                         </Label>
@@ -134,91 +149,79 @@ export function WorkflowRunDetailPage() {
 
             <div style={{ paddingTop: "16px" }}>
                 {activeTab === 0 && (
-                    <dl>
-                        <dt><strong>Title</strong></dt>
-                        <dd>{run.title || "—"}</dd>
-                        <dt><strong>Subject</strong></dt>
-                        <dd>
-                            <Link to={`/subjects/${run.subjectId}`}>Subject #{run.subjectId}</Link>
-                        </dd>
-                        <dt><strong>Labels</strong></dt>
-                        <dd>
-                            {Object.keys(run.labels ?? {}).length === 0 ? "—"
-                                : Object.entries(run.labels ?? {}).map(([k, v]) => (
-                                    <Label key={k} isCompact style={{ marginRight: "4px" }}>
-                                        {k}: {v}
-                                    </Label>
-                                ))}
-                        </dd>
-                        <dt><strong>Inputs</strong></dt>
-                        <dd>
-                            {Object.keys(run.inputs ?? {}).length === 0 ? "—" : (
-                                <pre style={{ whiteSpace: "pre-wrap" }}>
-                                    {JSON.stringify(run.inputs, null, 2)}
-                                </pre>
-                            )}
-                        </dd>
-                        <dt><strong>Workflow</strong></dt>
-                        <dd>{run.definitionName} v{run.definitionVersion}</dd>
-                        <dt><strong>Status</strong></dt>
-                        <dd>{run.status}</dd>
-                        <dt><strong>Started</strong></dt>
-                        <dd>{new Date(run.startedOn).toLocaleString()}</dd>
-                        <dt><strong>Completed</strong></dt>
-                        <dd>{run.completedOn
-                            ? new Date(run.completedOn).toLocaleString() : "—"}</dd>
+                    <Form isHorizontal onSubmit={(e) => e.preventDefault()} className="axiom-run-overview">
+                        {run.title && (
+                            <OverviewField label="Title" id="run-title">{run.title}</OverviewField>
+                        )}
+                        <OverviewField label="Subject" id="run-subject">
+                            <Link to={`/subjects/${run.subjectId}`}>{run.subjectName || `Subject #${run.subjectId}`}</Link>
+                        </OverviewField>
+                        <OverviewField label="Workflow" id="run-workflow">
+                            <Link to={`/components/workflows/${run.definitionId}`}>
+                                {run.definitionName || `Workflow #${run.definitionId}`}
+                            </Link>
+                            {` (version ${run.definitionVersion})`}
+                        </OverviewField>
+                        <OverviewField label="Status" id="run-status">
+                            <Label isCompact color={STATUS_COLORS[run.status] || "grey"}>{run.status}</Label>
+                        </OverviewField>
+                        <OverviewField label="Started" id="run-started">
+                            {new Date(run.startedOn).toLocaleString()}
+                        </OverviewField>
+                        <OverviewField label="Completed" id="run-completed">
+                            {run.completedOn ? new Date(run.completedOn).toLocaleString() : "—"}
+                        </OverviewField>
                         {run.failureReason && (
-                            <>
-                                <dt><strong>Failure</strong></dt>
-                                <dd>{run.failureReason}</dd>
-                            </>
+                            <OverviewField label="Failure" id="run-failure">{run.failureReason}</OverviewField>
                         )}
-                        {run.traceId && (
-                            <>
-                                <dt><strong>Trace</strong></dt>
-                                <dd>
-                                    <Link to={`/logs/traces/${run.traceId}`}>
-                                        View full execution trace →
-                                    </Link>
-                                </dd>
-                            </>
-                        )}
-                        <dt><strong>Triggered by</strong></dt>
-                        <dd>
+                        <OverviewField label="Triggered by" id="run-trigger">
                             {run.triggerEventId ? (
-                                <Link to={`/events/stream/${run.triggerEventId}`}>
-                                    Event {run.triggerEventId}
-                                </Link>
+                                <Link to={`/events/stream/${run.triggerEventId}`}>Event {run.triggerEventId}</Link>
                             ) : "Started manually or by another means"}
-                        </dd>
+                        </OverviewField>
                         {run.resumedBy && run.resumedBy.length > 0 && (
-                            <>
-                                <dt><strong>Resumed by</strong></dt>
+                            <OverviewField label="Resumed by" id="run-resumed">
                                 {run.resumedBy.map((r, i) => (
-                                    <dd key={`${i}-${r.eventId}-${r.resumedOn}`}>
-                                        <Link to={`/events/stream/${r.eventId}`}>
-                                            Event {r.eventId}
-                                        </Link>
+                                    <div key={`${i}-${r.eventId}-${r.resumedOn}`}>
+                                        <Link to={`/events/stream/${r.eventId}`}>Event {r.eventId}</Link>
                                         {" "}at {r.nodeName || r.nodeId}
                                         {" "}({new Date(r.resumedOn).toLocaleString()})
-                                    </dd>
+                                    </div>
                                 ))}
-                            </>
+                            </OverviewField>
                         )}
-                        <dt><strong>Tasks</strong></dt>
-                        <dd>
+                        {run.traceId && (
+                            <OverviewField label="Trace" id="run-trace">
+                                <Link to={`/logs/traces/${run.traceId}`}>View full execution trace →</Link>
+                            </OverviewField>
+                        )}
+                        <OverviewField label="Labels" id="run-labels">
+                            {Object.keys(run.labels ?? {}).length === 0 ? "—" : (
+                                <LabelGroup numLabels={20}>
+                                    {Object.entries(run.labels ?? {}).map(([k, v]) => (
+                                        <Label key={k} isCompact>{k}: {v}</Label>
+                                    ))}
+                                </LabelGroup>
+                            )}
+                        </OverviewField>
+                        <OverviewField label="Inputs" id="run-inputs">
+                            {Object.keys(run.inputs ?? {}).length === 0 ? "—" : (
+                                <CodeBlock>
+                                    <CodeBlockCode>{JSON.stringify(run.inputs, null, 2)}</CodeBlockCode>
+                                </CodeBlock>
+                            )}
+                        </OverviewField>
+                        <OverviewField label="Tasks" id="run-tasks">
                             {tasks.length === 0 ? "—" : tasks.map((t) => (
                                 <div key={t.id} style={{ marginBottom: "8px" }}>
                                     <strong>{t.nodeId ?? t.actionType}</strong>{" "}
                                     <Label isCompact>{t.status}</Label>{" "}
-                                    <Button variant="link" isInline onClick={() => openLog(t.id)}>
-                                        log
-                                    </Button>
+                                    <Button variant="link" isInline onClick={() => openLog(t.id)}>log</Button>
                                     <pre style={{ whiteSpace: "pre-wrap" }}>{t.output || "(no output)"}</pre>
                                 </div>
                             ))}
-                        </dd>
-                    </dl>
+                        </OverviewField>
+                    </Form>
                 )}
 
                 {activeTab === 1 && workflowContent && viewerInstance && (

@@ -3,6 +3,17 @@ import { Button, Label } from "@patternfly/react-core";
 import type { WorkflowRunSummary } from "../../config/api";
 import { STATUS_COLORS } from "../../components/workflowRun";
 
+/**
+ * Summarises a run of the workbench's workflow: its subject, then its title when it has one.
+ *
+ * @param run the run summary
+ * @returns the summary text
+ */
+export function runSummary(run: WorkflowRunSummary): string {
+    const subject: string = run.subjectName || `Subject #${run.subjectId}`;
+    return run.title ? `${subject} · ${run.title}` : subject;
+}
+
 /** Props for {@link RunsList}. */
 export interface RunsListProps {
     /** Runs, newest first. */
@@ -42,8 +53,9 @@ export function RunsList({ runs, published, error, onOpenRun, onAskAi }: RunsLis
                             onClick={() => onOpenRun(run.runId)} onKeyDown={(e) => onRowKey(e, run)}>
                             <Label isCompact color={STATUS_COLORS[run.status] || "grey"}>{run.status}</Label>
                             <span>#{run.runId}</span>
-                            {/* The title takes the remaining width and is truncated, so the row never scrolls sideways. */}
-                            <span className="axiom-test-strip__summary" title={run.title}>{run.title}</span>
+                            {/* All runs here share the workflow, so a run is named by its subject, then its title.
+                                The summary takes the remaining width and is truncated, so the row never scrolls sideways. */}
+                            <span className="axiom-test-strip__summary" title={runSummary(run)}>{runSummary(run)}</span>
                             <span className="axiom-text-subtle">v{run.definitionVersion}</span>
                             <span className="axiom-text-subtle">
                                 {new Date(run.startedOn).toLocaleString()}

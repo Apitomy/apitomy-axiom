@@ -204,3 +204,15 @@
 .subject-detail__body-actions > * {
     pointer-events: auto;
 }
+
+/* Runs list: an optional run title, shown below the run's subject and workflow. */
+.axiom-run-title {
+    display: block;
+    color: var(--pf-t--global--text--color--subtle, #6a6e73);
+}
+
+/* Run detail Overview: read-only values aligned with the horizontal form labels. */
+.axiom-run-overview__value {
+    padding-top: var(--pf-t--global--spacer--sm, 8px);
+    overflow-wrap: anywhere;
+}

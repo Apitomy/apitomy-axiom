@@ -4,18 +4,19 @@ import type { WorkflowRunSummary } from "../../config/api";
 import { RunsList } from "./RunsList";
 
 const runs = [
-    { runId: 9, status: "failed", title: "Triage", definitionVersion: 3, startedOn: "2026-10-14T10:00:00Z",
+    { runId: 9, status: "failed", subjectId: 1, subjectName: "PR 12", title: "Triage", definitionVersion: 3, startedOn: "2026-10-14T10:00:00Z",
         currentNodeName: "classify" },
-    { runId: 8, status: "completed", title: "Done", definitionVersion: 2, startedOn: "2026-10-14T09:00:00Z",
+    { runId: 8, status: "completed", subjectId: 2, subjectName: "PR 11", definitionVersion: 2, startedOn: "2026-10-14T09:00:00Z",
         currentNodeName: "end" },
 ] as WorkflowRunSummary[];
 
 describe("RunsList", () => {
-    it("lists runs with status, id, title, version and node of failed runs", () => {
+    it("lists runs with status, id, subject and optional title, version and node of failed runs", () => {
         render(<RunsList runs={runs} published onOpenRun={vi.fn()} onAskAi={vi.fn()} />);
         expect(screen.getByText("failed")).toBeTruthy();
         expect(screen.getByText("#9")).toBeTruthy();
-        expect(screen.getByText("Triage")).toBeTruthy();
+        expect(screen.getByText("PR 12 · Triage")).toBeTruthy();
+        expect(screen.getByText("PR 11")).toBeTruthy();
         expect(screen.getByText("v3")).toBeTruthy();
         expect(screen.getByText(/classify/)).toBeTruthy();
         expect(screen.queryByText(/· end/)).toBeNull();
@@ -29,7 +30,7 @@ describe("RunsList", () => {
         fireEvent.click(screen.getByRole("button", { name: "Ask AI to analyze" }));
         expect(onAskAi).toHaveBeenCalledWith(runs[0]);
         expect(onOpenRun).not.toHaveBeenCalled();
-        fireEvent.click(screen.getByText("Done"));
+        fireEvent.click(screen.getByText("PR 11"));
         expect(onOpenRun).toHaveBeenCalledWith(8);
     });
 

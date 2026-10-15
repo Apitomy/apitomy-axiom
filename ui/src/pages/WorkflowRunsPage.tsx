@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
     Button,
+    Content,
     EmptyState,
     EmptyStateBody,
     Label,
@@ -87,8 +88,24 @@ function formatDuration(startedOn: string, completedOn?: string): string {
     return `${mins}m ${secs}s`;
 }
 
-/** Lists workflow runs, filtered by status, workflow, subject and labels using filter chips. */
+/**
+ * Describes a run by what it ran on and what it ran: "subject — workflow vN".
+ *
+ * @param run the run summary
+ * @returns the run's description
+ */
+export function describeRun(run: WorkflowRunSummary): string {
+    const subject: string = run.subjectName || `Subject #${run.subjectId}`;
+    const workflow: string = run.definitionName || `Workflow #${run.definitionId}`;
+    return `${subject} — ${workflow} v${run.definitionVersion}`;
+}
+
+/**
+ * Lists workflow runs, filtered by status, workflow, subject and labels using filter chips. Clicking a row
+ * opens the run.
+ */
 export function WorkflowRunsPage() {
+    const navigate = useNavigate();
     const [runs, setRuns] = useState<WorkflowRunSummary[]>([]);
     const [totalCount, setTotalCount] = useState(0);
     const [page, setPage] = useState(1);
@@ -224,48 +241,31 @@ export function WorkflowRunsPage() {
                     <Thead>
                         <Tr>
                             <Th>Status</Th>
-                            <Th>Title</Th>
-                            <Th>Subject</Th>
-                            <Th>Workflow</Th>
+                            <Th>Run</Th>
                             <Th>Started</Th>
                             <Th>Duration</Th>
-                            <Th>Actions</Th>
                         </Tr>
                     </Thead>
                     <Tbody>
                         {runs.map((run) => (
-                            <Tr key={run.runId}>
+                            <Tr key={run.runId} isClickable onRowClick={() => navigate(`/runs/${run.runId}`)}>
                                 <Td>
                                     <Label isCompact color={STATUS_COLORS[run.status] || "grey"}
-                                        onClick={() => addFilter("status", run.status)}>
+                                        onClick={(e) => { e.stopPropagation(); addFilter("status", run.status); }}>
                                         {run.status}
                                     </Label>
                                 </Td>
                                 <Td>
-                                    <Link to={`/runs/${run.runId}`}>{run.title}</Link>
-                                </Td>
-                                <Td>
-                                    <Link to={`/subjects/${run.subjectId}`}>
-                                        {run.subjectName || `Subject #${run.subjectId}`}
-                                    </Link>
-                                </Td>
-                                <Td>
-                                    <Button variant="link" isInline
-                                        onClick={() => addFilter("workflow", run.definitionName || String(run.definitionId))}>
-                                        {run.definitionName || `Definition #${run.definitionId}`}
-                                    </Button>
-                                    {" v"}{run.definitionVersion}
+                                    <div>{describeRun(run)}</div>
+                                    {run.title && (
+                                        <Content component="small" className="axiom-run-title">{run.title}</Content>
+                                    )}
                                 </Td>
                                 <Td style={{ whiteSpace: "nowrap" }}>
                                     {new Date(run.startedOn).toLocaleString()}
                                 </Td>
                                 <Td style={{ whiteSpace: "nowrap" }}>
                                     {formatDuration(run.startedOn, run.completedOn)}
-                                </Td>
-                                <Td>
-                                    <Link to={`/runs/${run.runId}`}>
-                                        View details
-                                    </Link>
                                 </Td>
                             </Tr>
                         ))}

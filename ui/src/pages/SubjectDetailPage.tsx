@@ -547,8 +547,7 @@ function RunsTimeline({ runs, onRerun }: { runs: WorkflowRunSummary[]; onRerun: 
                 <Thead>
                     <Tr>
                         <Th>Status</Th>
-                        <Th>Title</Th>
-                        <Th>Workflow</Th>
+                        <Th>Run</Th>
                         <Th>Started</Th>
                         <Th>Completed</Th>
                         <Th screenReaderText="Actions" />
@@ -563,10 +562,11 @@ function RunsTimeline({ runs, onRerun }: { runs: WorkflowRunSummary[]; onRerun: 
                                 </Label>
                             </Td>
                             <Td>
-                                <Link to={`/runs/${run.runId}`}>{run.title}</Link>
-                            </Td>
-                            <Td>
-                                {run.definitionName || `Definition #${run.definitionId}`} v{run.definitionVersion}
+                                {/* The subject is this page, so a run is named by its workflow; a title goes below. */}
+                                <Link to={`/runs/${run.runId}`}>
+                                    {run.definitionName || `Workflow #${run.definitionId}`} v{run.definitionVersion}
+                                </Link>
+                                {run.title && <small className="axiom-run-title">{run.title}</small>}
                             </Td>
                             <Td style={{ whiteSpace: "nowrap" }}>{new Date(run.startedOn).toLocaleString()}</Td>
                             <Td style={{ whiteSpace: "nowrap" }}>

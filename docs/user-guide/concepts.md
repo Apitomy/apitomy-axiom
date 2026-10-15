@@ -60,7 +60,7 @@ A **Workflow Run** is one execution of a workflow definition against a subject. 
 
 | Field | Purpose |
 |-------|---------|
-| **Title** | Defaults to `<definition name> — <subject name>`; at most 500 characters |
+| **Title** | Optional; set only when the run is started with one; at most 500 characters |
 | **Status** | `running`, `waiting`, `completed`, `failed`, or `cancelled` |
 | **Subject** | The subject the run operates on (required) |
 | **Definition / version** | The workflow definition and the version that was started |
