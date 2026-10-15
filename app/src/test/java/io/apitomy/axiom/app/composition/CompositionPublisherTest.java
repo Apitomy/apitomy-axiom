@@ -270,6 +270,52 @@ class CompositionPublisherTest {
     }
 
     @Test
+    void renamedSubscriptionDisablesTheOldOneOnForcedPublish() throws Exception {
+        CompositionEntity composition = service.create("c", null, null, null, null);
+        CompositionItemEntity actionType = validActionType(composition.id, "cpt-rat");
+        CompositionItemEntity workflow = workflowUsing(composition.id, "cpt-rwf", "cpt-rat");
+        CompositionItemEntity sub = subscriptionFor(composition.id, "cpt-rsub-old", "cpt-rwf");
+        publisher.publish(composition.id, List.of(workflow.id, actionType.id, sub.id), false);
+        QuarkusTransaction.requiringNew().call(() -> service.setEnabled(composition.id, sub.id, true));
+
+        QuarkusTransaction.requiringNew().call(() -> {
+            CompositionItemEntity current = service.item(composition.id, sub.id);
+            ObjectNode content = (ObjectNode) service.contentOf(current);
+            content.put("name", "cpt-rsub-new");
+            return service.save(composition.id, current.id, content, current.contentRevision,
+                    CompositionService.AUTHOR_USER, null);
+        });
+        publisher.publish(composition.id, List.of(sub.id), true);
+
+        QuarkusTransaction.requiringNew().run(() -> {
+            EventSubscriptionEntity old = EventSubscriptionEntity.find("name", "cpt-rsub-old").firstResult();
+            EventSubscriptionEntity renamed = EventSubscriptionEntity.find("name", "cpt-rsub-new").firstResult();
+            assertNotNull(old);
+            assertFalse(old.enabled, "the old subscription is disabled, not left running");
+            assertNotNull(renamed);
+            assertFalse(renamed.enabled);
+        });
+    }
+
+    @Test
+    void forcedPublishOverUnownedEnabledSubscriptionDisablesIt() throws Exception {
+        CompositionEntity first = service.create("c1", null, null, null, null);
+        CompositionItemEntity actionType = validActionType(first.id, "cpt-oat");
+        CompositionItemEntity workflow = workflowUsing(first.id, "cpt-owf", "cpt-oat");
+        CompositionItemEntity original = subscriptionFor(first.id, "cpt-osub", "cpt-owf");
+        publisher.publish(first.id, List.of(workflow.id, actionType.id, original.id), false);
+        QuarkusTransaction.requiringNew().call(() -> service.setEnabled(first.id, original.id, true));
+
+        CompositionEntity second = service.create("c2", null, null, null, null);
+        CompositionItemEntity secondWorkflow = workflowUsing(second.id, "cpt-owf2", "cpt-oat");
+        CompositionItemEntity duplicate = subscriptionFor(second.id, "cpt-osub", "cpt-owf2");
+        publisher.publish(second.id, List.of(secondWorkflow.id, duplicate.id), true);
+
+        assertFalse(QuarkusTransaction.requiringNew().call(() ->
+                EventSubscriptionEntity.<EventSubscriptionEntity>find("name", "cpt-osub").firstResult().enabled));
+    }
+
+    @Test
     void blocksSubscriptionWhoseWorkflowIsNotPublishedOrSelected() throws Exception {
         CompositionEntity composition = service.create("c", null, null, null, null);
         workflowUsing(composition.id, "cpt-bwf", "cpt-bat");

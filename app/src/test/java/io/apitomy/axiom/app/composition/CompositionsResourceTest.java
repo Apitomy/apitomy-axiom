@@ -2,14 +2,23 @@ package io.apitomy.axiom.app.composition;
 
 import io.apitomy.axiom.core.entities.CompositionEntity;
 import io.apitomy.axiom.core.entities.CompositionItemEntity;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.apitomy.axiom.app.validation.ConfigItemType;
+import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.CompositionRevisionEntity;
+import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
+import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import io.restassured.path.json.JsonPath;
+import jakarta.inject.Inject;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 
 import static io.restassured.RestAssured.given;
@@ -28,12 +37,21 @@ class CompositionsResourceTest {
 
     static final String BASE = "/api/v1/compositions";
 
+    @Inject
+    CompositionService service;
+
+    @Inject
+    CompositionPublisher publisher;
+
     @AfterEach
     void cleanUp() {
         QuarkusTransaction.requiringNew().run(() -> {
             CompositionRevisionEntity.deleteAll();
             CompositionItemEntity.deleteAll();
             CompositionEntity.deleteAll();
+            EventSubscriptionEntity.list("name like ?1", "rest-en-%").forEach(e -> e.delete());
+            WorkflowDefinitionEntity.list("name like ?1", "rest-en-%").forEach(e -> e.delete());
+            ActionTypeEntity.list("name like ?1", "rest-en-%").forEach(e -> e.delete());
         });
     }
 
@@ -161,5 +179,44 @@ class CompositionsResourceTest {
         given().contentType(ContentType.JSON).body("{\"enabled\": true}")
                 .when().put("/api/v1/compositions/" + compositionId + "/items/999999999/enabled")
                 .then().statusCode(404);
+    }
+
+    @Test
+    void enabledEndpointEnablesAPublishedSubscription() throws Exception {
+        CompositionEntity composition = service.create("rest-c", null, null, null, null);
+        CompositionItemEntity actionType = service.addBlank(composition.id, ConfigItemType.ACTION_TYPE, "rest-en-at");
+        ObjectNode atContent = (ObjectNode) service.contentOf(actionType);
+        atContent.put("description", "Test action type");
+        atContent.putArray("outputs").addObject().put("name", "result").put("type", "string").put("required", true);
+        atContent.put("codeTemplate", "export async function run(inputs, ctx) {\n    return { result: 'ok' };\n}\n");
+        service.save(composition.id, actionType.id, atContent, actionType.contentRevision,
+                CompositionService.AUTHOR_USER, null);
+
+        CompositionItemEntity workflow = service.addBlank(composition.id, ConfigItemType.WORKFLOW, "rest-en-wf");
+        ObjectNode wfContent = (ObjectNode) service.contentOf(workflow);
+        ObjectNode action = ((ArrayNode) wfContent.path("nodes")).addObject();
+        action.put("id", "act-1").put("type", "action").put("name", "Act");
+        action.putObject("config").put("actionType", "rest-en-at").putObject("inputs");
+        ArrayNode edges = wfContent.putArray("edges");
+        edges.addObject().put("id", "e1").put("source", "start-1").put("target", "act-1")
+                .put("priority", 0).put("isDefault", true);
+        edges.addObject().put("id", "e2").put("source", "act-1").put("target", "end-1")
+                .put("priority", 0).put("isDefault", true);
+        service.save(composition.id, workflow.id, wfContent, workflow.contentRevision,
+                CompositionService.AUTHOR_USER, null);
+
+        CompositionItemEntity sub = service.addBlank(composition.id, ConfigItemType.SUBSCRIPTION, "rest-en-sub");
+        ObjectNode subContent = (ObjectNode) service.contentOf(sub);
+        subContent.put("filterExpression", "event.type == 'pr.created'");
+        subContent.set("routing", new ObjectMapper().readTree(
+                "[{\"type\": \"create-workflow\", \"workflowDefinitionName\": \"rest-en-wf\"}]"));
+        service.save(composition.id, sub.id, subContent, sub.contentRevision, CompositionService.AUTHOR_USER, null);
+        publisher.publish(composition.id, List.of(actionType.id, workflow.id, sub.id), false);
+
+        given().contentType(ContentType.JSON).body("{\"enabled\": true}")
+                .put(BASE + "/{id}/items/{itemId}/enabled", composition.id, sub.id).then().statusCode(200)
+                .body("enabled", equalTo(true));
+        given().get(BASE + "/{id}/items", composition.id).then().statusCode(200)
+                .body("find { it.id == " + sub.id + " }.enabled", equalTo(true));
     }
 }

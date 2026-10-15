@@ -124,7 +124,7 @@ public class CompositionPublisher {
             ConfigItemType type = ConfigItemType.fromName(item.itemType);
             ObjectNode packItem = validator.packItem(item);
             if (type == ConfigItemType.SUBSCRIPTION) {
-                applyPublishedState(packItem);
+                applyPublishedState(packItem, item.baseItemId);
             }
             pack.withArray(CompositionItems.packArray(type)).add(packItem);
         }
@@ -138,6 +138,9 @@ public class CompositionPublisher {
         Instant now = Instant.now();
         for (CompositionItemEntity item : selected) {
             ConfigItemType type = ConfigItemType.fromName(item.itemType);
+            if (type == ConfigItemType.SUBSCRIPTION) {
+                disableRenamedSubscription(item);
+            }
             item.baseItemId = publishedId(type, item.name);
             item.baseContentRevision = service.currentBaseRevision(type, item.baseItemId);
             item.publishedRevision = item.contentRevision;
@@ -191,10 +194,12 @@ public class CompositionPublisher {
     }
 
     /**
-     * Publishing never changes whether a subscription runs: a new one is created disabled, and an existing one
-     * keeps its enabled state and processEventsFrom (the pack import would otherwise reset them).
+     * Publishing never changes whether a subscription runs: a new one is created disabled, and one the item
+     * already owns keeps its enabled state and processEventsFrom (the pack import would otherwise reset them).
+     * Overwriting a same-name subscription the item does not own publishes it disabled, so a forced publish
+     * cannot take over a running subscription.
      */
-    private static void applyPublishedState(ObjectNode packItem) {
+    private static void applyPublishedState(ObjectNode packItem, Long baseItemId) {
         packItem.remove("enabled");
         packItem.remove("processEventsFrom");
         EventSubscriptionEntity existing = EventSubscriptionEntity.<EventSubscriptionEntity>find("name",
@@ -203,9 +208,24 @@ public class CompositionPublisher {
             packItem.put("enabled", false);
             return;
         }
-        packItem.put("enabled", existing.enabled);
+        packItem.put("enabled", existing.enabled && Objects.equals(baseItemId, existing.id));
         if (existing.processEventsFrom != null) {
             packItem.put("processEventsFrom", existing.processEventsFrom.toString());
+        }
+    }
+
+    /**
+     * A renamed subscription item publishes as a new subscription; the one it was loaded from is disabled (but
+     * kept) so it does not keep running out of the workbench's sight.
+     */
+    private static void disableRenamedSubscription(CompositionItemEntity item) {
+        if (item.baseItemId == null) {
+            return;
+        }
+        String oldName = CompositionService.publishedName(ConfigItemType.SUBSCRIPTION, item.baseItemId);
+        if (oldName != null && !oldName.equals(item.name)) {
+            EventSubscriptionEntity old = EventSubscriptionEntity.findById(item.baseItemId);
+            old.enabled = false;
         }
     }
 
