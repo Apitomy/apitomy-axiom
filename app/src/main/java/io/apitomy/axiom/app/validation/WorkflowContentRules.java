@@ -11,6 +11,7 @@ import io.apitomy.flow.validation.WorkflowValidator;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -109,6 +110,84 @@ public final class WorkflowContentRules {
     private static final Pattern CONTEXT_KEY_REFERENCE =
             Pattern.compile("(?<![\\w.])context\\.([A-Za-z_][A-Za-z0-9_]*)");
     private static final Pattern BARE_EVENT_REFERENCE = Pattern.compile("(?<![\\w.'\"])event\\.");
+
+
+    /**
+     * A node output that overwrites a declared workflow input.
+     *
+     * @param nodeIndex the node's index in {@code content.nodes}
+     * @param key       the context key written
+     * @param message   the warning message
+     */
+    public record ShadowProblem(int nodeIndex, String key, String message) {
+
+        /** @return the JSON path of the node's config relative to the workflow item */
+        public String path() {
+            return "content.nodes[" + nodeIndex + "].config";
+        }
+    }
+
+    /**
+     * Finds nodes whose statically known outputs would overwrite an input declared on the Start node: action
+     * node outputs (renamed by their {@code contextKey}), the action type's declared outputs the node does not
+     * rename, human-task outputs and receive-event output mappings. {@code sdk:} results are not declared and
+     * are not checked.
+     *
+     * @param workflow          the workflow
+     * @param actionTypeOutputs action type name to declared output names; null to skip action type outputs
+     * @return one problem per node and overwritten input
+     */
+    public static List<ShadowProblem> shadowProblems(Workflow workflow, Map<String, Set<String>> actionTypeOutputs) {
+        List<ShadowProblem> problems = new ArrayList<>();
+        List<WorkflowNode> nodes = workflow.nodes() != null ? workflow.nodes() : List.of();
+        Set<String> declared = new HashSet<>();
+        for (WorkflowNode node : nodes) {
+            if (node.type() == NodeType.START && node.config() != null) {
+                try {
+                    if (node.typedConfig() instanceof NodeConfig.Start start) {
+                        start.inputs().forEach(f -> addKey(declared, f.name()));
+                    }
+                } catch (RuntimeException e) {
+                    // Malformed config is reported by the engine validator.
+                }
+            }
+        }
+        if (declared.isEmpty()) {
+            return problems;
+        }
+        for (int i = 0; i < nodes.size(); i++) {
+            WorkflowNode node = nodes.get(i);
+            Set<String> written = new LinkedHashSet<>();
+            try {
+                switch (node.typedConfig()) {
+                    case NodeConfig.Action action -> {
+                        Set<String> renamed = new HashSet<>();
+                        action.outputs().forEach(f -> {
+                            addKey(written, f.effectiveContextKey());
+                            addKey(renamed, f.name());
+                        });
+                        if (actionTypeOutputs != null && action.actionType() != null) {
+                            actionTypeOutputs.getOrDefault(action.actionType(), Set.of()).stream()
+                                    .filter(o -> !renamed.contains(o)).forEach(o -> addKey(written, o));
+                        }
+                    }
+                    case NodeConfig.HumanTask task -> task.outputs().forEach(f -> addKey(written, f.effectiveContextKey()));
+                    case NodeConfig.ReceiveEvent receive -> receive.outputs().forEach(m -> addKey(written, m.contextKey()));
+                    default -> {
+                    }
+                }
+            } catch (RuntimeException e) {
+                continue;
+            }
+            for (String key : written) {
+                if (declared.contains(key)) {
+                    problems.add(new ShadowProblem(i, key, "Output '" + key + "' of node '" + node.name()
+                            + "' overwrites the workflow input '" + key + "' for later nodes."));
+                }
+            }
+        }
+        return problems;
+    }
 
     /**
      * Checks action node input mappings against the declared inputs of their action types:

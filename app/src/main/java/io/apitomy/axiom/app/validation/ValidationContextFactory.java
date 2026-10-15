@@ -64,7 +64,8 @@ public class ValidationContextFactory {
                     workflows.stream().map(w -> w.id).collect(Collectors.toCollection(HashSet::new)),
                     collect(EventSourceEntity.<EventSourceEntity>listAll(), e -> e.id),
                     collect(SecretEntity.<SecretEntity>listAll(), s -> s.name),
-                    actionTypeInputs(actionTypes));
+                    actionTypeInputs(actionTypes),
+                    actionTypeOutputs(actionTypes));
         } finally {
             if (activated) {
                 requestContext.deactivate();
@@ -88,7 +89,9 @@ public class ValidationContextFactory {
                 db.workflowDefinitionIds(),
                 union(db.eventSourceIds(), packNames(pack, "eventSources", "id")),
                 db.secretNames(),
-                overlay(db.actionTypeInputs(), pendingInputs(pack != null ? pack.path("actionTypes") : null)));
+                overlay(db.actionTypeInputs(), pendingInputs(pack != null ? pack.path("actionTypes") : null)),
+                overlayOutputs(db.actionTypeOutputs(),
+                        pendingOutputs(pack != null ? pack.path("actionTypes") : null)));
     }
 
     /**
@@ -109,7 +112,8 @@ public class ValidationContextFactory {
                 db.workflowDefinitionIds(),
                 db.eventSourceIds(),
                 db.secretNames(),
-                overlay(db.actionTypeInputs(), pendingInputs(actionTypes)));
+                overlay(db.actionTypeInputs(), pendingInputs(actionTypes)),
+                overlayOutputs(db.actionTypeOutputs(), pendingOutputs(actionTypes)));
     }
 
     private static Set<String> itemNames(Map<ConfigItemType, List<JsonNode>> items, ConfigItemType type) {
@@ -141,6 +145,8 @@ public class ValidationContextFactory {
                 union(db.eventSourceIds(), names(directoryFiles(workDir, ConfigItemType.EVENT_SOURCE), "id")),
                 db.secretNames(),
                 overlay(db.actionTypeInputs(), pendingInputs(actionTypes.stream()
+                        .map(DirectoryFile::content).filter(c -> c != null).toList())),
+                overlayOutputs(db.actionTypeOutputs(), pendingOutputs(actionTypes.stream()
                         .map(DirectoryFile::content).filter(c -> c != null).toList())));
     }
 
@@ -159,6 +165,54 @@ public class ValidationContextFactory {
             }
             result.put(at.name, inputs);
         }
+        return result;
+    }
+
+
+    /**
+     * Builds declared output names for the given action types.
+     *
+     * @param actionTypes the action type entities
+     * @return action type name to output names
+     */
+    public static Map<String, Set<String>> actionTypeOutputs(List<ActionTypeEntity> actionTypes) {
+        Map<String, Set<String>> result = new HashMap<>();
+        for (ActionTypeEntity at : actionTypes) {
+            Set<String> outputs = new HashSet<>();
+            if (at.outputs != null) {
+                at.outputs.forEach(f -> outputs.add(f.name));
+            }
+            result.put(at.name, outputs);
+        }
+        return result;
+    }
+
+    private static Map<String, Set<String>> pendingOutputs(Iterable<JsonNode> actionTypes) {
+        Map<String, Set<String>> result = new HashMap<>();
+        if (actionTypes == null) {
+            return result;
+        }
+        for (JsonNode item : actionTypes) {
+            String name = item.path("name").asText("");
+            if (name.isBlank()) {
+                continue;
+            }
+            Set<String> outputs = new HashSet<>();
+            item.path("outputs").forEach(o -> {
+                String n = o.path("name").asText("");
+                if (!n.isBlank()) {
+                    outputs.add(n);
+                }
+            });
+            result.put(name, outputs);
+        }
+        return result;
+    }
+
+    private static Map<String, Set<String>> overlayOutputs(Map<String, Set<String>> base,
+                                                          Map<String, Set<String>> pending) {
+        Map<String, Set<String>> result = new HashMap<>(base != null ? base : Map.of());
+        result.putAll(pending);
         return result;
     }
 

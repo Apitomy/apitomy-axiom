@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -310,5 +311,58 @@ class ConfigItemValidationServiceTest {
             {"name": "s", "filterExpression": "event.type == 'issues'"}
             """), ValidationContext.unchecked());
         assertTrue(problems.stream().anyMatch(p -> !p.isError() && p.code().equals("UNKNOWN_EVENT_TYPE")));
+    }
+
+
+    @Test
+    void warnsWhenANodeOutputShadowsADeclaredInput() throws Exception {
+        String content = """
+            {"id": "w", "name": "W",
+             "nodes": [
+               {"id": "s", "type": "start", "name": "Start", "position": {"x": 0, "y": 0},
+                "config": {"inputs": [{"name": "event", "type": "object", "required": true}]}},
+               {"id": "r", "type": "receive-event", "name": "Await", "position": {"x": 0, "y": 100},
+                "config": {"eventType": "issue.comment.created", "outputs": [{"contextKey": "event", "expression": "event"}]}},
+               {"id": "h", "type": "human-task", "name": "Review", "position": {"x": 0, "y": 200},
+                "config": {"outputs": [{"name": "subject", "type": "string"}]}},
+               {"id": "e", "type": "end", "name": "End", "config": {}, "position": {"x": 0, "y": 300}}],
+             "edges": [
+               {"id": "x1", "source": "s", "target": "r", "priority": 0, "isDefault": false},
+               {"id": "x2", "source": "r", "target": "h", "priority": 0, "isDefault": false},
+               {"id": "x3", "source": "h", "target": "e", "priority": 0, "isDefault": false}]}
+            """;
+        List<ConfigProblem> problems = service.validate(ConfigItemType.WORKFLOW,
+                json("{\"name\": \"W\", \"content\": " + content + "}"), ValidationContext.unchecked());
+        List<ConfigProblem> shadows = problems.stream()
+                .filter(p -> p.code().equals("SHADOWS_WORKFLOW_INPUT")).toList();
+        assertEquals(1, shadows.size(), problems.toString()); // 'subject' is not declared, so only 'event'
+        assertEquals("warning", shadows.get(0).severity());
+        assertEquals("content.nodes[1].config", shadows.get(0).path());
+        assertEquals("Output 'event' of node 'Await' overwrites the workflow input 'event' for later nodes.",
+                shadows.get(0).message());
+    }
+
+    @Test
+    void warnsWhenAnActionTypeOutputShadowsADeclaredInput() throws Exception {
+        String content = """
+            {"id": "w", "name": "W",
+             "nodes": [
+               {"id": "s", "type": "start", "name": "Start", "position": {"x": 0, "y": 0},
+                "config": {"inputs": [{"name": "subject", "type": "object", "required": true}]}},
+               {"id": "a", "type": "action", "name": "Lookup", "position": {"x": 0, "y": 100},
+                "config": {"actionType": "lookup"}},
+               {"id": "e", "type": "end", "name": "End", "config": {}, "position": {"x": 0, "y": 200}}],
+             "edges": [
+               {"id": "x1", "source": "s", "target": "a", "priority": 0, "isDefault": false},
+               {"id": "x2", "source": "a", "target": "e", "priority": 0, "isDefault": false}]}
+            """;
+        ValidationContext ctx = new ValidationContext(Set.of(), Set.of(), Set.of("lookup"), Set.of(), Set.of(),
+                Set.of(), Set.of(), Map.of("lookup", Map.of()), Map.of("lookup", Set.of("subject", "other")));
+        List<ConfigProblem> shadows = service.validate(ConfigItemType.WORKFLOW,
+                json("{\"name\": \"W\", \"content\": " + content + "}"), ctx).stream()
+                .filter(p -> p.code().equals("SHADOWS_WORKFLOW_INPUT")).toList();
+        assertEquals(1, shadows.size());
+        assertEquals("Output 'subject' of node 'Lookup' overwrites the workflow input 'subject' for later nodes.",
+                shadows.get(0).message());
     }
 }

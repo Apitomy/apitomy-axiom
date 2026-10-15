@@ -261,6 +261,10 @@ public class ConfigItemValidationService {
                         : ConfigProblem.warning(p.path(), p.code(), p.message()));
             }
         }
+        for (WorkflowContentRules.ShadowProblem p
+                : WorkflowContentRules.shadowProblems(workflow, context.actionTypeOutputs())) {
+            problems.add(ConfigProblem.warning(p.path(), "SHADOWS_WORKFLOW_INPUT", p.message()));
+        }
     }
 
     private void validateSubscription(JsonNode item, ValidationContext context, List<ConfigProblem> problems) {
