@@ -358,6 +358,10 @@ saving.
 A subscription with no routing rules matches events silently, which is useful for previewing matches
 before committing to a destination.
 
+Subscriptions can also be part of a [Workflow Workbench](workbench.md#subscriptions) composition, which
+publishes them disabled and lets you enable them from the workbench. Its filter preview also reports how many of the
+recent events could not be evaluated and the first evaluation error; such events count as not matching.
+
 ---
 
 ## Inbox

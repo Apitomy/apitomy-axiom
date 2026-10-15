@@ -75,8 +75,9 @@ Pane widths, collapsed panes, the layout option and the selected bottom tab are 
 
 ## Components
 
-The **Components** pane lists the composition's items in three groups: **Workflow**, **Action types** and
-**Tools**. Click an item to open it in a centre tab.
+The **Components** pane lists the composition's items in four groups: **Workflow**, **Action types**,
+**Tools** and **Subscriptions** (see [Subscriptions](#subscriptions)). Click an item to open it in a centre
+tab.
 
 ### Adding action types and tools
 
@@ -193,16 +194,18 @@ the workflow after that turn, the workflow is left alone.
 
 The AI can:
 
-- Read the composition and its items, and create, update and remove action type and tool drafts.
+- Read the composition and its items, and create, update and remove action type, tool and subscription
+  drafts.
 - Change the workflow, only through change sets.
 - Validate the composition.
 - Look at recent events in the Event Stream and evaluate expressions against them.
+- Preview a subscription filter against the 200 most recent events (`preview_subscription`).
 - Read runs of the published workflow and their traces.
 - Look up published action types, tools and secret names (never secret values).
 - Suggest a test with sample inputs.
 
-The AI cannot publish, and it never runs tests or workflows. When it creates or changes a Node.js or script
-action type or a tool, it suggests a test that you can run.
+The AI cannot publish or enable subscriptions, and it never runs tests or workflows. When it creates or
+changes a Node.js or script action type or a tool, it suggests a test that you can run.
 
 ## Testing
 
@@ -285,9 +288,69 @@ Click **Publish**. The workbench then:
 - Reports a conflict if a published item changed outside the workbench since it was loaded, if a new item's
   name is already used by a published item, or if an item was renamed (publishing creates a new item and
   keeps the old one). Click **Publish anyway** to publish regardless.
-- Otherwise, creates or updates the published workflow, action types and tools, and reports how many were
-  created and updated.
+- Otherwise, creates or updates the published workflow, action types, tools and subscriptions, and reports
+  how many were created and updated.
 
-Publishing does not delete published items (removed drafts and old names stay published), does not start the
-workflow, and does not create subscriptions or other configuration. Set up a subscription separately to start
-the workflow from events.
+Publishing does not delete published items (removed drafts and old names stay published) and does not start
+the workflow. Published subscriptions stay disabled until you enable them (see
+[Subscriptions](#subscriptions)).
+
+## Subscriptions
+
+A composition can own the subscriptions that drive its workflow, so the workbench takes you from a goal to
+working automation. A subscription filters the Event Stream and routes matching events (see
+[Concepts](concepts.md#subscriptions)). In a composition, a subscription can:
+
+- **Start runs** of the composition's workflow, with a `create-workflow` rule. The rule must name the
+  composition's own workflow (`workflowDefinitionName`).
+- **Feed receive-event nodes**, with a `workflow-dispatch` rule, which delivers events to runs waiting at a
+  matching `receive-event` node. Without a `workflow-dispatch` subscription, receive-event nodes never receive
+  events.
+
+### Creating a subscription
+
+Click the **Create** (plus) button in the **Components** pane toolbar and choose **Subscription**, or ask the
+AI to create one. A composition can have any number of subscriptions.
+
+### The subscription editor
+
+The editor has these fields:
+
+- **Name** and **Description**.
+- **Filter expression**: the EL expression evaluated against each event. An empty expression matches every
+  event.
+- **Routing**: the routing rules. **Add start rule** adds a `create-workflow` rule for the composition's
+  workflow; **Add dispatch rule** adds a `workflow-dispatch` rule. Each rule has a remove button.
+
+Below the form, the **Matching events** panel evaluates the current filter against the 200 most recent events
+and shows how many match (for example "12 of 200 recent events match"), how many events could not be
+evaluated together with the first error, and the matching events, each linking to its Event Stream page.
+
+### Validation
+
+On top of the usual subscription checks, the workbench reports:
+
+| Code | Severity | Meaning |
+|------|----------|---------|
+| `FOREIGN_WORKFLOW_ROUTE` | Error | A `create-workflow` rule does not start this composition's workflow by name (it uses another name or a `workflowDefinitionId`). |
+| `ENABLED_IGNORED` | Warning | The draft sets `enabled`. Subscriptions are published disabled; enable them in the workbench after publishing. |
+| `OVERLAPPING_SUBSCRIPTION` | Warning | Another enabled published subscription, not part of this composition, already starts this composition's workflow. |
+
+### Publishing and enabling
+
+A subscription needs the composition's workflow to be published already, or selected in the same publish.
+
+Publishing never turns automation on:
+
+- A new subscription is published **disabled**.
+- Republishing an existing subscription keeps its enabled state and its **Process events from** time.
+- Turning the subscription on or off (here or on the Events → Subscriptions page) does not count as a change
+  outside the workbench.
+
+Once a subscription is published, the editor header shows an **Enabled** switch. The switch is disabled (with
+the tooltip "Publish the workflow before enabling this subscription") until the composition's workflow is
+published. Enabling a subscription sets its **Process events from** time to now, so earlier events are
+ignored; only new events start or resume runs. Turning the switch off disables the subscription.
+
+Removing a subscription draft, or deleting the composition, leaves the published subscription as it is
+(enabled or not). Disable or delete it on the Events → Subscriptions page.
