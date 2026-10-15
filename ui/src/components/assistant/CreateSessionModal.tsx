@@ -48,6 +48,16 @@ interface CreateSessionModalProps {
     defaultName?: string;
 }
 
+/**
+ * Whether a template can be started from the AI Assistant. Templates with the `composition` capability (the
+ * Workflow Workbench) only work inside the workbench, so they are hidden from the picker.
+ * @param template the template
+ * @returns true when it should be listed
+ */
+export function isPickableTemplate(template: SessionTemplate): boolean {
+    return !(template.capabilities ?? []).includes("composition");
+}
+
 export function CreateSessionModal({
     isOpen, onClose, onSessionCreated, subjectId, defaultName,
 }: CreateSessionModalProps) {
@@ -64,7 +74,7 @@ export function CreateSessionModal({
     useEffect(() => {
         if (isOpen) {
             fetchAssistantTemplates()
-                .then(setTemplates)
+                .then((all) => setTemplates(all.filter(isPickableTemplate)))
                 .catch(console.error);
             setTemplateFilter("");
         }

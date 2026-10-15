@@ -11,7 +11,8 @@ Assistant** for creating and updating tools, action types, toolsets,
 event sources, subscriptions, workflows, and session templates, a **General Assistant** for
 open-ended tasks, and a **Subject Assistant** for working within the context of a
 specific subject. A fourth built-in template, **Workflow Workbench**, drives the AI Assistant of the
-[Workflow Workbench](workbench.md). You can also create your own templates to define custom workflows.
+[Workflow Workbench](workbench.md); it only works inside the workbench, so the template picker does not list
+it. You can also create your own templates to define custom workflows.
 
 !!! note "AI help in other pages"
     The AI Assistant is the general conversational interface. The Workflow Workbench has its own AI
