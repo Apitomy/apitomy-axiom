@@ -146,4 +146,20 @@ class CompositionsResourceTest {
         given().contentType(ContentType.JSON).body(Map.of("type", "subscription", "existingItemId", 1))
                 .post(BASE + "/{id}/items", compositionId).then().statusCode(400);
     }
+
+    @Test
+    void enabledEndpointRejectsUnpublishedAndNonSubscriptionItems() {
+        long compositionId = createComposition();
+        long subscriptionId = addItem(compositionId, "subscription", "en-sub").getLong("id");
+        long toolId = addItem(compositionId, "tool", "en-tool").getLong("id");
+        given().contentType(ContentType.JSON).body("{\"enabled\": true}")
+                .when().put("/api/v1/compositions/" + compositionId + "/items/" + subscriptionId + "/enabled")
+                .then().statusCode(409);
+        given().contentType(ContentType.JSON).body("{\"enabled\": true}")
+                .when().put("/api/v1/compositions/" + compositionId + "/items/" + toolId + "/enabled")
+                .then().statusCode(409);
+        given().contentType(ContentType.JSON).body("{\"enabled\": true}")
+                .when().put("/api/v1/compositions/" + compositionId + "/items/999999999/enabled")
+                .then().statusCode(404);
+    }
 }

@@ -1,5 +1,6 @@
 package io.apitomy.axiom.app.composition;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.app.validation.ConfigItemType;
@@ -7,6 +8,7 @@ import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.CompositionEntity;
 import io.apitomy.axiom.core.entities.CompositionItemEntity;
 import io.apitomy.axiom.core.entities.CompositionRevisionEntity;
+import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
@@ -15,6 +17,7 @@ import jakarta.inject.Inject;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -44,6 +47,7 @@ class CompositionPublisherTest {
             CompositionRevisionEntity.deleteAll();
             CompositionItemEntity.deleteAll();
             CompositionEntity.deleteAll();
+            EventSubscriptionEntity.list("name like ?1", "cpt-%").forEach(e -> e.delete());
             WorkflowDefinitionEntity.list("name like ?1", "cpt-%").forEach(e -> e.delete());
             ActionTypeEntity.list("name like ?1", "cpt-%").forEach(e -> e.delete());
             ToolDefinitionEntity.list("name like ?1", "cpt-%").forEach(e -> e.delete());
@@ -221,5 +225,58 @@ class CompositionPublisherTest {
             assertEquals(newest.contentRevision, stored.contentRevision);
             assertEquals(stored.contentRevision, stored.publishedRevision);
         });
+    }
+
+    private CompositionItemEntity subscriptionFor(long compositionId, String name, String workflowName) throws Exception {
+        CompositionItemEntity item = service.addBlank(compositionId, ConfigItemType.SUBSCRIPTION, name);
+        ObjectNode content = (ObjectNode) service.contentOf(item);
+        content.put("filterExpression", "event.type == 'pr.created'");
+        content.set("routing", new ObjectMapper().readTree(
+                "[{\"type\": \"create-workflow\", \"workflowDefinitionName\": \"" + workflowName + "\"}]"));
+        return service.save(compositionId, item.id, content, item.contentRevision, CompositionService.AUTHOR_USER, null);
+    }
+
+    @Test
+    void publishesSubscriptionDisabledAndKeepsEnabledStateOnRepublish() throws Exception {
+        CompositionEntity composition = service.create("c", null, null, null, null);
+        CompositionItemEntity actionType = validActionType(composition.id, "cpt-sat");
+        CompositionItemEntity workflow = workflowUsing(composition.id, "cpt-swf", "cpt-sat");
+        CompositionItemEntity sub = subscriptionFor(composition.id, "cpt-sub", "cpt-swf");
+
+        CompositionPublisher.Outcome outcome = publisher.publish(composition.id,
+                List.of(workflow.id, actionType.id, sub.id), false);
+        assertEquals(3, outcome.created());
+        EventSubscriptionEntity published = QuarkusTransaction.requiringNew().call(() ->
+                EventSubscriptionEntity.<EventSubscriptionEntity>find("name", "cpt-sub").firstResult());
+        assertFalse(published.enabled);
+
+        QuarkusTransaction.requiringNew().call(() -> service.setEnabled(composition.id, sub.id, true));
+        Instant from = QuarkusTransaction.requiringNew().call(() ->
+                EventSubscriptionEntity.<EventSubscriptionEntity>findById(published.id).processEventsFrom);
+
+        CompositionItemEntity edited = QuarkusTransaction.requiringNew().call(() -> {
+            CompositionItemEntity current = service.item(composition.id, sub.id);
+            ObjectNode content = (ObjectNode) service.contentOf(current);
+            content.put("description", "changed");
+            return service.save(composition.id, current.id, content, current.contentRevision,
+                    CompositionService.AUTHOR_USER, null);
+        });
+        publisher.publish(composition.id, List.of(edited.id), false);   // not a conflict: enabling is not content
+        EventSubscriptionEntity republished = QuarkusTransaction.requiringNew().call(() ->
+                EventSubscriptionEntity.<EventSubscriptionEntity>findById(published.id));
+        assertTrue(republished.enabled, "republish keeps the subscription enabled");
+        assertEquals(from, republished.processEventsFrom);
+        assertEquals("changed", republished.description);
+    }
+
+    @Test
+    void blocksSubscriptionWhoseWorkflowIsNotPublishedOrSelected() throws Exception {
+        CompositionEntity composition = service.create("c", null, null, null, null);
+        workflowUsing(composition.id, "cpt-bwf", "cpt-bat");
+        CompositionItemEntity sub = subscriptionFor(composition.id, "cpt-bsub", "cpt-bwf");
+        PublishBlockedException e = assertThrows(PublishBlockedException.class,
+                () -> publisher.publish(composition.id, List.of(sub.id), false));
+        assertTrue(e.problems().get("subscription/cpt-bsub").stream()
+                .anyMatch(p -> p.code().equals("missing-dependency")), e.problems().toString());
     }
 }

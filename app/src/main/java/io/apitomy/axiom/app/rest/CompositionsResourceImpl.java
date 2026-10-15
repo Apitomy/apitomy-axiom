@@ -20,6 +20,7 @@ import io.apitomy.axiom.api.beans.ChangeSetError;
 import io.apitomy.axiom.api.beans.CompositionChangeSetResolution;
 import io.apitomy.axiom.api.beans.CompositionContent;
 import io.apitomy.axiom.api.beans.CompositionItem;
+import io.apitomy.axiom.api.beans.CompositionItemEnabled;
 import io.apitomy.axiom.api.beans.CompositionItemProblems;
 import io.apitomy.axiom.api.beans.CompositionItemUpdate;
 import io.apitomy.axiom.api.beans.CompositionItemValidateRequest;
@@ -54,6 +55,7 @@ import io.apitomy.axiom.app.composition.WorkbenchSessions;
 import io.apitomy.axiom.app.validation.ConfigItemType;
 import io.apitomy.axiom.core.entities.CompositionEntity;
 import io.apitomy.axiom.core.entities.CompositionItemEntity;
+import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.flow.changeset.ContentRevision;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -177,6 +179,16 @@ public class CompositionsResourceImpl implements CompositionsResource {
         String turnId = data.getTurnId() == null || data.getTurnId().isBlank() ? null : data.getTurnId();
         String author = turnId == null ? CompositionService.AUTHOR_USER : CompositionService.AUTHOR_AI;
         return toBean(service.save(compositionId, itemId, content, data.getBaseRevision(), author, turnId), true);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public CompositionItem setCompositionItemEnabled(long compositionId, long itemId, CompositionItemEnabled data) {
+        try {
+            return toBean(service.setEnabled(compositionId, itemId, data.getEnabled()), false);
+        } catch (IllegalStateException e) {
+            throw new CompositionConflictException(e.getMessage());
+        }
     }
 
     /** {@inheritDoc} */
@@ -513,6 +525,12 @@ public class CompositionsResourceImpl implements CompositionsResource {
         bean.setPublishedRevision(entity.publishedRevision);
         bean.setPublishedAt(entity.publishedOn == null ? null : Date.from(entity.publishedOn));
         bean.setChanged(CompositionService.isChanged(entity));
+        if (ConfigItemType.SUBSCRIPTION.jsonName().equals(entity.itemType) && entity.baseItemId != null) {
+            EventSubscriptionEntity subscription = EventSubscriptionEntity.findById(entity.baseItemId);
+            if (subscription != null) {
+                bean.setEnabled(subscription.enabled);
+            }
+        }
         if (withContent) {
             CompositionContent content = new CompositionContent();
             mapper.convertValue(service.contentOf(entity), Map.class)

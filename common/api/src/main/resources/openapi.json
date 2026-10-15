@@ -5436,6 +5436,64 @@
         }
       ]
     },
+    "/compositions/{compositionId}/items/{itemId}/enabled": {
+      "put": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Enable or disable a published subscription",
+        "description": "Enabling also sets processEventsFrom to now, so earlier events are not processed.",
+        "operationId": "setCompositionItemEnabled",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompositionItemEnabled"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionItem"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "The item is not a subscription or is not published"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "itemId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
     "/compositions/{compositionId}/items/{itemId}/revisions": {
       "get": {
         "tags": [
@@ -11257,8 +11315,24 @@
             "description": "True when publishing would change something",
             "type": "boolean"
           },
+          "enabled": {
+            "description": "For a published subscription item: whether the published subscription is enabled",
+            "type": "boolean"
+          },
           "content": {
             "$ref": "#/components/schemas/CompositionContent"
+          }
+        }
+      },
+      "CompositionItemEnabled": {
+        "required": [
+          "enabled"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Whether the published subscription is enabled",
+            "type": "boolean"
           }
         }
       },

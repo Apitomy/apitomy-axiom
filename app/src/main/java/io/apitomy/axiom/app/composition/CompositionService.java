@@ -207,6 +207,34 @@ public class CompositionService {
     }
 
     /**
+     * Enables or disables the published subscription of a subscription item. Enabling sets
+     * {@code processEventsFrom} to now, so events before this moment are not processed.
+     *
+     * @param compositionId the composition id
+     * @param itemId the item id
+     * @param enabled the new state
+     * @return the item
+     * @throws IllegalStateException when the item is not a published subscription
+     */
+    @Transactional
+    public CompositionItemEntity setEnabled(long compositionId, long itemId, boolean enabled) {
+        CompositionItemEntity item = item(compositionId, itemId);
+        if (!ConfigItemType.SUBSCRIPTION.jsonName().equals(item.itemType) || item.baseItemId == null) {
+            throw new IllegalStateException("Only a published subscription can be enabled or disabled");
+        }
+        EventSubscriptionEntity subscription = EventSubscriptionEntity.findById(item.baseItemId);
+        if (subscription == null) {
+            throw new IllegalStateException("The published subscription no longer exists");
+        }
+        subscription.enabled = enabled;
+        if (enabled) {
+            subscription.processEventsFrom = Instant.now();
+        }
+        subscription.modifiedOn = Instant.now();
+        return item;
+    }
+
+    /**
      * @param compositionId the composition id
      * @param itemId the item id
      * @return the item

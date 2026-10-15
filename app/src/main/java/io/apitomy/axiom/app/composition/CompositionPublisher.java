@@ -11,6 +11,7 @@ import io.apitomy.axiom.app.validation.ValidationContext;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.CompositionEntity;
 import io.apitomy.axiom.core.entities.CompositionItemEntity;
+import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.quarkus.hibernate.orm.panache.PanacheEntity;
@@ -121,7 +122,11 @@ public class CompositionPublisher {
         pack.putObject("metadata").put("name", "Workbench - " + composition.name);
         for (CompositionItemEntity item : selected) {
             ConfigItemType type = ConfigItemType.fromName(item.itemType);
-            pack.withArray(CompositionItems.packArray(type)).add(validator.packItem(item));
+            ObjectNode packItem = validator.packItem(item);
+            if (type == ConfigItemType.SUBSCRIPTION) {
+                applyPublishedState(packItem);
+            }
+            pack.withArray(CompositionItems.packArray(type)).add(packItem);
         }
         ImportExportService.UpsertResult result;
         try {
@@ -138,8 +143,10 @@ public class CompositionPublisher {
             item.publishedRevision = item.contentRevision;
             item.publishedOn = now;
         }
-        int created = result.workflowDefinitionsCreated() + result.actionTypesCreated() + result.toolsCreated();
-        int updated = result.workflowDefinitionsUpdated() + result.actionTypesUpdated() + result.toolsUpdated();
+        int created = result.workflowDefinitionsCreated() + result.actionTypesCreated() + result.toolsCreated()
+                + result.subscriptionsCreated();
+        int updated = result.workflowDefinitionsUpdated() + result.actionTypesUpdated() + result.toolsUpdated()
+                + result.subscriptionsUpdated();
         return new Outcome(created, updated, selected);
     }
 
@@ -160,6 +167,11 @@ public class CompositionPublisher {
                     requireDependency(item, ConfigItemType.TOOL, name,
                             ToolDefinitionEntity.count("name", name) > 0, selectedKeys, draftKeys, blocked);
                 }
+            } else if (ConfigItemType.SUBSCRIPTION.jsonName().equals(item.itemType)) {
+                for (String name : CompositionItems.referencedWorkflows(content)) {
+                    requireDependency(item, ConfigItemType.WORKFLOW, name,
+                            WorkflowDefinitionEntity.count("name", name) > 0, selectedKeys, draftKeys, blocked);
+                }
             }
         }
     }
@@ -178,6 +190,25 @@ public class CompositionPublisher {
                 .add(ConfigProblem.error("", "missing-dependency", message));
     }
 
+    /**
+     * Publishing never changes whether a subscription runs: a new one is created disabled, and an existing one
+     * keeps its enabled state and processEventsFrom (the pack import would otherwise reset them).
+     */
+    private static void applyPublishedState(ObjectNode packItem) {
+        packItem.remove("enabled");
+        packItem.remove("processEventsFrom");
+        EventSubscriptionEntity existing = EventSubscriptionEntity.<EventSubscriptionEntity>find("name",
+                packItem.path("name").asText()).firstResult();
+        if (existing == null) {
+            packItem.put("enabled", false);
+            return;
+        }
+        packItem.put("enabled", existing.enabled);
+        if (existing.processEventsFrom != null) {
+            packItem.put("processEventsFrom", existing.processEventsFrom.toString());
+        }
+    }
+
     private static Long publishedId(ConfigItemType type, String name) {
         return Objects.requireNonNull(publishedIdOrNull(type, name), "Published item not found: " + name);
     }
@@ -187,6 +218,8 @@ public class CompositionPublisher {
             case WORKFLOW -> idOf(WorkflowDefinitionEntity.<WorkflowDefinitionEntity>find("name", name).firstResult());
             case ACTION_TYPE -> idOf(ActionTypeEntity.<ActionTypeEntity>find("name", name).firstResult());
             case TOOL -> idOf(ToolDefinitionEntity.<ToolDefinitionEntity>find("name", name).firstResult());
+            case SUBSCRIPTION -> idOf(EventSubscriptionEntity.<EventSubscriptionEntity>find("name",
+                    name).firstResult());
             default -> throw new IllegalArgumentException("Unsupported type " + type);
         };
     }
