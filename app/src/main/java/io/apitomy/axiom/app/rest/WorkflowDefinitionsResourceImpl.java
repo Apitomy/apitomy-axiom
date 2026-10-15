@@ -1,11 +1,9 @@
 package io.apitomy.axiom.app.rest;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.WorkflowResource;
 import io.apitomy.axiom.api.beans.Content;
-import io.apitomy.axiom.api.beans.Inputs;
 import io.apitomy.axiom.api.beans.NewScheduleTrigger;
 import io.apitomy.axiom.api.beans.NewWorkflowDefinition;
 import io.apitomy.axiom.api.beans.ScheduleTrigger;
@@ -37,7 +35,6 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
-import org.jboss.logging.Logger;
 
 import java.io.InputStream;
 import java.time.Instant;
@@ -53,8 +50,6 @@ import java.util.Set;
 @ApplicationScoped
 @RunOnVirtualThread
 public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
-
-    private static final Logger LOG = Logger.getLogger(WorkflowDefinitionsResourceImpl.class);
 
     @Inject
     ObjectMapper objectMapper;
@@ -279,12 +274,6 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
         trigger.subjectName = subjectName;
         trigger.enabled = data.getEnabled() == null || data.getEnabled();
         trigger.nextRunAt = trigger.enabled ? nextRunAt : null;
-        try {
-            trigger.inputs = data.getInputs() == null ? null
-                    : objectMapper.writeValueAsString(data.getInputs().getAdditionalProperties());
-        } catch (JsonProcessingException e) {
-            throw new WebApplicationException("Invalid inputs", 400);
-        }
         trigger.updatedOn = Instant.now();
     }
 
@@ -295,17 +284,6 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
         bean.setCron(trigger.cron);
         bean.setSubjectName(trigger.subjectName);
         bean.setEnabled(trigger.enabled);
-        if (trigger.inputs != null) {
-            try {
-                Map<String, Object> values = objectMapper.readValue(trigger.inputs,
-                        new TypeReference<Map<String, Object>>() { });
-                Inputs inputs = new Inputs();
-                values.forEach(inputs::setAdditionalProperty);
-                bean.setInputs(inputs);
-            } catch (JsonProcessingException e) {
-                LOG.warnf("Omitting corrupt stored inputs of schedule trigger %d: %s", trigger.id, e.getMessage());
-            }
-        }
         bean.setNextRunAt(trigger.nextRunAt != null ? Date.from(trigger.nextRunAt) : null);
         bean.setLastRunAt(trigger.lastRunAt != null ? Date.from(trigger.lastRunAt) : null);
         bean.setLastOutcome(trigger.lastOutcome);

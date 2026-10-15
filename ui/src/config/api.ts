@@ -1752,7 +1752,7 @@ export interface HistoryEntryInfo {
 
 /**
  * Re-runs a failed workflow run: starts a new run of the same workflow (latest published version) for the same
- * subject, with the original title, labels (plus rerunOf) and inputs.
+ * subject, with the original title and labels (plus rerunOf).
  * @param runId the failed run
  * @returns the new run
  */
@@ -1836,7 +1836,6 @@ export interface TriggerStreamEventWorkflowRequest {
     workflowDefinitionId: number;
     title?: string;
     labels?: Record<string, string>;
-    inputs?: Record<string, unknown>;
 }
 
 /** A workflow suggested for a stream event because a subscription matching the event uses it. */
@@ -1851,7 +1850,7 @@ export interface StreamEventWorkflowSuggestion {
  * Manually starts a workflow run on the subject of a stream event, with the event in `context.event`.
  *
  * @param eventId the stream event id (UUID)
- * @param data the workflow and optional title, labels and inputs
+ * @param data the workflow and optional title and labels
  * @returns the started workflow instance
  */
 export async function triggerStreamEventWorkflow(
@@ -1891,7 +1890,6 @@ export interface NewScheduleTrigger {
     /** Unix (5-field) cron expression, evaluated in UTC. */
     cron: string;
     subjectName: string;
-    inputs?: Record<string, unknown>;
     enabled?: boolean;
 }
 

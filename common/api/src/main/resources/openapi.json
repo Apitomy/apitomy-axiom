@@ -6446,7 +6446,7 @@
           "WorkflowRuns"
         ],
         "summary": "Re-run a failed workflow run",
-        "description": "Starts a new run of the same workflow (latest published version) for the same subject, with the original title, labels (plus rerunOf=<runId>) and inputs. A run started by a stream event is re-run from that event. Only failed runs can be re-run.",
+        "description": "Starts a new run of the same workflow (latest published version) for the same subject, with the original title and labels (plus rerunOf=<runId>). A run started by a stream event is re-run from that event. Only failed runs can be re-run.",
         "operationId": "rerunWorkflowRun",
         "responses": {
           "200": {
@@ -9805,11 +9805,6 @@
             "description": "Name of the fixed subject every run attaches to; created on first firing",
             "type": "string"
           },
-          "inputs": {
-            "description": "Static workflow inputs passed to every run",
-            "type": "object",
-            "additionalProperties": {}
-          },
           "enabled": {
             "type": "boolean",
             "default": true
@@ -9841,11 +9836,6 @@
           "subjectName": {
             "description": "Name of the fixed subject every run attaches to; created on first firing",
             "type": "string"
-          },
-          "inputs": {
-            "description": "Static workflow inputs passed to every run",
-            "type": "object",
-            "additionalProperties": {}
           },
           "enabled": {
             "type": "boolean",
@@ -10049,7 +10039,8 @@
           },
           "inputs": {
             "type": "object",
-            "additionalProperties": {}
+            "additionalProperties": {},
+            "description": "The standard inputs the run was started with (excluding event)"
           },
           "status": {
             "type": "string"
@@ -10166,11 +10157,6 @@
             "additionalProperties": {
               "type": "string"
             }
-          },
-          "inputs": {
-            "type": "object",
-            "description": "Workflow inputs, validated against the Start node's declared inputs",
-            "additionalProperties": {}
           }
         }
       },
@@ -10207,7 +10193,8 @@
           },
           "inputs": {
             "type": "object",
-            "additionalProperties": {}
+            "additionalProperties": {},
+            "description": "The standard inputs the run was started with (excluding event)"
           },
           "definitionVersion": {
             "format": "int32",

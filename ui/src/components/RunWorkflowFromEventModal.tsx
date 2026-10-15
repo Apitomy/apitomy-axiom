@@ -14,7 +14,6 @@ import {
     ModalBody,
     ModalFooter,
     ModalHeader,
-    TextArea,
     TextInput,
 } from "@patternfly/react-core";
 import {
@@ -46,27 +45,6 @@ export function parseLabels(raw: string): Record<string, string> | null {
     return labels;
 }
 
-/**
- * Parses inputs typed as a JSON object.
- *
- * @param raw the typed text
- * @returns the inputs (empty when blank), or null when the text is not a JSON object
- */
-export function parseInputs(raw: string): Record<string, unknown> | null {
-    if (!raw.trim()) {
-        return {};
-    }
-    try {
-        const value: unknown = JSON.parse(raw);
-        if (value && typeof value === "object" && !Array.isArray(value)) {
-            return value as Record<string, unknown>;
-        }
-    } catch {
-        // fall through
-    }
-    return null;
-}
-
 /** Props of {@link RunWorkflowFromEventModal}. */
 export interface RunWorkflowFromEventModalProps {
     eventId: string;
@@ -83,7 +61,6 @@ export function RunWorkflowFromEventModal({ eventId, isOpen, onClose, onStarted 
     const [selectedId, setSelectedId] = useState<string>("");
     const [title, setTitle] = useState<string>("");
     const [labelsText, setLabelsText] = useState<string>("");
-    const [inputsText, setInputsText] = useState<string>("");
     const [error, setError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState<boolean>(false);
 
@@ -94,7 +71,6 @@ export function RunWorkflowFromEventModal({ eventId, isOpen, onClose, onStarted 
         setSelectedId("");
         setTitle("");
         setLabelsText("");
-        setInputsText("");
         setError(null);
         fetchWorkflowDefinitions(1, 1000)
             .then((r) => setDefinitions(r.items.filter((d) => d.currentVersion != null)))
@@ -120,18 +96,16 @@ export function RunWorkflowFromEventModal({ eventId, isOpen, onClose, onStarted 
         () => [...definitions].sort((a, b) => a.name.localeCompare(b.name)), [definitions]);
 
     const labels = parseLabels(labelsText);
-    const inputs = parseInputs(inputsText);
     const selectedSuggestion = suggestions.find((s) => String(s.workflowDefinitionId) === selectedId);
-    const canRun: boolean = !!selectedId && labels !== null && inputs !== null && !submitting;
+    const canRun: boolean = !!selectedId && labels !== null && !submitting;
 
     const run = () => {
-        if (!canRun || labels === null || inputs === null) {
+        if (!canRun || labels === null) {
             return;
         }
         const body: TriggerStreamEventWorkflowRequest = { workflowDefinitionId: Number(selectedId) };
         if (title.trim()) body.title = title.trim();
         if (Object.keys(labels).length > 0) body.labels = labels;
-        if (Object.keys(inputs).length > 0) body.inputs = inputs;
         setSubmitting(true);
         setError(null);
         triggerStreamEventWorkflow(eventId, body)
@@ -187,16 +161,6 @@ export function RunWorkflowFromEventModal({ eventId, isOpen, onClose, onStarted 
                         {labels === null && (
                             <FormHelperText><HelperText><HelperTextItem variant="error">
                                 Labels must be key:value pairs separated by commas.
-                            </HelperTextItem></HelperText></FormHelperText>
-                        )}
-                    </FormGroup>
-                    <FormGroup label="Inputs" fieldId="run-wf-event-inputs">
-                        <TextArea id="run-wf-event-inputs" value={inputsText} placeholder="{ }" rows={5}
-                            validated={inputs === null ? "error" : "default"}
-                            onChange={(_e, v) => setInputsText(v)} />
-                        {inputs === null && (
-                            <FormHelperText><HelperText><HelperTextItem variant="error">
-                                Inputs must be a JSON object.
                             </HelperTextItem></HelperText></FormHelperText>
                         )}
                     </FormGroup>

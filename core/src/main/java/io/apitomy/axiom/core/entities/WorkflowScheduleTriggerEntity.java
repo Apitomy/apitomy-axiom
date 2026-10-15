@@ -28,10 +28,6 @@ public class WorkflowScheduleTriggerEntity extends PanacheEntity {
     @Column(name = "subject_name", nullable = false, length = 255)
     public String subjectName;
 
-    /** Static workflow inputs as a JSON object; null for none. */
-    @Column(columnDefinition = "TEXT")
-    public String inputs;
-
     @Column(nullable = false)
     public boolean enabled = true;
 

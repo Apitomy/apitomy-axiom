@@ -25,5 +25,6 @@ describe("WorkflowTriggersTab", () => {
         const dialog: HTMLElement = await screen.findByRole("dialog");
         expect(within(dialog).getByRole("textbox", { name: /^Cron/ })).toBeInTheDocument();
         expect(within(dialog).getByRole("textbox", { name: /^Subject name/ })).toBeInTheDocument();
+        expect(within(dialog).queryByRole("textbox", { name: /Inputs/ })).toBeNull();
     });
 });

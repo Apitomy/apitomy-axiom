@@ -588,7 +588,6 @@
         cron varchar(100) not null,
         last_outcome varchar(1000),
         subject_name varchar(255) not null,
-        inputs TEXT,
         primary key (id)
     );
 

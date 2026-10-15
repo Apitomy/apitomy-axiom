@@ -11,7 +11,6 @@ import {
     ModalBody,
     ModalFooter,
     ModalHeader,
-    TextArea,
     TextInput,
     Toolbar,
     ToolbarContent,
@@ -143,26 +142,14 @@ function TriggerModal({ trigger, onClose, onSave }: {
 }) {
     const [cron, setCron] = useState(trigger?.cron ?? "");
     const [subjectName, setSubjectName] = useState(trigger?.subjectName ?? "");
-    const [inputs, setInputs] = useState(JSON.stringify(trigger?.inputs ?? {}, null, 2));
     const [enabled, setEnabled] = useState(trigger?.enabled ?? true);
     const [error, setError] = useState("");
     const [saving, setSaving] = useState(false);
 
     const save = () => {
-        let parsed: Record<string, unknown>;
-        try {
-            parsed = inputs.trim() ? JSON.parse(inputs) : {};
-        } catch {
-            setError("Inputs must be valid JSON.");
-            return;
-        }
-        if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-            setError("Inputs must be a JSON object.");
-            return;
-        }
         setError("");
         setSaving(true);
-        onSave({ cron: cron.trim(), subjectName: subjectName.trim(), inputs: parsed, enabled })
+        onSave({ cron: cron.trim(), subjectName: subjectName.trim(), enabled })
             .catch((e: Error) => setError(e.message))
             .finally(() => setSaving(false));
     };
@@ -180,10 +167,6 @@ function TriggerModal({ trigger, onClose, onSave }: {
                     <FormGroup label="Subject name" isRequired fieldId="trigger-subject">
                         <TextInput id="trigger-subject" value={subjectName} maxLength={246}
                             onChange={(_e, v) => setSubjectName(v)} />
-                    </FormGroup>
-                    <FormGroup label="Inputs (JSON)" fieldId="trigger-inputs">
-                        <TextArea id="trigger-inputs" value={inputs} rows={6}
-                            onChange={(_e, v) => setInputs(v)} />
                     </FormGroup>
                     <Checkbox id="trigger-enabled" label="Enabled" isChecked={enabled}
                         onChange={(_e, v) => setEnabled(v)} />

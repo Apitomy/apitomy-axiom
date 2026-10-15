@@ -34,7 +34,7 @@ class WorkflowScheduleTriggerSchedulerTest {
     void firstFiringCreatesSubjectAndStartsRun() {
         String subjectName = "Nightly triage " + UUID.randomUUID();
         long definitionId = TestFixtures.createWaitDefinition("sched-first-" + UUID.randomUUID());
-        long triggerId = createTrigger(definitionId, subjectName, true, "{\"priority\": \"high\"}");
+        long triggerId = createTrigger(definitionId, subjectName, true);
 
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
         scheduler.fire(triggerId, now);
@@ -56,7 +56,7 @@ class WorkflowScheduleTriggerSchedulerTest {
     void secondFiringReusesSubjectAndSkipsWhileActive() {
         String subjectName = "Nightly triage " + UUID.randomUUID();
         long definitionId = TestFixtures.createWaitDefinition("sched-skip-" + UUID.randomUUID());
-        long triggerId = createTrigger(definitionId, subjectName, true, null);
+        long triggerId = createTrigger(definitionId, subjectName, true);
 
         scheduler.fire(triggerId, Instant.now());
         makeDue(triggerId);
@@ -77,7 +77,7 @@ class WorkflowScheduleTriggerSchedulerTest {
     void firingAfterRunEndsStartsNewRunOnSameSubject() {
         String subjectName = "Nightly triage " + UUID.randomUUID();
         long definitionId = TestFixtures.createWaitDefinition("sched-again-" + UUID.randomUUID());
-        long triggerId = createTrigger(definitionId, subjectName, true, null);
+        long triggerId = createTrigger(definitionId, subjectName, true);
 
         scheduler.fire(triggerId, Instant.now());
         long subjectId = subjectsNamed(subjectName).get(0).id;
@@ -99,7 +99,7 @@ class WorkflowScheduleTriggerSchedulerTest {
     void disabledTriggerDoesNotFire() {
         String subjectName = "Nightly triage " + UUID.randomUUID();
         long definitionId = TestFixtures.createWaitDefinition("sched-off-" + UUID.randomUUID());
-        long triggerId = createTrigger(definitionId, subjectName, false, null);
+        long triggerId = createTrigger(definitionId, subjectName, false);
 
         assertFalse(QuarkusTransaction.requiringNew()
                 .call(() -> scheduler.findDueTriggerIds(Instant.now())).contains(triggerId));
@@ -115,7 +115,7 @@ class WorkflowScheduleTriggerSchedulerTest {
     @Test
     void dueTriggerIsFound() {
         long definitionId = TestFixtures.createWaitDefinition("sched-due-" + UUID.randomUUID());
-        long triggerId = createTrigger(definitionId, "Due " + UUID.randomUUID(), true, null);
+        long triggerId = createTrigger(definitionId, "Due " + UUID.randomUUID(), true);
 
         assertTrue(QuarkusTransaction.requiringNew()
                 .call(() -> scheduler.findDueTriggerIds(Instant.now())).contains(triggerId));
@@ -136,7 +136,7 @@ class WorkflowScheduleTriggerSchedulerTest {
             def.persist();
             return def.id;
         });
-        long triggerId = createTrigger(definitionId, subjectName, true, null);
+        long triggerId = createTrigger(definitionId, subjectName, true);
 
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
         scheduler.fire(triggerId, now);
@@ -156,7 +156,7 @@ class WorkflowScheduleTriggerSchedulerTest {
     void claimFailureRecordsOutcomeAndAdvances() {
         long definitionId = TestFixtures.createWaitDefinition("sched-claimfail-" + UUID.randomUUID());
         String tooLong = "n".repeat(SubjectEntity.REF_MAX_LENGTH);
-        long triggerId = createTrigger(definitionId, tooLong, true, null);
+        long triggerId = createTrigger(definitionId, tooLong, true);
 
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
         scheduler.fire(triggerId, now);
@@ -177,13 +177,32 @@ class WorkflowScheduleTriggerSchedulerTest {
         assertTrue(outcome.startsWith("failed: x"));
     }
 
-    private static long createTrigger(long definitionId, String subjectName, boolean enabled, String inputs) {
+    /** A trigger whose workflow requires an event cannot start a run: the outcome names the missing input. */
+    @Test
+    void requiredEventFailsTheFiring() {
+        long definitionId = TestFixtures.createDefinition("sched-needs-event-" + UUID.randomUUID(), """
+            {"id": "sched-ev", "name": "Needs Event",
+             "nodes": [
+               {"id": "s1", "type": "start", "name": "Start", "position": {"x": 0, "y": 0},
+                "config": {"inputs": [{"name": "event", "type": "object", "required": true}]}},
+               {"id": "e1", "type": "end", "name": "End", "config": {}, "position": {"x": 0, "y": 100}}],
+             "edges": [{"id": "x1", "source": "s1", "target": "e1", "priority": 0, "isDefault": false}]}
+            """);
+        long triggerId = createTrigger(definitionId, "Needs event " + UUID.randomUUID(), true);
+
+        scheduler.fire(triggerId, Instant.now());
+
+        String outcome = loadTrigger(triggerId).lastOutcome;
+        assertTrue(outcome.startsWith("failed: Cannot start workflow"), outcome);
+        assertTrue(outcome.endsWith("required input(s) not available: event"), outcome);
+    }
+
+    private static long createTrigger(long definitionId, String subjectName, boolean enabled) {
         return QuarkusTransaction.requiringNew().call(() -> {
             WorkflowScheduleTriggerEntity trigger = new WorkflowScheduleTriggerEntity();
             trigger.definitionId = definitionId;
             trigger.cron = "0 2 * * *";
             trigger.subjectName = subjectName;
-            trigger.inputs = inputs;
             trigger.enabled = enabled;
             trigger.nextRunAt = Instant.now().minus(1, ChronoUnit.MINUTES);
             trigger.createdOn = Instant.now();

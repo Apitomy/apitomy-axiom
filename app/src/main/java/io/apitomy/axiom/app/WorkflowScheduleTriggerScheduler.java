@@ -41,7 +41,7 @@ public class WorkflowScheduleTriggerScheduler {
     private volatile boolean shuttingDown = false;
 
     /** A claimed firing that should attempt to start a run. */
-    private record Attempt(long subjectId, long definitionId, String inputs) {
+    private record Attempt(long subjectId, long definitionId) {
     }
 
     @PreDestroy
@@ -134,7 +134,7 @@ public class WorkflowScheduleTriggerScheduler {
                     triggerId, subject.id, trigger.definitionId);
             return null;
         }
-        return new Attempt(subject.id, trigger.definitionId, trigger.inputs);
+        return new Attempt(subject.id, trigger.definitionId);
     }
 
     /**

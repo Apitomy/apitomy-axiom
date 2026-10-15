@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { parseInputs, parseLabels, RunWorkflowFromEventModal } from "./RunWorkflowFromEventModal";
+import { parseLabels, RunWorkflowFromEventModal } from "./RunWorkflowFromEventModal";
 import { renderWithRouter } from "../test/renderWithRouter";
 import * as api from "../config/api";
 
@@ -48,7 +48,7 @@ describe("RunWorkflowFromEventModal", () => {
         expect(document.activeElement).toBe(select);
     });
 
-    it("sends the workflow, title, labels and inputs on Run", async () => {
+    it("sends the workflow, title and labels on Run", async () => {
         vi.mocked(api.triggerStreamEventWorkflow).mockResolvedValue({ id: 50, runId: 50 } as never);
         const onStarted = renderModal();
         const select = await screen.findByLabelText(/Workflow/, { selector: "select" });
@@ -56,12 +56,12 @@ describe("RunWorkflowFromEventModal", () => {
         await userEvent.selectOptions(select, "2");
         await userEvent.type(screen.getByLabelText("Title"), "Manual triage");
         await userEvent.type(screen.getByLabelText("Labels"), "team:core, prio:high");
-        await userEvent.type(screen.getByLabelText("Inputs"), '{{"x": 1}');
+        expect(screen.queryByLabelText("Inputs")).toBeNull();
         await userEvent.click(screen.getByRole("button", { name: "Run" }));
         await waitFor(() => expect(onStarted).toHaveBeenCalled());
         expect(api.triggerStreamEventWorkflow).toHaveBeenCalledWith(EVENT_ID, {
             workflowDefinitionId: 2, title: "Manual triage",
-            labels: { team: "core", prio: "high" }, inputs: { x: 1 },
+            labels: { team: "core", prio: "high" },
         });
     });
 
@@ -74,16 +74,6 @@ describe("RunWorkflowFromEventModal", () => {
         await userEvent.click(screen.getByRole("button", { name: "Run" }));
         await waitFor(() => expect(api.triggerStreamEventWorkflow).toHaveBeenCalledWith(
             EVENT_ID, { workflowDefinitionId: 3 }));
-    });
-
-    it("blocks Run while the inputs are not a JSON object", async () => {
-        renderModal();
-        const select = await screen.findByLabelText(/Workflow/, { selector: "select" });
-        await waitFor(() => expect(within(select).getAllByRole("option").length).toBe(5));
-        await userEvent.selectOptions(select, "2");
-        await userEvent.type(screen.getByLabelText("Inputs"), "not json");
-        expect(screen.getByText("Inputs must be a JSON object.")).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
     });
 
     it("shows the server's conflict message inline", async () => {
@@ -102,8 +92,5 @@ describe("RunWorkflowFromEventModal", () => {
         expect(parseLabels("")).toEqual({});
         expect(parseLabels("a:b, c:d:e")).toEqual({ a: "b", c: "d:e" });
         expect(parseLabels("bad")).toBeNull();
-        expect(parseInputs("")).toEqual({});
-        expect(parseInputs("[1]")).toBeNull();
-        expect(parseInputs('{"a":1}')).toEqual({ a: 1 });
     });
 });

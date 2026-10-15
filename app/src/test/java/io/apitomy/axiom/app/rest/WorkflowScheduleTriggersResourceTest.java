@@ -44,7 +44,7 @@ class WorkflowScheduleTriggersResourceTest {
                     .body("definitionId", equalTo((int) definitionId))
                     .body("cron", equalTo("0 2 * * *"))
                     .body("subjectName", equalTo("Nightly"))
-                    .body("inputs.priority", equalTo("high"))
+                    .body("inputs", nullValue())
                     .body("enabled", equalTo(true))
                     .body("nextRunAt", notNullValue())
                     .body("lastRunAt", nullValue())
