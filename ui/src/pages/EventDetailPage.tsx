@@ -219,12 +219,16 @@ export function EventDetailPage() {
                         {activeTab === 2 && <EventRunsTab eventId={event.id} refreshKey={runsRefresh} />}
                     </TabContent>
                 </Tab>
+                <Tab eventKey={3} title={<TabTitleText>Lineage</TabTitleText>}>
+                    <TabContent id="lineage-tab" eventKey={3} activeKey={activeTab}
+                        style={{ marginTop: "24px" }}>
+                        {activeTab === 3 && <LineagePanel entityType="event" id={event.id} expandable={false} />}
+                    </TabContent>
+                </Tab>
             </Tabs>
 
             <RunWorkflowFromEventModal eventId={event.id} isOpen={isRunOpen}
                 onClose={() => setIsRunOpen(false)} onStarted={onRunStarted} />
-
-            <LineagePanel entityType="event" id={event.id} />
         </PageSection>
     );
 }

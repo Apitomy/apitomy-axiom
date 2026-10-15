@@ -233,7 +233,7 @@ Shows all stream events (from event sources) that were associated with this subj
 The **Lineage** panel shows the chain of work an item belongs to, so you do not have to hop between the event,
 trace, workflow run, task and usage pages. It is available on:
 
-- the event detail page (expand **Lineage** below the tabs),
+- the event detail page (**Lineage** tab),
 - the workflow run detail page (**Lineage** tab),
 - the **Logs > Tasks** page and the subject **Tasks** tab (**Lineage** button on each task).
 

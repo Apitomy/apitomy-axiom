@@ -20,7 +20,10 @@ vi.mock("../config/api", () => ({
 vi.mock("../config/sse", () => ({
     sseClient: { subscribe: vi.fn(() => () => {}) },
 }));
-vi.mock("../components/LineagePanel", () => ({ LineagePanel: () => null }));
+vi.mock("../components/LineagePanel", () => ({
+    LineagePanel: ({ expandable }: { expandable?: boolean }) =>
+        <div data-testid="lineage-panel">{expandable === false ? "inline" : "expandable"}</div>,
+}));
 vi.mock("@patternfly/react-code-editor", () => ({
     CodeEditor: () => null,
     Language: { json: "json" },
@@ -53,6 +56,14 @@ describe("EventDetailPage", () => {
         renderPage();
         await userEvent.click(await screen.findByRole("button", { name: "Run workflow…" }));
         expect(await screen.findByText(/with the event in context.event/)).toBeInTheDocument();
+    });
+
+    it("shows lineage only on its own Lineage tab, open without the expandable header", async () => {
+        renderPage();
+        const lineageTab = await screen.findByRole("tab", { name: "Lineage" });
+        expect(screen.queryByTestId("lineage-panel")).toBeNull();
+        await userEvent.click(lineageTab);
+        expect(await screen.findByTestId("lineage-panel")).toHaveTextContent("inline");
     });
 
     it("lists the runs started from the event on the Runs tab with the manual label", async () => {
