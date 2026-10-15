@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-    itemUsages,
+    itemKindLabel, itemUsages,
     defaultPublishChoice, isLockedForUser, itemStatus, mergeCatalog, publishSelection, referencedActionTypes,
     referencedTools, undoPlan,
 } from "./workbenchLogic";
@@ -77,5 +77,26 @@ describe("workbenchLogic", () => {
         expect(itemUsages(items[1], items, contents)).toEqual(["Workflow wf (2 nodes)"]);
         expect(itemUsages(items[2], items, contents)).toEqual(["Action type at"]);
         expect(itemUsages(items[3], items, contents)).toEqual([]);
+    });
+});
+
+describe("subscriptions", () => {
+    it("labels every item kind", () => {
+        expect(itemKindLabel("workflow")).toBe("workflow");
+        expect(itemKindLabel("action-type")).toBe("action type");
+        expect(itemKindLabel("tool")).toBe("tool");
+        expect(itemKindLabel("subscription")).toBe("subscription");
+    });
+
+    it("publishing a subscription also selects its changed workflow", () => {
+        const items = [
+            { id: 1, type: "workflow", name: "wf", changed: true, contentRevision: "r", lastAuthor: "user" },
+            { id: 2, type: "subscription", name: "on-pr", changed: true, contentRevision: "r", lastAuthor: "user" },
+        ] as CompositionItem[];
+        const contents = {
+            1: { id: "wf", name: "wf", nodes: [], edges: [] },
+            2: { name: "on-pr", routing: [{ type: "create-workflow", workflowDefinitionName: "wf" }, { type: "workflow-dispatch" }] },
+        };
+        expect(publishSelection(items, contents, [2])).toEqual([1, 2]);
     });
 });

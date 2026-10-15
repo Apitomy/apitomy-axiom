@@ -1,5 +1,5 @@
 import type { ActionTypeDescriptor, ActionTypeField, Workflow } from "@apitomy/flow-ui";
-import type { Composition, CompositionItem, ConfigProblem, UndoResult } from "../../config/compositions";
+import type { Composition, CompositionItem, CompositionItemType, ConfigProblem, UndoResult } from "../../config/compositions";
 
 /** Validation status of a composition item. */
 export type ItemStatus = "valid" | "warnings" | "errors" | "unknown";
@@ -121,6 +121,11 @@ export function publishSelection(items: CompositionItem[],
             deps = referencedTools(content)
                 .map((n: string) => findChanged("tool", n))
                 .filter((d: CompositionItem | undefined): d is CompositionItem => !!d);
+        } else if (item.type === "subscription") {
+            const routing = (content.routing as { type?: string; workflowDefinitionName?: string }[] | undefined) ?? [];
+            deps = routing.filter((r) => r.type === "create-workflow" && !!r.workflowDefinitionName)
+                .map((r) => findChanged("workflow", r.workflowDefinitionName as string))
+                .filter((d: CompositionItem | undefined): d is CompositionItem => !!d);
         }
         for (const dep of deps) {
             if (!selected.has(dep.id)) {
@@ -130,6 +135,15 @@ export function publishSelection(items: CompositionItem[],
         }
     }
     return [...selected].sort((a: number, b: number) => a - b);
+}
+
+/**
+ * Human-readable kind of a composition item, for messages and dialogs.
+ * @param type the item type
+ * @returns e.g. "action type"
+ */
+export function itemKindLabel(type: CompositionItemType): string {
+    return type === "action-type" ? "action type" : type;
 }
 
 /**

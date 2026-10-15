@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, mergeTestRun, mergeTestRuns, resolveChangeSet, saveItem, subscribeComposition } from "./compositions";
+import { ApiError, mergeTestRun, mergeTestRuns, resolveChangeSet, saveItem, setItemEnabled, subscribeComposition } from "./compositions";
 import type { CompositionTestRun, TestRunStatus } from "./compositions";
 import { sseClient } from "./sse";
 
@@ -19,6 +19,17 @@ describe("compositions api", () => {
         expect(String(url)).toMatch(/\/api\/v1\/compositions\/1\/items\/2$/);
         expect((init as RequestInit).method).toBe("PUT");
         expect(JSON.parse(String((init as RequestInit).body))).toEqual({ content: { name: "t" }, baseRevision: "sha256:a", turnId: "turn-1" });
+    });
+
+    it("enables a subscription item", async () => {
+        const fetchSpy = mockFetch(200, { id: 5, name: "s", type: "subscription", contentRevision: "r",
+            lastAuthor: "user", changed: false, enabled: true });
+        const item = await setItemEnabled(3, 5, true);
+        const [url, init] = fetchSpy.mock.calls[0];
+        expect(String(url)).toMatch(/\/api\/v1\/compositions\/3\/items\/5\/enabled$/);
+        expect((init as RequestInit).method).toBe("PUT");
+        expect(JSON.parse(String((init as RequestInit).body))).toEqual({ enabled: true });
+        expect(item.enabled).toBe(true);
     });
 
     it("throws ApiError with status and body on 409", async () => {

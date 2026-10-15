@@ -25,7 +25,7 @@ export function workbenchTool(toolName: string): WorkbenchTool | null {
 
 /** Where clicking a card navigates. */
 export type CardTarget =
-    | { kind: "item"; itemType: "action-type" | "tool" | "workflow"; name: string }
+    | { kind: "item"; itemType: "action-type" | "tool" | "workflow" | "subscription"; name: string }
     | { kind: "workflow"; nodeId?: string }
     | { kind: "suggestion"; itemType: "action-type" | "tool"; name: string };
 
@@ -45,14 +45,14 @@ export interface ToolCard {
     target?: CardTarget;
 }
 
-type ItemType = "action-type" | "tool" | "workflow";
+type ItemType = "action-type" | "tool" | "workflow" | "subscription";
 
 function kindLabel(type: string): string {
     return type === "action-type" ? "action type" : type;
 }
 
 function isItemType(type: string): type is ItemType {
-    return type === "action-type" || type === "tool" || type === "workflow";
+    return type === "action-type" || type === "tool" || type === "workflow" || type === "subscription";
 }
 
 function str(value: unknown): string {

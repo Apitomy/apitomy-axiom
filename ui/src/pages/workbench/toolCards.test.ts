@@ -95,3 +95,13 @@ describe("groupToolCalls", () => {
         expect(groups.map(g => g.map(c => c.id))).toEqual([["1", "2"], ["w"], ["3"], ["n"], ["n"]]);
     });
 });
+
+describe("subscription items", () => {
+    it("treats subscription as an item type with its own label", () => {
+        expect(describeToolCall("workbench_upsert_item", {},
+            "VALID: subscription/on-pr (created, revision sha256:abc)", false)).toMatchObject({
+            text: "Created subscription on-pr",
+            target: { kind: "item", itemType: "subscription", name: "on-pr" },
+        });
+    });
+});

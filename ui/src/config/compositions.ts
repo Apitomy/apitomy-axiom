@@ -9,7 +9,7 @@ const API = `${getApiBaseUrl()}/api/v1`;
 // ── Types ─────────────────────────────────────────────────────────
 
 /** The kind of item a composition draft holds. */
-export type CompositionItemType = "workflow" | "action-type" | "tool";
+export type CompositionItemType = "workflow" | "action-type" | "tool" | "subscription";
 
 /** Who authored a composition item revision. */
 export type CompositionAuthor = "user" | "ai";
@@ -54,6 +54,8 @@ export interface CompositionItem {
     publishedAt?: string;
     changed: boolean;
     content?: Record<string, unknown>;
+    /** For a published subscription item: whether the published subscription is enabled. */
+    enabled?: boolean;
 }
 
 /** A historical revision of a composition item (mirrors `CompositionRevision`). */
@@ -242,6 +244,11 @@ export function fetchItem(id: number, itemId: number): Promise<CompositionItem> 
 }
 
 /** Saves item content against a base revision; throws ApiError 409 when stale. */
+/** Enables or disables a published subscription item; enabling skips events before now. */
+export function setItemEnabled(id: number, itemId: number, enabled: boolean): Promise<CompositionItem> {
+    return request("PUT", `${c(id)}/items/${itemId}/enabled`, { enabled });
+}
+
 export function saveItem(
     id: number,
     itemId: number,

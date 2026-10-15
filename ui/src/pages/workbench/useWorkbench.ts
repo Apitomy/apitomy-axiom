@@ -259,10 +259,11 @@ export function useWorkbench(compositionId: number): WorkbenchState {
         };
     }, [compositionId, refreshItems, loadContent, scheduleValidate, refreshComposition, updatePending, adoptPending]);
 
-    // Action type drafts feed the canvas catalog, so keep every action type's content loaded and current.
+    // Action type drafts feed the canvas catalog and subscription routing feeds publish dependencies, so keep
+    // every action type's and subscription's content loaded and current.
     const loadingRef = useRef<Map<number, string>>(new Map());
     useEffect(() => {
-        items.filter((i) => i.type === "action-type").forEach((i) => {
+        items.filter((i) => i.type === "action-type" || i.type === "subscription").forEach((i) => {
             if (revisionsRef.current[i.id] === i.contentRevision || loadingRef.current.get(i.id) === i.contentRevision) {
                 return;
             }
@@ -316,7 +317,7 @@ export function useWorkbench(compositionId: number): WorkbenchState {
     const runTest = useCallback(async (itemId: number, inputs: Record<string, unknown>, subjectId?: number,
                                        runId?: string) => {
         const item: CompositionItem | undefined = itemsRef.current.find((i) => i.id === itemId);
-        if (runId && item && item.type !== "workflow") {
+        if (runId && item && (item.type === "action-type" || item.type === "tool")) {
             const placeholder: CompositionTestRun = { id: runId, itemId, itemType: item.type, itemName: item.name,
                 author: "user", status: "running", startedAt: new Date().toISOString(), inputs, subjectId };
             setTestRuns((prev) => mergeTestRun(prev, placeholder));

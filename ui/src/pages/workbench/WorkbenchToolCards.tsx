@@ -16,7 +16,7 @@ import { ToolCallDetails } from "./ToolCallDetails";
 /** Navigation callbacks used by the workbench chat cards. */
 export interface WorkbenchToolActions {
     /** Opens the tab of the item with the given type and name (no-op when it no longer exists). */
-    openItem(type: "action-type" | "tool" | "workflow", name: string): void;
+    openItem(type: "action-type" | "tool" | "workflow" | "subscription", name: string): void;
     /**
      * Activates the workflow tab.
      *

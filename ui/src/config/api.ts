@@ -2273,6 +2273,8 @@ export interface SubscriptionPreviewResponse {
     totalMatched: number;
     page: number;
     limit: number;
+    errorCount?: number;
+    firstError?: string;
 }
 
 export async function previewSubscriptionFilter(
