@@ -107,11 +107,26 @@ it covers publish and the workbench's `propose_workflow_changes`) rejects a Star
 The old rule forbidding `required` on `event`/`subjectName`/`repository` is removed; requiring `event` is how a
 workflow says it must be started from an event.
 
-4. an EL expression anywhere in the workflow (edge conditions, node input mappings, human-task
-   title/description, receive-event correlation/match/output mappings) reads `context.subject` or
-   `context.event` while the Start node does not declare that input. Detection is a token match on
-   `context.subject` / `context.event` not followed by an identifier character, so `context.subjectX` does not
-   match. Such a read can never succeed, so it blocks publish like the other rules.
+Reading an undeclared standard input (e.g. `context.subject` without declaring `subject`) is **not** checked:
+a node output with that name may legitimately provide it. Standard input names are not reserved.
+
+### Shadowing warning
+
+Workflow validation (`ConfigItemValidationService.validateWorkflow`, which backs the workbench's
+`propose_workflow_changes` problems and assistant item validation) adds a **warning**, code
+`SHADOWS_WORKFLOW_INPUT`, when a node would write a context key equal to the name of an input declared on the
+Start node. The warning is reported at the node and names the node, the key and the input, e.g.
+`Output 'event' of node 'Review' overwrites the workflow input 'event' for later nodes.` It does not block
+publish.
+
+Statically known output keys checked:
+
+- an `action` node's declared `config.outputs` names, and its action type's declared outputs (via the
+  validation context, which gains action-type outputs alongside the existing `actionTypeInputs`);
+- a `receive-event` node's output mapping context keys;
+- a `human-task` node's form field names.
+
+`sdk:` node results are not declared anywhere and are not checked.
 
 ## 5. New-Workflow Scaffold
 
@@ -149,7 +164,8 @@ standard inputs with type, availability and (for `subject`) its fields, followed
 - declare only standard inputs; no other inputs and no `defaultValue`;
 - mark `event` required only if the workflow must be started from an event (schedule-triggered workflows must
   not require it);
-- read only declared inputs (`context.subject.<field>`, `context.event.<field>`).
+- read only declared inputs (`context.subject.<field>`, `context.event.<field>`);
+- do not give node outputs the name of a declared input (validation warns: `SHADOWS_WORKFLOW_INPUT`).
 
 The workbench prompt rule list gets a matching one-line rule.
 
@@ -163,7 +179,8 @@ expressions.
 ## 9. Testing
 
 - **Unit:** registry resolution (subject snapshot with nulls; event present/absent); publish rules (unknown
-  name, wrong type, `defaultValue`, required `event` now allowed); undeclared-use detection; scaffold content;
+  name, wrong type, `defaultValue`, required `event` now allowed); `SHADOWS_WORKFLOW_INPUT` warnings for each
+  output source, and none for outputs that do not match a declared input; scaffold content;
   reference section content.
 - **Integration (`@QuarkusTest`):** context contains only declared inputs; optional unsatisfied `event` is
   absent; required unsatisfied `event` fails for each event-less trigger path (subject REST API, schedule
