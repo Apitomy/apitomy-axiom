@@ -7,6 +7,7 @@ import org.jboss.logging.Logger;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 
 /**
@@ -115,8 +116,12 @@ public class WorkspaceService {
         }
     }
 
+    /**
+     * Deletes a file or directory tree. Symbolic links are deleted as links and never followed, so a link inside a
+     * workspace cannot cause files outside it to be deleted (issue #340).
+     */
     private void deleteRecursively(Path path) throws IOException {
-        if (Files.isDirectory(path)) {
+        if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
             try (var entries = Files.list(path)) {
                 for (Path entry : entries.toList()) {
                     deleteRecursively(entry);
