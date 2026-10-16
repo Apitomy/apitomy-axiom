@@ -16,6 +16,7 @@ vi.mock("@patternfly/react-core", async (orig) => {
 
 beforeEach(() => {
     vi.spyOn(api, "fetchSubjects").mockResolvedValue({ items: [{ id: 5, name: "repo-x" }], count: 1 } as never);
+    vi.spyOn(api, "fetchSecrets").mockResolvedValue([{ id: 1, name: "GH_TOKEN" }] as never);
 });
 
 const content = { executionMode: "script", inputs: [
@@ -28,7 +29,22 @@ describe("TestRunDialog", () => {
             onRun={onRun} onClose={vi.fn()} />);
         fireEvent.change(screen.getByLabelText("times"), { target: { value: "3" } });
         fireEvent.click(screen.getByRole("button", { name: "Run" }));
-        expect(onRun).toHaveBeenCalledWith({ who: "ann", times: 3 }, { who: "ann", times: "3" }, undefined);
+        expect(onRun).toHaveBeenCalledWith({ who: "ann", times: 3 }, { who: "ann", times: "3" }, undefined, {});
+        expect(screen.queryByText("Environment")).toBeNull();
+    });
+
+    it("runs a tool with the environment given for the test", async () => {
+        const onRun = vi.fn();
+        const tool = { scriptTemplate: "echo $GH_TOKEN", parameters: [] };
+        render(<TestRunDialog itemName="t" itemType="tool" content={tool} initialValues={{}}
+            initialEnvironment={{ A: "1" }} onRun={onRun} onClose={vi.fn()} />);
+        expect(screen.getByText("Environment")).toBeTruthy();
+        expect(screen.getByText(/A tool gets no secrets automatically/)).toBeTruthy();
+        const picker = await screen.findByLabelText("Add secret");
+        await vi.waitFor(() => expect(picker.querySelectorAll("option").length).toBe(2));
+        fireEvent.change(picker, { target: { value: "GH_TOKEN" } });
+        fireEvent.click(screen.getByRole("button", { name: "Run" }));
+        expect(onRun).toHaveBeenCalledWith({}, {}, undefined, { A: "1", GH_TOKEN: "${secret:GH_TOKEN}" });
     });
 
     it("blocks a run with a missing required input or an invalid value", () => {

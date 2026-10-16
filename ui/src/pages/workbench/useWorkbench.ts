@@ -60,7 +60,8 @@ export interface WorkbenchState {
      * Starts a test run. With a `runId`, a "running" placeholder for that id is added to `testRuns` at once, so
      * the run can be shown before the request returns.
      */
-    runTest(itemId: number, inputs: Record<string, unknown>, subjectId?: number, runId?: string): Promise<CompositionTestRun>;
+    runTest(itemId: number, inputs: Record<string, unknown>, subjectId?: number, runId?: string,
+            environment?: Record<string, string>): Promise<CompositionTestRun>;
 }
 
 const VALIDATE_DEBOUNCE_MS: number = 800;
@@ -321,19 +322,23 @@ export function useWorkbench(compositionId: number): WorkbenchState {
     itemsRef.current = items;
 
     const runTest = useCallback(async (itemId: number, inputs: Record<string, unknown>, subjectId?: number,
-                                       runId?: string) => {
+                                       runId?: string, environment?: Record<string, string>) => {
         const item: CompositionItem | undefined = itemsRef.current.find((i) => i.id === itemId);
         if (runId && item && (item.type === "action-type" || item.type === "tool")) {
             const placeholder: CompositionTestRun = { id: runId, itemId, itemType: item.type, itemName: item.name,
                 author: "user", status: "running", startedAt: new Date().toISOString(), inputs, subjectId };
             setTestRuns((prev) => mergeTestRun(prev, placeholder));
         }
-        const data: { inputs: Record<string, unknown>; subjectId?: number; runId?: string } = { inputs };
+        const data: { inputs: Record<string, unknown>; subjectId?: number; runId?: string;
+            environment?: Record<string, string> } = { inputs };
         if (subjectId !== undefined) {
             data.subjectId = subjectId;
         }
         if (runId) {
             data.runId = runId;
+        }
+        if (environment && Object.keys(environment).length > 0) {
+            data.environment = environment;
         }
         let run: CompositionTestRun;
         try {

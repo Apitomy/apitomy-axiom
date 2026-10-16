@@ -90,7 +90,8 @@ export function WorkbenchPage() {
     /** Id of the workflow run shown in the run dialog. */
     const [openRunId, setOpenRunId] = useState<number | null>(null);
     const [testError, setTestError] = useState<{ title: string } | null>(null);
-    const testValues = useRef<Map<number, { values: Record<string, string>; subjectId?: number }>>(new Map());
+    const testValues = useRef<Map<number, { values: Record<string, string>; subjectId?: number;
+        environment?: Record<string, string> }>>(new Map());
     const [preparingPublish, setPreparingPublish] = useState<boolean>(false);
     /** Turn id of the last workflow save made for an AI turn (input to undoPlan). */
     const lastWorkflowSaveTurnId = useRef<string | undefined>(undefined);
@@ -328,15 +329,15 @@ export function WorkbenchPage() {
 
     /** Starts a test run; the strip shows progress via SSE, request failures show inline. */
     const runTest = (itemId: number, inputs: Record<string, unknown>, values: Record<string, string>,
-                     subjectId?: number) => {
-        testValues.current.set(itemId, { values, subjectId });
+                     subjectId?: number, environment?: Record<string, string>) => {
+        testValues.current.set(itemId, { values, subjectId, environment });
         suggestedValues.current = null;
         setTesting(null);
         setTestError(null);
         // Open the run's details right away; the dialog shows it running and updates live when it finishes.
         const runId: string = newRunId();
         setSelectedRunId(runId);
-        wb.runTest(itemId, inputs, subjectId, runId).then((run) => {
+        wb.runTest(itemId, inputs, subjectId, runId, environment).then((run) => {
             // If the server recorded the run under another id, keep showing it instead of closing the dialog.
             if (typeof run?.id === "string" && run.id !== runId) {
                 setSelectedRunId((current) => (current === runId ? run.id : current));
@@ -700,7 +701,9 @@ export function WorkbenchPage() {
             {testing !== null && wb.contents[testing] && (() => {
                 const item: CompositionItem | undefined = wb.items.find((i) => i.id === testing);
                 const suggestion = suggestedValues.current?.itemId === testing ? suggestedValues.current : null;
-                const remembered = suggestion ? { values: suggestion.values, subjectId: undefined }
+                // A suggestion brings its own values; the environment is kept from the tool's previous run.
+                const remembered = suggestion ? { values: suggestion.values, subjectId: undefined,
+                    environment: testValues.current.get(testing)?.environment }
                     : testValues.current.get(testing);
                 return item && (
                     <TestRunDialog itemName={item.name} itemType={item.type === "tool" ? "tool" : "action-type"}
@@ -710,7 +713,9 @@ export function WorkbenchPage() {
                             suggestedValues.current = null;
                             setTesting(null);
                         }}
-                        onRun={(inputs, values, subjectId) => runTest(testing, inputs, values, subjectId)} />
+                        initialEnvironment={remembered?.environment}
+                        onRun={(inputs, values, subjectId, environment) =>
+                            runTest(testing, inputs, values, subjectId, environment)} />
                 );
             })()}
             {openRunId !== null && (

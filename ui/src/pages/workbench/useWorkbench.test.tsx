@@ -125,6 +125,16 @@ describe("test runs", () => {
         expect(result.current.testRuns[0].id).toBe("c");
     });
 
+    it("sends a tool test's environment", async () => {
+        const test = vi.spyOn(c, "testItem").mockResolvedValue(run("d", "passed"));
+        const { result } = renderHook(() => useWorkbench(1));
+        await waitFor(() => expect(result.current.items).toHaveLength(1));
+        await act(async () => {
+            await result.current.runTest(11, {}, undefined, undefined, { GH_TOKEN: "${secret:GH_TOKEN}" });
+        });
+        expect(test).toHaveBeenCalledWith(1, 11, { inputs: {}, environment: { GH_TOKEN: "${secret:GH_TOKEN}" } });
+    });
+
     it("shows a running placeholder for a run id at once and replaces it with the result", async () => {
         vi.spyOn(c, "listItems").mockResolvedValue([{ id: 11, type: "tool", name: "t", contentRevision: "r",
             lastAuthor: "user", changed: true }]);

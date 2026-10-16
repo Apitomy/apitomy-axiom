@@ -61,6 +61,7 @@ vi.mock("./ItemTab", async () => {
 vi.mock("../../config/api", async (orig) => ({
     ...(await orig<Record<string, unknown>>()),
     fetchSubjects: vi.fn().mockResolvedValue({ items: [], count: 0 }),
+    fetchSecrets: vi.fn().mockResolvedValue([]),
     fetchWorkflowRuns: (...a: unknown[]) => fetchWorkflowRunsMock(...a),
 }));
 const fetchWorkflowRunsMock = vi.fn();
@@ -239,7 +240,7 @@ describe("WorkbenchPage", () => {
         fireEvent.click(screen.getByRole("button", { name: "Test…" }));
         fireEvent.change(await screen.findByLabelText("who"), { target: { value: "ann" } });
         fireEvent.click(screen.getByRole("button", { name: "Run" }));
-        await waitFor(() => expect(runTest).toHaveBeenCalledWith(11, { who: "ann" }, undefined, expect.any(String)));
+        await waitFor(() => expect(runTest).toHaveBeenCalledWith(11, { who: "ann" }, undefined, expect.any(String), {}));
         expect(itemFlush).toHaveBeenCalled();
     });
 
@@ -344,7 +345,7 @@ describe("WorkbenchPage", () => {
         fireEvent.click(screen.getByRole("button", { name: "Run…" }));
         expect(((await screen.findByLabelText("who")) as HTMLInputElement).value).toBe("bob");
         fireEvent.click(screen.getByRole("button", { name: "Run" }));
-        await waitFor(() => expect(runTest).toHaveBeenCalledWith(11, { who: "bob" }, undefined, expect.any(String)));
+        await waitFor(() => expect(runTest).toHaveBeenCalledWith(11, { who: "bob" }, undefined, expect.any(String), {}));
     });
 
     it("shows an error when the suggested item no longer exists", async () => {

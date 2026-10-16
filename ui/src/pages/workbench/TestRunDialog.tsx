@@ -4,6 +4,7 @@ import {
     Modal, ModalBody, ModalFooter, ModalHeader, TextArea, TextInput,
 } from "@patternfly/react-core";
 import { fetchSubjects } from "../../config/api";
+import { EnvironmentTab } from "../../components/EnvironmentTab";
 import { parseFieldValue, type TestField, testFields, testUnsupportedReason } from "./testRunLogic";
 
 /** Props for {@link TestRunDialog}. */
@@ -16,8 +17,14 @@ export interface TestRunDialogProps {
     initialSubjectId?: number;
     /** True when the values come from an AI-suggested test; the dialog then invites the user to review them. */
     isSuggestion?: boolean;
-    /** Called with the parsed inputs, the raw texts and the chosen subject. */
-    onRun(inputs: Record<string, unknown>, values: Record<string, string>, subjectId?: number): void;
+    /** Tools only: the environment of the previous run of this tool. */
+    initialEnvironment?: Record<string, string>;
+    /**
+     * Called with the parsed inputs, the raw texts, the chosen subject and, for a tool, the environment for the
+     * run (empty for action types, which use their own environment).
+     */
+    onRun(inputs: Record<string, unknown>, values: Record<string, string>, subjectId: number | undefined,
+          environment: Record<string, string>): void;
     onClose(): void;
 }
 
@@ -31,6 +38,8 @@ export function TestRunDialog(props: TestRunDialogProps) {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [subjectId, setSubjectId] = useState<string>(props.initialSubjectId ? String(props.initialSubjectId) : "");
     const [subjects, setSubjects] = useState<{ id: number; name: string }[]>([]);
+    const [environment, setEnvironment] = useState<Record<string, string>>(props.initialEnvironment ?? {});
+    const isTool: boolean = props.itemType === "tool";
     const noun: string = props.itemType === "tool" ? "parameters" : "inputs";
 
     useEffect(() => {
@@ -53,7 +62,7 @@ export function TestRunDialog(props: TestRunDialogProps) {
         }
         setErrors(nextErrors);
         if (Object.keys(nextErrors).length === 0) {
-            props.onRun(inputs, values, subjectId ? Number(subjectId) : undefined);
+            props.onRun(inputs, values, subjectId ? Number(subjectId) : undefined, isTool ? environment : {});
         }
     };
 
@@ -97,6 +106,14 @@ export function TestRunDialog(props: TestRunDialogProps) {
                                 {subjects.map((s) => <FormSelectOption key={s.id} value={String(s.id)} label={s.name} />)}
                             </FormSelect>
                         </FormGroup>
+                        {isTool && (
+                            <FormGroup label="Environment" fieldId="test-environment" role="group">
+                                <EnvironmentTab envVars={environment} onChange={setEnvironment}
+                                    description={"A tool gets no secrets automatically. In a workflow it runs with "
+                                        + "the environment of the action type that allows it; for this test run, "
+                                        + "it gets only the variables listed here."} />
+                            </FormGroup>
+                        )}
                     </Form>
                 )}
             </ModalBody>

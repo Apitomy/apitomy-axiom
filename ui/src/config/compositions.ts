@@ -347,9 +347,13 @@ export interface CompositionTestRunEvent {
     run: CompositionTestRun;
 }
 
-/** Test-runs a draft action type or tool and returns the finished run. */
+/**
+ * Test-runs a draft action type or tool and returns the finished run. `environment` applies to tools only (an
+ * action type uses its own); values may reference secrets as `${secret:NAME}`.
+ */
 export function testItem(id: number, itemId: number,
-    data: { inputs: Record<string, unknown>; subjectId?: number; runId?: string }): Promise<CompositionTestRun> {
+    data: { inputs: Record<string, unknown>; subjectId?: number; runId?: string;
+        environment?: Record<string, string> }): Promise<CompositionTestRun> {
     return request("POST", `${it(id, itemId)}/test`, data);
 }
 
