@@ -151,13 +151,13 @@ export function SubscriptionItemEditor(props: SubscriptionItemEditorProps) {
                             </Tbody>
                         </Table>
                     )}
-                    <Flex>
-                        <Button variant="link" isInline isDisabled={readOnly}
+                    <Flex spaceItems={{ default: "spaceItemsSm" }}>
+                        <Button variant="secondary" size="sm" isDisabled={readOnly}
                             onClick={() => setRouting([...routing,
                                 { type: "create-workflow", workflowDefinitionName: workflowName }])}>
                             Add start rule
                         </Button>
-                        <Button variant="link" isInline isDisabled={readOnly}
+                        <Button variant="secondary" size="sm" isDisabled={readOnly}
                             onClick={() => setRouting([...routing, { type: "workflow-dispatch" }])}>
                             Add dispatch rule
                         </Button>
