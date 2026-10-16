@@ -257,7 +257,7 @@ class EventWorkflowLinksTest {
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
             .when()
-                .post("/api/v1/subjects/" + subjectId + "/workflow")
+                .post(TestRunsResource.path(subjectId))
             .then()
                 .statusCode(200)
                 .body("status", equalTo("waiting"))

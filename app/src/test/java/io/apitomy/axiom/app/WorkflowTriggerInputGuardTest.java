@@ -75,7 +75,7 @@ class WorkflowTriggerInputGuardTest {
         long subjectId = TestFixtures.createSubject("inputs-subject-only");
         long defId = TestFixtures.createDefinition("Inputs Subject Only", content(SUBJECT_REQUIRED));
         given().contentType(ContentType.JSON).body("{\"workflowDefinitionId\": %d}".formatted(defId))
-                .when().post("/api/v1/subjects/" + subjectId + "/workflow")
+                .when().post(TestRunsResource.path(subjectId))
                 .then().statusCode(200)
                 .body("context.subject.id", equalTo((int) subjectId))
                 .body("context.subject.name", equalTo("inputs-subject-only"))
@@ -101,7 +101,7 @@ class WorkflowTriggerInputGuardTest {
         long subjectId = TestFixtures.createSubject("inputs-no-event");
         long defId = TestFixtures.createDefinition("Needs Event", content(EVENT_REQUIRED));
         given().contentType(ContentType.JSON).body("{\"workflowDefinitionId\": %d}".formatted(defId))
-                .when().post("/api/v1/subjects/" + subjectId + "/workflow")
+                .when().post(TestRunsResource.path(subjectId))
                 .then().statusCode(400)
                 .body("message", equalTo(
                         "Cannot start workflow \"Needs Event\": required input(s) not available: event"));
@@ -125,7 +125,7 @@ class WorkflowTriggerInputGuardTest {
         long subjectId = TestFixtures.createSubject("inputs-optional-event");
         long defId = TestFixtures.createDefinition("Optional Event", content(EVENT_OPTIONAL));
         given().contentType(ContentType.JSON).body("{\"workflowDefinitionId\": %d}".formatted(defId))
-                .when().post("/api/v1/subjects/" + subjectId + "/workflow")
+                .when().post(TestRunsResource.path(subjectId))
                 .then().statusCode(200).body("context.event", nullValue());
     }
 

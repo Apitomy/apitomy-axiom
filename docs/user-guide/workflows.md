@@ -131,8 +131,7 @@ input that is not available is absent; a declared required input that is not ava
 being created with `Cannot start workflow "<name>": required input(s) not available: <names>`. New
 workflows declare both inputs as required, so a workflow run by a schedule trigger must remove `event` or
 make it optional; otherwise each firing records `lastOutcome` `failed: Cannot start workflow "<name>":
-required input(s) not available: event`. The subject REST endpoint
-(`POST /api/v1/subjects/{subjectId}/workflow`) returns HTTP 400 with the same message. See the
+required input(s) not available: event`, and a re-run returns HTTP 400 with the same message. See the
 [Workflow Input Contract](../developer-guide/workflow-input-contract.md).
 
 The run's recorded **inputs** (the **Inputs** entry on the run's Overview tab) are the resolved standard

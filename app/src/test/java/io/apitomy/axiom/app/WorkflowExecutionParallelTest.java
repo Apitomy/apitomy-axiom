@@ -84,7 +84,7 @@ class WorkflowExecutionParallelTest {
                 .contentType(ContentType.JSON)
                 .body(Map.of("workflowDefinitionId", definitionId))
                 .when()
-                    .post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("waiting"));
@@ -131,7 +131,7 @@ class WorkflowExecutionParallelTest {
 
         given()
                 .when()
-                    .get(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .get(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("waiting"));
@@ -159,7 +159,7 @@ class WorkflowExecutionParallelTest {
 
         given()
                 .when()
-                    .get(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .get(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("waiting"));
@@ -187,7 +187,7 @@ class WorkflowExecutionParallelTest {
 
         given()
                 .when()
-                    .get(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .get(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("completed"));

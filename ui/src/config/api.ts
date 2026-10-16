@@ -64,7 +64,6 @@ export interface EngineInfo {
 
 export interface SystemConfig {
     version: string;
-    engine?: string;
     defaultEngine?: string;
     engines?: EngineInfo[];
     features: Record<string, boolean>;

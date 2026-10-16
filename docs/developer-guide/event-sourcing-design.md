@@ -217,7 +217,7 @@ running or waiting).
   as a re-run of a run started from an event) stores `trigger_event_id`; the run's `workflow` trace has
   `eventId` set to the event; and the run's context has the event ID as `event.id`. Only runs started by a
   `create-workflow` rule also store `trigger_ledger_id`, and their outcome's `trace_id` is the run's trace.
-  Runs started any other way (e.g. `POST /subjects/{id}/workflow` or a schedule trigger) have null trigger
+  Runs started any other way (a schedule trigger, or a re-run of such a run) have null trigger
   fields. `GET /workflow/runs?triggerEventId=<id>` lists the runs started from an event; the event detail
   page shows them on its "Runs" tab.
 - **Resumed runs (`workflow-dispatch`).** `WorkflowEventDispatcher.dispatchStreamEvent` returns the

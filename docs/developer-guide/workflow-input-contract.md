@@ -17,8 +17,7 @@ A run is started from a stream event (all through `EventStreamOrchestrator.start
 - **Run workflow…** on the event detail page (`POST /stream/events/{eventId}/runs`);
 - a re-run of a run that was itself started from an event (`POST /workflow/runs/{runId}/rerun`).
 
-Runs started through the subject REST endpoint (`POST /api/v1/subjects/{subjectId}/workflow`), by a schedule
-trigger, or as a re-run of such a run have no `event`.
+Runs started by a schedule trigger, or as a re-run of such a run, have no `event`.
 
 ## Declaring inputs
 
@@ -50,7 +49,6 @@ How that failure surfaces depends on how the run was started:
 
 | started by | outcome when a required input is unavailable |
 |------------|----------------------------------------------|
-| subject REST endpoint `POST /api/v1/subjects/{subjectId}/workflow` (API only) | HTTP 400 with the message |
 | re-run (`POST /workflow/runs/{runId}/rerun`) | HTTP 400 with the message |
 | schedule trigger | the firing records `lastOutcome` `failed: <message>`, for example `failed: Cannot start workflow "<name>": required input(s) not available: event` |
 | subscription routing, **Run workflow…** on an event | cannot happen: both inputs are always available |

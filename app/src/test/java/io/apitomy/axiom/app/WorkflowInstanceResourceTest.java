@@ -27,7 +27,7 @@ class WorkflowInstanceResourceTest {
                     }
                     """.formatted(definitionId))
                 .when()
-                    .post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("id", notNullValue())
@@ -43,7 +43,7 @@ class WorkflowInstanceResourceTest {
 
         given()
                 .when()
-                    .get(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .get(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("subjectId", equalTo(subjectId))
@@ -63,7 +63,7 @@ class WorkflowInstanceResourceTest {
                     }
                     """)
                 .when()
-                    .post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(400);
     }
@@ -76,7 +76,7 @@ class WorkflowInstanceResourceTest {
                 .contentType(ContentType.JSON)
                 .body("{}")
                 .when()
-                    .post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(400);
     }
@@ -95,7 +95,7 @@ class WorkflowInstanceResourceTest {
                     }
                     """.formatted(definitionId))
                 .when()
-                    .post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("waiting"));
@@ -108,7 +108,7 @@ class WorkflowInstanceResourceTest {
                     }
                     """.formatted(definitionId))
                 .when()
-                    .post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(409);
     }
@@ -126,7 +126,7 @@ class WorkflowInstanceResourceTest {
                     }
                     """.formatted(definitionId))
                 .when()
-                    .post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(400);
     }
@@ -224,7 +224,7 @@ class WorkflowInstanceResourceTest {
                     {"workflowDefinitionId": %d}
                     """.formatted(definitionId))
                 .when()
-                    .post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("waiting"));
@@ -251,7 +251,7 @@ class WorkflowInstanceResourceTest {
 
         given()
                 .when()
-                    .get(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .get(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("completed"));
@@ -272,7 +272,7 @@ class WorkflowInstanceResourceTest {
 
         given()
                 .when()
-                    .get(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .get(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("cancelled"));
@@ -317,7 +317,7 @@ class WorkflowInstanceResourceTest {
                     }
                     """.formatted(definitionId))
                 .when()
-                    .post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(409);
 
@@ -352,7 +352,7 @@ class WorkflowInstanceResourceTest {
                     }
                     """.formatted(definitionId))
                 .when()
-                    .post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo(expectedStatus))
@@ -365,7 +365,7 @@ class WorkflowInstanceResourceTest {
 
         given()
                 .when()
-                    .get(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .get(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(404);
     }
@@ -393,7 +393,7 @@ class WorkflowInstanceResourceTest {
                     }
                     """.formatted(definitionId))
                 .when()
-                    .post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200);
 
@@ -413,7 +413,7 @@ class WorkflowInstanceResourceTest {
         int definitionId = createAndPublishDefinition("No Title WF");
         given().contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
-                .when().post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                .when().post(TestRunsResource.path(subjectId))
                 .then().statusCode(200)
                 .body("title", nullValue())
                 .body("definitionName", equalTo("No Title WF"))

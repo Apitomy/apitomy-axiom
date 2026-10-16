@@ -1,8 +1,8 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Apicurio Axiom API",
-    "description": "REST API for the Apicurio Axiom event-driven subject orchestration platform.",
+    "title": "Apitomy Axiom API",
+    "description": "REST API for Apitomy Axiom, a workflow automation platform for GitHub and Jira with AI agents.",
     "license": {
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0"
@@ -522,73 +522,6 @@
         "responses": {
           "201": {
             "description": "Thread entry created"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/SubjectId"
-        }
-      ]
-    },
-    "/subjects/{subjectId}/workflow": {
-      "get": {
-        "tags": [
-          "WorkflowInstances"
-        ],
-        "summary": "Get the workflow instance for a subject",
-        "operationId": "getSubjectWorkflowInstance",
-        "responses": {
-          "200": {
-            "description": "The workflow instance",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorkflowInstance"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "WorkflowInstances"
-        ],
-        "summary": "Trigger a workflow on a subject",
-        "operationId": "triggerSubjectWorkflow",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TriggerWorkflow"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Workflow triggered",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WorkflowInstance"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Workflow definition not published or contains unsupported node types"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "409": {
-            "description": "Subject already has an active run of this workflow definition"
           }
         }
       },
@@ -7022,10 +6955,6 @@
         "type": "object",
         "properties": {
           "version": {
-            "type": "string"
-          },
-          "engine": {
-            "description": "The default AI engine type (deprecated — use defaultEngine instead)",
             "type": "string"
           },
           "defaultEngine": {

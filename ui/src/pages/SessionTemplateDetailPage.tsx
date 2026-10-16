@@ -103,7 +103,7 @@ export function SessionTemplateDetailPage() {
                 const engines = (systemConfig.engines || [])
                     .filter((engine) => engine.supportsInteractiveSessions);
                 setInteractiveEngines(engines);
-                const defaultEngine = systemConfig.defaultEngine || systemConfig.engine || "";
+                const defaultEngine = systemConfig.defaultEngine || "";
                 setGlobalDefaultEngine(defaultEngine);
 
                 const modelEngine = resolveModelEngine(t.engine, defaultEngine);

@@ -73,7 +73,7 @@ export function App() {
                     setAppVersion(config.version);
                 }
                 // Resolve default engine label from engines array
-                const defaultType = config.defaultEngine || config.engine;
+                const defaultType = config.defaultEngine;
                 const defaultInfo = (config.engines || []).find(
                     (e) => e.type === defaultType
                 );

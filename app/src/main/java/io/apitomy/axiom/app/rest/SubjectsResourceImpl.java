@@ -13,11 +13,7 @@ import io.apitomy.axiom.api.beans.Subject;
 import io.apitomy.axiom.api.beans.SubjectSearchResults;
 import io.apitomy.axiom.api.beans.Task;
 import io.apitomy.axiom.api.beans.ThreadEntry;
-import io.apitomy.axiom.api.beans.TriggerWorkflow;
 import io.apitomy.axiom.api.beans.UpdateSubject;
-import io.apitomy.axiom.app.RunRequest;
-import io.apitomy.axiom.app.WorkflowExecutionService;
-import io.apitomy.axiom.app.WorkflowRunBeanMapper;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.SubjectEntity;
@@ -69,9 +65,6 @@ public class SubjectsResourceImpl implements SubjectsResource {
     ObjectMapper objectMapper;
 
     @Inject
-    WorkflowExecutionService workflowExecutionService;
-
-    @Inject
     TraceService traceService;
 
     @Inject
@@ -79,9 +72,6 @@ public class SubjectsResourceImpl implements SubjectsResource {
 
     @Inject
     TaskExecutionService taskExecutionService;
-
-    @Inject
-    WorkflowRunBeanMapper runBeanMapper;
 
     // ── Subjects ──────────────────────────────────────────────────────
 
@@ -378,47 +368,6 @@ public class SubjectsResourceImpl implements SubjectsResource {
                 .stream()
                 .map(TraceMapper::toTraceBean)
                 .toList();
-    }
-
-    @Override
-    public io.apitomy.axiom.api.beans.WorkflowInstance triggerSubjectWorkflow(
-            long subjectId, TriggerWorkflow data) {
-        if (data == null || data.getWorkflowDefinitionId() == null) {
-            throw new WebApplicationException(
-                    "Missing required 'workflowDefinitionId' field", 400);
-        }
-        RunRequest request = new RunRequest(data.getTitle(),
-                toStringMap(data.getLabels() != null ? data.getLabels().getAdditionalProperties() : null));
-        WorkflowRunEntity entity = workflowExecutionService
-                .triggerWorkflow(subjectId, data.getWorkflowDefinitionId(), request, null);
-        return toWorkflowInstanceBean(entity);
-    }
-
-    @Override
-    public io.apitomy.axiom.api.beans.WorkflowInstance getSubjectWorkflowInstance(
-            long subjectId) {
-        WorkflowRunEntity entity = WorkflowRunEntity
-                .find("subjectId", io.quarkus.panache.common.Sort.descending("startedOn"),
-                        subjectId)
-                .firstResult();
-        if (entity == null) {
-            throw new WebApplicationException(404);
-        }
-        return toWorkflowInstanceBean(entity);
-    }
-
-    private io.apitomy.axiom.api.beans.WorkflowInstance toWorkflowInstanceBean(
-            WorkflowRunEntity entity) {
-        return runBeanMapper.toBean(entity);
-    }
-
-    private static Map<String, String> toStringMap(Map<String, Object> values) {
-        if (values == null) {
-            return null;
-        }
-        Map<String, String> result = new java.util.LinkedHashMap<>();
-        values.forEach((key, value) -> result.put(key, value != null ? String.valueOf(value) : null));
-        return result;
     }
 
     private void validateRequired(String value, String fieldName) {

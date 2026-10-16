@@ -83,7 +83,7 @@ export function CreateSessionModal({
     useEffect(() => {
         if (isOpen && defaultEngine === null) {
             fetchSystemConfig()
-                .then((c) => setDefaultEngine(c.defaultEngine || c.engine || ""))
+                .then((c) => setDefaultEngine(c.defaultEngine || ""))
                 .catch(console.error);
         }
     }, [isOpen, defaultEngine]);

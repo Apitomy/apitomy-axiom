@@ -78,7 +78,6 @@ public class SystemResourceImpl implements SystemResource {
         config.setVersion(applicationVersion);
 
         String defaultType = resolveDefaultEngineType();
-        config.setEngine(defaultType);
         config.setDefaultEngine(defaultType);
         config.setFeatures(new Features());
 

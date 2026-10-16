@@ -46,7 +46,7 @@ class WorkflowRunsResourceTest {
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
                 .when()
-                    .post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("waiting"));
@@ -72,7 +72,7 @@ class WorkflowRunsResourceTest {
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
                 .when()
-                    .post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("completed"));
@@ -82,7 +82,7 @@ class WorkflowRunsResourceTest {
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
                 .when()
-                    .post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("completed"));
@@ -107,7 +107,7 @@ class WorkflowRunsResourceTest {
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
                 .when()
-                    .post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("waiting"));
@@ -117,7 +117,7 @@ class WorkflowRunsResourceTest {
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
                 .when()
-                    .post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(409);
     }
@@ -135,7 +135,7 @@ class WorkflowRunsResourceTest {
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
                 .when()
-                    .post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("waiting"));
@@ -174,12 +174,12 @@ class WorkflowRunsResourceTest {
         Integer firstRunId = given()
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
-                .when().post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                .when().post(TestRunsResource.path(subjectId))
                 .then().statusCode(200).extract().path("runId");
 
         given()
                 .when()
-                    .get(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .get(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("runId", equalTo(firstRunId))
@@ -200,7 +200,7 @@ class WorkflowRunsResourceTest {
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
                 .when()
-                    .post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("waiting"));
@@ -442,7 +442,7 @@ class WorkflowRunsResourceTest {
         Integer runId = given()
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
-                .when().post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                .when().post(TestRunsResource.path(subjectId))
                 .then().statusCode(200).extract().path("runId");
 
         given()
@@ -479,13 +479,13 @@ class WorkflowRunsResourceTest {
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d, \"title\": \"Run A\", \"labels\": {\"filter\": \"alpha\"}}"
                         .formatted(definitionId))
-                .when().post(SUBJECTS_PATH + "/" + subjectA + "/workflow")
+                .when().post(TestRunsResource.path(subjectA))
                 .then().statusCode(200).body("title", equalTo("Run A")).extract().path("runId");
         given()
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d, \"labels\": {\"filter\": \"beta\"}}"
                         .formatted(definitionId))
-                .when().post(SUBJECTS_PATH + "/" + subjectB + "/workflow")
+                .when().post(TestRunsResource.path(subjectB))
                 .then().statusCode(200).body("title", nullValue());
 
         given()
@@ -520,7 +520,7 @@ class WorkflowRunsResourceTest {
         given()
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
-                .when().post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                .when().post(TestRunsResource.path(subjectId))
                 .then().statusCode(200);
 
         given()
@@ -552,7 +552,7 @@ class WorkflowRunsResourceTest {
         Integer runId = given()
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
-                .when().post(SUBJECTS_PATH + "/" + subjectId + "/workflow")
+                .when().post(TestRunsResource.path(subjectId))
                 .then().statusCode(200).body("status", equalTo("waiting"))
                 .extract().path("runId");
 

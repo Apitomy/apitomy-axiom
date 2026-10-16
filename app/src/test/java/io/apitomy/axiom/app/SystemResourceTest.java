@@ -84,7 +84,7 @@ class SystemResourceTest {
             .then()
                 .statusCode(200)
                 .body("defaultEngine", equalTo("opencode"))
-                .body("engine", equalTo("opencode"));
+                .body("$", not(hasKey("engine")));
 
         given()
                 .contentType(ContentType.JSON)
