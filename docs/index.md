@@ -7,11 +7,13 @@ versioned workflows that delegate work to AI agents, scripts, and humans.
 
 - **Workflows** — visually authored, versioned automations with action, human-task, wait, and
   receive-event nodes; workflow runs are the primary object in the UI
+- **Standard Workflow Inputs** — a workflow's Start node declares the standard inputs it needs
+  (`subject`, `event`), and Axiom supplies them when a run starts
 - **Event Sources & Subscriptions** — polls GitHub and Jira for activity, then routes matched events
   to workflows: `create-workflow` starts a run, `workflow-dispatch` resumes waiting runs
 - **Schedule Triggers** — cron schedules that start workflow runs on a fixed subject
-- **Workflow Workbench** — an authoring workspace for a workflow and its action types and tools, with a
-  workflow canvas, editors, test runs, run history and an AI Assistant that proposes changes you can
+- **Workflow Workbench** — an authoring workspace for a workflow and its action types, tools and
+  subscriptions, with a workflow canvas, editors, test runs, run history and an AI Assistant that proposes changes you can
   review or apply live
 - **Subjects** — the issue, pull request, or named subject a run is about, with a shared workspace and
   thread
@@ -29,6 +31,9 @@ versioned workflows that delegate work to AI agents, scripts, and humans.
 - [Running Axiom](getting-started/running-axiom.md) — Prerequisites and running Axiom
 - [Configuring Axiom](getting-started/configuring-axiom.md) — AI engines, profiles, and properties
 - [User Guide](user-guide/concepts.md) — Core concepts, configuration, and extending Axiom
+- [Workflow Workbench](user-guide/workbench.md) — Author workflows with their action types, tools and
+  subscriptions
+- [Upgrading and Backups](developer-guide/upgrading-and-backups.md) — Axiom 3 cannot use a 2.x database
 - [GitHub Repository](https://github.com/Apitomy/apitomy-axiom) — Source code and issues
 
 ## Tech Stack

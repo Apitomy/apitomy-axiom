@@ -114,8 +114,11 @@ concurrent runs of different definitions on the same subject take turns executin
 
 ```
 WorkflowExecutionService.triggerWorkflow(subjectId, definitionId, RunRequest)
-  │  Manual trigger (Run Workflow), a subscription's "create-workflow" rule, or a schedule trigger
-  │  RunRequest carries the optional title, labels, and inputs
+  │  A subscription's "create-workflow" rule, a manual start from an event (Event Stream),
+  │  a schedule trigger, or a re-run of a failed run
+  │  RunRequest carries only the optional title and labels; runs cannot be started with supplied inputs
+  │  StandardInputs resolves the inputs the Start node declares (subject, event) into the initial context;
+  │  the run stores the resolved inputs (subject only; the event is linked as the run's trigger event)
   │  Rejects a second active (running/waiting) run of the same definition on the subject
   │  (WorkflowRunConflictException → HTTP 409, or a recorded "skipped" for routing and schedules)
   │

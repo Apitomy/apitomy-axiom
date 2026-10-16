@@ -15,7 +15,10 @@ versioned workflows that delegate work to AI agents, scripts, and humans.
   wait in the Inbox
 - Subjects (issues, pull requests, named subjects) hold the workspace and thread shared by their runs
 - The Workflow Workbench is an authoring workspace where you build a workflow together with its action
-  types and tools, test them, and work with an AI Assistant that proposes changes
+  types, tools and the subscriptions that start it, test them, and work with an AI Assistant that proposes
+  changes
+- Workflows declare the standard inputs they need on their Start node (`subject`, `event`); Axiom fills
+  them in when a run starts
 - A UI with Runs as its landing page provides visibility into runs, subjects, tasks, and configuration
 
 ## Tech Stack
@@ -146,6 +149,9 @@ See [Database & Migrations](docs/developer-guide/database-and-migrations.md).
 - [Concepts](docs/user-guide/concepts.md)
 - [Navigating the UI](docs/user-guide/navigating-the-ui.md)
 - [Workflows](docs/user-guide/workflows.md)
+- [Workflow Workbench](docs/user-guide/workbench.md)
+- [Workflow Input Contract](docs/developer-guide/workflow-input-contract.md)
+- [Upgrading and Backups](docs/developer-guide/upgrading-and-backups.md)
 - [Stack & Architecture](docs/developer-guide/stack-and-architecture.md)
 
 ## License

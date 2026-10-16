@@ -7,8 +7,9 @@ downloads and runs the latest release automatically.
 
 - **Java 25+**
 - **curl** and **jq** (for downloading releases)
-- **Node.js** and **npm** (used by Axiom at runtime for custom MCP tool servers and the
-  AI Assistant's MCP server)
+- **Node.js** (the `node` binary on the `PATH`; used by Axiom at runtime to run the MCP tool servers it
+  gives to AI agents and the AI Assistant, and Node.js action types). The AI engine CLIs installed with
+  `npm` also need **npm**.
 - One of the supported AI engine CLIs:
 
 | Engine | Config Value | Binary | Install |
@@ -45,11 +46,28 @@ The script will:
 Open **http://localhost:9191** in your browser to access the Axiom UI. The REST API is served under
 `http://localhost:9191/api/v1`. Arguments passed to the script are passed on to `java -jar`.
 
+### Running a Release JAR Directly
+
+Each GitHub release publishes a single uber-jar named `apitomy-axiom-<version>.jar`. You can download it
+yourself and run it with:
+
+```bash
+java -jar apitomy-axiom-3.0.0.jar
+```
+
+The release JAR uses the `prod` profile: it listens on port **9191** and stores its H2 database in
+`~/.axiom/data/`.
+
+!!! warning "Upgrading from Axiom 2.x"
+    Axiom 3 cannot use a database created by Axiom 2.x (or older) and refuses to start on one. See
+    [Upgrading From Axiom 2.x](../developer-guide/upgrading-and-backups.md#upgrading-from-axiom-2x).
+
 ## Running from Source
 
 To run the current source code, clone the repository and run `./dev.sh` (requires Java 25+, Maven 3.9+,
 Node.js 20.19+ or 22.12+ and npm). It builds all modules, then starts the backend on
-**http://localhost:9090** and the Vite UI dev server on **http://localhost:9191**, which proxies API requests to the backend.
+**http://localhost:9090** and the Vite UI dev server on **http://localhost:9191**, which proxies API
+requests to the backend.
 
 | Option | Effect |
 |--------|--------|
@@ -59,6 +77,10 @@ Node.js 20.19+ or 22.12+ and npm). It builds all modules, then starts the backen
 | `--portOffset=N` | Add `N` to both ports (for example `100` gives backend 9190 and UI 9291) |
 
 Press **Ctrl+C** to stop both processes.
+
+To build a release JAR yourself, run `./build-release.sh` (backend and UI, `prod` profile). It produces
+`app/target/apitomy-axiom-app-<version>-runner.jar`, which the release workflow publishes as
+`apitomy-axiom-<version>.jar`. See [Building Axiom](../developer-guide/building-axiom.md).
 
 ## Next Steps
 

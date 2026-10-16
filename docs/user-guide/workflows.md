@@ -122,8 +122,10 @@ A workflow run can be started in these ways:
 A run can have a **title** of at most 500 characters. A run gets one when it is started with one (for
 example from the **Title** field of an event's **Run workflow…** dialog, or the REST API), or when the
 workflow sets it with the `axiom_set_workflow_run_title` SDK function (see
-[Axiom SDK Functions](#axiom-sdk-functions)); lists and headers name other runs by their subject and workflow. Runs also carry free-form key/value **labels** (runs started by a schedule trigger are
-labeled `trigger: schedule`) and the **inputs** they were started with.
+[Axiom SDK Functions](#axiom-sdk-functions)); lists and headers name other runs by their subject and
+workflow. Runs also carry free-form key/value **labels** (runs started by a schedule trigger are labeled
+`trigger: schedule`). A run cannot be started with supplied inputs: its inputs are always resolved by Axiom
+(see below).
 
 A run's context starts with exactly the standard inputs its Start node declares: `subject` (always
 available) and `event` (available only when the run was started from a stream event). A declared optional

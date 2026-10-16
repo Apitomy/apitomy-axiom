@@ -340,10 +340,16 @@ On top of the usual subscription checks, the workbench reports:
 
 A subscription needs the composition's workflow to be published already, or selected in the same publish.
 
-Publishing never turns automation on:
+Publishing never turns automation on by itself:
 
-- A new subscription is published **disabled**.
-- Republishing an existing subscription keeps its enabled state and its **Process events from** time.
+- A new subscription (no published subscription with that name exists yet) is published **disabled**.
+- Republishing a subscription that this composition already published keeps its enabled state and its
+  **Process events from** time.
+- If you rename a subscription item that was already published, publishing it creates a new subscription
+  (disabled) and **disables** the previously published subscription. The old subscription is kept, not
+  deleted; it is still listed on the Events → Subscriptions page, where you can delete it.
+- If a forced publish overwrites a same-name subscription that this composition did not publish, the
+  subscription is left **disabled** (its **Process events from** time is kept).
 - Turning the subscription on or off (here or on the Events → Subscriptions page) does not count as a change
   outside the workbench.
 
