@@ -80,6 +80,8 @@ class WorkbenchReferenceTest {
                 "For each node or script action type and each tool you create or change, call suggest_test with "
                         + "realistic sample inputs.",
                 "Receive-event nodes must correlate",
+                "- Declare in an action type's environment every secret it, or a tool it allows, needs (e.g. "
+                        + "GH_TOKEN=${secret:GH_TOKEN}); secrets are never injected automatically.",
                 "- Declare only the standard Start inputs (subject, event); require event only when the workflow "
                         + "must be started from an event.",
                 "- Never say the automation is live: published subscriptions stay disabled until the user enables "

@@ -40,6 +40,7 @@ public class ConfigItemValidationService {
     private static final String WORKFLOW_FORMAT_HINT = "Node types are lowercase (start, end, action, "
             + "human-task, receive-event, wait); edges use id/source/target/condition/priority/isDefault (and isTimeout for a receive-event timeout edge).";
     private static final Pattern GITHUB_REPOSITORY = Pattern.compile("[^/\\s]+/[^/\\s]+");
+    private static final Pattern SECRET_REFERENCE = Pattern.compile("\\$\\{secret:([^}]+)}");
     private static final Pattern FILTER_EVENT_TYPE = Pattern.compile(
             "event\\.type\\s*==\\s*['\"]([^'\"]+)['\"]");
 
@@ -60,10 +61,10 @@ public class ConfigItemValidationService {
     public List<ConfigProblem> validate(ConfigItemType type, JsonNode item, ValidationContext context) {
         List<ConfigProblem> problems = new ArrayList<>();
         switch (type) {
-            case TOOL -> validateTool(item, problems);
+            case TOOL -> validateTool(item, context, problems);
             case ACTION_TYPE -> validateActionType(item, context, problems);
             case TOOLSET -> validateToolset(item, context, problems);
-            case SESSION_TEMPLATE -> validateSessionTemplate(item, problems);
+            case SESSION_TEMPLATE -> validateSessionTemplate(item, context, problems);
             case EVENT_SOURCE -> validateEventSource(item, context, problems);
             case WORKFLOW -> validateWorkflow(item, context, problems);
             case SUBSCRIPTION -> validateSubscription(item, context, problems);
@@ -82,7 +83,7 @@ public class ConfigItemValidationService {
         return problems.stream().anyMatch(ConfigProblem::isError);
     }
 
-    private void validateTool(JsonNode item, List<ConfigProblem> problems) {
+    private void validateTool(JsonNode item, ValidationContext context, List<ConfigProblem> problems) {
         NewToolDefinition tool;
         try {
             tool = objectMapper.treeToValue(item, NewToolDefinition.class);
@@ -92,6 +93,15 @@ public class ConfigItemValidationService {
         }
         ToolValidator.validate(tool).messages().forEach(m -> problems.add(new ConfigProblem(
                 m.severity().name().toLowerCase(Locale.ROOT), m.field(), "TOOL_INVALID", m.message())));
+        // A tool runs with the environment of the action type that allows it (or of a test run).
+        if (context.secretNames() != null && tool.getScriptTemplate() != null) {
+            for (String secret : ActionTypeValidator.usedSecrets(tool.getScriptTemplate(), context.secretNames(),
+                    false)) {
+                problems.add(ConfigProblem.warning("scriptTemplate", "UNDECLARED_SECRET", "Uses the secret " + secret
+                        + ". Tools get no secrets automatically: declare " + secret + "=${secret:" + secret
+                        + "} in the environment of each action type that allows this tool."));
+            }
+        }
     }
 
     private void validateActionType(JsonNode item, ValidationContext context, List<ConfigProblem> problems) {
@@ -144,7 +154,7 @@ public class ConfigItemValidationService {
         }
     }
 
-    private void validateSessionTemplate(JsonNode item, List<ConfigProblem> problems) {
+    private void validateSessionTemplate(JsonNode item, ValidationContext context, List<ConfigProblem> problems) {
         requireText(item, "name", problems);
         requireText(item, "description", problems);
         requireText(item, "systemPrompt", problems);
@@ -156,6 +166,17 @@ public class ConfigItemValidationService {
         if (allowedTools.isMissingNode() || (allowedTools.isArray() && allowedTools.isEmpty())) {
             problems.add(ConfigProblem.warning("allowedTools", "NO_ALLOWED_TOOLS",
                     "'allowedTools' is empty — the session will have no tool access."));
+        }
+        if (context.secretNames() != null) {
+            item.path("environment").fields().forEachRemaining(entry -> {
+                java.util.regex.Matcher m = SECRET_REFERENCE.matcher(entry.getValue().asText(""));
+                while (m.find()) {
+                    if (!context.secretNames().contains(m.group(1))) {
+                        problems.add(ConfigProblem.error("environment." + entry.getKey(), "UNKNOWN_SECRET",
+                                "References secret '" + m.group(1) + "', which does not exist."));
+                    }
+                }
+            });
         }
     }
 

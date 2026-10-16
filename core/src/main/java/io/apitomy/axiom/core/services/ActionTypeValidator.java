@@ -94,6 +94,7 @@ public final class ActionTypeValidator {
         validateCodeTemplate(def, messages);
         validateAllowedTools(def, known, messages);
         validateEnvironment(def, known, messages);
+        validateUndeclaredSecrets(def, known, messages);
         validateFields(def.getInputs(), "inputs", messages);
         validateFields(def.getOutputs(), "outputs", messages);
 
@@ -323,6 +324,66 @@ public final class ActionTypeValidator {
                 }
             }
         }
+    }
+
+    /**
+     * Warns when script or Node code uses a secret by name ({@code $NAME}, {@code ${NAME}},
+     * {@code process.env.NAME}) that the environment does not declare: secrets are not injected automatically,
+     * so the variable would be empty at run time. Prompts of agent action types cannot be checked this way.
+     */
+    private static void validateUndeclaredSecrets(NewActionType def, KnownNames known,
+                                                  List<ValidationMessage> messages) {
+        if (known == null || known.secretNames() == null || known.secretNames().isEmpty()) {
+            return;
+        }
+        Set<String> declared = def.getEnvironment() != null && def.getEnvironment().getAdditionalProperties() != null
+                ? def.getEnvironment().getAdditionalProperties().keySet() : Set.of();
+        String mode = def.getExecutionMode() != null ? def.getExecutionMode().value() : "";
+        String field = "node".equals(mode) ? "codeTemplate" : "script".equals(mode) ? "scriptTemplate" : null;
+        String code = "node".equals(mode) ? def.getCodeTemplate() : "script".equals(mode) ? def.getScriptTemplate()
+                : null;
+        if (field == null || code == null) {
+            return;
+        }
+        for (String secret : usedSecrets(code, known.secretNames(), "node".equals(mode))) {
+            if (!declared.contains(secret)) {
+                messages.add(warning(field, undeclaredSecretMessage(secret)));
+            }
+        }
+    }
+
+    /**
+     * Returns the secrets a script or Node module refers to by name as environment variables.
+     *
+     * @param code        the script or module source
+     * @param secretNames the names of existing secrets
+     * @param node        whether the code is a Node module ({@code process.env}) rather than a shell script
+     * @return the referenced secret names, sorted
+     */
+    public static Set<String> usedSecrets(String code, Set<String> secretNames, boolean node) {
+        Set<String> used = new java.util.TreeSet<>();
+        for (String secret : secretNames) {
+            String quoted = Pattern.quote(secret);
+            Pattern use = node
+                    ? Pattern.compile("process\\.env(?:\\." + quoted + "(?![A-Za-z0-9_$])|\\[\\s*['\"`]" + quoted
+                            + "['\"`]\\s*])")
+                    : Pattern.compile("\\$(?:" + quoted + "(?![A-Za-z0-9_])|\\{" + quoted + "(?![A-Za-z0-9_]))");
+            if (use.matcher(code).find()) {
+                used.add(secret);
+            }
+        }
+        return used;
+    }
+
+    /**
+     * The warning for a secret used in code but not declared in the environment.
+     *
+     * @param secret the secret name
+     * @return the message
+     */
+    public static String undeclaredSecretMessage(String secret) {
+        return "Uses the secret " + secret + ", which is not declared in the environment. Secrets are not "
+                + "injected automatically: add " + secret + "=${secret:" + secret + "} to the environment.";
     }
 
     private static void validateFields(java.util.List<io.apitomy.axiom.api.beans.ActionTypeField> fields,

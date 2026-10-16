@@ -415,6 +415,48 @@ class ActionTypeValidatorTest {
         assertFalse(ActionTypeValidator.validate(at, known).hasErrors());
     }
 
+    private static final ActionTypeValidator.KnownNames GH_SECRET =
+            new ActionTypeValidator.KnownNames(Set.of("GH_TOKEN"), null, null, null);
+
+    private static List<ActionTypeValidator.ValidationMessage> undeclared(NewActionType at) {
+        return ActionTypeValidator.validate(at, GH_SECRET).messages().stream()
+                .filter(m -> m.message().contains("is not declared")).toList();
+    }
+
+    @Test
+    void scriptUsingAnUndeclaredSecretWarns() {
+        for (String use : List.of("$GH_TOKEN", "${GH_TOKEN}", "\"$GH_TOKEN\"")) {
+            NewActionType at = makeScript("s", "d", "curl -H \"Authorization: token " + use + "\" x");
+            List<ActionTypeValidator.ValidationMessage> warnings = undeclared(at);
+            assertEquals(1, warnings.size(), use);
+            assertEquals(Severity.WARNING, warnings.get(0).severity());
+            assertEquals("scriptTemplate", warnings.get(0).field());
+            assertEquals("Uses the secret GH_TOKEN, which is not declared in the environment. Secrets are not "
+                    + "injected automatically: add GH_TOKEN=${secret:GH_TOKEN} to the environment.",
+                    warnings.get(0).message());
+        }
+    }
+
+    @Test
+    void nodeCodeUsingAnUndeclaredSecretWarns() {
+        NewActionType dotted = makeNode("n", "d",
+                "export async function run() { return { t: process.env.GH_TOKEN }; }\n");
+        assertEquals("codeTemplate", undeclared(dotted).get(0).field());
+        NewActionType indexed = makeNode("n", "d",
+                "export async function run() { return { t: process.env[\"GH_TOKEN\"] }; }\n");
+        assertEquals(1, undeclared(indexed).size());
+    }
+
+    @Test
+    void aDeclaredOrUnrelatedVariableDoesNotWarn() {
+        NewActionType declared = makeScript("s", "d", "echo $GH_TOKEN");
+        io.apitomy.axiom.api.beans.Environment env = new io.apitomy.axiom.api.beans.Environment();
+        env.setAdditionalProperty("GH_TOKEN", "${secret:GH_TOKEN}");
+        declared.setEnvironment(env);
+        assertTrue(undeclared(declared).isEmpty());
+        assertTrue(undeclared(makeScript("s", "d", "echo $GH_TOKENS $HOME")).isEmpty());
+    }
+
     // ── Input/output field validation ───────────────────────────────
 
     @Test

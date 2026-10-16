@@ -16,6 +16,9 @@ import io.apitomy.flow.model.NodeType;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
+import io.apitomy.axiom.core.entities.SecretEntity;
+import io.apitomy.axiom.core.services.EncryptionService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -43,6 +46,8 @@ class AssistantReferenceTest {
     ObjectMapper mapper;
     @Inject
     ConfigItemValidationService validationService;
+    @Inject
+    EncryptionService encryptionService;
     @Inject
     ValidationContextFactory contextFactory;
 
@@ -84,6 +89,16 @@ class AssistantReferenceTest {
         assertTrue(ref.contains("A failed call fails the node"), ref);
         assertTrue(ref.contains("\"actionType\": \"sdk:axiom_set_workflow_run_title\""), ref);
         assertFalse(ref.contains("may be `sdk:<function>` for:"), "the bare name list is replaced");
+    }
+
+    @Test
+    void referenceExplainsThatSecretsMustBeDeclared() {
+        String ref = generator.generate();
+        assertTrue(ref.contains("### Secrets"), ref);
+        assertTrue(ref.contains("Secrets are never injected automatically"), ref);
+        assertTrue(ref.contains("`GH_TOKEN=${secret:GH_TOKEN}`"), ref);
+        assertFalse(ref.contains("otherwise every secret is available"), ref);
+        assertFalse(ref.contains("The workflow context provides `subjectId`"), ref);
     }
 
     @Test
@@ -157,24 +172,39 @@ class AssistantReferenceTest {
         }
     }
 
+    /** The scenario's secret, GH_TOKEN, which the examples declare and reference. */
+    private void createGhToken() {
+        QuarkusTransaction.requiringNew().run(() -> {
+            if (SecretEntity.count("name", "GH_TOKEN") == 0) {
+                SecretEntity secret = new SecretEntity();
+                secret.name = "GH_TOKEN";
+                secret.encryptedValue = encryptionService.encrypt("example-token");
+                secret.persist();
+            }
+        });
+    }
+
+    @AfterEach
+    void deleteGhToken() {
+        QuarkusTransaction.requiringNew().run(() -> SecretEntity.delete("name", "GH_TOKEN"));
+    }
+
     @Test
     void everyExampleValidatesWithoutProblems(@TempDir Path dir) throws Exception {
+        createGhToken();
         copyExamples(dir);
         ObjectNode pack = AssistantPackBuilder.fromDirectory(dir, mapper);
         ValidationContext ctx = contextFactory.forPack(pack);
         for (Map.Entry<String, String> e : generator.examples()) {
             ConfigItemType type = ConfigItemType.fromName(e.getKey().substring(0, e.getKey().indexOf('/')));
             List<ConfigProblem> problems = validationService.validate(type, mapper.readTree(e.getValue()), ctx);
-            // The example's secret (GH_TOKEN, mandated by the scenario) is not created in tests.
-            List<ConfigProblem> unexpected = problems.stream()
-                    .filter(p -> !"UNKNOWN_SECRET".equals(p.code()))
-                    .toList();
-            assertTrue(unexpected.isEmpty(), e.getKey() + ": " + unexpected);
+            assertTrue(problems.isEmpty(), e.getKey() + ": " + problems);
         }
     }
 
     @Test
     void examplesApplyEndToEnd(@TempDir Path dir) throws Exception {
+        createGhToken();
         copyExamples(dir);
         importExportService.importOrUpdatePack(AssistantPackBuilder.fromDirectory(dir, mapper));
         QuarkusTransaction.requiringNew().run(() -> {

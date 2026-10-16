@@ -2,6 +2,9 @@
   "name": "add-issue-comment",
   "description": "Adds a comment to a GitHub issue using the GitHub REST API.",
   "executionMode": "node",
+  "environment": {
+    "GH_TOKEN": "${secret:GH_TOKEN}"
+  },
   "inputs": [
     {
       "name": "repository",
