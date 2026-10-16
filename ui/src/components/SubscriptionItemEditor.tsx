@@ -151,7 +151,7 @@ export function SubscriptionItemEditor(props: SubscriptionItemEditorProps) {
                             </Tbody>
                         </Table>
                     )}
-                    <Flex spaceItems={{ default: "spaceItemsSm" }}>
+                    <Flex spaceItems={{ default: "spaceItemsSm" }} style={{ marginTop: "5px" }}>
                         <Button variant="secondary" size="sm" isDisabled={readOnly}
                             onClick={() => setRouting([...routing,
                                 { type: "create-workflow", workflowDefinitionName: workflowName }])}>
