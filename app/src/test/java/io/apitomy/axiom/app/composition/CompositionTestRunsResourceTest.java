@@ -4,6 +4,9 @@ import io.apitomy.axiom.app.assistant.AssistantSession;
 import io.apitomy.axiom.core.entities.CompositionEntity;
 import io.apitomy.axiom.core.entities.CompositionItemEntity;
 import io.apitomy.axiom.core.entities.CompositionRevisionEntity;
+import io.apitomy.axiom.core.entities.SecretEntity;
+import io.apitomy.axiom.core.services.EncryptionService;
+import jakarta.inject.Inject;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -16,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.hasSize;
@@ -36,6 +40,9 @@ class CompositionTestRunsResourceTest {
     @InjectMock
     WorkbenchSessions sessions;
 
+    @Inject
+    EncryptionService encryptionService;
+
     @BeforeEach
     void setUp() {
         AssistantSession session = mock(AssistantSession.class);
@@ -49,7 +56,23 @@ class CompositionTestRunsResourceTest {
             CompositionRevisionEntity.deleteAll();
             CompositionItemEntity.deleteAll();
             CompositionEntity.deleteAll();
+            SecretEntity.delete("name", "CTR_TOKEN");
         });
+    }
+
+    /** A tool draft whose script prints the TOKEN and CTR_TOKEN variables it was given. */
+    static long envTool(long compositionId) {
+        long itemId = given().contentType(ContentType.JSON).body(Map.of("type", "tool", "name", "env-tool"))
+                .post(BASE + "/{id}/items", compositionId).then().statusCode(200)
+                .extract().jsonPath().getLong("id");
+        String revision = given().get(BASE + "/{id}/items/{itemId}", compositionId, itemId)
+                .then().statusCode(200).extract().jsonPath().getString("contentRevision");
+        Map<String, Object> content = Map.of("name", "env-tool", "description", "Prints its environment",
+                "parameters", List.of(),
+                "scriptTemplate", "echo \"token=${TOKEN:-none} ctr=${CTR_TOKEN:-none}\"");
+        given().contentType(ContentType.JSON).body(Map.of("content", content, "baseRevision", revision))
+                .put(BASE + "/{id}/items/{itemId}", compositionId, itemId).then().statusCode(200);
+        return itemId;
     }
 
     static long scriptActionType(long compositionId) {
@@ -81,6 +104,32 @@ class CompositionTestRunsResourceTest {
                 .body("executionMode", equalTo("script"));
         given().get(BASE + "/{id}/test-runs", id).then().statusCode(200)
                 .body("$", hasSize(1)).body("[0].status", equalTo("passed"));
+    }
+
+    @Test
+    void aToolTestGetsOnlyTheEnvironmentItIsGiven() {
+        QuarkusTransaction.requiringNew().run(() -> {
+            SecretEntity secret = new SecretEntity();
+            secret.name = "CTR_TOKEN";
+            secret.encryptedValue = encryptionService.encrypt("s3cret");
+            secret.persist();
+        });
+        long id = CompositionsResourceTest.createComposition();
+        long itemId = envTool(id);
+        given().contentType(ContentType.JSON).body(Map.of("inputs", Map.of()))
+                .post(BASE + "/{id}/items/{itemId}/test", id, itemId).then().statusCode(200)
+                .body("status", equalTo("passed"))
+                .body("stdout", containsString("token=none ctr=none"));
+        given().contentType(ContentType.JSON)
+                .body(Map.of("inputs", Map.of(), "environment", Map.of("TOKEN", "${secret:CTR_TOKEN}")))
+                .post(BASE + "/{id}/items/{itemId}/test", id, itemId).then().statusCode(200)
+                .body("status", equalTo("passed"))
+                .body("stdout", containsString("token=s3cret ctr=none"));
+        given().contentType(ContentType.JSON)
+                .body(Map.of("inputs", Map.of(), "environment", Map.of("TOKEN", "${secret:CTR_MISSING}")))
+                .post(BASE + "/{id}/items/{itemId}/test", id, itemId).then().statusCode(200)
+                .body("status", equalTo("error"))
+                .body("message", containsString("Secret 'CTR_MISSING' does not exist"));
     }
 
     @Test

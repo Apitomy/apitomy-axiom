@@ -135,12 +135,16 @@ public class DraftTestRunner {
     /**
      * Runs a draft tool the way the MCP tools server does.
      *
-     * @param content the draft tool JSON
-     * @param params  parameter values by name
-     * @param subject the subject whose workspace to run in, or {@code null}
+     * @param content     the draft tool JSON
+     * @param params      parameter values by name
+     * @param environment environment variables for the run ({@code ${secret:NAME}} allowed); a tool gets no
+     *                    other secrets
+     * @param subject     the subject whose workspace to run in, or {@code null}
      * @return the result
+     * @throws io.apitomy.axiom.core.services.MissingSecretException when a referenced secret does not exist
      */
-    public Result runTool(JsonNode content, Map<String, Object> params, SubjectEntity subject) {
+    public Result runTool(JsonNode content, Map<String, Object> params, Map<String, String> environment,
+                          SubjectEntity subject) {
         String template = content.path("scriptTemplate").asText("");
         if (template.isBlank()) {
             return Result.error("The tool has no script to run.", List.of());
@@ -168,8 +172,11 @@ public class DraftTestRunner {
             workDir = scriptExecutionService.workingDirectory(subject);
             ProcessBuilder pb = ScriptExecutionService.scriptProcess(scriptFile, workDir.path(),
                     scriptExecutionService.buildBaseEnvironment("test-" + UUID.randomUUID(), workDir.path()));
-            // A tool has no environment of its own; like an action type without one, it gets every secret.
-            scriptExecutionService.applyActionEnvironment(pb, new ActionTypeEntity());
+            // A tool has no environment of its own: it gets only the variables given for this test run.
+            ActionTypeEntity holder = new ActionTypeEntity();
+            holder.environment = environment == null || environment.isEmpty() ? null
+                    : objectMapper.writeValueAsString(environment);
+            scriptExecutionService.applyActionEnvironment(pb, holder);
             Instant start = Instant.now();
             ScriptExecutionService.CapturedOutput captured =
                     ScriptExecutionService.capture(pb.start(), toolTimeoutSeconds);

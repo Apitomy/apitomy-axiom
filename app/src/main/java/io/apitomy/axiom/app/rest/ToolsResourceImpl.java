@@ -15,6 +15,7 @@ import io.apitomy.axiom.app.validation.ConfigProblem;
 import io.apitomy.axiom.app.validation.ValidationContextFactory;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
+import io.apitomy.axiom.core.services.MissingSecretException;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -245,6 +246,8 @@ public class ToolsResourceImpl implements ToolsResource {
         try {
             String envJson = objectMapper.writeValueAsString(env);
             return environmentResolver.resolve(envJson);
+        } catch (MissingSecretException e) {
+            throw e;   // reported as the test's execution error
         } catch (Exception e) {
             LOG.warnf(e, "Failed to resolve test environment variables");
             return Map.of();

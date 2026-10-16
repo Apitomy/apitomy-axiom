@@ -414,7 +414,12 @@ public class CompositionsResourceImpl implements CompositionsResource {
         if (ConfigItemType.WORKFLOW.jsonName().equals(item.itemType)) {
             throw new IllegalArgumentException("The workflow cannot be test-run");
         }
-        return testRuns.run(compositionId, item, testValues(data.getInputs()), data.getSubjectId(),
+        Map<String, String> environment = new LinkedHashMap<>();
+        if (data.getEnvironment() != null && data.getEnvironment().getAdditionalProperties() != null) {
+            data.getEnvironment().getAdditionalProperties().forEach((k, v) ->
+                    environment.put(k, v != null ? String.valueOf(v) : ""));
+        }
+        return testRuns.run(compositionId, item, testValues(data.getInputs()), environment, data.getSubjectId(),
                 CompositionService.AUTHOR_USER, null, data.getRunId());
     }
 

@@ -10,15 +10,14 @@ import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AgentEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.SubjectEntity;
-import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.axiom.core.logging.LogContext;
 import io.apitomy.axiom.core.services.ActionTypeIoValidator;
-import io.apitomy.axiom.core.services.EncryptionService;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
+import io.apitomy.axiom.core.services.MissingSecretException;
 import io.apitomy.axiom.core.services.InputBindingResolver;
 import io.apitomy.axiom.core.services.ToolsetResolver;
 import io.apitomy.axiom.core.services.WorkspaceService;
@@ -70,8 +69,6 @@ public class TaskExecutionService {
     @Inject
     NodeExecutionService nodeExecutionService;
 
-    @Inject
-    EncryptionService encryptionService;
 
     @Inject
     EnvironmentResolver environmentResolver;
@@ -214,8 +211,15 @@ public class TaskExecutionService {
             failTask(task.id, "Failed to prepare workspace: " + e.getMessage());
             return;
         }
-        Map<String, String> env = buildEnvironment(
-                actionTypeEntity != null ? actionTypeEntity.environment : null);
+        Map<String, String> env;
+        try {
+            env = buildEnvironment(actionTypeEntity != null ? actionTypeEntity.environment : null);
+        } catch (MissingSecretException e) {
+            agentPool.release(lease);
+            LOG.errorf("Task %d cannot start: %s", task.id, e.getMessage());
+            failTask(task.id, e.getMessage());
+            return;
+        }
 
         // Inject trace env vars for MCP tool callbacks (tool calls become children of the task node)
         if (task.traceId != null) {
@@ -293,35 +297,15 @@ public class TaskExecutionService {
     }
 
     /**
-     * Builds environment variables to pass to the subprocess.
-     * If the action type has a custom environment configured, resolves
-     * that (including ${secret:NAME} references). Otherwise falls back
-     * to injecting all configured secrets.
+     * Builds the environment variables for an agent subprocess: exactly the action type's declared
+     * environment, with {@code ${secret:NAME}} references resolved. Secrets are never injected automatically.
+     *
+     * @param customEnvironmentJson the action type's environment JSON, or null
+     * @return a mutable map of the declared variables
+     * @throws io.apitomy.axiom.core.services.MissingSecretException when a referenced secret does not exist
      */
-    private Map<String, String> buildEnvironment(String customEnvironmentJson) {
-        if (environmentResolver.hasCustomEnvironment(customEnvironmentJson)) {
-            Map<String, String> env = environmentResolver.resolve(customEnvironmentJson);
-            LOG.debugf("Using custom environment with %d variable(s)", env.size());
-            return env;
-        }
-
-        Map<String, String> env = new HashMap<>();
-        List<SecretEntity> secrets = SecretEntity.listAll();
-        for (SecretEntity secret : secrets) {
-            try {
-                env.put(secret.name, encryptionService.decrypt(secret.encryptedValue));
-            } catch (Exception e) {
-                LOG.warnf("Failed to decrypt secret '%s' — skipping", secret.name);
-            }
-        }
-
-        if (secrets.isEmpty()) {
-            LOG.debug("No secrets configured — subprocess will have no injected credentials");
-        } else {
-            LOG.debugf("Injected %d secret(s) into subprocess environment", secrets.size());
-        }
-
-        return env;
+    Map<String, String> buildEnvironment(String customEnvironmentJson) {
+        return new HashMap<>(environmentResolver.resolve(customEnvironmentJson));
     }
 
     /**

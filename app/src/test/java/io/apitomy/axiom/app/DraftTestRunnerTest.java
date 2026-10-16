@@ -124,7 +124,7 @@ class DraftTestRunnerTest {
                  {"name":"opt","required":false}],
                  "scriptTemplate":"echo \\"hello {{who}}\\"; cat {{body_file}}; echo \\"[{{opt}}]\\""}""");
         DraftTestRunner.Result r = QuarkusTransaction.requiringNew().call(() ->
-                runner.runTool(tool, Map.of("who", "ann", "body", "long text"), null));
+                runner.runTool(tool, Map.of("who", "ann", "body", "long text"), Map.of(), null));
         assertEquals("passed", r.status(), r.toString());
         assertEquals("hello ann\nlong text[]\n", r.stdout());
         assertNull(r.outputs());
@@ -135,7 +135,7 @@ class DraftTestRunnerTest {
         JsonNode tool = json("{\"name\":\"t\",\"parameters\":[{\"name\":\"who\",\"required\":true}],"
                 + "\"scriptTemplate\":\"echo {{who}}\"}");
         DraftTestRunner.Result r = QuarkusTransaction.requiringNew().call(() ->
-                runner.runTool(tool, Map.of(), null));
+                runner.runTool(tool, Map.of(), Map.of(), null));
         assertEquals("error", r.status());
         assertEquals(List.of("Parameter: Missing required parameter 'who'."), r.problems());
     }
@@ -179,7 +179,7 @@ class DraftTestRunnerTest {
         try {
             long start = System.currentTimeMillis();
             DraftTestRunner.Result r = QuarkusTransaction.requiringNew().call(() ->
-                    runner.runTool(tool, Map.of(), null));
+                    runner.runTool(tool, Map.of(), Map.of(), null));
             assertEquals("failed", r.status());
             assertEquals(List.of("Timed out."), r.problems());
             assertTrue(System.currentTimeMillis() - start < 3000);

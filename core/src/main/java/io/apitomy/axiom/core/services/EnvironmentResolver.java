@@ -17,10 +17,9 @@ import java.util.regex.Pattern;
  * Values containing {@code ${secret:NAME}} references are resolved by
  * looking up the named secret and decrypting its value.
  *
- * <p>If the entity has a custom environment configured, only those
- * variables are returned (no automatic secrets injection). If the
- * environment is null or empty, callers should fall back to injecting
- * all secrets.</p>
+ * <p>Secrets are never injected automatically: a process gets only the variables its environment
+ * declares. A reference to a secret that does not exist, or cannot be decrypted, throws
+ * {@link MissingSecretException} so the process does not start with a wrong value.</p>
  */
 @ApplicationScoped
 public class EnvironmentResolver {
@@ -57,6 +56,7 @@ public class EnvironmentResolver {
      *
      * @param environmentJson JSON object string with env var key-value pairs
      * @return the resolved environment map
+     * @throws MissingSecretException when a referenced secret does not exist or cannot be decrypted
      */
     public Map<String, String> resolve(String environmentJson) {
         if (environmentJson == null || environmentJson.isBlank()) {
@@ -73,6 +73,8 @@ public class EnvironmentResolver {
             }
 
             return resolved;
+        } catch (MissingSecretException e) {
+            throw e;
         } catch (Exception e) {
             LOG.warnf(e, "Failed to parse environment JSON — skipping custom environment");
             return Map.of();
@@ -102,14 +104,13 @@ public class EnvironmentResolver {
     private String lookupSecret(String secretName) {
         SecretEntity secret = SecretEntity.find("name", secretName).firstResult();
         if (secret == null) {
-            LOG.warnf("Secret '%s' not found — keeping literal reference", secretName);
-            return "${secret:" + secretName + "}";
+            throw new MissingSecretException("Secret '" + secretName + "' does not exist");
         }
         try {
             return encryptionService.decrypt(secret.encryptedValue);
         } catch (Exception e) {
-            LOG.warnf("Failed to decrypt secret '%s' — keeping literal reference", secretName);
-            return "${secret:" + secretName + "}";
+            LOG.warnf(e, "Failed to decrypt secret '%s'", secretName);
+            throw new MissingSecretException("Secret '" + secretName + "' could not be decrypted");
         }
     }
 }

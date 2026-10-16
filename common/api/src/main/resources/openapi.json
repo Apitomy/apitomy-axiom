@@ -11559,6 +11559,13 @@
           "runId": {
             "description": "Optional id for the run (letters, digits and dashes, 8 to 64 characters), so the caller can follow it before the request returns; ignored when invalid or already used",
             "type": "string"
+          },
+          "environment": {
+            "description": "Tools only: environment variables for the run. Values may reference secrets as ${secret:NAME}; no secrets are provided otherwise. Action types use their own environment.",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         }
       },

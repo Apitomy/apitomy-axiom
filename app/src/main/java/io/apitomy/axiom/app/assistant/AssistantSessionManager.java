@@ -22,6 +22,7 @@ import io.apitomy.axiom.core.entities.SystemConfigEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
+import io.apitomy.axiom.core.services.MissingSecretException;
 import io.apitomy.axiom.core.services.WorkspaceService;
 import jakarta.enterprise.event.Event;
 import io.quarkus.runtime.ShutdownEvent;
@@ -212,8 +213,11 @@ public class AssistantSessionManager {
             // Resolve environment variables early — MCP server resolution needs
             // them (e.g. @axiom-tools passes env to the tools MCP server).
             Map<String, String> resolvedEnv = new LinkedHashMap<>();
-            if (environmentResolver.hasCustomEnvironment(template.environment())) {
+            try {
                 resolvedEnv.putAll(environmentResolver.resolve(template.environment()));
+            } catch (MissingSecretException e) {
+                throw new IllegalArgumentException(
+                        "Session template '" + template.name() + "': " + e.getMessage(), e);
             }
 
             // Inject subject environment variables

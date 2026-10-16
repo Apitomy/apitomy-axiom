@@ -6,13 +6,11 @@ import io.apitomy.axiom.core.entities.ActionTypeField;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.services.WorkspaceService;
-import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.axiom.core.logging.LogContext;
-import io.apitomy.axiom.core.services.EncryptionService;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.InputBindingResolver;
 import io.apitomy.axiom.core.services.ShellContext;
@@ -57,8 +55,6 @@ public class ScriptExecutionService {
     @Inject
     Event<SseEvent> sseEvents;
 
-    @Inject
-    EncryptionService encryptionService;
 
     @Inject
     EnvironmentResolver environmentResolver;
@@ -307,24 +303,15 @@ public class ScriptExecutionService {
     }
 
     /**
-     * Injects the action type's environment into a process: its custom {@code environment} when configured,
-     * otherwise every secret (decrypted) as a fallback.
+     * Injects the action type's declared environment into a process, with {@code ${secret:NAME}} references
+     * resolved. Secrets are never injected automatically.
      *
      * @param pb         the process builder to add variables to
      * @param actionType the action type being run
+     * @throws io.apitomy.axiom.core.services.MissingSecretException when a referenced secret does not exist
      */
     void applyActionEnvironment(ProcessBuilder pb, ActionTypeEntity actionType) {
-        if (environmentResolver.hasCustomEnvironment(actionType.environment)) {
-            pb.environment().putAll(environmentResolver.resolve(actionType.environment));
-        } else {
-            for (SecretEntity secret : SecretEntity.<SecretEntity>listAll()) {
-                try {
-                    pb.environment().put(secret.name, encryptionService.decrypt(secret.encryptedValue));
-                } catch (Exception e) {
-                    LOG.warnf("Failed to decrypt secret '%s' for script — skipping", secret.name);
-                }
-            }
-        }
+        pb.environment().putAll(environmentResolver.resolve(actionType.environment));
     }
 
     /**

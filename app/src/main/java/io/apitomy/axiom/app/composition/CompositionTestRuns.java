@@ -74,7 +74,7 @@ public class CompositionTestRuns {
      */
     public CompositionTestRun run(long compositionId, CompositionItemEntity item, Map<String, Object> inputs,
                                   Long subjectId, String author, String turnId) {
-        return run(compositionId, item, inputs, subjectId, author, turnId, null);
+        return run(compositionId, item, inputs, Map.of(), subjectId, author, turnId, null);
     }
 
     /**
@@ -84,6 +84,8 @@ public class CompositionTestRuns {
      * @param compositionId the composition id
      * @param item          the draft (not the workflow)
      * @param inputs        input or parameter values
+     * @param environment   tools only: environment variables for the run ({@code ${secret:NAME}} allowed);
+     *                      action types use their own environment
      * @param subjectId     the subject to run in, or {@code null}
      * @param author        {@link CompositionService#AUTHOR_USER} or {@link CompositionService#AUTHOR_AI}
      * @param turnId        the AI turn id, or {@code null}
@@ -93,7 +95,8 @@ public class CompositionTestRuns {
      * @throws TooManyTestRunsException when the composition already has the maximum number of runs in progress
      */
     public CompositionTestRun run(long compositionId, CompositionItemEntity item, Map<String, Object> inputs,
-                                  Long subjectId, String author, String turnId, String runId) {
+                                  Map<String, String> environment, Long subjectId, String author, String turnId,
+                                  String runId) {
         boolean tool = "tool".equals(item.itemType);
         if (!tool && !"action-type".equals(item.itemType)) {
             throw new IllegalArgumentException("Only action types and tools can be test-run");
@@ -110,8 +113,9 @@ public class CompositionTestRuns {
             throw new TooManyTestRunsException();
         }
         try {
-            return execute(compositionId, item, tool, inputs != null ? inputs : Map.of(), subject, subjectId,
-                    author, turnId, runIdFor(compositionId, runId));
+            return execute(compositionId, item, tool, inputs != null ? inputs : Map.of(),
+                    environment != null ? environment : Map.of(), subject, subjectId, author, turnId,
+                    runIdFor(compositionId, runId));
         } finally {
             semaphore.release();
         }
@@ -150,8 +154,9 @@ public class CompositionTestRuns {
     }
 
     private CompositionTestRun execute(long compositionId, CompositionItemEntity item, boolean tool,
-                                       Map<String, Object> values, SubjectEntity subject, Long subjectId,
-                                       String author, String turnId, String runId) {
+                                       Map<String, Object> values, Map<String, String> environment,
+                                       SubjectEntity subject, Long subjectId, String author, String turnId,
+                                       String runId) {
         CompositionTestRun run = new CompositionTestRun();
         run.setId(runId);
         run.setItemId(item.id);
@@ -171,7 +176,7 @@ public class CompositionTestRuns {
         try {
             JsonNode content = service.contentOf(item);
             DraftTestRunner.Result result = tool
-                    ? runner.runTool(content, values, subject)
+                    ? runner.runTool(content, values, environment, subject)
                     : runner.runActionType(content, values, subject);
             finished.setStatus(CompositionTestRun.Status.fromValue(result.status()));
             finished.setDurationMs(result.durationMs());
