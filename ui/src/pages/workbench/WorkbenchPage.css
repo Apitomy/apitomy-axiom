@@ -183,7 +183,8 @@
     gap: var(--pf-t--global--spacer--xs, 4px);
     padding: 0 var(--pf-t--global--spacer--xs, 4px);
     border-bottom: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
-    min-height: 36px;
+    /* Same height as the centre editor tabs (39px), so the side panels' borders line up with the tab bar's. */
+    min-height: 39px;
     flex: 0 0 auto;
 }
 
