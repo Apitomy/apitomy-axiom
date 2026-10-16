@@ -109,7 +109,7 @@ export function SubscriptionItemEditor(props: SubscriptionItemEditorProps) {
                     {routing.length === 0 ? (
                         <HelperText><HelperTextItem>No routing rules: matching events do nothing.</HelperTextItem></HelperText>
                     ) : (
-                        <Table aria-label="Routing rules" variant="compact">
+                        <Table aria-label="Routing rules" variant="compact" isStriped>
                             <Thead>
                                 <Tr>
                                     <Th>Rule</Th>
@@ -176,7 +176,7 @@ export function SubscriptionItemEditor(props: SubscriptionItemEditorProps) {
                         </HelperTextItem></HelperText>
                     )}
                     {matches.length > 0 && (
-                        <Table aria-label="Matching events" variant="compact">
+                        <Table aria-label="Matching events" variant="compact" isStriped>
                             <Thead>
                                 <Tr>
                                     <Th>Type</Th>
