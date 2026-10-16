@@ -24,8 +24,9 @@ jobs:
 
       - name: Install MkDocs and dependencies
         run: |
-          pip install mkdocs>=1.5.0
-          pip install mkdocs-material>=9.0.0
+          # MkDocs 2.0 drops the plugin and theme system Material for MkDocs relies on.
+          pip install "mkdocs>=1.5.0,<2"
+          pip install "mkdocs-material>=9.0.0,<10"
           pip install pymdown-extensions
 
       - name: Build documentation
