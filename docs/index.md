@@ -13,8 +13,8 @@ versioned workflows that delegate work to AI agents, scripts, and humans.
   to workflows: `create-workflow` starts a run, `workflow-dispatch` resumes waiting runs
 - **Schedule Triggers** — cron schedules that start workflow runs on a fixed subject
 - **Workflow Workbench** — an authoring workspace for a workflow and its action types, tools and
-  subscriptions, with a workflow canvas, editors, test runs, run history and an AI Assistant that proposes changes you can
-  review or apply live
+  subscriptions, with a workflow canvas, editors, test runs, run history and an AI Assistant that proposes
+  changes you can review or apply live
 - **Subjects** — the issue, pull request, or named subject a run is about, with a shared workspace and
   thread
 - **Human + AI Agents** — pluggable agent pool supports Claude Code, OpenCode, GitHub Copilot CLI, and
