@@ -423,7 +423,7 @@ log("INFO", "Axiom Assistant MCP server started", {
     subjectId: AXIOM_SUBJECT_ID || null,
 });
 
-const server = new Server({ name: "axiom-assistant", version: "1.0.0" }, {
+const server = new Server({ name: "axiom-assistant", version: "3.0.0-SNAPSHOT" }, {
     capabilities: { tools: {} }
 });
 

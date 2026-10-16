@@ -94,7 +94,7 @@ public class ImportExportService {
         if (request.getDescription() != null) {
             metadata.put("description", request.getDescription());
         }
-        metadata.put("version", "2.0");
+        metadata.put("version", "3.0");
         metadata.put("exportedAt", Instant.now().toString());
 
         if (request.getToolIds() != null && !request.getToolIds().isEmpty()) {
