@@ -221,8 +221,11 @@ Start a test in one of these ways:
 
 The test dialog asks for the item's inputs (for an action type) or parameters (for a tool). Each field shows
 its type and description; required fields are marked. Object and array values are entered as JSON. Under
-**Subject**, choose a subject to run in its directory, or **None — run in a temporary directory**. Click
-**Run**. The workbench remembers the values you used for each item.
+**Subject**, choose a subject to run in its directory, or **None — run in a temporary directory**. For a
+tool, the **Environment** section sets the variables for the test run: a tool gets no secrets automatically,
+so add the secrets it needs (in a workflow it runs with the environment of the action type that allows it).
+An action type uses its own **Environment**. Click **Run**. The workbench remembers the values (and a tool's
+environment) you used for each item.
 
 The test uses the current draft, including unsaved edits, which are saved first.
 

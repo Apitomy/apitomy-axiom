@@ -105,7 +105,7 @@ Each template specifies:
 | **MCP Servers** | Named MCP server configurations to include in the session. |
 | **Allowed Tools** | Tool patterns for `--allowedTools` (e.g., `Read(*)`, `Bash(ls *)`). Use `@ToolsetName` to include all tools from a toolset. |
 | **Init Script** | Optional startup script executed when the session is created (see [Init Scripts](#init-scripts) below). |
-| **Environment** | Optional key-value environment variables injected into the interactive engine process. Values support `${secret:NAME}` syntax. |
+| **Environment** | Optional key-value environment variables for the interactive engine process, the only variables it gets beyond Axiom's own. Values support `${secret:NAME}` syntax; secrets are not injected automatically, and a missing secret stops the session from starting. |
 
 ### Built-in Templates
 

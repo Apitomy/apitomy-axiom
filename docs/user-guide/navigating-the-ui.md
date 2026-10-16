@@ -183,7 +183,7 @@ The **Components** section contains workflows and the building blocks they and t
 | **Agents** | Register AI agent slots with capabilities that determine which work they're eligible for |
 | **AI Assistant** (Session Templates) | Define AI Assistant session templates with system prompts, agent type, tools, and MCP servers |
 | **MCP Servers** | Register external MCP tool servers (HTTP or stdio) |
-| **Secrets** | Store encrypted credentials injected into subprocesses |
+| **Secrets** | Store encrypted credentials; processes receive only the secrets their environment declares |
 | **Tools** | Define script-based tools with parameters and bash templates |
 | **Toolsets** | Group tools into named collections for reuse |
 | **Workflows** | Workflow definitions (`/components/workflows`); each detail page has the **Design**, **Versions**, **Runs** and **Triggers** (schedule triggers) tabs. See [Workflows](workflows.md) |

@@ -312,8 +312,9 @@ When something isn't working, work through the pipeline in order:
 8. **Did the task execute?** Check **Logs > Tasks** or the run's tasks. Read the execution log.
 9. **Did the tools work?** The task execution log shows each tool call and its output. If a tool failed,
    check its script template under **Components > Tools**.
-10. **Were secrets available?** If a tool needs API credentials, verify the secret exists under
-    **Components > Secrets** and the action type's environment is configured correctly.
+10. **Were secrets available?** Secrets are not injected automatically. If an action type or one of its tools
+    needs API credentials, check that the secret exists under **Components > Secrets** and that the action
+    type's **Environment** declares it (for example `GH_TOKEN=${secret:GH_TOKEN}`).
 
 !!! tip "Use a Trace for the Full Picture"
     For any workflow run, opening its trace gives you the entire run tree in one view — every step, every

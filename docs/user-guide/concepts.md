@@ -196,7 +196,8 @@ inside a quoted heredoc (`<<'EOF'`) would never be expanded, so such templates a
 files in `$AXIOM_WORK_DIR` or create them with `mktemp`, not at fixed `/tmp` paths.
 
 **Script environment.** Scripts receive the plumbing environment variables `AXIOM_API_URL` (Axiom's
-API base URL), `AXIOM_TASK_ID` and `AXIOM_WORK_DIR`, plus secrets and the action type's environment.
+API base URL), `AXIOM_TASK_ID` and `AXIOM_WORK_DIR`, plus the action type's environment (see
+[Secrets](#secrets)).
 A script runs in its subject's workspace (`AXIOM_WORK_DIR`), or in a temporary directory when the task has
 no subject; it never runs in Axiom's own directory. A required input whose value is empty counts as missing,
 so the task fails before the script runs. For subjects created from GitHub events,
@@ -218,7 +219,8 @@ Subject data is not passed through the environment; declare an input instead, e.
 A node-mode action type's **code template** is an ES module that exports an async `run(inputs, ctx)`
 function. Axiom runs it with the `node` executable on the server's `PATH`, under the same rules as script
 mode: it runs in the subject's workspace (or a temporary directory), honours the script timeout, keeps stderr
-separately in the execution log, and receives secrets and the action type's environment in `process.env`.
+separately in the execution log, and receives the action type's environment in `process.env` (see
+[Secrets](#secrets)).
 
 ```js
 export async function run(inputs, ctx) {
@@ -433,16 +435,25 @@ MCP server that provides database query tools, API clients, or domain-specific a
 
 ### Secrets
 
-Secrets are encrypted key-value pairs injected as environment variables into AI agent and script
-subprocesses. Common uses:
+Secrets are encrypted key-value pairs that processes receive as environment variables. Common uses:
 
 - `GH_TOKEN` — GitHub API authentication
 - `JIRA_API_TOKEN` — Jira API authentication
 - Provider-specific tokens for other integrations
 
-Secret values are encrypted at rest and never returned by the API. They are automatically injected into
-all subprocesses by default. For fine-grained control, action types can specify a custom **Environment**
-that selectively references secrets using `${secret:SECRET_NAME}` syntax.
+Secret values are encrypted at rest and never returned by the API. **Secrets are never injected
+automatically.** A process gets only the variables declared in its **Environment**, where a value can
+reference a secret as `${secret:SECRET_NAME}`, for example `GH_TOKEN=${secret:GH_TOKEN}` (the **Add secret**
+picker fills this in):
+
+- **Action types** (AI agent, script and Node.js) get their own **Environment**. An AI agent's tools run with
+  the agent's environment, so declare the secrets its tools need on the action type.
+- **Session templates** have their own **Environment** for the assistant session.
+- **Workbench tool test runs** use the **Environment** given in the test dialog.
+
+A reference to a secret that does not exist stops the process from starting: the task, test run or session
+fails with `Secret 'NAME' does not exist`. Validation reports such references as errors, and warns when a
+script, Node.js code or a tool uses a secret (`$GH_TOKEN`, `process.env.GH_TOKEN`) that is not declared.
 
 Secrets are also used by Event Sources for API authentication when polling.
 
