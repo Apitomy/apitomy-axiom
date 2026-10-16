@@ -628,3 +628,8 @@ code.axiom-test-run__value {
 .axiom-run-detail__graph > * {
     height: 100%;
 }
+
+/* Separates the subscription editor's form from its Matching events preview. */
+.axiom-subscription-item-editor__divider {
+    margin-block: var(--pf-t--global--spacer--lg, 24px) var(--pf-t--global--spacer--md, 16px);
+}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-    Alert, Button, Flex, FlexItem, Form, FormGroup, HelperText, HelperTextItem, Switch, TextArea, TextInput,
+    Alert, Button, Divider, Flex, FlexItem, Form, FormGroup, HelperText, HelperTextItem, Switch, TextArea, TextInput,
     Title, Tooltip,
 } from "@patternfly/react-core";
 import { TrashIcon } from "@patternfly/react-icons";
@@ -131,6 +131,7 @@ export function SubscriptionItemEditor(props: SubscriptionItemEditorProps) {
                     </Flex>
                 </FormGroup>
             </Form>
+            <Divider className="axiom-subscription-item-editor__divider" />
             <Title headingLevel="h3" size="md">Matching events</Title>
             {previewError && <Alert isInline variant="danger" title={`Could not preview: ${previewError}`} />}
             {preview && (
