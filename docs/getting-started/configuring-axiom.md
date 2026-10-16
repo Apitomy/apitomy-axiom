@@ -44,6 +44,7 @@ the UI, without restarting the server. The UI setting takes precedence over
 | Property | Default | Description |
 |----------|---------|--------------|
 | `quarkus.http.port` | `9090` (`9191` in the `prod` profile) | HTTP port of the UI and REST API (`/api/v1`) |
+| `quarkus.http.host` | `127.0.0.1` in the `prod` profile | Address to listen on. Axiom has no authentication, so it accepts local connections only by default; set `0.0.0.0` to listen on all interfaces and protect access yourself |
 
 ### AI Agents
 

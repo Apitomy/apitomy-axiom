@@ -58,6 +58,12 @@ java -jar apitomy-axiom-3.0.0.jar
 The release JAR uses the `prod` profile: it listens on port **9191** and stores its H2 database in
 `~/.axiom/data/`.
 
+!!! warning "Local access only"
+    Axiom has no authentication, so the release build only accepts connections from the same machine
+    (`127.0.0.1`). To make it reachable from other machines, set the bind address, for example
+    `java -Dquarkus.http.host=0.0.0.0 -jar apitomy-axiom-3.0.0.jar` (or `QUARKUS_HTTP_HOST=0.0.0.0`), and
+    protect access yourself, for example behind an authenticating reverse proxy.
+
 !!! warning "Upgrading from Axiom 2.x"
     Axiom 3 cannot use a database created by Axiom 2.x (or older) and refuses to start on one. See
     [Upgrading From Axiom 2.x](../developer-guide/upgrading-and-backups.md#upgrading-from-axiom-2x).
