@@ -191,3 +191,8 @@ generates automatically on first startup and stores at `~/.axiom/secret.key`. Th
 is separate from the database — see
 [Upgrading and Backups](../developer-guide/upgrading-and-backups.md) for what to back up
 and restore together.
+
+Axiom loads the key when it starts. If the key file cannot be read or created, or is not a valid
+256-bit key (for example, truncated), Axiom logs the problem and exits instead of starting. Restore the
+key from a backup; deleting it makes Axiom generate a new key, and secrets encrypted with the old key can
+no longer be decrypted.
