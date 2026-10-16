@@ -28,7 +28,8 @@ remove the old data. To upgrade:
 5. Recreate your configuration: event sources, secrets, action types, tools, workflows and subscriptions.
    Many 2.x concepts were removed or reworked (see the 3.0.0 release notes), so 2.x configuration packs are
    not expected to import cleanly; the [Workflow Workbench](../user-guide/workbench.md) is the quickest way
-   to rebuild workflows.
+   to rebuild workflows. The [3.0.0 release notes](../release-notes/v3.0.0.md) list what was removed and
+   renamed.
 
 Secrets are stored in the database, so they must be re-entered. The rest of `~/.axiom` (the encryption key,
 workspaces and session directories) can stay; old 2.x subject workspaces are no longer referenced and can be
