@@ -16,7 +16,12 @@ GitHub Actions workflows for Apitomy Axiom.
 **Trigger:** manual (Actions → Release → Run workflow). There are no inputs: the version comes from the
 `-SNAPSHOT` version in `pom.xml`.
 
-**Required secret:** `ACCESS_TOKEN` (a token that can push to `main` and create releases).
+**Secrets:**
+
+- `ACCESS_TOKEN` (required): a token that can push to `main` and create releases.
+- `SLACK_GENERAL_NOTIFICATION_WEBHOOK`, `SLACK_IMPORTANT_NOTIFICATION_WEBHOOK`, `SLACK_USER_MAP` (optional):
+  organization secrets for the Slack notification, sent with
+  [notify-slack](https://github.com/Apicurio/apicurio-github-actions/tree/main/notify-slack).
 
 **Process:**
 
@@ -31,6 +36,8 @@ GitHub Actions workflows for Apitomy Axiom.
    publishing it triggers **Update Website**.
 8. `scripts/set-version.sh` sets the next development version (`<major>.<minor>.<patch+1>-SNAPSHOT`), which is
    committed and pushed.
+9. A Slack notification is sent: success to the general channel, failure to the important one, mentioning
+   whoever ran the release.
 
 **Before releasing:**
 
