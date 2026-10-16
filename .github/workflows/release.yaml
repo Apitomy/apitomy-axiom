@@ -26,7 +26,7 @@ jobs:
           distribution: oracle
           java-version: '25'
 
-      - name: Set up Node.js 22
+      - name: Set up Node.js 24
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: '24.21.0'
@@ -46,22 +46,38 @@ jobs:
           echo "Release version: ${RELEASE_VERSION}"
 
       # ── Set release version ──────────────────────────────────────────
-      - name: Set release version in pom.xml files
+      - name: Set release version
+        run: scripts/set-version.sh ${{ steps.version.outputs.release-version }}
+
+      # ── Release notes: docs/release-notes/v<version>.md when present, otherwise generated notes ──
+      - name: Find release notes
+        id: notes
         run: |
-          mvn versions:set -DnewVersion=${{ steps.version.outputs.release-version }} -DgenerateBackupPoms=false -Pui
+          NOTES="docs/release-notes/v${{ steps.version.outputs.release-version }}.md"
+          if [[ -f "$NOTES" ]]; then
+            echo "body-path=${NOTES}" >> "$GITHUB_OUTPUT"
+            echo "generate=false" >> "$GITHUB_OUTPUT"
+            echo "Using release notes ${NOTES}"
+          else
+            echo "body-path=" >> "$GITHUB_OUTPUT"
+            echo "generate=true" >> "$GITHUB_OUTPUT"
+            echo "No ${NOTES}; using generated release notes"
+          fi
 
       # ── Build and test ───────────────────────────────────────────────
       - name: Build application with UI
         run: ./build-release.sh
 
-      # ── Commit, tag, and push release ────────────────────────────────
-      - name: Commit release version
+      - name: Rename uber-jar for release
+        run: |
+          cp app/target/apitomy-axiom-app-${{ steps.version.outputs.release-version }}-runner.jar \
+             app/target/apitomy-axiom-${{ steps.version.outputs.release-version }}.jar
+
+      # ── Commit and tag locally; push only after every step that can fail has run ──
+      - name: Commit and tag release
         run: |
           git add -A
           git commit -m "Release ${{ steps.version.outputs.release-version }}"
-
-      - name: Tag release
-        run: |
           git tag v${{ steps.version.outputs.release-version }}
 
       - name: Push release commit and tag
@@ -69,18 +85,15 @@ jobs:
           git push origin HEAD
           git push origin v${{ steps.version.outputs.release-version }}
 
-      # ── Create GitHub Release ────────────────────────────────────────
-      - name: Rename uber-jar for release
-        run: |
-          cp app/target/apitomy-axiom-app-${{ steps.version.outputs.release-version }}-runner.jar \
-             app/target/apitomy-axiom-${{ steps.version.outputs.release-version }}.jar
-
-      - name: Create GitHub Release
+      # ── Create the GitHub Release as a draft; a maintainer reviews and publishes it ──
+      - name: Create draft GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           tag_name: v${{ steps.version.outputs.release-version }}
           name: ${{ steps.version.outputs.release-version }}
-          generate_release_notes: true
+          draft: true
+          body_path: ${{ steps.notes.outputs.body-path }}
+          generate_release_notes: ${{ steps.notes.outputs.generate == 'true' }}
           prerelease: ${{ contains(steps.version.outputs.release-version, 'RC') || contains(steps.version.outputs.release-version, 'alpha') || contains(steps.version.outputs.release-version, 'beta') }}
           files: |
             app/target/apitomy-axiom-${{ steps.version.outputs.release-version }}.jar
@@ -98,9 +111,8 @@ jobs:
           echo "next-version=${NEXT_VERSION}" >> "$GITHUB_OUTPUT"
           echo "Next development version: ${NEXT_VERSION}"
 
-      - name: Set next SNAPSHOT version in pom.xml files
-        run: |
-          mvn versions:set -DnewVersion=${{ steps.next-version.outputs.next-version }} -DgenerateBackupPoms=false -Pui
+      - name: Set next SNAPSHOT version
+        run: scripts/set-version.sh ${{ steps.next-version.outputs.next-version }}
 
       - name: Commit and push SNAPSHOT version
         run: |

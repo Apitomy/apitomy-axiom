@@ -1,93 +1,57 @@
 # GitHub Workflows
 
-This directory contains GitHub Actions workflows for the Apitomy Axiom project.
+GitHub Actions workflows for Apitomy Axiom.
 
-## Workflows
+## Verify Build (`verify.yaml`)
 
-### Release (`release.yaml`)
+**Trigger:** pull requests to `main` and pushes to `main`.
 
-Creates a new release of Apitomy Axiom, including building and publishing Docker images.
+- **Verify Build** — `./build.sh` with Java 25 and Node.js 24: builds every module and runs the backend tests,
+  including the bundled MCP servers' Node tests.
+- **UI Build Check** — `npm ci`, `npm run build` (TypeScript type check and Vite build) and `npm test` (Vitest)
+  in `ui/`.
 
-**Trigger**: Manual workflow dispatch
+## Release (`release.yaml`)
 
-**Inputs**:
-- `release-version`: The version to release (e.g., `1.0.0`)
+**Trigger:** manual (Actions → Release → Run workflow). There are no inputs: the version comes from the
+`-SNAPSHOT` version in `pom.xml`.
 
-**Process**:
-1. Updates `package.json` with the release version
-2. Builds and tests the project
-3. Commits and pushes version changes to the main branch
-4. Builds multi-architecture Docker images (amd64, arm64)
-5. Pushes images to Docker Hub and Quay.io with tags:
-   - `<version>` (e.g., `1.0.0`)
-   - `latest`
-6. Creates a GitHub release with auto-generated release notes
-7. Sends Slack notifications (success/failure)
+**Required secret:** `ACCESS_TOKEN` (a token that can push to `main` and create releases).
 
-**Required Secrets**:
-- `ACCESS_TOKEN`: GitHub personal access token with repo and packages permissions
-- `DOCKERHUB_USERNAME`: Docker Hub username
-- `DOCKERHUB_PASSWORD`: Docker Hub password/token
-- `QUAY_USERNAME`: Quay.io username
-- `QUAY_PASSWORD`: Quay.io password/token
-- `SLACK_NOTIFICATION_WEBHOOK`: Slack webhook for general notifications (optional)
-- `SLACK_ERROR_WEBHOOK`: Slack webhook for error notifications (optional)
+**Process:**
 
-**Usage**:
+1. Release version = the current version without `-SNAPSHOT` (e.g. `3.0.0-SNAPSHOT` → `3.0.0`).
+2. `scripts/set-version.sh <version>` sets it everywhere: Maven modules, the OpenAPI contract, the UI package and
+   the bundled MCP servers.
+3. Release notes: `docs/release-notes/v<version>.md` when it exists, otherwise GitHub's generated notes.
+4. `./build-release.sh` builds the application with the UI and runs all tests.
+5. The uber-jar is renamed to `apitomy-axiom-<version>.jar`.
+6. The release commit and the `v<version>` tag are pushed only after every step above has succeeded.
+7. A **draft** GitHub Release is created with the notes and the jar. A maintainer reviews and publishes it;
+   publishing it triggers **Update Website**.
+8. `scripts/set-version.sh` sets the next development version (`<major>.<minor>.<patch+1>-SNAPSHOT`), which is
+   committed and pushed.
 
-1. Go to Actions → Release
-2. Click "Run workflow"
-3. Enter the release version (e.g., `1.0.0`)
-4. Click "Run workflow"
+**Before releasing:**
 
-**Pre-release Versions**:
+- Write `docs/release-notes/v<version>.md` and merge it to `main`.
+- Optionally run `./build-release.sh` locally as a dry run.
+- For a minor or major release, set the target version first, e.g. `scripts/set-version.sh 3.1.0-SNAPSHOT`,
+  and merge that.
 
-The workflow automatically detects pre-release versions by checking for:
-- `RC` (release candidate)
-- `alpha`
-- `beta`
+## Publish Documentation (`publish-docs.yml`)
 
-Example: `1.0.0-RC1` will be marked as a pre-release.
+**Trigger:** pushes to `main`. Builds the MkDocs site and pushes it to the website repository.
 
-**Registry Locations**:
+## Update Website (`update-website.yaml`)
 
-After release, images are available at:
-- Docker Hub: `docker.io/apitomy/apitomy-axiom:<version>`
-- Quay.io: `quay.io/apitomy/apitomy-axiom:<version>`
-
-**Multi-Architecture Support**:
-
-Images are built for:
-- `linux/amd64`
-- `linux/arm64`
+**Trigger:** a published GitHub Release. Updates the project website for the release; posts to Slack only
+when the update fails.
 
 ## Local Testing
 
-To test the Docker build locally before releasing:
-
 ```bash
-# Build locally
-cd docker/build
-./build.sh 1.0.0-test
-
-# Test the image
-docker run --rm apitomy/apitomy-axiom:1.0.0-test node --version
+./build.sh                 # backend build and tests
+cd ui && npm run build && npm test
+./build-release.sh         # full release build with the UI
 ```
-
-## Troubleshooting
-
-### Version mismatch error
-If the workflow fails with a version mismatch, ensure:
-- The version number in `package.json` matches the release tag
-- You're running the workflow from the correct branch
-
-### Docker push fails
-Check that:
-- Docker Hub and Quay.io credentials are correctly configured in repository secrets
-- The `ACCESS_TOKEN` has `packages:write` permissions
-- Repository name and organization match the configured registries
-
-### Build fails
-- Review the build logs for specific errors
-- Test the build locally first using the build script
-- Ensure all dependencies are correctly specified in `package.json`
