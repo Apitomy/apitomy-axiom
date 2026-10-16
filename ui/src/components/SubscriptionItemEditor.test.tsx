@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -20,7 +20,8 @@ function renderEditor(over: Partial<Parameters<typeof SubscriptionItemEditor>[0]
 beforeEach(() => {
     vi.mocked(api.previewSubscriptionFilter).mockReset().mockResolvedValue({
         results: [
-            { matched: true, event: { id: "e1", type: "pr.created", ref: "https://x/pull/1", timestamp: "2026-10-15T10:00:00Z" } },
+            { matched: true, event: { id: "e1", type: "pr.created", ref: "https://x/pull/1", actor: { login: "renovate[bot]" },
+                timestamp: "2026-10-15T10:00:00Z" } },
             { matched: false, event: { id: "e2", type: "issue.created", ref: "https://x/issues/2", timestamp: "2026-10-15T09:00:00Z" } },
         ], totalMatched: 1, totalCount: 2, page: 1, limit: 200, errorCount: 0,
     } as never);
@@ -37,7 +38,14 @@ describe("SubscriptionItemEditor", () => {
     it("previews matching recent events", async () => {
         renderEditor();
         expect(await screen.findByText("1 of 2 recent events match")).toBeInTheDocument();
-        expect(screen.getByRole("link", { name: /https:\/\/x\/pull\/1/ })).toHaveAttribute("href", "/events/stream/e1");
+        const table = screen.getByRole("grid", { name: "Matching events" });
+        expect(within(table).getAllByRole("columnheader").map((h) => h.textContent))
+            .toEqual(["Type", "Ref", "Actor", "Time"]);
+        const rows = within(table).getAllByRole("row").slice(1);
+        expect(rows).toHaveLength(1);
+        expect(within(rows[0]).getByRole("link", { name: "pr.created" })).toHaveAttribute("href", "/events/stream/e1");
+        expect(rows[0]).toHaveTextContent("https://x/pull/1");
+        expect(rows[0]).toHaveTextContent("renovate[bot]");
         expect(api.previewSubscriptionFilter).toHaveBeenCalledWith({ filterExpression: base.filterExpression, limit: 200 });
     });
 

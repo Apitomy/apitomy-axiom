@@ -6,12 +6,24 @@ import {
 } from "@patternfly/react-core";
 import { TrashIcon } from "@patternfly/react-icons";
 import { previewSubscriptionFilter, type SubscriptionPreviewResponse } from "../config/api";
+import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import type { ValidationMessage } from "./ActionTypeEditor";
 
 const PREVIEW_DEBOUNCE_MS: number = 500;
 const PREVIEW_LIMIT: number = 200;
 
 type Rule = { type: string; workflowDefinitionName?: string };
+
+/**
+ * The login of an event actor, if it has one.
+ *
+ * @param actor the event's actor object
+ * @returns the login, or undefined
+ */
+function actorLogin(actor: Record<string, unknown> | undefined): string | undefined {
+    const login: unknown = actor?.login;
+    return typeof login === "string" && login ? login : undefined;
+}
 
 /** Props of {@link SubscriptionItemEditor}. */
 export interface SubscriptionItemEditorProps {
@@ -129,14 +141,32 @@ export function SubscriptionItemEditor(props: SubscriptionItemEditorProps) {
                             {`${preview.errorCount} event(s) could not be evaluated: ${preview.firstError}`}
                         </HelperTextItem></HelperText>
                     )}
-                    <ul>
-                        {matches.map((m) => (
-                            <li key={m.event.id}>
-                                <Link to={`/events/stream/${m.event.id}`}>{`${m.event.type} ${m.event.ref}`}</Link>
-                                {` ${new Date(m.event.timestamp).toLocaleString()}`}
-                            </li>
-                        ))}
-                    </ul>
+                    {matches.length > 0 && (
+                        <Table aria-label="Matching events" variant="compact">
+                            <Thead>
+                                <Tr>
+                                    <Th>Type</Th>
+                                    <Th>Ref</Th>
+                                    <Th>Actor</Th>
+                                    <Th>Time</Th>
+                                </Tr>
+                            </Thead>
+                            <Tbody>
+                                {matches.map((m) => (
+                                    <Tr key={m.event.id}>
+                                        <Td dataLabel="Type">
+                                            <Link to={`/events/stream/${m.event.id}`}>{m.event.type}</Link>
+                                        </Td>
+                                        <Td dataLabel="Ref" modifier="breakWord">{m.event.ref}</Td>
+                                        <Td dataLabel="Actor">{actorLogin(m.event.actor) ?? "—"}</Td>
+                                        <Td dataLabel="Time" modifier="nowrap">
+                                            {new Date(m.event.timestamp).toLocaleString()}
+                                        </Td>
+                                    </Tr>
+                                ))}
+                            </Tbody>
+                        </Table>
+                    )}
                 </>
             )}
         </div>
