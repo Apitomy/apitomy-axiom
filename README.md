@@ -134,9 +134,9 @@ file, `app/src/main/resources/db/migration/V1__baseline.sql`.
 - **Persist/Prod mode**: Flyway runs migrations at startup. Hibernate schema generation is
   set to `none` — Flyway owns the schema.
 
-Until the first release, schema changes are made by **editing `V1__baseline.sql` in place** — do not add
-`V2__…` files. There is no data migration: an existing persistent database must be deleted when the
-baseline changes. `MigrationSchemaValidationTest` verifies that the baseline matches the entity model.
+`V1__baseline.sql` is frozen as of 3.0.0: every schema change is a new, incremental `V2__…` migration,
+applied automatically at startup. `MigrationSchemaValidationTest` verifies that the migrations match the
+entity model. Axiom 3 refuses to start on a database created by Axiom 2.x or older.
 See [Database & Migrations](docs/developer-guide/database-and-migrations.md).
 
 ## Documentation

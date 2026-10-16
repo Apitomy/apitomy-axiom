@@ -71,20 +71,26 @@ app/src/main/resources/db/migration/
 
 Flyway runs automatically at startup when the `persist` or `prod` profile is active.
 
-### Single Baseline
+### Migrations
 
-The schema is defined by a single baseline migration:
+Axiom 3 starts from a single baseline migration:
 
 ```
 app/src/main/resources/db/migration/V1__baseline.sql
 ```
 
-**Until the first release, edit `V1__baseline.sql` in place.** Do not add `V2__…` (or Java) migrations.
-There is no data migration and no backward compatibility: when the baseline changes, existing persistent
-databases (`~/.axiom/data/axiom`) must be deleted and recreated. Once Axiom is released, schema changes will
-be made with new, incremental `V<number>__<description>.sql` migrations instead.
+**`V1__baseline.sql` is frozen as of 3.0.0. Never edit it.** Every schema change is a new, incremental
+migration, `V2__<description>.sql`, `V3__<description>.sql` and so on, which Flyway applies at startup to
+existing databases. A migration must work against real data written by the previous release, and must keep
+working on the H2 file database used by the `persist` and `prod` profiles.
 
-Flyway is configured with `baseline-on-migrate=true` and `baseline-version=1`.
+### Databases From Earlier Major Versions
+
+Axiom 3 cannot use a database created by Axiom 2.x or older. `LegacyDatabaseGuard` (a Flyway callback that
+runs before validation) refuses to start with a clear message when the database's migration history contains
+anything other than Axiom 3's migrations (a version 2 or later from 2.x, or a Flyway baseline marker), or when
+the database has tables but no migration history. Flyway baselining (`baseline-on-migrate`) is therefore
+disabled. See [Upgrading and Backups](upgrading-and-backups.md#upgrading-from-axiom-2x).
 
 ### Adding a New Entity
 

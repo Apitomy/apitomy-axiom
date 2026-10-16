@@ -45,7 +45,7 @@ When making changes, use this guide to find the right module:
 | Built-in MCP servers and assistant templates | `app/src/main/resources/templates/` |
 | UI page or component | `ui/src/pages/` (workbench: `ui/src/pages/workbench/`) or `ui/src/components/` |
 | API client functions | `ui/src/config/api.ts` (workbench: `ui/src/config/compositions.ts`) |
-| Database schema | `app/src/main/resources/db/migration/V1__baseline.sql` (edit in place until the first release) |
+| Database schema | `app/src/main/resources/db/migration/` (`V1__baseline.sql` is frozen; add `V<n>__…` migrations) |
 
 ---
 

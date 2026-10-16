@@ -9,17 +9,30 @@ versions, what to back up, and how to restore an instance.
 
 ## What a Version Upgrade Can Change
 
-Until the first release, Axiom's schema is a single baseline migration
-(`app/src/main/resources/db/migration/V1__baseline.sql`) that is **edited in place**. There is no data
-migration and no backward compatibility between pre-release builds: when the baseline changes, an existing
-persistent database cannot be upgraded and must be deleted (or moved aside) so Axiom can create a fresh
-one. Export a [configuration pack](#configuration-packs-are-for-sharing-not-disaster-recovery) first if
-you want to keep your configuration, then import it into the new database.
+Schema changes ship as incremental Flyway migrations (see
+[Database & Migrations](database-and-migrations.md#migrations)) that run automatically at startup. They are
+not designed to be rolled back: review the migration files between your current version and the target
+version before upgrading a production instance, and take a backup (see below) first. There is no automatic
+downgrade path.
 
-After the first release, schema changes will ship as incremental Flyway migrations. Because Flyway
-migrations run automatically and are not designed to be rolled back, review the migration files between
-your current version and the target version before upgrading a production instance, and take a database
-backup (see below) first — there is no automatic downgrade path.
+## Upgrading From Axiom 2.x
+
+Axiom 3.0 is a clean break from 2.x: it starts from a new database schema and **cannot use a 2.x database**.
+If Axiom 3 finds a database created by 2.x (or older) it refuses to start, with a message telling you to
+remove the old data. To upgrade:
+
+1. Stop Axiom 2.x.
+2. Back up `~/.axiom` (or move it aside) if you want to keep the old data for reference.
+3. Delete the database directory, `~/.axiom/data/`.
+4. Start Axiom 3. It creates a new, empty database.
+5. Recreate your configuration: event sources, secrets, action types, tools, workflows and subscriptions.
+   Many 2.x concepts were removed or reworked (see the 3.0.0 release notes), so 2.x configuration packs are
+   not expected to import cleanly; the [Workflow Workbench](../user-guide/workbench.md) is the quickest way
+   to rebuild workflows.
+
+Secrets are stored in the database, so they must be re-entered. The rest of `~/.axiom` (the encryption key,
+workspaces and session directories) can stay; old 2.x subject workspaces are no longer referenced and can be
+removed.
 
 ## What Makes Up a Full Backup
 
@@ -55,8 +68,8 @@ snapshot (H2 does not support online hot backups of the file store used here).
 2. Restore `~/.axiom/data/` and `~/.axiom/secret.key` from backup **together** — the
    encryption key must match the database it was used to encrypt secrets for.
 3. Restore `~/.axiom/workspaces/` if subject workspaces are needed.
-4. Start Axiom with the `persist` or `prod` profile. Before the first release, restore only into the
-   same Axiom build that created the backup (the baseline may have changed since).
+4. Start Axiom with the `persist` or `prod` profile. Restore into the same or a newer 3.x version than the
+   one that created the backup; newer versions migrate the restored database at startup.
 
 ## Configuration Packs Are for Sharing, Not Disaster Recovery
 
