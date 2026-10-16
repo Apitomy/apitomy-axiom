@@ -32,7 +32,13 @@ describe("SubscriptionItemEditor", () => {
         renderEditor();
         expect(screen.getByLabelText("Name")).toHaveValue("on-pr");
         expect(screen.getByLabelText("Filter expression")).toHaveValue("event.type == 'pr.created'");
-        expect(screen.getByText(/Starts workflow/)).toHaveTextContent("Starts workflow wf");
+        const table = screen.getByRole("grid", { name: "Routing rules" });
+        expect(within(table).getAllByRole("columnheader").map((h) => h.textContent))
+            .toEqual(["Rule", "Target", "Actions"]);
+        const rows = within(table).getAllByRole("row").slice(1);
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toHaveTextContent("Start workflow");
+        expect(rows[0]).toHaveTextContent("wf");
     });
 
     it("previews matching recent events", async () => {
@@ -62,6 +68,25 @@ describe("SubscriptionItemEditor", () => {
     it("hides the Enabled switch until published and disables it while the workflow is unpublished", () => {
         renderEditor();
         expect(screen.queryByRole("switch", { name: "Enabled" })).toBeNull();
+    });
+
+    it("lists dispatch rules and flags a start rule that targets another workflow", async () => {
+        const props = renderEditor({ value: { ...base, routing: [
+            { type: "create-workflow", workflowDefinitionName: "other-wf" }, { type: "workflow-dispatch" }] } });
+        const rows = within(screen.getByRole("grid", { name: "Routing rules" })).getAllByRole("row").slice(1);
+        expect(rows[0]).toHaveTextContent("other-wf");
+        expect(rows[0]).toHaveTextContent("Not this composition's workflow");
+        expect(rows[1]).toHaveTextContent("Dispatch to waiting runs");
+        expect(rows[1]).toHaveTextContent("receive-event nodes");
+        await userEvent.click(within(rows[1]).getByRole("button", { name: "Remove rule 2" }));
+        expect(props.onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+            routing: [{ type: "create-workflow", workflowDefinitionName: "other-wf" }] }));
+    });
+
+    it("shows an empty state when there are no rules", () => {
+        renderEditor({ value: { ...base, routing: [] } });
+        expect(screen.queryByRole("grid", { name: "Routing rules" })).toBeNull();
+        expect(screen.getByText("No routing rules: matching events do nothing.")).toBeInTheDocument();
     });
 
     it("does not crash when routing is not an array", () => {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-    Alert, Button, Divider, Flex, FlexItem, Form, FormGroup, HelperText, HelperTextItem, Switch, TextArea, TextInput,
+    Alert, Button, Divider, Flex, Label, FlexItem, Form, FormGroup, HelperText, HelperTextItem, Switch, TextArea, TextInput,
     Title, Tooltip,
 } from "@patternfly/react-core";
 import { TrashIcon } from "@patternfly/react-icons";
@@ -106,18 +106,51 @@ export function SubscriptionItemEditor(props: SubscriptionItemEditorProps) {
                         isDisabled={readOnly} onChange={(_e, v) => set("filterExpression", v)} />
                 </FormGroup>
                 <FormGroup label="Routing" fieldId="subscription-routing">
-                    {routing.map((rule, i) => (
-                        <Flex key={i} alignItems={{ default: "alignItemsCenter" }}>
-                            <FlexItem>
-                                {rule.type === "create-workflow" ? `Starts workflow ${workflowName}`
-                                    : "Delivers events to waiting runs (receive-event nodes)"}
-                            </FlexItem>
-                            <FlexItem>
-                                <Button variant="plain" aria-label={`Remove rule ${i + 1}`} isDisabled={readOnly}
-                                    icon={<TrashIcon />} onClick={() => setRouting(routing.filter((_, j) => j !== i))} />
-                            </FlexItem>
-                        </Flex>
-                    ))}
+                    {routing.length === 0 ? (
+                        <HelperText><HelperTextItem>No routing rules: matching events do nothing.</HelperTextItem></HelperText>
+                    ) : (
+                        <Table aria-label="Routing rules" variant="compact">
+                            <Thead>
+                                <Tr>
+                                    <Th>Rule</Th>
+                                    <Th>Target</Th>
+                                    <Th screenReaderText="Actions" />
+                                </Tr>
+                            </Thead>
+                            <Tbody>
+                                {routing.map((rule, i) => (
+                                    <Tr key={i}>
+                                        <Td dataLabel="Rule">
+                                            {rule.type === "create-workflow" ? "Start workflow"
+                                                : rule.type === "workflow-dispatch" ? "Dispatch to waiting runs"
+                                                    : rule.type}
+                                        </Td>
+                                        <Td dataLabel="Target">
+                                            {rule.type === "create-workflow" ? (
+                                                <>
+                                                    {rule.workflowDefinitionName || "—"}
+                                                    {rule.workflowDefinitionName !== workflowName && (
+                                                        <Label isCompact color="red" className="pf-v6-u-ml-sm">
+                                                            Not this composition's workflow
+                                                        </Label>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <span className="axiom-text-subtle">
+                                                    Runs waiting at receive-event nodes
+                                                </span>
+                                            )}
+                                        </Td>
+                                        <Td isActionCell>
+                                            <Button variant="plain" aria-label={`Remove rule ${i + 1}`}
+                                                isDisabled={readOnly} icon={<TrashIcon />}
+                                                onClick={() => setRouting(routing.filter((_, j) => j !== i))} />
+                                        </Td>
+                                    </Tr>
+                                ))}
+                            </Tbody>
+                        </Table>
+                    )}
                     <Flex>
                         <Button variant="link" isInline isDisabled={readOnly}
                             onClick={() => setRouting([...routing,
